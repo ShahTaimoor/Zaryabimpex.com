@@ -1,0 +1,209 @@
+/**
+ * Centralized Print Styles
+ * Used by PrintWrapper and all print layouts.
+ * Import once in App or main entry.
+ */
+
+@media print {
+  /* Hide UI elements during printing */
+  .no-print,
+  .print\\:hidden,
+  nav,
+  header:not(.print-header),
+  .sidebar,
+  .navbar,
+  button:not(.print\\:block),
+  .btn,
+  [role="banner"],
+  .print-toolbar,
+  .print-preview-wrapper .no-print,
+  [data-print-hide="true"] {
+    display: none !important;
+  }
+
+  /* Reset page */
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  @page.a4-landscape {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  @page.thermal {
+    size: 80mm auto;
+    margin: 2mm;
+  }
+
+  /* Base body reset */
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    font-family: 'Inter', Arial, Helvetica, sans-serif !important;
+    font-size: 10px !important;
+    color: #000 !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Prevent page breaks inside critical elements */
+  .print-document,
+  .print-layout-a4 .print-document,
+  .receipt-voucher {
+    page-break-inside: avoid;
+  }
+
+  /* Allow page breaks between rows for long tables */
+  .print-break-inside-auto tr,
+  .print-break-inside-auto .print-row {
+    page-break-inside: auto;
+  }
+
+  /* Tables */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    border: 1px solid #000 !important;
+    padding: 4px 6px !important;
+    font-size: 9px !important;
+  }
+
+  th {
+    background-color: #eee !important;
+    font-weight: 700 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* A4 Invoice layout */
+  .print-layout-a4 {
+    font-size: 11px;
+    max-width: 100%;
+  }
+
+  .print-layout-a4 .print-document__company-name {
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .print-layout-a4 .print-document__logo-img {
+    max-height: 60px;
+    max-width: 200px;
+  }
+
+  .print-layout-a4 .layout2-table th,
+  .print-layout-a4 .layout2-table td {
+    border: 1px solid #000 !important;
+    padding: 4px;
+  }
+
+  /* 80mm Thermal receipt layout */
+  .print-layout-thermal {
+    width: 80mm !important;
+    max-width: 80mm !important;
+    font-size: 10px !important;
+    padding: 2mm !important;
+  }
+
+  .print-layout-thermal .receipt-voucher {
+    max-width: 76mm;
+  }
+
+  .print-layout-thermal .receipt-voucher__company-name {
+    font-size: 14px;
+  }
+
+  .print-layout-thermal .receipt-voucher__title h2 {
+    font-size: 12px;
+  }
+
+  .print-layout-thermal table th,
+  .print-layout-thermal table td {
+    font-size: 9px;
+    padding: 2px 3px;
+  }
+
+  /* Ledger / Summary layouts */
+  .print-header {
+    text-align: center;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #000;
+  }
+
+  .print-header h1 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  .print-footer {
+    margin-top: 10px;
+    text-align: right;
+    font-size: 8px;
+    border-top: 1px solid #000;
+    padding-top: 4px;
+  }
+
+  /* Sale invoice print - emerald (match desktop/customer colors) */
+  .print-document--sale .print-document__table th,
+  .print-document--sale .layout2-table th {
+    background-color: #059669 !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .print-document--sale .print-document__section-label {
+    color: #047857 !important;
+    border-bottom-color: #10b981 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .print-document--sale .print-document__summary-row--total {
+    background-color: #d1fae5 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .print-document--sale .print-document__summary-table {
+    border-color: #10b981 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Purchase invoice print - blue (match desktop/supplier colors) */
+  .print-document--purchase .print-document__table th,
+  .print-document--purchase .layout2-table th {
+    background-color: #2563eb !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .print-document--purchase .print-document__section-label {
+    color: #1d4ed8 !important;
+    border-bottom-color: #3b82f6 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .print-document--purchase .print-document__summary-row--total {
+    background-color: #dbeafe !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .print-document--purchase .print-document__summary-table {
+    border-color: #3b82f6 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Utility classes */
+  .text-right { text-align: right !important; }
+  .text-center { text-align: center !important; }
+  .font-bold { font-weight: 700 !important; }
+  .print-amount { font-size: 9px !important; }
+}
