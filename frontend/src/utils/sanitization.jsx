@@ -67,7 +67,9 @@ export const sanitizeObjectLight = (obj) => {
     return sanitized;
   }
   
-  // Only sanitize strings by trimming and removing dangerous characters
+  // Only sanitize strings by trimming and removing dangerous characters.
+  // Do NOT HTML-encode & " ' - that corrupts display data (e.g. "Smith & Sons", "O'Brien").
+  // React escapes values automatically; encoding causes literal "&amp;" to show in form fields.
   if (typeof obj === 'string') {
     return obj
       .trim()
@@ -75,9 +77,6 @@ export const sanitizeObjectLight = (obj) => {
       .replace(/javascript:/gi, '') // Remove javascript: protocols
       .replace(/on\w+=/gi, '') // Remove event handlers
       .replace(/script/gi, '') // Remove script tags
-      .replace(/&/g, '&amp;') // Only encode ampersands
-      .replace(/"/g, '&quot;') // Only encode quotes
-      .replace(/'/g, '&#x27;'); // Only encode single quotes
   }
   
   return obj;

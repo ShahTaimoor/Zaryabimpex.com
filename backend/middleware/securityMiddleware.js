@@ -52,6 +52,21 @@ class SecurityMiddleware {
   }
   
   /**
+   * Light sanitization: remove XSS vectors but preserve & " ' for names (e.g. "Smith & Sons", "O'Brien").
+   * validator.escape corrupts display data by encoding & as &amp; - causing "&amp;" to show in form fields.
+   */
+  sanitizeString(str) {
+    if (typeof str !== 'string') return str;
+    let s = validator.stripLow ? validator.stripLow(str) : str.trim();
+    return s
+      .trim()
+      .replace(/[<>]/g, '') // Remove HTML brackets
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+=/gi, '') // Remove event handlers
+      .replace(/script/gi, '');
+  }
+
+  /**
    * Recursively sanitize object
    */
   sanitizeObject(obj) {
@@ -60,8 +75,7 @@ class SecurityMiddleware {
     }
     
     if (typeof obj === 'string') {
-      // Escape HTML and remove potential script tags
-      return validator.escape(validator.stripLow(obj));
+      return this.sanitizeString(obj);
     }
     
     if (Array.isArray(obj)) {
@@ -72,9 +86,7 @@ class SecurityMiddleware {
       const sanitized = {};
       for (const key in obj) {
         if (obj.hasOwnProperty(key)) {
-          // Sanitize key
-          const sanitizedKey = validator.escape(key);
-          sanitized[sanitizedKey] = this.sanitizeObject(obj[key]);
+          sanitized[key] = this.sanitizeObject(obj[key]);
         }
       }
       return sanitized;

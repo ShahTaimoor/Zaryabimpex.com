@@ -45,8 +45,8 @@ router.get('/', auth, async (req, res) => {
     res.json({
       success: true,
       data: {
-        companyName: company.company_name || company.companyName || '',
-        phone: company.contact_number || company.phone || '',
+        companyName: company.companyName || company.company_name || '',
+        phone: company.contactNumber || company.contact_number || company.phone || '',
         address: company.address || '',
         logo: company.logo || ''
       }
@@ -77,8 +77,8 @@ router.put('/', auth, async (req, res) => {
       success: true,
       message: 'Company settings updated successfully',
       data: {
-        companyName: company.company_name || company.companyName || '',
-        phone: company.contact_number || company.phone || '',
+        companyName: company.companyName || company.company_name || '',
+        phone: company.contactNumber || company.contact_number || company.phone || '',
         address: company.address || '',
         logo: company.logo || ''
       }
@@ -116,8 +116,8 @@ router.post('/logo', auth, upload.single('logo'), async (req, res) => {
       success: true,
       message: 'Logo uploaded successfully',
       data: {
-        companyName: company.company_name || company.companyName || '',
-        phone: company.contact_number || company.phone || '',
+        companyName: company.companyName || company.company_name || '',
+        phone: company.contactNumber || company.contact_number || company.phone || '',
         address: company.address || '',
         logo: company.logo || secure_url || ''
       }

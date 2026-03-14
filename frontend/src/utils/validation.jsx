@@ -4,18 +4,14 @@
 export const sanitizeInput = (input) => {
   if (typeof input !== 'string') return input;
   
+  // Remove XSS vectors only. Do NOT HTML-encode & " ' - that corrupts user data
+  // (e.g. "Smith & Sons", "O'Brien") when stored and displayed in form fields.
   return input
     .trim()
     .replace(/[<>]/g, '') // Remove potential HTML tags
     .replace(/javascript:/gi, '') // Remove javascript: protocols
     .replace(/on\w+=/gi, '') // Remove event handlers
     .replace(/script/gi, '') // Remove script tags
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
 };
 
 // Sanitize object recursively
