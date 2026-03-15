@@ -3,8 +3,10 @@ const { body, query, validationResult } = require('express-validator');
 const { auth, requireAnyPermission } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
-const attendanceRepository = require('../repositories/postgres/AttendanceRepository');
-const employeeRepository = require('../repositories/postgres/EmployeeRepository');
+const Attendance = require('../models/Attendance'); // Still needed for new Attendance() and static methods
+const Employee = require('../models/Employee'); // Still needed for model reference
+const attendanceRepository = require('../repositories/AttendanceRepository');
+const employeeRepository = require('../repositories/EmployeeRepository');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -16,7 +18,7 @@ router.post('/clock-in', [
   body('storeId').optional().isString(),
   body('deviceId').optional().isString(),
   body('notesIn').optional().isString(),
-  body('employeeId').optional().isUUID(4), // For managers clocking in other employees
+  body('employeeId').optional().isMongoId(), // For managers clocking in other employees
 ], async (req, res) => {
   try {
     let employee;
@@ -43,27 +45,26 @@ router.post('/clock-in', [
       }
     }
     
-    const employeeId = employee.id || employee._id;
-    const open = await attendanceRepository.findOpenSession(employeeId);
+    // Check for open session
+    const open = await attendanceRepository.findOpenSession(employee._id);
     if (open) {
       return res.status(400).json({ message: 'Employee is already clocked in' });
     }
-
+    
+    let session;
     try {
-      const session = await attendanceRepository.create({
-        employee: employeeId,
-        user: req.body.employeeId ? null : (req.user.id || req.user._id),
-        clockedInBy: req.body.employeeId ? (req.user.id || req.user._id) : null,
+      session = await attendanceRepository.create({
+        employee: employee._id,
+        user: req.body.employeeId ? null : req.user._id, // Only set if self clock-in
+        clockedInBy: req.body.employeeId ? req.user._id : null, // Set if manager clocking in
         storeId: req.body.storeId || null,
         deviceId: req.body.deviceId || null,
         clockInAt: new Date(),
         notesIn: req.body.notesIn || '',
         status: 'open'
       });
-      const withEmployee = await attendanceRepository.findByIdWithEmployee(session.id);
-      res.json({ success: true, data: withEmployee || session });
     } catch (err) {
-      if (err.code === '23505') {
+      if (err.code === 11000) {
         return res.status(400).json({
           success: false,
           message: 'Duplicate entry detected'
@@ -71,6 +72,9 @@ router.post('/clock-in', [
       }
       throw err;
     }
+    
+    await session.populate('employee', 'firstName lastName employeeId');
+    res.json({ success: true, data: session });
   } catch (err) {
     logger.error('Clock in error:', { error: err.message, stack: err.stack });
     res.status(500).json({ success: false, message: 'Server error' });
@@ -82,7 +86,7 @@ router.post('/clock-out', [
   auth,
   requireAnyPermission(['clock_attendance', 'clock_out']),
   body('notesOut').optional().isString(),
-  body('employeeId').optional().isUUID(4), // For managers clocking out other employees
+  body('employeeId').optional().isMongoId(), // For managers clocking out other employees
 ], async (req, res) => {
   try {
     let employee;
@@ -93,20 +97,20 @@ router.post('/clock-out', [
         return res.status(404).json({ message: 'Employee not found' });
       }
     } else {
-      employee = await employeeRepository.findByUserAccount(req.user.id || req.user._id);
+      employee = await employeeRepository.findByUserAccount(req.user._id);
       if (!employee) {
         return res.status(400).json({ message: 'No employee record found' });
       }
     }
     
-    const employeeId = employee.id || employee._id;
-    const session = await attendanceRepository.findOpenSession(employeeId);
+    const session = await attendanceRepository.findOpenSession(employee._id);
     if (!session) {
       return res.status(400).json({ message: 'Employee is not clocked in' });
     }
-    const updated = await attendanceRepository.closeSession(session.id, req.body.notesOut);
-    const withEmployee = updated ? await attendanceRepository.findByIdWithEmployee(updated.id) : null;
-    res.json({ success: true, data: withEmployee || updated });
+    session.closeSession(req.body.notesOut);
+    await session.save();
+    await session.populate('employee', 'firstName lastName employeeId');
+    res.json({ success: true, data: session });
   } catch (err) {
     logger.error('Clock out error:', { error: err.message, stack: err.stack });
     res.status(500).json({ success: false, message: 'Server error' });
@@ -125,17 +129,17 @@ router.post('/breaks/start', [
       return res.status(400).json({ message: 'No employee record found' });
     }
     
-    const employeeId = employee.id || employee._id;
-    const session = await attendanceRepository.findOpenSession(employeeId);
+    const session = await attendanceRepository.findOpenSession(employee._id);
     if (!session) {
       return res.status(400).json({ message: 'You are not clocked in' });
     }
-    const updated = await attendanceRepository.startBreak(session.id, req.body.type || 'break');
-    if (!updated) {
+    const ok = session.startBreak(req.body.type || 'break');
+    if (!ok) {
       return res.status(400).json({ message: 'Active break already in progress or session closed' });
     }
-    const withEmployee = await attendanceRepository.findByIdWithEmployee(updated.id);
-    res.json({ success: true, data: withEmployee || updated });
+    await session.save();
+    await session.populate('employee', 'firstName lastName employeeId');
+    res.json({ success: true, data: session });
   } catch (err) {
     logger.error('Start break error:', { error: err.message, stack: err.stack });
     res.status(500).json({ success: false, message: 'Server error' });
@@ -153,16 +157,17 @@ router.post('/breaks/end', [
       return res.status(400).json({ message: 'No employee record found' });
     }
     
-    const session = await attendanceRepository.findOpenSession(employee.id || employee._id);
+    const session = await attendanceRepository.findOpenSession(employee._id);
     if (!session) {
       return res.status(400).json({ message: 'You are not clocked in' });
     }
-    const updated = await attendanceRepository.endBreak(session.id);
-    if (!updated) {
+    const ok = session.endBreak();
+    if (!ok) {
       return res.status(400).json({ message: 'No active break to end' });
     }
-    const withEmployee = await attendanceRepository.findByIdWithEmployee(updated.id);
-    res.json({ success: true, data: withEmployee || updated });
+    await session.save();
+    await session.populate('employee', 'firstName lastName employeeId');
+    res.json({ success: true, data: session });
   } catch (err) {
     logger.error('End break error:', { error: err.message, stack: err.stack });
     res.status(500).json({ success: false, message: 'Server error' });
@@ -180,9 +185,13 @@ router.get('/status', [
       return res.json({ success: true, data: null }); // No employee record, no attendance
     }
     
-    const session = await attendanceRepository.findOpenSession(employee.id || employee._id);
-    const data = session ? await attendanceRepository.findByIdWithEmployee(session.id) : null;
-    res.json({ success: true, data });
+    const session = await attendanceRepository.findOpenSession(employee._id, {
+      populate: [
+        { path: 'employee', select: 'firstName lastName employeeId position department' },
+        { path: 'user', select: 'firstName lastName email' }
+      ]
+    });
+    res.json({ success: true, data: session });
   } catch (err) {
     logger.error('Get status error:', { error: err.message, stack: err.stack });
     res.status(500).json({ success: false, message: 'Server error' });
@@ -205,12 +214,22 @@ router.get('/me', [
     }
     
     const limit = parseInt(req.query.limit || '30');
-    const filter = { employeeId: employee.id || employee._id };
-    if (req.dateFilter && req.dateFilter.createdAt) {
-      if (req.dateFilter.createdAt.$gte) filter.createdAtFrom = req.dateFilter.createdAt.$gte;
-      if (req.dateFilter.createdAt.$lte) filter.createdAtTo = req.dateFilter.createdAt.$lte;
+    const query = { employee: employee._id };
+    
+    // Use dateFilter from middleware (Pakistan timezone)
+    if (req.dateFilter && Object.keys(req.dateFilter).length > 0) {
+      Object.assign(query, req.dateFilter);
     }
-    const result = await attendanceRepository.findWithPagination(filter, { page: 1, limit });
+    
+    const result = await attendanceRepository.findWithPagination(query, {
+      page: 1,
+      limit,
+      sort: { createdAt: -1 },
+      populate: [
+        { path: 'employee', select: 'firstName lastName employeeId position department' },
+        { path: 'user', select: 'firstName lastName email' }
+      ]
+    });
     const rows = result.attendances;
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -233,7 +252,7 @@ router.get('/team', [
     });
   },
   query('limit').optional().isInt({ min: 1, max: 100 }),
-  query('employeeId').optional().isUUID(4),
+  query('employeeId').optional().isMongoId(),
   ...validateDateParams,
   query('status').optional().isIn(['open', 'closed']),
   handleValidationErrors,
@@ -242,16 +261,35 @@ router.get('/team', [
   try {
     const limit = parseInt(req.query.limit || '50');
     const filterQuery = {};
-    if (req.query.employeeId) filterQuery.employeeId = req.query.employeeId;
-    if (req.query.status) filterQuery.status = req.query.status;
-    if (req.dateFilter && req.dateFilter.createdAt) {
-      if (req.dateFilter.createdAt.$gte) filterQuery.createdAtFrom = req.dateFilter.createdAt.$gte;
-      if (req.dateFilter.createdAt.$lte) filterQuery.createdAtTo = req.dateFilter.createdAt.$lte;
+    
+    if (req.query.employeeId) {
+      filterQuery.employee = req.query.employeeId;
     }
+    
+    if (req.query.status) {
+      filterQuery.status = req.query.status;
+    }
+    
+    // Use dateFilter from middleware (Pakistan timezone)
+    if (req.dateFilter && Object.keys(req.dateFilter).length > 0) {
+      Object.assign(filterQuery, req.dateFilter);
+    }
+    
+    logger.debug('Fetching team attendance', {
+      filterQuery,
+      limit,
+      userId: req.user._id
+    });
 
     const result = await attendanceRepository.findWithPagination(filterQuery, {
       page: 1,
-      limit
+      limit,
+      sort: { createdAt: -1 },
+      populate: [
+        { path: 'employee', select: 'firstName lastName employeeId position department' },
+        { path: 'user', select: 'firstName lastName email' },
+        { path: 'clockedInBy', select: 'firstName lastName email' }
+      ]
     });
     
     const rows = result?.attendances || [];

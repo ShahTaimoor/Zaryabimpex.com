@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Package } from 'lucide-react';
 
 /**
  * OptimizedImage - Image component with lazy loading, WebP support, and responsive images
@@ -119,11 +118,11 @@ export const OptimizedImage = ({
     }
     return (
       <div
-        className={`bg-gray-100 flex items-center justify-center text-gray-400 ${className}`}
+        className={`bg-gray-200 flex items-center justify-center ${className}`}
         style={{ minHeight: '200px', ...style }}
         {...props}
       >
-        <Package className="h-12 w-12" />
+        <span className="text-gray-400 text-sm">Image not available</span>
       </div>
     );
   }

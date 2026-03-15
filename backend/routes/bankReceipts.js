@@ -4,12 +4,11 @@ const { body, validationResult, query } = require('express-validator');
 const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
-const bankReceiptRepository = require('../repositories/postgres/BankReceiptRepository');
-const customerRepository = require('../repositories/postgres/CustomerRepository');
-const supplierRepository = require('../repositories/postgres/SupplierRepository');
-const salesRepository = require('../repositories/SalesRepository');
-const AccountingService = require('../services/accountingService');
-const { validateUuidParam } = require('../middleware/validation');
+const bankReceiptService = require('../services/bankReceiptService');
+const BankReceipt = require('../models/BankReceipt'); // Still needed for create/update operations
+const Bank = require('../models/Bank');
+const Sales = require('../models/Sales');
+const Customer = require('../models/Customer');
 
 // @route   GET /api/bank-receipts
 // @desc    Get all bank receipts with filtering and pagination
@@ -49,20 +48,45 @@ router.get('/', [
       particular
     } = req.query;
 
-    // Build Postgres filter
-    // Normalize dates to start/end of day for proper filtering
-    const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
-    const filter = {
-      startDate: req.dateRange?.startDate ? (getStartOfDayPakistan(req.dateRange.startDate) || new Date(req.dateRange.startDate)) : null,
-      endDate: req.dateRange?.endDate ? (getEndOfDayPakistan(req.dateRange.endDate) || new Date(req.dateRange.endDate)) : null,
-      voucherCode: voucherCode || undefined,
-      amount: amount ? parseFloat(amount) : undefined,
-      particular: particular || undefined
-    };
+    // Build filter object
+    const filter = {};
 
-    const result = await bankReceiptRepository.findWithPagination(filter, {
-      page: parseInt(page, 10),
-      limit: parseInt(limit, 10)
+    // Date range filter - use dateFilter from middleware (Pakistan timezone)
+    if (req.dateFilter && Object.keys(req.dateFilter).length > 0) {
+      Object.assign(filter, req.dateFilter);
+    }
+
+    // Get date range for service call (for backward compatibility)
+    const fromDate = req.dateRange?.startDate || null;
+    const toDate = req.dateRange?.endDate || null;
+    const dateFrom = req.dateRange?.startDate || null;
+    const dateTo = req.dateRange?.endDate || null;
+
+    // Voucher code filter
+    if (voucherCode) {
+      filter.voucherCode = { $regex: voucherCode, $options: 'i' };
+    }
+
+    // Amount filter
+    if (amount) {
+      filter.amount = parseFloat(amount);
+    }
+
+    // Particular filter
+    if (particular) {
+      filter.particular = { $regex: particular, $options: 'i' };
+    }
+
+    const result = await bankReceiptService.getBankReceipts({
+      page,
+      limit,
+      fromDate,
+      toDate,
+      dateFrom,
+      dateTo,
+      voucherCode,
+      amount,
+      particular
     });
 
     res.json({
@@ -91,13 +115,13 @@ router.post('/', [
   body('date').optional().isISO8601().withMessage('Date must be a valid date'),
   body('amount').isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
   body('particular').optional().isString().trim().isLength({ max: 500 }).withMessage('Particular must be less than 500 characters'),
-  body('bank').isUUID(4).withMessage('Valid bank account is required'),
+  body('bank').isMongoId().withMessage('Valid bank account is required'),
   body('bankAccount').optional().isString().trim().isLength({ min: 1, max: 100 }).withMessage('Bank account must be a string (deprecated - use bank)'),
   body('bankName').optional().isString().trim().isLength({ min: 1, max: 100 }).withMessage('Bank name must be a string (deprecated - use bank)'),
   body('transactionReference').optional().isString().trim().withMessage('Transaction reference must be a string'),
-  body('order').optional().isUUID(4).withMessage('Invalid order ID'),
-  body('customer').optional().isUUID(4).withMessage('Invalid customer ID'),
-  body('supplier').optional().isUUID(4).withMessage('Invalid supplier ID'),
+  body('order').optional().isMongoId().withMessage('Invalid order ID'),
+  body('customer').optional().isMongoId().withMessage('Invalid customer ID'),
+  body('supplier').optional().isMongoId().withMessage('Invalid supplier ID'),
   body('notes').optional().isString().trim().isLength({ max: 1000 }).withMessage('Notes must be less than 1000 characters')
 ], async (req, res) => {
   try {
@@ -133,7 +157,7 @@ router.post('/', [
 
     // Validate customer exists if provided
     if (customer) {
-      const customerExists = await customerRepository.findById(customer);
+      const customerExists = await Customer.findById(customer);
       if (!customerExists) {
         return res.status(400).json({
           success: false,
@@ -144,7 +168,7 @@ router.post('/', [
 
     // Validate supplier exists if provided
     if (supplier) {
-      const supplierExists = await supplierRepository.findById(supplier);
+      const supplierExists = await bankReceiptService.supplierExists(supplier);
       if (!supplierExists) {
         return res.status(400).json({
           success: false,
@@ -153,64 +177,84 @@ router.post('/', [
       }
     }
 
-    // Validation: Must have either customer or supplier, not both
-    if (customer && supplier) {
+    // Validate bank exists
+    const bankExists = await Bank.findById(bank);
+    if (!bankExists) {
       return res.status(400).json({
         success: false,
-        message: 'Bank receipt must be for either a customer OR a supplier, not both'
+        message: 'Bank account not found'
       });
     }
 
-    if (!customer && !supplier) {
+    if (!bankExists.isActive) {
       return res.status(400).json({
         success: false,
-        message: 'Bank receipt must specify either a customer or a supplier'
+        message: 'Bank account is inactive'
       });
     }
 
-    // Validate amount
-    const receiptAmount = parseFloat(amount);
-    if (isNaN(receiptAmount) || receiptAmount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Amount must be a positive number'
-      });
+    // Create bank receipt
+    const bankReceiptData = {
+      date: date ? new Date(date) : new Date(),
+      amount: parseFloat(amount),
+      particular: particular ? particular.trim() : 'Bank Receipt',
+      bank: bank,
+      transactionReference: transactionReference ? transactionReference.trim() : null,
+      order: order || null,
+      customer: customer || null,
+      supplier: supplier || null,
+      notes: notes ? notes.trim() : null,
+      createdBy: req.user._id
+    };
+
+    const bankReceipt = new BankReceipt(bankReceiptData);
+    await bankReceipt.save();
+
+    // Update customer balance if customer is provided
+    if (customer && amount > 0) {
+      try {
+        const CustomerBalanceService = require('../services/customerBalanceService');
+        await CustomerBalanceService.recordPayment(customer, amount, order);
+      } catch (error) {
+        console.error('Error updating customer balance for bank receipt:', error);
+        // Don't fail the bank receipt creation if balance update fails
+      }
     }
 
-    // Bank validation - can be added later if Bank model is migrated to PostgreSQL
+    // Update supplier balance if supplier is provided
+    // When we receive bank payment from a supplier, they're paying us (reduces our payables)
+    if (supplier && amount > 0) {
+      try {
+        const SupplierBalanceService = require('../services/supplierBalanceService');
+        await SupplierBalanceService.recordPayment(supplier, amount, order);
+      } catch (error) {
+        console.error('Error updating supplier balance for bank receipt:', error);
+        // Don't fail the bank receipt creation if balance update fails
+      }
+    }
 
-    // Create bank receipt with atomic transaction
-    const { transaction } = require('../config/postgres');
-    
-    const bankReceipt = await transaction(async (client) => {
-      const bankReceiptData = {
-        date: date ? new Date(date) : new Date(),
-        amount: receiptAmount,
-        particular: particular ? particular.trim() : 'Bank Receipt',
-        bankId: bank,
-        transactionReference: transactionReference ? transactionReference.trim() : null,
-        supplierId: supplier || null,
-        customerId: customer || null,
-        notes: notes ? notes.trim() : null,
-        createdBy: req.user?.id || req.user?._id || req.user._id.toString()
-      };
+    // Create accounting entries
+    try {
+      const AccountingService = require('../services/accountingService');
+      await AccountingService.recordBankReceipt(bankReceipt);
+    } catch (error) {
+      console.error('Error creating accounting entries for bank receipt:', error);
+      // Don't fail the bank receipt creation if accounting fails
+    }
 
-      // Create receipt
-      const receipt = await bankReceiptRepository.create(bankReceiptData, client);
-
-      // Post to account ledger atomically (using same client)
-      await AccountingService.recordBankReceipt(receipt, client);
-
-      return receipt;
-    });
-
-    // Fetch the created receipt with customer details using findById
-    const receiptWithDetails = await bankReceiptRepository.findById(bankReceipt.id);
+    // Populate the created receipt
+    await bankReceipt.populate([
+      { path: 'bank', select: 'accountName accountNumber bankName' },
+      { path: 'order', select: 'orderNumber' },
+      { path: 'customer', select: 'name businessName' },
+      { path: 'supplier', select: 'name businessName' },
+      { path: 'createdBy', select: 'firstName lastName' }
+    ]);
 
     res.status(201).json({
       success: true,
       message: 'Bank receipt created successfully',
-      data: receiptWithDetails || bankReceipt
+      data: bankReceipt
     });
   } catch (error) {
     console.error('Create bank receipt error:', error);
@@ -267,24 +311,23 @@ router.get('/summary/date-range', [
 router.put('/:id', [
   auth,
   requirePermission('edit_orders'),
-  validateUuidParam('id'),
   body('date').optional().isISO8601().withMessage('Date must be a valid date'),
   body('amount').optional().isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
   body('particular').optional().isString().trim().isLength({ min: 1, max: 500 }).withMessage('Particular must be between 1 and 500 characters'),
-  body('bank').optional().isUUID(4).withMessage('Valid bank account is required'),
+  body('bank').optional().isMongoId().withMessage('Valid bank account is required'),
   body('transactionReference').optional().isString().trim().withMessage('Transaction reference must be a string'),
-  body('order').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid order ID'),
-  body('customer').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid customer ID'),
-  body('supplier').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid supplier ID'),
+  body('order').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid order ID'),
+  body('customer').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid customer ID'),
+  body('supplier').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid supplier ID'),
   body('notes').optional().isString().trim().isLength({ max: 1000 }).withMessage('Notes must be less than 1000 characters'),
   handleValidationErrors
 ], async (req, res) => {
   try {
-    const bankReceipt = await bankReceiptRepository.findById(req.params.id);
+    const bankReceipt = await BankReceipt.findById(req.params.id);
     if (!bankReceipt) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Bank receipt not found' 
+        message: 'Bank receipt not found'
       });
     }
 
@@ -294,48 +337,40 @@ router.put('/:id', [
       particular,
       bank,
       transactionReference,
-      supplier,
+      order,
       customer,
+      supplier,
       notes
     } = req.body;
 
-    const { transaction } = require('../config/postgres');
-    const updatedReceipt = await transaction(async (client) => {
-      // 1. Reverse old ledger entries
-      await AccountingService.reverseLedgerEntriesByReference('bank_receipt', req.params.id, client);
-      // 2. Update receipt (within transaction)
-      const receipt = await bankReceiptRepository.update(req.params.id, {
-        date: date ? new Date(date) : undefined,
-        amount: amount ? parseFloat(amount) : undefined,
-        particular: particular ? particular.trim() : undefined,
-        bankId: bank || undefined,
-        transactionReference: transactionReference ? transactionReference.trim() : undefined,
-        supplierId: supplier !== undefined ? (supplier || null) : undefined,
-        customerId: customer !== undefined ? (customer || null) : undefined,
-        notes: notes ? notes.trim() : undefined
-      }, client);
-      if (!receipt) return null;
-      // 3. Re-post ledger with updated values (must have customer or supplier)
-      if (receipt.customer_id || receipt.supplier_id) {
-        await AccountingService.recordBankReceipt(receipt, client);
-      }
-      return receipt;
-    });
+    // Update fields
+    if (date !== undefined) bankReceipt.date = new Date(date);
+    if (amount !== undefined) bankReceipt.amount = parseFloat(amount);
+    if (particular !== undefined) bankReceipt.particular = particular.trim();
+    if (bank !== undefined) bankReceipt.bank = bank;
+    if (transactionReference !== undefined) bankReceipt.transactionReference = transactionReference ? transactionReference.trim() : null;
+    if (order !== undefined) bankReceipt.order = order || null;
+    if (customer !== undefined) bankReceipt.customer = customer || null;
+    if (supplier !== undefined) bankReceipt.supplier = supplier || null;
+    if (notes !== undefined) bankReceipt.notes = notes ? notes.trim() : null;
 
-    if (!updatedReceipt) {
-      return res.status(404).json({
-        success: false,
-        message: 'Bank receipt not found'
-      });
-    }
+    bankReceipt.updatedBy = req.user._id;
 
-    // Fetch formatted receipt with supplier/customer for response
-    const receiptWithDetails = await bankReceiptRepository.findById(req.params.id);
+    await bankReceipt.save();
+
+    // Populate the updated receipt
+    await bankReceipt.populate([
+      { path: 'bank', select: 'accountName accountNumber bankName' },
+      { path: 'order', select: 'orderNumber' },
+      { path: 'customer', select: 'name businessName' },
+      { path: 'supplier', select: 'name businessName' },
+      { path: 'createdBy', select: 'firstName lastName' }
+    ]);
 
     res.json({
       success: true,
       message: 'Bank receipt updated successfully',
-      data: receiptWithDetails || { ...updatedReceipt, voucherCode: updatedReceipt.receipt_number }
+      data: bankReceipt
     });
   } catch (error) {
     console.error('Update bank receipt error:', error);
@@ -352,12 +387,10 @@ router.put('/:id', [
 // @access  Private
 router.delete('/:id', [
   auth,
-  requirePermission('delete_orders'),
-  validateUuidParam('id'),
-  handleValidationErrors
+  requirePermission('delete_orders')
 ], async (req, res) => {
   try {
-    const bankReceipt = await bankReceiptRepository.findById(req.params.id);
+    const bankReceipt = await BankReceipt.findById(req.params.id);
     if (!bankReceipt) {
       return res.status(404).json({
         success: false,
@@ -365,7 +398,7 @@ router.delete('/:id', [
       });
     }
 
-    await bankReceiptRepository.delete(req.params.id);
+    await BankReceipt.findByIdAndDelete(req.params.id);
 
     res.json({
       success: true,

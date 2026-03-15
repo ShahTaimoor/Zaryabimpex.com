@@ -1,6 +1,6 @@
 const { createRateLimiter } = require('./rateLimit');
 const validator = require('validator');
-const AuditLogRepository = require('../repositories/AuditLogRepository');
+const AuditLog = require('../models/AuditLog');
 
 /**
  * Security Middleware
@@ -52,21 +52,6 @@ class SecurityMiddleware {
   }
   
   /**
-   * Light sanitization: remove XSS vectors but preserve & " ' for names (e.g. "Smith & Sons", "O'Brien").
-   * validator.escape corrupts display data by encoding & as &amp; - causing "&amp;" to show in form fields.
-   */
-  sanitizeString(str) {
-    if (typeof str !== 'string') return str;
-    let s = validator.stripLow ? validator.stripLow(str) : str.trim();
-    return s
-      .trim()
-      .replace(/[<>]/g, '') // Remove HTML brackets
-      .replace(/javascript:/gi, '')
-      .replace(/on\w+=/gi, '') // Remove event handlers
-      .replace(/script/gi, '');
-  }
-
-  /**
    * Recursively sanitize object
    */
   sanitizeObject(obj) {
@@ -75,7 +60,8 @@ class SecurityMiddleware {
     }
     
     if (typeof obj === 'string') {
-      return this.sanitizeString(obj);
+      // Escape HTML and remove potential script tags
+      return validator.escape(validator.stripLow(obj));
     }
     
     if (Array.isArray(obj)) {
@@ -86,7 +72,9 @@ class SecurityMiddleware {
       const sanitized = {};
       for (const key in obj) {
         if (obj.hasOwnProperty(key)) {
-          sanitized[key] = this.sanitizeObject(obj[key]);
+          // Sanitize key
+          const sanitizedKey = validator.escape(key);
+          sanitized[sanitizedKey] = this.sanitizeObject(obj[key]);
         }
       }
       return sanitized;
@@ -114,8 +102,8 @@ class SecurityMiddleware {
           !userPermissions.includes('super_admin')) {
         // Log unauthorized access attempt
         try {
-          await AuditLogRepository.create({
-            user: req.user?.id ?? req.user?._id,
+          await AuditLog.create({
+            user: req.user._id,
             action: 'unauthorized_access_attempt',
             documentType: 'financial_operation',
             description: `Attempted ${req.method} ${req.path} without permission: ${requiredPermission}`,
@@ -161,8 +149,8 @@ class SecurityMiddleware {
         
         if (isFinancial && req.user) {
           // Log financial operation asynchronously (don't block response)
-          AuditLogRepository.create({
-            user: req.user?.id ?? req.user?._id,
+          AuditLog.create({
+            user: req.user._id,
             action: `${req.method} ${req.path}`,
             documentType: 'financial_operation',
             description: `Financial operation: ${req.method} ${req.path}`,
@@ -205,18 +193,17 @@ class SecurityMiddleware {
   }
   
   /**
-   * Validate id (UUID v4 for PostgreSQL; accepts legacy 24-char hex)
+   * Validate MongoDB ObjectId
    */
   validateObjectId(id, fieldName = 'id') {
     if (!id) {
       throw new Error(`${fieldName} is required`);
     }
-    const s = String(id).trim();
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
-    const isMongoId = /^[a-f0-9]{24}$/i.test(s);
-    if (!isUuid && !isMongoId) {
+    
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new Error(`Invalid ${fieldName}: ${id}`);
     }
+    
     return true;
   }
   
@@ -246,7 +233,7 @@ class SecurityMiddleware {
   }
   
   /**
-   * Prevent SQL injection
+   * Prevent SQL injection (for MongoDB, but good practice)
    */
   preventInjection(input) {
     if (typeof input === 'string') {

@@ -96,13 +96,6 @@ export const customersApi = api.injectEndpoints({
       }),
       providesTags: [{ type: 'Customers', id: 'CITIES' }],
     }),
-    getCustomersByCities: builder.query({
-      query: (params) => ({
-        url: 'customers/by-cities',
-        method: 'get',
-        params,
-      }),
-    }),
     exportExcel: builder.mutation({
       query: (params) => ({
         url: 'customers/export/excel',
@@ -153,8 +146,6 @@ export const {
   useLazyCheckEmailQuery,
   useLazyCheckBusinessNameQuery,
   useCitiesQuery,
-  useGetCustomersByCitiesQuery,
-  useLazyGetCustomersByCitiesQuery,
   useExportExcelMutation,
   useImportExcelMutation,
   useDownloadTemplateQuery,

@@ -22,9 +22,6 @@ import {
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatDate } from '../utils/formatters';
 import ReceiptPaymentPrintModal from '../components/ReceiptPaymentPrintModal';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
   useGetCashPaymentsQuery,
   useCreateCashPaymentMutation,
@@ -42,8 +39,6 @@ import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useAppDispatch } from '../store/hooks';
 import { api } from '../store/api';
 import DateFilter from '../components/DateFilter';
-import BaseModal from '../components/BaseModal';
-import FormField from '../components/FormField';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
 
 const CashPayments = () => {
@@ -112,7 +107,7 @@ const CashPayments = () => {
 
   // Fetch customers for dropdown
   const { data: customersData, isLoading: customersLoading, error: customersError, refetch: refetchCustomers } = useGetCustomersQuery(
-    { search: '', limit: 999999 },
+    { search: '', limit: 100 },
     { refetchOnMountOrArgChange: true }
   );
 
@@ -134,9 +129,8 @@ const CashPayments = () => {
 
   // Update selected supplier when suppliers data changes
   useEffect(() => {
-    const selectedId = selectedSupplier?.id || selectedSupplier?._id;
-    if (selectedId && suppliers.length > 0) {
-      const updatedSupplier = suppliers.find(s => (s.id || s._id) === selectedId);
+    if (selectedSupplier && suppliers.length > 0) {
+      const updatedSupplier = suppliers.find(s => s._id === selectedSupplier._id);
       if (updatedSupplier && (
         updatedSupplier.pendingBalance !== selectedSupplier.pendingBalance ||
         updatedSupplier.advanceBalance !== selectedSupplier.advanceBalance ||
@@ -146,13 +140,14 @@ const CashPayments = () => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Note: selectedSupplier is intentionally excluded from deps to prevent infinite loops.
+    // We only want to sync when the suppliers list updates, not when selectedSupplier changes.
   }, [suppliers]);
 
   // Update selected customer when customers data changes
   useEffect(() => {
-    const selectedId = selectedCustomer?.id || selectedCustomer?._id;
-    if (selectedId && customers.length > 0) {
-      const updatedCustomer = customers.find(c => (c.id || c._id) === selectedId);
+    if (selectedCustomer && customers.length > 0) {
+      const updatedCustomer = customers.find(c => c._id === selectedCustomer._id);
       if (updatedCustomer && (
         updatedCustomer.pendingBalance !== selectedCustomer.pendingBalance ||
         updatedCustomer.advanceBalance !== selectedCustomer.advanceBalance ||
@@ -162,6 +157,8 @@ const CashPayments = () => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Note: selectedCustomer is intentionally excluded from deps to prevent infinite loops.
+    // We only want to sync when the customers list updates, not when selectedCustomer changes.
   }, [customers]);
 
   // Mutations
@@ -199,7 +196,7 @@ const CashPayments = () => {
   };
 
   const handleSupplierSelect = (supplierId) => {
-    const supplier = suppliers.find(s => (s.id || s._id) === supplierId);
+    const supplier = suppliers.find(s => s._id === supplierId);
     setSelectedSupplier(supplier);
     setFormData(prev => ({ ...prev, supplier: supplierId, customer: '' }));
     setSelectedCustomer(null);
@@ -207,7 +204,7 @@ const CashPayments = () => {
   };
 
   const handleCustomerSelect = (customerId) => {
-    const customer = customers.find(c => (c.id || c._id) === customerId);
+    const customer = customers.find(c => c._id === customerId);
     setSelectedCustomer(customer);
     setFormData(prev => ({ ...prev, customer: customerId, supplier: '' }));
     setSelectedSupplier(null);
@@ -276,7 +273,7 @@ const CashPayments = () => {
         e.preventDefault();
         if (expenseDropdownIndex >= 0 && expenseDropdownIndex < filteredAccounts.length) {
           const account = filteredAccounts[expenseDropdownIndex];
-          handleExpenseAccountSelect(account.id || account._id);
+          handleExpenseAccountSelect(account._id);
           setExpenseSearchTerm(account.accountName || '');
           setExpenseDropdownIndex(-1);
         }
@@ -320,7 +317,7 @@ const CashPayments = () => {
         e.preventDefault();
         if (supplierDropdownIndex >= 0 && supplierDropdownIndex < filteredSuppliers.length) {
           const supplier = filteredSuppliers[supplierDropdownIndex];
-          handleSupplierSelect(supplier.id || supplier._id);
+          handleSupplierSelect(supplier._id);
           setSupplierSearchTerm(supplier.displayName || supplier.companyName || supplier.name || '');
           setSupplierDropdownIndex(-1);
         }
@@ -336,7 +333,7 @@ const CashPayments = () => {
 
   const handleCustomerKeyDown = (e) => {
     const filteredCustomers = (customers || []).filter(customer => {
-      const displayName = customer.businessName || customer.business_name || customer.displayName || customer.name ||
+      const displayName = customer.displayName || customer.businessName || customer.name ||
         `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || '';
       return (
         displayName.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
@@ -368,9 +365,9 @@ const CashPayments = () => {
         e.preventDefault();
         if (customerDropdownIndex >= 0 && customerDropdownIndex < filteredCustomers.length) {
           const customer = filteredCustomers[customerDropdownIndex];
-          const displayName = customer.businessName || customer.business_name || customer.displayName || customer.name ||
+          const displayName = customer.displayName || customer.businessName || customer.name ||
             `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || '';
-          handleCustomerSelect(customer.id || customer._id);
+          handleCustomerSelect(customer._id);
           setCustomerSearchTerm(displayName);
           setCustomerDropdownIndex(-1);
         }
@@ -458,7 +455,7 @@ const CashPayments = () => {
       notes: formData.notes
     };
 
-    updateCashPayment({ id: (selectedPayment.id || selectedPayment._id), ...submissionData })
+    updateCashPayment({ id: selectedPayment._id, ...submissionData })
       .unwrap()
       .then(() => {
         setShowEditModal(false);
@@ -480,7 +477,7 @@ const CashPayments = () => {
 
   const handleDelete = (payment) => {
     if (window.confirm('Are you sure you want to delete this cash payment?')) {
-      deleteCashPayment(payment.id || payment._id)
+      deleteCashPayment(payment._id)
         .unwrap()
         .then(() => {
           showSuccessToast('Cash payment deleted successfully');
@@ -500,28 +497,25 @@ const CashPayments = () => {
 
   const handleEdit = (payment) => {
     setSelectedPayment(payment);
-    const supplierId = payment.supplier?.id || payment.supplier?._id;
-    const customerId = payment.customer?.id || payment.customer?._id;
-
     setFormData({
       date: payment.date ? payment.date.split('T')[0] : today,
       amount: payment.amount || '',
       particular: payment.particular || '',
-      supplier: supplierId || '',
-      customer: customerId || '',
+      supplier: payment.supplier?._id || '',
+      customer: payment.customer?._id || '',
       notes: payment.notes || ''
     });
 
-    if (supplierId) {
+    if (payment.supplier) {
       setPaymentType('supplier');
       setSelectedSupplier(payment.supplier);
       setSupplierSearchTerm(payment.supplier.displayName || payment.supplier.companyName || payment.supplier.name || '');
       setSelectedCustomer(null);
       setCustomerSearchTerm('');
-    } else if (customerId) {
+    } else if (payment.customer) {
       setPaymentType('customer');
       setSelectedCustomer(payment.customer);
-      setCustomerSearchTerm(payment.customer.businessName || payment.customer.business_name || payment.customer.displayName || payment.customer.name || '');
+      setCustomerSearchTerm(payment.customer.displayName || payment.customer.businessName || payment.customer.name || '');
       setSelectedSupplier(null);
       setSupplierSearchTerm('');
     } else {
@@ -618,24 +612,20 @@ const CashPayments = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage and view all cash payment transactions</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-          <Button
+          <button
             onClick={handleExport}
-            variant="outline"
-            size="default"
-            className="flex items-center justify-center gap-2 w-full sm:w-auto"
+            className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <Download className="h-4 w-4" />
             <span>Export</span>
-          </Button>
-          <Button
+          </button>
+          <button
             onClick={resetForm}
-            variant="default"
-            size="default"
-            className="flex items-center justify-center gap-2 w-full sm:w-auto"
+            className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             <span>New Payment</span>
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -694,13 +684,12 @@ const CashPayments = () => {
                     Supplier
                   </label>
                   <div className="relative">
-                    <Input
+                    <input
                       type="text"
-                      autoComplete="off"
                       value={supplierSearchTerm}
                       onChange={(e) => handleSupplierSearch(e.target.value)}
                       onKeyDown={handleSupplierKeyDown}
-                      className="w-full pr-10"
+                      className="input w-full pr-10"
                       placeholder="Search or select supplier..."
                     />
                     <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -711,51 +700,48 @@ const CashPayments = () => {
                         (supplier.companyName || supplier.name || supplier.displayName || '').toLowerCase().includes(supplierSearchTerm.toLowerCase()) ||
                         (supplier.phone || '').includes(supplierSearchTerm) ||
                         (supplier.email || '').toLowerCase().includes(supplierSearchTerm.toLowerCase())
-                      ).map((supplier, index) => {
-                        const supplierId = supplier.id || supplier._id;
-                        return (
-                          <div
-                            key={supplierId}
-                            onClick={() => {
-                              handleSupplierSelect(supplierId);
-                              setSupplierSearchTerm(supplier.displayName || supplier.companyName || supplier.name || '');
-                              setSupplierDropdownIndex(-1);
-                            }}
-                            className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${supplierDropdownIndex === index ? 'bg-blue-50' : ''
-                              }`}
-                          >
-                            <div className="font-medium text-gray-900">
-                              {supplier.displayName || supplier.companyName || supplier.name || 'Unknown'}
-                            </div>
-                            <div className="text-sm text-gray-600 capitalize mt-0.5">
-                              {supplier.businessType && supplier.reliability
-                                ? `${supplier.businessType} • ${supplier.reliability}`
-                                : supplier.businessType || supplier.reliability || ''
-                              }
-                            </div>
-                            <div className="flex items-center space-x-3 mt-1">
-                              <div className="text-sm text-gray-600">
-                                <span className="text-gray-500">Outstanding Balance:</span>{' '}
-                                <span className={`font-medium ${(supplier.pendingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                  {Math.round(supplier.pendingBalance || 0)}
-                                </span>
-                              </div>
-                              {supplier.phone && (
-                                <div className="flex items-center space-x-1 text-sm text-gray-500">
-                                  <Phone className="h-3 w-3" />
-                                  <span>{supplier.phone}</span>
-                                </div>
-                              )}
-                              {supplier.email && (
-                                <div className="flex items-center space-x-1 text-sm text-gray-500">
-                                  <Mail className="h-3 w-3" />
-                                  <span>{supplier.email}</span>
-                                </div>
-                              )}
-                            </div>
+                      ).map((supplier, index) => (
+                        <div
+                          key={supplier._id}
+                          onClick={() => {
+                            handleSupplierSelect(supplier._id);
+                            setSupplierSearchTerm(supplier.displayName || supplier.companyName || supplier.name || '');
+                            setSupplierDropdownIndex(-1);
+                          }}
+                          className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${supplierDropdownIndex === index ? 'bg-blue-50' : ''
+                            }`}
+                        >
+                          <div className="font-medium text-gray-900">
+                            {supplier.displayName || supplier.companyName || supplier.name || 'Unknown'}
                           </div>
-                        );
-                      })}
+                          <div className="text-sm text-gray-600 capitalize mt-0.5">
+                            {supplier.businessType && supplier.reliability
+                              ? `${supplier.businessType} • ${supplier.reliability}`
+                              : supplier.businessType || supplier.reliability || ''
+                            }
+                          </div>
+                          <div className="flex items-center space-x-3 mt-1">
+                            <div className="text-sm text-gray-600">
+                              <span className="text-gray-500">Outstanding Balance:</span>{' '}
+                              <span className={`font-medium ${(supplier.pendingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                ${Math.round(supplier.pendingBalance || 0)}
+                              </span>
+                            </div>
+                            {supplier.phone && (
+                              <div className="flex items-center space-x-1 text-sm text-gray-500">
+                                <Phone className="h-3 w-3" />
+                                <span>{supplier.phone}</span>
+                              </div>
+                            )}
+                            {supplier.email && (
+                              <div className="flex items-center space-x-1 text-sm text-gray-500">
+                                <Mail className="h-3 w-3" />
+                                <span>{supplier.email}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -778,7 +764,7 @@ const CashPayments = () => {
                             <div className="flex items-center space-x-1">
                               <span className="text-xs text-gray-500">Outstanding Balance:</span>
                               <span className={`text-sm font-medium ${(selectedSupplier.pendingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                {Math.round(selectedSupplier.pendingBalance || 0)}
+                                ${Math.round(selectedSupplier.pendingBalance || 0)}
                               </span>
                             </div>
                             {selectedSupplier.phone && (
@@ -808,21 +794,20 @@ const CashPayments = () => {
                     Customer
                   </label>
                   <div className="relative">
-                    <Input
+                    <input
                       type="text"
-                      autoComplete="off"
                       value={customerSearchTerm}
                       onChange={(e) => handleCustomerSearch(e.target.value)}
                       onKeyDown={handleCustomerKeyDown}
-                      className="w-full pr-10"
+                      className="input w-full pr-10"
                       placeholder="Search customers by name, email, or business..."
                     />
                     <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   </div>
                   {customerSearchTerm && (
-                    <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
+                    <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
                       {(customers || []).filter(customer => {
-                        const displayName = customer.businessName || customer.business_name || customer.displayName || customer.name ||
+                        const displayName = customer.displayName || customer.businessName || customer.name ||
                           `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || '';
                         return (
                           displayName.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
@@ -830,21 +815,20 @@ const CashPayments = () => {
                           (customer.email || '').toLowerCase().includes(customerSearchTerm.toLowerCase())
                         );
                       }).map((customer, index) => {
-                        const customerId = customer.id || customer._id;
-                        const currentBalance = customer.currentBalance !== undefined
-                          ? customer.currentBalance
-                          : ((customer.pendingBalance || 0) - (customer.advanceBalance || 0));
-                        const isPayable = currentBalance < 0;
-                        const isReceivable = currentBalance > 0;
-                        const hasBalance = Math.abs(currentBalance) > 0.01;
-                        const displayName = customer.businessName || customer.business_name || customer.displayName || customer.name ||
+                        const receivables = customer.pendingBalance || 0;
+                        const advance = customer.advanceBalance || 0;
+                        const netBalance = receivables - advance;
+                        const isPayable = netBalance < 0;
+                        const isReceivable = netBalance > 0;
+                        const hasBalance = receivables > 0 || advance > 0;
+                        const displayName = customer.displayName || customer.businessName || customer.name ||
                           `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || 'Unknown';
 
                         return (
                           <div
-                            key={customerId}
+                            key={customer._id}
                             onClick={() => {
-                              handleCustomerSelect(customerId);
+                              handleCustomerSelect(customer._id);
                               setCustomerSearchTerm(displayName);
                               setCustomerDropdownIndex(-1);
                             }}
@@ -859,8 +843,8 @@ const CashPayments = () => {
                               {hasBalance && (
                                 <div className="text-sm text-gray-600">
                                   <span className="text-gray-500">{isPayable ? 'Payables:' : 'Receivables:'}</span>{' '}
-                                  <span className={`font-medium ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'}`}>
-                                    {Math.abs(currentBalance).toFixed(2)}
+                                  <span className={`font-medium ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
+                                    ${Math.abs(netBalance).toFixed(2)}
                                   </span>
                                 </div>
                               )}
@@ -884,34 +868,29 @@ const CashPayments = () => {
                         <User className="h-5 w-5 text-gray-400" />
                         <div className="flex-1">
                           <p className="font-medium">
-                            {selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name ||
+                            {selectedCustomer.displayName || selectedCustomer.businessName || selectedCustomer.name ||
                               `${selectedCustomer.firstName || ''} ${selectedCustomer.lastName || ''}`.trim() ||
                               selectedCustomer.email || 'Unknown Customer'}
                           </p>
-                          {(selectedCustomer.businessName || selectedCustomer.business_name) && (selectedCustomer.displayName || selectedCustomer.name) && (
-                            <p className="text-xs text-gray-500">
-                              Contact: {selectedCustomer.displayName || selectedCustomer.name}
-                            </p>
-                          )}
                           <p className="text-sm text-gray-600 capitalize">
                             {selectedCustomer.businessType ? `${selectedCustomer.businessType} • ` : ''}
                             {selectedCustomer.phone || 'No phone'}
                           </p>
                           <div className="flex items-center space-x-4 mt-2">
                             {(() => {
-                              const currentBalance = selectedCustomer.currentBalance !== undefined
-                                ? selectedCustomer.currentBalance
-                                : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
-                              const isPayable = currentBalance < 0;
-                              const isReceivable = currentBalance > 0;
-                              const hasBalance = Math.abs(currentBalance) > 0.01;
+                              const receivables = selectedCustomer.pendingBalance || 0;
+                              const advance = selectedCustomer.advanceBalance || 0;
+                              const netBalance = receivables - advance;
+                              const isPayable = netBalance < 0;
+                              const isReceivable = netBalance > 0;
+                              const hasBalance = receivables > 0 || advance > 0;
 
                               return hasBalance ? (
                                 <div className="flex items-center space-x-1">
                                   <span className="text-xs text-gray-500">{isPayable ? 'Payables:' : 'Receivables:'}</span>
                                   <span className={`text-sm font-medium ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'
                                     }`}>
-                                    {Math.abs(currentBalance).toFixed(2)}
+                                    ${Math.abs(netBalance).toFixed(2)}
                                   </span>
                                 </div>
                               ) : null;
@@ -931,13 +910,12 @@ const CashPayments = () => {
                     Expense Description *
                   </label>
                   <div className="relative">
-                    <Input
+                    <input
                       type="text"
-                      autoComplete="off"
                       value={expenseSearchTerm}
                       onChange={(e) => handleExpenseSearch(e.target.value)}
                       onKeyDown={handleExpenseKeyDown}
-                      className="w-full pr-10"
+                      className="input w-full pr-10"
                       placeholder="Search expense account (e.g., Rent Expense, Utilities Expense, etc.)"
                       required
                     />
@@ -948,26 +926,23 @@ const CashPayments = () => {
                       {expenseAccounts?.filter(account =>
                         (account.accountName || '').toLowerCase().includes(expenseSearchTerm.toLowerCase()) ||
                         (account.accountCode || '').includes(expenseSearchTerm)
-                      ).map((account, index) => {
-                        const accountId = account.id || account._id;
-                        return (
-                          <div
-                            key={accountId}
-                            onClick={() => {
-                              handleExpenseAccountSelect(accountId);
-                              setExpenseSearchTerm(account.accountName || '');
-                              setExpenseDropdownIndex(-1);
-                            }}
-                            className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${expenseDropdownIndex === index ? 'bg-blue-50' : ''
-                              }`}
-                          >
-                            <div className="font-medium text-gray-900">{account.accountName || 'Unknown'}</div>
-                            {account.accountCode && (
-                              <div className="text-sm text-gray-500">Code: {account.accountCode}</div>
-                            )}
-                          </div>
-                        );
-                      })}
+                      ).map((account, index) => (
+                        <div
+                          key={account._id}
+                          onClick={() => {
+                            handleExpenseAccountSelect(account._id);
+                            setExpenseSearchTerm(account.accountName || '');
+                            setExpenseDropdownIndex(-1);
+                          }}
+                          className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${expenseDropdownIndex === index ? 'bg-blue-50' : ''
+                            }`}
+                        >
+                          <div className="font-medium text-gray-900">{account.accountName || 'Unknown'}</div>
+                          {account.accountCode && (
+                            <div className="text-sm text-gray-500">Code: {account.accountCode}</div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -982,40 +957,42 @@ const CashPayments = () => {
                   <div className="space-y-1">
                     {paymentType === 'supplier' && selectedSupplier && (
                       <>
-                        {(() => {
-                          const currentBalance = selectedSupplier.currentBalance !== undefined
-                            ? selectedSupplier.currentBalance
-                            : ((selectedSupplier.advanceBalance || 0) - (selectedSupplier.pendingBalance || 0));
-                          const isPayable = currentBalance < 0;
-                          const isReceivable = currentBalance > 0;
-                          const hasBalance = Math.abs(currentBalance) > 0.01;
-
-                          return hasBalance ? (
-                            <div className={`flex items-center justify-between px-3 py-2 rounded ${isPayable ? 'bg-red-50 border border-red-200' : isReceivable ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
-                              <span className={`text-sm font-medium ${isPayable ? 'text-red-700' : isReceivable ? 'text-green-700' : 'text-gray-700'}`}>
-                                {isPayable ? 'Payables:' : isReceivable ? 'Receivables:' : 'Balance:'}
-                              </span>
-                              <span className={`text-sm font-bold ${isPayable ? 'text-red-700' : isReceivable ? 'text-green-700' : 'text-gray-700'}`}>
-                                {Math.abs(currentBalance).toFixed(2)}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 text-center">
-                              No balance
-                            </div>
-                          );
-                        })()}
+                        {selectedSupplier.pendingBalance > 0 && (
+                          <div className="flex items-center justify-between px-3 py-2 bg-red-50 border border-red-200 rounded">
+                            <span className="text-sm font-medium text-red-700">Payables:</span>
+                            <span className="text-sm font-bold text-red-700">{selectedSupplier.pendingBalance.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {selectedSupplier.advanceBalance > 0 && (
+                          <div className="flex items-center justify-between px-3 py-2 bg-green-50 border border-green-200 rounded">
+                            <span className="text-sm font-medium text-green-700">Advance:</span>
+                            <span className="text-sm font-bold text-green-700">{selectedSupplier.advanceBalance.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {selectedSupplier.pendingBalance === 0 && selectedSupplier.advanceBalance === 0 && (
+                          <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 text-center">
+                            No balance
+                          </div>
+                        )}
+                        {selectedSupplier.pendingBalance > 0 && selectedSupplier.advanceBalance > 0 && (
+                          <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border-2 border-blue-300 rounded">
+                            <span className="text-sm font-bold text-blue-700">Net Balance:</span>
+                            <span className={`text-sm font-bold ${(selectedSupplier.pendingBalance - selectedSupplier.advanceBalance) > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                              {(selectedSupplier.pendingBalance - selectedSupplier.advanceBalance).toFixed(2)}
+                            </span>
+                          </div>
+                        )}
                       </>
                     )}
                     {paymentType === 'customer' && selectedCustomer && (
                       <>
                         {(() => {
-                          const currentBalance = selectedCustomer.currentBalance !== undefined
-                            ? selectedCustomer.currentBalance
-                            : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
-                          const isPayable = currentBalance < 0;
-                          const isReceivable = currentBalance > 0;
-                          const hasBalance = Math.abs(currentBalance) > 0.01;
+                          const receivables = selectedCustomer.pendingBalance || 0;
+                          const advance = selectedCustomer.advanceBalance || 0;
+                          const netBalance = receivables - advance;
+                          const isPayable = netBalance < 0;
+                          const isReceivable = netBalance > 0;
+                          const hasBalance = receivables > 0 || advance > 0;
 
                           return hasBalance ? (
                             <div className={`flex items-center justify-between px-3 py-2 rounded ${isPayable ? 'bg-red-50 border border-red-200' : isReceivable ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
@@ -1023,7 +1000,7 @@ const CashPayments = () => {
                                 {isPayable ? 'Payables:' : isReceivable ? 'Receivables:' : 'Balance:'}
                               </span>
                               <span className={`text-sm font-bold ${isPayable ? 'text-red-700' : isReceivable ? 'text-green-700' : 'text-gray-700'}`}>
-                                {Math.abs(currentBalance).toFixed(2)}
+                                {Math.abs(netBalance).toFixed(2)}
                               </span>
                             </div>
                           ) : (
@@ -1043,9 +1020,8 @@ const CashPayments = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Amount *
                 </label>
-                <Input
+                <input
                   type="number"
-                  autoComplete="off"
                   step="0.01"
                   min="0"
                   value={formData.amount}
@@ -1053,7 +1029,7 @@ const CashPayments = () => {
                     const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
                     setFormData(prev => ({ ...prev, amount: value }));
                   }}
-                  className="w-full"
+                  className="input w-full"
                   placeholder="0.00"
                   required
                 />
@@ -1068,12 +1044,11 @@ const CashPayments = () => {
                   Payment Date
                 </label>
                 <div className="relative">
-                  <Input
+                  <input
                     type="date"
-                    autoComplete="off"
                     value={formData.date}
                     onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                    className="w-full pr-10"
+                    className="input w-full pr-10"
                   />
                   <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 </div>
@@ -1084,12 +1059,11 @@ const CashPayments = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Description
                 </label>
-                <Input
+                <input
                   type="text"
-                  autoComplete="off"
                   value={formData.particular}
                   onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
-                  className="w-full"
+                  className="input w-full"
                   placeholder="Enter payment description or notes..."
                 />
               </div>
@@ -1099,10 +1073,10 @@ const CashPayments = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Notes (Optional)
                 </label>
-                <Textarea
+                <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full h-20 resize-none"
+                  className="input w-full h-20 resize-none"
                   placeholder="Additional notes..."
                 />
               </div>
@@ -1111,25 +1085,21 @@ const CashPayments = () => {
 
           {/* Action Buttons */}
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
-            <Button
+            <button
               onClick={resetForm}
-              variant="outline"
-              size="default"
-              className="flex items-center justify-center gap-2 w-full sm:w-auto"
+              className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
             >
               <RotateCcw className="h-4 w-4" />
               <span>Reset</span>
-            </Button>
-            <Button
+            </button>
+            <button
               onClick={handleCreate}
               disabled={creating}
-              variant="default"
-              size="default"
-              className="flex items-center justify-center gap-2 w-full sm:w-auto"
+              className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
             >
               <Save className="h-4 w-4" />
               <span>{creating ? 'Saving...' : 'Save Payment'}</span>
-            </Button>
+            </button>
           </div>
         </div>
       </div>
@@ -1146,9 +1116,6 @@ const CashPayments = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             {/* Date Range */}
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date Range
-              </label>
               <DateFilter
                 startDate={filters.fromDate}
                 endDate={filters.toDate}
@@ -1166,12 +1133,12 @@ const CashPayments = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Voucher Code
               </label>
-              <Input
+              <input
                 type="text"
-                autoComplete="off"
                 placeholder="Contains..."
                 value={filters.voucherCode}
                 onChange={(e) => handleFilterChange('voucherCode', e.target.value)}
+                className="input"
               />
             </div>
 
@@ -1180,12 +1147,12 @@ const CashPayments = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Amount
               </label>
-              <Input
+              <input
                 type="number"
-                autoComplete="off"
                 placeholder="Equals..."
                 value={filters.amount}
                 onChange={(e) => handleFilterChange('amount', e.target.value)}
+                className="input"
               />
             </div>
 
@@ -1194,26 +1161,24 @@ const CashPayments = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Particular
               </label>
-              <Input
+              <input
                 type="text"
-                autoComplete="off"
                 placeholder="Contains..."
                 value={filters.particular}
                 onChange={(e) => handleFilterChange('particular', e.target.value)}
+                className="input"
               />
             </div>
 
             {/* Search Button */}
             <div className="flex items-end">
-              <Button
+              <button
                 onClick={() => refetch()}
-                variant="default"
-                size="default"
-                className="w-full flex items-center justify-center gap-2"
+                className="btn btn-primary btn-md w-full flex items-center justify-center gap-2"
               >
                 <Search className="h-4 w-4" />
                 <span>Search</span>
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -1300,90 +1265,87 @@ const CashPayments = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {cashPayments.map((payment, index) => {
-                      const paymentId = payment.id || payment._id;
-                      return (
-                        <tr
-                          key={paymentId}
-                          className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
-                        >
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatDate(payment.date)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {payment.voucherCode || payment.payment_number || '-'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {Math.round(payment.amount)}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
-                            {payment.particular}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {payment.supplier ? (
-                              <div>
-                                <div className="font-medium">
-                                  {payment.supplier.businessName || payment.supplier.business_name || payment.supplier.companyName || payment.supplier.displayName || payment.supplier.name || 'Unknown Supplier'}
-                                </div>
-                                <div className="text-gray-500 text-xs">Supplier</div>
+                    {cashPayments.map((payment, index) => (
+                      <tr
+                        key={payment._id}
+                        className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatDate(payment.date)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {payment.voucherCode}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {Math.round(payment.amount)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                          {payment.particular}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {payment.supplier ? (
+                            <div>
+                              <div className="font-medium">
+                                {payment.supplier.companyName || payment.supplier.displayName || payment.supplier.name || 'Unknown Supplier'}
                               </div>
-                            ) : payment.customer ? (
-                              <div>
-                                <div className="font-medium">
-                                  {((payment.customer.businessName || payment.customer.business_name || payment.customer.displayName || payment.customer.name ||
-                                    `${payment.customer.firstName || ''} ${payment.customer.lastName || ''}`.trim() ||
-                                    payment.customer.email || 'Unknown Customer') || '').toUpperCase()}
-                                </div>
-                                <div className="text-gray-500 text-xs">Customer</div>
-                              </div>
-                            ) : payment.paymentType === 'expense' ? (
-                              <div>
-                                <div className="font-medium text-orange-600">Expense</div>
-                                <div className="text-gray-500 text-xs">{payment.particular || 'N/A'}</div>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => handlePrint(payment)}
-                                className="text-green-600 hover:text-green-900"
-                                title="Print"
-                              >
-                                <Printer className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleView(payment)}
-                                className="text-blue-600 hover:text-blue-900"
-                                title="View"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </button>
-                              {(
-                                <>
-                                  <button
-                                    onClick={() => handleEdit(payment)}
-                                    className="text-indigo-600 hover:text-indigo-900"
-                                    title="Edit"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(payment)}
-                                    className="text-red-600 hover:text-red-900"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </>
-                              )}
+                              <div className="text-gray-500 text-xs">Supplier</div>
                             </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                          ) : payment.customer ? (
+                            <div>
+                              <div className="font-medium">
+                                {((payment.customer.businessName || payment.customer.displayName || payment.customer.name ||
+                                  `${payment.customer.firstName || ''} ${payment.customer.lastName || ''}`.trim() ||
+                                  payment.customer.email || 'Unknown Customer') || '').toUpperCase()}
+                              </div>
+                              <div className="text-gray-500 text-xs">Customer</div>
+                            </div>
+                          ) : payment.paymentType === 'expense' ? (
+                            <div>
+                              <div className="font-medium text-orange-600">Expense</div>
+                              <div className="text-gray-500 text-xs">{payment.particular || 'N/A'}</div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handlePrint(payment)}
+                              className="text-green-600 hover:text-green-900"
+                              title="Print"
+                            >
+                              <Printer className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleView(payment)}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="View"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            {formatDateForInput(payment.date) === today && (
+                              <>
+                                <button
+                                  onClick={() => handleEdit(payment)}
+                                  className="text-indigo-600 hover:text-indigo-900"
+                                  title="Edit"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(payment)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -1404,116 +1366,160 @@ const CashPayments = () => {
       />
 
       {/* Edit Modal */}
-      <BaseModal
-        isOpen={showEditModal}
-        onClose={() => { setShowEditModal(false); setSelectedPayment(null); resetForm(); }}
-        title="Edit Cash Payment"
-        maxWidth="sm"
-        variant="centered"
-        contentClassName="p-5"
-        footer={
-          <div className="flex justify-end space-x-3">
-            <Button onClick={() => { setShowEditModal(false); setSelectedPayment(null); resetForm(); }} variant="secondary">
-              Cancel
-            </Button>
-            <Button onClick={handleUpdate} disabled={updating} variant="default">
-              {updating ? 'Updating...' : 'Update'}
-            </Button>
+      {showEditModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Edit Cash Payment</h3>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedPayment(null);
+                    resetForm();
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                    className="input w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Amount
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.amount}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
+                      setFormData(prev => ({ ...prev, amount: value }));
+                    }}
+                    className="input w-full"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Particular
+                  </label>
+                  <textarea
+                    value={formData.particular}
+                    onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
+                    className="input w-full"
+                    rows="3"
+                    placeholder="Enter transaction details..."
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {paymentType === 'supplier' ? 'Supplier' : 'Customer'} (Optional)
+                  </label>
+                  <select
+                    value={paymentType === 'supplier' ? formData.supplier : formData.customer}
+                    onChange={(e) => setFormData(prev => ({ ...prev, [paymentType === 'supplier' ? 'supplier' : 'customer']: e.target.value }))}
+                    className="input w-full"
+                    disabled={paymentType === 'supplier' ? suppliersLoading : customersLoading}
+                  >
+                    <option value="">
+                      {paymentType === 'supplier'
+                        ? (suppliersLoading ? 'Loading suppliers...' : 'Select Supplier')
+                        : (customersLoading ? 'Loading customers...' : 'Select Customer')
+                      }
+                    </option>
+                    {paymentType === 'supplier'
+                      ? suppliers?.map((s) => (
+                        <option key={s._id} value={s._id}>
+                          {s.displayName || s.companyName || s.name}
+                        </option>
+                      ))
+                      : customers?.map((c) => (
+                        <option key={c._id} value={c._id}>
+                          {c.displayName || c.businessName || c.name}
+                        </option>
+                      ))
+                    }
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Notes (Optional)
+                  </label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    className="input w-full"
+                    rows="2"
+                    placeholder="Additional notes..."
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedPayment(null);
+                    resetForm();
+                  }}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdate}
+                  disabled={updating}
+                  className="btn btn-primary"
+                >
+                  {updating ? 'Updating...' : 'Update'}
+                </button>
+              </div>
+            </div>
           </div>
-        }
-      >
-        <div className="space-y-4">
-          <FormField label="Date" htmlFor="edit-date">
-            <Input
-              id="edit-date"
-              type="date"
-              autoComplete="off"
-              value={formData.date}
-              onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-              className="w-full"
-            />
-          </FormField>
-          <FormField label="Amount" htmlFor="edit-amount" required>
-            <Input
-              id="edit-amount"
-              type="number"
-              autoComplete="off"
-              step="0.01"
-              min="0"
-              value={formData.amount}
-              onChange={(e) => {
-                const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
-                setFormData(prev => ({ ...prev, amount: value }));
-              }}
-              className="w-full"
-              placeholder="0.00"
-              required
-            />
-          </FormField>
-          <FormField label="Particular" htmlFor="edit-particular" required>
-            <Textarea
-              id="edit-particular"
-              value={formData.particular}
-              onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
-              className="w-full"
-              rows={3}
-              placeholder="Enter transaction details..."
-              required
-            />
-          </FormField>
-          <FormField label={`${paymentType === 'supplier' ? 'Supplier' : 'Customer'} (Optional)`} htmlFor="edit-party">
-            <select
-              id="edit-party"
-              value={paymentType === 'supplier' ? formData.supplier : formData.customer}
-              onChange={(e) => setFormData(prev => ({ ...prev, [paymentType === 'supplier' ? 'supplier' : 'customer']: e.target.value }))}
-              className="input w-full"
-              disabled={paymentType === 'supplier' ? suppliersLoading : customersLoading}
-            >
-              <option value="">
-                {paymentType === 'supplier' ? (suppliersLoading ? 'Loading suppliers...' : 'Select Supplier') : (customersLoading ? 'Loading customers...' : 'Select Customer')}
-              </option>
-              {paymentType === 'supplier'
-                ? suppliers?.map((s) => <option key={s.id || s._id} value={s.id || s._id}>{s.businessName || s.business_name || s.displayName || s.companyName || s.name}</option>)
-                : customers?.map((c) => <option key={c.id || c._id} value={c.id || c._id}>{c.businessName || c.business_name || c.displayName || c.name}</option>)
-              }
-            </select>
-          </FormField>
-          <FormField label="Notes (Optional)" htmlFor="edit-notes">
-            <Textarea
-              id="edit-notes"
-              value={formData.notes}
-              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-              className="w-full"
-              rows={2}
-              placeholder="Additional notes..."
-            />
-          </FormField>
         </div>
-      </BaseModal>
+      )}
 
       {/* View Modal */}
-      <BaseModal
-        isOpen={showViewModal && !!selectedPayment}
-        onClose={() => { setShowViewModal(false); setSelectedPayment(null); }}
-        title="Cash Payment Details"
-        maxWidth="sm"
-        variant="centered"
-        contentClassName="p-5"
-        footer={
-          <div className="flex justify-end">
-            <Button onClick={() => { setShowViewModal(false); setSelectedPayment(null); }} variant="secondary" className="w-full">
-              Close
-            </Button>
-          </div>
-        }
-      >
-        {selectedPayment && (
-          <div className="space-y-4">
+      {showViewModal && selectedPayment && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Cash Payment Details</h3>
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setSelectedPayment(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Voucher Code
                   </label>
-                  <p className="text-sm text-gray-900">{selectedPayment.voucherCode || selectedPayment.payment_number || '-'}</p>
+                  <p className="text-sm text-gray-900">{selectedPayment.voucherCode}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1546,7 +1552,7 @@ const CashPayments = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Customer
                     </label>
-                    <p className="text-sm text-gray-900">{(selectedPayment.customer.businessName || selectedPayment.customer.business_name || selectedPayment.customer.displayName || selectedPayment.customer.name || '').toUpperCase()}</p>
+                    <p className="text-sm text-gray-900">{(selectedPayment.customer.businessName || selectedPayment.customer.displayName || selectedPayment.customer.name || '').toUpperCase()}</p>
                   </div>
                 )}
                 <div>
@@ -1572,8 +1578,21 @@ const CashPayments = () => {
                   </p>
                 </div>
               </div>
-        )}
-      </BaseModal>
+              <div className="flex justify-end mt-6">
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setSelectedPayment(null);
+                  }}
+                  className="btn btn-secondary"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

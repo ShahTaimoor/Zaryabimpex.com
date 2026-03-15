@@ -34,7 +34,6 @@ export const api = createApi({
     'Warehouses',
     'RecurringExpenses',
     'Returns',
-    'SaleReturns',
     'Discounts',
     'JournalVouchers',
     'Users',

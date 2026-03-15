@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import BaseModal from './BaseModal';
 import { 
   Download, 
   Upload, 
@@ -7,6 +6,7 @@ import {
   FileSpreadsheet, 
   AlertCircle,
   CheckCircle,
+  X,
   HelpCircle,
   ChevronDown,
   ChevronUp,
@@ -23,10 +23,8 @@ import {
 import { useAppDispatch } from '../store/hooks';
 import { LoadingButton } from './LoadingSpinner';
 import { handleApiError, showSuccessToast, showErrorToast, showWarningToast } from '../utils/errorHandler';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import { useLoadingState } from '../utils/loadingStates';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { validateFile, validateCSVData, sanitizeCSVData } from '../utils/validation';
 import { sanitizeCSVData as sanitizeCSVDataUtil } from '../utils/sanitization';
 
@@ -227,19 +225,17 @@ const ProductImportExport = ({ onImportComplete, filters = {} }) => {
           <span className="text-sm sm:text-base font-medium text-gray-900">Import / Export Products</span>
         </div>
         <div className="flex items-center space-x-2 w-full sm:w-auto">
-          <Button
+          <button
             onClick={(e) => {
               e.stopPropagation();
               setShowImportModal(true);
             }}
-            variant="default"
-            size="default"
-            className="flex items-center justify-center gap-2 w-full sm:w-auto"
+            className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <Upload className="h-4 w-4" />
             <span className="hidden sm:inline">Import Products</span>
             <span className="sm:hidden">Import</span>
-          </Button>
+          </button>
           {isExpanded ? (
             <ChevronUp className="h-4 w-4 text-gray-400 flex-shrink-0" />
           ) : (
@@ -265,9 +261,7 @@ const ProductImportExport = ({ onImportComplete, filters = {} }) => {
           <LoadingButton
             onClick={handleExportCSV}
             isLoading={isExporting}
-            variant="secondary"
-            size="default"
-            className="flex items-center justify-center gap-2 w-full"
+            className="btn btn-secondary btn-md flex items-center justify-center gap-2 w-full"
           >
             <Download className="h-4 w-4" />
             Export CSV
@@ -285,9 +279,7 @@ const ProductImportExport = ({ onImportComplete, filters = {} }) => {
           <LoadingButton
             onClick={handleExportExcel}
             isLoading={isExporting}
-            variant="secondary"
-            size="default"
-            className="flex items-center justify-center gap-2 w-full"
+            className="btn btn-secondary btn-md flex items-center justify-center gap-2 w-full"
           >
             <Download className="h-4 w-4" />
             Export Excel
@@ -308,40 +300,43 @@ const ProductImportExport = ({ onImportComplete, filters = {} }) => {
               <li>• Maximum file size: 10MB</li>
               <li>• Products with duplicate names will be skipped</li>
             </ul>
-            <Button
+            <button
               onClick={handleDownloadTemplate}
-              variant="default"
-              size="default"
-              className="flex items-center justify-center gap-2 mt-3"
+              className="btn btn-primary btn-md flex items-center justify-center gap-2 mt-3"
             >
               <Download className="h-4 w-4" />
               Download Template
-            </Button>
+            </button>
           </div>
         </div>
       </div>
 
       {/* Import Modal */}
       {showImportModal && (
-        <BaseModal
-          isOpen={showImportModal}
-          onClose={resetImport}
-          title="Import Products"
-          maxWidth="md"
-          variant="centered"
-          contentClassName="p-4 sm:p-6"
-        >
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900">Import Products</h3>
+              <button
+                onClick={resetImport}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6">
               {!importResults ? (
                 <div>
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Select File
                     </label>
-                    <Input
+                    <input
                       type="file"
                       accept=".csv,.xlsx,.xls"
                       onChange={handleFileSelect}
-                      className="w-full"
+                      className="input w-full"
                     />
                   </div>
 
@@ -358,21 +353,17 @@ const ProductImportExport = ({ onImportComplete, filters = {} }) => {
                   )}
 
                   <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
-                    <Button
+                    <button
                       onClick={resetImport}
-                      variant="secondary"
-                      size="default"
-                      className="w-full sm:w-auto"
+                      className="btn btn-secondary btn-md w-full sm:w-auto"
                     >
                       Cancel
-                    </Button>
+                    </button>
                     <LoadingButton
                       onClick={handleImport}
                       isLoading={isImporting}
                       disabled={!importFile}
-                      variant="default"
-                      size="default"
-                      className="flex items-center justify-center gap-2 w-full sm:w-auto"
+                      className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
                     >
                       Import Products
                     </LoadingButton>
@@ -421,18 +412,18 @@ const ProductImportExport = ({ onImportComplete, filters = {} }) => {
                   </div>
 
                   <div className="flex justify-end">
-                    <Button
+                    <button
                       onClick={resetImport}
-                      variant="default"
-                      size="default"
-                      className="w-full sm:w-auto"
+                      className="btn btn-primary btn-md w-full sm:w-auto"
                     >
                       Close
-                    </Button>
+                    </button>
                   </div>
                 </div>
               )}
-        </BaseModal>
+            </div>
+          </div>
+        </div>
       )}
         </div>
       )}

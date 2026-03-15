@@ -1,7 +1,6 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
-import BaseModal from './BaseModal';
 import { 
+  X, 
   Tag, 
   Percent, 
   TrendingUp, 
@@ -73,65 +72,38 @@ const DiscountDetailModal = ({
 
   if (!isOpen || !discount) return null;
 
-  const statusBadge = (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(discount.status)}`}>
-      {getStatusIcon(discount.status)}
-      <span className="ml-2 capitalize">{discount.status}</span>
-    </span>
-  );
-
   return (
-    <BaseModal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={
-        <span className="flex items-center gap-3">
-          <span className="p-2 bg-blue-50 rounded-lg">
-            <Tag className="h-5 w-5 text-blue-600" />
-          </span>
-          {discount.name}
-        </span>
-      }
-      subtitle={`Code: ${discount.code} • ${(discount.type ?? '').replace(/_/g, ' ')}`}
-      headerExtra={statusBadge}
-      maxWidth="xl"
-      variant="scrollable"
-      contentClassName="p-5"
-      footer={
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center space-x-4">
-            <Button
-              type="button"
-              onClick={() => onToggleStatus(discount._id)}
-              variant="secondary"
-              disabled={isLoading}
-            >
-              {discount.isActive ? (
-                <><ToggleLeft className="h-4 w-4 mr-2" /> Deactivate</>
-              ) : (
-                <><ToggleRight className="h-4 w-4 mr-2" /> Activate</>
-              )}
-            </Button>
-            {discount.currentUsage === 0 && (
-              <Button
-                type="button"
-                onClick={() => onDelete(discount._id)}
-                variant="secondary"
-                className="text-red-600 hover:text-red-800"
-                disabled={isLoading}
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Delete
-              </Button>
-            )}
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center">
+            <div className="p-3 bg-blue-50 rounded-lg mr-4">
+              <Tag className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">{discount.name}</h3>
+              <p className="text-sm text-gray-500">
+                Code: {discount.code} • {discount.type.replace('_', ' ')}
+              </p>
+            </div>
           </div>
-          <Button onClick={onClose} variant="secondary">
-            Close
-          </Button>
+          <div className="flex items-center space-x-3">
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(discount.status)}`}>
+              {getStatusIcon(discount.status)}
+              <span className="ml-2 capitalize">{discount.status}</span>
+            </span>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
         </div>
-      }
-    >
-      <div className="space-y-6">
+
+        {/* Content */}
+        <div className="space-y-6">
           {/* Basic Information */}
           <div className="bg-gray-50 rounded-lg p-6">
             <h4 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h4>
@@ -226,7 +198,7 @@ const DiscountDetailModal = ({
                 <div className="mt-2 max-h-32 overflow-y-auto">
                   {discount.applicableProducts.map((product) => (
                     <div key={product._id} className="text-sm text-gray-900 py-1">
-                      • {product.name} ({typeof product.category === 'object' ? (product.category?.name ?? 'N/A') : (product.category || 'N/A')})
+                      • {product.name} ({product.category || 'N/A'})
                     </div>
                   ))}
                 </div>
@@ -352,7 +324,40 @@ const DiscountDetailModal = ({
             </div>
           )}
         </div>
-    </BaseModal>
+
+        {/* Footer Actions */}
+        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => onToggleStatus(discount._id)}
+              className="btn btn-secondary"
+              disabled={isLoading}
+            >
+              {discount.isActive ? 
+                <><ToggleLeft className="h-4 w-4 mr-2" /> Deactivate</> : 
+                <><ToggleRight className="h-4 w-4 mr-2" /> Activate</>
+              }
+            </button>
+            {discount.currentUsage === 0 && (
+              <button
+                onClick={() => onDelete(discount._id)}
+                className="btn btn-secondary text-red-600 hover:text-red-800"
+                disabled={isLoading}
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Delete
+              </button>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="btn btn-secondary"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 

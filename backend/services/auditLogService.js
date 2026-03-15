@@ -1,10 +1,10 @@
-const AuditLogRepository = require('../repositories/AuditLogRepository');
+const AuditLog = require('../models/AuditLog');
 
 class AuditLogService {
   /**
    * Create an audit log entry
    * @param {Object} auditData - Audit log data
-   * @returns {Promise<Object>}
+   * @returns {Promise<AuditLog>}
    */
   async createAuditLog(auditData) {
     const {
@@ -19,11 +19,11 @@ class AuditLogService {
       metadata = {}
     } = auditData;
 
-    return await AuditLogRepository.create({
+    const auditLog = new AuditLog({
       entityType,
       entityId,
       action,
-      changes: changes ?? {},
+      changes,
       user,
       ipAddress,
       userAgent,
@@ -31,6 +31,8 @@ class AuditLogService {
       metadata,
       timestamp: new Date()
     });
+
+    return await auditLog.save();
   }
 
   /**
@@ -43,12 +45,12 @@ class AuditLogService {
   async logProductCreation(product, user, req) {
     return await this.createAuditLog({
       entityType: 'Product',
-      entityId: product?.id ?? product?._id,
+      entityId: product._id,
       action: 'CREATE',
       changes: {
         after: this.sanitizeProduct(product)
       },
-      user: user?.id ?? user?._id,
+      user: user._id,
       ipAddress: req?.ip || req?.connection?.remoteAddress,
       userAgent: req?.headers['user-agent'],
       reason: 'Product created',
@@ -102,12 +104,12 @@ class AuditLogService {
   async logProductDeletion(product, user, req) {
     return await this.createAuditLog({
       entityType: 'Product',
-      entityId: product?.id ?? product?._id,
+      entityId: product._id,
       action: 'DELETE',
       changes: {
         before: this.sanitizeProduct(product)
       },
-      user: user?.id ?? user?._id,
+      user: user._id,
       ipAddress: req?.ip || req?.connection?.remoteAddress,
       userAgent: req?.headers['user-agent'],
       reason: 'Product deleted',
@@ -138,7 +140,7 @@ class AuditLogService {
         after: { currentStock: newStock },
         fieldsChanged: ['inventory.currentStock']
       },
-      user: user?.id ?? user?._id,
+      user: user._id,
       ipAddress: req?.ip || req?.connection?.remoteAddress,
       userAgent: req?.headers['user-agent'],
       reason,
@@ -157,14 +159,27 @@ class AuditLogService {
    */
   async getProductAuditLogs(productId, options = {}) {
     const { limit = 50, skip = 0, action, startDate, endDate } = options;
-    const filters = {
+    
+    const filter = {
       entityType: 'Product',
-      entityId: typeof productId === 'string' ? productId : (productId?.id ?? productId?._id?.toString?.() ?? productId?._id)
+      entityId: productId
     };
-    if (action) filters.action = action;
-    if (startDate) filters.startDate = startDate;
-    if (endDate) filters.endDate = endDate;
-    return await AuditLogRepository.find(filters, { limit, skip });
+
+    if (action) {
+      filter.action = action;
+    }
+
+    if (startDate || endDate) {
+      filter.timestamp = {};
+      if (startDate) filter.timestamp.$gte = new Date(startDate);
+      if (endDate) filter.timestamp.$lte = new Date(endDate);
+    }
+
+    return await AuditLog.find(filter)
+      .populate('user', 'firstName lastName email')
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .skip(skip);
   }
 
   /**
@@ -226,7 +241,7 @@ class AuditLogService {
     const productObj = product.toObject ? product.toObject() : product;
     
     return {
-      _id: productObj.id ?? productObj._id,
+      _id: productObj._id,
       name: productObj.name,
       sku: productObj.sku,
       barcode: productObj.barcode,

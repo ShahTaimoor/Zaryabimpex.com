@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   AlertTriangle, 
@@ -8,8 +8,7 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-  Zap,
-  Search
+  Zap
 } from 'lucide-react';
 import {
   useGetLowStockAlertsQuery,
@@ -18,18 +17,12 @@ import {
 } from '../store/services/inventoryApi';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatCurrency } from '../utils/formatters';
-import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-
-const LIMIT_OPTIONS = [50, 500, 1000, 5000];
 
 const InventoryAlerts = () => {
   const navigate = useNavigate();
   const [filterLevel, setFilterLevel] = useState('all'); // 'all', 'critical', 'warning'
-  const [currentPage, setCurrentPage] = useState(1);
   const [autoConfirm, setAutoConfirm] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [limit, setLimit] = useState(50);
 
   // Fetch low stock alerts
   const { 
@@ -41,19 +34,12 @@ const InventoryAlerts = () => {
     {
       includeOutOfStock: filterLevel === 'all' || filterLevel === 'critical',
       includeCritical: filterLevel === 'all' || filterLevel === 'critical',
-      includeWarning: filterLevel === 'all' || filterLevel === 'warning',
-      page: currentPage,
-      limit,
-      ...(searchTerm.trim() && { search: searchTerm.trim() })
+      includeWarning: filterLevel === 'all' || filterLevel === 'warning'
     },
     {
       pollingInterval: 30000, // Refetch every 30 seconds
     }
   );
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filterLevel, searchTerm, limit]);
 
   // Fetch alert summary
   const { data: summaryResponse } = useGetAlertSummaryQuery(undefined, {
@@ -102,15 +88,6 @@ const InventoryAlerts = () => {
   const alerts = Array.isArray(alertsData) ? alertsData : [];
   const summary = summaryResponse?.data?.data || summaryResponse?.data || summaryResponse || {};
 
-  const pagination = {
-    current: alertsResponse?.data?.pagination?.page ?? alertsResponse?.pagination?.page ?? 1,
-    pages: alertsResponse?.data?.pagination?.pages ?? alertsResponse?.pagination?.pages ?? 1,
-    total: alertsResponse?.data?.pagination?.total ?? alertsResponse?.pagination?.total ?? alerts.length,
-    limit: alertsResponse?.data?.pagination?.limit ?? alertsResponse?.pagination?.limit ?? limit
-  };
-  pagination.hasPrev = pagination.current > 1;
-  pagination.hasNext = pagination.current < pagination.pages;
-
   const getAlertBadgeColor = (level) => {
     switch (level) {
       case 'critical':
@@ -138,12 +115,10 @@ const InventoryAlerts = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Monitor low stock and auto-generate purchase orders</p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-          <Button
+          <button
             onClick={handleGeneratePOs}
             disabled={generating || alerts.length === 0}
-            variant="default"
-            size="default"
-            className="flex items-center justify-center gap-2"
+            className="btn btn-primary btn-md flex items-center justify-center gap-2"
           >
             {generating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -152,7 +127,7 @@ const InventoryAlerts = () => {
             )}
             <span className="hidden sm:inline">Generate Purchase Orders</span>
             <span className="sm:hidden">Generate POs</span>
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -207,52 +182,28 @@ const InventoryAlerts = () => {
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex flex-col gap-3 sm:gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 flex-wrap">
-            <label className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">Filter by Level:</label>
-            <select
-              value={filterLevel}
-              onChange={(e) => setFilterLevel(e.target.value)}
-              className="input w-full sm:w-auto"
-            >
-              <option value="all">All Alerts</option>
-              <option value="critical">Critical Only</option>
-              <option value="warning">Warning Only</option>
-            </select>
-            <div className="relative flex-1 min-w-[180px] sm:max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search products by name or SKU..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="input w-full pl-9"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">Show:</label>
-              <select
-                value={limit}
-                onChange={(e) => setLimit(Number(e.target.value))}
-                className="input w-auto"
-              >
-                {LIMIT_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center space-x-2 ml-auto">
-              <input
-                type="checkbox"
-                id="autoConfirm"
-                checked={autoConfirm}
-                onChange={(e) => setAutoConfirm(e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="autoConfirm" className="text-sm text-gray-700">
-                Auto-confirm generated POs
-              </label>
-            </div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+          <label className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">Filter by Level:</label>
+          <select
+            value={filterLevel}
+            onChange={(e) => setFilterLevel(e.target.value)}
+            className="input"
+          >
+            <option value="all">All Alerts</option>
+            <option value="critical">Critical Only</option>
+            <option value="warning">Warning Only</option>
+          </select>
+          <div className="flex items-center space-x-2 ml-auto">
+            <input
+              type="checkbox"
+              id="autoConfirm"
+              checked={autoConfirm}
+              onChange={(e) => setAutoConfirm(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="autoConfirm" className="text-sm text-gray-700">
+              Auto-confirm generated POs
+            </label>
           </div>
         </div>
       </div>
@@ -372,48 +323,6 @@ const InventoryAlerts = () => {
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
-
-        {/* Pagination */}
-        {!isLoading && !error && alerts.length > 0 && pagination.pages > 1 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-4 px-6 border-t border-gray-200">
-            <p className="text-sm text-gray-600">
-              Showing{' '}
-              <span className="font-medium">
-                {(pagination.current - 1) * pagination.limit + 1}
-              </span>
-              {' - '}
-              <span className="font-medium">
-                {Math.min(pagination.current * pagination.limit, pagination.total)}
-              </span>
-              {' of '}
-              <span className="font-medium">{pagination.total}</span>
-              {' alerts'}
-            </p>
-            <nav className="flex items-center gap-2">
-              <Button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={!pagination.hasPrev}
-                variant="outline"
-                size="sm"
-                className="disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-gray-600 px-2">
-                Page {pagination.current} of {pagination.pages}
-              </span>
-              <Button
-                onClick={() => setCurrentPage((p) => Math.min(pagination.pages, p + 1))}
-                disabled={!pagination.hasNext}
-                variant="outline"
-                size="sm"
-                className="disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </Button>
-            </nav>
           </div>
         )}
       </div>

@@ -31,7 +31,6 @@ import { useGetProductsQuery } from '../store/services/productsApi';
 import { useGetVariantsQuery } from '../store/services/productVariantsApi';
 import {
   useGetPurchaseOrdersQuery,
-  useGetPurchaseOrderQuery,
   useCreatePurchaseOrderMutation,
   useUpdatePurchaseOrderMutation,
   useDeletePurchaseOrderMutation,
@@ -41,11 +40,8 @@ import {
 } from '../store/services/purchaseOrdersApi';
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { SearchableDropdown } from '../components/SearchableDropdown';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../utils/componentUtils';
 import { formatDate, formatCurrency } from '../utils/formatters';
@@ -54,59 +50,12 @@ import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 import PrintModal from '../components/PrintModal';
 
-// Helper to get product display name (handles object with name/displayName or UUID string)
-const getProductDisplayName = (product) => {
-  if (!product) return 'Unknown Product';
-  if (typeof product === 'object') {
-    const name = product.displayName || product.variantName || product.name || product.company_name || '';
-    return name || 'Product';
-  }
-  // UUID-like string - don't show raw ID
-  if (typeof product === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(product)) {
-    return 'Product';
-  }
-  return product;
-};
-
-// Format supplier/customer address for display (avoids showing raw JSON)
-const formatAddressForDisplay = (party) => {
-  if (!party) return '';
-  if (typeof party.address === 'string' && party.address.trim()) return party.address.trim();
-  const addrRaw = party.address ?? party.addresses;
-  if (Array.isArray(addrRaw) && addrRaw.length > 0) {
-    const a = addrRaw.find(x => x.isDefault) || addrRaw.find(x => x.type === 'billing' || x.type === 'both') || addrRaw[0];
-    const parts = [a.street || a.address_line1 || a.addressLine1 || a.line1 || a.address, a.city, a.state || a.province, a.country, a.zipCode || a.zip || a.postalCode || a.postal_code].filter(Boolean);
-    return parts.join(', ') || '—';
-  }
-  if (addrRaw && typeof addrRaw === 'object' && !Array.isArray(addrRaw)) {
-    const parts = [addrRaw.street || addrRaw.address_line1 || addrRaw.addressLine1 || addrRaw.line1 || addrRaw.address, addrRaw.city, addrRaw.state || addrRaw.province, addrRaw.country, addrRaw.zipCode || addrRaw.zip || addrRaw.postalCode || addrRaw.postal_code].filter(Boolean);
-    return parts.join(', ') || '—';
-  }
-  if (typeof party.location === 'string' && party.location.trim()) return party.location.trim();
-  if (typeof party.companyAddress === 'string' && party.companyAddress.trim()) return party.companyAddress.trim();
-  return '';
-};
-
-// Helper function to safely render values (supports both camelCase and snake_case)
+// Helper function to safely render values
 const safeRender = (value) => {
   if (value === null || value === undefined) return '';
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string') {
-    // Handle JSON string (e.g. supplier stored as stringified object)
-    if (value.trim().startsWith('{')) {
-      try {
-        const parsed = JSON.parse(value);
-        return parsed.businessName || parsed.business_name || parsed.companyName || parsed.company_name || parsed.name || parsed.contact_person || parsed.contactPerson?.name || parsed.contactPerson || '';
-      } catch {
-        return value;
-      }
-    }
-    return value;
-  }
+  if (typeof value === 'string' || typeof value === 'number') return value;
   if (typeof value === 'object') {
-    const cp = value.contactPerson ?? value.contact_person;
-    const cpVal = typeof cp === 'object' ? (cp?.name ?? cp?.title) : cp;
-    return value.businessName || value.business_name || value.companyName || value.company_name || value.name || value.title || value.fullName || value.contact_person || (typeof cpVal === 'string' ? cpVal : '') || '';
+    return value.name || value.title || value.fullName || value.companyName || JSON.stringify(value);
   }
   return String(value);
 };
@@ -145,7 +94,7 @@ const PurchaseOrderCard = ({ po, onEdit, onDelete, onConfirm, onCancel, onClose,
           <div className="space-y-2">
             <div className="flex items-center text-sm text-gray-600">
               <Building className="h-4 w-4 mr-2" />
-              {po.supplier?.businessName || po.supplier?.business_name || po.supplier?.companyName || (typeof po.supplier === 'string' ? `Supplier ID: ${po.supplier}` : 'Unknown Supplier')}
+              {po.supplier?.companyName || (typeof po.supplier === 'string' ? `Supplier ID: ${po.supplier}` : 'Unknown Supplier')}
             </div>
 
             <div className="flex items-center text-sm text-gray-600">
@@ -443,11 +392,6 @@ export const PurchaseOrders = ({ tabId }) => {
     }
   }, [completeSupplierData]);
 
-  // Fetch full order (with populated products) when view modal is open
-  const viewOrderId = showViewModal && selectedOrder ? (selectedOrder.id || selectedOrder._id) : null;
-  const { data: viewOrderData } = useGetPurchaseOrderQuery(viewOrderId, { skip: !viewOrderId });
-  const viewOrder = viewOrderData?.data?.purchaseOrder || viewOrderData?.purchaseOrder || selectedOrder;
-
   // Fetch all active products for client-side fuzzy search
   const { data: allProductsData, isLoading: productsLoading } = useGetProductsQuery(
     { limit: 999999, status: 'active' }, // Get all active products
@@ -605,10 +549,7 @@ export const PurchaseOrders = ({ tabId }) => {
   const supplierDisplayKey = (supplier) => {
     return (
       <div>
-        <div className="font-medium">{supplier.companyName || supplier.company_name || supplier.businessName || supplier.displayName || supplier.name || 'Unknown'}</div>
-        {supplier.name && supplier.name !== (supplier.companyName || supplier.company_name || supplier.businessName || supplier.displayName) && (
-          <div className="text-xs text-gray-500">{supplier.name}</div>
-        )}
+        <div className="font-medium">{supplier.displayName || supplier.companyName || supplier.name || 'Unknown'}</div>
         <div className="text-sm text-gray-600">
           Outstanding Balance: {(supplier.pendingBalance || 0).toFixed(2)}
         </div>
@@ -623,13 +564,13 @@ export const PurchaseOrders = ({ tabId }) => {
 
     setSelectedSupplier(supplierObj);
     setFormData(prev => ({ ...prev, supplier: supplierId }));
-    setSupplierSearchTerm(supplierObj?.companyName || supplierObj?.company_name || supplierObj?.businessName || supplierObj?.name || '');
+    setSupplierSearchTerm(supplierObj?.companyName || supplierObj?.name || '');
 
     // Update tab title to show supplier name
     if (updateTabTitle && getActiveTab && supplierObj) {
       const activeTab = getActiveTab();
       if (activeTab) {
-        updateTabTitle(activeTab.id, `PO - ${supplierObj.companyName || supplierObj.company_name || supplierObj.businessName || supplierObj.name || 'Unknown'}`);
+        updateTabTitle(activeTab.id, `PO - ${supplierObj.companyName || supplierObj.name || 'Unknown'}`);
       }
     }
   };
@@ -892,7 +833,7 @@ export const PurchaseOrders = ({ tabId }) => {
       }))
     };
 
-    updatePurchaseOrderMutation({ id: selectedOrder.id || selectedOrder._id, ...cleanedData })
+    updatePurchaseOrderMutation({ id: selectedOrder._id, ...cleanedData })
       .unwrap()
       .then(() => {
         setShowEditModal(false);
@@ -1057,19 +998,13 @@ export const PurchaseOrders = ({ tabId }) => {
   const formatPurchaseOrderForPrint = (order) => {
     if (!order) return null;
     const supplier = order.supplier || {};
-    const supplierInfo = {
-      ...order.supplierInfo,
-      address: order.supplierInfo?.address && typeof order.supplierInfo.address === 'string'
-        ? order.supplierInfo.address
-        : formatAddressForDisplay(supplier) || ''
-    };
     const items = (order.items || []).map((item) => {
-      const product = item.product || item.productData || {};
-      const productName = typeof product === 'object' && product !== null
-        ? (product.name || product.displayName || product.display_name || product.variantName || product.variant_name)
-        : getProductDisplayName(product);
-      const name = productName || 'Product';
+      const product = item.product || {};
+      const name = product.isVariant
+        ? product.displayName || product.variantName || product.name || 'Product'
+        : product.name || 'Product';
       const qty = Number(item.quantity) || 0;
+      // costPerUnit is the actual field name used in purchase orders
       const unitCost = Number(item.costPerUnit ?? item.unitCost ?? item.cost ?? 0) || 0;
       const totalCost = Number(item.totalCost) || qty * unitCost;
       return {
@@ -1088,7 +1023,6 @@ export const PurchaseOrders = ({ tabId }) => {
     return {
       ...order,
       supplier,
-      supplierInfo,
       items,
       subtotal,
       tax,
@@ -1209,32 +1143,28 @@ export const PurchaseOrders = ({ tabId }) => {
           <p className="text-sm sm:text-base text-gray-600">Process purchase order transactions</p>
         </div>
         <div className="flex items-center space-x-2 w-full sm:w-auto">
-          <Button
+          <button
             onClick={handleExport}
-            variant="secondary"
-            size="default"
-            className="flex-1 sm:flex-initial"
+            className="btn btn-secondary btn-md flex-1 sm:flex-initial"
           >
             <Download className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Export</span>
-          </Button>
-          <Button
+          </button>
+          <button
             onClick={resetForm}
-            variant="default"
-            size="default"
-            className="flex-1 sm:flex-initial"
+            className="btn btn-primary btn-md flex-1 sm:flex-initial"
           >
             <Plus className="h-4 w-4 mr-2" />
             <span className="hidden sm:inline">New Purchase Order</span>
             <span className="sm:hidden">New PO</span>
-          </Button>
+          </button>
         </div>
       </div>
 
       {/* Supplier Selection and Information Row */}
-      <div className="flex flex-col md:flex-row items-start space-y-4 md:space-y-0 md:space-x-12">
+      <div className="flex flex-col md:flex-row items-start space-y-4 md:space-y-0 md:space-x-4">
         {/* Supplier Selection */}
-        <div className="w-full md:w-[750px] flex-shrink-0">
+        <div className="w-full md:w-[500px] flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-gray-700">
               Select Supplier
@@ -1279,15 +1209,15 @@ export const PurchaseOrders = ({ tabId }) => {
               <div className="flex items-center space-x-3">
                 <Building className="h-5 w-5 text-gray-400" />
                 <div className="flex-1">
-                  <p className="font-medium">{selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name || 'Unknown'}</p>
+                  <p className="font-medium">{selectedSupplier.companyName || selectedSupplier.name || 'Unknown'}</p>
                   <p className="text-sm text-gray-600 capitalize">
                     {selectedSupplier.businessType || 'Business'} • {selectedSupplier.reliability || 'Standard'}
                   </p>
                   <div className="flex items-center space-x-4 mt-2">
                     <div className="flex items-center space-x-1">
                       <span className="text-xs text-gray-500">Outstanding Balance:</span>
-                      <span className={`text-sm font-medium ${(selectedSupplier.pendingBalance || selectedSupplier.outstandingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {(selectedSupplier.pendingBalance || selectedSupplier.outstandingBalance || 0).toFixed(2)}
+                      <span className={`text-sm font-medium ${(selectedSupplier.outstandingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {Math.round(selectedSupplier.outstandingBalance || 0)}
                       </span>
                     </div>
                     {selectedSupplier.phone && (
@@ -1366,13 +1296,13 @@ export const PurchaseOrders = ({ tabId }) => {
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       Quantity
                     </label>
-                    <Input
+                    <input
                       type="number"
                       min="1"
                       value={quantity}
                       onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
                       onKeyDown={handleInputKeyDown}
-                      className="text-center h-10 w-full"
+                      className="input text-center h-10 w-full"
                       placeholder="1"
                     />
                   </div>
@@ -1382,13 +1312,13 @@ export const PurchaseOrders = ({ tabId }) => {
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       Cost
                     </label>
-                    <Input
+                    <input
                       type="number"
                       step="1"
                       value={customCost}
                       onChange={(e) => setCustomCost(e.target.value)}
                       onKeyDown={handleInputKeyDown}
-                      className="text-center h-10 w-full"
+                      className="input text-center h-10 w-full"
                       placeholder="0"
                       required
                     />
@@ -1397,17 +1327,16 @@ export const PurchaseOrders = ({ tabId }) => {
 
                 {/* Add Button - Full width on mobile */}
                 <div>
-                  <Button
+                  <button
                     type="button"
                     onClick={handleAddItem}
-                    variant="default"
-                    className="w-full flex items-center justify-center px-4 py-2.5 h-11"
+                    className="w-full btn btn-primary flex items-center justify-center px-4 py-2.5 h-11"
                     disabled={!selectedProduct}
                     title="Add to cart (or press Enter in Quantity/Cost fields - focus returns to search)"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add
-                  </Button>
+                  </button>
                 </div>
               </div>
 
@@ -1448,13 +1377,13 @@ export const PurchaseOrders = ({ tabId }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Quantity
                   </label>
-                  <Input
+                  <input
                     type="number"
                     min="1"
                     value={quantity}
                     onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
                     onKeyDown={handleInputKeyDown}
-                    className="text-center h-12"
+                    className="input text-center h-12"
                     placeholder="1 (Enter to add & focus search)"
                   />
                 </div>
@@ -1464,13 +1393,13 @@ export const PurchaseOrders = ({ tabId }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Cost
                   </label>
-                  <Input
+                  <input
                     type="number"
                     step="1"
                     value={customCost}
                     onChange={(e) => setCustomCost(e.target.value)}
                     onKeyDown={handleInputKeyDown}
-                    className="text-center h-12"
+                    className="input text-center h-12"
                     placeholder="0 (Enter to add & focus search)"
                     required
                   />
@@ -1491,17 +1420,16 @@ export const PurchaseOrders = ({ tabId }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     &nbsp;
                   </label>
-                  <Button
+                  <button
                     type="button"
                     onClick={handleAddItem}
-                    variant="default"
-                    className="w-full flex items-center justify-center px-3 h-12"
+                    className="w-full btn btn-primary flex items-center justify-center px-3 h-12"
                     disabled={!selectedProduct}
                     title="Add to cart (or press Enter in Quantity/Cost fields - focus returns to search)"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add
-                  </Button>
+                  </button>
                 </div>
               </div>
             </div>
@@ -1517,18 +1445,16 @@ export const PurchaseOrders = ({ tabId }) => {
             <div className="space-y-4 border-t border-gray-200 pt-6">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-base sm:text-md font-medium text-gray-700">Cart Items</h4>
-                <Button
+                <button
                   type="button"
                   onClick={handleSortCartItems}
-                  variant="secondary"
-                  size="sm"
-                  className="flex items-center space-x-2"
+                  className="btn btn-secondary btn-sm flex items-center space-x-2"
                   title="Sort products alphabetically"
                 >
                   <ArrowUpDown className="h-4 w-4" />
                   <span className="hidden sm:inline">Sort A-Z</span>
                   <span className="sm:hidden">Sort</span>
-                </Button>
+                </button>
               </div>
 
               {/* Desktop Table Header */}
@@ -1587,15 +1513,13 @@ export const PurchaseOrders = ({ tabId }) => {
                             {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low</span>}
                           </div>
                         </div>
-                        <Button
+                        <button
                           onClick={() => handleRemoveItem(index)}
-                          variant="destructive"
-                          size="sm"
-                          className="h-8 w-8 p-0 flex-shrink-0 ml-2"
+                          className="btn btn-danger btn-sm h-8 w-8 p-0 flex-shrink-0 ml-2"
                           title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
-                        </Button>
+                        </button>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -1612,7 +1536,7 @@ export const PurchaseOrders = ({ tabId }) => {
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
-                          <Input
+                          <input
                             type="number"
                             value={item.quantity}
                             onChange={(e) => {
@@ -1628,13 +1552,13 @@ export const PurchaseOrders = ({ tabId }) => {
                                 )
                               }));
                             }}
-                            className="text-center h-8 w-full"
+                            className="input text-center h-8 w-full"
                             min="1"
                           />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-500 mb-1">Cost</label>
-                          <Input
+                          <input
                             type="number"
                             step="0.01"
                             value={item.costPerUnit}
@@ -1647,7 +1571,7 @@ export const PurchaseOrders = ({ tabId }) => {
                                 )
                               }));
                             }}
-                            className="text-center h-8 w-full"
+                            className="input text-center h-8 w-full"
                             min="0"
                           />
                         </div>
@@ -1690,7 +1614,7 @@ export const PurchaseOrders = ({ tabId }) => {
 
                         {/* Quantity - 1 column (matches Product Selection Quantity) */}
                         <div className="col-span-1">
-                          <Input
+                          <input
                             type="number"
                             value={item.quantity}
                             onChange={(e) => {
@@ -1706,14 +1630,14 @@ export const PurchaseOrders = ({ tabId }) => {
                                 )
                               }));
                             }}
-                            className="text-center h-8"
+                            className="input text-center h-8"
                             min="1"
                           />
                         </div>
 
                         {/* Cost - 1 column (matches Product Selection Cost) */}
                         <div className="col-span-1">
-                          <Input
+                          <input
                             type="number"
                             step="0.01"
                             value={item.costPerUnit}
@@ -1726,7 +1650,7 @@ export const PurchaseOrders = ({ tabId }) => {
                                 )
                               }));
                             }}
-                            className="text-center h-8"
+                            className="input text-center h-8"
                             min="0"
                           />
                         </div>
@@ -1740,15 +1664,13 @@ export const PurchaseOrders = ({ tabId }) => {
 
                         {/* Delete Button - 1 column (matches Product Selection Add Button) */}
                         <div className="col-span-1">
-                          <Button
+                          <button
                             onClick={() => handleRemoveItem(index)}
-                            variant="destructive"
-                            size="sm"
-                            className="h-8 w-full"
+                            className="btn btn-danger btn-sm h-8 w-full"
                             title="Delete"
                           >
                             <Trash2 className="h-4 w-4" />
-                          </Button>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1778,11 +1700,11 @@ export const PurchaseOrders = ({ tabId }) => {
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Invoice Number
                 </label>
-                <Input
+                <input
                   type="text"
                   value={formData.invoiceNumber || "Auto-generated"}
                   onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
-                  className="h-10 text-sm w-full"
+                  className="input h-10 text-sm w-full"
                   placeholder="Auto-generated"
                   disabled
                 />
@@ -1794,11 +1716,11 @@ export const PurchaseOrders = ({ tabId }) => {
                   Expected Delivery
                 </label>
                 <div className="relative">
-                  <Input
+                  <input
                     type="date"
                     value={formData.expectedDelivery}
                     onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
-                    className="h-10 text-sm w-full pr-8"
+                    className="input h-10 text-sm w-full pr-8"
                   />
                   <Calendar className="absolute right-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none sm:hidden" />
                 </div>
@@ -1835,11 +1757,11 @@ export const PurchaseOrders = ({ tabId }) => {
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Notes
                 </label>
-                <Input
+                <input
                   type="text"
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="h-10 text-sm w-full"
+                  className="input h-10 text-sm w-full"
                   placeholder="Additional notes..."
                 />
               </div>
@@ -1852,11 +1774,11 @@ export const PurchaseOrders = ({ tabId }) => {
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Invoice Number
                 </label>
-                <Input
+                <input
                   type="text"
                   value={formData.invoiceNumber || "Auto-generated"}
                   onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
-                  className="h-8 text-sm"
+                  className="input h-8 text-sm"
                   placeholder="Auto-generated"
                   disabled
                 />
@@ -1867,11 +1789,11 @@ export const PurchaseOrders = ({ tabId }) => {
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Expected Delivery
                 </label>
-                <Input
+                <input
                   type="date"
                   value={formData.expectedDelivery}
                   onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
-                  className="h-8 text-sm"
+                  className="input h-8 text-sm"
                 />
               </div>
 
@@ -1906,12 +1828,11 @@ export const PurchaseOrders = ({ tabId }) => {
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Notes
                 </label>
-                <Input
+                <input
                   type="text"
-                  autoComplete="off"
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="h-8 text-sm"
+                  className="input h-8 text-sm"
                   placeholder="Additional notes..."
                 />
               </div>
@@ -1953,24 +1874,23 @@ export const PurchaseOrders = ({ tabId }) => {
             {/* Action Buttons */}
             <div className="flex space-x-3 mt-6 px-6 pb-6">
               {formData.items.length > 0 && !showEditModal && (
-                <Button
+                <button
                   onClick={resetForm}
-                  variant="secondary"
-                  className="flex-1"
+                  className="btn btn-secondary flex-1"
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Clear Cart
-                </Button>
+                </button>
               )}
               {formData.items.length > 0 && (
-                <Button
+                <button
                   onClick={() => {
                     // Create temporary order data for print preview
                     const tempOrder = {
                       poNumber: `PO-${Date.now()}`,
                       supplier: selectedSupplier,
                       items: formData.items.map(item => {
-                        const product = item.productData || productsData?.find(p => p._id === item.product);
+                        const product = productsData?.find(p => p._id === item.product);
                         return {
                           product: product,
                           quantity: item.quantity,
@@ -1989,23 +1909,20 @@ export const PurchaseOrders = ({ tabId }) => {
                     };
                     handlePrint(tempOrder);
                   }}
-                  variant="secondary"
-                  className="flex-1"
+                  className="btn btn-secondary flex-1"
                 >
                   <Receipt className="h-4 w-4 mr-2" />
                   Print Preview
-                </Button>
+                </button>
               )}
-              <Button
+              <button
                 onClick={handleCreate}
                 disabled={creating || formData.items.length === 0}
-                variant="default"
-                size="lg"
-                className="flex-2"
+                className="btn btn-primary btn-lg flex-2"
               >
                 <Save className="h-4 w-4 mr-2" />
                 {creating ? 'Creating...' : 'Create Purchase Order'}
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -2059,7 +1976,6 @@ export const PurchaseOrders = ({ tabId }) => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Selection</label>
                       <input
                         type="text"
-                        autoComplete="off"
                         placeholder="Search suppliers..."
                         value={supplierSearchTerm}
                         onChange={(e) => setSupplierSearchTerm(e.target.value)}
@@ -2111,11 +2027,11 @@ export const PurchaseOrders = ({ tabId }) => {
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         Invoice Number
                       </label>
-                      <Input
+                      <input
                         type="text"
                         value={formData.invoiceNumber || "Auto-generated"}
                         onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
-                        className="h-8 text-sm"
+                        className="input h-8 text-sm"
                         placeholder="Auto-generated"
                         disabled
                       />
@@ -2126,12 +2042,11 @@ export const PurchaseOrders = ({ tabId }) => {
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         Expected Delivery
                       </label>
-                      <Input
+                      <input
                         type="date"
-                        autoComplete="off"
                         value={formData.expectedDelivery}
                         onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
-                        className="h-8 text-sm"
+                        className="input h-8 text-sm"
                       />
                     </div>
 
@@ -2163,10 +2078,10 @@ export const PurchaseOrders = ({ tabId }) => {
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           Notes
                         </label>
-                        <Textarea
+                        <textarea
                           value={formData.notes}
                           onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                          className="h-16 text-sm resize-none"
+                          className="input h-16 text-sm resize-none"
                           placeholder="Add any notes or comments..."
                         />
                       </div>
@@ -2176,10 +2091,10 @@ export const PurchaseOrders = ({ tabId }) => {
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           Terms & Conditions
                         </label>
-                        <Textarea
+                        <textarea
                           value={formData.terms}
                           onChange={(e) => setFormData(prev => ({ ...prev, terms: e.target.value }))}
-                          className="h-16 text-sm resize-none"
+                          className="input h-16 text-sm resize-none"
                           placeholder="Add terms and conditions..."
                         />
                       </div>
@@ -2201,7 +2116,6 @@ export const PurchaseOrders = ({ tabId }) => {
                         </label>
                         <input
                           type="text"
-                          autoComplete="off"
                           placeholder="Search or type product name..."
                           value={modalProductSearchTerm}
                           onChange={(e) => {
@@ -2322,7 +2236,6 @@ export const PurchaseOrders = ({ tabId }) => {
                         <input
                           type="number"
                           min="1"
-                          autoComplete="off"
                           value={editProductQuantity}
                           onChange={(e) => setEditProductQuantity(parseInt(e.target.value) || 1)}
                           className="modal-quantity-input w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2338,7 +2251,6 @@ export const PurchaseOrders = ({ tabId }) => {
                         <input
                           type="number"
                           step="0.01"
-                          autoComplete="off"
                           value={editProductCost}
                           onChange={(e) => setEditProductCost(parseFloat(e.target.value) || 0)}
                           className="modal-cost-input w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2402,7 +2314,6 @@ export const PurchaseOrders = ({ tabId }) => {
                               <input
                                 type="number"
                                 min="1"
-                                autoComplete="off"
                                 value={item.quantity}
                                 onChange={(e) => {
                                   const newItems = [...formData.items];
@@ -2422,7 +2333,6 @@ export const PurchaseOrders = ({ tabId }) => {
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                autoComplete="off"
                                 value={item.costPerUnit}
                                 onChange={(e) => {
                                   const newItems = [...formData.items];
@@ -2540,12 +2450,9 @@ export const PurchaseOrders = ({ tabId }) => {
           </div>
         </div>
         <div className="card-content">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4">
-            {/* Date Range - spans more columns to prevent overlap */}
-            <div className="sm:col-span-2 lg:col-span-5">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date Range
-              </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
+            {/* Date Range */}
+            <div className="col-span-2">
               <DateFilter
                 startDate={filters.fromDate}
                 endDate={filters.toDate}
@@ -2559,29 +2466,28 @@ export const PurchaseOrders = ({ tabId }) => {
             </div>
 
             {/* PO Number Filter */}
-            <div className="sm:col-span-2 lg:col-span-2">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 PO Number
               </label>
-              <Input
+              <input
                 type="text"
-                autoComplete="off"
                 placeholder="Contains..."
                 value={filters.poNumber}
                 onChange={(e) => handleFilterChange('poNumber', e.target.value)}
-                className="h-[42px] w-full"
+                className="input h-[42px]"
               />
             </div>
 
             {/* Status Filter */}
-            <div className="sm:col-span-2 lg:col-span-2">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Status
               </label>
               <select
                 value={filters.status}
                 onChange={(e) => handleFilterChange('status', e.target.value)}
-                className="input h-[42px] w-full"
+                className="input h-[42px]"
               >
                 <option value="">All Statuses</option>
                 <option value="draft">Pending</option>
@@ -2594,14 +2500,14 @@ export const PurchaseOrders = ({ tabId }) => {
             </div>
 
             {/* Supplier Filter */}
-            <div className="sm:col-span-2 lg:col-span-2">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Supplier
               </label>
               <select
                 value={filters.supplier}
                 onChange={(e) => handleFilterChange('supplier', e.target.value)}
-                className="input h-[42px] w-full"
+                className="input h-[42px]"
               >
                 <option value="">All Suppliers</option>
                 {suppliers?.map((supplier) => (
@@ -2613,16 +2519,16 @@ export const PurchaseOrders = ({ tabId }) => {
             </div>
 
             {/* Payment Status Filter */}
-            <div className="sm:col-span-2 lg:col-span-1">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Payment
+                Payment Status
               </label>
               <select
                 value={filters.paymentStatus}
                 onChange={(e) => handleFilterChange('paymentStatus', e.target.value)}
-                className="input h-[42px] w-full"
+                className="input h-[42px]"
               >
-                <option value="">All</option>
+                <option value="">All Payment Statuses</option>
                 <option value="pending">Pending</option>
                 <option value="paid">Paid</option>
                 <option value="partial">Partial</option>
@@ -2631,15 +2537,14 @@ export const PurchaseOrders = ({ tabId }) => {
             </div>
 
             {/* Search Button */}
-            <div className="sm:col-span-2 lg:col-span-2 flex items-end">
-              <Button
+            <div className="flex items-end">
+              <button
                 onClick={() => refetch()}
-                variant="default"
-                className="w-full flex items-center justify-center space-x-2 h-[42px]"
+                className="btn btn-primary w-full flex items-center justify-center space-x-2 h-[42px]"
               >
                 <Search className="h-4 w-4" />
                 <span>Search</span>
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -2654,7 +2559,7 @@ export const PurchaseOrders = ({ tabId }) => {
             </h3>
             <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-500">
-                {paginationInfo.total ?? paginationInfo.totalItems ?? purchaseOrders.length ?? 0} records
+                {paginationInfo.totalItems || 0} records
               </span>
               <button
                 onClick={() => refetch()}
@@ -2707,12 +2612,12 @@ export const PurchaseOrders = ({ tabId }) => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {purchaseOrders.map((order, index) => (
-                    <tr key={order.id || order._id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <tr key={order._id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(order.purchase_date || order.order_date || order.created_at || order.createdAt)}
+                        {formatDate(order.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {order.purchase_order_number || order.poNumber || '-'}
+                        {order.poNumber}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {safeRender(order.supplier) || 'Unknown'}
@@ -2751,14 +2656,14 @@ export const PurchaseOrders = ({ tabId }) => {
                           {order.status === 'draft' && (
                             <>
                               <button
-                                onClick={() => handleConfirm(order.id || order._id)}
+                                onClick={() => handleConfirm(order._id)}
                                 className="text-green-600 hover:text-green-900"
                                 title="Confirm Order"
                               >
                                 <CheckCircle className="h-4 w-4" />
                               </button>
                               <button
-                                onClick={() => handleCancel(order.id || order._id)}
+                                onClick={() => handleCancel(order._id)}
                                 className="text-red-600 hover:text-red-900"
                                 title="Cancel Order"
                               >
@@ -2768,7 +2673,7 @@ export const PurchaseOrders = ({ tabId }) => {
                           )}
                           {(order.status === 'draft' || order.status === 'cancelled' || order.status === 'confirmed' || order.status === 'partially_received' || !order.supplier) && (
                             <button
-                              onClick={() => handleDelete(order.id || order._id)}
+                              onClick={() => handleDelete(order._id)}
                               className="text-red-600 hover:text-red-900"
                               title="Delete"
                             >
@@ -2787,7 +2692,7 @@ export const PurchaseOrders = ({ tabId }) => {
       </div>
 
       {/* View Modal - Bill Format */}
-      {showViewModal && (viewOrder || selectedOrder) && (
+      {showViewModal && selectedOrder && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-10 mx-auto p-5 border w-4/5 max-w-4xl shadow-lg rounded-md bg-white">
             <div className="mt-3">
@@ -2823,21 +2728,21 @@ export const PurchaseOrders = ({ tabId }) => {
                 <div>
                   <h5 className="font-semibold text-gray-900 mb-2">Purchase Order Details</h5>
                   <div className="space-y-1 text-sm">
-                    <p><span className="font-medium">PO Number:</span> {viewOrder.purchase_order_number || viewOrder.poNumber || '-'}</p>
-                    <p><span className="font-medium">Date:</span> {formatDate(viewOrder.purchase_date || viewOrder.order_date || viewOrder.created_at || viewOrder.createdAt)}</p>
+                    <p><span className="font-medium">PO Number:</span> {selectedOrder.poNumber}</p>
+                    <p><span className="font-medium">Date:</span> {formatDate(selectedOrder.createdAt)}</p>
                     <p><span className="font-medium">Status:</span>
-                      <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${viewOrder.status === 'draft' ? 'bg-gray-100 text-gray-800' :
-                        viewOrder.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
-                          viewOrder.status === 'partially_received' ? 'bg-yellow-100 text-yellow-800' :
-                            viewOrder.status === 'fully_received' ? 'bg-green-100 text-green-800' :
-                              viewOrder.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                      <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${selectedOrder.status === 'draft' ? 'bg-gray-100 text-gray-800' :
+                        selectedOrder.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                          selectedOrder.status === 'partially_received' ? 'bg-yellow-100 text-yellow-800' :
+                            selectedOrder.status === 'fully_received' ? 'bg-green-100 text-green-800' :
+                              selectedOrder.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                                 'bg-gray-100 text-gray-800'
                         }`}>
-                        {viewOrder.status === 'draft' ? 'Pending' : (viewOrder.status || '').replace('_', ' ')}
+                        {selectedOrder.status === 'draft' ? 'Pending' : selectedOrder.status.replace('_', ' ')}
                       </span>
                     </p>
-                    {viewOrder.expectedDelivery && (
-                      <p><span className="font-medium">Expected Delivery:</span> {formatDate(viewOrder.expectedDelivery)}</p>
+                    {selectedOrder.expectedDelivery && (
+                      <p><span className="font-medium">Expected Delivery:</span> {formatDate(selectedOrder.expectedDelivery)}</p>
                     )}
                   </div>
                 </div>
@@ -2847,20 +2752,19 @@ export const PurchaseOrders = ({ tabId }) => {
                 <div className="text-right">
                   <h5 className="font-semibold text-gray-900 mb-2">Supplier Details</h5>
                   <div className="space-y-1 text-sm">
-                    <p><span className="font-medium">Company:</span> {safeRender(viewOrder.supplier) || 'Unknown'}</p>
-                    {viewOrder.supplier?.email && (
-                      <p><span className="font-medium">Email:</span> {safeRender(viewOrder.supplier.email)}</p>
+                    <p><span className="font-medium">Company:</span> {safeRender(selectedOrder.supplier) || 'Unknown'}</p>
+                    {selectedOrder.supplier?.email && (
+                      <p><span className="font-medium">Email:</span> {safeRender(selectedOrder.supplier.email)}</p>
                     )}
-                    {viewOrder.supplier?.phone && (
-                      <p><span className="font-medium">Phone:</span> {safeRender(viewOrder.supplier.phone)}</p>
+                    {selectedOrder.supplier?.phone && (
+                      <p><span className="font-medium">Phone:</span> {safeRender(selectedOrder.supplier.phone)}</p>
                     )}
-                    <p><span className="font-medium">Address:</span> {formatAddressForDisplay(viewOrder.supplier) || '—'}</p>
-                    {(viewOrder.supplier?.contact_person || viewOrder.supplier?.contactPerson) && (
-                      <p><span className="font-medium">Contact:</span> {safeRender(viewOrder.supplier.contact_person || viewOrder.supplier.contactPerson)}</p>
+                    {selectedOrder.supplier?.contactPerson && (
+                      <p><span className="font-medium">Contact:</span> {safeRender(selectedOrder.supplier.contactPerson)}</p>
                     )}
                     <div className="mt-3 pt-2 border-t border-gray-200">
                       <p className="font-semibold text-red-600">
-                        <span className="font-medium">Outstanding Balance:</span> {Math.round((viewOrder.supplier?.pendingBalance ?? viewOrder.supplier?.currentBalance) || 0)}
+                        <span className="font-medium">Outstanding Balance:</span> {Math.round(selectedOrder.supplier?.pendingBalance || 0)}
                       </p>
                     </div>
                   </div>
@@ -2892,7 +2796,7 @@ export const PurchaseOrders = ({ tabId }) => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {viewOrder.items && viewOrder.items.map((item, index) => (
+                      {selectedOrder.items && selectedOrder.items.map((item, index) => (
                         <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                           <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
                             {index + 1}
@@ -2900,11 +2804,9 @@ export const PurchaseOrders = ({ tabId }) => {
                           <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
                             <div>
                               <div className="font-medium">
-                                {typeof item.product === 'object' && item.product !== null
-                                  ? (item.product.name || item.product.displayName || item.product.display_name || item.product.variantName || item.product.variant_name || 'Unknown Product')
-                                  : (getProductDisplayName(item.product) || item.productData?.name || 'Unknown Product')}
+                                {safeRender(item.product) || 'Unknown Product'}
                               </div>
-                              {item.product?.description && typeof item.product === 'object' && (
+                              {item.product?.description && (
                                 <div className="text-gray-500 text-xs">{safeRender(item.product.description)}</div>
                               )}
                             </div>
@@ -2931,46 +2833,46 @@ export const PurchaseOrders = ({ tabId }) => {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Subtotal:</span>
-                      <span className="font-medium">{Math.round(Number(viewOrder.subtotal) || 0)}</span>
+                      <span className="font-medium">{Math.round(selectedOrder.subtotal || 0)}</span>
                     </div>
-                    {viewOrder.tax && viewOrder.tax > 0 && (
+                    {selectedOrder.tax && selectedOrder.tax > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Tax:</span>
-                        <span className="font-medium">{Math.round(Number(viewOrder.tax))}</span>
+                        <span className="font-medium">{Math.round(selectedOrder.tax)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">PO Total:</span>
-                      <span className="font-medium">{Math.round(Number(viewOrder.total) || 0)}</span>
+                      <span className="font-medium">{Math.round(selectedOrder.total || 0)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Previous Outstanding:</span>
-                      <span className="font-medium text-red-600">{Math.round((Number((viewOrder.supplier?.pendingBalance ?? viewOrder.supplier?.currentBalance)) || 0))}</span>
+                      <span className="font-medium text-red-600">{Math.round(selectedOrder.supplier?.pendingBalance || 0)}</span>
                     </div>
                     <div className="flex justify-between text-lg font-bold border-t pt-2">
                       <span>Total Payables:</span>
-                      <span className="text-red-600">{Math.round((Number(viewOrder.total) || 0) + (Number((viewOrder.supplier?.pendingBalance ?? viewOrder.supplier?.currentBalance)) || 0))}</span>
+                      <span className="text-red-600">{Math.round((selectedOrder.total || 0) + (selectedOrder.supplier?.pendingBalance || 0))}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Notes */}
-              {viewOrder.notes && (
+              {selectedOrder.notes && (
                 <div className="mb-6">
                   <h5 className="font-semibold text-gray-900 mb-2">Notes</h5>
                   <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded border">
-                    {safeRender(viewOrder.notes)}
+                    {safeRender(selectedOrder.notes)}
                   </p>
                 </div>
               )}
 
               {/* Terms */}
-              {viewOrder.terms && (
+              {selectedOrder.terms && (
                 <div className="mb-6">
                   <h5 className="font-semibold text-gray-900 mb-2">Terms & Conditions</h5>
                   <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded border">
-                    {safeRender(viewOrder.terms)}
+                    {safeRender(selectedOrder.terms)}
                   </p>
                 </div>
               )}
@@ -2981,23 +2883,22 @@ export const PurchaseOrders = ({ tabId }) => {
                   Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
                 </div>
                 <div className="flex space-x-3">
-                  <Button
-                    onClick={() => handlePrint(viewOrder)}
-                    variant="default"
-                    className="flex items-center"
+                  <button
+                    onClick={() => handlePrint(selectedOrder)}
+                    className="btn btn-primary flex items-center"
                   >
                     <Printer className="h-4 w-4 mr-2" />
                     Print
-                  </Button>
-                  <Button
+                  </button>
+                  <button
                     onClick={() => {
                       setShowViewModal(false);
                       setSelectedOrder(null);
                     }}
-                    variant="secondary"
+                    className="btn btn-secondary"
                   >
                     Close
-                  </Button>
+                  </button>
                 </div>
               </div>
             </div>

@@ -1,4 +1,5 @@
-const userRepository = require('../repositories/postgres/UserRepository');
+const userRepository = require('../repositories/UserRepository');
+const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const logger = require('../utils/logger');
 
@@ -34,7 +35,7 @@ class AuthService {
     // Track permission change
     if (createdBy) {
       await userRepository.trackPermissionChange(
-        user.id,
+        user._id,
         createdBy,
         'created',
         {},
@@ -72,17 +73,17 @@ class AuthService {
     // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      await userRepository.incrementLoginAttempts(user.id);
+      await userRepository.incrementLoginAttempts(user._id);
       throw new Error('Invalid credentials');
     }
 
     // Reset login attempts on successful login
     if (user.loginAttempts > 0) {
-      await userRepository.resetLoginAttempts(user.id);
+      await userRepository.resetLoginAttempts(user._id);
     }
 
     // Track login activity
-    await userRepository.trackLogin(user.id, ipAddress, userAgent);
+    await userRepository.trackLogin(user._id, ipAddress, userAgent);
 
     // Create JWT token
     if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim() === '') {
@@ -120,27 +121,23 @@ class AuthService {
   }
 
   /**
-   * Update user profile (firstName, lastName, email, phone). Password must be changed via changePassword().
+   * Update user profile
    * @param {string} userId - User ID
    * @param {object} updateData - Data to update
    * @returns {Promise<{user: User, message: string}>}
    */
   async updateProfile(userId, updateData) {
-    const { firstName, lastName, email, phone } = updateData;
-
-    const emailVal = email !== undefined && email !== null ? String(email).trim() : '';
-    if (emailVal) {
-      const taken = await userRepository.emailExists(emailVal, userId);
-      if (taken) {
-        throw new Error('Email already exists');
-      }
-    }
+    const { firstName, lastName, phone, department, preferences } = updateData;
 
     const updateFields = {};
-    if (firstName !== undefined) updateFields.firstName = firstName;
-    if (lastName !== undefined) updateFields.lastName = lastName;
-    if (emailVal) updateFields.email = emailVal.toLowerCase();
+    if (firstName) updateFields.firstName = firstName;
+    if (lastName) updateFields.lastName = lastName;
     if (phone !== undefined) updateFields.phone = phone;
+    if (department !== undefined) updateFields.department = department;
+    if (preferences) {
+      const currentUser = await userRepository.findById(userId);
+      updateFields.preferences = { ...(currentUser?.preferences || {}), ...preferences };
+    }
 
     const user = await userRepository.updateProfile(userId, updateFields);
     if (!user) {

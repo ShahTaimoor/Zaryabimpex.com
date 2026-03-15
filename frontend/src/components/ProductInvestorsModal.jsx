@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { useGetInvestorsQuery } from '../store/services/investorsApi';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 
 export const ProductInvestorsModal = ({ product, isOpen, onClose, onSave }) => {
   const [linkedInvestors, setLinkedInvestors] = useState([]);
@@ -16,8 +15,7 @@ export const ProductInvestorsModal = ({ product, isOpen, onClose, onSave }) => {
     }
   );
   const investors = useMemo(() => {
-    const list = investorsData?.data?.investors || investorsData?.investors || investorsData || [];
-    return Array.isArray(list) ? list : [];
+    return investorsData?.data?.investors || investorsData?.investors || investorsData || [];
   }, [investorsData]);
 
   useEffect(() => {
@@ -137,14 +135,13 @@ export const ProductInvestorsModal = ({ product, isOpen, onClose, onSave }) => {
                     placeholder="%"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
-                  <Button
+                  <button
                     type="button"
                     onClick={handleAddInvestor}
-                    variant="default"
-                    className="px-4"
+                    className="btn btn-primary px-4"
                   >
                     Add
-                  </Button>
+                  </button>
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-2">
@@ -199,24 +196,20 @@ export const ProductInvestorsModal = ({ product, isOpen, onClose, onSave }) => {
           </div>
 
           <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-            <Button
+            <button
               type="button"
               onClick={handleSave}
-              variant="default"
-              size="default"
-              className="w-full sm:w-auto sm:ml-3"
+              className="btn btn-primary btn-md w-full sm:w-auto sm:ml-3"
             >
               Save Investors
-            </Button>
-            <Button
+            </button>
+            <button
               type="button"
               onClick={onClose}
-              variant="secondary"
-              size="default"
-              className="w-full sm:w-auto mt-3 sm:mt-0"
+              className="btn btn-secondary btn-md w-full sm:w-auto mt-3 sm:mt-0"
             >
               Cancel
-            </Button>
+            </button>
           </div>
         </div>
       </div>

@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import {
   useGetPurchaseInvoicesQuery,
-  useLazyGetPurchaseInvoiceQuery,
   useConfirmPurchaseInvoiceMutation,
   useDeletePurchaseInvoiceMutation,
   useExportExcelMutation,
@@ -23,23 +22,13 @@ import {
   useExportJSONMutation,
   useDownloadFileMutation,
 } from '../store/services/purchaseInvoicesApi';
-import { useLazyGetSupplierQuery } from '../store/services/suppliersApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
 import PrintModal from '../components/PrintModal';
-import { Button } from '@/components/ui/button';
 import DateFilter from '../components/DateFilter';
-import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
-
-// Check if invoice date is today (edit icon only for today)
-const isInvoiceDateToday = (invoice) => {
-  const raw = invoice?.invoiceDate ?? invoice?.invoice_date ?? invoice?.createdAt;
-  if (raw == null) return false;
-  const invoiceDateStr = formatDateForInput(raw);
-  return invoiceDateStr === getCurrentDatePakistan();
-};
+import { getCurrentDatePakistan } from '../utils/dateUtils';
 
 const StatusBadge = ({ status }) => {
   const statusConfig = {
@@ -62,7 +51,7 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onPrint, isEditable }) => (
+const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onPrint }) => (
   <div className="card hover:shadow-lg transition-shadow">
     <div className="card-content">
       <div className="flex items-start justify-between">
@@ -75,7 +64,7 @@ const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onP
           <div className="space-y-2">
             <div className="flex items-center text-sm text-gray-600">
               <FileText className="h-4 w-4 mr-2" />
-              {invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}
+              {invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}
             </div>
 
             <div className="flex items-center text-sm text-gray-600">
@@ -84,9 +73,7 @@ const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onP
             </div>
 
             <div className="text-sm text-gray-500">
-              {invoice.invoiceDate || invoice.invoice_date || invoice.createdAt 
-                ? new Date(invoice.invoiceDate || invoice.invoice_date || invoice.createdAt).toLocaleDateString()
-                : 'Invalid Date'}
+              {new Date(invoice.createdAt).toLocaleDateString()}
             </div>
           </div>
         </div>
@@ -108,15 +95,13 @@ const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onP
             <Printer className="h-4 w-4" />
           </button>
 
-          {isEditable && (
-            <button
-              onClick={() => onEdit(invoice)}
-              className="text-blue-600 hover:text-blue-800"
-              title="Edit Invoice"
-            >
-              <Edit className="h-4 w-4" />
-            </button>
-          )}
+          <button
+            onClick={() => onEdit(invoice)}
+            className="text-blue-600 hover:text-blue-800"
+            title="Edit Invoice"
+          >
+            <Edit className="h-4 w-4" />
+          </button>
 
           {/* Show delete button for all statuses except paid and closed */}
           {!['paid', 'closed'].includes(invoice.status) && (
@@ -170,8 +155,6 @@ export const PurchaseInvoices = () => {
 
   // Editing occurs in Purchase page; no supplier query needed here
 
-  const [getPurchaseInvoiceById] = useLazyGetPurchaseInvoiceQuery();
-
   // Mutations
   const [confirmPurchaseInvoiceMutation, { isLoading: confirming }] = useConfirmPurchaseInvoiceMutation();
   const [deletePurchaseInvoiceMutation, { isLoading: deleting }] = useDeletePurchaseInvoiceMutation();
@@ -181,54 +164,10 @@ export const PurchaseInvoices = () => {
   const [exportJSONMutation] = useExportJSONMutation();
   const [downloadFileMutation] = useDownloadFileMutation();
 
-  const [getSupplierById] = useLazyGetSupplierQuery();
-
-  // Print helper - fetch full invoice by ID, and fetch supplier if address is missing
-  const handlePrint = async (invoice) => {
+  // Print helper
+  const handlePrint = (invoice) => {
     if (!invoice) return;
-    const id = invoice.id || invoice._id;
-    if (id) {
-      try {
-        const result = await getPurchaseInvoiceById(id).unwrap();
-        let fullInvoice = result?.invoice || result?.data?.invoice || result?.data || result;
-        const supplierId = fullInvoice?.supplier_id || fullInvoice?.supplierId || fullInvoice?.supplier?.id || fullInvoice?.supplier?._id || fullInvoice?.supplierInfo?.id || fullInvoice?.supplierInfo?._id;
-        const hasAddress = !!(fullInvoice?.supplierInfo?.address || fullInvoice?.supplier?.address);
-        if (!hasAddress && supplierId && typeof supplierId === 'string') {
-          try {
-            const supResult = await getSupplierById(supplierId).unwrap();
-            const supplier = supResult?.supplier || supResult?.data?.supplier || supResult;
-            if (supplier) {
-              let addr = '';
-              if (typeof supplier.address === 'string' && supplier.address.trim()) addr = supplier.address.trim();
-              else if (Array.isArray(supplier.address) && supplier.address.length > 0) {
-                const a = supplier.address.find(x => x.isDefault) || supplier.address.find(x => x.type === 'billing' || x.type === 'both') || supplier.address[0];
-                const parts = [a.street || a.address_line1 || a.addressLine1, a.city, a.state || a.province, a.country, a.zipCode || a.zip].filter(Boolean);
-                addr = parts.join(', ');
-              } else if (supplier.address && typeof supplier.address === 'object') {
-                const a = supplier.address;
-                const parts = [a.street || a.address_line1 || a.addressLine1 || a.line1, a.address_line2 || a.addressLine2, a.city, a.state || a.province, a.country, a.zipCode || a.zip || a.postal_code].filter(Boolean);
-                addr = parts.join(', ');
-              } else if (supplier.addresses?.length) {
-                const a = supplier.addresses.find(x => x.isDefault) || supplier.addresses.find(x => x.type === 'billing' || x.type === 'both') || supplier.addresses[0];
-                addr = [a.street || a.address_line1 || a.addressLine1, a.city, a.state || a.province, a.country, a.zipCode || a.zip].filter(Boolean).join(', ');
-              }
-              if (addr) {
-                fullInvoice = {
-                  ...fullInvoice,
-                  supplierInfo: { ...(fullInvoice.supplierInfo || {}), address: addr },
-                  supplier: typeof fullInvoice.supplier === 'object' ? { ...fullInvoice.supplier, address: addr } : fullInvoice.supplier
-                };
-              }
-            }
-          } catch (e) { /* ignore */ }
-        }
-        setSelectedInvoice(fullInvoice || invoice);
-      } catch {
-        setSelectedInvoice(invoice);
-      }
-    } else {
-      setSelectedInvoice(invoice);
-    }
+    setSelectedInvoice(invoice);
     setShowViewModal(true);
   };
 
@@ -250,9 +189,7 @@ export const PurchaseInvoices = () => {
         <div>
           <div className="font-medium text-gray-900">{value}</div>
           <div className="text-sm text-gray-500">
-            {item.invoiceDate || item.invoice_date || item.createdAt 
-              ? new Date(item.invoiceDate || item.invoice_date || item.createdAt).toLocaleDateString()
-              : 'Invalid Date'}
+            {new Date(item.createdAt).toLocaleDateString()}
           </div>
         </div>
       ),
@@ -310,15 +247,13 @@ export const PurchaseInvoices = () => {
             <Printer className="h-4 w-4" />
           </button>
 
-          {isInvoiceDateToday(item) && (
-            <button
-              onClick={() => handleEdit(item)}
-              className="text-blue-600 hover:text-blue-800"
-              title="Edit Invoice"
-            >
-              <Edit className="h-4 w-4" />
-            </button>
-          )}
+          <button
+            onClick={() => handleEdit(item)}
+            className="text-blue-600 hover:text-blue-800"
+            title="Edit Invoice"
+          >
+            <Edit className="h-4 w-4" />
+          </button>
 
           {/* Show delete button for all statuses except paid and closed */}
           {!['paid', 'closed'].includes(item.status) && (
@@ -385,8 +320,7 @@ export const PurchaseInvoices = () => {
         invoiceType: invoice.invoiceType || 'purchase',
         invoiceDate: invoice.invoiceDate || invoice.createdAt, // Include invoiceDate for editing
         createdAt: invoice.createdAt, // Include createdAt as fallback
-        isEditMode: true,
-        payment: invoice.payment || {} // Include payment for amount paid editing
+        isEditMode: true
       };
 
       openTab({
@@ -489,9 +423,9 @@ export const PurchaseInvoices = () => {
     return (
       <div className="text-center py-8 sm:py-12 px-4">
         <p className="text-sm sm:text-base text-red-600">Failed to load purchase invoices</p>
-        <Button onClick={refetch} variant="default" size="default" className="mt-4">
+        <button onClick={refetch} className="btn btn-primary btn-md mt-4">
           Try Again
-        </Button>
+        </button>
       </div>
     );
   }
@@ -566,15 +500,15 @@ export const PurchaseInvoices = () => {
           {/* Table Header - Desktop Only */}
           <div className="hidden md:block bg-gray-50 px-4 lg:px-6 py-3 border-b border-gray-200">
             <div className="grid grid-cols-12 gap-3 lg:gap-4 text-xs font-medium text-gray-500 uppercase tracking-wider">
-              <div className="col-span-1">Invoice #</div>
-              <div className="col-span-3">Supplier</div>
+              <div className="col-span-2">Invoice Number</div>
+              <div className="col-span-2">Supplier</div>
               <div className="col-span-1">Date</div>
               <div className="col-span-1">Items</div>
               <div className="col-span-1">Total</div>
               <div className="col-span-1">Status</div>
               <div className="col-span-1">Payment</div>
               <div className="col-span-1">Notes</div>
-              <div className="col-span-2 text-right">Actions</div>
+              <div className="col-span-2">Actions</div>
             </div>
           </div>
 
@@ -591,44 +525,40 @@ export const PurchaseInvoices = () => {
                         <StatusBadge status={invoice.status} />
                       </div>
                       <p className="text-xs text-gray-600 truncate">
-                        {invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}
+                        {invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}
                       </p>
                       <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
-                        <span>{invoice.invoiceDate || invoice.invoice_date || invoice.createdAt 
-                          ? new Date(invoice.invoiceDate || invoice.invoice_date || invoice.createdAt).toLocaleDateString()
-                          : 'Invalid Date'}</span>
+                        <span>{new Date(invoice.createdAt).toLocaleDateString()}</span>
                         <span>•</span>
                         <span>{invoice.items?.length || 0} items</span>
                       </div>
                     </div>
-                    <div className="flex items-center flex-nowrap gap-1 flex-shrink-0">
+                    <div className="flex items-center space-x-1 flex-shrink-0">
                       <button
                         onClick={() => handleView(invoice)}
-                        className="shrink-0 text-gray-600 hover:text-gray-800 p-1"
+                        className="text-gray-600 hover:text-gray-800 p-1"
                         title="View Invoice"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handlePrint(invoice)}
-                        className="shrink-0 text-green-600 hover:text-green-800 p-1"
+                        className="text-green-600 hover:text-green-800 p-1"
                         title="Print Invoice"
                       >
                         <Printer className="h-4 w-4" />
                       </button>
-                      {isInvoiceDateToday(invoice) && (
-                        <button
-                          onClick={() => handleEdit(invoice)}
-                          className="shrink-0 text-blue-600 hover:text-blue-800 p-1"
-                          title="Edit Invoice"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleEdit(invoice)}
+                        className="text-blue-600 hover:text-blue-800 p-1"
+                        title="Edit Invoice"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
                       {!['paid', 'closed'].includes(invoice.status) && (
                         <button
                           onClick={() => handleDelete(invoice)}
-                          className="shrink-0 text-red-600 hover:text-red-800 p-1"
+                          className="text-red-600 hover:text-red-800 p-1"
                           title="Delete Invoice"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -663,25 +593,23 @@ export const PurchaseInvoices = () => {
                 {/* Desktop Table Layout */}
                 <div className="hidden md:grid grid-cols-12 gap-3 lg:gap-4 items-center">
                   {/* Invoice Number */}
-                  <div className="col-span-1 min-w-0">
+                  <div className="col-span-2">
                     <div className="font-medium text-sm text-gray-900 truncate">
                       {invoice.invoiceNumber}
                     </div>
                   </div>
 
                   {/* Supplier */}
-                  <div className="col-span-3 min-w-0">
-                    <div className="text-sm text-gray-900 truncate" title={invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}>
-                      {invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}
+                  <div className="col-span-2">
+                    <div className="text-sm text-gray-900 truncate">
+                      {invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}
                     </div>
                   </div>
 
                   {/* Date */}
                   <div className="col-span-1">
                     <span className="text-xs sm:text-sm text-gray-600">
-                      {invoice.invoiceDate || invoice.invoice_date || invoice.createdAt 
-                        ? new Date(invoice.invoiceDate || invoice.invoice_date || invoice.createdAt).toLocaleDateString()
-                        : 'Invalid Date'}
+                      {new Date(invoice.createdAt).toLocaleDateString()}
                     </span>
                   </div>
 
@@ -726,38 +654,37 @@ export const PurchaseInvoices = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="col-span-2 flex justify-end">
-                    <div className="flex items-center flex-nowrap gap-1">
+                  <div className="col-span-2">
+                    <div className="flex items-center space-x-1">
                       <button
                         onClick={() => handleView(invoice)}
-                        className="shrink-0 text-gray-600 hover:text-gray-800 p-1"
+                        className="text-gray-600 hover:text-gray-800 p-1"
                         title="View Invoice"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
+
                       <button
                         onClick={() => handlePrint(invoice)}
-                        className="shrink-0 text-green-600 hover:text-green-800 p-1"
+                        className="text-green-600 hover:text-green-800 p-1"
                         title="Print Invoice"
                       >
                         <Printer className="h-4 w-4" />
                       </button>
 
-                      {isInvoiceDateToday(invoice) && (
-                        <button
-                          onClick={() => handleEdit(invoice)}
-                          className="shrink-0 text-blue-600 hover:text-blue-800 p-1"
-                          title="Edit Invoice"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleEdit(invoice)}
+                        className="text-blue-600 hover:text-blue-800 p-1"
+                        title="Edit Invoice"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
 
                       {/* Show delete button for all statuses except paid and closed */}
                       {!['paid', 'closed'].includes(invoice.status) && (
                         <button
                           onClick={() => handleDelete(invoice)}
-                          className="shrink-0 text-red-600 hover:text-red-800 p-1"
+                          className="text-red-600 hover:text-red-800 p-1"
                           title="Delete Invoice"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -779,8 +706,7 @@ export const PurchaseInvoices = () => {
         onClose={() => setShowViewModal(false)}
         orderData={selectedInvoice ? {
           ...selectedInvoice,
-          supplier: selectedInvoice.supplierInfo || selectedInvoice.supplier,
-          supplierInfo: { ...(selectedInvoice.supplierInfo || {}), address: selectedInvoice.supplierInfo?.address || selectedInvoice.supplier?.address }
+          supplier: selectedInvoice.supplierInfo // Map supplierInfo to supplier for PrintModal
         } : null}
         documentTitle="Purchase Invoice"
         partyLabel="Supplier"

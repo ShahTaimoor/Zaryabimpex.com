@@ -41,27 +41,20 @@ export const saleReturnsApi = api.injectEndpoints({
 
     // Create sale return
     createSaleReturn: builder.mutation({
-      query: (data) => {
-        const { customerId, ...payload } = data;
-        return { url: 'sale-returns', method: 'post', data: payload };
-      },
-      invalidatesTags: (result, error, arg) => {
-        const tags = [
-          { type: 'SaleReturns', id: 'LIST' },
-          { type: 'SaleReturns', id: 'STATS' },
-          { type: 'Returns', id: 'LIST' },
-          { type: 'Sales', id: 'LIST' },
-          { type: 'Inventory', id: 'LIST' },
-          { type: 'Accounting', id: 'LEDGER_SUMMARY' },
-          { type: 'Accounting', id: 'LEDGER_ENTRIES' },
-          { type: 'Accounting', id: 'ALL_ENTRIES' },
-          { type: 'ChartOfAccounts', id: 'LIST' },
-        ];
-        if (arg?.customerId) {
-          tags.push({ type: 'SaleReturns', id: `CUSTOMER_PRODUCTS_${arg.customerId}` });
-        }
-        return tags;
-      },
+      query: (data) => ({
+        url: 'sale-returns',
+        method: 'post',
+        data,
+      }),
+      invalidatesTags: [
+        { type: 'SaleReturns', id: 'LIST' },
+        { type: 'Returns', id: 'LIST' },
+        { type: 'Sales', id: 'LIST' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'ChartOfAccounts', id: 'LIST' },
+      ],
     }),
 
     // Get customer invoices for return
@@ -132,23 +125,6 @@ export const saleReturnsApi = api.injectEndpoints({
       ],
     }),
 
-    // Issue refund for deferred sale return (when refund was not paid at creation)
-    issueRefund: builder.mutation({
-      query: ({ returnId, amount, method = 'cash', bankId, date }) => ({
-        url: `sale-returns/${returnId}/issue-refund`,
-        method: 'post',
-        data: { amount, method, bankId, date },
-      }),
-      invalidatesTags: (_r, _e, { returnId }) => [
-        { type: 'SaleReturns', id: returnId },
-        { type: 'SaleReturns', id: 'LIST' },
-        { type: 'Returns', id: returnId },
-        { type: 'Returns', id: 'LIST' },
-        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
-        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
-      ],
-    }),
-
     // Get sale return statistics
     getSaleReturnStats: builder.query({
       query: (params) => ({
@@ -172,7 +148,5 @@ export const {
   useApproveSaleReturnMutation,
   useRejectSaleReturnMutation,
   useProcessSaleReturnMutation,
-  useIssueRefundMutation,
   useGetSaleReturnStatsQuery,
-  useLazyGetSaleReturnQuery,
 } = saleReturnsApi;

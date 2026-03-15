@@ -17,7 +17,7 @@ import {
 import { useGetCCTVOrdersQuery } from '../store/services/salesApi';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 
 const CCTVAccess = ({ tabId }) => {
   const [page, setPage] = useState(1);
@@ -54,35 +54,6 @@ const CCTVAccess = ({ tabId }) => {
     orderNumber: orderNumber || undefined
   });
 
-  // Normalize orders from API (backend returns snake_case; support both and add fallbacks for missing CCTV fields)
-  // Use created_at/updated_at so bill times show real time (not 00:00:00) and duration can be calculated
-  const orders = React.useMemo(() => {
-    const raw = data?.orders || [];
-    return raw.map((o) => {
-      const customer = o.customer || {};
-      const displayName = customer.displayName ?? customer.business_name ?? customer.businessName ?? customer.name ?? 'Walk-in Customer';
-      const saleDate = o.sale_date || o.saleDate || o.created_at || o.createdAt;
-      const createdAt = o.created_at ?? o.createdAt;
-      const updatedAt = o.updated_at ?? o.updatedAt;
-      const total = o.total != null ? o.total : (o.pricing?.total ?? 0);
-      // Prefer real CCTV timestamps; else use created_at (has time) and updated_at so duration can show
-      const billStart = o.bill_start_time ?? o.billStartTime ?? createdAt ?? saleDate;
-      const billEnd = o.bill_end_time ?? o.billEndTime ?? updatedAt ?? createdAt ?? saleDate;
-      return {
-        _id: o.id || o._id,
-        id: o.id || o._id,
-        orderNumber: o.order_number ?? o.orderNumber ?? 'N/A',
-        billDate: o.bill_date ?? o.billDate ?? saleDate,
-        billStartTime: billStart,
-        billEndTime: billEnd,
-        customer: { ...customer, displayName },
-        customerInfo: { name: displayName },
-        pricing: { total },
-        createdAt
-      };
-    });
-  }, [data?.orders]);
-
   const formatDateTime = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -109,13 +80,8 @@ const CCTVAccess = ({ tabId }) => {
 
   const calculateDuration = (startTime, endTime) => {
     if (!startTime || !endTime) return 'N/A';
-    const seconds = Math.round((new Date(endTime) - new Date(startTime)) / 1000);
-    if (seconds <= 0) return '—';
-    if (seconds < 60) return `${seconds} sec`;
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    if (secs === 0) return `${mins} min`;
-    return `${mins} min ${secs} sec`;
+    const duration = Math.round((new Date(endTime) - new Date(startTime)) / 1000);
+    return `${duration} seconds`;
   };
 
   const copyToClipboard = (text, type) => {
@@ -302,12 +268,12 @@ const CCTVAccess = ({ tabId }) => {
           <AlertCircle className="h-5 w-5 text-red-600" />
           <span className="text-red-800">Error loading CCTV orders: {error.message || 'Unknown error'}</span>
         </div>
-      ) : !orders.length ? (
+      ) : !data?.orders || data.orders.length === 0 ? (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
           <Camera className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 text-lg">No orders found</p>
+          <p className="text-gray-600 text-lg">No orders with CCTV timestamps found</p>
           <p className="text-gray-500 text-sm mt-2">
-            Try adjusting your search filters or date range.
+            Try adjusting your search filters or check if orders have been created with CCTV tracking enabled.
           </p>
         </div>
       ) : (
@@ -315,34 +281,34 @@ const CCTVAccess = ({ tabId }) => {
           {/* Orders List */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] table-auto">
+              <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider min-w-[140px]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Invoice #
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider min-w-[120px]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Customer
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider min-w-[160px]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Bill Start Time
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider min-w-[160px]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Bill End Time
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider min-w-[100px] whitespace-nowrap">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Duration
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider min-w-[80px] whitespace-nowrap">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Amount
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider min-w-[180px] whitespace-nowrap">
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {orders.map((order) => (
+                  {data.orders.map((order) => (
                     <tr key={order._id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
@@ -374,9 +340,9 @@ const CCTVAccess = ({ tabId }) => {
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-green-600 flex-shrink-0" />
+                          <Clock className="h-4 w-4 text-green-600" />
                           <span className="text-gray-900 font-mono text-sm">
                             {formatDateTime(order.billStartTime)}
                           </span>
@@ -393,9 +359,9 @@ const CCTVAccess = ({ tabId }) => {
                           </button>
                         </div>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-red-600 flex-shrink-0" />
+                          <Clock className="h-4 w-4 text-red-600" />
                           <span className="text-gray-900 font-mono text-sm">
                             {formatDateTime(order.billEndTime)}
                           </span>
@@ -412,21 +378,21 @@ const CCTVAccess = ({ tabId }) => {
                           </button>
                         </div>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4">
                         <span className="text-gray-600 text-sm">
                           {calculateDuration(order.billStartTime, order.billEndTime)}
                         </span>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4">
                         <span className="font-semibold text-gray-900">
                           {Math.round(order.pricing?.total || 0)}
                         </span>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
+                      <td className="px-4 py-4">
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => handleOpenCCTV(order)}
-                            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm flex-shrink-0"
+                            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
                             title="Open CCTV Playback"
                           >
                             <Eye className="h-4 w-4" />
@@ -434,7 +400,7 @@ const CCTVAccess = ({ tabId }) => {
                           </button>
                           <button
                             onClick={() => handleViewDetails(order)}
-                            className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2 text-sm flex-shrink-0"
+                            className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2 text-sm"
                             title="View Details"
                           >
                             <FileText className="h-4 w-4" />
@@ -449,7 +415,7 @@ const CCTVAccess = ({ tabId }) => {
             </div>
 
             {/* Pagination */}
-            {data?.pagination && data.pagination.pages > 1 && (
+            {data.pagination && data.pagination.pages > 1 && (
               <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 flex items-center justify-between">
                 <div className="text-sm text-gray-700">
                   Showing {((data.pagination.page - 1) * data.pagination.limit) + 1} to{' '}

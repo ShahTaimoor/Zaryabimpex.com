@@ -3,7 +3,6 @@ import { TrendingUp, Sparkles, RefreshCw, Settings, Eye, ShoppingCart } from 'lu
 import { useGenerateRecommendationsMutation } from '../store/services/recommendationsApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { LoadingSpinner, LoadingButton } from './LoadingSpinner';
-import { Button } from '@/components/ui/button';
 import ProductRecommendationCard from './ProductRecommendationCard';
 import { useResponsive, ResponsiveContainer, ResponsiveGrid } from './ResponsiveContainer';
 
@@ -104,14 +103,9 @@ const RecommendationSection = ({
   const handleAddToCart = async (product) => {
     try {
       if (onAddToCart) {
-        const unitPrice = product?.selling_price ?? product?.sellingPrice ?? product?.pricing?.retail ?? product?.pricing?.wholesale ?? 0;
-        await onAddToCart({
-          product: { ...product, _id: product?._id ?? product?.id },
-          quantity: 1,
-          unitPrice: Number(unitPrice) || 0,
-        });
+        await onAddToCart(product);
       }
-      showSuccessToast(`${product?.name ?? 'Product'} added to cart`);
+      showSuccessToast(`${product.name} added to cart`);
     } catch (error) {
       handleApiError(error, 'Add to Cart');
     }
@@ -140,12 +134,12 @@ const RecommendationSection = ({
         </div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Unable to load recommendations</h3>
         <p className="text-gray-500 mb-4">{error.message}</p>
-        <Button
+        <button
           onClick={handleRefresh}
-          variant="default"
+          className="btn btn-primary"
         >
           Try Again
-        </Button>
+        </button>
       </div>
     );
   }
@@ -186,8 +180,7 @@ const RecommendationSection = ({
               <LoadingButton
                 onClick={handleRefresh}
                 isLoading={isRefreshing}
-                variant="secondary"
-                size="sm"
+                className="btn btn-secondary btn-sm"
               >
                 <RefreshCw className="h-4 w-4" />
               </LoadingButton>
@@ -219,15 +212,13 @@ const RecommendationSection = ({
       {/* Recommendations Grid */}
       {recommendationsData?.recommendations && (
         <ResponsiveGrid 
-          cols={{ default: 2, md: 2, lg: 3, xl: 4 }} 
+          cols={{ default: 2, md: 3, lg: 4 }} 
           gap={4}
           className="mb-6"
         >
-          {recommendationsData.recommendations
-            .filter((rec) => rec?.product)
-            .map((recommendation, index) => (
+          {recommendationsData.recommendations.map((recommendation, index) => (
             <ProductRecommendationCard
-              key={`${recommendation.product?._id ?? recommendation.product?.id ?? index}-${index}`}
+              key={`${recommendation.product._id}-${index}`}
               recommendation={{
                 ...recommendation,
                 _id: recommendationsData.recommendationId,
@@ -252,13 +243,13 @@ const RecommendationSection = ({
           <p className="text-gray-500 mb-4">
             We need more data to provide personalized recommendations.
           </p>
-          <Button
+          <button
             onClick={handleRefresh}
-            variant="default"
+            className="btn btn-primary"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
-          </Button>
+          </button>
         </div>
       )}
 

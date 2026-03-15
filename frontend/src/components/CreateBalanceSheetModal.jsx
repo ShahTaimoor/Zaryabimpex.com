@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, FileText, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import BaseModal from './BaseModal';
+import { X, Calendar, FileText, AlertCircle } from 'lucide-react';
 import { useGenerateBalanceSheetMutation } from '../store/services/balanceSheetsApi';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 
@@ -122,23 +120,30 @@ const CreateBalanceSheetModal = ({ isOpen, onClose, onSuccess }) => {
   if (!isOpen) return null;
 
   return (
-    <BaseModal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={
-        <span className="flex items-center gap-3">
-          <span className="p-2 bg-blue-50 rounded-lg">
-            <FileText className="h-5 w-5 text-blue-600" />
-          </span>
-          Generate Balance Sheet
-        </span>
-      }
-      subtitle="Create a new financial position statement"
-      maxWidth="sm"
-      variant="centered"
-      contentClassName="p-5"
-    >
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center">
+            <div className="p-2 bg-blue-50 rounded-lg mr-3">
+              <FileText className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">Generate Balance Sheet</h3>
+              <p className="text-sm text-gray-500">Create a new financial position statement</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+            disabled={isLoading}
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-4">
           {/* Start Date */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -246,26 +251,32 @@ const CreateBalanceSheetModal = ({ isOpen, onClose, onSuccess }) => {
 
           {/* Action Buttons */}
           <div className="flex space-x-3 pt-4">
-            <Button
+            <button
               type="button"
               onClick={onClose}
-              variant="secondary"
-              className="flex-1"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               disabled={isLoading}
             >
               Cancel
-            </Button>
-            <Button
+            </button>
+            <button
               type="submit"
-              variant="default"
-              className="flex-1"
+              className="flex-1 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isLoading}
             >
-              {isLoading ? 'Generating...' : 'Generate Balance Sheet'}
-            </Button>
+              {isLoading ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Generating...
+                </div>
+              ) : (
+                'Generate Balance Sheet'
+              )}
+            </button>
           </div>
         </form>
-    </BaseModal>
+      </div>
+    </div>
   );
 };
 

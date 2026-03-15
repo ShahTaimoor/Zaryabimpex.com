@@ -148,7 +148,6 @@ export const {
   useLazyCheckContactNameQuery,
   useGetActiveSuppliersQuery,
   useGetSupplierQuery,
-  useLazyGetSupplierQuery,
   useSearchSuppliersQuery,
   useLazySearchSuppliersQuery,
   useExportExcelMutation,

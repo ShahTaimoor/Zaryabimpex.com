@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Minus, Package, Calendar, DollarSign, CheckSquare, Square } from 'lucide-react';
-import BaseModal from './BaseModal';
-import { Button } from '@/components/ui/button';
+import { X, Plus, Minus, Package, Calendar, DollarSign, CheckSquare, Square } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner';
 
 const ProductSelectionModal = ({ 
@@ -10,8 +8,7 @@ const ProductSelectionModal = ({
   products, 
   isLoading,
   type = 'sale', // 'sale' or 'purchase'
-  onConfirm,
-  confirmLabel = 'Create Return' // e.g. "Add to Return" for cart flow
+  onConfirm 
 }) => {
   const [selectedProducts, setSelectedProducts] = useState({}); // { productId: { quantity, sale/purchase data } }
 
@@ -66,15 +63,12 @@ const ProductSelectionModal = ({
       const firstSale = type === 'sale' 
         ? productData.sales[0] 
         : productData.purchases[0];
-      // Cap quantity at this specific order item's available amount (backend validates per order item)
-      const maxForOrderItem = firstSale?.remainingQuantity ?? selected.maxQuantity ?? 0;
-      const cappedQuantity = Math.min(selected.quantity, maxForOrderItem, selected.maxQuantity);
 
       return {
         product: productData.product._id,
         originalOrder: firstSale.orderId || firstSale.invoiceId,
         originalOrderItem: firstSale.orderItemId || firstSale.invoiceItemId,
-        quantity: Math.max(1, cappedQuantity),
+        quantity: selected.quantity,
         originalPrice: productData.previousPrice,
         returnReason: type === 'sale' ? 'changed_mind' : 'defective',
         condition: 'good',
@@ -111,35 +105,28 @@ const ProductSelectionModal = ({
   };
 
   return (
-    <BaseModal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Select Products for Return"
-      subtitle={`${type === 'sale' ? 'Sale' : 'Purchase'} Return - Select products and quantities`}
-      maxWidth="xl"
-      variant="scrollable"
-      contentClassName="p-5"
-      footer={
-        <div className="flex justify-between items-center w-full">
-          <div className="text-sm text-gray-600">
-            {Object.keys(selectedProducts).length} product(s) selected
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-0 border w-11/12 max-w-5xl shadow-lg rounded-md bg-white flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-200 flex-shrink-0">
+          <div>
+            <h3 className="text-lg font-medium text-gray-900">
+              Select Products for Return
+            </h3>
+            <p className="text-sm text-gray-600 mt-1">
+              {type === 'sale' ? 'Sale' : 'Purchase'} Return - Select products and quantities
+            </p>
           </div>
-          <div className="flex gap-3">
-            <Button type="button" onClick={onClose} variant="secondary">
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleConfirm}
-              disabled={Object.keys(selectedProducts).length === 0}
-              variant="default"
-            >
-              {confirmLabel}
-            </Button>
-          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-6 w-6" />
+          </button>
         </div>
-      }
-    >
+
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto flex-1 p-5">
           {isLoading ? (
             <div className="flex justify-center items-center py-12">
               <LoadingSpinner />
@@ -261,7 +248,33 @@ const ProductSelectionModal = ({
               })}
             </div>
           )}
-    </BaseModal>
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-between items-center p-5 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+          <div className="text-sm text-gray-600">
+            {Object.keys(selectedProducts).length} product(s) selected
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={Object.keys(selectedProducts).length === 0}
+              className="btn btn-primary"
+            >
+              Create Return
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

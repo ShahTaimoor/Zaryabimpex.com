@@ -2,12 +2,11 @@ import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../contexts/AuthContext';
-import { Package, MessageCircle, Mail, Globe, Lock, User, ArrowRight, MapPin, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Package, MessageCircle, Mail, Globe, Lock, User, ArrowRight, MapPin } from 'lucide-react';
 import { LoadingButton } from '../components/LoadingSpinner';
 
 export const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [showSetup, setShowSetup] = useState(false);
   const { login, isAuthenticated } = useAuth();
   const { register, handleSubmit, formState: { errors } } = useForm();
 

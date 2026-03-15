@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import { useGetReportQuery } from '../store/services/salesPerformanceApi';
 import { LoadingSpinner, LoadingCard } from '../components/LoadingSpinner';
-import { Button } from '@/components/ui/button';
 
 const SalesPerformanceDetailModal = ({ isOpen, onClose, report, onDelete, onExport }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -166,13 +165,13 @@ const SalesPerformanceDetailModal = ({ isOpen, onClose, report, onDelete, onExpo
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                <Button
+                <button
                   onClick={() => setShowExportMenu(!showExportMenu)}
-                  variant="secondary"
+                  className="btn btn-secondary"
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Export
-                </Button>
+                </button>
                 <button
                   onClick={onClose}
                   className="text-gray-400 hover:text-gray-600"
@@ -390,7 +389,7 @@ const SalesPerformanceDetailModal = ({ isOpen, onClose, report, onDelete, onExpo
                               </div>
                               <div>
                                 <h4 className="text-sm font-medium text-gray-900">{product.product.name}</h4>
-                                <p className="text-sm text-gray-500">Category: {typeof product.product?.category === 'object' ? (product.product?.category?.name ?? 'N/A') : (product.product?.category || 'N/A')}</p>
+                                <p className="text-sm text-gray-500">Category: {product.product.category || 'N/A'}</p>
                               </div>
                             </div>
                             <div className="text-right">
@@ -613,12 +612,12 @@ const SalesPerformanceDetailModal = ({ isOpen, onClose, report, onDelete, onExpo
               Report ID: {report.reportId}
             </div>
             <div className="flex space-x-3">
-              <Button
+              <button
                 onClick={onClose}
-                variant="secondary"
+                className="btn btn-secondary"
               >
                 Close
-              </Button>
+              </button>
             </div>
           </div>
         </div>

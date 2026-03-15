@@ -41,27 +41,20 @@ export const purchaseReturnsApi = api.injectEndpoints({
 
     // Create purchase return
     createPurchaseReturn: builder.mutation({
-      query: (data) => {
-        const { supplierId, ...payload } = data;
-        return { url: 'purchase-returns', method: 'post', data: payload };
-      },
-      invalidatesTags: (result, error, arg) => {
-        const tags = [
-          { type: 'PurchaseReturns', id: 'LIST' },
-          { type: 'PurchaseReturns', id: 'STATS' },
-          { type: 'Returns', id: 'LIST' },
-          { type: 'PurchaseInvoices', id: 'LIST' },
-          { type: 'Inventory', id: 'LIST' },
-          { type: 'Accounting', id: 'LEDGER_SUMMARY' },
-          { type: 'Accounting', id: 'LEDGER_ENTRIES' },
-          { type: 'Accounting', id: 'ALL_ENTRIES' },
-          { type: 'ChartOfAccounts', id: 'LIST' },
-        ];
-        if (arg?.supplierId) {
-          tags.push({ type: 'PurchaseReturns', id: `SUPPLIER_PRODUCTS_${arg.supplierId}` });
-        }
-        return tags;
-      },
+      query: (data) => ({
+        url: 'purchase-returns',
+        method: 'post',
+        data,
+      }),
+      invalidatesTags: [
+        { type: 'PurchaseReturns', id: 'LIST' },
+        { type: 'Returns', id: 'LIST' },
+        { type: 'PurchaseInvoices', id: 'LIST' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'ChartOfAccounts', id: 'LIST' },
+      ],
     }),
 
     // Get supplier invoices for return
@@ -148,7 +141,6 @@ export const purchaseReturnsApi = api.injectEndpoints({
 export const {
   useGetPurchaseReturnsQuery,
   useGetPurchaseReturnQuery,
-  useLazyGetPurchaseReturnQuery,
   useCreatePurchaseReturnMutation,
   useGetSupplierInvoicesQuery,
   useSearchSupplierProductsQuery,

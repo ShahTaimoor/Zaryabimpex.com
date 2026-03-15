@@ -1,7 +1,10 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
+const Supplier = require('../models/Supplier'); // Still needed for model reference
+const PurchaseOrder = require('../models/PurchaseOrder'); // Still needed for model reference
 const SupplierBalanceService = require('../services/supplierBalanceService');
 const supplierRepository = require('../repositories/SupplierRepository');
+const AccountingService = require('../services/accountingService');
 const { auth, requirePermission } = require('../middleware/auth');
 
 const router = express.Router();
@@ -10,7 +13,7 @@ const router = express.Router();
 router.get('/:supplierId', [
   auth,
   requirePermission('view_suppliers'),
-  param('supplierId').isUUID(4).withMessage('Invalid supplier ID')
+  param('supplierId').isMongoId().withMessage('Invalid supplier ID')
 ], async (req, res) => {
   try {
     const { supplierId } = req.params;
@@ -34,9 +37,9 @@ router.get('/:supplierId', [
 router.post('/:supplierId/payment', [
   auth,
   requirePermission('manage_payments'),
-  param('supplierId').isUUID(4).withMessage('Invalid supplier ID'),
+  param('supplierId').isMongoId().withMessage('Invalid supplier ID'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Payment amount must be greater than 0'),
-  body('purchaseOrderId').optional().isUUID(4).withMessage('Invalid purchase order ID'),
+  body('purchaseOrderId').optional().isMongoId().withMessage('Invalid purchase order ID'),
   body('notes').optional().isString().trim().isLength({ max: 500 }).withMessage('Notes too long')
 ], async (req, res) => {
   try {
@@ -67,9 +70,9 @@ router.post('/:supplierId/payment', [
 router.post('/:supplierId/refund', [
   auth,
   requirePermission('manage_payments'),
-  param('supplierId').isUUID(4).withMessage('Invalid supplier ID'),
+  param('supplierId').isMongoId().withMessage('Invalid supplier ID'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Refund amount must be greater than 0'),
-  body('purchaseOrderId').optional().isUUID(4).withMessage('Invalid purchase order ID'),
+  body('purchaseOrderId').optional().isMongoId().withMessage('Invalid purchase order ID'),
   body('reason').optional().isString().trim().isLength({ max: 500 }).withMessage('Reason too long')
 ], async (req, res) => {
   try {
@@ -100,7 +103,7 @@ router.post('/:supplierId/refund', [
 router.post('/:supplierId/recalculate', [
   auth,
   requirePermission('manage_suppliers'),
-  param('supplierId').isUUID(4).withMessage('Invalid supplier ID')
+  param('supplierId').isMongoId().withMessage('Invalid supplier ID')
 ], async (req, res) => {
   try {
     const { supplierId } = req.params;
@@ -125,7 +128,7 @@ router.post('/:supplierId/recalculate', [
 router.get('/:supplierId/can-accept-purchase', [
   auth,
   requirePermission('view_suppliers'),
-  param('supplierId').isUUID(4).withMessage('Invalid supplier ID'),
+  param('supplierId').isMongoId().withMessage('Invalid supplier ID'),
   query('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0')
 ], async (req, res) => {
   try {
@@ -160,16 +163,7 @@ router.get('/reports/balance-issues', [
     });
 
     const supplierIds = suppliers.map(s => s._id.toString());
-    // Accounting removed - balances calculated from SupplierBalanceService
-    const balanceMap = new Map();
-    for (const supplierId of supplierIds) {
-      try {
-        const summary = await SupplierBalanceService.getBalanceSummary(supplierId);
-        balanceMap.set(supplierId, summary.currentBalance || 0);
-      } catch (error) {
-        balanceMap.set(supplierId, 0);
-      }
-    }
+    const balanceMap = await AccountingService.getBulkSupplierBalances(supplierIds);
 
     const pendingBalances = [];
     const advanceBalances = [];

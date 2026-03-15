@@ -1,6 +1,7 @@
 const StockMovementRepository = require('../repositories/StockMovementRepository');
 const ProductRepository = require('../repositories/ProductRepository');
 const InventoryRepository = require('../repositories/InventoryRepository');
+const StockMovement = require('../models/StockMovement'); // Keep for instance creation
 
 class StockMovementService {
   /**
@@ -39,13 +40,10 @@ class StockMovementService {
         throw new Error('Product not found');
       }
 
-      const inventoryRow = await InventoryRepository.findByProduct(productId);
-      const currentStock = inventoryRow
-        ? Number(inventoryRow.current_stock ?? inventoryRow.currentStock ?? 0)
-        : Number(product.stock_quantity ?? product.stockQuantity ?? 0);
+      const currentStock = product.inventory.currentStock || 0;
       const resolvedUnitCost = typeof unitCost === 'number' && !Number.isNaN(unitCost)
         ? unitCost
-        : (Number(product.cost_price ?? product.costPrice ?? 0) || (product.pricing?.cost ?? 0));
+        : (product.pricing?.cost ?? 0);
       const totalValue = quantity * resolvedUnitCost;
 
       const isStockIn = ['purchase', 'return_in', 'adjustment_in', 'transfer_in', 'production', 'initial_stock'].includes(movementType);
@@ -83,13 +81,10 @@ class StockMovementService {
         }
       }
 
-      const userId = user?.id ?? user?._id;
-      const userName = (user?.firstName && user?.lastName) ? `${user.firstName} ${user.lastName}` : (user?.email || 'System');
       const stockMovementRecord = {
-        productId,
         product: productId,
-        productName: product.name || product.productName,
-        productSku: product.sku || null,
+        productName: product.name,
+        productSku: product.sku,
         movementType,
         quantity,
         unitCost: resolvedUnitCost,
@@ -102,9 +97,8 @@ class StockMovementService {
         location,
         fromLocation,
         toLocation,
-        userId,
-        user: userId,
-        userName,
+        user: user._id,
+        userName: `${user.firstName} ${user.lastName}`,
         reason,
         notes,
         batchNumber,
@@ -119,7 +113,20 @@ class StockMovementService {
 
       if (!skipInventoryUpdate) {
         try {
-          await InventoryRepository.updateByProductId(productId, { currentStock: newStock });
+          const inventoryType = ['purchase', 'return_in', 'adjustment_in', 'transfer_in', 'production', 'initial_stock'].includes(movementType)
+            ? 'in'
+            : (['sale', 'return_out', 'adjustment_out', 'transfer_out', 'damage', 'expiry', 'theft', 'consumption'].includes(movementType) ? 'out' : 'adjustment');
+          await Inventory.updateStock(productId, {
+            type: inventoryType,
+            quantity,
+            reason,
+            reference: referenceNumber,
+            referenceId,
+            referenceModel: movement.referenceType || 'system_generated',
+            cost: resolvedUnitCost,
+            performedBy: user._id,
+            notes,
+          });
         } catch (invErr) {
           console.error('Error updating Inventory record for stock movement:', invErr);
         }

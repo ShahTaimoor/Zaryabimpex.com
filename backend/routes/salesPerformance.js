@@ -4,8 +4,9 @@ const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors, sanitizeRequest } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const salesPerformanceService = require('../services/salesPerformanceService');
-const salesPerformanceRepository = require('../repositories/postgres/SalesPerformanceRepository');
-const salesRepository = require('../repositories/postgres/SalesRepository');
+const SalesPerformance = require('../models/SalesPerformance'); // Still needed for static methods
+const salesPerformanceRepository = require('../repositories/SalesPerformanceRepository');
+const salesRepository = require('../repositories/SalesRepository');
 
 const router = express.Router();
 
@@ -87,7 +88,7 @@ router.get('/', [
   query('limit').optional({ checkFalsy: true }).isInt({ min: 1, max: 100 }),
   query('reportType').optional({ checkFalsy: true }).isIn(['top_products', 'top_customers', 'top_sales_reps', 'comprehensive']),
   query('status').optional({ checkFalsy: true }).isIn(['generating', 'completed', 'failed', 'archived']),
-  query('generatedBy').optional({ checkFalsy: true }).isUUID(4),
+  query('generatedBy').optional({ checkFalsy: true }).isMongoId(),
   ...validateDateParams,
   query('sortBy').optional({ checkFalsy: true }).isIn(['generatedAt', 'reportName', 'status', 'viewCount']),
   query('sortOrder').optional({ checkFalsy: true }).isIn(['asc', 'desc']),
@@ -335,7 +336,7 @@ router.get('/stats/overview', [
   handleValidationErrors,
 ], async (req, res) => {
   try {
-    const stats = await salesPerformanceRepository.getReportStats(req.query);
+    const stats = await SalesPerformance.getReportStats(req.query);
     res.json(stats);
   } catch (error) {
     console.error('Error fetching report stats:', error);
@@ -380,24 +381,47 @@ router.get('/quick/top-products', [
     }
 
     // Get quick data without generating full report
-    const productPerformance = await salesRepository.getTopProductsPerformance(startDate, endDate, limit);
+    const productPerformance = await salesRepository.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate, $lte: endDate },
+          status: 'delivered'
+        }
+      },
+      { $unwind: '$items' },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      { $unwind: '$productInfo' },
+      {
+        $group: {
+          _id: '$items.product',
+          product: { $first: '$productInfo' },
+          totalRevenue: {
+            $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] }
+          },
+          totalQuantity: { $sum: '$items.quantity' },
+          totalOrders: { $sum: 1 }
+        }
+      },
+      { $sort: { totalRevenue: -1 } },
+      { $limit: parseInt(limit) }
+    ]);
 
-    // Get product details
-    const productIds = productPerformance.map(p => p.productId);
-    const products = await productRepository.findAll({ ids: productIds });
-
-    const topProducts = productPerformance.map((perf, index) => {
-      const product = products.find(p => p.id === perf.productId);
-      return {
-        product: product || { id: perf.productId, name: 'Unknown Product' },
-        metrics: {
-          totalRevenue: perf.totalRevenue,
-          totalQuantity: perf.totalQuantity,
-          totalOrders: perf.totalOrders
-        },
-        rank: index + 1
-      };
-    });
+    const topProducts = productPerformance.map((product, index) => ({
+      product: product.product,
+      metrics: {
+        totalRevenue: product.totalRevenue,
+        totalQuantity: product.totalQuantity,
+        totalOrders: product.totalOrders
+      },
+      rank: index + 1
+    }));
 
     res.json({
       topProducts,
@@ -448,25 +472,98 @@ router.get('/quick/top-customers', [
     }
 
     // Get quick data without generating full report
-    const customerPerformance = await salesRepository.getTopCustomersPerformance(startDate, endDate, limit);
+    const customerPerformance = await salesRepository.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate, $lte: endDate },
+          status: 'completed',
+          customer: { $exists: true, $ne: null }
+        }
+      },
+      {
+        $lookup: {
+          from: 'customers',
+          localField: 'customer',
+          foreignField: '_id',
+          as: 'customerInfo'
+        }
+      },
+      { $unwind: '$customerInfo' },
+      {
+        $addFields: {
+          orderRevenue: {
+            $sum: {
+              $map: {
+                input: { $ifNull: ['$items', []] },
+                as: 'item',
+                in: {
+                  $multiply: ['$$item.unitPrice', '$$item.quantity']
+                }
+              }
+            }
+          },
+          orderCost: {
+            $sum: {
+              $map: {
+                input: { $ifNull: ['$items', []] },
+                as: 'item',
+                in: {
+                  $multiply: [
+                    { $ifNull: ['$$item.unitCost', 0] },
+                    '$$item.quantity'
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: '$customer',
+          customer: { $first: '$customerInfo' },
+          totalRevenue: { $sum: '$orderRevenue' },
+          totalCost: { $sum: '$orderCost' },
+          totalOrders: { $sum: 1 },
+          lastOrderDate: { $max: '$createdAt' },
+          firstOrderDate: { $min: '$createdAt' }
+        }
+      },
+      {
+        $addFields: {
+          averageOrderValue: { $divide: ['$totalRevenue', '$totalOrders'] },
+          totalProfit: { $subtract: ['$totalRevenue', '$totalCost'] },
+          margin: {
+            $cond: [
+              { $eq: ['$totalRevenue', 0] },
+              0,
+              {
+                $multiply: [
+                  { $divide: [{ $subtract: ['$totalRevenue', '$totalCost'] }, '$totalRevenue'] },
+                  100
+                ]
+              }
+            ]
+          }
+        }
+      },
+      { $sort: { [sortMetric]: -1, totalRevenue: -1 } },
+      { $limit: parseInt(limit) }
+    ]);
 
-    // Get customer details
-    const customerIds = customerPerformance.map(c => c.customerId);
-    const customerRepository = require('../repositories/CustomerRepository');
-    const customers = await customerRepository.findAll({ ids: customerIds });
-
-    const topCustomers = customerPerformance.map((perf, index) => {
-      const customer = customers.find(c => c.id === perf.customerId);
-      return {
-        customer: customer || { id: perf.customerId, name: 'Unknown Customer' },
-        metrics: {
-          totalRevenue: perf.totalRevenue,
-          totalOrders: perf.totalOrders,
-          averageOrderValue: perf.totalOrders > 0 ? perf.totalRevenue / perf.totalOrders : 0
-        },
-        rank: index + 1
-      };
-    });
+    const topCustomers = customerPerformance.map((customer, index) => ({
+      customer: customer.customer,
+      metrics: {
+        totalRevenue: customer.totalRevenue,
+        totalOrders: customer.totalOrders,
+        averageOrderValue: customer.averageOrderValue,
+        lastOrderDate: customer.lastOrderDate,
+        firstOrderDate: customer.firstOrderDate,
+        totalProfit: customer.totalProfit,
+        margin: customer.margin
+      },
+      rank: index + 1
+    }));
 
     res.json({
       topCustomers,
@@ -572,11 +669,67 @@ router.get('/quick/summary', [
 
     // Get quick summary data without generating full report
     // Get current period summary
-    const summary = await salesRepository.getSalesPerformanceSummary(startDate, endDate);
+    const currentSummary = await salesRepository.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate, $lte: endDate },
+          status: 'delivered'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$pricing.total' },
+          totalOrders: { $sum: 1 },
+          totalCustomers: { $addToSet: '$customer' }
+        }
+      },
+      {
+        $addFields: {
+          totalCustomers: { $size: '$totalCustomers' },
+          averageOrderValue: { $divide: ['$totalRevenue', '$totalOrders'] }
+        }
+      }
+    ]);
+
+    const summary = currentSummary[0] || {
+      totalRevenue: 0,
+      totalOrders: 0,
+      totalCustomers: 0,
+      averageOrderValue: 0
+    };
 
     // Get previous period for comparison
     const previousStartDate = new Date(startDate.getTime() - (endDate - startDate));
-    const previousData = await salesRepository.getSalesPerformanceSummary(previousStartDate, startDate);
+    const previousSummary = await salesRepository.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: previousStartDate, $lte: startDate },
+          status: 'delivered'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$pricing.total' },
+          totalOrders: { $sum: 1 },
+          totalCustomers: { $addToSet: '$customer' }
+        }
+      },
+      {
+        $addFields: {
+          totalCustomers: { $size: '$totalCustomers' },
+          averageOrderValue: { $divide: ['$totalRevenue', '$totalOrders'] }
+        }
+      }
+    ]);
+
+    const previousData = previousSummary[0] || {
+      totalRevenue: 0,
+      totalOrders: 0,
+      totalCustomers: 0,
+      averageOrderValue: 0
+    };
 
     // Calculate changes
     const calculatePercentageChange = (current, previous) => {

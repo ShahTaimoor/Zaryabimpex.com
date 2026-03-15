@@ -27,11 +27,8 @@ import {
   useGetInvestorProductsQuery,
   useGetProfitSharesQuery,
 } from '../store/services/investorsApi';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage } from '../components/LoadingSpinner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import { useTab } from '../contexts/TabContext';
@@ -87,9 +84,9 @@ const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
+                    <input
                       {...register('name', { required: 'Investor name is required' })}
-                      className="pl-10"
+                      className="input pl-10"
                       placeholder="Enter investor name"
                     />
                   </div>
@@ -105,7 +102,7 @@ const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                     </label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
+                      <input
                         {...register('email', { 
                           required: 'Email is required',
                           pattern: {
@@ -114,7 +111,7 @@ const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                           }
                         })}
                         type="email"
-                        className="pl-10"
+                        className="input pl-10"
                         placeholder="Enter email address"
                       />
                     </div>
@@ -129,10 +126,10 @@ const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                     </label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
+                      <input
                         {...register('phone')}
                         type="tel"
-                        className="pl-10"
+                        className="input pl-10"
                         placeholder="Enter phone number"
                       />
                     </div>
@@ -151,9 +148,9 @@ const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                   </label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
+                    <input
                       {...register('address.street')}
-                      className="pl-10"
+                      className="input pl-10"
                       placeholder="Enter street address"
                     />
                   </div>
@@ -164,8 +161,9 @@ const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       City
                     </label>
-                    <Input
+                    <input
                       {...register('address.city')}
+                      className="input"
                       placeholder="Enter city"
                     />
                   </div>
@@ -174,8 +172,9 @@ const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       State/Province
                     </label>
-                    <Input
+                    <input
                       {...register('address.state')}
+                      className="input"
                       placeholder="Enter state"
                     />
                   </div>
@@ -186,8 +185,9 @@ const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Zip Code
                     </label>
-                    <Input
+                    <input
                       {...register('address.zipCode')}
+                      className="input"
                       placeholder="Enter zip code"
                     />
                   </div>
@@ -196,8 +196,9 @@ const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Country
                     </label>
-                    <Input
+                    <input
                       {...register('address.country')}
+                      className="input"
                       placeholder="Enter country"
                     />
                   </div>
@@ -215,14 +216,14 @@ const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                   </label>
                   <div className="relative">
                     <TrendingUp className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
+                    <input
                       {...register('totalInvestment', { 
                         valueAsNumber: true,
                         min: { value: 0, message: 'Investment must be positive' }
                       })}
                       type="number"
                       step="0.01"
-                      className="pl-10"
+                      className="input pl-10"
                       placeholder="0.00"
                     />
                   </div>
@@ -249,34 +250,31 @@ const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Notes
               </label>
-              <Textarea
+              <textarea
                 {...register('notes')}
                 rows={3}
+                className="input"
                 placeholder="Enter any additional notes"
               />
             </div>
 
             {/* Form Actions */}
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-6 border-t border-gray-200">
-              <Button
+              <button
                 type="button"
                 onClick={onCancel}
-                variant="secondary"
-                size="default"
-                className="w-full sm:w-auto"
+                className="btn btn-secondary btn-md w-full sm:w-auto"
                 disabled={isSubmitting}
               >
                 Cancel
-              </Button>
-              <Button
+              </button>
+              <button
                 type="submit"
-                variant="default"
-                size="default"
-                className="w-full sm:w-auto"
+                className="btn btn-primary btn-md w-full sm:w-auto"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? 'Saving...' : (investor ? 'Update Investor' : 'Add Investor')}
-              </Button>
+              </button>
             </div>
           </form>
         </div>
@@ -305,9 +303,10 @@ export const Investors = ({ tabId }) => {
     keepPreviousData: true,
   });
 
+  // Backend returns: { success: true, data: [investors] }
   const investors = useMemo(() => {
-    const list = data?.data?.investors || data?.data || data?.investors || data || [];
-    return Array.isArray(list) ? list : [];
+    const investorsList = data?.data?.investors || data?.data || data?.investors || data || [];
+    return Array.isArray(investorsList) ? investorsList : [];
   }, [data]);
 
   const [createInvestor, { isLoading: creating }] = useCreateInvestorMutation();
@@ -379,30 +378,28 @@ export const Investors = ({ tabId }) => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Investors</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage investors and track profit distributions</p>
         </div>
-        <Button
+        <button
           onClick={() => {
             setSelectedInvestor(null);
             setIsModalOpen(true);
           }}
-          variant="default"
-          size="default"
-          className="flex items-center justify-center gap-2 w-full sm:w-auto"
+          className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           <Plus className="h-4 w-4" />
           <span>Add Investor</span>
-        </Button>
+        </button>
       </div>
 
       {/* Search and Filters */}
       <div className="mb-6 flex flex-col sm:flex-row gap-4">
         <div className="flex-[2] relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-          <Input
+          <input
             type="text"
             placeholder="Search investors by name, email, or phone..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 w-full"
+            className="input pl-10 w-full"
           />
         </div>
         <select
@@ -931,11 +928,11 @@ const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Investor
               </label>
-              <Input
+              <input
                 type="text"
                 value={investor.name}
                 disabled
-                className="bg-gray-50"
+                className="input bg-gray-50"
               />
             </div>
 
@@ -943,11 +940,11 @@ const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Current Balance
               </label>
-              <Input
+              <input
                 type="text"
                 value={`$${investor.currentBalance?.toFixed(2) || '0.00'}`}
                 disabled
-                className="bg-gray-50"
+                className="input bg-gray-50"
               />
             </div>
 
@@ -957,14 +954,14 @@ const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
               </label>
               <div className="relative">
                 <TrendingUp className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
+                <input
                   type="number"
                   step="0.01"
                   min="0.01"
                   max={investor.currentBalance}
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="pl-10"
+                  className="input pl-10"
                   placeholder="0.00"
                   required
                 />
@@ -977,25 +974,21 @@ const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
             </div>
 
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
-              <Button
+              <button
                 type="button"
                 onClick={onCancel}
-                variant="secondary"
-                size="default"
-                className="w-full sm:w-auto"
+                className="btn btn-secondary btn-md w-full sm:w-auto"
                 disabled={isSubmitting}
               >
                 Cancel
-              </Button>
-              <Button
+              </button>
+              <button
                 type="submit"
-                variant="default"
-                size="default"
-                className="w-full sm:w-auto"
+                className="btn btn-primary btn-md w-full sm:w-auto"
                 disabled={isSubmitting || parseFloat(amount) <= 0 || parseFloat(amount) > investor.currentBalance}
               >
                 {isSubmitting ? 'Recording...' : 'Record Payout'}
-              </Button>
+              </button>
             </div>
           </form>
         </div>
@@ -1040,11 +1033,11 @@ const InvestmentModal = ({ investor, onSave, onCancel, isSubmitting }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Investor
               </label>
-              <Input
+              <input
                 type="text"
                 value={investor.name}
                 disabled
-                className="bg-gray-50"
+                className="input bg-gray-50"
               />
             </div>
 
@@ -1052,11 +1045,11 @@ const InvestmentModal = ({ investor, onSave, onCancel, isSubmitting }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Current Total Investment
               </label>
-              <Input
+              <input
                 type="text"
                 value={`$${(investor.totalInvestment || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 disabled
-                className="bg-gray-50"
+                className="input bg-gray-50"
               />
             </div>
 
@@ -1066,13 +1059,13 @@ const InvestmentModal = ({ investor, onSave, onCancel, isSubmitting }) => {
               </label>
               <div className="relative">
                 <TrendingUp className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
+                <input
                   type="number"
                   step="0.01"
                   min="0.01"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="pl-10"
+                  className="input pl-10"
                   placeholder="0.00"
                   required
                 />
@@ -1086,9 +1079,10 @@ const InvestmentModal = ({ investor, onSave, onCancel, isSubmitting }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Notes (Optional)
               </label>
-              <Textarea
+              <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
+                className="input"
                 rows={3}
                 placeholder="Add any notes about this investment..."
                 maxLength={500}
@@ -1096,25 +1090,21 @@ const InvestmentModal = ({ investor, onSave, onCancel, isSubmitting }) => {
             </div>
 
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
-              <Button
+              <button
                 type="button"
                 onClick={onCancel}
-                variant="secondary"
-                size="default"
-                className="w-full sm:w-auto"
+                className="btn btn-secondary btn-md w-full sm:w-auto"
                 disabled={isSubmitting}
               >
                 Cancel
-              </Button>
-              <Button
+              </button>
+              <button
                 type="submit"
-                variant="default"
-                size="default"
-                className="w-full sm:w-auto"
+                className="btn btn-primary btn-md w-full sm:w-auto"
                 disabled={isSubmitting || parseFloat(amount) <= 0}
               >
                 {isSubmitting ? 'Recording...' : 'Record Investment'}
-              </Button>
+              </button>
             </div>
           </form>
         </div>

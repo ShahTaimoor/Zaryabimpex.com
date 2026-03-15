@@ -6,7 +6,7 @@
 const express = require('express');
 const multer = require('multer');
 const { auth } = require('../middleware/auth');
-const SettingsRepository = require('../repositories/postgres/SettingsRepository');
+const Company = require('../models/Company');
 const { uploadImageOnCloudinary } = require('../services/cloudinary');
 const logger = require('../utils/logger');
 
@@ -40,13 +40,12 @@ const CLOUDINARY_FOLDER = 'company_logos';
 // @access  Private
 router.get('/', auth, async (req, res) => {
   try {
-    const settings = await SettingsRepository.getSettings();
-    const company = settings || {};
+    const company = await Company.getCompany();
     res.json({
       success: true,
       data: {
-        companyName: company.companyName || company.company_name || '',
-        phone: company.contactNumber || company.contact_number || company.phone || '',
+        companyName: company.companyName || '',
+        phone: company.phone || '',
         address: company.address || '',
         logo: company.logo || ''
       }
@@ -62,23 +61,23 @@ router.get('/', auth, async (req, res) => {
 });
 
 // @route   PUT /api/company
-// @desc    Update company settings (stored in Postgres settings)
+// @desc    Update company settings
 // @access  Private
 router.put('/', auth, async (req, res) => {
   try {
     const { companyName, phone, address } = req.body;
     const updates = {};
     if (companyName !== undefined) updates.companyName = String(companyName).trim();
-    if (phone !== undefined) updates.contactNumber = String(phone).trim();
+    if (phone !== undefined) updates.phone = String(phone).trim();
     if (address !== undefined) updates.address = String(address).trim();
 
-    const company = await SettingsRepository.updateSettings(updates);
+    const company = await Company.updateCompany(updates);
     res.json({
       success: true,
       message: 'Company settings updated successfully',
       data: {
-        companyName: company.companyName || company.company_name || '',
-        phone: company.contactNumber || company.contact_number || company.phone || '',
+        companyName: company.companyName || '',
+        phone: company.phone || '',
         address: company.address || '',
         logo: company.logo || ''
       }
@@ -94,7 +93,7 @@ router.put('/', auth, async (req, res) => {
 });
 
 // @route   POST /api/company/logo
-// @desc    Upload company logo (Multer + Cloudinary), save secure_url in Settings
+// @desc    Upload company logo (Multer + Cloudinary), save secure_url in MongoDB
 // @access  Private
 router.post('/logo', auth, upload.single('logo'), async (req, res) => {
   try {
@@ -110,16 +109,16 @@ router.post('/logo', auth, upload.single('logo'), async (req, res) => {
       CLOUDINARY_FOLDER
     );
 
-    const company = await SettingsRepository.updateSettings({ logo: secure_url });
+    const company = await Company.updateCompany({ logo: secure_url });
 
     res.json({
       success: true,
       message: 'Logo uploaded successfully',
       data: {
-        companyName: company.companyName || company.company_name || '',
-        phone: company.contactNumber || company.contact_number || company.phone || '',
+        companyName: company.companyName || '',
+        phone: company.phone || '',
         address: company.address || '',
-        logo: company.logo || secure_url || ''
+        logo: company.logo || ''
       }
     });
   } catch (error) {

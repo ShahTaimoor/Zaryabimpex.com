@@ -141,20 +141,6 @@ export const purchaseInvoicesApi = api.injectEndpoints({
         responseType: 'blob',
       }),
     }),
-    syncPurchaseInvoicesLedger: builder.mutation({
-      query: (params = {}) => ({
-        url: 'purchase-invoices/sync-ledger',
-        method: 'post',
-        params: params?.dateFrom || params?.dateTo ? { dateFrom: params.dateFrom, dateTo: params.dateTo } : undefined,
-      }),
-      invalidatesTags: [
-        { type: 'Orders', id: 'PI_LIST' },
-        { type: 'Suppliers', id: 'LIST' },
-        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
-        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
-        { type: 'ChartOfAccounts', id: 'LIST' },
-      ],
-    }),
   }),
   overrideExisting: false,
 });
@@ -173,6 +159,5 @@ export const {
   useExportPDFMutation,
   useExportJSONMutation,
   useDownloadFileMutation,
-  useSyncPurchaseInvoicesLedgerMutation,
 } = purchaseInvoicesApi;
 

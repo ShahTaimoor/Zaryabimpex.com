@@ -49,14 +49,38 @@ export const categoriesApi = api.injectEndpoints({
         { type: 'Categories', id: 'TREE' },
       ],
     }),
-    exportCategories: builder.mutation({
-      query: (filters) => ({
-        url: 'categories/export/excel',
-        method: 'post',
-        data: { filters },
+    exportCategoriesCSV: builder.mutation({
+      query: (params) => ({
+        url: 'categories/export/csv',
+        method: 'get',
+        params,
+        responseType: 'blob',
       }),
     }),
-    importCategories: builder.mutation({
+    exportCategoriesExcel: builder.mutation({
+      query: (params) => ({
+        url: 'categories/export/excel',
+        method: 'get',
+        params,
+        responseType: 'blob',
+      }),
+    }),
+    importCategoriesCSV: builder.mutation({
+      query: (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return {
+          url: 'categories/import/csv',
+          method: 'post',
+          data: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        };
+      },
+      invalidatesTags: [{ type: 'Categories', id: 'LIST' }, { type: 'Categories', id: 'TREE' }],
+    }),
+    importCategoriesExcel: builder.mutation({
       query: (file) => {
         const formData = new FormData();
         formData.append('file', file);
@@ -69,21 +93,11 @@ export const categoriesApi = api.injectEndpoints({
           },
         };
       },
-      invalidatesTags: [
-        { type: 'Categories', id: 'LIST' },
-        { type: 'Categories', id: 'TREE' },
-      ],
+      invalidatesTags: [{ type: 'Categories', id: 'LIST' }, { type: 'Categories', id: 'TREE' }],
     }),
     downloadCategoryTemplate: builder.query({
       query: () => ({
-        url: 'categories/template/excel',
-        method: 'get',
-        responseType: 'blob',
-      }),
-    }),
-    downloadCategoryExportFile: builder.query({
-      query: (filename) => ({
-        url: `categories/download/${filename}`,
+        url: 'categories/import/template',
         method: 'get',
         responseType: 'blob',
       }),
@@ -98,9 +112,10 @@ export const {
   useCreateCategoryMutation,
   useUpdateCategoryMutation,
   useDeleteCategoryMutation,
-  useExportCategoriesMutation,
-  useImportCategoriesMutation,
-  useDownloadCategoryTemplateQuery,
-  useLazyDownloadCategoryExportFileQuery,
+  useExportCategoriesCSVMutation,
+  useExportCategoriesExcelMutation,
+  useImportCategoriesCSVMutation,
+  useImportCategoriesExcelMutation,
+  useLazyDownloadCategoryTemplateQuery,
 } = categoriesApi;
 

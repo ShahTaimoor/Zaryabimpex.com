@@ -4,7 +4,7 @@ import {
   useUpdateCustomerMutation,
   useDeleteCustomerMutation,
 } from '../store/services/customersApi';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 
 export const useCustomerOperations = (refetch) => {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -31,7 +31,7 @@ export const useCustomerOperations = (refetch) => {
     }
 
     if (selectedCustomer) {
-      updateCustomer({ id: selectedCustomer.id || selectedCustomer._id, ...data })
+      updateCustomer({ id: selectedCustomer._id, ...data })
         .unwrap()
         .then(() => {
           toast.success('Customer updated successfully');
@@ -69,7 +69,7 @@ export const useCustomerOperations = (refetch) => {
     const customerName = customer.displayName || customer.businessName || customer.name || customer.email || 'Unknown Customer';
     confirmDelete(customerName, 'Customer', async () => {
       try {
-        await deleteCustomer(customer.id || customer._id).unwrap();
+        await deleteCustomer(customer._id).unwrap();
         toast.success('Customer deleted successfully');
         refetch();
       } catch (error) {

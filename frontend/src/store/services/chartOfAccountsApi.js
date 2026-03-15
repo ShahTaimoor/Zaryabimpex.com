@@ -86,13 +86,6 @@ export const chartOfAccountsApi = api.injectEndpoints({
       }),
       providesTags: [{ type: 'ChartOfAccounts', id: 'CATEGORIES' }],
     }),
-    syncPartyAccounts: builder.mutation({
-      query: () => ({
-        url: 'chart-of-accounts/sync-party-accounts',
-        method: 'post',
-      }),
-      invalidatesTags: [{ type: 'ChartOfAccounts', id: 'LIST' }],
-    }),
   }),
   overrideExisting: false,
 });
@@ -106,6 +99,5 @@ export const {
   useGetAccountHierarchyQuery,
   useGetAccountStatsQuery,
   useGetCategoriesGroupedQuery,
-  useSyncPartyAccountsMutation,
 } = chartOfAccountsApi;
 

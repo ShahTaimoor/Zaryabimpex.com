@@ -17,35 +17,26 @@ class InventoryAlertService {
         warehouse = null
       } = options;
 
-      // Get all active products (Postgres uses isActive, not status)
+      // Get all products with their inventory
       const products = await ProductRepository.findAll(
-        { isActive: true },
-        { limit: 10000 }
+        { status: 'active' },
+        {
+          populate: [{ path: 'category', select: 'name' }],
+          lean: true
+        }
       );
 
       const alerts = [];
 
       for (const product of products) {
-        const productId = product.id || product._id;
-        const inventory = await InventoryRepository.findOne({ product: productId, productId });
+        // Get inventory record
+        const inventory = await InventoryRepository.findOne({ product: product._id });
+        
+        if (!inventory) continue;
 
-        // Use inventory table when available; fallback to products table (stock_quantity, min_stock_level)
-        const currentStock = parseFloat(
-          inventory
-            ? (inventory.current_stock ?? inventory.currentStock ?? 0)
-            : (product.stock_quantity ?? product.stockQuantity ?? 0)
-        ) || 0;
-        const defaultReorder = 10;
-        const reorderPoint = parseFloat(
-          inventory
-            ? (inventory.reorder_point ?? inventory.reorderPoint ?? defaultReorder)
-            : (product.min_stock_level ?? product.minStockLevel ?? product.inventory?.reorderPoint ?? defaultReorder)
-        ) || defaultReorder;
-        const minStock = parseFloat(
-          inventory
-            ? (inventory.reorder_point ?? inventory.reorderPoint ?? 0)
-            : (product.min_stock_level ?? product.minStockLevel ?? product.inventory?.minStock ?? 0)
-        ) || 0;
+        const currentStock = inventory.currentStock || 0;
+        const reorderPoint = inventory.reorderPoint || product.inventory?.reorderPoint || 10;
+        const minStock = product.inventory?.minStock || 0;
 
         // Determine alert level
         let alertLevel = null;
@@ -63,32 +54,25 @@ class InventoryAlertService {
         }
 
         if (alertLevel) {
-          const reorderQty = inventory
-            ? (inventory.reorder_quantity ?? inventory.reorderQuantity ?? 50)
-            : 50;
-          const maxStockVal = inventory
-            ? (inventory.max_stock ?? inventory.maxStock ?? null)
-            : (product.inventory?.maxStock ?? null);
-
+          // Calculate days until out of stock (based on average daily sales)
           const daysUntilOutOfStock = await this.calculateDaysUntilOutOfStock(
-            productId,
+            product._id,
             currentStock
           );
 
           alerts.push({
             product: {
-              _id: productId,
-              id: productId,
+              _id: product._id,
               name: product.name,
               sku: product.sku,
-              category: product.category || product.category_id
+              category: product.category
             },
             inventory: {
               currentStock,
               reorderPoint,
               minStock,
-              reorderQuantity: reorderQty,
-              maxStock: maxStockVal
+              reorderQuantity: inventory.reorderQuantity || 50,
+              maxStock: inventory.maxStock || product.inventory?.maxStock
             },
             alertLevel,
             stockStatus,
@@ -96,8 +80,8 @@ class InventoryAlertService {
             suggestedReorderQuantity: this.calculateSuggestedReorderQuantity(
               currentStock,
               reorderPoint,
-              reorderQty,
-              maxStockVal
+              inventory.reorderQuantity || 50,
+              inventory.maxStock || product.inventory?.maxStock
             ),
             urgency: this.calculateUrgency(currentStock, reorderPoint, daysUntilOutOfStock)
           });
@@ -132,15 +116,37 @@ class InventoryAlertService {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      const salesStats = await SalesRepository.getProductSalesStats(productId, thirtyDaysAgo);
+      const sales = await SalesRepository.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: thirtyDaysAgo },
+            status: 'completed',
+            'items.product': productId
+          }
+        },
+        {
+          $unwind: '$items'
+        },
+        {
+          $match: {
+            'items.product': productId
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalQuantity: { $sum: '$items.quantity' },
+            totalDays: { $sum: 1 }
+          }
+        }
+      ]);
 
-      if (!salesStats || parseFloat(salesStats.totalQuantity) === 0) {
+      if (!sales || sales.length === 0 || sales[0].totalQuantity === 0) {
         // No sales data, return a high number (90 days)
         return 90;
       }
 
-      const totalQuantity = parseFloat(salesStats.totalQuantity);
-      const averageDailySales = totalQuantity / 30;
+      const averageDailySales = sales[0].totalQuantity / 30;
       
       if (averageDailySales === 0) {
         return 90; // No sales, won't run out soon

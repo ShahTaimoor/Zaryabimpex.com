@@ -5,7 +5,6 @@ const { handleValidationErrors, sanitizeRequest } = require('../middleware/valid
 const inventoryService = require('../services/inventoryService');
 const inventoryRepository = require('../repositories/InventoryRepository');
 const productRepository = require('../repositories/ProductRepository');
-const productService = require('../services/productServicePostgres');
 const stockAdjustmentRepository = require('../repositories/StockAdjustmentRepository');
 
 const router = express.Router();
@@ -74,61 +73,84 @@ router.get('/', [
     const { page = 1, limit = 10, search, status, lowStock, warehouse } = req.query;
     const skip = (page - 1) * limit;
 
-    // Get API-shaped products (all products so inventory page shows full catalog; filter by status in UI if needed)
-    const productResult = await productService.getProducts({
-      search: search || undefined,
-      limit: 9999,
-      all: 'true'
+    // Build filter object
+    const filter = {};
+    
+    if (status) {
+      filter.status = status;
+    }
+    
+    if (warehouse) {
+      filter['location.warehouse'] = warehouse;
+    }
+    
+    if (lowStock === 'true') {
+      filter.$expr = { $lte: ['$currentStock', '$reorderPoint'] };
+    }
+
+    // Build aggregation pipeline
+    const pipeline = [
+      { $match: filter },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'product',
+          foreignField: '_id',
+          as: 'product',
+        },
+      },
+      { $unwind: '$product' },
+    ];
+
+    // Get all products that match the search criteria
+    const productFilter = { status: 'active' };
+    if (search) {
+      productFilter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    const allProducts = await productRepository.findAll(productFilter, {
+      select: '_id name description pricing category status inventory',
+      lean: true
     });
-    const allProducts = productResult.products || [];
-
-    // Get existing inventory records (PostgreSQL)
-    const invFilters = {};
-    if (status) invFilters.status = status;
-    if (warehouse) invFilters.warehouse = warehouse;
-    const existingInventoryRows = await inventoryRepository.findAll(invFilters, { limit: 10000 });
-
-    // Map product_id -> inventory row (with product attached from allProducts)
-    const productById = new Map(allProducts.map(p => [(p.id || p._id).toString(), p]));
+    
+    // Get existing inventory records
+    const existingInventory = await inventoryRepository.aggregate(pipeline);
+    
+    // Create a map of existing inventory records by product ID
     const inventoryMap = new Map();
-    existingInventoryRows.forEach(invRow => {
-      const product = productById.get((invRow.product_id || invRow.productId || '').toString());
-      if (product) {
-        const location = (typeof invRow.location === 'string' ? (invRow.location ? JSON.parse(invRow.location) : {}) : invRow.location) || {};
-        inventoryMap.set((invRow.product_id || invRow.productId).toString(), {
-          _id: invRow.id,
-          id: invRow.id,
-          product: transformProductToUppercase(product),
-          currentStock: invRow.current_stock ?? invRow.currentStock ?? 0,
-          reorderPoint: invRow.reorder_point ?? invRow.reorderPoint ?? 0,
-          reorderQuantity: invRow.reorder_quantity ?? invRow.reorderQuantity ?? 0,
-          status: invRow.status || 'active',
-          movements: (typeof invRow.movements === 'string' ? (invRow.movements ? JSON.parse(invRow.movements) : []) : invRow.movements) || [],
-          location,
-          createdAt: invRow.created_at ?? invRow.createdAt,
-          updatedAt: invRow.updated_at ?? invRow.updatedAt
-        });
-      }
+    existingInventory.forEach(inv => {
+      inventoryMap.set(inv.product._id.toString(), inv);
     });
-
-    // Combine products with their inventory records (or synthetic)
+    
+    // Combine products with their inventory records
     const combinedResults = allProducts.map(product => {
-      const pid = (product.id || product._id).toString();
-      const existingInv = inventoryMap.get(pid);
-      if (existingInv) return existingInv;
-      const transformedProduct = transformProductToUppercase(product);
-      return {
-        _id: `temp_${pid}`,
-        product: transformedProduct,
-        currentStock: product.inventory?.currentStock ?? 0,
-        reorderPoint: product.inventory?.reorderPoint ?? product.inventory?.minStock ?? 0,
-        reorderQuantity: product.inventory?.reorderQuantity ?? 0,
-        status: 'active',
-        movements: [],
-        location: { warehouse: 'Main Warehouse' },
-        createdAt: product.createdAt ?? product.created_at,
-        updatedAt: product.updatedAt ?? product.updated_at
-      };
+      const existingInv = inventoryMap.get(product._id.toString());
+      if (existingInv) {
+        // Transform product name to uppercase
+        if (existingInv.product) {
+          existingInv.product = transformProductToUppercase(existingInv.product);
+        }
+        return existingInv;
+      } else {
+        // Transform product name to uppercase
+        const transformedProduct = transformProductToUppercase(product);
+        // Create inventory record from product data
+        return {
+          _id: `temp_${product._id}`,
+          product: transformedProduct,
+          currentStock: product.inventory?.currentStock || 0,
+          reorderPoint: product.inventory?.reorderPoint || 0,
+          reorderQuantity: product.inventory?.reorderQuantity || 0,
+          status: 'active',
+          movements: [],
+          location: { warehouse: 'Main Warehouse' },
+          createdAt: product.createdAt,
+          updatedAt: product.updatedAt
+        };
+      }
     });
     
     // Apply additional filters
@@ -219,7 +241,7 @@ router.get('/:productId', [
   auth,
   requirePermission('view_inventory'),
   sanitizeRequest,
-  param('productId').isUUID(4).withMessage('Valid Product ID is required'),
+  param('productId').isMongoId().withMessage('Valid Product ID is required'),
   handleValidationErrors,
 ], async (req, res) => {
   try {
@@ -239,7 +261,7 @@ router.get('/:productId/history', [
   auth,
   requirePermission('view_inventory'),
   sanitizeRequest,
-  param('productId').isUUID(4).withMessage('Valid Product ID is required'),
+  param('productId').isMongoId().withMessage('Valid Product ID is required'),
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('offset').optional().isInt({ min: 0 }),
   query('type').optional().isIn(['in', 'out', 'adjustment', 'transfer', 'return', 'damage', 'theft']),
@@ -274,12 +296,12 @@ router.post('/update-stock', [
   auth,
   requirePermission('update_inventory'),
   sanitizeRequest,
-  body('productId').isUUID(4).withMessage('Valid Product ID is required'),
+  body('productId').isMongoId().withMessage('Valid Product ID is required'),
   body('type').isIn(['in', 'out', 'adjustment', 'transfer', 'return', 'damage', 'theft']).withMessage('Invalid movement type'),
   body('quantity').isFloat({ min: 0 }).withMessage('Quantity must be a positive number'),
   body('reason').trim().notEmpty().withMessage('Reason is required'),
   body('reference').optional().trim(),
-  body('referenceId').optional().isUUID(4),
+  body('referenceId').optional().isMongoId(),
   body('referenceModel').optional().isIn(['SalesOrder', 'PurchaseOrder', 'StockAdjustment', 'Transfer']),
   body('cost').optional().isFloat({ min: 0 }),
   body('notes').optional().trim(),
@@ -329,7 +351,7 @@ router.post('/bulk-update', [
   requirePermission('update_inventory'),
   sanitizeRequest,
   body('updates').isArray({ min: 1 }).withMessage('Updates array is required'),
-  body('updates.*.productId').isUUID(4).withMessage('Valid Product ID is required'),
+  body('updates.*.productId').isMongoId().withMessage('Valid Product ID is required'),
   body('updates.*.type').isIn(['in', 'out', 'adjustment', 'transfer', 'return', 'damage', 'theft']).withMessage('Invalid movement type'),
   body('updates.*.quantity').isFloat({ min: 0 }).withMessage('Quantity must be a positive number'),
   body('updates.*.reason').trim().notEmpty().withMessage('Reason is required'),
@@ -363,7 +385,7 @@ router.post('/reserve-stock', [
   auth,
   requirePermission('update_inventory'),
   sanitizeRequest,
-  body('productId').isUUID(4).withMessage('Valid Product ID is required'),
+  body('productId').isMongoId().withMessage('Valid Product ID is required'),
   body('quantity').isFloat({ min: 0 }).withMessage('Quantity must be a positive number'),
   handleValidationErrors,
 ], async (req, res) => {
@@ -389,7 +411,7 @@ router.post('/release-stock', [
   auth,
   requirePermission('update_inventory'),
   sanitizeRequest,
-  body('productId').isUUID(4).withMessage('Valid Product ID is required'),
+  body('productId').isMongoId().withMessage('Valid Product ID is required'),
   body('quantity').isFloat({ min: 0 }).withMessage('Quantity must be a positive number'),
   handleValidationErrors,
 ], async (req, res) => {
@@ -418,7 +440,7 @@ router.post('/adjustments', [
   body('type').isIn(['physical_count', 'damage', 'theft', 'transfer', 'correction', 'return', 'write_off']).withMessage('Invalid adjustment type'),
   body('reason').trim().notEmpty().withMessage('Reason is required'),
   body('adjustments').isArray({ min: 1 }).withMessage('Adjustments array is required'),
-  body('adjustments.*.product').isUUID(4).withMessage('Valid Product ID is required'),
+  body('adjustments.*.product').isMongoId().withMessage('Valid Product ID is required'),
   body('adjustments.*.currentStock').isFloat({ min: 0 }).withMessage('Current stock must be a non-negative number'),
   body('adjustments.*.adjustedStock').isFloat({ min: 0 }).withMessage('Adjusted stock must be a non-negative number'),
   body('warehouse').optional().trim(),
@@ -502,7 +524,7 @@ router.put('/adjustments/:adjustmentId/approve', [
   auth,
   requirePermission('approve_inventory_adjustments'),
   sanitizeRequest,
-  param('adjustmentId').isUUID(4).withMessage('Valid Adjustment ID is required'),
+  param('adjustmentId').isMongoId().withMessage('Valid Adjustment ID is required'),
   handleValidationErrors,
 ], async (req, res) => {
   try {
@@ -527,7 +549,7 @@ router.put('/adjustments/:adjustmentId/complete', [
   auth,
   requirePermission('complete_inventory_adjustments'),
   sanitizeRequest,
-  param('adjustmentId').isUUID(4).withMessage('Valid Adjustment ID is required'),
+  param('adjustmentId').isMongoId().withMessage('Valid Adjustment ID is required'),
   handleValidationErrors,
 ], async (req, res) => {
   try {

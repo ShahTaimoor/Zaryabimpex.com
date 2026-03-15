@@ -24,9 +24,8 @@ import {
   useSearchUsersQuery,
 } from '../store/services/notesApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import { LoadingSpinner } from './LoadingSpinner';
-import { Button } from '@/components/ui/button';
 
 /**
  * Notes Panel Component
@@ -432,15 +431,13 @@ const NotesPanel = ({
 
             {/* Create Button */}
             <div className="p-3 border-t border-gray-200">
-              <Button
+              <button
                 onClick={handleStartCreate}
-                variant="default"
-                size="sm"
-                className="w-full flex items-center justify-center"
+                className="w-full btn btn-primary btn-sm flex items-center justify-center"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 New Note
-              </Button>
+              </button>
             </div>
           </div>
 

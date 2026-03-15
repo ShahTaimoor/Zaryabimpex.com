@@ -17,16 +17,13 @@ import {
   CheckCircle,
   X,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import {
   useGetWarehousesQuery,
   useCreateWarehouseMutation,
   useUpdateWarehouseMutation,
   useDeleteWarehouseMutation,
 } from '../store/services/warehousesApi';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
   LoadingPage,
   LoadingCard,
@@ -159,8 +156,9 @@ const WarehouseFormModal = ({ warehouse, onSave, onCancel, isSubmitting }) => {
                 <Hash className="h-4 w-4 text-gray-400" />
                 <span>Name *</span>
               </label>
-              <Input
+              <input
                 {...register('name', { required: 'Warehouse name is required' })}
+                className="input"
                 placeholder="Main Warehouse"
               />
               {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name.message}</p>}
@@ -171,12 +169,12 @@ const WarehouseFormModal = ({ warehouse, onSave, onCancel, isSubmitting }) => {
                 <Layers className="h-4 w-4 text-gray-400" />
                 <span>Code *</span>
               </label>
-              <Input
+              <input
                 {...register('code', {
                   required: 'Warehouse code is required',
                   maxLength: { value: 50, message: 'Maximum 50 characters' },
                 })}
-                className="uppercase"
+                className="input uppercase"
                 placeholder="MAIN"
               />
               {errors.code && <p className="mt-1 text-sm text-red-500">{errors.code.message}</p>}
@@ -188,8 +186,9 @@ const WarehouseFormModal = ({ warehouse, onSave, onCancel, isSubmitting }) => {
               <StickyNote className="h-4 w-4 text-gray-400" />
               <span>Description</span>
             </label>
-            <Textarea
+            <textarea
               {...register('description', { maxLength: { value: 500, message: 'Max 500 characters' } })}
+              className="input"
               rows={3}
               placeholder="Short description about warehouse purpose or coverage"
             />
@@ -204,8 +203,9 @@ const WarehouseFormModal = ({ warehouse, onSave, onCancel, isSubmitting }) => {
                 <MapPin className="h-4 w-4 text-gray-400" />
                 <span>Address Line 1</span>
               </label>
-              <Input
+              <input
                 {...register('address.line1')}
+                className="input"
                 placeholder="Street, number..."
               />
             </div>
@@ -214,8 +214,9 @@ const WarehouseFormModal = ({ warehouse, onSave, onCancel, isSubmitting }) => {
                 <MapPin className="h-4 w-4 text-gray-400" />
                 <span>Address Line 2</span>
               </label>
-              <Input
+              <input
                 {...register('address.line2')}
+                className="input"
                 placeholder="Suite, building..."
               />
             </div>
@@ -224,22 +225,22 @@ const WarehouseFormModal = ({ warehouse, onSave, onCancel, isSubmitting }) => {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <div>
               <label className="form-label">City</label>
-              <Input {...register('address.city')} />
+              <input {...register('address.city')} className="input" />
             </div>
             <div>
               <label className="form-label">State/Province</label>
-              <Input {...register('address.state')} />
+              <input {...register('address.state')} className="input" />
             </div>
             <div>
               <label className="form-label">Postal Code</label>
-              <Input {...register('address.postalCode')} />
+              <input {...register('address.postalCode')} className="input" />
             </div>
             <div>
               <label className="form-label flex items-center space-x-2">
                 <Flag className="h-4 w-4 text-gray-400" />
                 <span>Country</span>
               </label>
-              <Input {...register('address.country')} />
+              <input {...register('address.country')} className="input" />
             </div>
           </div>
 
@@ -249,27 +250,28 @@ const WarehouseFormModal = ({ warehouse, onSave, onCancel, isSubmitting }) => {
                 <User className="h-4 w-4 text-gray-400" />
                 <span>Contact Person</span>
               </label>
-              <Input {...register('contact.name')} placeholder="Person in charge" />
+              <input {...register('contact.name')} className="input" placeholder="Person in charge" />
             </div>
             <div>
               <label className="form-label flex items-center space-x-2">
                 <Phone className="h-4 w-4 text-gray-400" />
                 <span>Phone</span>
               </label>
-              <Input {...register('contact.phone')} placeholder="+1 555 123 4567" />
+              <input {...register('contact.phone')} className="input" placeholder="+1 555 123 4567" />
             </div>
             <div>
               <label className="form-label flex items-center space-x-2">
                 <Mail className="h-4 w-4 text-gray-400" />
                 <span>Email</span>
               </label>
-              <Input
+              <input
                 {...register('contact.email', {
                   pattern: {
                     value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
                     message: 'Please enter a valid email address',
                   },
                 })}
+                className="input"
                 placeholder="contact@example.com"
               />
               {errors.contact?.email && (
@@ -281,13 +283,14 @@ const WarehouseFormModal = ({ warehouse, onSave, onCancel, isSubmitting }) => {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label className="form-label">Storage Capacity (optional)</label>
-              <Input
+              <input
                 type="number"
-                min={0}
-                step={1}
+                min="0"
+                step="1"
                 {...register('capacity', {
                   min: { value: 0, message: 'Capacity must be zero or higher' },
                 })}
+                className="input"
                 placeholder="Units or pallets"
               />
               {errors.capacity && (
@@ -316,18 +319,19 @@ const WarehouseFormModal = ({ warehouse, onSave, onCancel, isSubmitting }) => {
 
           <div>
             <label className="form-label">Notes</label>
-            <Textarea
+            <textarea
               {...register('notes')}
+              className="input"
               rows={3}
               placeholder="Internal notes or handling instructions"
             />
           </div>
 
           <div className="flex items-center justify-end space-x-3 border-t pt-4">
-            <Button type="button" variant="secondary" size="default" onClick={onCancel} disabled={isSubmitting}>
+            <button type="button" className="btn btn-secondary btn-md" onClick={onCancel} disabled={isSubmitting}>
               Cancel
-            </Button>
-            <Button type="submit" variant="default" size="default" disabled={isSubmitting}>
+            </button>
+            <button type="submit" className="btn btn-primary btn-md" disabled={isSubmitting}>
               {isSubmitting ? (
                 <LoadingButton />
               ) : (
@@ -336,7 +340,7 @@ const WarehouseFormModal = ({ warehouse, onSave, onCancel, isSubmitting }) => {
                   <span>{warehouse ? 'Update Warehouse' : 'Create Warehouse'}</span>
                 </span>
               )}
-            </Button>
+            </button>
           </div>
         </form>
       </div>
@@ -360,21 +364,15 @@ const Warehouses = () => {
     }
   );
 
-  // Extract warehouses array from response and normalize snake_case from API (e.g. is_active → isActive)
+  // Extract warehouses array from response
   const warehouses = React.useMemo(() => {
-    let list = [];
     if (!warehousesResponse) return [];
-    if (warehousesResponse?.data?.data?.items) list = warehousesResponse.data.data.items;
-    else if (warehousesResponse?.data?.items) list = warehousesResponse.data.items;
-    else if (warehousesResponse?.data?.warehouses) list = warehousesResponse.data.warehouses;
-    else if (warehousesResponse?.warehouses) list = warehousesResponse.warehouses;
-    else if (Array.isArray(warehousesResponse)) list = warehousesResponse;
-    return list.map((w) => ({
-      ...w,
-      _id: w._id ?? w.id,
-      isActive: w.isActive ?? w.is_active,
-      isPrimary: w.isPrimary ?? w.is_primary
-    }));
+    if (warehousesResponse?.data?.data?.items) return warehousesResponse.data.data.items;
+    if (warehousesResponse?.data?.items) return warehousesResponse.data.items;
+    if (warehousesResponse?.data?.warehouses) return warehousesResponse.data.warehouses;
+    if (warehousesResponse?.warehouses) return warehousesResponse.warehouses;
+    if (Array.isArray(warehousesResponse)) return warehousesResponse;
+    return [];
   }, [warehousesResponse]);
 
   // Mutations
@@ -455,10 +453,10 @@ const Warehouses = () => {
             Manage warehouse locations, contacts, capacity, and availability.
           </p>
         </div>
-        <Button onClick={handleAdd} variant="default" size="default" className="flex items-center justify-center gap-2 w-full sm:w-auto">
+        <button onClick={handleAdd} className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto">
           <Plus className="h-4 w-4" />
           <span>Add Warehouse</span>
-        </Button>
+        </button>
       </div>
 
       <div className="rounded-lg bg-white p-4 shadow">
@@ -467,11 +465,11 @@ const Warehouses = () => {
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Search</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input
+              <input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search by name or code..."
-                className="pl-9"
+                className="input pl-9"
               />
             </div>
           </div>
@@ -653,22 +651,18 @@ const Warehouses = () => {
                     {contact.email && <p>Email: {contact.email}</p>}
                   </div>
                   <div className="mt-4 flex space-x-2">
-                    <Button
+                    <button
                       onClick={() => handleEdit(warehouse)}
-                      variant="secondary"
-                      size="default"
-                      className="flex-1"
+                      className="btn btn-secondary btn-md flex-1"
                     >
                       Edit
-                    </Button>
-                    <Button
+                    </button>
+                    <button
                       onClick={() => handleDelete(warehouse)}
-                      variant="destructive"
-                      size="default"
-                      className="flex-1"
+                      className="btn btn-danger btn-md flex-1"
                     >
                       Delete
-                    </Button>
+                    </button>
                   </div>
                 </div>
               );

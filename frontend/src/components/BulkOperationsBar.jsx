@@ -15,7 +15,6 @@ import {
   X,
   Undo2
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 
 export const BulkOperationsBar = ({
   selectedCount,
@@ -63,124 +62,106 @@ export const BulkOperationsBar = ({
         {/* Action Buttons */}
         <div className="grid grid-cols-2 sm:flex sm:items-center sm:flex-wrap gap-2 sm:gap-2 w-full sm:w-auto">
           {canUndo && (
-            <Button
+            <button
               onClick={onUndo}
-              variant="outline"
-              size="default"
-              className="flex items-center justify-center gap-2"
+              className="btn btn-outline btn-md flex items-center justify-center gap-2"
               title="Undo last operation"
             >
               <Undo2 className="h-4 w-4" />
               <span className="hidden sm:inline">Undo</span>
               <span className="sm:hidden">Undo</span>
-            </Button>
+            </button>
           )}
 
           {availableActions.includes('update') && onBulkUpdate && (
-            <Button
+            <button
               onClick={onBulkUpdate}
               disabled={isOperationInProgress}
-              variant="default"
-              size="default"
-              className="flex items-center justify-center gap-2"
+              className="btn btn-primary btn-md flex items-center justify-center gap-2"
             >
               <Edit className="h-4 w-4" />
               Update
-            </Button>
+            </button>
           )}
 
           {availableActions.includes('status') && onBulkStatusChange && (
-            <Button
+            <button
               onClick={onBulkStatusChange}
               disabled={isOperationInProgress}
-              variant="outline"
-              size="default"
-              className="flex items-center justify-center gap-2"
+              className="btn btn-outline btn-md flex items-center justify-center gap-2"
             >
               <CheckSquare className="h-4 w-4" />
               <span className="hidden sm:inline">Change Status</span>
               <span className="sm:hidden">Status</span>
-            </Button>
+            </button>
           )}
 
           {availableActions.includes('category') && onBulkCategoryChange && (
-            <Button
+            <button
               onClick={onBulkCategoryChange}
               disabled={isOperationInProgress}
-              variant="outline"
-              size="default"
-              className="flex items-center justify-center gap-2"
+              className="btn btn-outline btn-md flex items-center justify-center gap-2"
             >
               <Tag className="h-4 w-4" />
               <span className="hidden sm:inline">Change Category</span>
               <span className="sm:hidden">Category</span>
-            </Button>
+            </button>
           )}
 
           {availableActions.includes('price') && onBulkPriceUpdate && (
-            <Button
+            <button
               onClick={onBulkPriceUpdate}
               disabled={isOperationInProgress}
-              variant="outline"
-              size="default"
-              className="flex items-center justify-center gap-2"
+              className="btn btn-outline btn-md flex items-center justify-center gap-2"
             >
               <TrendingUp className="h-4 w-4" />
               <span className="hidden sm:inline">Update Prices</span>
               <span className="sm:hidden">Prices</span>
-            </Button>
+            </button>
           )}
 
           {availableActions.includes('stock') && onBulkStockAdjust && (
-            <Button
+            <button
               onClick={onBulkStockAdjust}
               disabled={isOperationInProgress}
-              variant="outline"
-              size="default"
-              className="flex items-center justify-center gap-2"
+              className="btn btn-outline btn-md flex items-center justify-center gap-2"
             >
               <Package className="h-4 w-4" />
               <span className="hidden sm:inline">Adjust Stock</span>
               <span className="sm:hidden">Stock</span>
-            </Button>
+            </button>
           )}
 
           {availableActions.includes('export') && onBulkExport && (
-            <Button
+            <button
               onClick={onBulkExport}
               disabled={isOperationInProgress}
-              variant="outline"
-              size="default"
-              className="flex items-center justify-center gap-2"
+              className="btn btn-outline btn-md flex items-center justify-center gap-2"
             >
               <Download className="h-4 w-4" />
               Export
-            </Button>
+            </button>
           )}
 
           {availableActions.includes('delete') && onBulkDelete && (
-            <Button
+            <button
               onClick={onBulkDelete}
               disabled={isOperationInProgress}
-              variant="outline"
-              size="default"
-              className="flex items-center justify-center gap-2 border-red-300 text-red-700 hover:bg-red-50"
+              className="btn btn-outline btn-md flex items-center justify-center gap-2 border-red-300 text-red-700 hover:bg-red-50"
             >
               <Trash2 className="h-4 w-4" />
               Delete
-            </Button>
+            </button>
           )}
 
-          <Button
+          <button
             onClick={onClearSelection}
             disabled={isOperationInProgress}
-            variant="outline"
-            size="default"
-            className="flex items-center justify-center gap-2 col-span-2 sm:col-span-1"
+            className="btn btn-outline btn-md flex items-center justify-center gap-2 col-span-2 sm:col-span-1"
           >
             <X className="h-4 w-4" />
             Clear
-          </Button>
+          </button>
         </div>
       </div>
 

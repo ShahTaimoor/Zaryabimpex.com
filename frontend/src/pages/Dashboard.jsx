@@ -42,7 +42,6 @@ import { useGetBankReceiptsQuery } from '../store/services/bankReceiptsApi';
 import { useGetBankPaymentsQuery } from '../store/services/bankPaymentsApi';
 import { useGetUpcomingExpensesQuery } from '../store/services/expensesApi';
 import { useGetCompanySettingsQuery } from '../store/services/settingsApi';
-import { useGetSummaryQuery } from '../store/services/plStatementsApi';
 import { useFetchCompanyQuery } from '../store/services/companyApi';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
@@ -54,24 +53,24 @@ import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan } from '../utils/dateUtils';
 
 const StatCard = ({ title, value, icon: Icon, color, change, changeType }) => (
-  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2 sm:p-2.5 xl:p-3 2xl:p-4 h-full min-w-0">
+  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2 sm:p-3 md:p-4 h-full">
     <div className="text-center flex flex-col justify-center items-center h-full">
-      <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2 2xl:mb-3">
-        <div className={`p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 rounded-full ${color}`}>
-          <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+      <div className="flex justify-center mb-1 sm:mb-2 md:mb-3">
+        <div className={`p-2 sm:p-2.5 md:p-3 rounded-full ${color}`}>
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
         </div>
       </div>
-      <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-600 mb-0.5 sm:mb-1 line-clamp-2">{title}</p>
-      <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-semibold text-gray-900 mb-0.5 sm:mb-1 break-words">{value}</p>
-      <div className="h-3 sm:h-4 flex items-center justify-center space-x-0.5">
+      <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1 line-clamp-2">{title}</p>
+      <p className="text-base sm:text-lg md:text-xl lg:text-2xl font-semibold text-gray-900 mb-1 break-words">{value}</p>
+      <div className="h-4 sm:h-5 flex items-center justify-center space-x-1">
         {change && (
           <>
             {changeType === 'positive' && (
-              <svg className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
             )}
-            <p className={`text-[10px] sm:text-xs font-medium ${changeType === 'positive' ? 'text-green-600' : 'text-gray-600'}`}>
+            <p className={`text-xs sm:text-sm font-medium ${changeType === 'positive' ? 'text-green-600' : 'text-gray-600'}`}>
               {changeType === 'positive' ? '+' : ''}{change}
             </p>
           </>
@@ -126,8 +125,6 @@ export const Dashboard = () => {
   const [showCashPaymentsModal, setShowCashPaymentsModal] = useState(false);
   const [showBankReceiptsModal, setShowBankReceiptsModal] = useState(false);
   const [showBankPaymentsModal, setShowBankPaymentsModal] = useState(false);
-  const [showAllReceiptsModal, setShowAllReceiptsModal] = useState(false);
-  const [showAllPaymentsModal, setShowAllPaymentsModal] = useState(false);
 
   // Lazy query for period summary
   const [getPeriodSummary] = useLazyGetPeriodSummaryQuery();
@@ -245,11 +242,6 @@ export const Dashboard = () => {
     { pollingInterval: 60000 }
   );
 
-  const { data: plSummaryData } = useGetSummaryQuery(
-    { startDate, endDate },
-    { skip: !startDate || !endDate }
-  );
-
   const { data: companySettingsData } = useGetCompanySettingsQuery();
   const { data: companyData } = useFetchCompanyQuery();
 
@@ -268,7 +260,7 @@ export const Dashboard = () => {
   // RTK Query wraps responses in 'data', but some APIs return data directly
   const summary = todaySummary?.data?.summary || todaySummary?.summary || {};
   const lowStockCount = lowStockData?.data?.products?.length || lowStockData?.products?.length || 0;
-  const inventorySummary = inventoryData?.data?.summary ?? inventoryData?.data ?? inventoryData?.summary ?? {};
+  const inventorySummary = inventoryData?.data?.summary || inventoryData?.summary || {};
 
   const activeCustomersCount = customersData?.data?.customers?.length || customersData?.customers?.length || 0;
 
@@ -334,45 +326,14 @@ export const Dashboard = () => {
     return sum + Number(orderTotal);
   }, 0);
 
-  // COGS for sales invoices (from items: quantity * unitCost/cost_price)
-  const salesInvoicesCOGS = salesInvoicesArray.reduce((sum, order) => {
-    const items = Array.isArray(order.items) ? order.items : (typeof order.items === 'string' ? (() => { try { return JSON.parse(order.items || '[]'); } catch { return []; } })() : []);
-    const orderCOGS = items.reduce((s, it) => {
-      const qty = Number(it.quantity) || 0;
-      const cost = Number(it.unitCost ?? it.cost_price ?? it.costPrice ?? 0);
-      return s + qty * cost;
-    }, 0);
-    return sum + orderCOGS;
-  }, 0);
-
   // Purchase Invoices (from Purchase page)
   const purchaseInvoicesTotal = purchaseInvoicesData?.data?.invoices?.reduce((sum, invoice) => sum + (invoice.pricing?.total || 0), 0) ||
     purchaseInvoicesData?.invoices?.reduce((sum, invoice) => sum + (invoice.pricing?.total || 0), 0) || 0;
 
-  // Safely calculate totals with proper number conversion and NaN handling
-  const cashReceiptsArray = cashReceiptsData?.data?.cashReceipts || [];
-  const cashReceiptsTotal = cashReceiptsArray.reduce((sum, receipt) => {
-    const amount = Number(receipt?.amount) || 0;
-    return sum + (isNaN(amount) ? 0 : amount);
-  }, 0);
-
-  const cashPaymentsArray = cashPaymentsData?.data?.cashPayments || [];
-  const cashPaymentsTotal = cashPaymentsArray.reduce((sum, payment) => {
-    const amount = Number(payment?.amount) || 0;
-    return sum + (isNaN(amount) ? 0 : amount);
-  }, 0);
-
-  const bankReceiptsArray = bankReceiptsData?.data?.bankReceipts || [];
-  const bankReceiptsTotal = bankReceiptsArray.reduce((sum, receipt) => {
-    const amount = Number(receipt?.amount) || 0;
-    return sum + (isNaN(amount) ? 0 : amount);
-  }, 0);
-
-  const bankPaymentsArray = bankPaymentsData?.data?.bankPayments || [];
-  const bankPaymentsTotal = bankPaymentsArray.reduce((sum, payment) => {
-    const amount = Number(payment?.amount) || 0;
-    return sum + (isNaN(amount) ? 0 : amount);
-  }, 0);
+  const cashReceiptsTotal = cashReceiptsData?.data?.cashReceipts?.reduce((sum, receipt) => sum + (receipt.amount || 0), 0) || 0;
+  const cashPaymentsTotal = cashPaymentsData?.data?.cashPayments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
+  const bankReceiptsTotal = bankReceiptsData?.data?.bankReceipts?.reduce((sum, receipt) => sum + (receipt.amount || 0), 0) || 0;
+  const bankPaymentsTotal = bankPaymentsData?.data?.bankPayments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
 
   // Calculate total sales (Sales Orders + Sales Invoices)
   const totalSales = salesOrdersTotal + salesInvoicesTotal;
@@ -386,31 +347,18 @@ export const Dashboard = () => {
     salesInvoicesData?.orders?.reduce((sum, order) => sum + (order.discountAmount || 0), 0) || 0;
   const totalDiscounts = salesOrdersDiscounts + salesInvoicesDiscounts;
 
-  // Sales Returns from P&L (account 4100)
-  const totalSalesReturns = plSummaryData?.data?.returns?.salesReturns ?? plSummaryData?.returns?.salesReturns ?? 0;
-
-  // Total Revenue = Sales Revenue - Sales Returns + Other Income (matches P&L)
-  const salesRevenue = plSummaryData?.data?.revenue?.salesRevenue ?? plSummaryData?.revenue?.salesRevenue ?? totalSales;
-  const otherIncome = plSummaryData?.data?.revenue?.otherIncome ?? plSummaryData?.revenue?.otherIncome ?? 0;
-  const totalRevenue = salesRevenue - totalSalesReturns + otherIncome;
-  // Total Sale Net Profit = Total Revenue - COGS (matches P&L; must subtract returns before COGS)
-  const salesInvoicesNetProfit = totalRevenue - salesInvoicesCOGS;
-
   // Separate Cash/Bank Payments into Supplier Payments vs Operating Expenses
   // Operating expenses are payments that don't have a supplier or customer (general expenses)
-  const cashOperatingExpenses = cashPaymentsArray
-    .filter(payment => !payment?.supplier && !payment?.customer)
-    .reduce((sum, payment) => {
-      const amount = Number(payment?.amount) || 0;
-      return sum + (isNaN(amount) ? 0 : amount);
-    }, 0);
+  const cashPayments = cashPaymentsData?.data?.cashPayments || [];
+  const bankPayments = bankPaymentsData?.data?.bankPayments || [];
 
-  const bankOperatingExpenses = bankPaymentsArray
+  const cashOperatingExpenses = cashPayments
     .filter(payment => !payment?.supplier && !payment?.customer)
-    .reduce((sum, payment) => {
-      const amount = Number(payment?.amount) || 0;
-      return sum + (isNaN(amount) ? 0 : amount);
-    }, 0);
+    .reduce((sum, payment) => sum + (payment.amount || 0), 0);
+
+  const bankOperatingExpenses = bankPayments
+    .filter(payment => !payment?.supplier && !payment?.customer)
+    .reduce((sum, payment) => sum + (payment.amount || 0), 0);
 
   const operatingExpenses = cashOperatingExpenses + bankOperatingExpenses;
 
@@ -418,31 +366,23 @@ export const Dashboard = () => {
   const totalBankPayments = bankPaymentsTotal;
   const totalPayments = totalCashPayments + totalBankPayments; // Includes both supplier payments and expenses
 
-  // Calculate payments received from Sales Invoices (amount_paid field)
-  const salesInvoicePayments = salesInvoicesArray.reduce((sum, order) => {
-    const amountPaid = Number(order.amount_paid || order.amountPaid || 0);
-    return sum + (isNaN(amountPaid) ? 0 : amountPaid);
-  }, 0);
-
   // Cash Flow Calculations
   const totalCashReceipts = cashReceiptsTotal;
   const totalBankReceipts = bankReceiptsTotal;
-  // Total Receipts includes: Cash Receipts + Bank Receipts + Sales Invoice Payments
-  const totalReceipts = totalCashReceipts + totalBankReceipts + salesInvoicePayments;
+  const totalReceipts = totalCashReceipts + totalBankReceipts;
   const netCashFlow = totalReceipts - totalPayments;
 
   // Financial Performance Calculations
   const grossRevenue = totalSales; // Total sales before discounts
-  const netRevenue = totalSales - totalDiscounts - totalSalesReturns; // Sales after discounts and returns
-  // Use COGS from P&L (cost of goods SOLD) - NOT totalPurchases (cost of goods bought). Purchases ≠ COGS.
-  const costOfGoodsSold = plSummaryData?.data?.costOfGoodsSold?.total ?? plSummaryData?.costOfGoodsSold?.total ?? totalPurchases;
+  const netRevenue = totalSales - totalDiscounts; // Sales after discounts
+  const costOfGoodsSold = totalPurchases; // COGS
   const grossProfit = netRevenue - costOfGoodsSold; // Gross Profit
   const netProfit = grossProfit - operatingExpenses;
 
   // Column definitions for modals
   const salesOrdersColumns = [
     { key: 'soNumber', label: 'Order Number', sortable: true },
-    { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.business_name || row.customer?.displayName || row.customer?.name || '-' },
+    { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.name || '-' },
     { key: 'orderDate', label: 'Date', sortable: true, format: 'date' },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'total', label: 'Total', sortable: true, format: 'currency' }
@@ -450,78 +390,57 @@ export const Dashboard = () => {
 
   const purchaseOrdersColumns = [
     { key: 'poNumber', label: 'PO Number', sortable: true },
-    { key: 'supplier', label: 'Supplier', sortable: true, render: (val, row) => row.supplier?.businessName || row.supplier?.business_name || row.supplier?.companyName || row.supplier?.displayName || row.supplier?.name || '-' },
+    { key: 'supplier', label: 'Supplier', sortable: true, render: (val, row) => row.supplier?.companyName || row.supplier?.name || '-' },
     { key: 'orderDate', label: 'Date', sortable: true, format: 'date' },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'total', label: 'Total', sortable: true, format: 'currency' }
   ];
 
   const salesInvoicesColumns = [
-    { key: 'order_number', label: 'Order Number', sortable: true, render: (val, row) => val || row.orderNumber || row.invoiceNo || '-' },
-    { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.business_name || row.customerInfo?.businessName || row.customerInfo?.business_name || row.customerName || row.customer?.name || row.customerInfo?.name || '-' },
-    { key: 'sale_date', label: 'Date', sortable: true, format: 'date', render: (val, row) => formatDate(val || row.createdAt || row.orderDate || row.date) },
+    { key: 'orderNumber', label: 'Order Number', sortable: true },
+    { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customerInfo?.businessName || row.customerInfo?.name || '-' },
+    { key: 'createdAt', label: 'Date', sortable: true, format: 'date' },
     { key: 'status', label: 'Status', sortable: true },
-    { key: 'total', label: 'Total', sortable: true, render: (val, row) => formatCurrency(val !== undefined && val !== null ? val : (row.pricing?.total || 0)) }
+    { key: 'pricing', label: 'Total', sortable: true, render: (val) => formatCurrency(val?.total || 0) }
   ];
 
   const purchaseInvoicesColumns = [
-    { key: 'invoice_number', label: 'Invoice Number', sortable: true, render: (val, row) => val || row.invoiceNumber || '-' },
-    { key: 'supplier', label: 'Supplier', sortable: true, render: (val, row) => row.supplier?.businessName || row.supplier?.business_name || row.supplier?.companyName || row.supplier?.displayName || row.supplier?.name || '-' },
-    { key: 'invoice_date', label: 'Date', sortable: true, format: 'date', render: (val, row) => formatDate(val || row.invoiceDate || row.createdAt) },
+    { key: 'invoiceNumber', label: 'Invoice Number', sortable: true },
+    { key: 'supplier', label: 'Supplier', sortable: true, render: (val, row) => row.supplier?.companyName || row.supplier?.name || '-' },
+    { key: 'invoiceDate', label: 'Date', sortable: true, format: 'date' },
     { key: 'status', label: 'Status', sortable: true },
-    { key: 'total', label: 'Total', sortable: true, render: (val, row) => formatCurrency(val !== undefined && val !== null ? val : (row.pricing?.total || 0)) }
+    { key: 'pricing', label: 'Total', sortable: true, render: (val) => formatCurrency(val?.total || 0) }
   ];
 
   const cashReceiptsColumns = [
-    { key: 'voucherCode', label: 'Voucher Code', sortable: true, render: (val, row) => val || row.receipt_number || '-' },
-    { key: 'customer', label: 'Customer/Supplier', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.business_name || row.customer?.displayName || row.customer?.name || row.supplier?.businessName || row.supplier?.business_name || row.supplier?.companyName || row.supplier?.displayName || row.supplier?.name || '-' },
-    { key: 'date', label: 'Date', sortable: true, format: 'date' },
-    { key: 'particular', label: 'Particular', sortable: true },
-    { key: 'amount', label: 'Amount', sortable: true, format: 'currency' }
-  ];
-
-  const allReceiptsColumns = [
-    { key: 'voucherCode', label: 'Voucher Code', sortable: true, render: (val, row) => val || row.receipt_number || '-' },
-    { key: 'type', label: 'Type', sortable: true, render: (val, row) => row.receiptType || 'Cash' },
-    { key: 'bankName', label: 'Bank Name', sortable: true, render: (val, row) => row.receiptType === 'Bank' ? (row.bankName || row.bank?.bankName || row.bank_name || '-') : '-' },
-    { key: 'customer', label: 'Customer/Supplier', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.business_name || row.customer?.displayName || row.customer?.name || row.supplier?.businessName || row.supplier?.business_name || row.supplier?.companyName || row.supplier?.displayName || row.supplier?.name || '-' },
+    { key: 'voucherCode', label: 'Voucher Code', sortable: true },
+    { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.name || '-' },
     { key: 'date', label: 'Date', sortable: true, format: 'date' },
     { key: 'particular', label: 'Particular', sortable: true },
     { key: 'amount', label: 'Amount', sortable: true, format: 'currency' }
   ];
 
   const cashPaymentsColumns = [
-    { key: 'voucherCode', label: 'Voucher Code', sortable: true, render: (val, row) => val || row.payment_number || '-' },
-    { key: 'supplier', label: 'Supplier', sortable: true, render: (val, row) => row.supplier?.businessName || row.supplier?.business_name || row.supplier?.companyName || row.supplier?.displayName || row.supplier?.name || '-' },
-    { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.business_name || row.customer?.displayName || row.customer?.name || '-' },
-    { key: 'date', label: 'Date', sortable: true, format: 'date' },
-    { key: 'particular', label: 'Particular', sortable: true },
-    { key: 'amount', label: 'Amount', sortable: true, format: 'currency' }
-  ];
-
-  const allPaymentsColumns = [
-    { key: 'voucherCode', label: 'Voucher Code', sortable: true, render: (val, row) => val || row.payment_number || '-' },
-    { key: 'type', label: 'Type', sortable: true, render: (val, row) => row.paymentType || 'Cash' },
-    { key: 'supplier', label: 'Supplier', sortable: true, render: (val, row) => row.supplier?.businessName || row.supplier?.business_name || row.supplier?.companyName || row.supplier?.displayName || row.supplier?.name || '-' },
-    { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.business_name || row.customer?.displayName || row.customer?.name || '-' },
+    { key: 'voucherCode', label: 'Voucher Code', sortable: true },
+    { key: 'supplier', label: 'Supplier', sortable: true, render: (val, row) => row.supplier?.companyName || row.supplier?.name || '-' },
+    { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.name || '-' },
     { key: 'date', label: 'Date', sortable: true, format: 'date' },
     { key: 'particular', label: 'Particular', sortable: true },
     { key: 'amount', label: 'Amount', sortable: true, format: 'currency' }
   ];
 
   const bankReceiptsColumns = [
-    { key: 'voucherCode', label: 'Voucher Code', sortable: true, render: (val, row) => val || row.receipt_number || '-' },
-    { key: 'bankName', label: 'Bank Name', sortable: true, render: (val, row) => row.bankName || row.bank?.bankName || row.bank_name || '-' },
-    { key: 'customer', label: 'Customer/Supplier', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.business_name || row.customer?.displayName || row.customer?.name || row.supplier?.businessName || row.supplier?.business_name || row.supplier?.companyName || row.supplier?.displayName || row.supplier?.name || '-' },
+    { key: 'voucherCode', label: 'Voucher Code', sortable: true },
+    { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.name || '-' },
     { key: 'date', label: 'Date', sortable: true, format: 'date' },
     { key: 'particular', label: 'Particular', sortable: true },
     { key: 'amount', label: 'Amount', sortable: true, format: 'currency' }
   ];
 
   const bankPaymentsColumns = [
-    { key: 'voucherCode', label: 'Voucher Code', sortable: true, render: (val, row) => val || row.payment_number || '-' },
-    { key: 'supplier', label: 'Supplier', sortable: true, render: (val, row) => row.supplier?.businessName || row.supplier?.business_name || row.supplier?.companyName || row.supplier?.displayName || row.supplier?.name || '-' },
-    { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.business_name || row.customer?.displayName || row.customer?.name || '-' },
+    { key: 'voucherCode', label: 'Voucher Code', sortable: true },
+    { key: 'supplier', label: 'Supplier', sortable: true, render: (val, row) => row.supplier?.companyName || row.supplier?.name || '-' },
+    { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.name || '-' },
     { key: 'date', label: 'Date', sortable: true, format: 'date' },
     { key: 'particular', label: 'Particular', sortable: true },
     { key: 'amount', label: 'Amount', sortable: true, format: 'currency' }
@@ -532,36 +451,10 @@ export const Dashboard = () => {
   const purchaseOrdersModalData = purchaseOrdersData?.data?.purchaseOrders || purchaseOrdersData?.purchaseOrders || [];
   const salesInvoicesModalData = salesInvoicesArray;
   const purchaseInvoicesDataArray = purchaseInvoicesData?.data?.invoices || purchaseInvoicesData?.invoices || [];
-  const cashReceiptsDataArray = cashReceiptsArray;
-  const cashPaymentsDataArray = cashPaymentsArray;
+  const cashReceiptsDataArray = cashReceiptsData?.data?.cashReceipts || [];
+  const cashPaymentsDataArray = cashPayments;
   const bankReceiptsDataArray = bankReceiptsData?.data?.bankReceipts || [];
-  const bankPaymentsDataArray = bankPaymentsArray;
-
-  // Combined receipts and payments data (cash + bank + sales invoice payments)
-  const salesInvoiceReceiptsArray = salesInvoicesArray
-    .filter(sale => {
-      const amountPaid = Number(sale.amount_paid || sale.amountPaid || 0);
-      return amountPaid > 0; // Only include sales with payments
-    })
-    .map(sale => ({
-      voucherCode: sale.order_number || sale.orderNumber || '-',
-      receiptType: 'Sales Invoice',
-      customer: sale.customer || sale.customerInfo,
-      date: sale.sale_date || sale.saleDate || sale.created_at || sale.createdAt,
-      particular: `Payment for Sale: ${sale.order_number || sale.orderNumber || 'N/A'}`,
-      amount: Number(sale.amount_paid || sale.amountPaid || 0)
-    }));
-
-  const allReceiptsDataArray = [
-    ...cashReceiptsArray.map(r => ({ ...r, receiptType: 'Cash' })),
-    ...bankReceiptsArray.map(r => ({ ...r, receiptType: 'Bank' })),
-    ...salesInvoiceReceiptsArray
-  ].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  const allPaymentsDataArray = [
-    ...cashPaymentsArray.map(p => ({ ...p, paymentType: 'Cash' })),
-    ...bankPaymentsArray.map(p => ({ ...p, paymentType: 'Bank' }))
-  ].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const bankPaymentsDataArray = bankPayments;
 
   const companyInfo = companySettingsData?.data || {};
   const companyFromApi = companyData?.data || companyData || {};
@@ -573,9 +466,7 @@ export const Dashboard = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
-          {!dashboardHidden && (
-            <p className="text-sm sm:text-base text-gray-600">Welcome back! Here's what's happening today.</p>
-          )}
+          <p className="text-sm sm:text-base text-gray-600">Welcome back! Here's what's happening today.</p>
         </div>
 
         {/* Hide Data Button - Mobile only (no date filter here to save space) */}
@@ -602,16 +493,14 @@ export const Dashboard = () => {
 
         {/* Date Filter and Hide Data Button - Desktop only */}
         <div className="hidden lg:flex items-center gap-3 w-full sm:w-auto">
-          {!dashboardHidden && (
-            <DateFilter
-              startDate={startDate}
-              endDate={endDate}
-              onDateChange={handleDateChange}
-              compact={true}
-              showPresets={true}
-              className="w-full"
-            />
-          )}
+          <DateFilter
+            startDate={startDate}
+            endDate={endDate}
+            onDateChange={handleDateChange}
+            compact={true}
+            showPresets={true}
+            className="w-full"
+          />
           <button
             type="button"
             onClick={toggleDashboardVisibility}
@@ -621,7 +510,7 @@ export const Dashboard = () => {
             {dashboardHidden ? (
               <>
                 <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                <span>Show data</span>
+                <span>Unhide data</span>
               </>
             ) : (
               <>
@@ -634,21 +523,21 @@ export const Dashboard = () => {
       </div>
 
       {dashboardHidden ? (
-        <div className="min-h-[70vh] flex flex-col items-center justify-center bg-white rounded-xl border border-gray-200 shadow-sm p-8">
-          <div className="flex flex-col items-center gap-8 w-full text-center">
+        <div className="min-h-[60vh] flex flex-col items-center justify-center bg-white rounded-xl border border-gray-200 shadow-sm p-8">
+          <div className="flex flex-col items-center gap-6 max-w-md text-center">
             {companyLogo ? (
               <img
                 src={companyLogo}
                 alt={companyName || 'Company logo'}
-                className="max-h-[400px] md:max-h-[500px] w-auto max-w-full object-contain transition-all duration-500 hover:scale-105"
+                className="max-h-48 w-auto max-w-full object-contain"
               />
             ) : (
-              <div className="w-60 h-60 rounded-2xl bg-gray-100 flex items-center justify-center">
-                <Building className="h-32 w-32 text-gray-400" />
+              <div className="w-40 h-40 rounded-xl bg-gray-100 flex items-center justify-center">
+                <Building className="h-20 w-20 text-gray-400" />
               </div>
             )}
             {companyName ? (
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight">{companyName}</h2>
+              <h2 className="text-xl font-semibold text-gray-800">{companyName}</h2>
             ) : null}
           </div>
         </div>
@@ -738,175 +627,166 @@ export const Dashboard = () => {
         </div>
         <div className="card-content space-y-6">
 
-          {/* REVENUE, COST & DISCOUNT SECTION - Responsive scaling */}
+          {/* REVENUE, COST & DISCOUNT SECTION */}
           <div>
-            <h3 className="text-[10px] sm:text-xs xl:text-sm font-semibold text-gray-700 mb-2 xl:mb-3 uppercase tracking-wide">Revenue, Cost & Discounts</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 sm:gap-2 xl:gap-3 2xl:gap-4">
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Revenue, Cost & Discounts</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
 
               {/* Sales */}
               <div
-                className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                className="text-center p-2 sm:p-3 md:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm"
                 onClick={() => setShowSalesInvoicesModal(true)}
               >
-                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                <div className="absolute top-1 right-1 sm:top-2 sm:right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600" />
                 </div>
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-green-500 rounded-full">
-                    <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                <div className="flex justify-center mb-1 sm:mb-2">
+                  <div className="p-2 sm:p-2.5 md:p-3 bg-green-500 rounded-full">
+                    <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
                   </div>
                 </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Sales (Revenue)</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{Math.round(totalSales).toLocaleString()}</p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">SO: {Math.round(salesOrdersTotal)} | SI: {Math.round(salesInvoicesTotal)}</p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-primary-600 font-medium mt-0.5">Net: {Math.round(netRevenue).toLocaleString()}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-700 mb-1">Sales (Revenue)</p>
+                <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900 break-words">{Math.round(totalSales).toLocaleString()}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-1 hidden sm:block">SO: {Math.round(salesOrdersTotal)} | SI: {Math.round(salesInvoicesTotal)}</p>
               </div>
 
               {/* Purchase (COGS) */}
               <div
-                className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                className="text-center p-2 sm:p-3 md:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm"
                 onClick={() => setShowPurchaseInvoicesModal(true)}
               >
-                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                <div className="absolute top-1 right-1 sm:top-2 sm:right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600" />
                 </div>
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-purple-500 rounded-full">
-                    <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                <div className="flex justify-center mb-1 sm:mb-2">
+                  <div className="p-2 sm:p-2.5 md:p-3 bg-purple-500 rounded-full">
+                    <Truck className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
                   </div>
                 </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Purchase (COGS)</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{Math.round(totalPurchases).toLocaleString()}</p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">PO: {Math.round(purchaseOrdersTotal)} | PI: {Math.round(purchaseInvoicesTotal)}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-700 mb-1">Purchase (COGS)</p>
+                <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900 break-words">{Math.round(totalPurchases).toLocaleString()}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-1 hidden sm:block">PO: {Math.round(purchaseOrdersTotal)} | PI: {Math.round(purchaseInvoicesTotal)}</p>
               </div>
 
               {/* Discount */}
-              <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-red-500 rounded-full">
-                    <Tag className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+              <div className="text-center p-2 sm:p-3 md:p-4 border border-gray-200 bg-white rounded-lg shadow-sm">
+                <div className="flex justify-center mb-1 sm:mb-2">
+                  <div className="p-2 sm:p-2.5 md:p-3 bg-red-500 rounded-full">
+                    <Tag className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
                   </div>
                 </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Discount Given</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{Math.round(totalDiscounts).toLocaleString()}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-700 mb-1">Discount Given</p>
+                <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900 break-words">{Math.round(totalDiscounts).toLocaleString()}</p>
               </div>
 
               {/* Pending Sales Orders */}
               <div
-                className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm min-w-0"
+                className="text-center p-2 sm:p-3 md:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm"
                 onClick={() => navigate('/sales-orders')}
               >
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-cyan-500 rounded-full">
-                    <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                <div className="flex justify-center mb-1 sm:mb-2">
+                  <div className="p-2 sm:p-2.5 md:p-3 bg-cyan-500 rounded-full">
+                    <FileText className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
                   </div>
                 </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Pending Sales Orders</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{pendingSalesOrdersCount}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-700 mb-1">Pending Sales Orders</p>
+                <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900 break-words">{pendingSalesOrdersCount}</p>
               </div>
 
               {/* Pending Purchase Orders */}
               <div
-                className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm min-w-0"
+                className="text-center p-2 sm:p-3 md:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm"
                 onClick={() => navigate('/purchase-orders')}
               >
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-indigo-500 rounded-full">
-                    <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                <div className="flex justify-center mb-1 sm:mb-2">
+                  <div className="p-2 sm:p-2.5 md:p-3 bg-indigo-500 rounded-full">
+                    <Receipt className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
                   </div>
                 </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Pending Purchase Orders</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{pendingPurchaseOrdersCount}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-700 mb-1">Pending Purchase Orders</p>
+                <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900 break-words">{pendingPurchaseOrdersCount}</p>
               </div>
             </div>
           </div>
 
-          {/* PROFITABILITY & CASH FLOW SECTION - Responsive scaling */}
+          {/* PROFITABILITY & CASH FLOW SECTION */}
           <div>
-            <h3 className="text-[10px] sm:text-xs xl:text-sm font-semibold text-gray-700 mb-2 xl:mb-3 uppercase tracking-wide">Profitability & Cash Flow</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2 xl:gap-3 2xl:gap-4">
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Profitability & Cash Flow</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
 
               {/* Gross Profit */}
-              <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-blue-500 rounded-full">
-                    <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+              <div className="text-center p-2 sm:p-3 md:p-4 border border-gray-200 bg-white rounded-lg shadow-sm">
+                <div className="flex justify-center mb-1 sm:mb-2">
+                  <div className="p-2 sm:p-2.5 md:p-3 bg-blue-500 rounded-full">
+                    <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
                   </div>
                 </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Gross Profit</p>
-                <p className={`text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold break-words ${grossProfit >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                <p className="text-xs sm:text-sm font-medium text-gray-700 mb-1">Gross Profit</p>
+                <p className={`text-base sm:text-lg md:text-xl font-bold break-words ${grossProfit >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                   {Math.round(grossProfit).toLocaleString()}
                 </p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">Revenue - COGS</p>
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-1 hidden sm:block">Revenue - COGS</p>
               </div>
 
               {/* Total Receipts */}
               <div
-                className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
-                onClick={() => setShowAllReceiptsModal(true)}
+                className="text-center p-2 sm:p-3 md:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm"
+                onClick={() => setShowCashReceiptsModal(true)}
               >
-                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                <div className="absolute top-1 right-1 sm:top-2 sm:right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600" />
                 </div>
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-emerald-500 rounded-full">
-                    <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                <div className="flex justify-center mb-1 sm:mb-2">
+                  <div className="p-2 sm:p-2.5 md:p-3 bg-emerald-500 rounded-full">
+                    <Receipt className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
                   </div>
                 </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Receipts</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">
-                  {isNaN(totalReceipts) ? '0' : Math.round(totalReceipts).toLocaleString()}
-                </p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">
-                  Cash: {isNaN(totalCashReceipts) ? '0' : Math.round(totalCashReceipts)} | Bank: {isNaN(totalBankReceipts) ? '0' : Math.round(totalBankReceipts)} | Sales: {isNaN(salesInvoicePayments) ? '0' : Math.round(salesInvoicePayments)}
-                </p>
+                <p className="text-xs sm:text-sm font-medium text-gray-700 mb-1">Total Receipts</p>
+                <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900 break-words">{Math.round(totalReceipts).toLocaleString()}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-1 hidden sm:block">Cash: {Math.round(totalCashReceipts)} | Bank: {Math.round(totalBankReceipts)}</p>
               </div>
 
               {/* Total Payments */}
               <div
-                className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
-                onClick={() => setShowAllPaymentsModal(true)}
+                className="text-center p-2 sm:p-3 md:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm"
+                onClick={() => setShowCashPaymentsModal(true)}
               >
-                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                <div className="absolute top-1 right-1 sm:top-2 sm:right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600" />
                 </div>
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-orange-500 rounded-full">
-                    <Banknote className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                <div className="flex justify-center mb-1 sm:mb-2">
+                  <div className="p-2 sm:p-2.5 md:p-3 bg-orange-500 rounded-full">
+                    <Banknote className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
                   </div>
                 </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Payments</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">
-                  {isNaN(totalPayments) ? '0' : Math.round(totalPayments).toLocaleString()}
-                </p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">
-                  Cash: {isNaN(totalCashPayments) ? '0' : Math.round(totalCashPayments)} | Bank: {isNaN(totalBankPayments) ? '0' : Math.round(totalBankPayments)}
-                </p>
+                <p className="text-xs sm:text-sm font-medium text-gray-700 mb-1">Total Payments</p>
+                <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900 break-words">{Math.round(totalPayments).toLocaleString()}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-1 hidden sm:block">Cash: {Math.round(totalCashPayments)} | Bank: {Math.round(totalBankPayments)}</p>
               </div>
 
               {/* Net Cash Flow */}
-              <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className={`p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 rounded-full ${netCashFlow >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
-                    <Wallet className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+              <div className="text-center p-2 sm:p-3 md:p-4 border border-gray-200 bg-white rounded-lg shadow-sm">
+                <div className="flex justify-center mb-1 sm:mb-2">
+                  <div className={`p-2 sm:p-2.5 md:p-3 rounded-full ${netCashFlow >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
+                    <Wallet className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
                   </div>
                 </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Net Cash Flow</p>
-                <p className={`text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold break-words ${(isNaN(netCashFlow) ? 0 : netCashFlow) >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                  {isNaN(netCashFlow) ? '0' : Math.round(netCashFlow).toLocaleString()}
+                <p className="text-xs sm:text-sm font-medium text-gray-700 mb-1">Net Cash Flow</p>
+                <p className={`text-base sm:text-lg md:text-xl font-bold break-words ${netCashFlow >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                  {Math.round(netCashFlow).toLocaleString()}
                 </p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">Receipts - Payments</p>
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-1 hidden sm:block">Receipts - Payments</p>
               </div>
 
               {/* Total Orders */}
-              <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-yellow-500 rounded-full">
-                    <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+              <div className="text-center p-2 sm:p-3 md:p-4 border border-gray-200 bg-white rounded-lg shadow-sm">
+                <div className="flex justify-center mb-1 sm:mb-2">
+                  <div className="p-2 sm:p-2.5 md:p-3 bg-yellow-500 rounded-full">
+                    <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white" />
                   </div>
                 </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Transactions</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{summary.totalOrders || 0}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-700 mb-1">Total Transactions</p>
+                <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900 break-words">{summary.totalOrders || 0}</p>
               </div>
 
             </div>
@@ -966,12 +846,10 @@ export const Dashboard = () => {
         />
       </div>
 
-      {/* Period Comparison Section – graphs & cards */}
-      <div className="card">
-        <div className="card-content pt-4">
-          <PeriodComparisonSection
-            title="Sales Performance Comparison"
-            metrics={[
+      {/* Period Comparison Section */}
+      <PeriodComparisonSection
+        title="Sales Performance Comparison"
+        metrics={[
           {
             title: 'Total Revenue',
             fetchFunction: (params) => fetchPeriodSummary(params).then(res => ({
@@ -1009,10 +887,8 @@ export const Dashboard = () => {
             iconColor: 'bg-orange-500'
           }
         ]}
-            fetchFunction={fetchPeriodSummary}
-          />
-        </div>
-      </div>
+        fetchFunction={fetchPeriodSummary}
+      />
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -1111,7 +987,7 @@ export const Dashboard = () => {
             <div><strong>Net Revenue:</strong> Sales minus discounts given</div>
             <div><strong>Purchase (COGS):</strong> Cost of goods purchased from suppliers</div>
             <div><strong>Gross Profit:</strong> Net Revenue - COGS (your margin)</div>
-            <div><strong>Receipts:</strong> Total money received (Cash Receipts + Bank Receipts + Sales Invoice Payments)</div>
+            <div><strong>Receipts:</strong> Cash/Bank money received (includes sales + customer payments)</div>
             <div><strong>Payments:</strong> Cash/Bank money paid (includes supplier payments + expenses)</div>
             <div><strong>Net Cash Flow:</strong> Total receipts minus total payments (cash position)</div>
             <div className="md:col-span-2 lg:col-span-3 mt-2 p-2 bg-yellow-100 border border-yellow-300 rounded">
@@ -1165,11 +1041,6 @@ export const Dashboard = () => {
           setStartDate(from);
           setEndDate(to);
         }}
-        summary={[
-          { label: 'Sales Revenue', value: salesRevenue },
-          { label: 'Sales Returns', value: totalSalesReturns },
-          { label: 'Net Total', value: totalSales - totalSalesReturns - totalDiscounts }
-        ]}
       />
 
       <DashboardReportModal
@@ -1239,36 +1110,6 @@ export const Dashboard = () => {
         columns={bankPaymentsColumns}
         data={bankPaymentsDataArray}
         isLoading={bankPaymentsLoading}
-        dateFrom={startDate}
-        dateTo={endDate}
-        onDateChange={(from, to) => {
-          setStartDate(from);
-          setEndDate(to);
-        }}
-      />
-
-      <DashboardReportModal
-        isOpen={showAllReceiptsModal}
-        onClose={() => setShowAllReceiptsModal(false)}
-        title="All Receipts (Cash + Bank + Sales)"
-        columns={allReceiptsColumns}
-        data={allReceiptsDataArray}
-        isLoading={cashReceiptsLoading || bankReceiptsLoading || salesInvoicesLoading}
-        dateFrom={startDate}
-        dateTo={endDate}
-        onDateChange={(from, to) => {
-          setStartDate(from);
-          setEndDate(to);
-        }}
-      />
-
-      <DashboardReportModal
-        isOpen={showAllPaymentsModal}
-        onClose={() => setShowAllPaymentsModal(false)}
-        title="All Payments (Cash + Bank)"
-        columns={allPaymentsColumns}
-        data={allPaymentsDataArray}
-        isLoading={cashPaymentsLoading || bankPaymentsLoading}
         dateFrom={startDate}
         dateTo={endDate}
         onDateChange={(from, to) => {

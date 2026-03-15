@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import BaseModal from '../components/BaseModal';
 import {
   Search,
   Filter,
@@ -23,8 +22,6 @@ import {
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatDate } from '../utils/formatters';
 import ReceiptPaymentPrintModal from '../components/ReceiptPaymentPrintModal';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   useGetBankPaymentsQuery,
   useCreateBankPaymentMutation,
@@ -114,7 +111,7 @@ const BankPayments = () => {
 
   // Fetch customers for dropdown
   const { data: customersData, isLoading: customersLoading, error: customersError, refetch: refetchCustomers } = useGetCustomersQuery(
-    { search: '', limit: 999999 },
+    { search: '', limit: 100 },
     { refetchOnMountOrArgChange: true }
   );
   const customers = React.useMemo(() => {
@@ -212,12 +209,11 @@ const BankPayments = () => {
   };
 
   const handleCustomerSelect = (customerId) => {
-    const customer = customers.find(c => (c.id || c._id) === customerId);
+    const customer = customers.find(c => c._id === customerId);
     setSelectedCustomer(customer);
     setFormData(prev => ({ ...prev, customer: customerId, supplier: '' }));
     setSelectedSupplier(null);
     setSupplierSearchTerm('');
-    setCustomerSearchTerm(customer?.businessName || customer?.business_name || customer?.displayName || customer?.name || '');
   };
 
   const handleSupplierSearch = (searchTerm) => {
@@ -342,7 +338,7 @@ const BankPayments = () => {
 
   const handleCustomerKeyDown = (e) => {
     const filteredCustomers = (customers || []).filter(customer => {
-      const displayName = customer.businessName || customer.business_name || customer.displayName || customer.name ||
+      const displayName = customer.displayName || customer.businessName || customer.name ||
         `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || '';
       return (
         displayName.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
@@ -374,9 +370,9 @@ const BankPayments = () => {
         e.preventDefault();
         if (customerDropdownIndex >= 0 && customerDropdownIndex < filteredCustomers.length) {
           const customer = filteredCustomers[customerDropdownIndex];
-          const displayName = customer.businessName || customer.business_name || customer.displayName || customer.name ||
+          const displayName = customer.displayName || customer.businessName || customer.name ||
             `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || '';
-          handleCustomerSelect(customer.id || customer._id);
+          handleCustomerSelect(customer._id);
           setCustomerSearchTerm(displayName);
           setCustomerDropdownIndex(-1);
         }
@@ -483,7 +479,7 @@ const BankPayments = () => {
       notes: formData.notes
     };
 
-    updateBankPayment({ id: selectedPayment.id || selectedPayment._id, ...submissionData })
+    updateBankPayment({ id: selectedPayment._id, ...submissionData })
       .unwrap()
       .then(() => {
         setShowEditModal(false);
@@ -505,7 +501,7 @@ const BankPayments = () => {
 
   const handleDelete = (payment) => {
     if (window.confirm('Are you sure you want to delete this bank payment?')) {
-      deleteBankPayment(payment.id || payment._id)
+      deleteBankPayment(payment._id)
         .unwrap()
         .then(() => {
           showSuccessToast('Bank payment deleted successfully');
@@ -529,10 +525,10 @@ const BankPayments = () => {
       date: payment.date ? payment.date.split('T')[0] : today,
       amount: payment.amount || '',
       particular: payment.particular || '',
-      bank: payment.bank?._id || payment.bank?.id || payment.bank_id || payment.bankId || '',
+      bank: payment.bank?._id || '',
       transactionReference: payment.transactionReference || '',
-      supplier: payment.supplier?._id || payment.supplier?.id || '',
-      customer: payment.customer?._id || payment.customer?.id || '',
+      supplier: payment.supplier?._id || '',
+      customer: payment.customer?._id || '',
       notes: payment.notes || ''
     });
 
@@ -545,7 +541,7 @@ const BankPayments = () => {
     } else if (payment.customer) {
       setPaymentType('customer');
       setSelectedCustomer(payment.customer);
-      setCustomerSearchTerm(payment.customer.businessName || payment.customer.business_name || payment.customer.displayName || payment.customer.name || '');
+      setCustomerSearchTerm(payment.customer.displayName || payment.customer.businessName || payment.customer.name || '');
       setSelectedSupplier(null);
       setSupplierSearchTerm('');
     } else if (payment.expenseAccount) {
@@ -630,12 +626,6 @@ const BankPayments = () => {
     bankPaymentsData?.data?.payments ||
     bankPaymentsData?.payments ||
     [];
-  const resolveBankInfo = (payment) => {
-    if (payment?.bank && typeof payment.bank === 'object') return payment.bank;
-    const bankId = payment?.bank_id || payment?.bankId || payment?.bank;
-    if (!bankId) return null;
-    return (banks || []).find(b => (b._id || b.id) === bankId) || null;
-  };
   const paginationInfo =
     bankPaymentsData?.data?.pagination ||
     bankPaymentsData?.pagination ||
@@ -650,24 +640,20 @@ const BankPayments = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage and view all bank payment transactions</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-          <Button
+          <button
             onClick={handleExport}
-            variant="outline"
-            size="default"
-            className="flex items-center justify-center gap-2 w-full sm:w-auto"
+            className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <Download className="h-4 w-4" />
             <span>Export</span>
-          </Button>
-          <Button
+          </button>
+          <button
             onClick={resetForm}
-            variant="default"
-            size="default"
-            className="flex items-center justify-center gap-2 w-full sm:w-auto"
+            className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             <span>New Payment</span>
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -728,7 +714,6 @@ const BankPayments = () => {
                   <div className="relative">
                     <input
                       type="text"
-                      autoComplete="off"
                       value={supplierSearchTerm}
                       onChange={(e) => handleSupplierSearch(e.target.value)}
                       onKeyDown={handleSupplierKeyDown}
@@ -757,11 +742,6 @@ const BankPayments = () => {
                           <div className="font-medium text-gray-900">
                             {supplier.displayName || supplier.companyName || supplier.name || 'Unknown'}
                           </div>
-                          {supplier.companyName && (
-                            <div className="text-xs text-gray-600">
-                              {supplier.companyName}
-                            </div>
-                          )}
                           <div className="text-sm text-gray-600 capitalize mt-0.5">
                             {supplier.businessType && supplier.reliability
                               ? `${supplier.businessType} • ${supplier.reliability}`
@@ -772,7 +752,7 @@ const BankPayments = () => {
                             <div className="text-sm text-gray-600">
                               <span className="text-gray-500">Outstanding Balance:</span>{' '}
                               <span className={`font-medium ${(supplier.pendingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                {Math.round(supplier.pendingBalance || 0)}
+                                ${Math.round(supplier.pendingBalance || 0)}
                               </span>
                             </div>
                             {supplier.phone && (
@@ -812,7 +792,7 @@ const BankPayments = () => {
                             <div className="flex items-center space-x-1">
                               <span className="text-xs text-gray-500">Outstanding Balance:</span>
                               <span className={`text-sm font-medium ${(selectedSupplier.pendingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                {Math.round(selectedSupplier.pendingBalance || 0)}
+                                ${Math.round(selectedSupplier.pendingBalance || 0)}
                               </span>
                             </div>
                             {selectedSupplier.phone && (
@@ -844,7 +824,6 @@ const BankPayments = () => {
                   <div className="relative">
                     <input
                       type="text"
-                      autoComplete="off"
                       value={customerSearchTerm}
                       onChange={(e) => handleCustomerSearch(e.target.value)}
                       onKeyDown={handleCustomerKeyDown}
@@ -856,7 +835,7 @@ const BankPayments = () => {
                   {customerSearchTerm && (
                     <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
                       {(customers || []).filter(customer => {
-                        const displayName = customer.businessName || customer.business_name || customer.displayName || customer.name ||
+                        const displayName = customer.displayName || customer.businessName || customer.name ||
                           `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || '';
                         return (
                           displayName.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
@@ -875,20 +854,16 @@ const BankPayments = () => {
 
                         return (
                           <div
-                            key={customer.id || customer._id}
+                            key={customer._id}
                             onClick={() => {
-                              handleCustomerSelect(customer.id || customer._id);
+                              handleCustomerSelect(customer._id);
+                              setCustomerSearchTerm(displayName);
+                              setCustomerDropdownIndex(-1);
                             }}
                             className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${customerDropdownIndex === index ? 'bg-blue-50' : ''
                               }`}
                           >
                             <div className="font-medium text-gray-900">{displayName}</div>
-                            <div className="text-xs text-gray-600">
-                              {customer.businessName || customer.business_name || 'No Business Name'}
-                            </div>
-                            {(customer.businessName || customer.business_name) && customer.name && (
-                              <div className="text-xs text-gray-500">Contact: {customer.name}</div>
-                            )}
                             <div className="text-sm text-gray-600 capitalize mt-0.5">
                               {customer.businessType || ''}
                             </div>
@@ -897,7 +872,7 @@ const BankPayments = () => {
                                 <div className="text-sm text-gray-600">
                                   <span className="text-gray-500">{isPayable ? 'Payables:' : 'Receivables:'}</span>{' '}
                                   <span className={`font-medium ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
-                                    {Math.abs(netBalance).toFixed(2)}
+                                    ${Math.abs(netBalance).toFixed(2)}
                                   </span>
                                 </div>
                               )}
@@ -921,15 +896,10 @@ const BankPayments = () => {
                         <User className="h-5 w-5 text-gray-400" />
                         <div className="flex-1">
                           <p className="font-medium">
-                            {selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name ||
+                            {selectedCustomer.displayName || selectedCustomer.businessName || selectedCustomer.name ||
                               `${selectedCustomer.firstName || ''} ${selectedCustomer.lastName || ''}`.trim() ||
                               selectedCustomer.email || 'Unknown Customer'}
                           </p>
-                          {(selectedCustomer.businessName || selectedCustomer.business_name) && (selectedCustomer.displayName || selectedCustomer.name) && (
-                            <p className="text-xs text-gray-500">
-                              Contact: {selectedCustomer.displayName || selectedCustomer.name}
-                            </p>
-                          )}
                           <p className="text-sm text-gray-600 capitalize">
                             {selectedCustomer.businessType ? `${selectedCustomer.businessType} • ` : ''}
                             {selectedCustomer.phone || 'No phone'}
@@ -948,7 +918,7 @@ const BankPayments = () => {
                                   <span className="text-xs text-gray-500">{isPayable ? 'Payables:' : 'Receivables:'}</span>
                                   <span className={`text-sm font-medium ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'
                                     }`}>
-                                    {Math.abs(netBalance).toFixed(2)}
+                                    ${Math.abs(netBalance).toFixed(2)}
                                   </span>
                                 </div>
                               ) : null;
@@ -970,7 +940,6 @@ const BankPayments = () => {
                   <div className="relative">
                     <input
                       type="text"
-                      autoComplete="off"
                       value={expenseSearchTerm}
                       onChange={(e) => handleExpenseSearch(e.target.value)}
                       onKeyDown={handleExpenseKeyDown}
@@ -1081,7 +1050,6 @@ const BankPayments = () => {
                 </label>
                 <input
                   type="number"
-                  autoComplete="off"
                   step="0.01"
                   min="0"
                   value={formData.amount}
@@ -1106,7 +1074,6 @@ const BankPayments = () => {
                 <div className="relative">
                   <input
                     type="date"
-                    autoComplete="off"
                     value={formData.date}
                     onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
                     className="input w-full pr-10"
@@ -1148,7 +1115,6 @@ const BankPayments = () => {
                 </label>
                 <input
                   type="text"
-                  autoComplete="off"
                   value={formData.transactionReference}
                   onChange={(e) => setFormData(prev => ({ ...prev, transactionReference: e.target.value }))}
                   className="input w-full"
@@ -1163,7 +1129,6 @@ const BankPayments = () => {
                 </label>
                 <input
                   type="text"
-                  autoComplete="off"
                   value={formData.particular}
                   onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
                   className="input w-full"
@@ -1188,25 +1153,21 @@ const BankPayments = () => {
 
           {/* Action Buttons */}
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
-            <Button
+            <button
               onClick={resetForm}
-              variant="outline"
-              size="default"
-              className="flex items-center justify-center gap-2 w-full sm:w-auto"
+              className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
             >
               <RotateCcw className="h-4 w-4" />
               <span>Reset</span>
-            </Button>
-            <Button
+            </button>
+            <button
               onClick={handleCreate}
               disabled={creating}
-              variant="default"
-              size="default"
-              className="flex items-center justify-center gap-2 w-full sm:w-auto"
+              className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
             >
               <Save className="h-4 w-4" />
               <span>{creating ? 'Saving...' : 'Save Payment'}</span>
-            </Button>
+            </button>
           </div>
         </div>
       </div>
@@ -1223,9 +1184,6 @@ const BankPayments = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             {/* Date Range */}
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date Range
-              </label>
               <DateFilter
                 startDate={filters.fromDate}
                 endDate={filters.toDate}
@@ -1243,12 +1201,12 @@ const BankPayments = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Voucher Code
               </label>
-              <Input
+              <input
                 type="text"
-                autoComplete="off"
                 placeholder="Contains..."
                 value={filters.voucherCode}
                 onChange={(e) => handleFilterChange('voucherCode', e.target.value)}
+                className="input"
               />
             </div>
 
@@ -1257,12 +1215,12 @@ const BankPayments = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Amount
               </label>
-              <Input
+              <input
                 type="number"
-                autoComplete="off"
                 placeholder="Equals..."
                 value={filters.amount}
                 onChange={(e) => handleFilterChange('amount', e.target.value)}
+                className="input"
               />
             </div>
 
@@ -1271,26 +1229,24 @@ const BankPayments = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Particular
               </label>
-              <Input
+              <input
                 type="text"
-                autoComplete="off"
                 placeholder="Contains..."
                 value={filters.particular}
                 onChange={(e) => handleFilterChange('particular', e.target.value)}
+                className="input"
               />
             </div>
 
             {/* Search Button */}
             <div className="flex items-end">
-              <Button
+              <button
                 onClick={() => refetch()}
-                variant="default"
-                size="default"
-                className="w-full flex items-center justify-center gap-2"
+                className="btn btn-primary btn-md w-full flex items-center justify-center gap-2"
               >
                 <Search className="h-4 w-4" />
                 <span>Search</span>
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -1398,27 +1354,27 @@ const BankPayments = () => {
                           {payment.particular}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {resolveBankInfo(payment) ? (
+                          {payment.bank ? (
                             <div>
-                              <div className="font-medium">{resolveBankInfo(payment).bankName}</div>
-                              <div className="text-gray-500 text-xs">{resolveBankInfo(payment).accountNumber}</div>
+                              <div className="font-medium">{payment.bank.bankName}</div>
+                              <div className="text-gray-500 text-xs">{payment.bank.accountNumber}</div>
                             </div>
                           ) : (
-                            payment.bankAccount || payment.bankName || payment.bank_name || '-'
+                            payment.bankAccount || 'N/A'
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {payment.supplier ? (
                             <div>
                               <div className="font-medium">
-                                {payment.supplier.businessName || payment.supplier.business_name || payment.supplier.companyName || payment.supplier.displayName || payment.supplier.name || 'Unknown Supplier'}
+                                {payment.supplier.companyName || payment.supplier.displayName || payment.supplier.name || 'Unknown Supplier'}
                               </div>
                               <div className="text-gray-500 text-xs">Supplier</div>
                             </div>
                           ) : payment.customer ? (
                             <div>
                               <div className="font-medium">
-                                {((payment.customer.businessName || payment.customer.business_name || payment.customer.displayName || payment.customer.name ||
+                                {((payment.customer.businessName || payment.customer.displayName || payment.customer.name ||
                                   `${payment.customer.firstName || ''} ${payment.customer.lastName || ''}`.trim() ||
                                   payment.customer.email || 'Unknown Customer') || '').toUpperCase()}
                               </div>
@@ -1449,7 +1405,7 @@ const BankPayments = () => {
                             >
                               <Eye className="h-4 w-4" />
                             </button>
-                            {(
+                            {formatDateForInput(payment.date) === today && (
                               <>
                                 <button
                                   onClick={() => handleEdit(payment)}
@@ -1608,22 +1564,20 @@ const BankPayments = () => {
                       <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     </div>
                     {customerSearchTerm && (
-                      <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
+                      <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
                         {(customers || []).filter(customer =>
-                          (customer.businessName || customer.business_name || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+                          (customer.businessName || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
                           (customer.phone || '').includes(customerSearchTerm)
                         ).map((customer) => (
                           <div
-                            key={customer.id || customer._id}
+                            key={customer._id}
                             onClick={() => {
-                              handleCustomerSelect(customer.id || customer._id);
+                              handleCustomerSelect(customer._id);
+                              setCustomerSearchTerm(customer.businessName || customer.name || '');
                             }}
                             className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
                           >
-                            <div className="font-medium text-gray-900">{customer.businessName || customer.business_name || customer.name || 'Unknown'}</div>
-                            {(customer.businessName || customer.business_name) && customer.name && (
-                              <div className="text-xs text-gray-500">Contact: {customer.name}</div>
-                            )}
+                            <div className="font-medium text-gray-900">{customer.businessName || customer.name || 'Unknown'}</div>
                             {customer.phone && (
                               <div className="text-sm text-gray-500">Phone: {customer.phone}</div>
                             )}
@@ -1879,26 +1833,31 @@ const BankPayments = () => {
       )}
       {/* Edit Modal */}
       {showEditModal && (
-        <BaseModal
-          isOpen={showEditModal}
-          onClose={() => {
-            setShowEditModal(false);
-            setSelectedPayment(null);
-            resetForm();
-          }}
-          title="Edit Bank Payment"
-          maxWidth="md"
-          variant="centered"
-          contentClassName="p-5"
-        >
-          <div className="space-y-4">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Edit Bank Payment</h3>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedPayment(null);
+                    resetForm();
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Date
                   </label>
                   <input
                     type="date"
-                    autoComplete="off"
                     value={formData.date}
                     onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
                     className="input w-full"
@@ -1927,7 +1886,6 @@ const BankPayments = () => {
                   </label>
                   <input
                     type="number"
-                    autoComplete="off"
                     step="0.01"
                     min="0"
                     value={formData.amount}
@@ -1946,7 +1904,6 @@ const BankPayments = () => {
                   </label>
                   <input
                     type="text"
-                    autoComplete="off"
                     value={formData.transactionReference}
                     onChange={(e) => setFormData(prev => ({ ...prev, transactionReference: e.target.value }))}
                     className="input w-full"
@@ -1980,41 +1937,49 @@ const BankPayments = () => {
                 </div>
               </div>
               <div className="flex justify-end space-x-3 mt-6">
-                <Button
+                <button
                   onClick={() => {
                     setShowEditModal(false);
                     setSelectedPayment(null);
                     resetForm();
                   }}
-                  variant="secondary"
+                  className="btn btn-secondary"
                 >
                   Cancel
-                </Button>
-                <Button
+                </button>
+                <button
                   onClick={handleUpdate}
                   disabled={updating}
-                  variant="default"
+                  className="btn btn-primary"
                 >
                   {updating ? 'Updating...' : 'Update'}
-                </Button>
+                </button>
               </div>
-        </BaseModal>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* View Modal */}
       {showViewModal && selectedPayment && (
-        <BaseModal
-          isOpen={showViewModal}
-          onClose={() => {
-            setShowViewModal(false);
-            setSelectedPayment(null);
-          }}
-          title="Bank Payment Details"
-          maxWidth="md"
-          variant="centered"
-          contentClassName="p-5"
-        >
-          <div className="space-y-3">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Bank Payment Details</h3>
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setSelectedPayment(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <span className="font-medium text-gray-500">Voucher Code:</span>
                   <span className="text-gray-900">{selectedPayment.voucherCode}</span>
@@ -2025,11 +1990,11 @@ const BankPayments = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <span className="font-medium text-gray-500">Amount:</span>
-                  <span className="text-gray-900 font-bold">{Math.round(selectedPayment.amount)}</span>
+                  <span className="text-gray-900 font-bold">${Math.round(selectedPayment.amount)}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <span className="font-medium text-gray-500">Bank:</span>
-                  <span className="text-gray-900">{resolveBankInfo(selectedPayment)?.bankName || selectedPayment.bankName || selectedPayment.bank_name || '-'}</span>
+                  <span className="text-gray-900">{selectedPayment.bank?.bankName || 'N/A'}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <span className="font-medium text-gray-500">Reference:</span>
@@ -2048,7 +2013,7 @@ const BankPayments = () => {
                 {selectedPayment.customer && (
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <span className="font-medium text-gray-500">Customer:</span>
-                    <span className="text-gray-900">{selectedPayment.customer.businessName || selectedPayment.customer.business_name || selectedPayment.customer.displayName || selectedPayment.customer.name}</span>
+                    <span className="text-gray-900">{selectedPayment.customer.businessName || selectedPayment.customer.displayName || selectedPayment.customer.name}</span>
                   </div>
                 )}
                 {selectedPayment.expenseAccount && (
@@ -2069,18 +2034,19 @@ const BankPayments = () => {
                 </div>
               </div>
               <div className="flex justify-end mt-6">
-                <Button
+                <button
                   onClick={() => {
                     setShowViewModal(false);
                     setSelectedPayment(null);
                   }}
-                  variant="secondary"
-                  className="w-full"
+                  className="btn btn-secondary w-full"
                 >
                   Close
-                </Button>
+                </button>
               </div>
-        </BaseModal>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -36,14 +36,13 @@ import {
   useExportReportMutation,
 } from '../store/services/salesPerformanceApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import AsyncErrorBoundary from '../components/AsyncErrorBoundary';
 import { useResponsive, ResponsiveContainer, ResponsiveGrid } from '../components/ResponsiveContainer';
 import CreateSalesPerformanceReportModal from '../components/CreateSalesPerformanceReportModal';
 import SalesPerformanceDetailModal from '../components/SalesPerformanceDetailModal';
 import SalesPerformanceFilters from '../components/SalesPerformanceFilters';
-import { Button } from '@/components/ui/button';
 
 const SalesPerformanceReports = () => {
   const [filters, setFilters] = useState({
@@ -290,14 +289,13 @@ const SalesPerformanceReports = () => {
             </p>
           </div>
           <div className="mt-4 sm:mt-0 flex space-x-3">
-            <Button
+            <button
               onClick={() => setShowCreateModal(true)}
-              variant="default"
-              size="default"
+              className="btn btn-primary btn-md"
             >
               <Plus className="h-4 w-4 mr-2" />
               Create Report
-            </Button>
+            </button>
           </div>
         </div>
 
@@ -468,7 +466,7 @@ const SalesPerformanceReports = () => {
                         </div>
                         <div>
                           <p className="text-sm font-medium text-gray-900">{product.product.name}</p>
-                          <p className="text-xs text-gray-500">Category: {typeof product.product?.category === 'object' ? (product.product?.category?.name ?? 'N/A') : (product.product?.category || 'N/A')}</p>
+                          <p className="text-xs text-gray-500">Category: {product.product.category || 'N/A'}</p>
                         </div>
                       </div>
                       <div className="text-right">
@@ -588,14 +586,13 @@ const SalesPerformanceReports = () => {
               />
             </div>
           </div>
-          <Button
+          <button
             onClick={() => setShowFilters(!showFilters)}
-            variant={showFilters ? 'default' : 'secondary'}
-            size="default"
+            className={`btn btn-md ${showFilters ? 'btn-primary' : 'btn-secondary'}`}
           >
             <Filter className="h-4 w-4 mr-2" />
             Filters
-          </Button>
+          </button>
         </div>
 
         {/* Filters Panel */}
@@ -695,14 +692,13 @@ const SalesPerformanceReports = () => {
                   Get started by creating your first sales performance report.
                 </p>
                 <div className="mt-6">
-                  <Button
+                  <button
                     onClick={() => setShowCreateModal(true)}
-                    variant="default"
-                    size="default"
+                    className="btn btn-primary btn-md"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Create Report
-                  </Button>
+                  </button>
                 </div>
               </div>
             )}
@@ -718,22 +714,20 @@ const SalesPerformanceReports = () => {
               {reportsData.pagination.total} results
             </div>
             <div className="flex space-x-2">
-              <Button
+              <button
                 onClick={() => setFilters(prev => ({ ...prev, page: prev.page - 1 }))}
                 disabled={!reportsData.pagination.hasPrev}
-                variant="secondary"
-                className="disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Previous
-              </Button>
-              <Button
+              </button>
+              <button
                 onClick={() => setFilters(prev => ({ ...prev, page: prev.page + 1 }))}
                 disabled={!reportsData.pagination.hasNext}
-                variant="secondary"
-                className="disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
-              </Button>
+              </button>
             </div>
           </div>
         )}

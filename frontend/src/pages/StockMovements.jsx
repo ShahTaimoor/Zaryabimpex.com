@@ -28,12 +28,9 @@ import {
   useReverseStockMovementMutation,
 } from '../store/services/inventoryApi';
 import { useGetProductsQuery } from '../store/services/productsApi';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
 import { handleApiError } from '../utils/errorHandler';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 
@@ -97,9 +94,8 @@ export const StockMovements = () => {
       setProductMap(prev => {
         const next = new Map(prev);
         initialProducts.forEach(product => {
-          const pid = product.id || product._id;
-          if (pid) {
-            next.set(pid, product);
+          if (product?._id) {
+            next.set(product._id, product);
           }
         });
         return next;
@@ -114,7 +110,7 @@ export const StockMovements = () => {
       parts.push(`SKU: ${product.sku}`);
     }
     return {
-      value: product.id || product._id,
+      value: product._id,
       label: parts.join(' • ')
     };
   }, []);
@@ -138,9 +134,8 @@ export const StockMovements = () => {
         setProductMap(prev => {
           const next = new Map(prev);
           filtered.forEach(product => {
-            const pid = product.id || product._id;
-            if (pid) {
-              next.set(pid, product);
+            if (product?._id) {
+              next.set(product._id, product);
             }
           });
           return next;
@@ -212,7 +207,7 @@ export const StockMovements = () => {
 
   const handleReverseMovement = async (movement, reason) => {
     try {
-      await reverseStockMovement({ id: movement.id || movement._id, reason }).unwrap();
+      await reverseStockMovement({ id: movement._id, reason }).unwrap();
       toast.success('Stock movement reversed successfully!');
       setSelectedMovement(null);
       refetch();
@@ -288,19 +283,14 @@ export const StockMovements = () => {
   };
 
   const formatCurrency = (amount) => {
-    const val = parseFloat(amount);
-    if (isNaN(val)) return '—';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD'
-    }).format(val);
+    }).format(amount);
   };
 
   const formatDate = (date) => {
-    if (!date) return '—';
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return '—';
-    return d.toLocaleString();
+    return new Date(date).toLocaleString();
   };
 
   if (isLoading && !movementsData) {
@@ -322,19 +312,17 @@ export const StockMovements = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Detailed inventory history and movement tracking</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-          <Button
+          <button
             onClick={() => setShowAdjustmentModal(true)}
-            variant="default"
-            size="default"
-            className="flex items-center justify-center gap-2"
+            className="btn btn-primary btn-md flex items-center justify-center gap-2"
           >
             <Plus className="h-4 w-4" />
             Stock Adjustment
-          </Button>
-          <Button variant="secondary" size="default" className="flex items-center justify-center gap-2">
+          </button>
+          <button className="btn btn-secondary btn-md flex items-center justify-center gap-2">
             <Download className="h-4 w-4" />
             Export
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -348,7 +336,7 @@ export const StockMovements = () => {
               </div>
               <div className="ml-2 sm:ml-4 min-w-0 flex-1">
                 <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Total Movements</p>
-                <p className="text-lg sm:text-2xl font-semibold text-gray-900">{summary.totalMovements || summary.total_movements || 0}</p>
+                <p className="text-lg sm:text-2xl font-semibold text-gray-900">{summary.totalMovements || 0}</p>
               </div>
             </div>
           </div>
@@ -362,7 +350,7 @@ export const StockMovements = () => {
               </div>
               <div className="ml-2 sm:ml-4 min-w-0 flex-1">
                 <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Stock In</p>
-                <p className="text-lg sm:text-2xl font-semibold text-gray-900">{summary.stockIn || summary.stock_in || 0}</p>
+                <p className="text-lg sm:text-2xl font-semibold text-gray-900">{summary.stockIn || 0}</p>
               </div>
             </div>
           </div>
@@ -376,7 +364,7 @@ export const StockMovements = () => {
               </div>
               <div className="ml-2 sm:ml-4 min-w-0 flex-1">
                 <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Stock Out</p>
-                <p className="text-lg sm:text-2xl font-semibold text-gray-900">{summary.stockOut || summary.stock_out || 0}</p>
+                <p className="text-lg sm:text-2xl font-semibold text-gray-900">{summary.stockOut || 0}</p>
               </div>
             </div>
           </div>
@@ -391,7 +379,7 @@ export const StockMovements = () => {
               <div className="ml-2 sm:ml-4 min-w-0 flex-1">
                 <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Total Value</p>
                 <p className="text-lg sm:text-2xl font-semibold text-gray-900">
-                  {(summary.totalValue || summary.total_value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {(summary.totalValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
             </div>
@@ -483,23 +471,19 @@ export const StockMovements = () => {
             </div>
 
             <div className="md:col-span-6 flex flex-wrap gap-3 justify-end pt-2">
-              <Button
+              <button
                 type="button"
                 onClick={handleResetFilters}
-                variant="secondary"
-                size="default"
-                className="flex items-center gap-2"
+                className="btn btn-secondary btn-md flex items-center gap-2"
                 disabled={isFetching && !isLoading}
               >
                 <RotateCcw className="h-4 w-4" />
                 Reset
-              </Button>
-              <Button
+              </button>
+              <button
                 type="button"
                 onClick={handleSearch}
-                variant="default"
-                size="default"
-                className="flex items-center gap-2"
+                className="btn btn-primary btn-md flex items-center gap-2"
                 disabled={isFetching && !isLoading}
               >
                 {isFetching && !isLoading ? (
@@ -513,7 +497,7 @@ export const StockMovements = () => {
                     Search
                   </>
                 )}
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -564,11 +548,11 @@ export const StockMovements = () => {
                   </tr>
                 )}
                 {movements.map((movement) => {
-                  const MovementIcon = getMovementIcon(movement.movementType || movement.movement_type);
-                  const movementColor = getMovementColor(movement.movementType || movement.movement_type);
+                  const MovementIcon = getMovementIcon(movement.movementType);
+                  const movementColor = getMovementColor(movement.movementType);
 
                   return (
-                    <tr key={movement.id || movement._id} className="hover:bg-gray-50">
+                    <tr key={movement._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className={`p-2 rounded-lg ${movementColor}`}>
@@ -576,7 +560,7 @@ export const StockMovements = () => {
                           </div>
                           <div className="ml-3">
                             <div className="text-sm font-medium text-gray-900">
-                              {movementTypes[movement.movementType || movement.movement_type]?.label || movement.movementType || movement.movement_type}
+                              {movementTypes[movement.movementType]?.label || movement.movementType}
                             </div>
                             <div className="text-sm text-gray-500">
                               {movement.location}
@@ -587,51 +571,51 @@ export const StockMovements = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-medium text-gray-900">
-                            {movement.productName || movement.product_name || '—'}
+                            {movement.productName}
                           </div>
-                          {(movement.productSku || movement.product_sku) && (
+                          {movement.productSku && (
                             <div className="text-sm text-gray-500">
-                              SKU: {movement.productSku || movement.product_sku}
+                              SKU: {movement.productSku}
                             </div>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
-                          {parseFloat(movement.quantity || 0).toFixed(2)}
+                          {movement.quantity}
                         </div>
                         <div className="text-sm text-gray-500">
-                          @ {formatCurrency(movement.unitCost || movement.unit_cost)}
+                          @ {formatCurrency(movement.unitCost)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
-                          {formatCurrency(movement.totalValue || movement.total_value)}
+                          {formatCurrency(movement.totalValue)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          {movement.previousStock ?? movement.previous_stock ?? 0} → {movement.newStock ?? movement.new_stock ?? 0}
+                          {movement.previousStock} → {movement.newStock}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-medium text-gray-900">
-                            {movement.referenceNumber || movement.reference_number || '—'}
+                            {movement.referenceNumber}
                           </div>
                           <div className="text-sm text-gray-500">
-                            {movement.referenceType || movement.reference_type || '—'}
+                            {movement.referenceType}
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          {movement.userName || movement.user_name || '—'}
+                          {movement.userName}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
-                          {formatDate(movement.createdAt || movement.created_at)}
+                          {formatDate(movement.createdAt)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -669,25 +653,23 @@ export const StockMovements = () => {
                 {pagination.total} results
               </div>
               <div className="flex space-x-2">
-                <Button
+                <button
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={pagination.current === 1}
-                  variant="secondary"
-                  size="sm"
+                  className="btn btn-secondary btn-sm"
                 >
                   Previous
-                </Button>
+                </button>
                 <span className="px-3 py-2 text-sm text-gray-700">
                   Page {pagination.current} of {pagination.pages}
                 </span>
-                <Button
+                <button
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.pages))}
                   disabled={pagination.current === pagination.pages}
-                  variant="secondary"
-                  size="sm"
+                  className="btn btn-secondary btn-sm"
                 >
                   Next
-                </Button>
+                </button>
               </div>
             </div>
           )}
@@ -748,12 +730,13 @@ export const StockMovements = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Quantity *
                     </label>
-                    <Input
+                    <input
                       type="number"
                       step="0.01"
-                      min={0.01}
+                      min="0.01"
                       value={adjustmentData.quantity}
                       onChange={(e) => setAdjustmentData(prev => ({ ...prev, quantity: e.target.value }))}
+                      className="input"
                       required
                     />
                   </div>
@@ -762,12 +745,13 @@ export const StockMovements = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Unit Cost *
                     </label>
-                    <Input
+                    <input
                       type="number"
                       step="0.01"
-                      min={0}
+                      min="0"
                       value={adjustmentData.unitCost}
                       onChange={(e) => setAdjustmentData(prev => ({ ...prev, unitCost: e.target.value }))}
+                      className="input"
                       required
                     />
                   </div>
@@ -777,10 +761,11 @@ export const StockMovements = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Reason
                   </label>
-                  <Input
+                  <input
                     type="text"
                     value={adjustmentData.reason}
                     onChange={(e) => setAdjustmentData(prev => ({ ...prev, reason: e.target.value }))}
+                    className="input"
                     placeholder="Reason for adjustment"
                   />
                 </div>
@@ -789,26 +774,27 @@ export const StockMovements = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Notes
                   </label>
-                  <Textarea
+                  <textarea
                     value={adjustmentData.notes}
                     onChange={(e) => setAdjustmentData(prev => ({ ...prev, notes: e.target.value }))}
-                    rows={3}
+                    className="input"
+                    rows="3"
                     placeholder="Additional notes"
                   />
                 </div>
 
                 <div className="flex justify-end space-x-3 pt-4">
-                  <Button
+                  <button
                     type="button"
                     onClick={() => setShowAdjustmentModal(false)}
-                    variant="secondary"
+                    className="btn btn-secondary"
                   >
                     Cancel
-                  </Button>
+                  </button>
                   <LoadingButton
                     type="submit"
                     isLoading={creatingAdjustment}
-                    variant="default"
+                    className="btn btn-primary"
                   >
                     Create Adjustment
                   </LoadingButton>

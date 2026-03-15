@@ -90,8 +90,8 @@ const validateProduct = [
   
   body('category')
     .optional()
-    .isUUID(4)
-    .withMessage('Category must be a valid UUID'),
+    .isMongoId()
+    .withMessage('Category must be a valid ID'),
   
   body('status')
     .optional()
@@ -165,16 +165,16 @@ const validateCustomer = [
 // Sales Order validation rules
 const validateSalesOrder = [
   body('customer')
-    .isUUID(4)
-    .withMessage('Customer must be a valid UUID'),
+    .isMongoId()
+    .withMessage('Customer must be a valid ID'),
   
   body('items')
     .isArray({ min: 1 })
     .withMessage('At least one item is required'),
   
   body('items.*.product')
-    .isUUID(4)
-    .withMessage('Each item must have a valid product UUID'),
+    .isMongoId()
+    .withMessage('Each item must have a valid product ID'),
   
   body('items.*.quantity')
     .isInt({ min: 1, max: 999999 })
@@ -205,16 +205,16 @@ const validateSalesOrder = [
 // Purchase Order validation rules
 const validatePurchaseOrder = [
   body('supplier')
-    .isUUID(4)
-    .withMessage('Supplier must be a valid UUID'),
+    .isMongoId()
+    .withMessage('Supplier must be a valid ID'),
   
   body('items')
     .isArray({ min: 1 })
     .withMessage('At least one item is required'),
   
   body('items.*.product')
-    .isUUID(4)
-    .withMessage('Each item must have a valid product UUID'),
+    .isMongoId()
+    .withMessage('Each item must have a valid product ID'),
   
   body('items.*.quantity')
     .isInt({ min: 1, max: 999999 })
@@ -311,19 +311,12 @@ const validateLogin = [
     .withMessage('Password is required')
 ];
 
-// ID parameter validation (PostgreSQL UUID)
+// ID parameter validation
 const validateId = [
   param('id')
-    .isUUID(4)
-    .withMessage('Invalid ID format (UUID required)')
+    .isMongoId()
+    .withMessage('Invalid ID format')
 ];
-
-/** Returns middleware that validates a route param as UUID (e.g. validateUuidParam('id')) */
-function validateUuidParam(paramName) {
-  return param(paramName)
-    .isUUID(4)
-    .withMessage('Invalid ID format (UUID required)');
-}
 
 // Search query validation
 const validateSearch = [
@@ -433,7 +426,6 @@ module.exports = {
   validateUser,
   validateLogin,
   validateId,
-  validateUuidParam,
   validateSearch,
   validateFileUpload,
   validateAccountCategory

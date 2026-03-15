@@ -116,67 +116,6 @@ export const salesApi = api.injectEndpoints({
           ]
           : [{ type: 'Sales', id: 'CCTV_LIST' }],
     }),
-    postMissingSalesToLedger: builder.mutation({
-      query: (params = {}) => ({
-        url: 'sales/post-missing-to-ledger',
-        method: 'post',
-        params: params?.dateFrom || params?.dateTo ? { dateFrom: params.dateFrom, dateTo: params.dateTo } : undefined,
-      }),
-      invalidatesTags: [
-        { type: 'Sales', id: 'LIST' },
-        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
-        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
-        { type: 'ChartOfAccounts', id: 'LIST' },
-      ],
-    }),
-    syncSalesLedger: builder.mutation({
-      query: (params = {}) => ({
-        url: 'sales/sync-ledger',
-        method: 'post',
-        params: params?.dateFrom || params?.dateTo ? { dateFrom: params.dateFrom, dateTo: params.dateTo } : undefined,
-      }),
-      invalidatesTags: [
-        { type: 'Sales', id: 'LIST' },
-        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
-        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
-        { type: 'ChartOfAccounts', id: 'LIST' },
-      ],
-    }),
-    exportExcel: builder.mutation({
-      query: (filters) => ({
-        url: 'sales/export/excel',
-        method: 'post',
-        data: { filters: filters || {} },
-      }),
-    }),
-    exportCSV: builder.mutation({
-      query: (filters) => ({
-        url: 'sales/export/csv',
-        method: 'post',
-        data: { filters: filters || {} },
-      }),
-    }),
-    exportPDF: builder.mutation({
-      query: (filters) => ({
-        url: 'sales/export/pdf',
-        method: 'post',
-        data: { filters: filters || {} },
-      }),
-    }),
-    exportJSON: builder.mutation({
-      query: (filters) => ({
-        url: 'sales/export/json',
-        method: 'post',
-        data: { filters: filters || {} },
-      }),
-    }),
-    downloadExportFile: builder.query({
-      query: (filename) => ({
-        url: `sales/download/${filename}`,
-        method: 'get',
-        responseHandler: (response) => response.blob(),
-      }),
-    }),
   }),
   overrideExisting: false,
 });
@@ -195,12 +134,5 @@ export const {
   useGetLastPricesQuery,
   useLazyGetLastPricesQuery,
   useGetCCTVOrdersQuery,
-  usePostMissingSalesToLedgerMutation,
-  useSyncSalesLedgerMutation,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useLazyDownloadExportFileQuery,
 } = salesApi;
 

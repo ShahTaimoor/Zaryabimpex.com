@@ -20,22 +20,12 @@ export const BarcodeScanner = ({
 
   useEffect(() => {
     if (isOpen && !html5QrCodeRef.current) {
-      try {
-        html5QrCodeRef.current = new Html5Qrcode('barcode-scanner');
-      } catch (err) {
-        console.warn('BarcodeScanner init:', err);
-      }
+      html5QrCodeRef.current = new Html5Qrcode('barcode-scanner');
     }
 
     return () => {
-      const scanner = html5QrCodeRef.current;
-      if (scanner) {
-        try {
-          scanner.stop().catch(() => {});
-        } catch (e) {
-          // Ignore - stop() can throw when scanner wasn't started or DOM was removed
-        }
-        html5QrCodeRef.current = null;
+      if (html5QrCodeRef.current) {
+        html5QrCodeRef.current.stop().catch(() => {});
       }
     };
   }, [isOpen]);
@@ -80,23 +70,18 @@ export const BarcodeScanner = ({
   };
 
   const stopScanning = async () => {
-    setScanning(false);
-    const scanner = html5QrCodeRef.current;
-    if (scanner) {
+    if (html5QrCodeRef.current) {
       try {
-        await scanner.stop();
+        await html5QrCodeRef.current.stop();
       } catch (err) {
-        // stop() throws when scanner wasn't started, or DOM was removed on cancel - ignore
+        // Error stopping scanner - silent fail
       }
     }
+    setScanning(false);
   };
 
   const handleClose = async () => {
-    try {
-      await stopScanning();
-    } catch (err) {
-      // Prevent any error from propagating to ErrorBoundary
-    }
+    await stopScanning();
     if (onClose) {
       onClose();
     }

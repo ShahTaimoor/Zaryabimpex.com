@@ -19,7 +19,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { handleApiError } from '../utils/errorHandler';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo, formatDateForInput } from '../utils/dateUtils';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 
 export const StockLedger = () => {
   const defaultDateTo = getCurrentDatePakistan();
@@ -124,7 +124,7 @@ export const StockLedger = () => {
     if (!customerSearchQuery.trim()) return allCustomers.slice(0, 50);
     const query = customerSearchQuery.toLowerCase();
     return allCustomers.filter(customer => {
-      const name = (customer.businessName || customer.business_name || customer.name || '').toLowerCase();
+      const name = (customer.businessName || customer.name || '').toLowerCase();
       const email = (customer.email || '').toLowerCase();
       const phone = (customer.phone || '').toLowerCase();
       return name.includes(query) || email.includes(query) || phone.includes(query);
@@ -136,7 +136,7 @@ export const StockLedger = () => {
     if (!supplierSearchQuery.trim()) return allSuppliers.slice(0, 50);
     const query = supplierSearchQuery.toLowerCase();
     return allSuppliers.filter(supplier => {
-      const name = (supplier.companyName || supplier.company_name || supplier.businessName || supplier.business_name || supplier.name || '').toLowerCase();
+      const name = (supplier.companyName || supplier.name || '').toLowerCase();
       const email = (supplier.email || '').toLowerCase();
       const phone = (supplier.phone || '').toLowerCase();
       return name.includes(query) || email.includes(query) || phone.includes(query);
@@ -157,12 +157,10 @@ export const StockLedger = () => {
   const handleFilterChange = (field, value) => {
     setFilters({ ...filters, [field]: value });
     if (field === 'customer') {
-      const c = allCustomers.find(x => x._id === value);
-      setCustomerSearchQuery(value && c ? (c.businessName || c.business_name || c.displayName || c.name || '') : '');
+      setCustomerSearchQuery(value ? (allCustomers.find(c => c._id === value)?.businessName || allCustomers.find(c => c._id === value)?.name || '') : '');
     }
     if (field === 'supplier') {
-      const s = allSuppliers.find(x => x._id === value);
-      setSupplierSearchQuery(value && s ? (s.companyName || s.company_name || s.businessName || s.business_name || s.displayName || s.name || '') : '');
+      setSupplierSearchQuery(value ? (allSuppliers.find(s => s._id === value)?.companyName || allSuppliers.find(s => s._id === value)?.name || '') : '');
     }
     if (field === 'product') {
       setProductSearchQuery(value ? (allProducts.find(p => p._id === value)?.name || '') : '');
@@ -171,14 +169,14 @@ export const StockLedger = () => {
 
   const handleCustomerSelect = (customer) => {
     setFilters({ ...filters, customer: customer._id, supplier: '' });
-    setCustomerSearchQuery(customer.businessName || customer.business_name || customer.displayName || customer.name || '');
+    setCustomerSearchQuery(customer.businessName || customer.name || '');
     setShowCustomerDropdown(false);
     setSupplierSearchQuery('');
   };
 
   const handleSupplierSelect = (supplier) => {
     setFilters({ ...filters, supplier: supplier._id, customer: '' });
-    setSupplierSearchQuery(supplier.companyName || supplier.company_name || supplier.businessName || supplier.business_name || supplier.displayName || supplier.name || '');
+    setSupplierSearchQuery(supplier.companyName || supplier.name || '');
     setShowSupplierDropdown(false);
     setCustomerSearchQuery('');
   };
@@ -330,7 +328,7 @@ export const StockLedger = () => {
                         className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
                       >
                         <div className="text-sm font-semibold text-gray-900">
-                          {customer.businessName || customer.business_name || customer.displayName || customer.name}
+                          {customer.businessName || customer.name}
                         </div>
                         {customer.email && (
                           <div className="text-xs text-gray-500 mt-0.5">{customer.email}</div>
@@ -349,7 +347,7 @@ export const StockLedger = () => {
                         className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
                       >
                         <div className="text-sm font-semibold text-gray-900">
-                          {supplier.companyName || supplier.company_name || supplier.businessName || supplier.business_name || supplier.displayName || supplier.name}
+                          {supplier.companyName || supplier.name}
                         </div>
                         {supplier.email && (
                           <div className="text-xs text-gray-500 mt-0.5">{supplier.email}</div>
@@ -373,7 +371,7 @@ export const StockLedger = () => {
                             className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
                           >
                             <div className="text-sm font-semibold text-gray-900">
-                              {customer.businessName || customer.business_name || customer.displayName || customer.name}
+                              {customer.businessName || customer.name}
                             </div>
                             {customer.email && (
                               <div className="text-xs text-gray-500 mt-0.5">{customer.email}</div>
@@ -394,7 +392,7 @@ export const StockLedger = () => {
                             className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
                           >
                             <div className="text-sm font-semibold text-gray-900">
-                              {supplier.companyName || supplier.company_name || supplier.businessName || supplier.business_name || supplier.displayName || supplier.name}
+                              {supplier.companyName || supplier.name}
                             </div>
                             {supplier.email && (
                               <div className="text-xs text-gray-500 mt-0.5">{supplier.email}</div>

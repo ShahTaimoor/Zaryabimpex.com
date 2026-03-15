@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { Button } from '@/components/ui/button';
 import { useUpdateInvoicePrefixMutation } from '../store/services/migrationApi';
 
 const Migration = () => {
@@ -33,11 +32,10 @@ const Migration = () => {
             <h1 className="text-2xl font-bold text-gray-900">Invoice Prefix Migration</h1>
             <p className="text-gray-600">Update existing ORD- invoices to SI- format</p>
           </div>
-          <Button
+          <button
             onClick={handleRunMigration}
             disabled={isRunning}
-            variant="default"
-            className="flex items-center space-x-2"
+            className="btn btn-primary flex items-center space-x-2"
           >
             {isRunning ? (
               <RefreshCw className="h-4 w-4 animate-spin" />
@@ -45,7 +43,7 @@ const Migration = () => {
               <RefreshCw className="h-4 w-4" />
             )}
             <span>{isRunning ? 'Running Migration...' : 'Run Migration'}</span>
-          </Button>
+          </button>
         </div>
 
         {migrationResult && (

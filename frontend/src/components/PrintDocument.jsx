@@ -6,7 +6,6 @@ const PrintDocument = ({
     printSettings,
     documentTitle = 'Invoice',
     partyLabel = 'Customer',
-    ledgerBalance: ledgerBalanceProp,
     children
 }) => {
     const {
@@ -36,14 +35,6 @@ const PrintDocument = ({
         footerText = '',
         invoiceLayout = 'standard'
     } = printSettings || {};
-
-    const isMobileLayout =
-        (printSettings?.mobilePrintPreview ?? false) ||
-        (typeof window !== 'undefined' && window.innerWidth <= 768);
-    const isSale = (partyLabel?.toLowerCase() || '').includes('customer');
-    const isPurchase = (partyLabel?.toLowerCase() || '').includes('supplier');
-    const saleOrPurchaseClass = invoiceLayout !== 'receipt' ? (isSale ? ' print-document--sale' : isPurchase ? ' print-document--purchase' : '') : '';
-    const printClassName = `print-document${invoiceLayout === 'layout2' ? ' print-document--layout2' : ''}${invoiceLayout === 'receipt' ? ' print-document--receipt' : ''}${isMobileLayout ? ' print-document--mobile' : ''}${saleOrPurchaseClass}`;
 
     const formatDate = (date) =>
         new Date(date || new Date()).toLocaleDateString('en-GB', {
@@ -116,38 +107,13 @@ const PrintDocument = ({
         // Merge them, preferring info for basic details but keeping balance from fullParty if missing in info
         const customer = { ...fullParty, ...info };
 
-        // Prefer business/company name for both Customer (sales) and Supplier (purchase)
-        const isCustomer = (partyLabel?.toLowerCase() || '').includes('customer');
-        const isSupplier = (partyLabel?.toLowerCase() || '').includes('supplier');
-        const composedName = isCustomer
-            ? (customer.businessName ||
-               customer.business_name ||
-               orderData.customerInfo?.businessName ||
-               orderData.customerInfo?.business_name ||
-               customer.companyName ||
-               customer.name ||
-               customer.displayName ||
-               customer.fullName ||
-               '—')
-            : isSupplier
-            ? (customer.companyName ||
-               customer.company_name ||
-               customer.businessName ||
-               customer.business_name ||
-               orderData.supplierInfo?.companyName ||
-               orderData.supplierInfo?.businessName ||
-               orderData.supplierInfo?.business_name ||
-               customer.name ||
-               customer.displayName ||
-               customer.fullName ||
-               '—')
-            : (customer.name ||
-               customer.displayName ||
-               customer.businessName ||
-               customer.business_name ||
-               customer.companyName ||
-               customer.fullName ||
-               '—');
+        const composedName =
+            customer.name ||
+            customer.displayName ||
+            customer.businessName ||
+            customer.companyName ||
+            customer.fullName ||
+            '—';
         const businessName =
             customer.businessName ||
             customer.companyName ||
@@ -163,69 +129,38 @@ const PrintDocument = ({
         let postalCode = '';
         const pickAddr = (defaultAddress) => {
             if (!defaultAddress) return;
-            street = defaultAddress.street || defaultAddress.address_line1 || defaultAddress.addressLine1 || defaultAddress.line1 || '';
+            street = defaultAddress.street || '';
             city = defaultAddress.city || '';
-            state = defaultAddress.state || defaultAddress.province || '';
-            postalCode = defaultAddress.zipCode || defaultAddress.zip || defaultAddress.postalCode || defaultAddress.postal_code || '';
+            state = defaultAddress.state || '';
+            postalCode = defaultAddress.zipCode || defaultAddress.zip || defaultAddress.postalCode || '';
             customerAddress = [street, city, state, defaultAddress.country, postalCode].filter(Boolean).join(', ');
         };
-        const addressList = customer.addresses ?? (Array.isArray(customer.address) ? customer.address : null);
-        if (addressList && addressList.length > 0) {
-            const defaultAddress = addressList.find(addr => addr.isDefault) ||
-                addressList.find(addr => addr.type === 'billing' || addr.type === 'both') ||
-                addressList[0];
+        if (customer.addresses && Array.isArray(customer.addresses) && customer.addresses.length > 0) {
+            const defaultAddress = customer.addresses.find(addr => addr.isDefault) ||
+                customer.addresses.find(addr => addr.type === 'billing' || addr.type === 'both') ||
+                customer.addresses[0];
             pickAddr(defaultAddress);
         }
         if (!customerAddress) {
             const refParty = orderData.customer || orderData.supplier;
-            const refList = refParty?.addresses ?? (Array.isArray(refParty?.address) ? refParty.address : null);
-            if (refList && refList.length > 0) {
-                const defaultAddress = refList.find(addr => addr.isDefault) ||
-                    refList.find(addr => addr.type === 'billing' || addr.type === 'both') ||
-                    refList[0];
+            if (refParty?.addresses && Array.isArray(refParty.addresses) && refParty.addresses.length > 0) {
+                const defaultAddress = refParty.addresses.find(addr => addr.isDefault) ||
+                    refParty.addresses.find(addr => addr.type === 'billing' || addr.type === 'both') ||
+                    refParty.addresses[0];
                 pickAddr(defaultAddress);
             }
         }
         if (!customerAddress) {
-            const addr = customer.address ||
+            customerAddress =
+                customer.address ||
                 customer.location ||
                 customer.companyAddress ||
                 customer.billingAddress ||
                 orderData.customerInfo?.address ||
                 orderData.supplierInfo?.address ||
-                orderData.supplier_info?.address ||
-                (typeof orderData.supplier === 'object' ? orderData.supplier?.address : null) ||
                 orderData.shippingAddress ||
                 orderData.billingAddress ||
                 '';
-            
-            // Format address: object, array (suppliers store addresses array in address column), or string
-            if (Array.isArray(addr) && addr.length > 0) {
-                const a = addr.find(x => x.isDefault) || addr.find(x => x.type === 'billing' || x.type === 'both') || addr[0];
-                const parts = [a.street || a.address_line1 || a.addressLine1 || a.line1, a.city, a.state || a.province, a.country, a.zipCode || a.zip || a.postalCode || a.postal_code].filter(Boolean);
-                customerAddress = parts.join(', ');
-            } else if (typeof addr === 'object' && addr !== null) {
-                const streetPart = addr.street || addr.address_line1 || addr.addressLine1 || addr.line1 || '';
-                const parts = [streetPart, addr.address_line2 || addr.addressLine2 || addr.line2, addr.city, addr.province || addr.state, addr.country, addr.zipCode || addr.zip || addr.postalCode || addr.postal_code].filter(Boolean);
-                customerAddress = parts.join(', ');
-            } else if (typeof addr === 'string') {
-                customerAddress = addr;
-            }
-        }
-        // Final fallback for supplier: extract from supplier_info / supplierInfo
-        if (!customerAddress && (partyLabel?.toLowerCase() || '').includes('supplier')) {
-            const si = orderData?.supplier_info || orderData?.supplierInfo;
-            if (si) {
-                let raw = si.address ?? si.addresses?.[0];
-                if (Array.isArray(si.address) && si.address.length > 0) {
-                    raw = si.address.find(x => x.isDefault) || si.address.find(x => x.type === 'billing' || x.type === 'both') || si.address[0];
-                }
-                if (typeof raw === 'string' && raw.trim()) customerAddress = raw.trim();
-                else if (raw && typeof raw === 'object') {
-                    const parts = [raw.street || raw.address_line1 || raw.addressLine1 || raw.line1, raw.address_line2 || raw.addressLine2, raw.city, raw.state || raw.province, raw.country, raw.zipCode || raw.zip || raw.postalCode || raw.postal_code].filter(Boolean);
-                    if (parts.length) customerAddress = parts.join(', ');
-                }
-            }
         }
 
         return {
@@ -242,48 +177,41 @@ const PrintDocument = ({
                 ? customer.currentBalance
                 : ((toNumber(customer.pendingBalance || 0)) - (toNumber(customer.advanceBalance || 0)))
         };
-    }, [orderData, partyLabel]);
+    }, [orderData]);
 
     const items = Array.isArray(orderData?.items) ? orderData.items : [];
 
-    const computedSubtotalFromItems = items.reduce((sum, item) => {
-        const qty = toNumber(item.quantity ?? item.qty, 0);
-        const price = toNumber(
-            item.unitPrice ?? item.unit_price ?? item.price ?? item.unitCost ?? item.rate ?? item.costPerUnit,
-            0
-        );
-        const lineTotal = toNumber(
-            item.subtotal ?? item.total ?? item.lineTotal ?? item.totalPrice ?? item.total_cost ?? item.totalCost,
-            qty * price
-        );
-        return sum + lineTotal;
-    }, 0);
-
-    // When there are items, use sum from items so summary is never 0; fall back to stored only if sum is 0
-    const storedSubtotal = toNumber(orderData?.pricing?.subtotal ?? orderData?.subtotal, undefined);
     const computedSubtotal =
-        items.length > 0
-            ? (computedSubtotalFromItems > 0 ? computedSubtotalFromItems : toNumber(storedSubtotal, 0))
-            : toNumber(storedSubtotal, 0);
+        orderData?.pricing?.subtotal ??
+        orderData?.subtotal ??
+        items.reduce((sum, item) => {
+            const qty = toNumber(item.quantity ?? item.qty, 0);
+            const price = toNumber(
+                item.unitPrice ?? item.price ?? item.unitCost ?? item.rate,
+                0
+            );
+            return sum + qty * price;
+        }, 0);
 
     const discountValue =
-        toNumber(orderData?.pricing?.discountAmount ?? orderData?.pricing?.discount ?? orderData?.discount, 0);
+        orderData?.pricing?.discountAmount ??
+        orderData?.discount ??
+        orderData?.pricing?.discount ??
+        0;
     const taxValue =
-        toNumber(orderData?.pricing?.taxAmount ?? orderData?.tax, undefined) ??
+        orderData?.pricing?.taxAmount ??
+        orderData?.tax ??
         (orderData?.pricing?.isTaxExempt ? 0 : 0);
-    const storedTotal = toNumber(orderData?.pricing?.total ?? orderData?.total, undefined);
     const totalValue =
-        items.length > 0
-            ? (storedTotal != null && storedTotal > 0 ? storedTotal : (computedSubtotal - toNumber(discountValue) + toNumber(taxValue)))
-            : (storedTotal ?? (computedSubtotal - toNumber(discountValue) + toNumber(taxValue)));
+        orderData?.pricing?.total ??
+        orderData?.total ??
+        computedSubtotal - toNumber(discountValue) + toNumber(taxValue);
 
     const documentNumber =
         orderData?.invoiceNumber ||
         orderData?.orderNumber ||
-        orderData?.order_number ||
         orderData?.poNumber ||
         orderData?.referenceNumber ||
-        orderData?.id ||
         orderData?._id ||
         'N/A';
 
@@ -319,13 +247,7 @@ const PrintDocument = ({
         orderData?.total ??
         0;
 
-    const ledgerBalance = ledgerBalanceProp !== undefined && ledgerBalanceProp !== null
-        ? toNumber(ledgerBalanceProp, 0)
-        : toNumber(partyInfo.balance, 0);
-
     const generatedAt = new Date();
-    // Bill creation date: sale_date/billDate when bill was created; Print Date = generatedAt (when printing)
-    const invoiceDate = orderData?.sale_date || orderData?.saleDate || orderData?.billDate || orderData?.order_date || orderData?.createdAt || orderData?.invoiceDate;
 
     const billToLines = [
         showPrintContactName ? { label: 'Name:', value: partyInfo.name } : null,
@@ -340,7 +262,7 @@ const PrintDocument = ({
 
     const invoiceDetailLines = [
         showPrintInvoiceNumber ? { label: 'Invoice #:', value: formatText(documentNumber) } : null,
-        (showPrintInvoiceDate && showDate) ? { label: 'Date:', value: formatDate(invoiceDate) } : null,
+        (showPrintInvoiceDate && showDate) ? { label: 'Date:', value: formatDate(orderData?.createdAt || orderData?.invoiceDate) } : null,
         showPrintInvoiceStatus ? { label: 'Status:', value: formatText(documentStatus) } : null,
         showPrintInvoiceType ? { label: 'Type:', value: formatText(documentType) } : null
     ].filter(Boolean);
@@ -353,94 +275,14 @@ const PrintDocument = ({
 
     const hasCameraTime = orderData?.billStartTime || orderData?.billEndTime;
 
-    // Received amount: from API or fallback when paid (so we don't show 0.0 on paid invoices)
-    const rawReceived = toNumber(orderData?.payment?.amountPaid ?? orderData?.amount_paid, 0);
-    const isPaid = orderData?.payment_status === 'paid' || orderData?.payment?.status === 'paid';
-    const receivedAmount = rawReceived > 0 ? rawReceived : (isPaid ? toNumber(totalValue, 0) : 0);
-    const invoiceBalance = toNumber(totalValue, 0) - toNumber(receivedAmount, 0);
-    const previousBalance = ledgerBalance - invoiceBalance;
-
-    // ==========================================
-    // Layout: Receipt / Payment Voucher (for Cash Receipt, Bank Receipt, Cash Payment, Bank Payment)
-    // ==========================================
-    if (invoiceLayout === 'receipt') {
-        const isPayment = resolvedDocumentTitle.toLowerCase().includes('payment');
-        const partyLabelReceipt = isPayment ? 'Paid To' : 'Received From';
-        const amount = toNumber(orderData?.total ?? orderData?.payment?.amountPaid, 0);
-        const particular = items[0]?.name || items[0]?.product?.name || items[0]?.description || resolvedDocumentTitle;
-
-        return (
-            <div className={printClassName}>
-                {children}
-
-                <div className="receipt-voucher">
-                    {/* Company Header */}
-                    <div className="receipt-voucher__header text-center mb-6">
-                        {showLogo && safeCompanySettings.logo && (
-                            <img src={safeCompanySettings.logo} alt="Logo" className="receipt-voucher__logo max-h-16 mx-auto mb-2" />
-                        )}
-                        <h1 className="receipt-voucher__company-name font-bold text-xl">{resolvedCompanyName}</h1>
-                        {resolvedCompanyAddress && <p className="receipt-voucher__company-address text-sm text-gray-600">{resolvedCompanyAddress}</p>}
-                        {resolvedCompanyPhone && <p className="receipt-voucher__company-phone text-sm text-gray-600">Phone: {resolvedCompanyPhone}</p>}
-                    </div>
-
-                    {/* Document Title */}
-                    <div className="receipt-voucher__title border-t-2 border-b-2 border-black py-3 my-4 text-center">
-                        <h2 className="font-bold text-2xl uppercase">{resolvedDocumentTitle}</h2>
-                    </div>
-
-                    {/* Voucher Details */}
-                    <div className="receipt-voucher__body border border-black">
-                        <div className="receipt-voucher__row flex border-b border-black">
-                            <div className="receipt-voucher__label w-1/3 font-semibold p-2">{partyLabelReceipt}</div>
-                            <div className="receipt-voucher__value flex-1 p-2 border-l border-black font-medium">{partyInfo.name}</div>
-                        </div>
-                        <div className="receipt-voucher__row flex border-b border-black">
-                            <div className="receipt-voucher__label w-1/3 font-semibold p-2">Voucher No.</div>
-                            <div className="receipt-voucher__value flex-1 p-2 border-l border-black">{documentNumber}</div>
-                        </div>
-                        <div className="receipt-voucher__row flex border-b border-black">
-                            <div className="receipt-voucher__label w-1/3 font-semibold p-2">Date</div>
-                            <div className="receipt-voucher__value flex-1 p-2 border-l border-black">{formatDate(invoiceDate)}</div>
-                        </div>
-                        <div className="receipt-voucher__row flex border-b border-black">
-                            <div className="receipt-voucher__label w-1/3 font-semibold p-2">Amount</div>
-                            <div className="receipt-voucher__value flex-1 p-2 border-l border-black font-bold text-lg">{formatCurrency(amount)}</div>
-                        </div>
-                        {ledgerBalanceProp != null && (
-                        <div className="receipt-voucher__row flex border-b border-black">
-                            <div className="receipt-voucher__label w-1/3 font-semibold p-2">Ledger Balance</div>
-                            <div className="receipt-voucher__value flex-1 p-2 border-l border-black">{formatCurrency(Number(ledgerBalanceProp))}</div>
-                        </div>
-                        )}
-                        <div className="receipt-voucher__row flex border-b border-black">
-                            <div className="receipt-voucher__label w-1/3 font-semibold p-2">Particular</div>
-                            <div className="receipt-voucher__value flex-1 p-2 border-l border-black">{particular}</div>
-                        </div>
-                        <div className="receipt-voucher__row flex">
-                            <div className="receipt-voucher__label w-1/3 font-semibold p-2">Payment Mode</div>
-                            <div className="receipt-voucher__value flex-1 p-2 border-l border-black">{resolvedDocumentTitle.toLowerCase().includes('bank') ? 'Bank' : 'Cash'}</div>
-                        </div>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="receipt-voucher__footer mt-8 text-center text-sm text-gray-600">
-                        <p>Print Date: {formatDateTime(new Date())}</p>
-                        {showFooter && resolvedCompanyAddress && <p className="mt-1">{resolvedCompanyAddress}</p>}
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     // ==========================================
     // Layout 2 (Professional Boxed Layout)
     // ==========================================
     if (invoiceLayout === 'layout2') {
-        const totalReceivables = ledgerBalance;
+        const totalReceivables = toNumber(totalValue) + toNumber(partyInfo.balance || 0);
 
         return (
-            <div className={printClassName}>
+            <div className="print-document print-document--layout2">
                 {children}
 
                 {/* Header Section */}
@@ -477,7 +319,7 @@ const PrintDocument = ({
                         Customer: <span className="uppercase">{partyInfo.name}</span> {partyInfo.phone !== 'N/A' && partyInfo.phone}
                     </div>
                     <div className="col-span-4 p-2 border-r border-b border-black font-medium text-right">
-                        Invoice Date: {formatDate(invoiceDate)}
+                        Invoice Date: {formatDate(orderData?.createdAt || orderData?.invoiceDate)}
                     </div>
                     <div className="col-span-8 p-2 border-r border-b border-black font-medium min-h-[40px]">
                         Address: {partyInfo.address}
@@ -516,9 +358,9 @@ const PrintDocument = ({
                                 </tr>
                             );
                         })}
-                        {/* Summary Footer of Table - Subtotal (sum of line items); Net Amount is in right panel */}
+                        {/* Summary Footer of Table */}
                         <tr className="font-bold">
-                            <td colSpan="4" className="border border-black p-1 text-right">Subtotal</td>
+                            <td colSpan="4" className="border border-black p-1 text-right">Total</td>
                             <td className="border border-black p-1 text-right">{formatCurrency(computedSubtotal)}</td>
                         </tr>
                     </tbody>
@@ -531,7 +373,7 @@ const PrintDocument = ({
                             Printed By: <span className="underline font-bold uppercase">{orderData?.createdBy?.firstName || (orderData?.createdBy?.name ? orderData.createdBy.name.split(' ')[0] : 'ADMIN')}</span>
                         </div>
                         <div>
-                            Entry Date Time: {formatDateTime(invoiceDate)}
+                            Entry Date Time: {formatDateTime(orderData?.createdAt || orderData?.invoiceDate)}
                         </div>
                         <div className="mb-6">
                             Print Date Time: {formatDateTime(generatedAt)}
@@ -553,11 +395,15 @@ const PrintDocument = ({
                                 </tr>
                                 <tr>
                                     <td className="border-b border-r border-black p-1 text-right font-bold">Received Amount</td>
-                                    <td className="border-b border-r border-black p-1 text-right">{formatCurrency(receivedAmount)}</td>
+                                    <td className="border-b border-r border-black p-1 text-right">{formatCurrency(orderData?.payment?.amountPaid || 0)}</td>
+                                </tr>
+                                <tr>
+                                    <td className="border-b border-r border-black p-1 text-right font-bold">Invoice Balance</td>
+                                    <td className="border-b border-r border-black p-1 text-right">{formatCurrency(toNumber(totalValue) - toNumber(orderData?.payment?.amountPaid || 0))}</td>
                                 </tr>
                                 <tr>
                                     <td className="border-b border-r border-black p-1 text-right font-bold">Previous Balance</td>
-                                    <td className="border-b border-r border-black p-1 text-right">{formatCurrency(previousBalance)}</td>
+                                    <td className="border-b border-r border-black p-1 text-right">{formatCurrency(partyInfo.balance || 0)}</td>
                                 </tr>
                                 <tr>
                                     <td className="border-b border-r border-black p-1 text-right font-bold">Total Receivables</td>
@@ -572,7 +418,7 @@ const PrintDocument = ({
     }
 
     return (
-        <div className={printClassName}>
+        <div className="print-document">
             {/* Option to inject content (like toolbar) at the top that is hidden in print via CSS if needed */}
             {children}
 
@@ -755,10 +601,6 @@ const PrintDocument = ({
                     <div className="print-document__summary-row print-document__summary-row--total">
                         <span>Total</span>
                         <span>{formatCurrency(totalValue)}</span>
-                    </div>
-                    <div className="print-document__summary-row">
-                        <span>Ledger Balance</span>
-                        <span>{formatCurrency(ledgerBalance)}</span>
                     </div>
                 </div>
             </div>

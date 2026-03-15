@@ -61,8 +61,6 @@ const BalanceSheets = () => {
       handleApiError(error, 'Fetch Balance Sheets');
     },
     keepPreviousData: true,
-    refetchOnMountOrArgChange: true,
-    refetchOnFocus: true,
   });
 
   // Fetch balance sheet statistics
@@ -76,8 +74,6 @@ const BalanceSheets = () => {
     },
     {
       skip: !filters.startDate || !filters.endDate,
-      refetchOnMountOrArgChange: true,
-      refetchOnFocus: true,
     }
   );
 

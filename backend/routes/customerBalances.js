@@ -1,7 +1,10 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
+const Customer = require('../models/Customer'); // Still needed for model reference
+const Sales = require('../models/Sales'); // Still needed for model reference
 const CustomerBalanceService = require('../services/customerBalanceService');
 const customerRepository = require('../repositories/CustomerRepository');
+const AccountingService = require('../services/accountingService');
 const { auth, requirePermission } = require('../middleware/auth');
 
 const router = express.Router();
@@ -10,7 +13,7 @@ const router = express.Router();
 router.get('/:customerId', [
   auth,
   requirePermission('view_customers'),
-  param('customerId').isUUID(4).withMessage('Invalid customer ID')
+  param('customerId').isMongoId().withMessage('Invalid customer ID')
 ], async (req, res) => {
   try {
     const { customerId } = req.params;
@@ -34,9 +37,9 @@ router.get('/:customerId', [
 router.post('/:customerId/payment', [
   auth,
   requirePermission('manage_payments'),
-  param('customerId').isUUID(4).withMessage('Invalid customer ID'),
+  param('customerId').isMongoId().withMessage('Invalid customer ID'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Payment amount must be greater than 0'),
-  body('orderId').optional().isUUID(4).withMessage('Invalid order ID'),
+  body('orderId').optional().isMongoId().withMessage('Invalid order ID'),
   body('notes').optional().isString().trim().isLength({ max: 500 }).withMessage('Notes too long')
 ], async (req, res) => {
   try {
@@ -67,9 +70,9 @@ router.post('/:customerId/payment', [
 router.post('/:customerId/refund', [
   auth,
   requirePermission('manage_payments'),
-  param('customerId').isUUID(4).withMessage('Invalid customer ID'),
+  param('customerId').isMongoId().withMessage('Invalid customer ID'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Refund amount must be greater than 0'),
-  body('orderId').optional().isUUID(4).withMessage('Invalid order ID'),
+  body('orderId').optional().isMongoId().withMessage('Invalid order ID'),
   body('reason').optional().isString().trim().isLength({ max: 500 }).withMessage('Reason too long')
 ], async (req, res) => {
   try {
@@ -100,7 +103,7 @@ router.post('/:customerId/refund', [
 router.post('/:customerId/recalculate', [
   auth,
   requirePermission('manage_customers'),
-  param('customerId').isUUID(4).withMessage('Invalid customer ID')
+  param('customerId').isMongoId().withMessage('Invalid customer ID')
 ], async (req, res) => {
   try {
     const { customerId } = req.params;
@@ -125,7 +128,7 @@ router.post('/:customerId/recalculate', [
 router.get('/:customerId/can-purchase', [
   auth,
   requirePermission('view_customers'),
-  param('customerId').isUUID(4).withMessage('Invalid customer ID'),
+  param('customerId').isMongoId().withMessage('Invalid customer ID'),
   query('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0')
 ], async (req, res) => {
   try {
@@ -160,16 +163,7 @@ router.get('/reports/balance-issues', [
     });
 
     const customerIds = customers.map(c => c._id.toString());
-    // Accounting removed - balances calculated from CustomerBalanceService
-    const balanceMap = new Map();
-    for (const customerId of customerIds) {
-      try {
-        const summary = await CustomerBalanceService.getBalanceSummary(customerId);
-        balanceMap.set(customerId, summary.currentBalance || 0);
-      } catch (error) {
-        balanceMap.set(customerId, 0);
-      }
-    }
+    const balanceMap = await AccountingService.getBulkCustomerBalances(customerIds);
 
     const pendingBalances = [];
     const advanceBalances = [];
@@ -274,7 +268,7 @@ router.post('/fix-all-balances', [
 router.post('/:customerId/fix-current-balance', [
   auth,
   requirePermission('manage_customers'),
-  param('customerId').isUUID(4).withMessage('Invalid customer ID')
+  param('customerId').isMongoId().withMessage('Invalid customer ID')
 ], async (req, res) => {
   try {
     const { customerId } = req.params;

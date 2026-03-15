@@ -20,10 +20,8 @@ import {
 } from '../store/services/accountLedgerApi';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { handleApiError } from '../utils/errorHandler';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 
@@ -214,25 +212,23 @@ const AccountLedger = () => {
           </p>
         </div>
         <div className="flex space-x-2 no-print">
-          <Button
+          <button
             onClick={() => setShowFilters(!showFilters)}
-            variant="secondary"
-            className="flex items-center"
+            className="btn btn-secondary flex items-center"
           >
             <Filter className="h-4 w-4 mr-2" />
             {showFilters ? 'Hide Filters' : 'Show Filters'}
-          </Button>
+          </button>
           {ledgerEntries.length > 0 && (
             <div className="relative">
-              <Button
+              <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
                 disabled={isExporting}
-                variant="secondary"
-                className="flex items-center"
+                className="btn btn-secondary flex items-center"
               >
                 <Download className="h-4 w-4 mr-2" />
                 {isExporting ? 'Exporting...' : 'Export'}
-              </Button>
+              </button>
 
               {showExportMenu && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-50 border border-gray-200">
@@ -278,14 +274,13 @@ const AccountLedger = () => {
               )}
             </div>
           )}
-          <Button
+          <button
             onClick={() => refetchLedger()}
-            variant="default"
-            className="flex items-center"
+            className="btn btn-primary flex items-center"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -303,10 +298,10 @@ const AccountLedger = () => {
               <div className="p-4 border-b">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
+                  <input
                     type="text"
                     placeholder="Search accounts..."
-                    className="pl-10"
+                    className="input pl-10"
                     value={accountSearchQuery}
                     onChange={(e) => setAccountSearchQuery(e.target.value)}
                   />
@@ -414,21 +409,21 @@ const AccountLedger = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Account Name
                     </label>
-                    <Input
+                    <input
                       type="text"
                       placeholder="Search by account, customer, or supplier name..."
                       value={filters.accountName}
                       onChange={(e) => handleFilterChange('accountName', e.target.value)}
+                      className="input"
                     />
                   </div>
                   <div className="flex items-end">
-                    <Button
+                    <button
                       onClick={handleClearFilters}
-                      variant="secondary"
-                      className="w-full"
+                      className="btn btn-secondary w-full"
                     >
                       Clear Filters
-                    </Button>
+                    </button>
                   </div>
                 </div>
               </div>

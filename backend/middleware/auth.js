@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const userRepository = require('../repositories/postgres/UserRepository');
+const userRepository = require('../repositories/UserRepository');
 const logger = require('../utils/logger');
 
 const auth = async (req, res, next) => {
@@ -26,8 +26,7 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ message: 'Token is not valid' });
     }
 
-    const status = user.status || (user.isActive ? 'active' : 'inactive');
-    if (status !== 'active') {
+    if (user.status !== 'active') {
       return res.status(401).json({ message: 'User account is not active' });
     }
 

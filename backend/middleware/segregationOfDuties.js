@@ -33,28 +33,40 @@ const checkSegregationOfDuties = (operation, approvalOperation) => {
           (req.path.includes('/approve') || req.body.action === 'approve');
         
         if (isApprovalRequest) {
+          // Get the document being approved
           const documentId = req.params.id || req.body.id || req.body.documentId;
-          const userIdStr = (user.id || user._id || '').toString();
-
+          
           if (documentId) {
-            let createdBy = null;
+            // Determine model based on route
+            let Model;
             if (req.path.includes('journal-vouchers')) {
-              try {
-                const JournalVoucherRepository = require('../repositories/JournalVoucherRepository');
-                const doc = await JournalVoucherRepository.findById(documentId);
-                createdBy = doc?.createdBy ?? doc?.created_by;
-              } catch (_) {}
+              Model = require('../models/JournalVoucher');
+            } else if (req.path.includes('balance-sheets')) {
+              Model = require('../models/BalanceSheet');
+            } else if (req.path.includes('pl-statements')) {
+              Model = require('../models/FinancialStatement');
             }
-            if (createdBy != null && (createdBy.toString?.() ?? String(createdBy)) === userIdStr) {
-              return res.status(403).json({
-                success: false,
-                message: 'Segregation of duties violation: Cannot approve own work. Please have another authorized user approve this.',
-                code: 'SOD_VIOLATION'
-              });
+            
+            if (Model) {
+              const document = await Model.findById(documentId);
+              
+              if (document) {
+                // Check if user created this document
+                const createdBy = document.createdBy || document.generatedBy;
+                
+                if (createdBy && createdBy.toString() === user._id.toString()) {
+                  return res.status(403).json({
+                    success: false,
+                    message: 'Segregation of duties violation: Cannot approve own work. Please have another authorized user approve this.',
+                    code: 'SOD_VIOLATION'
+                  });
+                }
+              }
             }
           }
           
-          if (req.body.createdBy && (req.body.createdBy.toString?.() ?? String(req.body.createdBy)) === userIdStr) {
+          // Also check request body for createdBy
+          if (req.body.createdBy && req.body.createdBy.toString() === user._id.toString()) {
             return res.status(403).json({
               success: false,
               message: 'Segregation of duties violation: Cannot approve own work',

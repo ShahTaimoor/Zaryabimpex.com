@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const backupService = require('./backupService');
-const BackupRepository = require('../repositories/BackupRepository');
+const Backup = require('../models/Backup');
 
 class BackupScheduler {
   constructor() {
@@ -127,12 +127,17 @@ class BackupScheduler {
     } catch (error) {
       console.error(`Failed ${schedule} ${type} backup:`, error);
       
+      // Create a failed backup record
       try {
-        await BackupRepository.create({
+        await Backup.createBackup({
           type,
           schedule,
           status: 'failed',
-          error: { message: error.message, stack: error.stack, retryable: true },
+          error: {
+            message: error.message,
+            stack: error.stack,
+            retryable: true,
+          },
           triggerReason: 'scheduled',
         });
       } catch (createError) {
@@ -143,17 +148,31 @@ class BackupScheduler {
 
   // Check if we should skip this backup
   async shouldSkipBackup(schedule, type) {
-    const inProgress = await BackupRepository.findInProgress(schedule, type);
-    if (inProgress) {
+    // Skip if there's already a backup in progress
+    const inProgressBackup = await Backup.findOne({
+      status: 'in_progress',
+      schedule,
+      type,
+    });
+
+    if (inProgressBackup) {
       console.log(`Backup already in progress for ${schedule} ${type}`);
       return true;
     }
-    const since = new Date(Date.now() - this.getSkipInterval(schedule));
-    const recent = await BackupRepository.findRecentCompleted(schedule, type, since);
-    if (recent) {
+
+    // Skip if we've had a successful backup recently
+    const recentBackup = await Backup.findOne({
+      status: 'completed',
+      schedule,
+      type,
+      createdAt: { $gte: new Date(Date.now() - this.getSkipInterval(schedule)) },
+    });
+
+    if (recentBackup) {
       console.log(`Recent backup found for ${schedule} ${type}, skipping`);
       return true;
     }
+
     return false;
   }
 

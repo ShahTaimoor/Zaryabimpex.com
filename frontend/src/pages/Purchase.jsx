@@ -36,12 +36,11 @@ import {
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { SearchableDropdown } from '../components/SearchableDropdown';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import PrintModal from '../components/PrintModal';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
-import { Button } from '@/components/ui/button';
 
 const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove }) => {
   const totalPrice = item.costPerUnit * item.quantity;
@@ -73,14 +72,12 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
               </p>
             )}
           </div>
-          <Button
+          <button
             onClick={() => onRemove(item.product?._id)}
-            variant="destructive"
-            size="sm"
-            className="p-1 flex-shrink-0"
+            className="btn btn-danger btn-sm p-1 flex-shrink-0"
           >
             <Trash2 className="h-4 w-4" />
-          </Button>
+          </button>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -99,7 +96,6 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
             <label className="block text-xs text-gray-500 mb-1">Quantity</label>
             <input
               type="number"
-              autoComplete="off"
               value={item.quantity}
               onChange={(e) => onUpdateQuantity(item.product?._id, parseInt(e.target.value) || 1)}
               className="input text-center text-sm h-8"
@@ -111,7 +107,6 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
             <input
               type="number"
               step="0.01"
-              autoComplete="off"
               value={item.costPerUnit}
               onChange={(e) => onUpdateCost(item.product?._id, parseFloat(e.target.value) || 0)}
               className="input text-center text-sm h-8"
@@ -156,7 +151,6 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
         <div className="col-span-1">
           <input
             type="number"
-            autoComplete="off"
             value={item.quantity}
             onChange={(e) => onUpdateQuantity(item.product?._id, parseInt(e.target.value) || 1)}
             className="input text-center text-xs sm:text-sm h-8"
@@ -169,7 +163,6 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
           <input
             type="number"
             step="0.01"
-            autoComplete="off"
             value={item.costPerUnit}
             onChange={(e) => onUpdateCost(item.product?._id, parseFloat(e.target.value) || 0)}
             className="input text-center text-xs sm:text-sm h-8"
@@ -186,14 +179,12 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
 
         {/* Delete Button - 1 column */}
         <div className="col-span-1">
-          <Button
+          <button
             onClick={() => onRemove(item.product?._id)}
-            variant="destructive"
-            size="sm"
-            className="h-8 w-full"
+            className="btn btn-danger btn-sm h-8 w-full"
           >
             <Trash2 className="h-4 w-4" />
-          </Button>
+          </button>
         </div>
       </div>
     </div>
@@ -415,7 +406,6 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
           <input
             type="number"
             min="1"
-            autoComplete="off"
             value={quantity}
             onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
             onKeyDown={(e) => {
@@ -437,7 +427,6 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
           <input
             type="number"
             step="1"
-            autoComplete="off"
             value={costPerUnit}
             onChange={(e) => setCostPerUnit(e.target.value)}
             onKeyDown={(e) => {
@@ -459,7 +448,6 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
           </label>
           <input
             type="text"
-            autoComplete="off"
             value={selectedProduct ? Math.round(quantity * parseFloat(costPerUnit || 0)) : ''}
             className="input text-center font-medium text-sm sm:text-base"
             disabled
@@ -472,18 +460,16 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
           <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
             &nbsp;
           </label>
-          <Button
+          <button
             type="button"
             onClick={handleAddToCart}
-            variant="default"
-            size="default"
-            className="w-full flex items-center justify-center gap-2"
+            className="w-full btn btn-primary btn-md flex items-center justify-center gap-2"
             disabled={!selectedProduct}
             title="Add to cart (or press Enter in Quantity/Cost fields - focus returns to search)"
           >
             <Plus className="h-4 w-4" />
             <span>Add</span>
-          </Button>
+          </button>
         </div>
       </div>
     </div>
@@ -630,15 +616,6 @@ export const Purchase = ({ tabId, editData }) => {
         setPurchaseItems(formattedItems);
       }
 
-      // Set payment amount and method for editing (same as sales invoice amount received)
-      if (editData.payment) {
-        const amt = editData.payment.amount ?? editData.payment.paidAmount ?? 0;
-        setAmountPaid(typeof amt === 'number' ? amt : parseFloat(amt) || 0);
-        if (editData.payment.method) {
-          setPaymentMethod(editData.payment.method);
-        }
-      }
-
       // Data loaded successfully (no toast needed as PurchaseInvoices already shows opening message)
     }
   }, [editData?.invoiceId]); // Only depend on invoiceId to prevent multiple executions
@@ -720,10 +697,7 @@ export const Purchase = ({ tabId, editData }) => {
   const supplierDisplayKey = (supplier) => {
     return (
       <div>
-        <div className="font-medium">{supplier.companyName || supplier.company_name || supplier.businessName || supplier.business_name || supplier.displayName || supplier.name || 'Unknown'}</div>
-        {supplier.name && supplier.name !== (supplier.companyName || supplier.company_name || supplier.businessName || supplier.displayName) && (
-          <div className="text-xs text-gray-500">{supplier.name}</div>
-        )}
+        <div className="font-medium">{supplier.displayName || supplier.companyName || supplier.name || 'Unknown'}</div>
         <div className="text-sm text-gray-600">
           Outstanding Balance: {(supplier.pendingBalance || 0).toFixed(2)}
         </div>
@@ -743,7 +717,7 @@ export const Purchase = ({ tabId, editData }) => {
     // Update tab title to show supplier name
     const activeTab = getActiveTab();
     if (activeTab && supplier) {
-      updateTabTitle(activeTab.id, `Purchase - ${supplier.companyName || supplier.company_name || supplier.businessName || supplier.displayName || supplier.name || 'Unknown'}`);
+      updateTabTitle(activeTab.id, `Purchase - ${supplier.displayName || supplier.companyName || supplier.name || 'Unknown'}`);
     }
 
     // Clear cart when supplier changes (only in new purchase mode, not in edit mode)
@@ -871,19 +845,6 @@ export const Purchase = ({ tabId, editData }) => {
         } catch (error) {
           // Failed to search suppliers - silent fail
         }
-      }
-
-      // Navigate to Purchase Invoices page after successful update
-      const componentInfo = getComponentInfo('/purchase-invoices');
-      if (componentInfo) {
-        openTab({
-          title: 'Purchase Invoices',
-          path: '/purchase-invoices',
-          component: componentInfo.component,
-          icon: componentInfo.icon,
-          allowMultiple: componentInfo.allowMultiple,
-          props: {}
-        });
       }
     } catch (error) {
       toast.error(error?.data?.message || error?.message || 'Failed to update purchase');
@@ -1209,18 +1170,7 @@ export const Purchase = ({ tabId, editData }) => {
         email: selectedSupplier.email,
         phone: selectedSupplier.phone,
         companyName: selectedSupplier.companyName,
-        address: (() => {
-          if (typeof selectedSupplier.address === 'string' && selectedSupplier.address.trim()) return selectedSupplier.address.trim();
-          if (selectedSupplier.address && typeof selectedSupplier.address === 'object') {
-            const a = selectedSupplier.address;
-            return [a.street, a.address_line1 || a.addressLine1, a.city, a.province || a.state, a.country, a.zipCode || a.zip].filter(Boolean).join(', ') || null;
-          }
-          if (selectedSupplier.addresses?.length) {
-            const addr = selectedSupplier.addresses.find(a => a.isDefault) || selectedSupplier.addresses.find(a => a.type === 'billing' || a.type === 'both') || selectedSupplier.addresses[0];
-            return [addr.street, addr.address_line1 || addr.addressLine1, addr.city, addr.province || addr.state, addr.country, addr.zipCode || addr.zip].filter(Boolean).join(', ') || null;
-          }
-          return null;
-        })()
+        address: selectedSupplier.address
       },
       items: purchaseItems.map(item => ({
         product: item.product?._id,
@@ -1255,7 +1205,7 @@ export const Purchase = ({ tabId, editData }) => {
     } else {
       handleCreatePurchaseInvoice(invoiceData);
     }
-  }, [purchaseItems, selectedSupplier, invoiceNumber, autoGenerateInvoice, expectedDelivery, invoiceDate, notes, taxExempt, subtotal, tax, total, directDiscountAmount, paymentMethod, amountPaid, editData, handleCreatePurchaseInvoice, handleUpdatePurchaseInvoice]);
+  }, [purchaseItems, selectedSupplier, invoiceNumber, autoGenerateInvoice, expectedDelivery, notes, taxExempt, subtotal, tax, total, directDiscountAmount, paymentMethod, amountPaid, editData, handleCreatePurchaseInvoice, handleUpdatePurchaseInvoice]);
 
 
   return (
@@ -1267,18 +1217,16 @@ export const Purchase = ({ tabId, editData }) => {
             <p className="text-sm sm:text-base text-gray-600">Process purchase transactions</p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:space-x-2 w-full sm:w-auto">
-            <Button
+            <button
               onClick={handleExport}
-              variant="secondary"
-              size="default"
-              className="flex items-center justify-center gap-2 w-full sm:w-auto"
+              className="btn btn-secondary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
               title="Export Purchase Report"
             >
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Export Purchase Report</span>
               <span className="sm:hidden">Export</span>
-            </Button>
-            <Button
+            </button>
+            <button
               onClick={() => {
                 const componentInfo = getComponentInfo('/purchase');
                 if (componentInfo) {
@@ -1293,20 +1241,18 @@ export const Purchase = ({ tabId, editData }) => {
                   });
                 }
               }}
-              variant="default"
-              size="default"
-              className="flex items-center justify-center gap-2 w-full sm:w-auto"
+              className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
             >
               <Plus className="h-4 w-4" />
               <span>New Purchase</span>
-            </Button>
+            </button>
           </div>
         </div>
 
         {/* Supplier Selection and Information Row */}
-        <div className="flex flex-col lg:flex-row items-start lg:gap-12 gap-4">
+        <div className="flex flex-col lg:flex-row items-start gap-4 lg:space-x-4">
           {/* Supplier Selection */}
-          <div className="w-full lg:w-[750px] lg:flex-shrink-0">
+          <div className="w-full lg:w-[500px] lg:flex-shrink-0">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-2">
               <label className="block text-xs sm:text-sm font-medium text-gray-700">
                 Select Supplier
@@ -1359,7 +1305,7 @@ export const Purchase = ({ tabId, editData }) => {
                 <div className="flex items-start sm:items-center space-x-3">
                   <Building className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 flex-shrink-0 mt-1 sm:mt-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm sm:text-base truncate">{selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name || 'Unknown Supplier'}</p>
+                    <p className="font-medium text-sm sm:text-base truncate">{selectedSupplier.displayName || selectedSupplier.name || selectedSupplier.companyName || 'Unknown Supplier'}</p>
                     <p className="text-xs sm:text-sm text-gray-600 capitalize mt-1">
                       {selectedSupplier.businessType && selectedSupplier.reliability
                         ? `${selectedSupplier.businessType} • ${selectedSupplier.reliability}`
@@ -1389,13 +1335,7 @@ export const Purchase = ({ tabId, editData }) => {
                     {selectedSupplier.address && (
                       <div className="flex items-start space-x-1 mt-1">
                         <MapPin className="h-3 w-3 text-gray-400 flex-shrink-0 mt-0.5" />
-                        <span className="text-xs text-gray-500 break-words">
-                          {(() => {
-                            const addr = selectedSupplier.address;
-                            if (typeof addr === 'string') return addr;
-                            return [addr.street, addr.city, addr.province || addr.state, addr.country].filter(Boolean).join(', ');
-                          })()}
-                        </span>
+                        <span className="text-xs text-gray-500 break-words">{selectedSupplier.address}</span>
                       </div>
                     )}
                   </div>
@@ -1430,17 +1370,15 @@ export const Purchase = ({ tabId, editData }) => {
               <div className="space-y-4 border-t border-gray-200 pt-4 sm:pt-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4">
                   <h4 className="text-sm sm:text-md font-medium text-gray-700">Cart Items</h4>
-                  <Button
+                  <button
                     type="button"
                     onClick={handleSortPurchaseItems}
-                    variant="secondary"
-                    size="sm"
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto"
+                    className="btn btn-secondary btn-sm flex items-center justify-center gap-2 w-full sm:w-auto"
                     title="Sort products alphabetically"
                   >
                     <ArrowUpDown className="h-4 w-4" />
                     <span>Sort A-Z</span>
-                  </Button>
+                  </button>
                 </div>
                 {purchaseItems.map((item, index) => (
                   <PurchaseItem
@@ -1472,7 +1410,6 @@ export const Purchase = ({ tabId, editData }) => {
                   </label>
                   <input
                     type="text"
-                    autoComplete="off"
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value)}
                     className="input h-8 sm:h-8 text-sm"
@@ -1488,7 +1425,6 @@ export const Purchase = ({ tabId, editData }) => {
                   </label>
                   <input
                     type="date"
-                    autoComplete="off"
                     value={expectedDelivery}
                     onChange={(e) => setExpectedDelivery(e.target.value)}
                     className="input h-8 sm:h-8 text-sm"
@@ -1502,13 +1438,17 @@ export const Purchase = ({ tabId, editData }) => {
                   </label>
                   <input
                     type="date"
-                    autoComplete="off"
                     value={invoiceDate}
                     onChange={(e) => setInvoiceDate(e.target.value)}
                     className="input h-8 sm:h-8 text-sm"
                     max={new Date().toISOString().split('T')[0]} // Prevent future dates
                     placeholder="Leave empty to use current date"
                   />
+                  {invoiceDate && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Invoice number will be generated based on this date
+                    </p>
+                  )}
                   {!invoiceDate && (
                     <p className="text-xs text-gray-500 mt-1">
                       Set custom date for backdating
@@ -1549,7 +1489,6 @@ export const Purchase = ({ tabId, editData }) => {
                   </label>
                   <input
                     type="text"
-                    autoComplete="off"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     className="input h-8 sm:h-8 text-sm"
@@ -1611,7 +1550,6 @@ export const Purchase = ({ tabId, editData }) => {
                       </select>
                       <input
                         type="number"
-                        autoComplete="off"
                         placeholder={directDiscount.type === 'amount' ? 'Enter amount...' : 'Enter percentage...'}
                         value={directDiscount.value || ''}
                         onChange={(e) => {
@@ -1658,7 +1596,6 @@ export const Purchase = ({ tabId, editData }) => {
                     <input
                       type="number"
                       step="0.01"
-                      autoComplete="off"
                       value={amountPaid}
                       onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
                       onFocus={(e) => e.target.select()}
@@ -1671,13 +1608,12 @@ export const Purchase = ({ tabId, editData }) => {
                 {/* Clear Discount Button */}
                 {directDiscount.value > 0 && (
                   <div className="mt-2">
-                    <Button
+                    <button
                       onClick={() => setDirectDiscount({ type: 'amount', value: 0 })}
-                      variant="destructive"
-                      size="sm"
+                      className="btn btn-danger btn-sm"
                     >
                       Clear Discount
-                    </Button>
+                    </button>
                   </div>
                 )}
               </div>
@@ -1687,7 +1623,7 @@ export const Purchase = ({ tabId, editData }) => {
             {/* Action Buttons */}
             <div className="flex flex-col-reverse sm:flex-row gap-3 mt-4 sm:mt-6 px-4 sm:px-6 pb-4 sm:pb-6">
               {purchaseItems.length > 0 && (
-                <Button
+                <button
                   onClick={() => {
                     setPurchaseItems([]);
                     setSelectedSupplier(null);
@@ -1699,44 +1635,27 @@ export const Purchase = ({ tabId, editData }) => {
                     setInvoiceDate(new Date().toISOString().split('T')[0]); // Reset to current date
                     toast.success('Cart cleared');
                   }}
-                  variant="secondary"
-                  size="default"
-                  className="flex items-center justify-center gap-2 w-full sm:flex-1"
+                  className="btn btn-secondary btn-md flex items-center justify-center gap-2 w-full sm:flex-1"
                 >
                   <Trash2 className="h-4 w-4" />
                   <span>Clear Cart</span>
-                </Button>
+                </button>
               )}
               {purchaseItems.length > 0 && (
-                <Button
+                <button
                   onClick={() => {
-                    const supplierInfoForPrint = selectedSupplier ? {
-                        name: selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name,
-                        email: selectedSupplier.email,
-                        phone: selectedSupplier.phone,
-                        address: (() => {
-                          if (typeof selectedSupplier.address === 'string' && selectedSupplier.address.trim()) return selectedSupplier.address.trim();
-                          const addr = selectedSupplier.address || selectedSupplier.companyAddress || selectedSupplier.location;
-                          if (addr && typeof addr === 'object') {
-                            const parts = [addr.street || addr.address_line1 || addr.addressLine1 || addr.line1, addr.address_line2 || addr.addressLine2, addr.city, addr.province || addr.state, addr.country, addr.zipCode || addr.zip || addr.postalCode || addr.postal_code].filter(Boolean);
-                            if (parts.length) return parts.join(', ');
-                          }
-                          if (selectedSupplier.addresses?.length) {
-                            const a = selectedSupplier.addresses.find(x => x.isDefault) || selectedSupplier.addresses.find(x => x.type === 'billing' || x.type === 'both') || selectedSupplier.addresses[0];
-                            const parts = [a.street || a.address_line1 || a.addressLine1, a.city, a.province || a.state, a.country, a.zipCode || a.zip].filter(Boolean);
-                            if (parts.length) return parts.join(', ');
-                          }
-                          return null;
-                        })(),
-                        businessName: selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.companyName
-                      } : null;
                     const tempOrder = {
                       orderNumber: `PO-${Date.now()}`,
                       orderType: 'purchase',
-                      supplier: selectedSupplier,
-                      supplierInfo: supplierInfoForPrint,
-                      customer: selectedSupplier,
-                      customerInfo: supplierInfoForPrint,
+                      supplier: selectedSupplier?._id,
+                      customer: selectedSupplier, // PrintModal expects 'customer' field
+                      customerInfo: selectedSupplier ? {
+                        name: selectedSupplier.displayName,
+                        email: selectedSupplier.email,
+                        phone: selectedSupplier.phone,
+                        address: selectedSupplier.address || selectedSupplier.companyAddress || selectedSupplier.location,
+                        businessName: selectedSupplier.companyName
+                      } : null,
                       items: purchaseItems.map(item => {
                         const product = item.product || {};
                         const displayName = product.isVariant
@@ -1776,20 +1695,16 @@ export const Purchase = ({ tabId, editData }) => {
                     setCurrentOrder(tempOrder);
                     setShowPrintModal(true);
                   }}
-                  variant="secondary"
-                  size="default"
-                  className="flex items-center justify-center gap-2 w-full sm:flex-1"
+                  className="btn btn-secondary btn-md flex items-center justify-center gap-2 w-full sm:flex-1"
                 >
                   <Receipt className="h-4 w-4" />
                   <span>Print Preview</span>
-                </Button>
+                </button>
               )}
               <LoadingButton
                 onClick={handleProcessPurchase}
                 isLoading={false}
-                variant="default"
-                size="lg"
-                className="flex items-center justify-center gap-2 w-full sm:flex-2"
+                className="btn btn-primary btn-md sm:btn-lg flex items-center justify-center gap-2 w-full sm:flex-2"
               >
                 <Truck className="h-4 w-4" />
                 <span className="hidden sm:inline">{editData?.isEditMode ? 'Update Purchase Invoice' : 'Complete Purchase & Update Inventory'}</span>
@@ -1909,7 +1824,6 @@ export const Purchase = ({ tabId, editData }) => {
                         <label className="block text-xs text-gray-600 mb-1">From Date</label>
                         <input
                           type="date"
-                          autoComplete="off"
                           value={exportDateFrom}
                           onChange={(e) => setExportDateFrom(e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -1919,7 +1833,6 @@ export const Purchase = ({ tabId, editData }) => {
                         <label className="block text-xs text-gray-600 mb-1">To Date</label>
                         <input
                           type="date"
-                          autoComplete="off"
                           value={exportDateTo}
                           onChange={(e) => setExportDateTo(e.target.value)}
                           min={exportDateFrom}

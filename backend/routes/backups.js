@@ -4,7 +4,8 @@ const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors, sanitizeRequest } = require('../middleware/validation');
 const backupService = require('../services/backupService');
 const backupScheduler = require('../services/backupScheduler');
-const backupRepository = require('../repositories/postgres/BackupRepository');
+const Backup = require('../models/Backup'); // Still needed for model reference
+const backupRepository = require('../repositories/BackupRepository');
 
 const router = express.Router();
 
@@ -36,7 +37,7 @@ router.post('/create', [
     } = req.body;
 
     const backup = await backupService.createFullBackup({
-      userId: req.user.id || req.user._id,
+      userId: req.user.id,
       schedule,
       type,
       compression,
@@ -45,19 +46,19 @@ router.post('/create', [
       excludeCollections,
     });
 
-    const backupId = backup.id || backup._id;
-    if (notes && backupId) {
-      await backupRepository.updateById(backupId, { notes }).catch(() => {});
+    if (notes) {
+      backup.notes = notes;
+      await backup.save();
     }
 
     res.status(201).json({
       message: 'Backup created successfully',
       backup: {
-        backupId: backup.backupId || backup.backup_id || backupId,
+        backupId: backup.backupId,
         type: backup.type,
         schedule: backup.schedule,
         status: backup.status,
-        createdAt: backup.createdAt || backup.created_at,
+        createdAt: backup.createdAt,
       },
     });
   } catch (error) {
@@ -151,7 +152,7 @@ router.get('/:backupId', [
   auth,
   requirePermission('view_backups'),
   sanitizeRequest,
-  param('backupId').isUUID(4).withMessage('Valid Backup ID is required'),
+  param('backupId').isMongoId().withMessage('Valid Backup ID is required'),
   handleValidationErrors,
 ], async (req, res) => {
   try {
@@ -182,7 +183,7 @@ router.post('/:backupId/restore', [
   auth,
   requirePermission('restore_backups'),
   sanitizeRequest,
-  param('backupId').isUUID(4).withMessage('Valid Backup ID is required'),
+  param('backupId').isMongoId().withMessage('Valid Backup ID is required'),
   body('collections').optional().isArray(),
   body('dropExisting').optional().isBoolean(),
   body('confirmRestore').isBoolean().withMessage('Restore confirmation is required'),
@@ -219,7 +220,7 @@ router.delete('/:backupId', [
   auth,
   requirePermission('delete_backups'),
   sanitizeRequest,
-  param('backupId').isUUID(4).withMessage('Valid Backup ID is required'),
+  param('backupId').isMongoId().withMessage('Valid Backup ID is required'),
   body('confirmDelete').isBoolean().withMessage('Delete confirmation is required'),
   handleValidationErrors,
 ], async (req, res) => {
@@ -263,7 +264,7 @@ router.post('/:backupId/verify', [
   auth,
   requirePermission('view_backups'),
   sanitizeRequest,
-  param('backupId').isUUID(4).withMessage('Valid Backup ID is required'),
+  param('backupId').isMongoId().withMessage('Valid Backup ID is required'),
   handleValidationErrors,
 ], async (req, res) => {
   try {
@@ -293,7 +294,7 @@ router.post('/:backupId/retry', [
   auth,
   requirePermission('create_backups'),
   sanitizeRequest,
-  param('backupId').isUUID(4).withMessage('Valid Backup ID is required'),
+  param('backupId').isMongoId().withMessage('Valid Backup ID is required'),
   handleValidationErrors,
 ], async (req, res) => {
   try {

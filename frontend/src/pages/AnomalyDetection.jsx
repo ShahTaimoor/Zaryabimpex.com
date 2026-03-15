@@ -18,7 +18,6 @@ import { useGetAnomaliesQuery, useGetSummaryQuery } from '../store/services/anom
 import { formatCurrency } from '../utils/formatters';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { showErrorToast, handleApiError } from '../utils/errorHandler';
-import { Button } from '@/components/ui/button';
 
 const AnomalyDetection = () => {
   const [filters, setFilters] = useState({
@@ -189,14 +188,12 @@ const AnomalyDetection = () => {
               onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
               className="input text-sm"
             />
-            <Button
+            <button
               onClick={() => setFilters({ type: '', severity: '', startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], endDate: new Date().toISOString().split('T')[0] })}
-              variant="secondary"
-              size="sm"
-              className="w-full py-2.5 px-4"
+              className="btn btn-secondary text-sm w-full py-2.5 px-4"
             >
               Clear Filters
-            </Button>
+            </button>
           </div>
         </div>
       </div>
@@ -300,13 +297,12 @@ const AnomalyDetection = () => {
                     </div>
                     <div className="flex sm:ml-4 justify-end sm:justify-start">
                       {anomaly.transactionId && (
-                        <Button
-                          variant="outline"
-                          size="sm"
+                        <button
+                          className="btn btn-outline btn-sm"
                           title="View Transaction"
                         >
                           <Eye className="h-4 w-4" />
-                        </Button>
+                        </button>
                       )}
                     </div>
                   </div>

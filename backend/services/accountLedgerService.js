@@ -1,4 +1,3 @@
-const { query } = require('../config/postgres');
 const transactionRepository = require('../repositories/TransactionRepository');
 const chartOfAccountsRepository = require('../repositories/ChartOfAccountsRepository');
 const customerRepository = require('../repositories/CustomerRepository');
@@ -10,66 +9,9 @@ const cashReceiptRepository = require('../repositories/CashReceiptRepository');
 const bankReceiptRepository = require('../repositories/BankReceiptRepository');
 const cashPaymentRepository = require('../repositories/CashPaymentRepository');
 const bankPaymentRepository = require('../repositories/BankPaymentRepository');
-const returnRepository = require('../repositories/postgres/ReturnRepository');
+const returnRepository = require('../repositories/ReturnRepository');
 
 class AccountLedgerService {
-  async appendBankNameToEntries(entries) {
-    if (!Array.isArray(entries) || entries.length === 0) return entries;
-
-    const bankReceiptIds = entries
-      .filter(e => (e.referenceType || e.source) === 'bank_receipt' && e.referenceId)
-      .map(e => e.referenceId);
-    const bankPaymentIds = entries
-      .filter(e => (e.referenceType || e.source) === 'bank_payment' && e.referenceId)
-      .map(e => e.referenceId);
-
-    const bankNameByReceiptId = new Map();
-    const bankNameByPaymentId = new Map();
-
-    if (bankReceiptIds.length > 0) {
-      const receiptResult = await query(
-        `SELECT br.id, b.bank_name AS "bankName"
-         FROM bank_receipts br
-         LEFT JOIN banks b ON br.bank_id = b.id
-         WHERE br.id = ANY($1::uuid[])`,
-        [bankReceiptIds]
-      );
-      receiptResult.rows.forEach(row => {
-        if (row.bankName) bankNameByReceiptId.set(row.id, row.bankName);
-      });
-    }
-
-    if (bankPaymentIds.length > 0) {
-      const paymentResult = await query(
-        `SELECT bp.id, b.bank_name AS "bankName"
-         FROM bank_payments bp
-         LEFT JOIN banks b ON bp.bank_id = b.id
-         WHERE bp.id = ANY($1::uuid[])`,
-        [bankPaymentIds]
-      );
-      paymentResult.rows.forEach(row => {
-        if (row.bankName) bankNameByPaymentId.set(row.id, row.bankName);
-      });
-    }
-
-    return entries.map(entry => {
-      const bankName =
-        (entry.referenceType || entry.source) === 'bank_receipt'
-          ? bankNameByReceiptId.get(entry.referenceId)
-          : (entry.referenceType || entry.source) === 'bank_payment'
-            ? bankNameByPaymentId.get(entry.referenceId)
-            : null;
-      if (!bankName) return entry;
-      const suffix = ` (Bank: ${bankName})`;
-      const particular = entry.particular || entry.description || '';
-      const description = entry.description || '';
-      return {
-        ...entry,
-        particular: particular.includes(suffix) ? particular : `${particular}${suffix}`,
-        description: description ? (description.includes(suffix) ? description : `${description}${suffix}`) : description
-      };
-    });
-  }
   /**
    * Clamp date range to prevent excessive queries
    * @param {Date|string} start - Start date
@@ -208,7 +150,7 @@ class AccountLedgerService {
 
     // Calculate running balance only when specific account is selected
     let runningBalance = accountInfo ? accountInfo.openingBalance || 0 : null;
-    let ledgerEntries = result.transactions.map(transaction => {
+    const ledgerEntries = result.transactions.map(transaction => {
       const debit = transaction.debitAmount || 0;
       const credit = transaction.creditAmount || 0;
 
@@ -230,60 +172,6 @@ class AccountLedgerService {
         source: 'Transaction'
       };
     });
-
-    // Enrich bank receipt/payment entries with bank name in description
-    const bankReceiptIds = ledgerEntries
-      .filter(e => e.referenceType === 'bank_receipt' && e.referenceId)
-      .map(e => e.referenceId);
-    const bankPaymentIds = ledgerEntries
-      .filter(e => e.referenceType === 'bank_payment' && e.referenceId)
-      .map(e => e.referenceId);
-
-    const bankNameByReceiptId = new Map();
-    const bankNameByPaymentId = new Map();
-
-    if (bankReceiptIds.length > 0) {
-      const receiptResult = await query(
-        `SELECT br.id, b.bank_name AS "bankName"
-         FROM bank_receipts br
-         LEFT JOIN banks b ON br.bank_id = b.id
-         WHERE br.id = ANY($1::uuid[])`,
-        [bankReceiptIds]
-      );
-      receiptResult.rows.forEach(row => {
-        if (row.bankName) bankNameByReceiptId.set(row.id, row.bankName);
-      });
-    }
-
-    if (bankPaymentIds.length > 0) {
-      const paymentResult = await query(
-        `SELECT bp.id, b.bank_name AS "bankName"
-         FROM bank_payments bp
-         LEFT JOIN banks b ON bp.bank_id = b.id
-         WHERE bp.id = ANY($1::uuid[])`,
-        [bankPaymentIds]
-      );
-      paymentResult.rows.forEach(row => {
-        if (row.bankName) bankNameByPaymentId.set(row.id, row.bankName);
-      });
-    }
-
-    if (bankNameByReceiptId.size > 0 || bankNameByPaymentId.size > 0) {
-      ledgerEntries = ledgerEntries.map(entry => {
-        const bankName =
-          entry.referenceType === 'bank_receipt'
-            ? bankNameByReceiptId.get(entry.referenceId)
-            : entry.referenceType === 'bank_payment'
-              ? bankNameByPaymentId.get(entry.referenceId)
-              : null;
-        if (!bankName) return entry;
-        const suffix = ` (Bank: ${bankName})`;
-        const desc = entry.description || '';
-        return desc.includes(suffix)
-          ? entry
-          : { ...entry, description: `${desc}${suffix}` };
-      });
-    }
 
     // Optional supplier name filter (case-insensitive) when populated
     let filteredEntries = ledgerEntries;
@@ -343,7 +231,6 @@ class AccountLedgerService {
 
       if (customerId) {
         customerFilter._id = customerId;
-        customerFilter.id = customerId; // PostgreSQL
       }
 
       if (search) {
@@ -357,11 +244,12 @@ class AccountLedgerService {
 
       // Build supplier filter
       const supplierFilter = {
-        isActive: true
+        status: 'active',
+        isDeleted: { $ne: true }
       };
 
       if (supplierId) {
-        supplierFilter.id = supplierId; // PostgreSQL uses 'id'
+        supplierFilter._id = supplierId;
       }
 
       if (search) {
@@ -414,292 +302,448 @@ class AccountLedgerService {
         suppliers = suppliers.slice(0, MAX_ITEMS_TO_PROCESS);
       }
 
-      // Ensure we never process undefined items (e.g. sparse array or bad repo response)
-      customers = customers.filter(Boolean);
-      suppliers = suppliers.filter(Boolean);
-
-      // Process customers with error handling for each (support both id and _id for PostgreSQL/MongoDB)
+      // Process customers with error handling for each
       const customerSummaries = await Promise.all(
         customers.map(async (customer) => {
           try {
-            const rawId = customer?.id ?? customer?._id;
-            if (rawId == null) return null;
-            const customerId = typeof rawId === 'string' ? rawId : (rawId && typeof rawId.toString === 'function' ? rawId.toString() : String(rawId));
+            const customerId = customer._id.toString();
 
-            // Get opening balance from customer record (support snake_case from Postgres)
-            let openingBalance = parseFloat(customer.opening_balance ?? customer.openingBalance ?? 0) || 0;
+            // Get opening balance
+            let openingBalance = customer.openingBalance || 0;
 
-            // Calculate adjusted opening balance from ledger entries before startDate
-            // SINGLE SOURCE OF TRUTH: Read from account_ledger table only
-            // Only AR (1100) entries affect customer receivable balance. Sale Return Cr AR is in 1100.
+            // Calculate adjusted opening balance (transactions before startDate)
             if (start) {
-              const openingLedgerEntries = await transactionRepository.findAll({
-                customerId,
-                transactionDate: { $lt: start },
-                status: 'completed',
-                accountCode: '1100'
+              // Sales before startDate (increases receivables)
+              const openingSales = await salesRepository.findAll({
+                customer: customerId,
+                createdAt: { $lt: start },
+                isDeleted: { $ne: true }
               }, { lean: true });
 
-              // For AR accounts: debit increases balance, credit decreases balance
-              const openingLedgerBalance = openingLedgerEntries.reduce((sum, entry) => {
-                return sum + (entry.debitAmount || 0) - (entry.creditAmount || 0);
+              const openingSalesTotal = openingSales.reduce((sum, sale) => {
+                return sum + (sale.pricing?.total || 0);
               }, 0);
 
-              openingBalance = openingBalance + openingLedgerBalance;
+              // Cash receipts before startDate (decreases receivables)
+              const openingCashReceipts = await cashReceiptRepository.findAll({
+                customer: customerId,
+                date: { $lt: start }
+              }, { lean: true });
+
+              const openingCashReceiptsTotal = openingCashReceipts.reduce((sum, receipt) => {
+                return sum + (receipt.amount || 0);
+              }, 0);
+
+              // Bank receipts before startDate (decreases receivables)
+              const openingBankReceipts = await bankReceiptRepository.findAll({
+                customer: customerId,
+                date: { $lt: start }
+              }, { lean: true });
+
+              const openingBankReceiptsTotal = openingBankReceipts.reduce((sum, receipt) => {
+                return sum + (receipt.amount || 0);
+              }, 0);
+
+              // Cash payments before startDate (increases receivables/advance - DEBIT)
+              const openingCashPayments = await cashPaymentRepository.findAll({
+                customer: customerId,
+                date: { $lt: start }
+              }, { lean: true });
+
+              const openingCashPaymentsTotal = openingCashPayments.reduce((sum, payment) => {
+                return sum + (payment.amount || 0);
+              }, 0);
+
+              // Bank payments before startDate (increases receivables/advance - DEBIT)
+              const openingBankPayments = await bankPaymentRepository.findAll({
+                customer: customerId,
+                date: { $lt: start }
+              }, { lean: true });
+
+              const openingBankPaymentsTotal = openingBankPayments.reduce((sum, payment) => {
+                return sum + (payment.amount || 0);
+              }, 0);
+
+              // Returns before startDate (decreases receivables - CREDIT)
+              // Use returnDate field for filtering
+              const openingReturns = await returnRepository.findAll({
+                customer: customerId,
+                origin: 'sales',
+                returnDate: { $lt: start },
+                status: { $in: ['completed', 'received', 'approved', 'refunded'] }
+              }, { lean: true });
+
+              const openingReturnsTotal = openingReturns.reduce((sum, ret) => {
+                return sum + (ret.netRefundAmount || ret.totalRefundAmount || 0);
+              }, 0);
+
+              // Adjusted opening balance
+              openingBalance = openingBalance + openingSalesTotal + openingCashPaymentsTotal + openingBankPaymentsTotal - openingCashReceiptsTotal - openingBankReceiptsTotal - openingReturnsTotal;
             }
 
-            // Get period transactions from ledger (within date range)
-            // SINGLE SOURCE OF TRUTH: Read from account_ledger table only
-            // Only AR (1100) entries - Sale Return posts Cr AR to 1100, which correctly reduces balance
-            const periodLedgerFilter = {
-              customerId,
-              status: 'completed',
-              accountCode: '1100'
-            };
-            if (start) periodLedgerFilter.transactionDate = { $gte: start };
-            if (end) {
-              if (!periodLedgerFilter.transactionDate) periodLedgerFilter.transactionDate = {};
-              periodLedgerFilter.transactionDate.$lte = end;
+            // Get period transactions (within date range)
+            const periodFilter = {};
+            if (start || end) {
+              periodFilter.createdAt = {};
+              if (start) periodFilter.createdAt.$gte = start;
+              if (end) periodFilter.createdAt.$lte = end;
             }
 
-            const periodLedgerEntries = await transactionRepository.findAll(periodLedgerFilter, { lean: true });
+            // Sales (DEBITS - increases receivables)
+            const sales = await salesRepository.findAll({
+              customer: customerId,
+              ...periodFilter,
+              isDeleted: { $ne: true }
+            }, { lean: true });
 
-            // Calculate totals from ledger entries
-            const totalDebits = periodLedgerEntries.reduce((sum, entry) => sum + (entry.debitAmount || 0), 0);
-            const totalCredits = periodLedgerEntries.reduce((sum, entry) => sum + (entry.creditAmount || 0), 0);
-            const returnTotal = periodLedgerEntries
-              .filter(e => (e.referenceType || e.source) === 'Sale Return')
-              .reduce((sum, entry) => sum + (entry.creditAmount || 0), 0);
+            const totalDebits = sales.reduce((sum, sale) => {
+              return sum + (sale.pricing?.total || 0);
+            }, 0);
 
-            // Total debits includes all debit entries (sales, payments to customer, etc.)
-            const totalDebitsWithPayments = totalDebits;
+            // Cash receipts (CREDITS - decreases receivables)
+            const receiptDateFilter = {};
+            if (start || end) {
+              receiptDateFilter.date = {};
+              if (start) receiptDateFilter.date.$gte = start;
+              if (end) receiptDateFilter.date.$lte = end;
+            }
+
+            const cashReceipts = await cashReceiptRepository.findAll({
+              customer: customerId,
+              ...receiptDateFilter
+            }, { lean: true });
+
+            const bankReceipts = await bankReceiptRepository.findAll({
+              customer: customerId,
+              ...receiptDateFilter
+            }, { lean: true });
+
+            // Cash payments (DEBITS - increases receivables/advance)
+            const cashPayments = await cashPaymentRepository.findAll({
+              customer: customerId,
+              ...receiptDateFilter
+            }, { lean: true });
+
+            // Bank payments (DEBITS - increases receivables/advance)
+            const bankPayments = await bankPaymentRepository.findAll({
+              customer: customerId,
+              ...receiptDateFilter
+            }, { lean: true });
+
+            const cashPaymentsTotal = cashPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+            const bankPaymentsTotal = bankPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+
+            // Returns (CREDITS - decreases receivables)
+            // Use returnDate field for filtering (the actual return date, not creation date)
+            const returnDateFilter = {};
+            if (start || end) {
+              returnDateFilter.returnDate = {};
+              if (start) {
+                const startDate = new Date(start);
+                startDate.setHours(0, 0, 0, 0);
+                returnDateFilter.returnDate.$gte = startDate;
+              }
+              if (end) {
+                const endDate = new Date(end);
+                endDate.setHours(23, 59, 59, 999);
+                returnDateFilter.returnDate.$lte = endDate;
+              }
+            }
+
+            const returns = await returnRepository.findAll({
+              customer: customerId,
+              origin: 'sales',
+              status: { $in: ['completed', 'received', 'approved', 'refunded'] },
+              ...returnDateFilter
+            }, { lean: true });
+
+            const returnsTotal = returns.reduce((sum, ret) => sum + (ret.netRefundAmount || ret.totalRefundAmount || 0), 0);
+
+            const totalCredits = cashReceipts.reduce((sum, receipt) => sum + (receipt.amount || 0), 0) +
+              bankReceipts.reduce((sum, receipt) => sum + (receipt.amount || 0), 0) +
+              returnsTotal;
+
+            // Total debits includes sales and payments to customer
+            const totalDebitsWithPayments = totalDebits + cashPaymentsTotal + bankPaymentsTotal;
 
             // Calculate closing balance
             const closingBalance = openingBalance + totalDebitsWithPayments - totalCredits;
 
-            // Build particular/description from ledger entries
-            // SINGLE SOURCE OF TRUTH: Use reference_number from ledger entries
+            // Build particular/description
             const particulars = [];
-            periodLedgerEntries.forEach(entry => {
-              if (entry.referenceNumber) {
-                const refType = entry.referenceType || 'Transaction';
-                particulars.push(`${refType}: ${entry.referenceNumber}`);
-              } else if (entry.description) {
-                particulars.push(entry.description);
+            sales.forEach(sale => {
+              if (sale.orderNumber) {
+                particulars.push(`Sale: ${sale.orderNumber}`);
+              }
+            });
+            cashReceipts.forEach(receipt => {
+              if (receipt.voucherCode) {
+                particulars.push(`Cash Receipt: ${receipt.voucherCode}`);
+              }
+            });
+            bankReceipts.forEach(receipt => {
+              if (receipt.voucherCode) {
+                particulars.push(`Bank Receipt: ${receipt.voucherCode}`);
+              }
+            });
+            returns.forEach(ret => {
+              if (ret.returnNumber) {
+                particulars.push(`Return: ${ret.returnNumber}`);
+              }
+            });
+            cashPayments.forEach(payment => {
+              if (payment.voucherCode) {
+                particulars.push(`Cash Payment: ${payment.voucherCode}`);
+              }
+            });
+            bankPayments.forEach(payment => {
+              if (payment.voucherCode) {
+                particulars.push(`Bank Payment: ${payment.voucherCode}`);
               }
             });
 
             const particular = particulars.join('; ');
-            const transactionCount = periodLedgerEntries.length;
+            const transactionCount = sales.length + cashReceipts.length + bankReceipts.length + cashPayments.length + bankPayments.length;
 
-            // Build line-item entries for single-customer detail view (DATE, VOUCHER NO, PARTICULAR, DEBITS, CREDITS, BALANCE)
-            // SINGLE SOURCE OF TRUTH: Read from account_ledger table only
-            let entries = [];
-            if (customerId && String(customer?.id ?? customer?._id) === String(customerId)) {
-              // Sort entries by transaction date
-              const sortedEntries = [...periodLedgerEntries].sort((a, b) => {
-                const dateA = new Date(a.transactionDate || a.createdAt || 0);
-                const dateB = new Date(b.transactionDate || b.createdAt || 0);
-                return dateA - dateB;
-              });
-
-              let running = openingBalance;
-              entries = sortedEntries.map(entry => {
-                running += (entry.debitAmount || 0) - (entry.creditAmount || 0);
-                return {
-                  date: entry.transactionDate || entry.createdAt,
-                  voucherNo: entry.referenceNumber || entry.transactionId || entry.id,
-                  particular: entry.description || `${entry.referenceType || 'Transaction'}: ${entry.referenceNumber || entry.id}`,
-                  debitAmount: entry.debitAmount || 0,
-                  creditAmount: entry.creditAmount || 0,
-                  referenceId: entry.referenceId,
-                  source: entry.referenceType || 'Ledger',
-                  balance: running
-                };
-              });
-              entries = await this.appendBankNameToEntries(entries);
-            }
-
-            const displayName = customer.business_name ?? customer.businessName ?? customer.name ?? '';
             return {
-              id: customer?.id ?? customer?._id,
+              id: customer._id,
               accountCode: customer.ledgerAccount?.accountCode || '',
-              name: displayName,
-              business_name: customer.business_name,
-              businessName: customer.business_name ?? customer.businessName,
+              name: customer.businessName || customer.name || '',
               email: customer.email || '',
               phone: customer.phone || '',
               openingBalance,
               totalDebits: totalDebitsWithPayments,
               totalCredits,
-              returnTotal,
               closingBalance,
               transactionCount,
-              particular,
-              entries
+              particular
             };
           } catch (error) {
             // Log error but don't fail the entire request
-            const custId = customer?.id ?? customer?._id ?? 'unknown';
-            console.error(`Error processing customer ${custId}:`, error);
+            console.error(`Error processing customer ${customer._id}:`, error);
             // Return a minimal summary for this customer
-            const errDisplayName = customer.business_name ?? customer.businessName ?? customer.name ?? '';
             return {
-              id: customer?.id ?? customer?._id,
+              id: customer._id,
               accountCode: customer.ledgerAccount?.accountCode || '',
-              name: errDisplayName,
-              business_name: customer.business_name,
-              businessName: customer.business_name ?? customer.businessName,
+              name: customer.businessName || customer.name || '',
               email: customer.email || '',
               phone: customer.phone || '',
-              openingBalance: parseFloat(customer.opening_balance ?? customer.openingBalance ?? 0) || 0,
+              openingBalance: customer.openingBalance || 0,
               totalDebits: 0,
               totalCredits: 0,
-              returnTotal: 0,
-              closingBalance: parseFloat(customer.opening_balance ?? customer.openingBalance ?? 0) || 0,
+              closingBalance: customer.openingBalance || 0,
               transactionCount: 0,
-              particular: 'Error loading transactions',
-              entries: []
+              particular: 'Error loading transactions'
             };
           }
         })
       );
 
-      // Process suppliers with error handling for each (support both id and _id for PostgreSQL/MongoDB)
+      // Process suppliers with error handling for each
       const supplierSummaries = await Promise.all(
         suppliers.map(async (supplier) => {
           try {
-            const rawId = supplier?.id ?? supplier?._id;
-            if (rawId == null) return null;
-            const supplierId = typeof rawId === 'string' ? rawId : String(rawId);
+            const supplierId = supplier._id.toString();
 
-            // Opening balance from ledger only (supplier opening balance is posted to ledger)
-            let openingBalance = 0;
+            // Get opening balance
+            let openingBalance = supplier.openingBalance || 0;
+
+            // Calculate adjusted opening balance (transactions before startDate)
             if (start) {
-              const openingLedgerEntries = await transactionRepository.findAll({
-                supplierId,
-                accountCode: '2000', // Only AP account entries
-                transactionDate: { $lt: start },
-                status: 'completed'
+              // Purchase Invoices before startDate (increases payables)
+              const openingPurchases = await purchaseInvoiceRepository.findAll({
+                supplier: supplierId,
+                createdAt: { $lt: start },
+                status: 'confirmed'
               }, { lean: true });
 
-              // For AP accounts: credit increases balance, debit decreases balance
-              openingBalance = openingLedgerEntries.reduce((sum, entry) => {
-                return sum + (entry.creditAmount || 0) - (entry.debitAmount || 0);
+              const openingPurchasesTotal = openingPurchases.reduce((sum, invoice) => {
+                return sum + (invoice.pricing?.total || 0);
               }, 0);
-            }
 
-            // Get period transactions from ledger (within date range)
-            // SINGLE SOURCE OF TRUTH: Read from account_ledger table only
-            // Filter by AP account code (2000) to show only Accounts Payable entries
-            const periodLedgerFilter = {
-              supplierId,
-              accountCode: '2000', // Only AP account entries
-              status: 'completed'
-            };
-            if (start) periodLedgerFilter.transactionDate = { $gte: start };
-            if (end) {
-              if (!periodLedgerFilter.transactionDate) periodLedgerFilter.transactionDate = {};
-              periodLedgerFilter.transactionDate.$lte = end;
-            }
-
-            const periodLedgerEntries = await transactionRepository.findAll(periodLedgerFilter, { lean: true });
-            
-            // Debug logging to help diagnose missing transactions
-            if (periodLedgerEntries.length === 0 && supplierId) {
-              console.log(`[DEBUG] No transactions found for supplier ${supplierId} with filters:`, {
-                supplierId,
-                accountCode: '2000',
-                status: 'completed',
-                dateRange: { start, end }
-              });
-              
-              // Check if transactions exist without date filter
-              const allEntriesCheck = await transactionRepository.findAll({
-                supplierId,
-                accountCode: '2000',
-                status: 'completed'
+              // Cash payments before startDate (decreases payables)
+              const openingCashPayments = await cashPaymentRepository.findAll({
+                supplier: supplierId,
+                date: { $lt: start }
               }, { lean: true });
-              
-              if (allEntriesCheck.length > 0) {
-                console.log(`[DEBUG] Found ${allEntriesCheck.length} transactions without date filter. Sample dates:`, 
-                  allEntriesCheck.slice(0, 3).map(e => ({
-                    transactionDate: e.transactionDate,
-                    createdAt: e.createdAt,
-                    referenceNumber: e.referenceNumber
-                  }))
-                );
-              } else {
-                console.log(`[DEBUG] No transactions found even without date filter. Checking all entries for supplier...`);
-                const allSupplierEntries = await transactionRepository.findAll({
-                  supplierId
-                }, { lean: true });
-                console.log(`[DEBUG] Total entries for supplier (any account): ${allSupplierEntries.length}`);
-                if (allSupplierEntries.length > 0) {
-                  console.log(`[DEBUG] Sample entries:`, allSupplierEntries.slice(0, 3).map(e => ({
-                    accountCode: e.accountCode,
-                    status: e.status,
-                    transactionDate: e.transactionDate,
-                    referenceNumber: e.referenceNumber
-                  })));
-                }
+
+              const openingCashPaymentsTotal = openingCashPayments.reduce((sum, payment) => {
+                return sum + (payment.amount || 0);
+              }, 0);
+
+              // Bank payments before startDate (decreases payables)
+              const openingBankPayments = await bankPaymentRepository.findAll({
+                supplier: supplierId,
+                date: { $lt: start }
+              }, { lean: true });
+
+              const openingBankPaymentsTotal = openingBankPayments.reduce((sum, payment) => {
+                return sum + (payment.amount || 0);
+              }, 0);
+
+              // Cash receipts before startDate (decreases payables - for refunds/advances from supplier)
+              const openingCashReceipts = await cashReceiptRepository.findAll({
+                supplier: supplierId,
+                date: { $lt: start }
+              }, { lean: true });
+
+              const openingCashReceiptsTotal = openingCashReceipts.reduce((sum, receipt) => {
+                return sum + (receipt.amount || 0);
+              }, 0);
+
+              // Bank receipts before startDate (decreases payables - for refunds/advances from supplier)
+              const openingBankReceipts = await bankReceiptRepository.findAll({
+                supplier: supplierId,
+                date: { $lt: start }
+              }, { lean: true });
+
+              const openingBankReceiptsTotal = openingBankReceipts.reduce((sum, receipt) => {
+                return sum + (receipt.amount || 0);
+              }, 0);
+
+              // Returns before startDate (decreases payables - DEBIT)
+              // Use returnDate field for filtering
+              const openingReturns = await returnRepository.findAll({
+                supplier: supplierId,
+                origin: 'purchase',
+                returnDate: { $lt: start },
+                status: { $in: ['completed', 'received', 'approved', 'refunded'] }
+              }, { lean: true });
+
+              const openingReturnsTotal = openingReturns.reduce((sum, ret) => {
+                return sum + (ret.netRefundAmount || ret.totalRefundAmount || 0);
+              }, 0);
+
+              // Adjusted opening balance
+              openingBalance = openingBalance + openingPurchasesTotal - openingCashPaymentsTotal - openingBankPaymentsTotal - openingCashReceiptsTotal - openingBankReceiptsTotal - openingReturnsTotal;
+            }
+
+            // Get period transactions (within date range)
+            const periodFilter = {};
+            if (start || end) {
+              periodFilter.createdAt = {};
+              if (start) periodFilter.createdAt.$gte = start;
+              if (end) periodFilter.createdAt.$lte = end;
+            }
+
+            // Purchase Invoices (CREDITS - increases payables)
+            const purchases = await purchaseInvoiceRepository.findAll({
+              supplier: supplierId,
+              ...periodFilter,
+              status: 'confirmed'
+            }, { lean: true });
+
+            const totalCredits = purchases.reduce((sum, invoice) => {
+              return sum + (invoice.pricing?.total || 0);
+            }, 0);
+
+            // Cash payments (DEBITS - decreases payables)
+            const paymentDateFilter = {};
+            if (start || end) {
+              paymentDateFilter.date = {};
+              if (start) paymentDateFilter.date.$gte = start;
+              if (end) paymentDateFilter.date.$lte = end;
+            }
+
+            const cashPayments = await cashPaymentRepository.findAll({
+              supplier: supplierId,
+              ...paymentDateFilter
+            }, { lean: true });
+
+            const bankPayments = await bankPaymentRepository.findAll({
+              supplier: supplierId,
+              ...paymentDateFilter
+            }, { lean: true });
+
+            // Cash receipts (DEBITS - decreases payables for refunds/advances from supplier)
+            const cashReceipts = await cashReceiptRepository.findAll({
+              supplier: supplierId,
+              ...paymentDateFilter
+            }, { lean: true });
+
+            // Bank receipts (DEBITS - decreases payables for refunds/advances from supplier)
+            const bankReceipts = await bankReceiptRepository.findAll({
+              supplier: supplierId,
+              ...paymentDateFilter
+            }, { lean: true });
+
+            // Returns (DEBITS - decreases payables)
+            // Use returnDate field for filtering
+            const returnDateFilter = {};
+            if (start || end) {
+              returnDateFilter.returnDate = {};
+              if (start) {
+                const startDate = new Date(start);
+                startDate.setHours(0, 0, 0, 0);
+                returnDateFilter.returnDate.$gte = startDate;
+              }
+              if (end) {
+                const endDate = new Date(end);
+                endDate.setHours(23, 59, 59, 999);
+                returnDateFilter.returnDate.$lte = endDate;
               }
             }
 
-            // Calculate totals from ledger entries
-            // For AP accounts: credits increase payables, debits decrease payables
-            const totalCredits = periodLedgerEntries.reduce((sum, entry) => sum + (entry.creditAmount || 0), 0);
-            const totalDebits = periodLedgerEntries.reduce((sum, entry) => sum + (entry.debitAmount || 0), 0);
+            const returns = await returnRepository.findAll({
+              supplier: supplierId,
+              origin: 'purchase',
+              status: { $in: ['completed', 'received', 'approved', 'refunded'] },
+              ...returnDateFilter
+            }, { lean: true });
+
+            const returnsTotal = returns.reduce((sum, ret) => sum + (ret.netRefundAmount || ret.totalRefundAmount || 0), 0);
+            const cashReceiptsTotal = cashReceipts.reduce((sum, receipt) => sum + (receipt.amount || 0), 0);
+            const bankReceiptsTotal = bankReceipts.reduce((sum, receipt) => sum + (receipt.amount || 0), 0);
+
+            const totalDebits = cashPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0) +
+              bankPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0) +
+              cashReceiptsTotal +
+              bankReceiptsTotal +
+              returnsTotal;
 
             // Calculate closing balance
             const closingBalance = openingBalance + totalCredits - totalDebits;
 
-            // Build particular/description from ledger entries
-            // SINGLE SOURCE OF TRUTH: Use reference_number from ledger entries
+            // Build particular/description
             const particulars = [];
-            periodLedgerEntries.forEach(entry => {
-              if (entry.referenceNumber) {
-                const refType = entry.referenceType || 'Transaction';
-                particulars.push(`${refType}: ${entry.referenceNumber}`);
-              } else if (entry.description) {
-                particulars.push(entry.description);
+            // Add Purchases to particulars
+            purchases.forEach(invoice => {
+              if (invoice.invoiceNumber) {
+                particulars.push(`Purchase: ${invoice.invoiceNumber}`);
+              }
+            });
+
+            cashPayments.forEach(payment => {
+              if (payment.voucherCode) {
+                particulars.push(`Cash Payment: ${payment.voucherCode}`);
+              }
+            });
+            bankPayments.forEach(payment => {
+              if (payment.voucherCode) {
+                particulars.push(`Bank Payment: ${payment.voucherCode}`);
+              }
+            });
+            cashReceipts.forEach(receipt => {
+              if (receipt.voucherCode) {
+                particulars.push(`Cash Receipt: ${receipt.voucherCode}`);
+              }
+            });
+            bankReceipts.forEach(receipt => {
+              if (receipt.voucherCode) {
+                particulars.push(`Bank Receipt: ${receipt.voucherCode}`);
+              }
+            });
+            returns.forEach(ret => {
+              if (ret.returnNumber) {
+                particulars.push(`Return: ${ret.returnNumber}`);
               }
             });
 
             const particular = particulars.join('; ');
-            const transactionCount = periodLedgerEntries.length;
-
-            // Build line-item entries for single-supplier detail view (DATE, VOUCHER NO, PARTICULAR, DEBITS, CREDITS, BALANCE)
-            // SINGLE SOURCE OF TRUTH: Read from account_ledger table only
-            let entries = [];
-            if (supplierId && String(supplier?.id ?? supplier?._id) === String(supplierId)) {
-              // Sort entries by transaction date
-              const sortedEntries = [...periodLedgerEntries].sort((a, b) => {
-                const dateA = new Date(a.transactionDate || a.createdAt || 0);
-                const dateB = new Date(b.transactionDate || b.createdAt || 0);
-                return dateA - dateB;
-              });
-
-              let running = openingBalance;
-              entries = sortedEntries.map(entry => {
-                // For AP accounts: credits increase balance, debits decrease balance
-                running += (entry.creditAmount || 0) - (entry.debitAmount || 0);
-                return {
-                  date: entry.transactionDate || entry.createdAt,
-                  voucherNo: entry.referenceNumber || entry.transactionId || entry.id,
-                  particular: entry.description || `${entry.referenceType || 'Transaction'}: ${entry.referenceNumber || entry.id}`,
-                  debitAmount: entry.debitAmount || 0,
-                  creditAmount: entry.creditAmount || 0,
-                  referenceId: entry.referenceId,
-                  source: entry.referenceType || 'Ledger',
-                  balance: running
-                };
-              });
-              entries = await this.appendBankNameToEntries(entries);
-            }
+            const transactionCount = purchases.length + cashPayments.length + bankPayments.length + cashReceipts.length + bankReceipts.length + returns.length;
 
             return {
-              id: supplier?.id ?? supplier?._id,
+              id: supplier._id,
               accountCode: supplier.ledgerAccount?.accountCode || '',
               name: supplier.companyName || supplier.contactPerson?.name || '',
               email: supplier.email || '',
@@ -709,26 +753,24 @@ class AccountLedgerService {
               totalCredits,
               closingBalance,
               transactionCount,
-              particular,
-              entries
+              particular
             };
           } catch (error) {
             // Log error but don't fail the entire request
-            console.error(`Error processing supplier ${supplier?.id ?? supplier?._id}:`, error);
+            console.error(`Error processing supplier ${supplier._id}:`, error);
             // Return a minimal summary for this supplier
             return {
-              id: supplier?.id ?? supplier?._id,
+              id: supplier._id,
               accountCode: supplier.ledgerAccount?.accountCode || '',
               name: supplier.companyName || supplier.contactPerson?.name || '',
               email: supplier.email || '',
               phone: supplier.phone || '',
-              openingBalance: parseFloat(supplier.opening_balance ?? supplier.openingBalance ?? 0) || 0,
+              openingBalance: supplier.openingBalance || 0,
               totalDebits: 0,
               totalCredits: 0,
-              closingBalance: parseFloat(supplier.opening_balance ?? supplier.openingBalance ?? 0) || 0,
+              closingBalance: supplier.openingBalance || 0,
               transactionCount: 0,
-              particular: 'Error loading transactions',
-              entries: []
+              particular: 'Error loading transactions'
             };
           }
         })
@@ -743,7 +785,6 @@ class AccountLedgerService {
         openingBalance: filteredCustomerSummaries.reduce((sum, c) => sum + (c.openingBalance || 0), 0),
         totalDebits: filteredCustomerSummaries.reduce((sum, c) => sum + (c.totalDebits || 0), 0),
         totalCredits: filteredCustomerSummaries.reduce((sum, c) => sum + (c.totalCredits || 0), 0),
-        returnTotal: filteredCustomerSummaries.reduce((sum, c) => sum + (c.returnTotal || 0), 0),
         closingBalance: filteredCustomerSummaries.reduce((sum, c) => sum + (c.closingBalance || 0), 0)
       };
 
@@ -754,53 +795,24 @@ class AccountLedgerService {
         closingBalance: filteredSupplierSummaries.reduce((sum, s) => sum + (s.closingBalance || 0), 0)
       };
 
-      const data = {
-        period: {
-          startDate: start,
-          endDate: end
-        },
-        customers: {
-          summary: filteredCustomerSummaries,
-          totals: customerTotals,
-          count: filteredCustomerSummaries.length
-        },
-        suppliers: {
-          summary: filteredSupplierSummaries,
-          totals: supplierTotals,
-          count: filteredSupplierSummaries.length
-        }
-      };
-
-      // When a single customer is requested, add the shape the frontend expects for "Customer Receivables" detail view
-      if (customerId && filteredCustomerSummaries.length === 1) {
-        const one = filteredCustomerSummaries[0];
-        data.openingBalance = one.openingBalance ?? 0;
-        data.closingBalance = one.closingBalance ?? one.openingBalance ?? 0;
-        data.returnTotal = one.returnTotal ?? 0;
-        data.customer = {
-          id: one.id,
-          name: (one.business_name ?? one.businessName ?? one.name) || '',
-          accountCode: one.accountCode || ''
-        };
-        data.entries = Array.isArray(one.entries) ? one.entries : [];
-      }
-
-      // When a single supplier is requested, add the shape the frontend expects for supplier detail view
-      if (supplierId && filteredSupplierSummaries.length === 1) {
-        const one = filteredSupplierSummaries[0];
-        data.openingBalance = one.openingBalance ?? 0;
-        data.closingBalance = one.closingBalance ?? one.openingBalance ?? 0;
-        data.supplier = {
-          id: one.id,
-          name: one.name || '',
-          accountCode: one.accountCode || ''
-        };
-        data.entries = Array.isArray(one.entries) ? one.entries : [];
-      }
-
       return {
         success: true,
-        data
+        data: {
+          period: {
+            startDate: start,
+            endDate: end
+          },
+          customers: {
+            summary: filteredCustomerSummaries,
+            totals: customerTotals,
+            count: filteredCustomerSummaries.length
+          },
+          suppliers: {
+            summary: filteredSupplierSummaries,
+            totals: supplierTotals,
+            count: filteredSupplierSummaries.length
+          }
+        }
       };
     } catch (error) {
       // Log the full error for debugging

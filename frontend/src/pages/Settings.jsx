@@ -25,7 +25,7 @@ import {
   TrendingUp,
   LayoutDashboard
 } from 'lucide-react';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import {
   useGetCompanySettingsQuery,
   useUpdateCompanySettingsMutation,
@@ -47,9 +47,6 @@ import PrintDocument from '../components/PrintDocument';
 import { CompanySettingsForm } from '../components/CompanySettingsForm';
 import { handleApiError } from '../utils/errorHandler';
 import { useAuth } from '../contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 
 export const Settings2 = () => {
   const { user } = useAuth();
@@ -117,7 +114,6 @@ export const Settings2 = () => {
     showPrintPaymentStatus: true,
     showPrintPaymentMethod: true,
     showPrintPaymentAmount: true,
-    mobilePrintPreview: false,
     headerText: '',
     footerText: '',
     invoiceLayout: 'standard'
@@ -725,7 +721,6 @@ export const Settings2 = () => {
           showPrintPaymentStatus: settings.printSettings.showPrintPaymentStatus ?? true,
           showPrintPaymentMethod: settings.printSettings.showPrintPaymentMethod ?? true,
           showPrintPaymentAmount: settings.printSettings.showPrintPaymentAmount ?? true,
-          mobilePrintPreview: settings.printSettings.mobilePrintPreview ?? false,
           headerText: settings.printSettings.headerText || '',
           footerText: settings.printSettings.footerText || '',
           invoiceLayout: settings.printSettings.invoiceLayout || 'standard'
@@ -843,7 +838,6 @@ export const Settings2 = () => {
           showPrintPaymentStatus: ps.showPrintPaymentStatus ?? true,
           showPrintPaymentMethod: ps.showPrintPaymentMethod ?? true,
           showPrintPaymentAmount: ps.showPrintPaymentAmount ?? true,
-          mobilePrintPreview: ps.mobilePrintPreview ?? prev.mobilePrintPreview ?? false,
           headerText: ps.headerText || prev.headerText || '',
           footerText: ps.footerText || prev.footerText || '',
           invoiceLayout: ps.invoiceLayout || prev.invoiceLayout || 'standard'
@@ -1277,16 +1271,10 @@ export const Settings2 = () => {
     refetchSettings();
   }, [refetchSettings]);
 
-  const [accountLedgerShowReturn, setAccountLedgerShowReturn] = useState(() => {
-    const saved = localStorage.getItem('accountLedgerShowReturnColumn');
-    return saved === null ? true : saved === 'true';
-  });
-
   const tabs = [
     { id: 'company', name: 'Company Information', shortName: 'Company', icon: Building },
     { id: 'users', name: 'Users Control', shortName: 'Users', icon: Users },
     { id: 'print', name: 'Print Preview Settings', shortName: 'Print', icon: Printer },
-    { id: 'other', name: 'Other', shortName: 'Other', icon: BarChart3 },
     { id: 'sidebar', name: 'Sidebar Configuration', shortName: 'Sidebar', icon: LayoutDashboard }
   ];
 
@@ -1356,7 +1344,7 @@ export const Settings2 = () => {
                     <h2 className="text-lg font-semibold">System Users ({users.length})</h2>
                   </div>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:space-x-2">
-                    <Button
+                    <button
                       onClick={() => {
                         resetNewUserForm();
                         const form = document.getElementById('add-edit-user-form');
@@ -1370,13 +1358,12 @@ export const Settings2 = () => {
                           }, 300);
                         }
                       }}
-                      variant="default"
-                      size="sm"
+                      className="btn btn-primary btn-sm"
                       title="Add New User"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Add New User
-                    </Button>
+                    </button>
                   </div>
                 </div>
                 <p className="text-sm text-gray-600 mt-1">
@@ -1404,14 +1391,13 @@ export const Settings2 = () => {
                             ? 'Authentication required. Please refresh the page and log in again.'
                             : usersError.message || 'An error occurred while loading users.'}
                       </p>
-                      <Button
+                      <button
                         onClick={() => refetchUsers()}
-                        variant="default"
-                        size="sm"
+                        className="btn btn-primary btn-sm"
                       >
                         <RefreshCw className="h-4 w-4 mr-2" />
                         Try Again
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 ) : users.length > 0 ? (
@@ -1472,39 +1458,35 @@ export const Settings2 = () => {
                             )}
                           </div>
                           <div className="flex flex-wrap sm:flex-nowrap gap-2">
-                            <Button
+                            <button
                               onClick={() => openActivityModal(systemUser)}
-                              variant="default"
-                              size="sm"
+                              className="btn btn-primary btn-sm"
                               title="View Activity"
                             >
                               <BarChart3 className="h-4 w-4" />
-                            </Button>
-                            <Button
+                            </button>
+                            <button
                               onClick={() => openPasswordModal(systemUser)}
-                              variant="secondary"
-                              size="sm"
+                              className="btn btn-secondary btn-sm"
                               title="Change Password"
                             >
                               <Lock className="h-4 w-4" />
-                            </Button>
-                            <Button
+                            </button>
+                            <button
                               onClick={() => handleEditUser(systemUser)}
-                              variant="secondary"
-                              size="sm"
+                              className="btn btn-secondary btn-sm"
                               title="Edit User"
                             >
                               <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
+                            </button>
+                            <button
                               onClick={() => handleDeleteUserClick(systemUser._id)}
-                              variant="destructive"
-                              size="sm"
+                              className="btn btn-danger btn-sm"
                               disabled={systemUser._id === user?._id}
                               title="Delete User"
                             >
                               <Trash2 className="h-4 w-4" />
-                            </Button>
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1517,11 +1499,12 @@ export const Settings2 = () => {
                     <p className="text-sm text-gray-500 mb-4">
                       The system has no users registered yet. Use the form below to create your first user.
                     </p>
-                    <Button
+                    <button
                       onClick={() => {
                         const form = document.getElementById('add-edit-user-form');
                         if (form) {
                           form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          // Focus on first input field
                           setTimeout(() => {
                             const firstInput = form.querySelector('input[type="text"]');
                             if (firstInput) {
@@ -1530,12 +1513,11 @@ export const Settings2 = () => {
                           }, 300);
                         }
                       }}
-                      variant="default"
-                      size="sm"
+                      className="btn btn-primary btn-sm"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Create First User
-                    </Button>
+                    </button>
                   </div>
                 )}
               </div>
@@ -1552,14 +1534,13 @@ export const Settings2 = () => {
                     </h2>
                   </div>
                   {editingUser && (
-                    <Button
+                    <button
                       onClick={resetNewUserForm}
-                      variant="secondary"
-                      size="sm"
+                      className="btn btn-secondary btn-sm"
                     >
                       <X className="h-4 w-4 mr-2" />
                       Cancel Edit
-                    </Button>
+                    </button>
                   )}
                 </div>
                 <p className="text-sm text-gray-600 mt-1">
@@ -1575,11 +1556,12 @@ export const Settings2 = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         First Name *
                       </label>
-                      <Input
+                      <input
                         type="text"
                         name="firstName"
                         value={newUserData.firstName}
                         onChange={handleNewUserChange}
+                        className="input"
                         placeholder="Enter first name"
                         autoComplete="off"
                         required
@@ -1591,11 +1573,12 @@ export const Settings2 = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Last Name *
                       </label>
-                      <Input
+                      <input
                         type="text"
                         name="lastName"
                         value={newUserData.lastName}
                         onChange={handleNewUserChange}
+                        className="input"
                         placeholder="Enter last name"
                         autoComplete="off"
                         required
@@ -1607,11 +1590,12 @@ export const Settings2 = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Email Address *
                       </label>
-                      <Input
+                      <input
                         type="email"
                         name="email"
                         value={newUserData.email}
                         onChange={handleNewUserChange}
+                        className="input"
                         placeholder="Enter email address"
                         autoComplete="off"
                         required
@@ -1625,12 +1609,12 @@ export const Settings2 = () => {
                           Password *
                         </label>
                         <div className="relative">
-                          <Input
+                          <input
                             type={showNewUserPassword ? 'text' : 'password'}
                             name="password"
                             value={newUserData.password}
                             onChange={handleNewUserChange}
-                            className="pr-10"
+                            className="input pr-10"
                             placeholder="Enter password"
                             autoComplete="new-password"
                             required
@@ -1656,15 +1640,14 @@ export const Settings2 = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Password
                         </label>
-                        <Button
+                        <button
                           type="button"
                           onClick={() => openPasswordModal()}
-                          variant="secondary"
-                          className="w-full"
+                          className="btn btn-secondary w-full"
                         >
                           <Lock className="h-4 w-4 mr-2" />
                           Change Password
-                        </Button>
+                        </button>
                         <p className="text-xs text-gray-500 mt-1">
                           Click to reset the user's password
                         </p>
@@ -1709,8 +1692,7 @@ export const Settings2 = () => {
                               type="button"
                               onClick={() => handleUpdateRolePermissions(newUserData.role)}
                               disabled={isUpdatingRolePermissions}
-                              variant="warning"
-                              size="sm"
+                              className="btn btn-warning btn-sm"
                             >
                               {isUpdatingRolePermissions ? (
                                 <>
@@ -1772,8 +1754,7 @@ export const Settings2 = () => {
                           <LoadingButton
                             type="submit"
                             isLoading={isCreatingUser}
-                            variant="default"
-                            className="w-full px-6 py-2.5"
+                            className="btn btn-primary w-full px-6 py-2.5"
                           >
                             <Plus className="h-4 w-4 mr-2" />
                             Create User
@@ -1853,7 +1834,7 @@ export const Settings2 = () => {
                       <LoadingButton
                         type="submit"
                         isLoading={isUpdatingUser}
-                        variant="default"
+                        className="btn btn-primary"
                       >
                         <Edit className="h-4 w-4 mr-2" />
                         Update User
@@ -1953,12 +1934,13 @@ export const Settings2 = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Header Text (Optional)
                       </label>
-                      <Textarea
+                      <textarea
                         name="headerText"
                         value={printSettings.headerText}
                         onChange={handlePrintSettingsChange}
+                        className="input"
                         placeholder="Enter custom header text"
-                        rows={3}
+                        rows="3"
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         This text will appear at the top of printed documents
@@ -1969,12 +1951,13 @@ export const Settings2 = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Footer Text (Optional)
                       </label>
-                      <Textarea
+                      <textarea
                         name="footerText"
                         value={printSettings.footerText}
                         onChange={handlePrintSettingsChange}
+                        className="input"
                         placeholder="Enter custom footer text"
-                        rows={3}
+                        rows="3"
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         This text will appear at the bottom of printed documents
@@ -2301,19 +2284,6 @@ export const Settings2 = () => {
                             <div className="text-xs text-gray-500">Display payment amount on print</div>
                           </div>
                         </label>
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="mobilePrintPreview"
-                            checked={printSettings.mobilePrintPreview}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Mobile Print Preview</div>
-                            <div className="text-xs text-gray-500">Use mobile layout for print preview/design</div>
-                          </div>
-                        </label>
                       </>
                     )}
                   </div>
@@ -2331,13 +2301,7 @@ export const Settings2 = () => {
                     )}
                   </p>
                   <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 overflow-hidden flex justify-center items-start min-h-[600px]">
-                    <div
-                      style={
-                        printSettings.mobilePrintPreview
-                          ? { maxWidth: 420, width: '100%', transform: 'scale(0.85)', transformOrigin: 'top center', marginBottom: '-200px' }
-                          : { transform: 'scale(0.55)', transformOrigin: 'top center', marginBottom: '-500px' }
-                      }
-                    >
+                    <div style={{ transform: 'scale(0.55)', transformOrigin: 'top center', marginBottom: '-500px' }}>
                       <PrintDocument
                         companySettings={{ ...companyData, logo: companyProfile.logo || companyData.logo }}
                         orderData={sampleOrderData}
@@ -2364,49 +2328,12 @@ export const Settings2 = () => {
                       };
                       handleSaveCompanySettings(dataToSend);
                     }}
-                    variant="default"
+                    className="btn btn-primary"
                   >
                     <Save className="h-4 w-4 mr-2" />
                     Save Print Settings
                   </LoadingButton>
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Other Tab */}
-        {activeTab === 'other' && (
-          <div className="card">
-            <div className="card-header">
-              <div className="flex items-center space-x-2">
-                <BarChart3 className="h-5 w-5 text-gray-600" />
-                <h2 className="text-lg font-semibold">Other Settings</h2>
-              </div>
-              <p className="text-sm text-gray-600 mt-1">
-                Display options and miscellaneous settings
-              </p>
-            </div>
-            <div className="card-content">
-              <div className="space-y-4">
-                <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={accountLedgerShowReturn}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setAccountLedgerShowReturn(checked);
-                      localStorage.setItem('accountLedgerShowReturnColumn', String(checked));
-                      toast.success(`Return column ${checked ? 'shown' : 'hidden'} in Account Ledger Summary`);
-                      window.dispatchEvent(new Event('accountLedgerConfigChanged'));
-                    }}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">Show Return Column in Account Ledger Summary</div>
-                    <div className="text-xs text-gray-500">Display the Return column in the Account Ledger Summary customer ledger table</div>
-                  </div>
-                </label>
               </div>
             </div>
           </div>
@@ -2671,11 +2598,11 @@ export const Settings2 = () => {
                     New Password *
                   </label>
                   <div className="relative">
-                    <Input
+                    <input
                       type={showPassword ? 'text' : 'password'}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="pr-10"
+                      className="input pr-10"
                       placeholder="Enter new password"
                     />
                     <button
@@ -2697,11 +2624,11 @@ export const Settings2 = () => {
                     Confirm Password *
                   </label>
                   <div className="relative">
-                    <Input
+                    <input
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="pr-10"
+                      className="input pr-10"
                       placeholder="Confirm new password"
                     />
                     <button
@@ -2725,14 +2652,14 @@ export const Settings2 = () => {
                     setShowPasswordModal(false);
                     setPasswordResetUser(null);
                   }}
-                  variant="secondary"
+                  className="btn btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handlePasswordReset}
                   disabled={isResettingPassword || !(passwordResetUser || editingUser)}
-                  variant="default"
+                  className="btn btn-primary"
                 >
                   {isResettingPassword ? 'Resetting...' : 'Reset Password'}
                 </button>
@@ -2766,11 +2693,11 @@ export const Settings2 = () => {
                     Current Password *
                   </label>
                   <div className="relative">
-                    <Input
+                    <input
                       type={showCurrentPassword ? 'text' : 'password'}
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
-                      className="pr-10"
+                      className="input pr-10"
                       placeholder="Enter current password"
                     />
                     <button
@@ -2792,11 +2719,11 @@ export const Settings2 = () => {
                     New Password *
                   </label>
                   <div className="relative">
-                    <Input
+                    <input
                       type={showPassword ? 'text' : 'password'}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="pr-10"
+                      className="input pr-10"
                       placeholder="Enter new password"
                     />
                     <button
@@ -2818,11 +2745,11 @@ export const Settings2 = () => {
                     Confirm New Password *
                   </label>
                   <div className="relative">
-                    <Input
+                    <input
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="pr-10"
+                      className="input pr-10"
                       placeholder="Confirm new password"
                     />
                     <button
@@ -2847,19 +2774,19 @@ export const Settings2 = () => {
               </div>
 
               <div className="flex justify-end space-x-3 mt-6">
-                <Button
+                <button
                   onClick={() => setShowMyPasswordModal(false)}
-                  variant="secondary"
+                  className="btn btn-secondary"
                 >
                   Cancel
-                </Button>
-                <Button
+                </button>
+                <button
                   onClick={handleChangeMyPassword}
                   disabled={isChangingMyPassword}
-                  variant="default"
+                  className="btn btn-primary"
                 >
                   {isChangingMyPassword ? 'Changing...' : 'Change Password'}
-                </Button>
+                </button>
               </div>
             </div>
           </div>

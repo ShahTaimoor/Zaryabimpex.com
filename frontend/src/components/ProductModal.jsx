@@ -1,9 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import BaseModal from './BaseModal';
 import { Camera } from 'lucide-react';
 import { LoadingButton } from './LoadingSpinner';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import ValidationSummary from './ValidationSummary';
+import toast from 'react-hot-toast';
 
 export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, allProducts = [], onEditExisting, categories = [] }) => {
   const [formData, setFormData] = useState({
@@ -139,7 +138,7 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
         });
         setPriceValidationShown(true);
       }
-      return null; // already showed toast
+      return false;
     }
     
     if (costPrice > 0 && wholesalePrice > 0 && costPrice > wholesalePrice) {
@@ -147,7 +146,7 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
         duration: 5000,
         position: 'top-center'
       });
-      return null;
+      return false;
     }
     
     if (costPrice > 0 && retailPrice > 0 && costPrice > retailPrice) {
@@ -155,12 +154,11 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
         duration: 5000,
         position: 'top-center'
       });
-      return null;
+      return false;
     }
     
     setErrors(newErrors);
-    if (Object.keys(newErrors).length === 0) return true;
-    return newErrors;
+    return Object.keys(newErrors).length === 0;
   }, [formData.name, formData.pricing, priceValidationShown]);
 
   const resetForm = useCallback((newData = {}) => {
@@ -172,13 +170,10 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       }
     }
     
-    const categoryId = typeof newData.category === 'object'
-      ? (newData.category?.id || newData.category?._id)
-      : (newData.categoryId || newData.category || '');
     setFormData({
       name: newData.name || '',
       description: newData.description || '',
-      category: categoryId || '',
+      category: newData.category || '',
       status: newData.status || 'active',
       expiryDate: expiryDateValue,
       barcode: newData.barcode || '',
@@ -220,17 +215,10 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
   const onSubmit = (e) => {
     e.preventDefault();
     
-    const result = validateForm();
+    const isValid = validateForm();
     
-    if (result === null) return; // price validation, already showed toast
-    
-    if (result !== true) {
-      const errorMessages = Object.values(result).filter(Boolean).join('. ');
-      toast.error(`Please fix the following errors: ${errorMessages}`, {
-        duration: 5000,
-        position: 'top-center'
-      });
-      const firstErrorField = Object.keys(result)[0];
+    if (!isValid) {
+      const firstErrorField = Object.keys(errors).find(key => errors[key]);
       if (firstErrorField) {
         setTimeout(() => {
           const fieldElement = document.querySelector(`[name="${firstErrorField}"], #${firstErrorField}`);
@@ -250,47 +238,47 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
   if (!isOpen) return null;
 
   return (
-    <BaseModal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={product ? 'Edit Product' : 'Add New Product'}
-      maxWidth="2xl"
-      variant="centered"
-      contentClassName="px-3 pt-4 pb-3 sm:px-5 sm:pt-5 sm:pb-4 xl:px-6 xl:pt-5 xl:pb-4"
-      headerClassName="p-3 sm:p-4 xl:p-5"
-    >
-      <form onSubmit={onSubmit}>
-        <div className="space-y-3 xl:space-y-4">
-                <div className="flex flex-col sm:flex-row gap-3 xl:gap-4">
-                  <div className="w-full sm:flex-[7] min-w-0">
-                    <label htmlFor="name" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
-                      Product Name
-                    </label>
-                    <input
-                      id="name"
-                      name="name"
-                      type="text"
-                      value={formData.name || ''}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      placeholder="Enter product name"
-                      className={`w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0 ${
-                        errors.name ? 'border-red-300' : 'border-gray-300'
-                      }`}
-                      autoComplete="off"
-                    />
-                    {errors.name && (
-                      <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-red-600">{errors.name}</p>
-                    )}
-                    
-                    {exactMatch && (
-                    <div className="mt-1.5 sm:mt-2 p-2 sm:p-3 bg-red-50 border border-red-200 rounded-md">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-xs sm:text-sm font-medium text-red-800">
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75" onClick={onClose} />
+        
+        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+          <form onSubmit={onSubmit}>
+            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                {product ? 'Edit Product' : 'Add New Product'}
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                    Product Name
+                  </label>
+                  <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    value={formData.name || ''}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    placeholder="Enter product name"
+                    className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                      errors.name ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    autoComplete="off"
+                  />
+                  {errors.name && (
+                    <p className="mt-1 text-sm text-red-600">{errors.name}</p>
+                  )}
+                  
+                  {exactMatch && (
+                    <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-red-800">
                             ⚠️ This product already exists!
                           </p>
-                          <p className="text-[10px] sm:text-xs text-red-600 mt-0.5 sm:mt-1 truncate">
+                          <p className="text-xs text-red-600 mt-1">
                             Product: "{exactMatch.name}"
                           </p>
                         </div>
@@ -313,14 +301,14 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                   )}
                   
                   {showSimilarProducts && similarProducts.length > 0 && (
-                    <div className="mt-1.5 sm:mt-2 p-2 sm:p-3 bg-blue-50 border border-blue-200 rounded-md">
-                      <p className="text-xs sm:text-sm font-medium text-blue-800 mb-1.5 sm:mb-2">
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                      <p className="text-sm font-medium text-blue-800 mb-2">
                         Similar existing products:
                       </p>
-                      <ul className="space-y-0.5 sm:space-y-1">
+                      <ul className="space-y-1">
                         {similarProducts.map((similar, index) => (
-                          <li key={index} className="flex items-center justify-between text-xs sm:text-sm text-blue-700 gap-2">
-                            <span className="truncate min-w-0">• {similar.name}</span>
+                          <li key={index} className="flex items-center justify-between text-sm text-blue-700">
+                            <span>• {similar.name}</span>
                             <button
                               type="button"
                               onClick={() => {
@@ -331,66 +319,48 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                                   }
                                 }, 100);
                               }}
-                              className="text-blue-600 hover:text-blue-800 underline text-[10px] sm:text-xs flex-shrink-0"
+                              className="text-blue-600 hover:text-blue-800 underline text-xs"
                             >
                               Edit
                             </button>
                           </li>
                         ))}
                       </ul>
-                      <p className="text-[10px] sm:text-xs text-blue-600 mt-1.5 sm:mt-2">
+                      <p className="text-xs text-blue-600 mt-2">
                         Choose a unique name to avoid duplicates, or edit an existing product.
                       </p>
                     </div>
                   )}
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">
-                      Product name must be unique - no duplicates allowed
-                    </p>
-                  </div>
-                  <div className="w-full sm:w-[20%] min-w-0 flex-shrink-0">
-                    <label htmlFor="category" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
-                      Category
-                    </label>
-                    <select
-                      id="category"
-                      name="category"
-                      value={formData.category || ''}
-                      onChange={handleChange}
-                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
-                    >
-                      <option value="">Select a category</option>
-                      {categories?.map((category) => {
-                        const catId = category.id || category._id;
-                        return (
-                          <option key={catId} value={catId}>
-                            {category.name}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Optional category</p>
-                  </div>
-                  <div className="w-full sm:flex-[1] min-w-0">
-                    <label htmlFor="status" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
-                      Status
-                    </label>
-                    <select
-                      id="status"
-                      name="status"
-                      value={formData.status || 'active'}
-                      onChange={handleChange}
-                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
-                    >
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive (Disabled)</option>
-                      <option value="discontinued">Discontinued</option>
-                    </select>
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Product availability</p>
-                  </div>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Product name must be unique - no duplicates allowed
+                  </p>
                 </div>
                 
                 <div>
-                  <label htmlFor="description" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                  <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+                    Category
+                  </label>
+                  <select
+                    id="category"
+                    name="category"
+                    value={formData.category || ''}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="">Select a category</option>
+                    {categories?.map((category) => (
+                      <option key={category._id} value={category._id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Optional product category
+                  </p>
+                </div>
+                
+                <div>
+                  <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
                     Description
                   </label>
                   <textarea
@@ -400,17 +370,39 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                     onChange={handleChange}
                     onBlur={handleBlur}
                     placeholder="Enter product description"
-                    rows={2}
-                    className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2.5rem] sm:min-h-0 resize-y"
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   />
-                  <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">
+                  <p className="mt-1 text-sm text-gray-500">
                     Optional description of the product
                   </p>
                 </div>
                 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 xl:gap-4">
+                <div>
+                  <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select
+                    id="status"
+                    name="status"
+                    value={formData.status || 'active'}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive (Disabled)</option>
+                    <option value="discontinued">Discontinued</option>
+                  </select>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {formData.status === 'active' && 'Product is active and available for sale'}
+                    {formData.status === 'inactive' && 'Product is disabled and hidden from sales'}
+                    {formData.status === 'discontinued' && 'Product is discontinued and no longer available'}
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label htmlFor="pricing.cost" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                    <label htmlFor="pricing.cost" className="block text-sm font-medium text-gray-700 mb-1">
                       Cost Price
                     </label>
                     <input
@@ -422,12 +414,12 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                       onChange={handleChange}
                       onBlur={handleBlur}
                       placeholder="0.00"
-                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Product cost</p>
+                    <p className="mt-1 text-sm text-gray-500">Product cost</p>
                   </div>
                   <div>
-                    <label htmlFor="pricing.retail" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                    <label htmlFor="pricing.retail" className="block text-sm font-medium text-gray-700 mb-1">
                       Retail Price
                     </label>
                     <input
@@ -439,12 +431,12 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                       onChange={handleChange}
                       onBlur={handleBlur}
                       placeholder="0.00"
-                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Retail selling price</p>
+                    <p className="mt-1 text-sm text-gray-500">Retail selling price</p>
                   </div>
                   <div>
-                    <label htmlFor="pricing.wholesale" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                    <label htmlFor="pricing.wholesale" className="block text-sm font-medium text-gray-700 mb-1">
                       Wholesale Price
                     </label>
                     <input
@@ -456,12 +448,15 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                       onChange={handleChange}
                       onBlur={handleBlur}
                       placeholder="0.00"
-                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Wholesale price</p>
+                    <p className="mt-1 text-sm text-gray-500">Wholesale selling price</p>
                   </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="inventory.currentStock" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                    <label htmlFor="inventory.currentStock" className="block text-sm font-medium text-gray-700 mb-1">
                       Current Stock
                     </label>
                     <input
@@ -472,12 +467,12 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                       onChange={handleChange}
                       onBlur={handleBlur}
                       placeholder="0"
-                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Inventory quantity</p>
+                    <p className="mt-1 text-sm text-gray-500">Current inventory quantity</p>
                   </div>
                   <div>
-                    <label htmlFor="inventory.reorderPoint" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                    <label htmlFor="inventory.reorderPoint" className="block text-sm font-medium text-gray-700 mb-1">
                       Reorder Point
                     </label>
                     <input
@@ -488,50 +483,35 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                       onChange={handleChange}
                       onBlur={handleBlur}
                       placeholder="0"
-                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Min stock for reorder</p>
+                    <p className="mt-1 text-sm text-gray-500">Minimum stock level for reordering</p>
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 xl:gap-4">
-                  <div>
-                    <label htmlFor="expiryDate" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
-                      Expiry Date
-                    </label>
-                    <input
-                      id="expiryDate"
-                      name="expiryDate"
-                      type="date"
-                      value={formData.expiryDate || ''}
-                      onChange={handleChange}
-                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
-                    />
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Leave empty if N/A</p>
-                  </div>
-                  <div>
-                    <label htmlFor="brand" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
-                      Brand
-                    </label>
-                    <input
-                      id="brand"
-                      name="brand"
-                      type="text"
-                      value={formData.brand || ''}
-                      onChange={handleChange}
-                      placeholder="Enter brand name"
-                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
-                    />
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Product brand</p>
-                  </div>
+                <div>
+                  <label htmlFor="expiryDate" className="block text-sm font-medium text-gray-700 mb-1">
+                    Expiry Date
+                  </label>
+                  <input
+                    id="expiryDate"
+                    name="expiryDate"
+                    type="date"
+                    value={formData.expiryDate || ''}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                  <p className="mt-1 text-sm text-gray-500">
+                    Optional expiry date for the product. Leave empty if product does not expire.
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 xl:gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="barcode" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                    <label htmlFor="barcode" className="block text-sm font-medium text-gray-700 mb-1">
                       Barcode
                     </label>
-                    <div className="flex gap-1.5 sm:gap-2">
+                    <div className="flex space-x-2">
                       <input
                         id="barcode"
                         name="barcode"
@@ -539,7 +519,7 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                         value={formData.barcode || ''}
                         onChange={handleChange}
                         placeholder="Enter or scan barcode"
-                        className="flex-1 min-w-0 px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       />
                       <button
                         type="button"
@@ -550,16 +530,16 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                             });
                           }
                         }}
-                        className="px-2 py-1.5 sm:px-3 sm:py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex-shrink-0"
+                        className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                         title="Scan barcode"
                       >
-                        <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-600" />
+                        <Camera className="h-4 w-4 text-gray-600" />
                       </button>
                     </div>
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Product barcode for scanning</p>
+                    <p className="mt-1 text-sm text-gray-500">Product barcode for scanning</p>
                   </div>
                   <div>
-                    <label htmlFor="sku" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                    <label htmlFor="sku" className="block text-sm font-medium text-gray-700 mb-1">
                       SKU
                     </label>
                     <input
@@ -569,38 +549,66 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                       value={formData.sku || ''}
                       onChange={handleChange}
                       placeholder="Enter SKU"
-                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Stock Keeping Unit</p>
+                    <p className="mt-1 text-sm text-gray-500">Stock Keeping Unit</p>
                   </div>
+                </div>
+
+                <div>
+                  <label htmlFor="brand" className="block text-sm font-medium text-gray-700 mb-1">
+                    Brand
+                  </label>
+                  <input
+                    id="brand"
+                    name="brand"
+                    type="text"
+                    value={formData.brand || ''}
+                    onChange={handleChange}
+                    placeholder="Enter brand name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                  <p className="mt-1 text-sm text-gray-500">Product brand name</p>
                 </div>
               </div>
               
+              {Object.keys(errors).some(key => errors[key]) && (
+                <ValidationSummary
+                  errors={errors}
+                  title="Please fix the following errors before submitting:"
+                  onFieldClick={(fieldName) => {
+                    const fieldElement = document.querySelector(`[name="${fieldName}"], #${fieldName}`);
+                    if (fieldElement) {
+                      fieldElement.focus();
+                      fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                  }}
+                />
+              )}
+            </div>
             
-            <div className="bg-gray-50 px-3 py-2.5 sm:px-5 sm:py-3 xl:px-6 xl:py-3 flex flex-col-reverse sm:flex-row-reverse gap-2 sm:gap-3 sm:justify-end">
+            <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
               <LoadingButton
                 type="submit"
                 isLoading={isSubmitting}
                 disabled={!formData.name || isSubmitting || Object.keys(errors).some(key => errors[key])}
-                variant="default"
-                size="default"
-                className="w-full sm:w-auto text-sm min-h-[2rem] sm:min-h-9 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn btn-primary btn-md w-full sm:w-auto sm:ml-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {product ? 'Update Product' : 'Create Product'}
               </LoadingButton>
-              <Button
+              <button
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                variant="secondary"
-                size="default"
-                className="w-full sm:w-auto text-sm min-h-[2rem] sm:min-h-9 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn btn-secondary btn-md w-full sm:w-auto mt-3 sm:mt-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
-              </Button>
+              </button>
             </div>
-      </form>
-    </BaseModal>
+          </form>
+        </div>
+      </div>
+    </div>
   );
 };
 

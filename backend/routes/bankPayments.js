@@ -4,11 +4,15 @@ const { body, validationResult, query } = require('express-validator');
 const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
-const bankPaymentRepository = require('../repositories/postgres/BankPaymentRepository');
-const supplierRepository = require('../repositories/postgres/SupplierRepository');
-const customerRepository = require('../repositories/postgres/CustomerRepository');
-const AccountingService = require('../services/accountingService');
-const { validateUuidParam } = require('../middleware/validation');
+const BankPayment = require('../models/BankPayment'); // Still needed for new BankPayment() and static methods
+const Bank = require('../models/Bank'); // Still needed for model reference in populate
+const Sales = require('../models/Sales'); // Still needed for model reference in populate
+const bankPaymentRepository = require('../repositories/BankPaymentRepository');
+const bankRepository = require('../repositories/BankRepository');
+const supplierRepository = require('../repositories/SupplierRepository');
+const customerRepository = require('../repositories/CustomerRepository');
+const chartOfAccountsRepository = require('../repositories/ChartOfAccountsRepository');
+const salesRepository = require('../repositories/SalesRepository');
 
 // @route   GET /api/bank-payments
 // @desc    Get all bank payments with filtering and pagination
@@ -48,31 +52,59 @@ router.get('/', [
       particular
     } = req.query;
 
-    // Build Postgres filter
-    // Normalize dates to start/end of day for proper filtering
-    const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
-    const filter = {
-      startDate: req.dateRange?.startDate ? (getStartOfDayPakistan(req.dateRange.startDate) || new Date(req.dateRange.startDate)) : null,
-      endDate: req.dateRange?.endDate ? (getEndOfDayPakistan(req.dateRange.endDate) || new Date(req.dateRange.endDate)) : null,
-      voucherCode: voucherCode || undefined,
-      amount: amount ? parseFloat(amount) : undefined,
-      particular: particular || undefined
-    };
+    // Build filter object
+    const filter = {};
 
+    // Date range filter - use dateFilter from middleware (Pakistan timezone)
+    if (req.dateFilter && Object.keys(req.dateFilter).length > 0) {
+      Object.assign(filter, req.dateFilter);
+    }
+
+    // Voucher code filter
+    if (voucherCode) {
+      filter.voucherCode = { $regex: voucherCode, $options: 'i' };
+    }
+
+    // Amount filter
+    if (amount) {
+      filter.amount = parseFloat(amount);
+    }
+
+    // Particular filter
+    if (particular) {
+      filter.particular = { $regex: particular, $options: 'i' };
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get bank payments with pagination
     const result = await bankPaymentRepository.findWithPagination(filter, {
-      page: parseInt(page, 10),
-      limit: parseInt(limit, 10)
+      page: parseInt(page),
+      limit: parseInt(limit),
+      sort: { date: -1, createdAt: -1 },
+      populate: [
+        { path: 'bank', select: 'accountName accountNumber bankName' },
+        { path: 'order', model: 'Sales', select: 'orderNumber' },
+        { path: 'supplier', select: 'companyName contactPerson' },
+        { path: 'customer', select: 'name businessName email' },
+        { path: 'createdBy', select: 'firstName lastName' },
+        { path: 'expenseAccount', select: 'accountName accountCode' }
+      ]
     });
+
+    const bankPayments = result.bankPayments;
+    const total = result.total;
 
     res.json({
       success: true,
       data: {
-        bankPayments: result.bankPayments,
+        bankPayments,
         pagination: {
-          currentPage: result.pagination.page,
-          totalPages: result.pagination.pages,
-          totalItems: result.pagination.total,
-          itemsPerPage: result.pagination.limit
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / parseInt(limit)),
+          totalItems: total,
+          itemsPerPage: parseInt(limit)
         }
       }
     });
@@ -95,14 +127,14 @@ router.post('/', [
   body('date').optional().isISO8601().withMessage('Date must be a valid date'),
   body('amount').isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
   body('particular').optional().isString().trim().isLength({ max: 500 }).withMessage('Particular must be less than 500 characters'),
-  body('bank').isUUID(4).withMessage('Valid bank account is required'),
+  body('bank').isMongoId().withMessage('Valid bank account is required'),
   body('bankAccount').optional().isString().trim().isLength({ min: 1, max: 100 }).withMessage('Bank account must be a string (deprecated - use bank)'),
   body('bankName').optional().isString().trim().isLength({ min: 1, max: 100 }).withMessage('Bank name must be a string (deprecated - use bank)'),
   body('transactionReference').optional().isString().trim().withMessage('Transaction reference must be a string'),
-  body('order').optional().isUUID(4).withMessage('Invalid order ID'),
-  body('supplier').optional().isUUID(4).withMessage('Invalid supplier ID'),
-  body('customer').optional().isUUID(4).withMessage('Invalid customer ID'),
-  body('expenseAccount').optional().isUUID(4).withMessage('Invalid expense account ID'),
+  body('order').optional().isMongoId().withMessage('Invalid order ID'),
+  body('supplier').optional().isMongoId().withMessage('Invalid supplier ID'),
+  body('customer').optional().isMongoId().withMessage('Invalid customer ID'),
+  body('expenseAccount').optional().isMongoId().withMessage('Invalid expense account ID'),
   body('notes').optional().isString().trim().isLength({ max: 1000 }).withMessage('Notes must be less than 1000 characters')
 ], async (req, res) => {
   try {
@@ -123,9 +155,19 @@ router.post('/', [
       supplier,
       customer,
       notes,
+      expenseAccount
     } = req.body;
 
-    // Order validation removed - orders handled separately
+    // Validate order exists if provided
+    if (order) {
+      const orderExists = await salesRepository.findById(order);
+      if (!orderExists) {
+        return res.status(400).json({
+          success: false,
+          message: 'Order not found'
+        });
+      }
+    }
 
     // Validate supplier exists if provided
     if (supplier) {
@@ -149,68 +191,105 @@ router.post('/', [
       }
     }
 
-    // Validation: Must have either customer or supplier, not both
-    if (customer && supplier) {
+    // Validate bank exists
+    const bankExists = await bankRepository.findById(bank);
+    if (!bankExists) {
       return res.status(400).json({
         success: false,
-        message: 'Bank payment must be for either a customer OR a supplier, not both'
+        message: 'Bank account not found'
       });
     }
 
-    if (!customer && !supplier) {
+    if (!bankExists.isActive) {
       return res.status(400).json({
         success: false,
-        message: 'Bank payment must specify either a customer or a supplier'
+        message: 'Bank account is inactive'
       });
     }
 
-    // Validate amount
-    const paymentAmount = parseFloat(amount);
-    if (isNaN(paymentAmount) || paymentAmount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Amount must be a positive number'
-      });
+    let expenseAccountDoc = null;
+    if (expenseAccount) {
+      expenseAccountDoc = await chartOfAccountsRepository.findById(expenseAccount);
+      if (!expenseAccountDoc) {
+        return res.status(400).json({
+          success: false,
+          message: 'Expense account not found'
+        });
+      }
     }
-
-    // Bank validation - can be added later if Bank model is migrated to PostgreSQL
 
     const resolvedParticular = particular
       ? particular.trim()
-      : 'Bank Payment';
+      : expenseAccountDoc
+        ? `Expense - ${expenseAccountDoc.accountName}`
+        : 'Bank Payment';
 
-    // Create bank payment with atomic transaction
-    const { transaction } = require('../config/postgres');
-    
-    const bankPayment = await transaction(async (client) => {
-      const bankPaymentData = {
-        date: date ? new Date(date) : new Date(),
-        amount: paymentAmount,
-        particular: resolvedParticular,
-        bankId: bank || null,
-        transactionReference: transactionReference ? transactionReference.trim() : null,
-        supplierId: supplier || null,
-        customerId: customer || null,
-        notes: notes ? notes.trim() : null,
-        createdBy: req.user._id.toString(),
-      };
+    // Create bank payment
+    const bankPaymentData = {
+      date: date ? new Date(date) : new Date(),
+      amount: parseFloat(amount),
+      particular: resolvedParticular,
+      bank: bank,
+      transactionReference: transactionReference ? transactionReference.trim() : null,
+      order: order || null,
+      supplier: supplier || null,
+      customer: customer || null,
+      notes: notes ? notes.trim() : null,
+      createdBy: req.user._id,
+      expenseAccount: expenseAccountDoc ? expenseAccountDoc._id : null
+    };
 
-      // Create payment
-      const payment = await bankPaymentRepository.create(bankPaymentData, client);
+    const bankPayment = new BankPayment(bankPaymentData);
+    await bankPayment.save();
 
-      // Post to account ledger atomically (using same client)
-      await AccountingService.recordBankPayment(payment, client);
+    // Update supplier balance if supplier is provided
+    if (supplier && amount > 0) {
+      try {
+        const SupplierBalanceService = require('../services/supplierBalanceService');
+        await SupplierBalanceService.recordPayment(supplier, amount, order);
+      } catch (error) {
+        console.error('Error updating supplier balance for bank payment:', error);
+        // Don't fail the bank payment creation if balance update fails
+      }
+    }
 
-      return payment;
-    });
+    // Update customer balance if customer is provided
+    // When we pay bank payment to a customer, we're giving them money (refund/advance)
+    // This should use recordRefund() which properly handles reducing advanceBalance first,
+    // then increasing advanceBalance if we're paying more than their credit
+    if (customer && amount > 0) {
+      try {
+        const CustomerBalanceService = require('../services/customerBalanceService');
+        await CustomerBalanceService.recordRefund(customer, amount, order);
+      } catch (error) {
+        console.error('Error updating customer balance for bank payment:', error);
+        // Don't fail the bank payment creation if balance update fails
+      }
+    }
 
-    // Fetch the created payment with supplier/customer details using findById
-    const paymentWithDetails = await bankPaymentRepository.findById(bankPayment.id);
+    // Create accounting entries
+    try {
+      const AccountingService = require('../services/accountingService');
+      await AccountingService.recordBankPayment(bankPayment);
+    } catch (error) {
+      console.error('Error creating accounting entries for bank payment:', error);
+      // Don't fail the bank payment creation if accounting fails
+    }
+
+    // Populate the created payment
+    await bankPayment.populate([
+      { path: 'bank', select: 'accountName accountNumber bankName' },
+      { path: 'order', select: 'orderNumber' },
+      { path: 'supplier', select: 'companyName contactPerson' },
+      { path: 'customer', select: 'name businessName email' },
+      { path: 'createdBy', select: 'firstName lastName' },
+      { path: 'expenseAccount', select: 'accountName accountCode' }
+    ]);
 
     res.status(201).json({
       success: true,
       message: 'Bank payment created successfully',
-      data: paymentWithDetails || bankPayment
+      data: bankPayment
     });
   } catch (error) {
     console.error('Create bank payment error:', error);
@@ -239,16 +318,30 @@ router.get('/summary/date-range', [
 
     const { fromDate, toDate } = req.query;
 
-    const summary = await bankPaymentRepository.getSummary(fromDate, toDate);
+    const filter = {
+      date: {
+        $gte: new Date(fromDate),
+        $lte: new Date(toDate + 'T23:59:59.999Z')
+      }
+    };
+
+    // Get summary data
+    const summary = await bankPaymentRepository.getSummary(filter);
+
+    const result = summary.length > 0 ? summary[0] : {
+      totalAmount: 0,
+      totalCount: 0,
+      averageAmount: 0
+    };
 
     res.json({
       success: true,
       data: {
         fromDate,
         toDate,
-        totalAmount: summary.totalAmount || 0,
-        totalCount: summary.totalCount || 0,
-        averageAmount: summary.averageAmount || 0
+        totalAmount: result.totalAmount,
+        totalCount: result.totalCount,
+        averageAmount: result.averageAmount
       }
     });
   } catch (error) {
@@ -267,20 +360,21 @@ router.get('/summary/date-range', [
 router.put('/:id', [
   auth,
   requirePermission('edit_orders'),
-  validateUuidParam('id'),
   body('date').optional().isISO8601().withMessage('Date must be a valid date'),
   body('amount').optional().isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
   body('particular').optional().isString().trim().isLength({ min: 1, max: 500 }).withMessage('Particular must be between 1 and 500 characters'),
-  body('bank').optional().isUUID(4).withMessage('Valid bank account is required'),
+  body('bank').optional().isMongoId().withMessage('Valid bank account is required'),
   body('transactionReference').optional().isString().trim().withMessage('Transaction reference must be a string'),
-  body('supplier').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid supplier ID'),
-  body('customer').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid customer ID'),
+  body('order').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid order ID'),
+  body('supplier').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid supplier ID'),
+  body('customer').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid customer ID'),
+  body('expenseAccount').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid expense account ID'),
   body('notes').optional().isString().trim().isLength({ max: 1000 }).withMessage('Notes must be less than 1000 characters'),
   handleValidationErrors
 ], async (req, res) => {
   try {
-    const existing = await bankPaymentRepository.findById(req.params.id);
-    if (!existing) {
+    const bankPayment = await BankPayment.findById(req.params.id);
+    if (!bankPayment) {
       return res.status(404).json({
         success: false,
         message: 'Bank payment not found'
@@ -293,49 +387,43 @@ router.put('/:id', [
       particular,
       bank,
       transactionReference,
+      order,
       supplier,
       customer,
-      notes
+      notes,
+      expenseAccount
     } = req.body;
 
-    const updateData = {};
-    if (date !== undefined) updateData.date = new Date(date);
-    if (amount !== undefined) updateData.amount = parseFloat(amount);
-    if (particular !== undefined) updateData.particular = particular.trim();
-    if (bank !== undefined) updateData.bankId = bank;
-    if (transactionReference !== undefined) updateData.transactionReference = transactionReference ? transactionReference.trim() : null;
-    if (supplier !== undefined) updateData.supplierId = supplier || null;
-    if (customer !== undefined) updateData.customerId = customer || null;
-    if (notes !== undefined) updateData.notes = notes ? notes.trim() : null;
+    // Update fields
+    if (date !== undefined) bankPayment.date = new Date(date);
+    if (amount !== undefined) bankPayment.amount = parseFloat(amount);
+    if (particular !== undefined) bankPayment.particular = particular.trim();
+    if (bank !== undefined) bankPayment.bank = bank;
+    if (transactionReference !== undefined) bankPayment.transactionReference = transactionReference ? transactionReference.trim() : null;
+    if (order !== undefined) bankPayment.order = order || null;
+    if (supplier !== undefined) bankPayment.supplier = supplier || null;
+    if (customer !== undefined) bankPayment.customer = customer || null;
+    if (notes !== undefined) bankPayment.notes = notes ? notes.trim() : null;
+    if (expenseAccount !== undefined) bankPayment.expenseAccount = expenseAccount || null;
 
-    const { transaction } = require('../config/postgres');
-    const updatedPayment = await transaction(async (client) => {
-      // 1. Reverse old ledger entries
-      await AccountingService.reverseLedgerEntriesByReference('bank_payment', req.params.id, client);
-      // 2. Update payment (within transaction)
-      const payment = await bankPaymentRepository.update(req.params.id, updateData, client);
-      if (!payment) return null;
-      // 3. Re-post ledger with updated values (must have customer or supplier)
-      if (payment.customer_id || payment.supplier_id) {
-        await AccountingService.recordBankPayment(payment, client);
-      }
-      return payment;
-    });
+    bankPayment.updatedBy = req.user._id;
 
-    if (!updatedPayment) {
-      return res.status(404).json({
-        success: false,
-        message: 'Bank payment not found'
-      });
-    }
+    await bankPayment.save();
 
-    // Fetch formatted payment with supplier/customer for response
-    const paymentWithDetails = await bankPaymentRepository.findById(req.params.id);
+    // Populate the updated payment
+    await bankPayment.populate([
+      { path: 'bank', select: 'accountName accountNumber bankName' },
+      { path: 'order', select: 'orderNumber' },
+      { path: 'supplier', select: 'companyName contactPerson' },
+      { path: 'customer', select: 'name businessName email' },
+      { path: 'createdBy', select: 'firstName lastName' },
+      { path: 'expenseAccount', select: 'accountName accountCode' }
+    ]);
 
     res.json({
       success: true,
       message: 'Bank payment updated successfully',
-      data: paymentWithDetails || { ...updatedPayment, voucherCode: updatedPayment.payment_number }
+      data: bankPayment
     });
   } catch (error) {
     console.error('Update bank payment error:', error);
@@ -352,12 +440,10 @@ router.put('/:id', [
 // @access  Private
 router.delete('/:id', [
   auth,
-  requirePermission('delete_orders'),
-  validateUuidParam('id'),
-  handleValidationErrors
+  requirePermission('delete_orders')
 ], async (req, res) => {
   try {
-    const bankPayment = await bankPaymentRepository.findById(req.params.id);
+    const bankPayment = await BankPayment.findById(req.params.id);
     if (!bankPayment) {
       return res.status(404).json({
         success: false,
@@ -365,7 +451,7 @@ router.delete('/:id', [
       });
     }
 
-    await bankPaymentRepository.delete(req.params.id);
+    await BankPayment.findByIdAndDelete(req.params.id);
 
     res.json({
       success: true,

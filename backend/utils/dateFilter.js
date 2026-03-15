@@ -108,11 +108,11 @@ function getEndOfDayPakistan(dateInput) {
 }
 
 /**
- * Build date filter for a date range in Pakistan timezone
+ * Build MongoDB date filter for a date range in Pakistan timezone
  * @param {string|Date} startDate - Start date (YYYY-MM-DD) or Date object
  * @param {string|Date} endDate - End date (YYYY-MM-DD) or Date object
- * @param {string} fieldName - Field name to filter (default: 'createdAt')
- * @returns {Object} Date filter object { fieldName: { $gte, $lte } }
+ * @param {string} fieldName - MongoDB field name to filter (default: 'createdAt')
+ * @returns {Object} MongoDB query filter object
  */
 function buildDateRangeFilter(startDate, endDate, fieldName = 'createdAt') {
   const filter = {};
@@ -133,11 +133,11 @@ function buildDateRangeFilter(startDate, endDate, fieldName = 'createdAt') {
 }
 
 /**
- * Build date filter for multiple date fields
+ * Build MongoDB date filter for multiple date fields
  * @param {string|Date} startDate - Start date (YYYY-MM-DD) or Date object
  * @param {string|Date} endDate - End date (YYYY-MM-DD) or Date object
- * @param {Array<string>} fieldNames - Array of field names to filter
- * @returns {Object} Date filter object with $or conditions
+ * @param {Array<string>} fieldNames - Array of MongoDB field names to filter
+ * @returns {Object} MongoDB query filter object with $or conditions
  */
 function buildMultiFieldDateFilter(startDate, endDate, fieldNames = ['createdAt']) {
   if (!startDate && !endDate) {

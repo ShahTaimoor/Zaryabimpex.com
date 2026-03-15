@@ -4,9 +4,11 @@ const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors, sanitizeRequest } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const inventoryReportService = require('../services/inventoryReportService');
-const inventoryReportRepository = require('../repositories/postgres/InventoryReportRepository');
-const productRepository = require('../repositories/postgres/ProductRepository');
-const salesRepository = require('../repositories/postgres/SalesRepository');
+const InventoryReport = require('../models/InventoryReport'); // Still needed for model reference
+const Product = require('../models/Product'); // Still needed for model reference
+const inventoryReportRepository = require('../repositories/InventoryReportRepository');
+const productRepository = require('../repositories/ProductRepository');
+const salesRepository = require('../repositories/SalesRepository');
 
 const router = express.Router();
 
@@ -86,7 +88,7 @@ router.get('/', [
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('reportType').optional({ checkFalsy: true }).isIn(['stock_levels', 'turnover_rates', 'aging_analysis', 'comprehensive', 'custom']),
   query('status').optional({ checkFalsy: true }).isIn(['generating', 'completed', 'failed', 'archived']),
-  query('generatedBy').optional({ checkFalsy: true }).isUUID(4),
+  query('generatedBy').optional({ checkFalsy: true }).isMongoId(),
   query('startDate').optional({ checkFalsy: true }).isISO8601(),
   query('endDate').optional({ checkFalsy: true }).isISO8601(),
   query('sortBy').optional({ checkFalsy: true }).isIn(['generatedAt', 'reportName', 'status', 'viewCount']),
@@ -261,42 +263,51 @@ router.get('/quick/stock-levels', [
 ], async (req, res) => {
   try {
     const { limit = 10, status } = req.query;
-    const filters = {};
-    if (status === 'out_of_stock') filters.stockStatus = 'outOfStock';
-    else if (status === 'low_stock') filters.lowStock = true;
-    else if (status === 'in_stock') filters.stockStatus = 'inStock';
+    
+    const Product = require('../models/Product');
+    
+    // Build match criteria
+    const matchCriteria = {};
+    if (status) {
+      // This would need more sophisticated logic based on reorder points
+      switch (status) {
+        case 'out_of_stock':
+          matchCriteria['inventory.currentStock'] = 0;
+          break;
+        case 'low_stock':
+          matchCriteria['inventory.currentStock'] = { $lte: '$inventory.reorderPoint' };
+          break;
+        case 'overstocked':
+          matchCriteria['inventory.currentStock'] = { $gt: { $multiply: ['$inventory.reorderPoint', 3] } };
+          break;
+        default:
+          matchCriteria['inventory.currentStock'] = { $gt: 0 };
+      }
+    }
 
-    const products = await productRepository.findAll(filters, {
-      limit: parseInt(limit, 10) || 10
+    const products = await productRepository.findAll(matchCriteria, {
+      populate: [{ path: 'category', select: 'name' }],
+      sort: { 'inventory.currentStock': -1 },
+      limit: parseInt(limit)
     });
 
-    const currentStock = (p) => p.stock_quantity ?? p.inventory?.currentStock ?? 0;
-    const minStock = (p) => p.min_stock_level ?? p.inventory?.minStock ?? 0;
-    const reorderPoint = (p) => p.min_stock_level ?? p.inventory?.reorderPoint ?? 0;
-    const costPrice = (p) => p.cost_price ?? p.pricing?.cost ?? 0;
-    const stockLevels = products.map((product, index) => {
-      const cur = currentStock(product);
-      const min = minStock(product);
-      const reorder = reorderPoint(product);
-      const cost = costPrice(product);
-      const stockStatus = cur === 0 ? 'out_of_stock' : (cur <= reorder ? 'low_stock' : 'in_stock');
-      return {
-        product: {
-          _id: product.id,
-          name: product.name,
-          description: product.description,
-          category: product.category_id || product.category
-        },
-        metrics: {
-          currentStock: cur,
-          minStock: min,
-          reorderPoint: reorder,
-          stockValue: cur * cost,
-          stockStatus
-        },
-        rank: index + 1
-      };
-    });
+    const stockLevels = products.map((product, index) => ({
+      product: {
+        _id: product._id,
+        name: product.name,
+        description: product.description,
+        category: product.category
+      },
+      metrics: {
+        currentStock: product.inventory.currentStock,
+        minStock: product.inventory.minStock,
+        reorderPoint: product.inventory.reorderPoint,
+        stockValue: product.inventory.currentStock * product.pricing.cost,
+        stockStatus: product.inventory.currentStock === 0 ? 'out_of_stock' : 
+                    product.inventory.currentStock <= product.inventory.reorderPoint ? 'low_stock' : 'in_stock'
+      },
+      rank: index + 1
+    }));
 
     res.json({
       stockLevels,
@@ -350,33 +361,50 @@ router.get('/quick/turnover-rates', [
     }
 
     // Get sales data for the period
-    const salesData = await salesRepository.getProductTurnoverStats(startDate, endDate, limit);
+    const salesData = await salesRepository.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate, $lte: endDate },
+          status: 'delivered'
+        }
+      },
+      { $unwind: '$items' },
+      {
+        $group: {
+          _id: '$items.product',
+          totalSold: { $sum: '$items.quantity' }
+        }
+      },
+      { $sort: { totalSold: -1 } },
+      { $limit: parseInt(limit) }
+    ]);
 
     // Get product details
-    const productIds = salesData.map(s => s.productId);
-    const products = await productRepository.findAll({ ids: productIds });
+    const productIds = salesData.map(s => s._id);
+    const products = await productRepository.findByIds(productIds, {
+      populate: [{ path: 'category', select: 'name' }]
+    });
 
     const periodDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
     const periodYears = periodDays / 365;
 
     const turnoverRates = salesData.map((sale, index) => {
-      const product = products.find(p => p.id === sale.productId);
-      const currentStock = parseFloat(product?.stock_quantity || 0);
-      const turnoverRate = product && currentStock > 0 ? 
-        (sale.totalSold / periodYears) / currentStock : 0;
+      const product = products.find(p => p._id.toString() === sale._id.toString());
+      const turnoverRate = product && product.inventory.currentStock > 0 ? 
+        (sale.totalSold / periodYears) / product.inventory.currentStock : 0;
       const daysToSell = turnoverRate > 0 ? 365 / turnoverRate : 999;
 
       return {
         product: {
-          _id: product?.id,
+          _id: product?._id,
           name: product?.name,
           description: product?.description,
-          category: product?.category_name || product?.category_id
+          category: product?.category
         },
         metrics: {
           turnoverRate,
           totalSold: sale.totalSold,
-          averageStock: currentStock,
+          averageStock: product?.inventory.currentStock || 0,
           daysToSell,
           turnoverCategory: turnoverRate >= 12 ? 'fast' : 
                            turnoverRate <= 4 ? 'slow' : 
@@ -420,32 +448,48 @@ router.get('/quick/aging-analysis', [
     const { limit = 10, threshold = 90 } = req.query;
     
     // Get products with stock
-    const products = await productRepository.findAll({ isActive: true });
-    const productsWithStock = products.filter(p => parseFloat(p.stock_quantity) > 0).slice(0, parseInt(limit) * 2);
+    const products = await productRepository.findAll({ 'inventory.currentStock': { $gt: 0 } }, {
+      populate: [{ path: 'category', select: 'name' }],
+      limit: parseInt(limit) * 2 // Get more to filter by aging
+    });
 
     // Get last sold dates for products
-    const productIds = productsWithStock.map(p => p.id);
-    const lastSoldDates = await salesRepository.getLastSoldDates(productIds);
+    const productIds = products.map(p => p._id);
+    const lastSoldDates = await salesRepository.aggregate([
+      {
+        $match: {
+          status: 'delivered',
+          'items.product': { $in: productIds }
+        }
+      },
+      { $unwind: '$items' },
+      {
+        $group: {
+          _id: '$items.product',
+          lastSoldDate: { $max: '$createdAt' }
+        }
+      }
+    ]);
 
     const currentDate = new Date();
     const agingAnalysis = [];
 
-    for (const product of productsWithStock) {
-      const lastSoldData = lastSoldDates.find(l => l.productId === product.id);
-      const lastSoldDate = lastSoldData?.lastSoldDate || product.created_at;
-      const daysInStock = Math.ceil((currentDate - new Date(lastSoldDate)) / (1000 * 60 * 60 * 24));
+    for (const product of products) {
+      const lastSoldData = lastSoldDates.find(l => l._id.toString() === product._id.toString());
+      const lastSoldDate = lastSoldData?.lastSoldDate || product.createdAt;
+      const daysInStock = Math.ceil((currentDate - lastSoldDate) / (1000 * 60 * 60 * 24));
       
       if (daysInStock >= parseInt(threshold)) {
-        const stockValue = (parseFloat(product.stock_quantity) || 0) * (parseFloat(product.cost_price) || 0);
+        const stockValue = product.inventory.currentStock * product.pricing.cost;
         const potentialLoss = daysInStock > 365 ? stockValue * 0.5 : 
                              daysInStock > 180 ? stockValue * 0.2 : 0;
 
         agingAnalysis.push({
           product: {
-            _id: product.id,
+            _id: product._id,
             name: product.name,
             description: product.description,
-            category: product.category_name || product.category_id
+            category: product.category
           },
           metrics: {
             daysInStock,
@@ -499,17 +543,67 @@ router.get('/quick/summary', [
   try {
     const totalProductsCount = await productRepository.count({});
     
-    const activeProductsCount = await productRepository.count({ isActive: true });
+    const activeProductsCount = await productRepository.count({ status: 'active' });
 
     // Get overall inventory summary
-    const products = await productRepository.findAll({ isActive: true });
-    const summaryData = {
-      totalProducts: products.length,
-      totalStockValue: products.reduce((sum, p) => sum + (parseFloat(p.stock_quantity) || 0) * (parseFloat(p.cost_price) || 0), 0),
-      lowStockProducts: products.filter(p => (parseFloat(p.stock_quantity) || 0) <= (parseFloat(p.min_stock_level) || 0)).length,
-      outOfStockProducts: products.filter(p => (parseFloat(p.stock_quantity) || 0) === 0).length,
-      overstockedProducts: products.filter(p => (parseFloat(p.stock_quantity) || 0) > (parseFloat(p.min_stock_level) || 0) * 3).length
+    const summary = await productRepository.aggregate([
+      {
+        $match: {
+          status: { $in: ['active', 'inactive'] } // Include both active and inactive products
+        }
+      },
+      {
+        $addFields: {
+          currentStock: { $ifNull: ['$inventory.currentStock', 0] },
+          reorderPoint: { $ifNull: ['$inventory.reorderPoint', 0] },
+          cost: { $ifNull: ['$pricing.cost', 0] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalProducts: { $sum: 1 },
+          totalStockValue: { $sum: { $multiply: ['$currentStock', '$cost'] } },
+          lowStockProducts: {
+            $sum: {
+              $cond: [
+                { $lte: ['$currentStock', '$reorderPoint'] },
+                1,
+                0
+              ]
+            }
+          },
+          outOfStockProducts: {
+            $sum: {
+              $cond: [
+                { $eq: ['$currentStock', 0] },
+                1,
+                0
+              ]
+            }
+          },
+          overstockedProducts: {
+            $sum: {
+              $cond: [
+                { $gt: ['$currentStock', { $multiply: ['$reorderPoint', 3] }] },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      }
+    ]);
+
+    
+    const summaryData = summary[0] || {
+      totalProducts: 0,
+      totalStockValue: 0,
+      lowStockProducts: 0,
+      outOfStockProducts: 0,
+      overstockedProducts: 0
     };
+    
 
     res.json({
       summary: summaryData,
@@ -521,9 +615,15 @@ router.get('/quick/summary', [
     });
   } catch (error) {
     console.error('Error fetching quick inventory summary:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     res.status(500).json({ 
       message: 'Server error fetching quick inventory summary', 
-      error: error.message 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -544,7 +644,8 @@ router.get('/stats', [
     if (req.query.startDate) period.startDate = new Date(req.query.startDate);
     if (req.query.endDate) period.endDate = new Date(req.query.endDate);
 
-    const stats = await inventoryReportRepository.getReportStats(period);
+    const stats = await InventoryReport.getReportStats(period);
+    
     res.json(stats);
   } catch (error) {
     console.error('Error fetching inventory report stats:', error);

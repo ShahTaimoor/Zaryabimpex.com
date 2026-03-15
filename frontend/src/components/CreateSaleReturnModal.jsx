@@ -1,20 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Minus, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { X, Plus, Minus, AlertCircle } from 'lucide-react';
 import { useCreateSaleReturnMutation } from '../store/services/saleReturnsApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import BaseModal from './BaseModal';
-import FormField from './FormField';
 
 const CreateSaleReturnModal = ({ isOpen, onClose, onSuccess, sale, customer }) => {
   const [formData, setFormData] = useState({
     originalOrder: sale?._id || '',
     returnType: 'return',
     priority: 'normal',
-    refundMethod: 'deferred',
+    refundMethod: 'original_payment',
     items: [],
     generalNotes: '',
     origin: 'sales'
@@ -28,7 +23,7 @@ const CreateSaleReturnModal = ({ isOpen, onClose, onSuccess, sale, customer }) =
         originalOrder: sale._id,
         returnType: 'return',
         priority: 'normal',
-        refundMethod: 'deferred',
+        refundMethod: 'original_payment',
         items: [],
         generalNotes: '',
         origin: 'sales'
@@ -88,16 +83,9 @@ const CreateSaleReturnModal = ({ isOpen, onClose, onSuccess, sale, customer }) =
   const handleItemChange = (index, field, value) => {
     setFormData(prev => ({
       ...prev,
-      items: prev.items.map((item, i) => {
-        if (i !== index) return item;
-        if (field === 'quantity') {
-          const parsed = parseInt(value, 10);
-          const maxQty = item.maxQuantity ?? 999;
-          const num = isNaN(parsed) ? 1 : Math.max(1, Math.min(parsed, maxQty));
-          return { ...item, quantity: num };
-        }
-        return { ...item, [field]: value };
-      })
+      items: prev.items.map((item, i) => 
+        i === index ? { ...item, [field]: value } : item
+      )
     }));
   };
 
@@ -132,8 +120,8 @@ const CreateSaleReturnModal = ({ isOpen, onClose, onSuccess, sale, customer }) =
 
     try {
       await createSaleReturn(formData).unwrap();
-      await onSuccess?.();
-      if (!onSuccess) showSuccessToast('Sale return created successfully');
+      showSuccessToast('Sale return created successfully');
+      onSuccess();
     } catch (error) {
       handleApiError(error, 'Create Sale Return');
     }
@@ -142,120 +130,116 @@ const CreateSaleReturnModal = ({ isOpen, onClose, onSuccess, sale, customer }) =
   if (!isOpen || !sale) return null;
 
   const saleItems = sale.items || [];
-  const subtitle = (
-    <>
-      Sale: {sale.orderNumber || sale.invoiceNumber || 'N/A'} •{' '}
-      Customer: {customer?.displayName || customer?.businessName || customer?.name || 'N/A'}
-    </>
-  );
 
   return (
-    <BaseModal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Create Sale Return"
-      subtitle={subtitle}
-      maxWidth="xl"
-      variant="scrollable"
-      contentClassName="p-5"
-      footer={
-        <div className="flex justify-end space-x-3">
-          <Button type="button" onClick={onClose} variant="secondary">
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="sale-return-form"
-            disabled={isCreatingReturn || formData.items.length === 0}
-            variant="default"
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-0 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-200 flex-shrink-0">
+          <div>
+            <h3 className="text-lg font-medium text-gray-900">Create Sale Return</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Sale: {sale.orderNumber || sale.invoiceNumber || 'N/A'} • 
+              Customer: {customer?.displayName || customer?.businessName || customer?.name || 'N/A'}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
           >
-            {isCreatingReturn ? <LoadingSpinner size="sm" /> : 'Create Return Request'}
-          </Button>
-        </div>
-      }
-    >
-      <form id="sale-return-form" onSubmit={handleSubmit} className="space-y-6">
-        {/* Return Type and Priority */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField label="Return Type" required htmlFor="return-type">
-            <select
-              id="return-type"
-              value={formData.returnType}
-              onChange={(e) => setFormData(prev => ({ ...prev, returnType: e.target.value }))}
-              className="input w-full"
-              required
-            >
-              <option value="return">Return</option>
-              <option value="exchange">Exchange</option>
-              <option value="warranty">Warranty</option>
-              <option value="recall">Recall</option>
-            </select>
-          </FormField>
-
-          <FormField label="Priority" htmlFor="priority">
-            <select
-              id="priority"
-              value={formData.priority}
-              onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value }))}
-              className="input w-full"
-            >
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </FormField>
+            <X className="h-6 w-6" />
+          </button>
         </div>
 
-        {/* Items to Return */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Items to Return *
-          </label>
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto flex-1 p-5">
+          <form id="sale-return-form" onSubmit={handleSubmit} className="space-y-6">
+            {/* Return Type and Priority */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Return Type *
+                </label>
+                <select
+                  value={formData.returnType}
+                  onChange={(e) => setFormData(prev => ({ ...prev, returnType: e.target.value }))}
+                  className="input"
+                  required
+                >
+                  <option value="return">Return</option>
+                  <option value="exchange">Exchange</option>
+                  <option value="warranty">Warranty</option>
+                  <option value="recall">Recall</option>
+                </select>
+              </div>
 
-          {saleItems.length === 0 ? (
-            <div className="p-4 text-center text-gray-500 bg-gray-50 rounded-lg">
-              <AlertCircle className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-              <p>No items found in this sale</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Priority
+                </label>
+                <select
+                  value={formData.priority}
+                  onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value }))}
+                  className="input"
+                >
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Available Items */}
-              <div className="border rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-3">Available Items</h4>
-                <div className="space-y-2">
-                  {saleItems.map((item) => {
+
+            {/* Items to Return */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Items to Return *
+              </label>
+              
+              {saleItems.length === 0 ? (
+                <div className="p-4 text-center text-gray-500 bg-gray-50 rounded-lg">
+                  <AlertCircle className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                  <p>No items found in this sale</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Available Items */}
+                  <div className="border rounded-lg p-4">
+                    <h4 className="font-medium text-gray-900 mb-3">Available Items</h4>
+                    <div className="space-y-2">
+                      {saleItems.map((item) => {
                         const availableQuantity = getAvailableQuantity(item);
                         const isAlreadyAdded = formData.items.some(i => i.originalOrderItem === item._id);
                         const productName = item.product?.name || item.product?.displayName || 'Unknown Product';
                         const itemPrice = item.price || item.unitPrice || item.unitCost || 0;
 
-                    return (
-                      <div key={item._id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <div className="flex-1">
-                          <div className="font-medium">{productName}</div>
-                          <div className="text-sm text-gray-500">
-                            Available: {availableQuantity} • Price: ${itemPrice.toFixed(2)} • Original Qty: {item.quantity}
+                        return (
+                          <div key={item._id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                            <div className="flex-1">
+                              <div className="font-medium">{productName}</div>
+                              <div className="text-sm text-gray-500">
+                                Available: {availableQuantity} • 
+                                Price: ${itemPrice.toFixed(2)} • 
+                                Original Qty: {item.quantity}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleAddItem(item)}
+                              className="btn btn-primary btn-sm"
+                              disabled={isAlreadyAdded || availableQuantity <= 0}
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add
+                            </button>
                           </div>
-                        </div>
-                        <Button
-                          type="button"
-                          onClick={() => handleAddItem(item)}
-                          variant="default"
-                          size="sm"
-                          disabled={isAlreadyAdded || availableQuantity <= 0}
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-              {/* Selected Items */}
-              {formData.items.length > 0 && (
+                  {/* Selected Items */}
+                  {formData.items.length > 0 && (
                     <div className="border rounded-lg p-4">
                       <h4 className="font-medium text-gray-900 mb-3">Selected Items for Return</h4>
                       <div className="space-y-4">
@@ -287,12 +271,13 @@ const CreateSaleReturnModal = ({ isOpen, onClose, onSuccess, sale, customer }) =
                                   <label className="block text-xs font-medium text-gray-700 mb-1">
                                     Quantity *
                                   </label>
-                                  <Input
+                                  <input
                                     type="number"
                                     min="1"
                                     max={item.maxQuantity}
                                     value={item.quantity}
-                                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                                    onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 1)}
+                                    className="input"
                                     required
                                   />
                                 </div>
@@ -346,10 +331,11 @@ const CreateSaleReturnModal = ({ isOpen, onClose, onSuccess, sale, customer }) =
                                 <label className="block text-xs font-medium text-gray-700 mb-1">
                                   Return Reason Details
                                 </label>
-                                <Textarea
+                                <textarea
                                   value={item.returnReasonDetail}
                                   onChange={(e) => handleItemChange(index, 'returnReasonDetail', e.target.value)}
                                   placeholder="Additional details about the return reason..."
+                                  className="input"
                                   rows={2}
                                 />
                               </div>
@@ -359,40 +345,68 @@ const CreateSaleReturnModal = ({ isOpen, onClose, onSuccess, sale, customer }) =
                       </div>
                     </div>
                   )}
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Refund Method */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Refund Method
+              </label>
+              <select
+                value={formData.refundMethod}
+                onChange={(e) => setFormData(prev => ({ ...prev, refundMethod: e.target.value }))}
+                className="input"
+              >
+                <option value="original_payment">Original Payment Method</option>
+                <option value="store_credit">Store Credit</option>
+                <option value="cash">Cash</option>
+                <option value="check">Check</option>
+                <option value="bank_transfer">Bank Transfer</option>
+              </select>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Notes
+              </label>
+              <textarea
+                value={formData.generalNotes}
+                onChange={(e) => setFormData(prev => ({ ...prev, generalNotes: e.target.value }))}
+                placeholder="Additional notes about this return request..."
+                className="input"
+                rows={3}
+              />
+            </div>
+          </form>
         </div>
 
-        {/* Refund Method */}
-        <FormField label="Refund Method" htmlFor="refund-method">
-          <select
-            id="refund-method"
-            value={formData.refundMethod}
-            onChange={(e) => setFormData(prev => ({ ...prev, refundMethod: e.target.value }))}
-            className="input w-full"
+        {/* Footer */}
+        <div className="flex justify-end space-x-3 p-5 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn btn-secondary"
           >
-            <option value="deferred">No Refund Yet (Record Return Only)</option>
-            <option value="original_payment">Original Payment Method</option>
-            <option value="store_credit">Store Credit</option>
-            <option value="cash">Cash</option>
-            <option value="check">Check</option>
-            <option value="bank_transfer">Bank Transfer</option>
-          </select>
-        </FormField>
-
-        {/* Notes */}
-        <FormField label="Notes" htmlFor="general-notes">
-          <Textarea
-            id="general-notes"
-            value={formData.generalNotes}
-            onChange={(e) => setFormData(prev => ({ ...prev, generalNotes: e.target.value }))}
-            placeholder="Additional notes about this return request..."
-            className="w-full"
-            rows={3}
-          />
-        </FormField>
-      </form>
-    </BaseModal>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="sale-return-form"
+            disabled={isCreatingReturn || formData.items.length === 0}
+            className="btn btn-primary"
+          >
+            {isCreatingReturn ? (
+              <LoadingSpinner size="sm" />
+            ) : (
+              'Create Return Request'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 

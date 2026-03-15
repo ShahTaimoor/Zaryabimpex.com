@@ -12,10 +12,9 @@ import {
   Save,
   X,
   Eye,
-  EyeOff,
-  RefreshCw
+  EyeOff
 } from 'lucide-react';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import {
   useGetAccountsQuery,
   useGetCategoriesGroupedQuery,
@@ -25,9 +24,6 @@ import {
 } from '../store/services/chartOfAccountsApi';
 import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
 import { handleApiError } from '../utils/errorHandler';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 
 const AccountTypeBadge = ({ type }) => {
   const config = {
@@ -52,14 +48,12 @@ const AccountTypeBadge = ({ type }) => {
 
 const AccountForm = ({ account, onSave, onCancel, isOpen, existingAccounts, presetType, presetCategory, categories, categoryOptions }) => {
   const [autoGenerateCode, setAutoGenerateCode] = useState(!account); // Auto-generate for new accounts
-  const accountCategoryVal = account?.accountCategory;
-  const accountCategoryStr = typeof accountCategoryVal === 'string' ? accountCategoryVal : (accountCategoryVal?.name ?? accountCategoryVal?.value ?? presetCategory ?? 'current_assets');
   const [formData, setFormData] = useState({
     accountCode: account?.accountCode || '',
     accountName: account?.accountName || '',
     accountType: account?.accountType || presetType || 'asset',
-    accountCategory: accountCategoryStr,
-    parentAccount: account?.parentAccount?._id ?? account?.parentAccount?.id ?? '',
+    accountCategory: account?.accountCategory || presetCategory || 'current_assets',
+    parentAccount: account?.parentAccount?._id || '',
     level: account?.level || 0,
     normalBalance: account?.normalBalance || 'debit',
     openingBalance: account?.openingBalance || 0,
@@ -72,14 +66,12 @@ const AccountForm = ({ account, onSave, onCancel, isOpen, existingAccounts, pres
 
   // Reset form data when account prop changes (for new accounts, account will be null)
   useEffect(() => {
-    const catVal = account?.accountCategory;
-    const catStr = typeof catVal === 'string' ? catVal : (catVal?.name ?? catVal?.value ?? presetCategory ?? 'current_assets');
     setFormData({
       accountCode: account?.accountCode || '',
       accountName: account?.accountName || '',
       accountType: account?.accountType || presetType || 'asset',
-      accountCategory: catStr,
-      parentAccount: account?.parentAccount?._id ?? account?.parentAccount?.id ?? '',
+      accountCategory: account?.accountCategory || presetCategory || 'current_assets',
+      parentAccount: account?.parentAccount?._id || '',
       level: account?.level || 0,
       normalBalance: account?.normalBalance || 'debit',
       openingBalance: account?.openingBalance || 0,
@@ -114,54 +106,33 @@ const AccountForm = ({ account, onSave, onCancel, isOpen, existingAccounts, pres
   // Generate next available account code based on account type
   const generateAccountCode = (accountType) => {
     const range = accountCodeRanges[accountType];
-    if (!range) {
-      console.error(`Invalid account type: ${accountType}`);
-      return '1000';
-    }
+    if (!range) return '1000';
 
     const accountList = extractAccountArray(existingAccounts);
     if (!accountList.length) {
       return range.start?.toString() || '1000';
     }
 
-    // Get all account codes for this type, with better validation
+    // Get all account codes for this type
     const existingCodes = accountList
-      .filter(acc => {
-        // Filter by account type
-        if (acc.accountType !== accountType) return false;
-        // Ensure account code exists and is a string
-        if (!acc.accountCode || typeof acc.accountCode !== 'string') return false;
-        return true;
-      })
-      .map(acc => {
-        // Parse account code, handling both string and number formats
-        const code = parseInt(acc.accountCode.toString().trim());
-        return code;
-      })
-      .filter(code => {
-        // Only include valid numeric codes within the expected range
-        return !isNaN(code) && code >= range.start && code <= range.end;
-      })
+      .filter(acc => acc.accountType === accountType)
+      .map(acc => parseInt(acc.accountCode))
+      .filter(code => !isNaN(code) && code >= range.start && code <= range.end)
       .sort((a, b) => a - b);
 
-    // Remove duplicates
-    const uniqueCodes = [...new Set(existingCodes)];
-
-    // Find next available code (first gap or next sequential)
+    // Find next available code
     let nextCode = range.start;
-    for (const code of uniqueCodes) {
+    for (const code of existingCodes) {
       if (code === nextCode) {
         nextCode++;
       } else if (code > nextCode) {
-        // Found a gap, use it
         break;
       }
     }
 
     // Make sure we don't exceed the range
     if (nextCode > range.end) {
-      toast.error(`No more account codes available for ${accountType}. Range: ${range.start}-${range.end}. Please contact administrator.`);
-      // Return the start of range as fallback, but user will need to manually adjust
+      toast.error(`No more account codes available for ${accountType}. Range: ${range.start}-${range.end}`);
       return range.start.toString();
     }
 
@@ -240,11 +211,11 @@ const AccountForm = ({ account, onSave, onCancel, isOpen, existingAccounts, pres
                 )}
               </div>
               <div className="relative">
-                <Input
+                <input
                   type="text"
                   value={formData.accountCode}
                   onChange={(e) => setFormData({ ...formData, accountCode: e.target.value.toUpperCase() })}
-                  className="pr-20"
+                  className="input pr-20"
                   placeholder={autoGenerateCode ? "Auto-generated" : "e.g., 1000, 2000, 3000"}
                   required
                   disabled={!!account || autoGenerateCode} // Can't change code after creation or when auto-generating
@@ -273,10 +244,11 @@ const AccountForm = ({ account, onSave, onCancel, isOpen, existingAccounts, pres
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Account Name *
               </label>
-              <Input
+              <input
                 type="text"
                 value={formData.accountName}
                 onChange={(e) => setFormData({ ...formData, accountName: e.target.value })}
+                className="input"
                 placeholder="e.g., Cash in Hand"
                 required
               />
@@ -316,7 +288,7 @@ const AccountForm = ({ account, onSave, onCancel, isOpen, existingAccounts, pres
                 Account Category *
               </label>
               <select
-                value={typeof formData.accountCategory === 'string' ? formData.accountCategory : (formData.accountCategory?.name ?? formData.accountCategory?.value ?? 'current_assets')}
+                value={formData.accountCategory}
                 onChange={(e) => setFormData({ ...formData, accountCategory: e.target.value })}
                 className="input"
                 required
@@ -351,11 +323,12 @@ const AccountForm = ({ account, onSave, onCancel, isOpen, existingAccounts, pres
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Opening Balance
                 </label>
-                <Input
+                <input
                   type="number"
                   step="0.01"
                   value={formData.openingBalance}
                   onChange={(e) => setFormData({ ...formData, openingBalance: parseFloat(e.target.value) || 0 })}
+                  className="input"
                   placeholder="0.00"
                 />
               </div>
@@ -367,9 +340,10 @@ const AccountForm = ({ account, onSave, onCancel, isOpen, existingAccounts, pres
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Description
             </label>
-            <Textarea
+            <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="input"
               rows={3}
               placeholder="Account description..."
             />
@@ -419,20 +393,20 @@ const AccountForm = ({ account, onSave, onCancel, isOpen, existingAccounts, pres
 
           {/* Action Buttons */}
           <div className="flex justify-end space-x-3 pt-4 border-t">
-            <Button
+            <button
               type="button"
               onClick={onCancel}
-              variant="secondary"
+              className="btn btn-secondary"
             >
               Cancel
-            </Button>
-            <Button
+            </button>
+            <button
               type="submit"
-              variant="default"
+              className="btn btn-primary"
             >
               <Save className="h-4 w-4 mr-2" />
               {account ? 'Update Account' : 'Create Account'}
-            </Button>
+            </button>
           </div>
         </form>
       </div>
@@ -532,7 +506,7 @@ const CategoryManagement = ({ categories, onCategoryCreated, onCategoryUpdated, 
     <div className="bg-white rounded-lg border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium text-gray-900">Account Categories</h3>
-        <Button
+        <button
           onClick={() => {
             setSelectedCategory(null);
             setAutoGenerateCode(true); // Enable auto-generation for new categories
@@ -546,12 +520,11 @@ const CategoryManagement = ({ categories, onCategoryCreated, onCategoryUpdated, 
             });
             setIsFormOpen(true);
           }}
-          variant="default"
-          size="sm"
+          className="btn btn-primary btn-sm"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add Category
-        </Button>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -612,7 +585,7 @@ const CategoryManagement = ({ categories, onCategoryCreated, onCategoryUpdated, 
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Category Name *
                   </label>
-                  <Input
+                  <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => {
@@ -626,6 +599,7 @@ const CategoryManagement = ({ categories, onCategoryCreated, onCategoryUpdated, 
                       
                       setFormData(newFormData);
                     }}
+                    className="input"
                     placeholder="e.g., Current Assets"
                     required
                   />
@@ -636,11 +610,11 @@ const CategoryManagement = ({ categories, onCategoryCreated, onCategoryUpdated, 
                     Category Code *
                   </label>
                   <div className="flex items-center space-x-2">
-                    <Input
+                    <input
                       type="text"
                       value={formData.code}
                       onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                      className="flex-1"
+                      className="input flex-1"
                       placeholder="e.g., CUR_ASSETS"
                       required
                     />
@@ -695,10 +669,11 @@ const CategoryManagement = ({ categories, onCategoryCreated, onCategoryUpdated, 
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Display Order
                   </label>
-                  <Input
+                  <input
                     type="number"
                     value={formData.displayOrder}
                     onChange={(e) => setFormData({ ...formData, displayOrder: parseInt(e.target.value) || 0 })}
+                    className="input"
                     min="0"
                   />
                 </div>
@@ -708,9 +683,10 @@ const CategoryManagement = ({ categories, onCategoryCreated, onCategoryUpdated, 
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Description
                 </label>
-                <Textarea
+                <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="input"
                   rows={3}
                   placeholder="Category description..."
                 />
@@ -727,31 +703,31 @@ const CategoryManagement = ({ categories, onCategoryCreated, onCategoryUpdated, 
                     onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                     className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
                   />
-                  <Input
+                  <input
                     type="text"
                     value={formData.color}
                     onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                    className="flex-1"
+                    className="input flex-1"
                     placeholder="#6B7280"
                   />
                 </div>
               </div>
 
               <div className="flex justify-end space-x-3 pt-4 border-t">
-                <Button
+                <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  variant="secondary"
+                  className="btn btn-secondary"
                 >
                   Cancel
-                </Button>
-                <Button
+                </button>
+                <button
                   type="submit"
-                  variant="default"
+                  className="btn btn-primary"
                 >
                   <Save className="h-4 w-4 mr-2" />
                   {selectedCategory ? 'Update Category' : 'Create Category'}
-                </Button>
+                </button>
               </div>
             </form>
           </div>
@@ -794,11 +770,10 @@ export const ChartOfAccounts = () => {
       expense: {}
     };
 
-    // Group accounts by type and category (category may be string or object { _id, id, name })
+    // Group accounts by type and category
     accountList.forEach(account => {
       const type = account.accountType;
-      const rawCat = account.accountCategory;
-      const category = typeof rawCat === 'string' ? rawCat : (rawCat?.name ?? rawCat?.label ?? String(rawCat ?? ''));
+      const category = account.accountCategory;
       if (!hierarchy[type][category]) {
         hierarchy[type][category] = [];
       }
@@ -961,12 +936,12 @@ export const ChartOfAccounts = () => {
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Accounts</h3>
             <p className="text-gray-600 mb-4">Failed to load chart of accounts. Please try again.</p>
-            <Button
+            <button
               onClick={() => window.location.reload()}
-              variant="default"
+              className="btn btn-primary"
             >
               Retry
-            </Button>
+            </button>
           </div>
         </div>
       </div>
@@ -982,25 +957,21 @@ export const ChartOfAccounts = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your accounting structure and account heads</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-          <Button
+          <button
             onClick={() => setShowCategoryManagement(!showCategoryManagement)}
-            variant="secondary"
-            size="default"
-            className="flex items-center justify-center gap-2"
+            className="btn btn-secondary btn-md flex items-center justify-center gap-2"
           >
             <FolderTree className="h-4 w-4" />
             <span className="hidden sm:inline">{showCategoryManagement ? 'Hide Categories' : 'Manage Categories'}</span>
             <span className="sm:hidden">Categories</span>
-          </Button>
-          <Button
+          </button>
+          <button
             onClick={handleAddNew}
-            variant="default"
-            size="default"
-            className="flex items-center justify-center gap-2"
+            className="btn btn-primary btn-md flex items-center justify-center gap-2"
           >
             <Plus className="h-4 w-4" />
             Create Account
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -1106,15 +1077,13 @@ export const ChartOfAccounts = () => {
           <option value="expense">Expenses</option>
         </select>
 
-        <Button
+        <button
           onClick={() => setShowInactive(!showInactive)}
-          variant={showInactive ? 'default' : 'secondary'}
-          size="default"
-          className="flex items-center justify-center gap-2 w-full sm:w-auto"
+          className={`btn btn-md ${showInactive ? 'btn-primary' : 'btn-secondary'} flex items-center justify-center gap-2 w-full sm:w-auto`}
         >
           {showInactive ? <Eye className="h-4 w-4 mr-2" /> : <EyeOff className="h-4 w-4 mr-2" />}
           {showInactive ? 'Show Active' : 'Show All'}
-        </Button>
+        </button>
       </div>
 
       {/* Accounts Table */}
@@ -1229,10 +1198,7 @@ export const ChartOfAccounts = () => {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <span className="text-sm text-gray-600 capitalize">
-                                    {(typeof account.accountCategory === 'string'
-                                      ? account.accountCategory
-                                      : (account.accountCategory?.name ?? account.accountCategory?.label ?? '')
-                                    ).replace(/_/g, ' ')}
+                                    {account.accountCategory.replace(/_/g, ' ')}
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right">

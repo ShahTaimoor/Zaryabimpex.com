@@ -6,7 +6,7 @@ const { validateDateParams, processDateFilter } = require('../middleware/dateFil
 const inventoryService = require('../services/inventoryService');
 const purchaseOrderService = require('../services/purchaseOrderService');
 const supplierRepository = require('../repositories/SupplierRepository');
-const purchaseOrderRepository = require('../repositories/postgres/PurchaseRepository');
+const PurchaseOrder = require('../models/PurchaseOrder'); // Still needed for generatePONumber static method
 
 const router = express.Router();
 
@@ -46,7 +46,7 @@ router.get('/', [
   query('all').optional({ checkFalsy: true }).isBoolean(),
   query('search').optional().trim(),
   query('status').optional().isIn(['draft', 'confirmed', 'partially_received', 'fully_received', 'cancelled', 'closed']),
-  query('supplier').optional().isUUID(4),
+  query('supplier').optional().isMongoId(),
   ...validateDateParams,
   handleValidationErrors,
   processDateFilter('createdAt'),
@@ -98,9 +98,9 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/', [
   auth,
   requirePermission('create_purchase_orders'),
-  body('supplier').isUUID(4).withMessage('Valid supplier is required'),
+  body('supplier').isMongoId().withMessage('Valid supplier is required'),
   body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
-  body('items.*.product').isUUID(4).withMessage('Valid product is required'),
+  body('items.*.product').isMongoId().withMessage('Valid product is required'),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('items.*.costPerUnit').isFloat({ min: 0 }).withMessage('Cost per unit must be positive'),
   body('expectedDelivery').optional().isISO8601().withMessage('Valid delivery date required'),
@@ -113,7 +113,7 @@ router.post('/', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const purchaseOrder = await purchaseOrderService.createPurchaseOrder(req.body, req.user?.id || req.user?._id);
+    const purchaseOrder = await purchaseOrderService.createPurchaseOrder(req.body, req.user._id);
 
     // Transform names to uppercase
     if (purchaseOrder.supplier) {
@@ -151,9 +151,9 @@ router.post('/', [
 router.put('/:id', [
   auth,
   requirePermission('edit_purchase_orders'),
-  body('supplier').optional().isUUID(4).withMessage('Valid supplier is required'),
+  body('supplier').optional().isMongoId().withMessage('Valid supplier is required'),
   body('items').optional().isArray({ min: 1 }).withMessage('At least one item is required'),
-  body('items.*.product').optional().isUUID(4).withMessage('Valid product is required'),
+  body('items.*.product').optional().isMongoId().withMessage('Valid product is required'),
   body('items.*.quantity').optional().isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('items.*.costPerUnit').optional().isFloat({ min: 0 }).withMessage('Cost per unit must be positive'),
   body('expectedDelivery').optional().isISO8601().withMessage('Valid delivery date required'),
@@ -170,7 +170,7 @@ router.put('/:id', [
     const updatedPO = await purchaseOrderService.updatePurchaseOrder(
       req.params.id,
       req.body,
-      req.user?.id || req.user?._id
+      req.user._id
     );
 
     // Store old items for comparison (for inventory updates)
@@ -202,7 +202,7 @@ router.put('/:id', [
                 reference: 'Purchase Order',
                 referenceId: updatedPO._id,
                 referenceModel: 'PurchaseOrder',
-                performedBy: req.user?.id || req.user?._id,
+                performedBy: req.user._id,
                 notes: `Inventory increased due to purchase order ${updatedPO.poNumber} update - quantity increased by ${quantityChange}`
               });
             } else {
@@ -215,7 +215,7 @@ router.put('/:id', [
                 reference: 'Purchase Order',
                 referenceId: updatedPO._id,
                 referenceModel: 'PurchaseOrder',
-                performedBy: req.user?.id || req.user?._id,
+                performedBy: req.user._id,
                 notes: `Inventory reduced due to purchase order ${updatedPO.poNumber} update - quantity decreased by ${Math.abs(quantityChange)}`
               });
             }
@@ -240,7 +240,7 @@ router.put('/:id', [
               reference: 'Purchase Order',
               referenceId: updatedPO._id,
               referenceModel: 'PurchaseOrder',
-              performedBy: req.user?.id || req.user?._id,
+              performedBy: req.user._id,
               notes: `Inventory reduced due to purchase order ${updatedPO.poNumber} update - item removed`
             });
           }
@@ -272,69 +272,124 @@ router.put('/:id/confirm', [
 ], async (req, res) => {
   try {
     const purchaseOrder = await purchaseOrderService.confirmPurchaseOrder(req.params.id);
-    const poId = purchaseOrder.id || purchaseOrder._id;
-    const poNumber = purchaseOrder.purchase_order_number || purchaseOrder.poNumber || poId;
 
     // Update inventory for each item in the purchase order
     const inventoryUpdates = [];
-    const items = Array.isArray(purchaseOrder.items) ? purchaseOrder.items : [];
-    for (const item of items) {
-      const productId = item.product_id || item.product;
-      if (!productId) continue;
+    for (const item of purchaseOrder.items) {
       try {
         const inventoryUpdate = await inventoryService.updateStock({
-          productId,
+          productId: item.product,
           type: 'in',
           quantity: item.quantity,
-          cost: item.costPerUnit || item.cost_per_unit || item.unitCost,
+          cost: item.costPerUnit, // Pass cost price from purchase order
           reason: 'Purchase Order Confirmation',
           reference: 'Purchase Order',
-          referenceId: poId,
+          referenceId: purchaseOrder._id,
           referenceModel: 'PurchaseOrder',
-          performedBy: req.user?.id || req.user?._id,
-          notes: `Stock increased due to purchase order confirmation - PO: ${poNumber}`
+          performedBy: req.user._id,
+          notes: `Stock increased due to purchase order confirmation - PO: ${purchaseOrder.poNumber}`
         });
 
         inventoryUpdates.push({
-          productId,
+          productId: item.product,
           quantity: item.quantity,
           newStock: inventoryUpdate.currentStock,
           success: true
         });
+
       } catch (inventoryError) {
-        console.error(`Failed to update inventory for product ${productId}:`, inventoryError.message);
+        console.error(`Failed to update inventory for product ${item.product}:`, inventoryError.message);
         inventoryUpdates.push({
-          productId,
+          productId: item.product,
           quantity: item.quantity,
           success: false,
           error: inventoryError.message
         });
+
+        // If inventory update fails, return error but don't rollback (since this is stock increase)
         return res.status(400).json({
-          message: `Failed to update inventory for product. Cannot confirm purchase order.`,
+          message: `Failed to update inventory for product ${item.product}. Cannot confirm purchase order.`,
           details: inventoryError.message,
-          inventoryUpdates
+          inventoryUpdates: inventoryUpdates
         });
       }
     }
 
-    // Supplier balance is now handled by ledger when purchase invoice is created (AccountingService.recordPurchaseInvoice)
+    // Update supplier balance: move from pendingBalance to currentBalance
+    if (purchaseOrder.supplier && purchaseOrder.total > 0) {
+      try {
+        const supplier = await supplierRepository.findById(purchaseOrder.supplier);
+        if (supplier) {
+          // Move amount from pendingBalance to currentBalance (outstanding amount we owe to supplier)
+          await supplierRepository.updateById(purchaseOrder.supplier, {
+            $inc: {
+              pendingBalance: -purchaseOrder.total,  // Remove from pending
+              currentBalance: purchaseOrder.total    // Add to current (outstanding)
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error updating supplier balance on PO confirmation:', error);
+        // Don't fail the confirmation if supplier update fails
+      }
+    }
 
-    // Automatically create a Purchase Invoice from this confirmed order (posts to ledger)
+    // Update purchase order status only after successful inventory updates
+    purchaseOrder.status = 'confirmed';
+    purchaseOrder.confirmedDate = new Date();
+    purchaseOrder.lastModifiedBy = req.user._id;
+
+    await purchaseOrder.save();
+
+    // Automatically create a Purchase Invoice from this confirmed order
     try {
-      await purchaseOrderService.createInvoiceFromPurchaseOrder(purchaseOrder, req.user?.id || req.user?._id);
-      await purchaseOrderRepository.update(poId, { status: 'received', updatedBy: req.user?.id || req.user?._id });
+      const invoice = await purchaseOrderService.createInvoiceFromPurchaseOrder(purchaseOrder, req.user._id);
+
+      // Track conversion in purchase order
+      purchaseOrder.conversions = purchaseOrder.conversions || [];
+      purchaseOrder.conversions.push({
+        invoiceId: invoice._id,
+        convertedBy: req.user._id,
+        convertedAt: new Date(),
+        items: (purchaseOrder.items || []).map(item => ({
+          product: item.product,
+          quantity: item.quantity,
+          costPerUnit: item.costPerUnit,
+          status: 'success'
+        })),
+        notes: `Automatically converted to invoice PI: ${invoice.invoiceNumber} on confirmation`
+      });
+
+      // Update PO status to fully_received since confirmation in this system increases stock immediately
+      purchaseOrder.status = 'fully_received';
+      purchaseOrder.lastReceivedDate = new Date();
     } catch (createInvoiceError) {
       console.error('Failed to automatically create purchase invoice during PO confirmation:', createInvoiceError);
       // Don't fail the confirmation if invoice creation fails
     }
 
-    // Refetch purchase order with supplier for response
-    const purchaseOrderResult = await purchaseOrderService.getPurchaseOrderById(poId);
-    if (purchaseOrderResult.supplier) {
-      purchaseOrderResult.supplier = transformSupplierToUppercase(purchaseOrderResult.supplier);
+    // Create accounting entries for confirmed purchase order
+    try {
+      const AccountingService = require('../services/accountingService');
+      await AccountingService.recordPurchase(purchaseOrder);
+    } catch (error) {
+      console.error('Error creating accounting entries for purchase order:', error);
+      // Don't fail the confirmation if accounting fails
     }
-    if (purchaseOrderResult.items && Array.isArray(purchaseOrderResult.items)) {
-      purchaseOrderResult.items.forEach(item => {
+
+    await purchaseOrder.populate([
+      { path: 'supplier', select: 'companyName contactPerson email phone businessType' },
+      { path: 'items.product', select: 'name description pricing inventory' },
+      { path: 'createdBy', select: 'firstName lastName email' },
+      { path: 'lastModifiedBy', select: 'firstName lastName email' }
+    ]);
+
+    // Transform names to uppercase
+    if (purchaseOrder.supplier) {
+      purchaseOrder.supplier = transformSupplierToUppercase(purchaseOrder.supplier);
+    }
+    if (purchaseOrder.items && Array.isArray(purchaseOrder.items)) {
+      purchaseOrder.items.forEach(item => {
         if (item.product) {
           item.product = transformProductToUppercase(item.product);
         }
@@ -343,8 +398,8 @@ router.put('/:id/confirm', [
 
     res.json({
       message: 'Purchase order confirmed and converted to invoice successfully',
-      purchaseOrder: purchaseOrderResult,
-      inventoryUpdates
+      purchaseOrder,
+      inventoryUpdates: inventoryUpdates
     });
   } catch (error) {
     console.error('Confirm purchase order error:', error);
@@ -364,55 +419,85 @@ router.put('/:id/cancel', [
     const purchaseOrderBeforeCancel = await purchaseOrderService.getPurchaseOrderById(req.params.id);
     const wasConfirmed = purchaseOrderBeforeCancel.status === 'confirmed';
 
-    const purchaseOrder = await purchaseOrderService.cancelPurchaseOrder(req.params.id, req.user?.id || req.user?._id);
+    const purchaseOrder = await purchaseOrderService.cancelPurchaseOrder(req.params.id, req.user._id);
 
     // If the purchase order was confirmed, reduce inventory
     const inventoryUpdates = [];
-    const poId = purchaseOrder.id || purchaseOrder._id;
-    const poNumber = purchaseOrder.purchase_order_number || purchaseOrder.poNumber || poId;
-    if (wasConfirmed && Array.isArray(purchaseOrder.items)) {
+    if (wasConfirmed) {
       for (const item of purchaseOrder.items) {
-        const productId = item.product_id || item.product;
-        if (!productId) continue;
         try {
           const inventoryUpdate = await inventoryService.updateStock({
-            productId,
+            productId: item.product,
             type: 'out',
             quantity: item.quantity,
             reason: 'Purchase Order Cancellation',
             reference: 'Purchase Order',
-            referenceId: poId,
+            referenceId: purchaseOrder._id,
             referenceModel: 'PurchaseOrder',
-            performedBy: req.user?.id || req.user?._id,
-            notes: `Stock reduced due to purchase order cancellation - PO: ${poNumber}`
+            performedBy: req.user._id,
+            notes: `Stock reduced due to purchase order cancellation - PO: ${purchaseOrder.poNumber}`
           });
+
           inventoryUpdates.push({
-            productId,
+            productId: item.product,
             quantity: item.quantity,
             newStock: inventoryUpdate.currentStock,
             success: true
           });
+
         } catch (inventoryError) {
-          console.error(`Failed to reduce inventory for product ${productId}:`, inventoryError.message);
-          inventoryUpdates.push({ productId, quantity: item.quantity, success: false, error: inventoryError.message });
+          console.error(`Failed to reduce inventory for product ${item.product}:`, inventoryError.message);
+          inventoryUpdates.push({
+            productId: item.product,
+            quantity: item.quantity,
+            success: false,
+            error: inventoryError.message
+          });
+
+          // If inventory update fails, check if it's due to insufficient stock
           if (inventoryError.message.includes('Insufficient stock')) {
             return res.status(400).json({
-              message: 'Insufficient stock to cancel purchase order. Stock may have been used in other transactions.',
+              message: `Insufficient stock to cancel purchase order for product ${item.product}. Stock may have been used in other transactions.`,
               details: inventoryError.message,
-              inventoryUpdates
+              inventoryUpdates: inventoryUpdates
             });
           }
-          console.warn(`Continuing with cancellation despite inventory reduction failure for product ${productId}`);
+
+          // Continue with cancellation for other errors
+          console.warn(`Continuing with purchase order cancellation despite inventory reduction failure for product ${item.product}`);
+        }
+      }
+
+      // Reverse supplier balance: move from currentBalance back to pendingBalance
+      if (purchaseOrder.supplier && purchaseOrder.total > 0) {
+        try {
+          const supplier = await supplierRepository.findById(purchaseOrder.supplier);
+          if (supplier) {
+            // Move amount from currentBalance back to pendingBalance (reverse the confirmation)
+            await supplierRepository.updateById(purchaseOrder.supplier, {
+              $inc: {
+                pendingBalance: purchaseOrder.total,  // Add back to pending
+                currentBalance: -purchaseOrder.total  // Remove from current
+              }
+            });
+          }
+        } catch (error) {
+          console.error('Error reversing supplier balance on PO cancellation:', error);
+          // Don't fail the cancellation if supplier update fails
         }
       }
     }
 
-    const cancelledPO = await purchaseOrderService.getPurchaseOrderById(req.params.id);
+    purchaseOrder.status = 'cancelled';
+    purchaseOrder.lastModifiedBy = req.user._id;
+
+    await purchaseOrder.save();
+
     res.json({
-      message: wasConfirmed
+      message: purchaseOrder.status === 'confirmed'
         ? 'Purchase order cancelled successfully and inventory reduced'
         : 'Purchase order cancelled successfully',
-      purchaseOrder: cancelledPO,
+      purchaseOrder,
       inventoryUpdates: inventoryUpdates.length > 0 ? inventoryUpdates : undefined
     });
   } catch (error) {
@@ -429,7 +514,7 @@ router.put('/:id/close', [
   requirePermission('close_purchase_orders')
 ], async (req, res) => {
   try {
-    const purchaseOrder = await purchaseOrderService.closePurchaseOrder(req.params.id, req.user?.id || req.user?._id);
+    const purchaseOrder = await purchaseOrderService.closePurchaseOrder(req.params.id, req.user._id);
 
     res.json({
       message: 'Purchase order closed successfully',
@@ -474,7 +559,7 @@ router.delete('/:id', [
               reference: 'Purchase Order',
               referenceId: purchaseOrder._id,
               referenceModel: 'PurchaseOrder',
-              performedBy: req.user?.id || req.user?._id,
+              performedBy: req.user._id,
               notes: `Inventory rolled back due to deletion of purchase order ${purchaseOrder.poNumber}`
             });
           } catch (error) {
@@ -516,7 +601,7 @@ router.post('/:id/convert', [
   auth,
   requirePermission('manage_inventory'),
   body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
-  body('items.*.product').isUUID(4).withMessage('Valid product is required'),
+  body('items.*.product').isMongoId().withMessage('Valid product is required'),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('items.*.costPerUnit').isFloat({ min: 0 }).withMessage('Cost per unit must be positive')
 ], async (req, res) => {
@@ -532,33 +617,37 @@ router.post('/:id/convert', [
       return res.status(400).json({ message: 'Cannot convert cancelled or closed purchase order' });
     }
 
-    const poNumber = purchaseOrder.purchase_order_number || purchaseOrder.poNumber;
-    const poId = purchaseOrder.id || purchaseOrder._id;
-    const userId = req.user?.id || req.user?._id;
+    const Inventory = require('../models/Inventory');
     const { items } = req.body;
     const conversionResults = [];
 
+    // Process each item
     for (const item of items) {
       try {
-        await inventoryService.updateStock({
-          productId: item.product,
-          type: 'in',
-          quantity: item.quantity,
-          cost: item.costPerUnit,
-          reason: `Purchase from PO: ${poNumber}`,
-          reference: 'Purchase Order',
-          referenceId: poId,
-          referenceModel: 'PurchaseOrder',
-          performedBy: userId,
-          notes: `Stock increased from purchase order: ${poNumber}`
-        });
-
-        const poItem = purchaseOrder.items.find(pi =>
-          (pi.product_id || pi.product || '').toString() === (item.product || '').toString()
+        // Update inventory stock with cost
+        await Inventory.updateStock(
+          item.product,
+          {
+            type: 'in',
+            quantity: item.quantity,
+            cost: item.costPerUnit, // Pass cost price from purchase order
+            reason: `Purchase from PO: ${purchaseOrder.poNumber}`,
+            reference: 'Purchase Order',
+            referenceId: purchaseOrder._id,
+            referenceModel: 'PurchaseOrder',
+            performedBy: req.user._id,
+            notes: `Stock increased from purchase order: ${purchaseOrder.poNumber}`
+          }
         );
+
+        // Update purchase order item received quantity
+        const poItem = purchaseOrder.items.find(poItem =>
+          poItem.product.toString() === item.product
+        );
+
         if (poItem) {
-          poItem.receivedQuantity = (poItem.receivedQuantity || 0) + item.quantity;
-          poItem.remainingQuantity = Math.max(0, (poItem.quantity || 0) - (poItem.receivedQuantity || 0));
+          poItem.receivedQuantity += item.quantity;
+          poItem.remainingQuantity = Math.max(0, poItem.quantity - poItem.receivedQuantity);
         }
 
         conversionResults.push({
@@ -567,6 +656,7 @@ router.post('/:id/convert', [
           costPerUnit: item.costPerUnit,
           status: 'success'
         });
+
       } catch (itemError) {
         console.error(`Error processing item ${item.product}:`, itemError);
         conversionResults.push({
@@ -579,30 +669,49 @@ router.post('/:id/convert', [
       }
     }
 
-    const allItemsReceived = purchaseOrder.items.every(it => (it.remainingQuantity || 0) === 0);
-    const newStatus = allItemsReceived ? 'fully_received' : 'partially_received';
+    // Update purchase order status
+    const allItemsReceived = purchaseOrder.items.every(item => item.remainingQuantity === 0);
+    if (allItemsReceived) {
+      purchaseOrder.status = 'fully_received';
+      purchaseOrder.lastReceivedDate = new Date();
+    } else {
+      purchaseOrder.status = 'partially_received';
+      purchaseOrder.lastReceivedDate = new Date();
+    }
 
+    // Add conversion record
+    purchaseOrder.conversions = purchaseOrder.conversions || [];
+    purchaseOrder.conversions.push({
+      convertedBy: req.user._id,
+      convertedAt: new Date(),
+      items: conversionResults,
+      notes: req.body.notes || `Converted ${items.length} items to purchase`
+    });
+
+    // Automatically create a Purchase Invoice for the converted items
     try {
-      await purchaseOrderService.createInvoiceFromPurchaseOrder(purchaseOrder, userId, items);
+      const invoice = await purchaseOrderService.createInvoiceFromPurchaseOrder(purchaseOrder, req.user._id, items);
+
+      // Update conversion record with invoiceId
+      const lastConversion = purchaseOrder.conversions[purchaseOrder.conversions.length - 1];
+      if (lastConversion) {
+        lastConversion.invoiceId = invoice._id;
+        lastConversion.notes = lastConversion.notes || ``;
+        lastConversion.notes += ` - Created Invoice PI: ${invoice.invoiceNumber}`;
+      }
     } catch (createInvoiceError) {
       console.error('Failed to create purchase invoice during conversion:', createInvoiceError);
     }
 
-    await purchaseOrderRepository.update(req.params.id, {
-      items: purchaseOrder.items,
-      status: newStatus,
-      updatedBy: userId
-    });
+    await purchaseOrder.save();
 
     res.json({
       message: 'Purchase order converted successfully',
       conversionResults,
       purchaseOrder: {
-        id: poId,
-        _id: poId,
-        purchase_order_number: poNumber,
-        poNumber,
-        status: newStatus
+        _id: purchaseOrder._id,
+        poNumber: purchaseOrder.poNumber,
+        status: purchaseOrder.status
       }
     });
 

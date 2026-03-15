@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 import {
+  X,
   Calendar,
   BarChart3,
   Package,
@@ -17,7 +18,6 @@ import { useCreateReportMutation } from '../store/services/inventoryApi';
 import { useGetCategoriesQuery } from '../store/services/categoriesApi';
 import { useGetSuppliersQuery } from '../store/services/suppliersApi';
 import { handleApiError } from '../utils/errorHandler';
-import BaseModal from './BaseModal';
 
 const CreateInventoryReportModal = ({ onClose, onSuccess }) => {
   const [activeTab, setActiveTab] = useState('basic');
@@ -158,14 +158,18 @@ const CreateInventoryReportModal = ({ onClose, onSuccess }) => {
   ];
 
   return (
-    <BaseModal
-      isOpen={true}
-      onClose={onClose}
-      title="Generate Inventory Report"
-      maxWidth="xl"
-      variant="scrollable"
-      contentClassName="p-5"
-    >
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Generate Inventory Report</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
         {/* Tabs */}
         <div className="border-b border-gray-200 mb-6">
           <nav className="-mb-px flex space-x-8">
@@ -511,7 +515,8 @@ const CreateInventoryReportModal = ({ onClose, onSuccess }) => {
             </button>
           </div>
         </form>
-    </BaseModal>
+      </div>
+    </div>
   );
 };
 

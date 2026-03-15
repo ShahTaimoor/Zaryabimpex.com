@@ -4,13 +4,13 @@ const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const PurchaseInvoice = require('../models/PurchaseInvoice'); // Still needed for new PurchaseInvoice() and static methods
 const { auth, requirePermission } = require('../middleware/auth');
-const { validateUuidParam } = require('../middleware/validation');
 const { sanitizeRequest, handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const purchaseInvoiceService = require('../services/purchaseInvoiceService');
-const purchaseInvoiceRepository = require('../repositories/postgres/PurchaseInvoiceRepository');
-const supplierRepository = require('../repositories/postgres/SupplierRepository');
+const purchaseInvoiceRepository = require('../repositories/PurchaseInvoiceRepository');
+const supplierRepository = require('../repositories/SupplierRepository');
 const AccountingService = require('../services/accountingService');
 
 const router = express.Router();
@@ -18,20 +18,10 @@ const router = express.Router();
 // Format supplier address for invoice supplierInfo (for print)
 const formatSupplierAddress = (supplierData) => {
   if (!supplierData) return '';
-  if (supplierData.address && typeof supplierData.address === 'string') return supplierData.address.trim();
-  if (Array.isArray(supplierData.address) && supplierData.address.length > 0) {
-    const a = supplierData.address.find(x => x.isDefault) || supplierData.address.find(x => x.type === 'billing' || x.type === 'both') || supplierData.address[0];
-    const parts = [a.street || a.address_line1 || a.addressLine1, a.city, a.state || a.province, a.country, a.zipCode || a.zip].filter(Boolean);
-    return parts.join(', ');
-  }
-  if (supplierData.address && typeof supplierData.address === 'object') {
-    const a = supplierData.address;
-    const parts = [a.street || a.address_line1 || a.addressLine1 || a.line1, a.address_line2 || a.addressLine2 || a.line2, a.city, a.state || a.province, a.country, a.zipCode || a.zip || a.postalCode || a.postal_code].filter(Boolean);
-    return parts.join(', ');
-  }
+  if (supplierData.address && typeof supplierData.address === 'string') return supplierData.address;
   if (supplierData.addresses && Array.isArray(supplierData.addresses) && supplierData.addresses.length > 0) {
     const addr = supplierData.addresses.find(a => a.isDefault) || supplierData.addresses.find(a => a.type === 'billing' || a.type === 'both') || supplierData.addresses[0];
-    const parts = [addr.street || addr.address_line1 || addr.addressLine1, addr.city, addr.state || addr.province, addr.country, addr.zipCode || addr.zip].filter(Boolean);
+    const parts = [addr.street, addr.city, addr.state, addr.country, addr.zipCode].filter(Boolean);
     return parts.join(', ');
   }
   return '';
@@ -97,32 +87,12 @@ router.get('/', [
   }
 });
 
-// @route   POST /api/purchase-invoices/sync-ledger
-// @desc    Sync purchase invoices to ledger: update existing entries + post missing
-// @access  Private
-router.post('/sync-ledger', auth, requirePermission('view_reports'), async (req, res) => {
-  try {
-    const dateFrom = req.query.dateFrom || req.body?.dateFrom;
-    const dateTo = req.query.dateTo || req.body?.dateTo;
-    const result = await purchaseInvoiceService.syncPurchaseInvoicesLedger({ dateFrom, dateTo });
-    return res.json({
-      success: true,
-      message: `Synced purchase invoices ledger. Updated ${result.updated}, posted ${result.posted}.` + (result.errors.length ? ` ${result.errors.length} failed.` : ''),
-      ...result
-    });
-  } catch (error) {
-    console.error('Sync purchase invoices ledger error:', error);
-    return res.status(500).json({ success: false, message: error.message || 'Failed to sync purchase invoices ledger.' });
-  }
-});
-
 // @route   GET /api/purchase-invoices/:id
 // @desc    Get single purchase invoice
 // @access  Private
 router.get('/:id', [
   auth,
-  validateUuidParam('id'),
-  handleValidationErrors
+  query('id').isMongoId().withMessage('Invalid invoice ID')
 ], async (req, res) => {
   try {
     const invoice = await purchaseInvoiceService.getPurchaseInvoiceById(req.params.id);
@@ -142,9 +112,9 @@ router.get('/:id', [
 // @access  Private
 router.post('/', [
   auth,
-  body('supplier').optional().isUUID(4).withMessage('Invalid supplier ID'),
+  body('supplier').optional().isMongoId().withMessage('Invalid supplier ID'),
   body('items').isArray({ min: 1 }).withMessage('Items array is required'),
-  body('items.*.product').isUUID(4).withMessage('Valid Product ID is required'),
+  body('items.*.product').isMongoId().withMessage('Valid Product ID is required'),
   body('items.*.quantity').isFloat({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('items.*.unitCost').isFloat({ min: 0 }).withMessage('Unit cost must be positive'),
   body('pricing.subtotal').isFloat({ min: 0 }).withMessage('Subtotal must be positive'),
@@ -184,25 +154,9 @@ router.post('/', [
       invoiceDate
     } = req.body;
 
-    const genInvoiceNumber = () => `PI-${Date.now()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
-    // Ensure supplierInfo has address - fetch from supplier record if missing
-    let enrichedSupplierInfo = supplierInfo || {};
-    if (supplier && (!enrichedSupplierInfo.address || (typeof enrichedSupplierInfo.address === 'string' && !enrichedSupplierInfo.address.trim()))) {
-      try {
-        const supplierData = await supplierRepository.findById(supplier);
-        if (supplierData) {
-          const addr = formatSupplierAddress(supplierData);
-          if (addr) {
-            enrichedSupplierInfo = { ...enrichedSupplierInfo, address: addr };
-          }
-        }
-      } catch (e) {
-        // Ignore - use whatever supplierInfo was provided
-      }
-    }
     const invoiceData = {
       supplier,
-      supplierInfo: enrichedSupplierInfo,
+      supplierInfo,
       items,
       pricing,
       payment: {
@@ -212,15 +166,44 @@ router.post('/', [
         paidAmount: payment?.amount || payment?.paidAmount || 0,
         isPartialPayment: payment?.isPartialPayment || false
       },
-      invoiceNumber: invoiceNumber && String(invoiceNumber).trim() ? invoiceNumber : genInvoiceNumber(),
+      invoiceNumber: invoiceNumber || undefined, // Only include if provided - pre-save hook will generate if missing
       expectedDelivery,
       notes,
       terms,
-      invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
-      createdBy: req.user?.id || req.user?._id
+      invoiceDate: invoiceDate ? new Date(invoiceDate) : null, // Allow custom invoice date (for backdating/postdating)
+      createdBy: req.user._id
     };
 
-    let invoice = await purchaseInvoiceRepository.create(invoiceData);
+    // Handle potential duplicate invoice number by generating a new one if needed
+    let invoice = new PurchaseInvoice(invoiceData);
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (retryCount < maxRetries) {
+      try {
+        await invoice.save();
+        break; // Success, exit retry loop
+      } catch (error) {
+        if (error.code === 11000 && error.keyPattern && error.keyPattern.invoiceNumber) {
+          // Duplicate invoice number error
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            throw new Error('Failed to generate unique invoice number after multiple attempts');
+          }
+
+          // Generate a new invoice number with additional randomness
+          const timestamp = Date.now();
+          const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+          const newInvoiceNumber = `${invoiceData.invoiceNumber}-${timestamp}-${random}`;
+
+          invoiceData.invoiceNumber = newInvoiceNumber;
+          invoice = new PurchaseInvoice(invoiceData);
+        } else {
+          // Different error, re-throw
+          throw error;
+        }
+      }
+    }
 
     // IMMEDIATE INVENTORY UPDATE - No confirmation required
     const inventoryService = require('../services/inventoryService');
@@ -287,28 +270,41 @@ router.post('/', [
       try {
         const SupplierBalanceService = require('../services/supplierBalanceService');
         const supplierExists = await supplierRepository.findById(supplier);
+
         if (supplierExists) {
+          // Note: Manual pendingBalance update removed.
+          // Balance is now derived from Accounting entries.
+
+          // Record payment (this will handle the ledger update)
           const amountPaid = payment?.amount || payment?.paidAmount || 0;
           if (amountPaid > 0) {
-            await SupplierBalanceService.recordPayment(supplier, amountPaid, invoice.id);
+            await SupplierBalanceService.recordPayment(supplier, amountPaid, invoice._id);
           }
         }
       } catch (error) {
         console.error('Error updating supplier balance on purchase invoice creation:', error);
+        // Don't fail the invoice creation if supplier update fails
       }
     }
 
-    await purchaseInvoiceRepository.updateById(invoice.id, { status: 'confirmed', confirmedDate: new Date() });
-    invoice = await purchaseInvoiceRepository.findById(invoice.id);
+    // Update invoice status to 'confirmed' since inventory was updated
+    invoice.status = 'confirmed';
+    invoice.confirmedDate = new Date();
+    await invoice.save();
 
-    // Post to account ledger
+    // Record accounting transaction (General Ledger)
     try {
-      const AccountingService = require('../services/accountingService');
       await AccountingService.recordPurchaseInvoice(invoice);
-    } catch (error) {
-      console.error('Error creating accounting entries for purchase invoice:', error);
-      // Don't fail the request, but log the error
+    } catch (accountingError) {
+      console.error('Failed to record accounting entry for purchase invoice:', accountingError);
+      // Don't fail the request, but log the error for investigation
     }
+
+    await invoice.populate([
+      { path: 'supplier', select: 'name companyName email phone' },
+      { path: 'items.product', select: 'name description pricing' },
+      { path: 'createdBy', select: 'name email' }
+    ]);
 
     const successCount = inventoryUpdates.filter(update => update.success).length;
     const failureCount = inventoryUpdates.filter(update => !update.success).length;
@@ -337,11 +333,11 @@ router.post('/', [
 // @access  Private
 router.put('/:id', [
   auth,
-  body('supplier').optional().isUUID(4).withMessage('Valid supplier is required'),
+  body('supplier').optional().isMongoId().withMessage('Valid supplier is required'),
   body('invoiceType').optional().isIn(['purchase', 'return', 'adjustment']).withMessage('Invalid invoice type'),
   body('notes').optional().trim().isLength({ max: 1000 }).withMessage('Notes too long'),
   body('items').optional().isArray({ min: 1 }).withMessage('Items array is required'),
-  body('items.*.product').optional().isUUID(4).withMessage('Valid Product ID is required'),
+  body('items.*.product').optional().isMongoId().withMessage('Valid Product ID is required'),
   body('items.*.quantity').optional().isFloat({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('items.*.unitCost').optional().isFloat({ min: 0 }).withMessage('Unit cost must be positive'),
   body('invoiceDate').optional().isISO8601().withMessage('Valid invoice date required (ISO 8601 format)'),
@@ -359,21 +355,24 @@ router.put('/:id', [
     }
 
     // Store old values for comparison
-    const oldItems = JSON.parse(JSON.stringify(invoice.items || []));
+    const oldItems = JSON.parse(JSON.stringify(invoice.items));
     const oldTotal = invoice.pricing.total;
     const oldSupplier = invoice.supplier;
 
+    // Get supplier data if supplier is being updated
     let supplierData = null;
     if (req.body.supplier) {
+      const Supplier = require('../models/Supplier');
       supplierData = await supplierRepository.findById(req.body.supplier);
       if (!supplierData) {
         return res.status(400).json({ message: 'Supplier not found' });
       }
     }
 
+    // Prepare update data
     const updateData = {
       ...req.body,
-      lastModifiedBy: req.user?.id || req.user?._id
+      lastModifiedBy: req.user._id
     };
 
     // Update invoiceDate if provided (for backdating/postdating)
@@ -383,12 +382,12 @@ router.put('/:id', [
 
     // Update supplier info if supplier is being updated
     if (req.body.supplier !== undefined) {
-      updateData.supplierId = req.body.supplier || null;
+      updateData.supplier = req.body.supplier || null;
       updateData.supplierInfo = supplierData ? {
-        name: supplierData.name || supplierData.contact_person,
+        name: supplierData.name,
         email: supplierData.email,
         phone: supplierData.phone,
-        companyName: supplierData.company_name || supplierData.companyName,
+        companyName: supplierData.companyName,
         address: formatSupplierAddress(supplierData)
       } : null;
     }
@@ -403,7 +402,7 @@ router.put('/:id', [
         const itemSubtotal = item.quantity * item.unitCost;
         const itemDiscount = itemSubtotal * ((item.discountPercent || 0) / 100);
         const itemTaxable = itemSubtotal - itemDiscount;
-        const itemTax = (invoice.pricing && invoice.pricing.isTaxExempt) ? 0 : itemTaxable * (item.taxRate || 0);
+        const itemTax = invoice.pricing.isTaxExempt ? 0 : itemTaxable * (item.taxRate || 0);
 
         newSubtotal += itemSubtotal;
         newTotalDiscount += itemDiscount;
@@ -420,55 +419,10 @@ router.put('/:id', [
       };
     }
 
-    const updatedInvoice = await purchaseInvoiceRepository.updateById(req.params.id, updateData);
-
-    // Parse updatedInvoice payment/pricing if they came back as string from DB
-    const updatedPayment = typeof updatedInvoice?.payment === 'string' ? JSON.parse(updatedInvoice.payment || '{}') : (updatedInvoice?.payment || {});
-    const updatedPricing = typeof updatedInvoice?.pricing === 'string' ? JSON.parse(updatedInvoice.pricing || '{}') : (updatedInvoice?.pricing || {});
-    const updatedSupplierId = updatedInvoice.supplier_id || updatedInvoice.supplierId || updatedInvoice.supplier;
-
-    const totalChanged = Math.abs((updatedPricing.total || 0) - oldTotal) >= 0.01;
-    const supplierChanged = String(oldSupplier || '') !== String(updatedSupplierId || '');
-
-    // Account Ledger: When confirmed invoice and (total or supplier) changed - reverse old entries and re-post
-    let didFullLedgerRepost = false;
-    if (invoice.status === 'confirmed' && (totalChanged || supplierChanged)) {
-      try {
-        const invoiceId = updatedInvoice.id || updatedInvoice._id;
-        await AccountingService.reverseLedgerEntriesByReference('purchase_invoice', invoiceId);
-        await AccountingService.reverseLedgerEntriesByReference('purchase_invoice_payment', invoiceId);
-        const fullInvoiceForLedger = await purchaseInvoiceRepository.findById(req.params.id);
-        await AccountingService.recordPurchaseInvoice({
-          ...fullInvoiceForLedger,
-          createdBy: req.user?.id || req.user?._id
-        });
-        didFullLedgerRepost = true;
-      } catch (ledgerErr) {
-        console.error('Failed to re-post purchase invoice to ledger:', ledgerErr);
-      }
-    }
-
-    // Account Ledger: When only payment amount changed (and we didn't do full re-post)
-    if (!didFullLedgerRepost && req.body.payment !== undefined) {
-      const oldAmountPaid = parseFloat(invoice.payment?.amount ?? invoice.payment?.paidAmount ?? 0) || 0;
-      const newAmountPaid = parseFloat(updatedPayment?.amount ?? updatedPayment?.paidAmount ?? 0) || 0;
-      if (Math.abs(newAmountPaid - oldAmountPaid) >= 0.01) {
-        try {
-          const supplierId = updatedInvoice.supplier_id || updatedInvoice.supplierId || invoice.supplier_id || invoice.supplierId;
-          await AccountingService.recordPurchasePaymentAdjustment({
-            invoiceId: updatedInvoice.id || updatedInvoice._id,
-            invoiceNumber: updatedInvoice.invoice_number || updatedInvoice.invoiceNumber,
-            supplierId: supplierId || updatedInvoice.supplier,
-            oldAmountPaid,
-            newAmountPaid,
-            paymentMethod: updatedPayment?.method || invoice.payment?.method || 'cash',
-            createdBy: req.user?.id || req.user?._id
-          });
-        } catch (ledgerErr) {
-          console.error('Failed to post purchase payment adjustment to ledger:', ledgerErr);
-        }
-      }
-    }
+    const updatedInvoice = await purchaseInvoiceRepository.update(req.params.id, updateData, {
+      new: true,
+      runValidators: true
+    });
 
     // Adjust inventory based on item changes if invoice was confirmed
     if (invoice.status === 'confirmed' && req.body.items && req.body.items.length > 0) {
@@ -477,8 +431,8 @@ router.put('/:id', [
 
         for (const newItem of req.body.items) {
           const oldItem = oldItems.find(oi => {
-            const oldProductId = (oi.product?.id || oi.product?._id || oi.product)?.toString?.() || String(oi.product);
-            const newProductId = (newItem.product?.id || newItem.product)?.toString?.() || String(newItem.product);
+            const oldProductId = oi.product?._id ? oi.product._id.toString() : oi.product?.toString() || oi.product;
+            const newProductId = newItem.product?.toString() || newItem.product;
             return oldProductId === newProductId;
           });
           const oldQuantity = oldItem ? oldItem.quantity : 0;
@@ -487,53 +441,54 @@ router.put('/:id', [
           if (quantityChange !== 0) {
             if (quantityChange > 0) {
               // Quantity increased - add more inventory
-              const productId = newItem.product?.id || newItem.product?._id || newItem.product;
               await inventoryService.updateStock({
-                productId,
+                productId: newItem.product,
                 type: 'in',
                 quantity: quantityChange,
                 reason: 'Purchase Invoice Update - Quantity Increased',
                 reference: 'Purchase Invoice',
-                referenceId: updatedInvoice.id || updatedInvoice._id,
+                referenceId: updatedInvoice._id,
                 referenceModel: 'PurchaseInvoice',
-                performedBy: req.user?.id || req.user?._id,
-                notes: `Inventory increased due to purchase invoice ${updatedInvoice.invoice_number || updatedInvoice.invoiceNumber} update - quantity increased by ${quantityChange}`
+                performedBy: req.user._id,
+                notes: `Inventory increased due to purchase invoice ${updatedInvoice.invoiceNumber} update - quantity increased by ${quantityChange}`
               });
             } else {
               // Quantity decreased - reduce inventory
-              const productId = newItem.product?.id || newItem.product?._id || newItem.product;
               await inventoryService.updateStock({
-                productId,
+                productId: newItem.product,
                 type: 'out',
                 quantity: Math.abs(quantityChange),
                 reason: 'Purchase Invoice Update - Quantity Decreased',
                 reference: 'Purchase Invoice',
-                referenceId: updatedInvoice.id || updatedInvoice._id,
+                referenceId: updatedInvoice._id,
                 referenceModel: 'PurchaseInvoice',
-                performedBy: req.user?.id || req.user?._id,
-                notes: `Inventory reduced due to purchase invoice ${updatedInvoice.invoice_number || updatedInvoice.invoiceNumber} update - quantity decreased by ${Math.abs(quantityChange)}`
+                performedBy: req.user._id,
+                notes: `Inventory reduced due to purchase invoice ${updatedInvoice.invoiceNumber} update - quantity decreased by ${Math.abs(quantityChange)}`
               });
             }
           }
         }
 
+        // Handle removed items (items that were in old but not in new)
         for (const oldItem of oldItems) {
-          const oldProductId = (oldItem.product?.id || oldItem.product?._id || oldItem.product)?.toString?.() || String(oldItem.product);
+          const oldProductId = oldItem.product?._id ? oldItem.product._id.toString() : oldItem.product?.toString() || oldItem.product;
           const stillExists = req.body.items.find(newItem => {
-            const newProductId = (newItem.product?.id || newItem.product)?.toString?.() || String(newItem.product);
+            const newProductId = newItem.product?.toString() || newItem.product;
             return oldProductId === newProductId;
           });
+
           if (!stillExists) {
+            // Item was removed - reduce inventory
             await inventoryService.updateStock({
-              productId: oldItem.product?.id || oldItem.product?._id || oldItem.product,
+              productId: oldItem.product?._id || oldItem.product,
               type: 'out',
               quantity: oldItem.quantity,
               reason: 'Purchase Invoice Update - Item Removed',
               reference: 'Purchase Invoice',
-              referenceId: updatedInvoice.id,
+              referenceId: updatedInvoice._id,
               referenceModel: 'PurchaseInvoice',
-              performedBy: req.user?.id || req.user?._id,
-              notes: `Inventory reduced due to purchase invoice ${updatedInvoice.invoice_number || updatedInvoice.invoiceNumber} update - item removed`
+              performedBy: req.user._id,
+              notes: `Inventory reduced due to purchase invoice ${updatedInvoice.invoiceNumber} update - item removed`
             });
           }
         }
@@ -545,10 +500,10 @@ router.put('/:id', [
 
     // Adjust supplier balance if total changed, payment changed, or supplier changed
     // Need to properly handle overpayments using SupplierBalanceService
-    if (updatedSupplierId && (
-      updatedPricing.total !== oldTotal ||
-      oldSupplier?.toString() !== String(updatedSupplierId) ||
-      (updatedPayment?.amount || updatedPayment?.paidAmount || 0) !== (invoice.payment?.amount || invoice.payment?.paidAmount || 0)
+    if (updatedInvoice.supplier && (
+      updatedInvoice.pricing.total !== oldTotal ||
+      oldSupplier?.toString() !== updatedInvoice.supplier?.toString() ||
+      (updatedInvoice.payment?.amount || updatedInvoice.payment?.paidAmount || 0) !== (invoice.payment?.amount || invoice.payment?.paidAmount || 0)
     )) {
       try {
         const SupplierBalanceService = require('../services/supplierBalanceService');
@@ -557,9 +512,9 @@ router.put('/:id', [
         // The ledger entries will be updated/reversed as needed.
 
         // Record new payment if any
-        const newAmountPaid = updatedPayment?.amount || updatedPayment?.paidAmount || 0;
+        const newAmountPaid = updatedInvoice.payment?.amount || updatedInvoice.payment?.paidAmount || 0;
         if (newAmountPaid > 0) {
-          await SupplierBalanceService.recordPayment(updatedSupplierId, newAmountPaid, updatedInvoice.id || updatedInvoice._id);
+          await SupplierBalanceService.recordPayment(updatedInvoice.supplier, newAmountPaid, updatedInvoice._id);
         }
       } catch (error) {
         console.error('Error adjusting supplier balance on purchase invoice update:', error);
@@ -567,12 +522,14 @@ router.put('/:id', [
       }
     }
 
-    // Fetch full invoice with supplier/items (Postgres - no Mongoose populate)
-    const fullInvoice = await purchaseInvoiceRepository.findById(req.params.id);
+    await updatedInvoice.populate([
+      { path: 'supplier', select: 'name companyName email phone address' },
+      { path: 'items.product', select: 'name description pricing' }
+    ]);
 
     res.json({
       message: 'Purchase invoice updated successfully',
-      invoice: fullInvoice || updatedInvoice
+      invoice: updatedInvoice
     });
   } catch (error) {
     console.error('Error updating purchase invoice:', error);
@@ -599,38 +556,37 @@ router.delete('/:id', [
     }
 
 
+    // ROLLBACK INVENTORY - Subtract the quantities that were added
     const inventoryService = require('../services/inventoryService');
     const inventoryRollbacks = [];
-    const items = Array.isArray(invoice.items) ? invoice.items : (typeof invoice.items === 'string' ? JSON.parse(invoice.items) : []);
 
     if (invoice.status === 'confirmed') {
-      for (const item of items) {
+      for (const item of invoice.items) {
         try {
 
-          const productId = item.product?.id ?? item.product?._id ?? item.product;
           const inventoryRollback = await inventoryService.updateStock({
-            productId,
+            productId: item.product,
             type: 'out',
             quantity: item.quantity,
             reason: 'Purchase Invoice Deletion',
             reference: 'Purchase Invoice Deletion',
-            referenceId: invoice.id,
+            referenceId: invoice._id,
             referenceModel: 'PurchaseInvoice',
-            performedBy: req.user?.id || req.user?._id,
-            notes: `Inventory rolled back due to deletion of purchase invoice ${invoice.invoice_number || invoice.invoiceNumber}`
+            performedBy: req.user._id,
+            notes: `Inventory rolled back due to deletion of purchase invoice ${invoice.invoiceNumber}`
           });
 
           inventoryRollbacks.push({
-            productId,
+            productId: item.product,
             quantity: item.quantity,
             newStock: inventoryRollback.currentStock,
             success: true
           });
 
         } catch (error) {
-          console.error(`Failed to rollback inventory for product ${productId}:`, error);
+          console.error(`Failed to rollback inventory for product ${item.product}:`, error);
           inventoryRollbacks.push({
-            productId: productId,
+            productId: item.product,
             quantity: item.quantity,
             success: false,
             error: error.message
@@ -659,7 +615,8 @@ router.delete('/:id', [
       }
     }
 
-    await purchaseInvoiceRepository.softDelete(req.params.id);
+    // Delete the invoice
+    await purchaseInvoiceRepository.delete(req.params.id);
 
 
     res.json({
@@ -712,14 +669,14 @@ router.put('/:id/cancel', [
       return res.status(400).json({ message: 'Cannot cancel paid or closed invoice' });
     }
 
-    const updated = await purchaseInvoiceRepository.updateById(req.params.id, {
-      status: 'cancelled',
-      lastModifiedBy: req.user?.id || req.user?._id
-    });
+    invoice.status = 'cancelled';
+    invoice.lastModifiedBy = req.user._id;
+
+    await invoice.save();
 
     res.json({
       message: 'Purchase invoice cancelled successfully',
-      invoice: updated || invoice
+      invoice
     });
   } catch (error) {
     console.error('Error cancelling purchase invoice:', error);
@@ -733,30 +690,68 @@ router.put('/:id/cancel', [
 router.post('/export/pdf', [auth, requirePermission('view_purchase_invoices')], async (req, res) => {
   try {
     const { filters = {} } = req.body;
-    const filter = {};
-    if (filters.search) filter.search = filters.search;
-    if (filters.status) filter.status = filters.status;
-    if (filters.paymentStatus) filter.paymentStatus = filters.paymentStatus;
-    if (filters.supplier) filter.supplierId = filters.supplier;
-    if (filters.dateFrom) filter.dateFrom = filters.dateFrom;
-    if (filters.dateTo) filter.dateTo = filters.dateTo;
 
-    let supplierName = null;
+    // Build query based on filters
+    const filter = {};
+
+    if (filters.search) {
+      filter.$or = [
+        { invoiceNumber: { $regex: filters.search, $options: 'i' } },
+        { notes: { $regex: filters.search, $options: 'i' } }
+      ];
+    }
+
+    if (filters.status) {
+      filter.status = filters.status;
+    }
+
+    if (filters.paymentStatus) {
+      filter['payment.status'] = filters.paymentStatus;
+    }
+
     if (filters.supplier) {
-      const supplier = await supplierRepository.findById(filters.supplier);
-      if (supplier) {
-        supplierName = supplier.company_name || supplier.companyName || supplier.name ||
-          `${supplier.first_name || ''} ${supplier.last_name || ''}`.trim() || 'Unknown Supplier';
+      filter.supplier = filters.supplier;
+    }
+
+    if (filters.dateFrom || filters.dateTo) {
+      filter.createdAt = {};
+      if (filters.dateFrom) {
+        const dateFrom = new Date(filters.dateFrom);
+        dateFrom.setHours(0, 0, 0, 0);
+        filter.createdAt.$gte = dateFrom;
+      }
+      if (filters.dateTo) {
+        const dateTo = new Date(filters.dateTo);
+        dateTo.setDate(dateTo.getDate() + 1);
+        dateTo.setHours(0, 0, 0, 0);
+        filter.createdAt.$lt = dateTo;
       }
     }
 
-    const { invoices } = await purchaseInvoiceRepository.findWithPagination(filter, { getAll: true });
-    invoices.forEach(inv => {
-      inv.createdAt = inv.created_at ?? inv.createdAt;
-      inv.invoiceNumber = inv.invoice_number ?? inv.invoiceNumber;
-      if (typeof inv.pricing === 'string') inv.pricing = JSON.parse(inv.pricing);
-      if (typeof inv.items === 'string') inv.items = JSON.parse(inv.items);
+    // Fetch supplier name if supplier filter is applied
+    let supplierName = null;
+    if (filters.supplier) {
+      const supplier = await supplierRepository.findById(filters.supplier, { lean: true });
+      if (supplier) {
+        supplierName = supplier.companyName ||
+          supplier.name ||
+          `${supplier.firstName || ''} ${supplier.lastName || ''}`.trim() ||
+          'Unknown Supplier';
+      }
+    }
+
+    const invoices = await purchaseInvoiceRepository.findAll(filter, {
+      populate: [
+        { path: 'supplier', select: 'companyName name firstName lastName email phone' },
+        { path: 'items.product', select: 'name' },
+        { path: 'createdBy', select: 'firstName lastName email' }
+      ],
+      sort: { createdAt: -1 },
+      lean: true
     });
+
+    if (invoices.length > 0) {
+    }
 
     // Ensure exports directory exists
     const exportsDir = path.join(__dirname, '../exports');

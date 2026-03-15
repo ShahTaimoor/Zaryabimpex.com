@@ -87,6 +87,11 @@ export const componentRegistry = {
     icon: 'FileText',
     component: () => import('../pages/StockLedger').then(m => m.default || m.StockLedger)
   },
+  '/returns': {
+    title: 'Returns',
+    icon: 'RotateCcw',
+    component: () => import('../pages/Returns').then(m => m.default || m.Returns)
+  },
   '/sale-returns': {
     title: 'Sale Returns',
     icon: 'RotateCcw',
@@ -114,16 +119,6 @@ export const componentRegistry = {
     icon: 'Search',
     component: () => import('../pages/PurchaseInvoices').then(m => m.default || m.PurchaseInvoices)
   },
-  '/purchase-by-supplier': {
-    title: 'Products by Supplier',
-    icon: 'BarChart3',
-    component: () => import('../pages/PurchaseBySupplierReport').then(m => m.default)
-  },
-  '/help': {
-    title: 'Help & Support',
-    icon: 'HelpCircle',
-    component: () => import('../pages/Help').then(m => m.default || m.Help)
-  },
   '/reports': {
     title: 'Reports',
     icon: 'BarChart3',
@@ -142,7 +137,6 @@ export const componentRegistry = {
   '/balance-sheets': {
     title: 'Balance Sheets',
     icon: 'FileText',
-    allowMultiple: true,
     component: () => import('../pages/BalanceSheets').then(m => m.default || m.BalanceSheets)
   },
   '/discounts': {

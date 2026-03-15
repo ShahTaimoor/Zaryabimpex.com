@@ -177,16 +177,12 @@ const sanitizeArray = (arr, itemSanitizer = sanitizeInput) => {
     });
 };
 
-// Sanitize entity ID (PostgreSQL UUID or legacy 24-char hex)
+// Sanitize MongoDB ObjectId
 const sanitizeObjectId = (id) => {
   if (!id || typeof id !== 'string') return null;
   
   const sanitized = sanitizeInput(id);
-  // PostgreSQL UUID format
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sanitized)) {
-    return sanitized;
-  }
-  // Legacy 24-char hex (MongoDB ObjectId)
+  // Check if it's a valid MongoDB ObjectId format
   if (/^[0-9a-fA-F]{24}$/.test(sanitized)) {
     return sanitized;
   }

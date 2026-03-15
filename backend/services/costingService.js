@@ -1,5 +1,5 @@
-const inventoryRepository = require('../repositories/InventoryRepository');
-const productRepository = require('../repositories/ProductRepository');
+const Inventory = require('../models/Inventory');
+const Product = require('../models/Product');
 
 class CostingService {
   /**
@@ -9,13 +9,12 @@ class CostingService {
    * @returns {Promise<{unitCost: number, totalCost: number, batches: Array}>}
    */
   async calculateFIFOCost(productId, quantity) {
-    const inventory = await inventoryRepository.findOne({ product: productId });
-    const cost = inventory?.cost && typeof inventory.cost === 'object' ? inventory.cost : (inventory?.cost ? (typeof inventory.cost === 'string' ? JSON.parse(inventory.cost) : inventory.cost) : {});
-    const fifo = cost?.fifo && Array.isArray(cost.fifo) ? cost.fifo : [];
-
-    if (!inventory || fifo.length === 0) {
-      const product = await productRepository.findById(productId);
-      const fallbackCost = cost?.average ?? product?.cost_price ?? product?.costPrice ?? product?.pricing?.cost ?? 0;
+    const inventory = await Inventory.findOne({ product: productId });
+    
+    if (!inventory || !inventory.cost?.fifo || inventory.cost.fifo.length === 0) {
+      // Fallback to average or standard cost
+      const product = await Product.findById(productId);
+      const fallbackCost = inventory?.cost?.average || product?.pricing?.cost || 0;
       return {
         unitCost: fallbackCost,
         totalCost: fallbackCost * quantity,
@@ -52,7 +51,8 @@ class CostingService {
     }
 
     if (remainingQty > 0) {
-      const avgCost = cost.average || 0;
+      // Not enough stock in FIFO batches, use average cost for remaining
+      const avgCost = inventory.cost.average || 0;
       totalCost += remainingQty * avgCost;
       batchesUsed.push({
         quantity: remainingQty,
@@ -77,13 +77,12 @@ class CostingService {
    * @returns {Promise<{unitCost: number, totalCost: number, batches: Array}>}
    */
   async calculateLIFOCost(productId, quantity) {
-    const inventory = await inventoryRepository.findOne({ product: productId });
-    const cost = inventory?.cost && typeof inventory.cost === 'object' ? inventory.cost : (inventory?.cost ? (typeof inventory.cost === 'string' ? JSON.parse(inventory.cost) : inventory.cost) : {});
-    const fifo = cost?.fifo && Array.isArray(cost.fifo) ? cost.fifo : [];
-
-    if (!inventory || fifo.length === 0) {
-      const product = await productRepository.findById(productId);
-      const fallbackCost = cost?.average ?? product?.cost_price ?? product?.costPrice ?? product?.pricing?.cost ?? 0;
+    const inventory = await Inventory.findOne({ product: productId });
+    
+    if (!inventory || !inventory.cost?.fifo || inventory.cost.fifo.length === 0) {
+      // Fallback to average or standard cost
+      const product = await Product.findById(productId);
+      const fallbackCost = inventory?.cost?.average || product?.pricing?.cost || 0;
       return {
         unitCost: fallbackCost,
         totalCost: fallbackCost * quantity,
@@ -93,7 +92,7 @@ class CostingService {
     }
 
     // Sort LIFO batches by date (newest first)
-    const lifoBatches = [...fifo]
+    const lifoBatches = [...inventory.cost.fifo]
       .filter(batch => batch.quantity > 0)
       .sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -120,7 +119,8 @@ class CostingService {
     }
 
     if (remainingQty > 0) {
-      const avgCost = cost.average || 0;
+      // Not enough stock in LIFO batches, use average cost for remaining
+      const avgCost = inventory.cost.average || 0;
       totalCost += remainingQty * avgCost;
       batchesUsed.push({
         quantity: remainingQty,
@@ -145,10 +145,10 @@ class CostingService {
    * @returns {Promise<{unitCost: number, totalCost: number}>}
    */
   async calculateAverageCost(productId, quantity) {
-    const inventory = await inventoryRepository.findOne({ product: productId });
-    const product = await productRepository.findById(productId);
-    const cost = inventory?.cost && typeof inventory.cost === 'object' ? inventory.cost : (inventory?.cost ? (typeof inventory.cost === 'string' ? JSON.parse(inventory.cost) : inventory.cost) : {});
-    const avgCost = cost?.average ?? product?.cost_price ?? product?.costPrice ?? product?.pricing?.cost ?? 0;
+    const inventory = await Inventory.findOne({ product: productId });
+    const product = await Product.findById(productId);
+    
+    const avgCost = inventory?.cost?.average || product?.pricing?.cost || 0;
     
     return {
       unitCost: avgCost,
@@ -164,12 +164,14 @@ class CostingService {
    * @returns {Promise<{unitCost: number, totalCost: number, batches: Array}>}
    */
   async calculateCost(productId, quantity) {
-    const product = await productRepository.findById(productId);
+    const product = await Product.findById(productId);
+    
     if (!product) {
       throw new Error('Product not found');
     }
-    const costingMethod = product.costing_method ?? product.costingMethod ?? 'standard';
-    const standardCost = Number(product.cost_price ?? product.costPrice ?? product.pricing?.cost ?? 0);
+
+    const costingMethod = product.costingMethod || 'standard';
+
     switch (costingMethod) {
       case 'fifo':
         return await this.calculateFIFOCost(productId, quantity);
@@ -179,9 +181,10 @@ class CostingService {
         return await this.calculateAverageCost(productId, quantity);
       case 'standard':
       default:
+        // Use product.pricing.cost directly
         return {
-          unitCost: standardCost,
-          totalCost: standardCost * quantity,
+          unitCost: product.pricing.cost,
+          totalCost: product.pricing.cost * quantity,
           method: 'STANDARD'
         };
     }
@@ -195,19 +198,31 @@ class CostingService {
    * @returns {Promise<number>} Updated average cost
    */
   async updateAverageCost(productId, newQuantity, newCost) {
-    const inventory = await inventoryRepository.findOne({ product: productId });
+    const inventory = await Inventory.findOne({ product: productId });
+    
     if (!inventory) {
       throw new Error('Inventory record not found');
     }
-    const currentStock = Number(inventory.current_stock ?? inventory.currentStock ?? 0);
-    const cost = inventory.cost && typeof inventory.cost === 'object' ? inventory.cost : (typeof inventory.cost === 'string' ? JSON.parse(inventory.cost || '{}') : {});
-    const currentAvg = cost.average || 0;
+
+    const currentStock = inventory.currentStock || 0;
+    const currentAvg = inventory.cost?.average || 0;
+    
+    // Calculate new average: (currentValue + newValue) / totalQuantity
     const currentValue = (currentStock - newQuantity) * currentAvg;
     const newValue = newQuantity * newCost;
     const totalQuantity = currentStock;
-    const newAverage = totalQuantity > 0 ? (currentValue + newValue) / totalQuantity : newCost;
-    const updatedCost = { ...cost, average: newAverage };
-    await inventoryRepository.updateByProductId(productId, { cost: updatedCost });
+    
+    const newAverage = totalQuantity > 0 
+      ? (currentValue + newValue) / totalQuantity 
+      : newCost;
+
+    // Update inventory average cost
+    if (!inventory.cost) {
+      inventory.cost = {};
+    }
+    inventory.cost.average = newAverage;
+    await inventory.save();
+
     return newAverage;
   }
 
@@ -221,20 +236,32 @@ class CostingService {
    * @returns {Promise<void>}
    */
   async addFIFOBatch(productId, quantity, cost, date = new Date(), purchaseOrderId = null) {
-    const inventory = await inventoryRepository.findOne({ product: productId });
+    const inventory = await Inventory.findOne({ product: productId });
+    
     if (!inventory) {
       throw new Error('Inventory record not found');
     }
-    const costObj = inventory.cost && typeof inventory.cost === 'object' ? inventory.cost : (typeof inventory.cost === 'string' ? JSON.parse(inventory.cost || '{}') : {});
-    if (!costObj.fifo) costObj.fifo = [];
-    costObj.fifo.push({
+
+    if (!inventory.cost) {
+      inventory.cost = {};
+    }
+    
+    if (!inventory.cost.fifo) {
+      inventory.cost.fifo = [];
+    }
+
+    // Add new batch
+    inventory.cost.fifo.push({
       quantity,
       cost,
       date: date || new Date(),
       purchaseOrder: purchaseOrderId
     });
+
+    // Update average cost
     await this.updateAverageCost(productId, quantity, cost);
-    await inventoryRepository.updateByProductId(productId, { cost: costObj });
+    
+    await inventory.save();
   }
 
   /**
@@ -244,22 +271,29 @@ class CostingService {
    * @returns {Promise<{totalCost: number, batches: Array}>}
    */
   async consumeFIFOBatches(productId, quantity) {
-    const inventory = await inventoryRepository.findOne({ product: productId });
-    const costObj = inventory?.cost && typeof inventory.cost === 'object' ? inventory.cost : (inventory?.cost ? (typeof inventory.cost === 'string' ? JSON.parse(inventory.cost || '{}') : inventory.cost) : {});
-    const fifo = costObj?.fifo && Array.isArray(costObj.fifo) ? costObj.fifo : [];
-    if (!inventory || fifo.length === 0) {
+    const inventory = await Inventory.findOne({ product: productId });
+    
+    if (!inventory || !inventory.cost?.fifo) {
       throw new Error('FIFO batches not found');
     }
-    const batches = fifo.filter(batch => batch.quantity > 0).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Sort by date (oldest first)
+    const batches = inventory.cost.fifo
+      .filter(batch => batch.quantity > 0)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
     let remainingQty = quantity;
     let totalCost = 0;
     const consumedBatches = [];
+
     for (let i = 0; i < batches.length && remainingQty > 0; i++) {
       const batch = batches[i];
       const qtyToConsume = Math.min(remainingQty, batch.quantity);
+      
       totalCost += qtyToConsume * batch.cost;
       batch.quantity -= qtyToConsume;
       remainingQty -= qtyToConsume;
+
       consumedBatches.push({
         batchId: batch._id,
         quantity: qtyToConsume,
@@ -267,12 +301,16 @@ class CostingService {
         totalCost: qtyToConsume * batch.cost
       });
     }
-    costObj.fifo = fifo.filter(batch => batch.quantity > 0);
-    await inventoryRepository.updateByProductId(productId, { cost: costObj });
+
+    // Remove empty batches
+    inventory.cost.fifo = inventory.cost.fifo.filter(batch => batch.quantity > 0);
+    
+    await inventory.save();
+
     return {
       totalCost,
       batches: consumedBatches,
-      remainingQty
+      remainingQty // If > 0, not enough stock in FIFO batches
     };
   }
 }

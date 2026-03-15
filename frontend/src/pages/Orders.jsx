@@ -10,22 +10,21 @@ import {
   XCircle,
   Trash2,
   Edit,
-  Printer,
-  BookOpen
+  Printer
 } from 'lucide-react';
 import {
   useGetOrdersQuery,
-  useLazyGetOrderByIdQuery,
+  useUpdateOrderMutation,
   useDeleteOrderMutation,
-  usePostMissingSalesToLedgerMutation,
 } from '../store/services/salesApi';
+import { useGetProductsQuery } from '../store/services/productsApi';
+import { useGetCustomersQuery } from '../store/services/customersApi';
 import { useGetCompanySettingsQuery } from '../store/services/settingsApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
 import DateFilter from '../components/DateFilter';
 import PrintModal from '../components/PrintModal';
-import { formatDateForInput, getCurrentDatePakistan } from '../utils/dateUtils';
 
 // Helper function to get local date in YYYY-MM-DD format (avoids timezone issues with toISOString)
 const getLocalDateString = (date = new Date()) => {
@@ -35,30 +34,7 @@ const getLocalDateString = (date = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
-// Safe date display: avoid "Invalid Date" when value is missing or invalid (PostgreSQL may send sale_date, created_at)
-const formatOrderDate = (order) => {
-  const raw = order?.sale_date ?? order?.billDate ?? order?.order_date ?? order?.created_at ?? order?.createdAt;
-  if (raw == null) return '—';
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString();
-};
-
-// Check if order/invoice is within last 1 week (edit allowed only for invoices from past 7 days)
-const canEditInvoice = (order) => {
-  const raw = order?.sale_date ?? order?.billDate ?? order?.order_date ?? order?.created_at ?? order?.createdAt;
-  if (raw == null) return false;
-  const invoiceDate = new Date(raw);
-  if (Number.isNaN(invoiceDate.getTime())) return false;
-  const now = new Date();
-  const oneWeekAgo = new Date(now);
-  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  oneWeekAgo.setHours(0, 0, 0, 0);
-  invoiceDate.setHours(0, 0, 0, 0);
-  return invoiceDate >= oneWeekAgo && invoiceDate <= now;
-};
-
-const OrderCard = ({ order, onView, onEdit, onPrint }) => {
+const OrderCard = ({ order, onDelete, onView, onEdit, onPrint }) => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
@@ -93,61 +69,66 @@ const OrderCard = ({ order, onView, onEdit, onPrint }) => {
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <h3 className="text-lg font-medium text-gray-900">
-              Order #{order.order_number ?? order.orderNumber ?? '—'}
+              Order #{order.orderNumber}
             </h3>
             <p className="text-sm text-gray-600">
-              {order.customer?.business_name ?? order.customer?.businessName ?? order.customer?.name ?? order.customerInfo?.businessName ?? order.customerInfo?.business_name ?? order.customerInfo?.name ?? 'Walk-in Customer'}
+              {order.customerInfo?.name || 'Walk-in Customer'}
             </p>
             <p className="text-sm text-gray-600">
-              {formatOrderDate(order)}
+              {order.billDate ? new Date(order.billDate).toLocaleDateString() : new Date(order.createdAt).toLocaleDateString()}
             </p>
           </div>
           <div className="text-right">
             <p className="text-lg font-semibold text-gray-900">
-              {Math.round(order.pricing?.total ?? order.total ?? 0)}
+              {Math.round(order.pricing.total)}
             </p>
             <p className="text-sm text-gray-600">
-              {order.items?.length ?? 0} item{(order.items?.length ?? 0) !== 1 ? 's' : ''}
+              {order.items.length} item{order.items.length !== 1 ? 's' : ''}
             </p>
           </div>
         </div>
 
         <div className="mt-4 flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <span className={`badge ${getStatusColor(order?.status ?? '')}`}>
-              {order?.status ?? '—'}
+            <span className={`badge ${getStatusColor(order.status)}`}>
+              {order.status}
             </span>
-            <span className={`badge ${getPaymentStatusColor(order.payment?.status ?? order.payment_status ?? order.paymentStatus ?? 'pending')}`}>
-              {order.payment?.status ?? order.payment_status ?? order.paymentStatus ?? 'pending'}
+            <span className={`badge ${getPaymentStatusColor(order.payment.status)}`}>
+              {order.payment.status}
             </span>
             <span className="badge badge-info">
               {order.orderType}
             </span>
           </div>
-          <div className="flex items-center flex-nowrap gap-1">
+          <div className="flex space-x-2">
             <button
               onClick={() => onView(order)}
-              className="shrink-0 text-primary-600 hover:text-primary-800"
+              className="text-primary-600 hover:text-primary-800"
               title="View Invoice"
             >
               <Eye className="h-4 w-4" />
             </button>
             <button
               onClick={() => onPrint(order)}
-              className="shrink-0 text-green-600 hover:text-green-800"
+              className="text-green-600 hover:text-green-800"
               title="Print Invoice"
             >
               <Printer className="h-4 w-4" />
             </button>
-            {canEditInvoice(order) && (
-              <button
-                onClick={() => onEdit(order)}
-                className="shrink-0 text-blue-600 hover:text-blue-800"
-                title="Edit Invoice"
-              >
-                <Edit className="h-4 w-4" />
-              </button>
-            )}
+            <button
+              onClick={() => onEdit(order)}
+              className="text-blue-600 hover:text-blue-800"
+              title="Edit Invoice"
+            >
+              <Edit className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => onDelete(order)}
+              className="text-red-600 hover:text-red-800"
+              title="Delete Invoice"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -170,14 +151,29 @@ export const Orders = () => {
 
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    notes: '',
+    items: [],
+    billDate: '',
+    customer: null,
+    orderType: 'retail'
+  });
+
   const { openTab } = useTab();
+  const [showProductModal, setShowProductModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printOrderData, setPrintOrderData] = useState(null);
+  const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [availableProducts, setAvailableProducts] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [newProductQuantity, setNewProductQuantity] = useState(1);
+  const [newProductRate, setNewProductRate] = useState(0);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
 
   // Mutations
+  const [updateOrder] = useUpdateOrderMutation();
   const [deleteOrder] = useDeleteOrderMutation();
-  const [postMissingSalesToLedger, { isLoading: isPostingToLedger }] = usePostMissingSalesToLedgerMutation();
-  const [fetchOrderById] = useLazyGetOrderByIdQuery();
 
   // Fetch orders
   const { data: ordersResponse, isLoading, error, refetch: refetchOrders } = useGetOrdersQuery(
@@ -211,6 +207,49 @@ export const Orders = () => {
   const companyPhone = companySettings.contactNumber?.trim() || '';
   const companyEmail = companySettings.email?.trim() || '';
 
+  // Products query for adding items
+  const { data: productsResponse } = useGetProductsQuery(
+    {
+      search: productSearchTerm,
+      limit: 50
+    },
+    {
+      skip: !showEditModal && !showProductModal, // Fetch products when edit modal or product modal is open
+    }
+  );
+
+  // Extract products from response
+  const products = React.useMemo(() => {
+    if (!productsResponse) return [];
+    if (productsResponse?.data?.products) return productsResponse.data.products;
+    if (productsResponse?.products) return productsResponse.products;
+    if (productsResponse?.data?.data?.products) return productsResponse.data.data.products;
+    if (Array.isArray(productsResponse)) return productsResponse;
+    return [];
+  }, [productsResponse]);
+
+  // Customers query for customer selection
+  const { data: customersResponse } = useGetCustomersQuery(
+    {
+      search: customerSearchTerm,
+      limit: 50
+    },
+    {
+      skip: !showEditModal,
+      keepPreviousData: true,
+    }
+  );
+
+  // Extract customers from response
+  const customers = React.useMemo(() => {
+    if (!customersResponse) return [];
+    if (customersResponse?.data?.customers) return customersResponse.data.customers;
+    if (customersResponse?.customers) return customersResponse.customers;
+    if (customersResponse?.data?.data?.customers) return customersResponse.data.data.customers;
+    if (Array.isArray(customersResponse)) return customersResponse;
+    return [];
+  }, [customersResponse]);
+
   // Handlers
   const handleDeleteOrder = async (orderId) => {
     try {
@@ -232,86 +271,64 @@ export const Orders = () => {
     }
   };
 
-  // Event handlers - Edit opens Sales page in new tab (same as Purchase Invoice edit)
-  const handleEdit = async (order) => {
-    try {
-      const result = await fetchOrderById(order._id || order.id).unwrap();
-      const orderData = result?.order || result?.data?.order || result;
-      const freshOrder = orderData || order;
+  // Event handlers
+  const handleEdit = (order) => {
+    // Initialize edit form with order data
+    setSelectedOrder(order);
 
-      const editData = {
-        orderId: freshOrder._id || freshOrder.id,
-        isEditMode: true,
-        customer: freshOrder.customer || freshOrder.customerInfo,
-        orderNumber: freshOrder.order_number ?? freshOrder.orderNumber,
-        notes: freshOrder.notes || '',
-        items: (freshOrder.items || []).map(item => {
-          // Preserve full product object (with name) for cart display; API returns product: { _id, name } from enrichItemsWithProductNames
-          const productObj = item.product && typeof item.product === 'object';
-          const product = productObj
-            ? {
-                _id: item.product._id || item.product.id,
-                name: item.product.name || item.product.displayName || item.product.variantName || 'Product',
-                isVariant: item.product.isVariant,
-                displayName: item.product.displayName,
-                variantName: item.product.variantName,
-                inventory: item.product.inventory || { currentStock: 0, reorderPoint: 0 },
-                pricing: item.product.pricing || { cost: 0 }
-              }
-            : {
-                _id: item.product_id || item.product,
-                name: item.productName || 'Unknown Product',
-                inventory: { currentStock: 0, reorderPoint: 0 },
-                pricing: { cost: 0 }
-              };
-          return {
-            product,
-            quantity: item.quantity || 1,
-            unitPrice: item.unitPrice ?? item.unit_price ?? 0,
-            totalPrice: item.total ?? (item.quantity * (item.unitPrice ?? item.unit_price ?? 0))
-          };
-        }),
-        isTaxExempt: freshOrder.isTaxExempt ?? freshOrder.is_tax_exempt ?? true,
-        payment: freshOrder.payment || {},
-        orderType: freshOrder.orderType ?? freshOrder.order_type ?? 'retail',
-        billDate: freshOrder.sale_date ?? freshOrder.billDate ?? freshOrder.order_date ?? freshOrder.created_at ?? freshOrder.createdAt
-      };
+    // Format items for editing (ensure product ID is available)
+    const formattedItems = (order.items || []).map(item => ({
+      product: item.product?._id || item.product || null,
+      productName: item.product?.name || 'Unknown Product',
+      quantity: item.quantity || 1,
+      unitPrice: item.unitPrice || 0,
+      total: item.total || (item.quantity * item.unitPrice) || 0
+    }));
 
-      const componentInfo = getComponentInfo('/sales');
-      if (componentInfo) {
-        const newTabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        openTab({
-          title: `Edit Sale - ${editData.orderNumber || freshOrder._id || freshOrder.id}`,
-          path: '/sales',
-          component: componentInfo.component,
-          icon: componentInfo.icon,
-          allowMultiple: true,
-          props: { tabId: newTabId, editData }
-        });
-        showSuccessToast(`Opening invoice for editing...`);
-      } else {
-        showErrorToast('Sales page not found');
-      }
-    } catch (err) {
-      handleApiError(err, 'Loading invoice for edit');
+    // Ensure customer is ID string, not object
+    let customerId = null;
+    if (order.customer) {
+      customerId = typeof order.customer === 'object'
+        ? (order.customer._id || order.customer.id || order.customer)
+        : order.customer;
     }
+
+    // Format billDate for input (YYYY-MM-DD format)
+    const formatDateForInput = (date) => {
+      if (!date) return '';
+      const d = new Date(date);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    setEditFormData({
+      notes: order.notes || '',
+      items: formattedItems,
+      customer: customerId,
+      orderType: order.orderType || 'retail',
+      billDate: formatDateForInput(order.billDate || order.createdAt)
+    });
+
+    // Reset product selection fields
+    setSelectedProduct(null);
+    setNewProductQuantity(1);
+    setNewProductRate(0);
+    setProductSearchTerm('');
+    setCustomerSearchTerm(order.customerInfo?.name || '');
+
+    // Open edit modal
+    setShowEditModal(true);
   };
 
-  const handlePrint = async (order) => {
-    try {
-      const result = await fetchOrderById(order._id || order.id).unwrap();
-      const orderData = result?.order || result?.data?.order || result;
-      setPrintOrderData(orderData || order);
-      setShowPrintModal(true);
-    } catch (err) {
-      handleApiError(err, 'Loading invoice for print');
-      setPrintOrderData(order);
-      setShowPrintModal(true);
-    }
+  const handlePrint = (order) => {
+    setPrintOrderData(order);
+    setShowPrintModal(true);
   };
 
   const handleDelete = (order) => {
-    if (window.confirm(`Are you sure you want to delete invoice ${order.order_number ?? order.orderNumber ?? order.id ?? 'this'}?`)) {
+    if (window.confirm(`Are you sure you want to delete invoice ${order.orderNumber}?`)) {
       handleDeleteOrder(order._id);
     }
   };
@@ -321,23 +338,42 @@ export const Orders = () => {
     setShowViewModal(true);
   };
 
-  const handlePostMissingToLedger = async () => {
-    if (!window.confirm('Post all sales invoices that are not yet in the account ledger? This will add AR, Revenue, and COGS/Inventory entries for each missing sale.')) return;
-    try {
-      const result = await postMissingSalesToLedger({}).unwrap();
-      const posted = Number(result?.posted) || 0;
-      const errList = Array.isArray(result?.errors) ? result.errors : [];
-      const msg = result?.message
-        || (posted > 0
-          ? `Posted ${posted} sale(s) to the ledger.${errList.length ? ` ${errList.length} failed.` : ''}`
-          : errList.length
-            ? `No new sales posted. ${errList.length} failed.`
-            : 'All sales were already in the ledger.');
-      showSuccessToast(msg);
-      refetchOrders();
-    } catch (error) {
-      handleApiError(error, 'Post to ledger');
+  const handleAddNewProduct = () => {
+    if (!selectedProduct || !newProductRate) {
+      showErrorToast('Please select a product and enter a rate');
+      return;
     }
+
+    // Check if product is out of stock
+    if (selectedProduct.inventory?.currentStock === 0) {
+      showErrorToast(`${selectedProduct.name} is out of stock and cannot be added to the invoice.`);
+      return;
+    }
+
+    // Check if requested quantity exceeds available stock
+    if (newProductQuantity > selectedProduct.inventory?.currentStock) {
+      showErrorToast(`Cannot add ${newProductQuantity} units.Only ${selectedProduct.inventory?.currentStock} units available in stock.`);
+      return;
+    }
+
+    const newItem = {
+      product: selectedProduct._id, // Store product ID for backend
+      productName: selectedProduct.name, // Store name for display
+      quantity: newProductQuantity,
+      unitPrice: newProductRate,
+      total: newProductQuantity * newProductRate
+    };
+
+    const updatedItems = [...editFormData.items, newItem];
+    setEditFormData({ ...editFormData, items: updatedItems });
+
+    // Reset form
+    setSelectedProduct(null);
+    setNewProductQuantity(1);
+    setNewProductRate(0);
+    setProductSearchTerm('');
+
+    showSuccessToast(`${selectedProduct.name} added to invoice`);
   };
 
   if (isLoading) {
@@ -367,24 +403,15 @@ export const Orders = () => {
           <p className="text-sm sm:text-base text-gray-600">View and manage sales invoices</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={handlePostMissingToLedger}
-            disabled={isPostingToLedger}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Post any past sales/invoices that were never recorded to the account ledger"
-          >
-            <BookOpen className="h-4 w-4" />
-            {isPostingToLedger ? 'Posting…' : 'Post missing to ledger'}
-          </button>
+        {/* Date Filter using DateFilter component */}
+        <div className="w-full sm:w-auto">
           <DateFilter
             startDate={fromDate}
             endDate={toDate}
             onDateChange={handleDateChange}
             compact={true}
             showPresets={true}
-            className="flex-1 min-w-[200px]"
+            className="w-full"
           />
         </div>
       </div>
@@ -436,15 +463,15 @@ export const Orders = () => {
           <div className="hidden lg:block bg-gray-50 border-b border-gray-200">
             <div className="px-4 xl:px-6 py-3">
               <div className="grid grid-cols-12 gap-3 xl:gap-4 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <div className="col-span-1">Order #</div>
-                <div className="col-span-3">Customer</div>
+                <div className="col-span-2">Order Number</div>
+                <div className="col-span-2">Customer</div>
                 <div className="col-span-1">Date</div>
                 <div className="col-span-1">Items</div>
                 <div className="col-span-1">Total</div>
                 <div className="col-span-2">Status</div>
                 <div className="col-span-1">Type</div>
                 <div className="col-span-1">Notes</div>
-                <div className="col-span-1 min-w-[100px] text-right">Actions</div>
+                <div className="col-span-1 min-w-[100px]">Actions</div>
               </div>
             </div>
           </div>
@@ -456,66 +483,66 @@ export const Orders = () => {
 
           {/* Table Body / Cards */}
           <div className="divide-y divide-gray-200">
-            {orders.map((order, idx) => (
-              <div key={order?.id ?? order?._id ?? order?.order_number ?? order?.orderNumber ?? `order-${idx}`}>
+            {orders.map((order) => (
+              <div key={order._id}>
                 {/* Desktop Table Row */}
                 <div className="hidden lg:block px-4 xl:px-6 py-3 xl:py-4 hover:bg-gray-50 transition-colors">
                   <div className="grid grid-cols-12 gap-3 xl:gap-4 items-center">
                     {/* Order Number */}
-                    <div className="col-span-1 min-w-0">
+                    <div className="col-span-2 min-w-0">
                       <div className="font-medium text-gray-900 truncate text-sm">
-                        #{order.order_number ?? order.orderNumber ?? '—'}
+                        #{order.orderNumber}
                       </div>
                     </div>
 
                     {/* Customer */}
-                    <div className="col-span-3 min-w-0">
-                      <div className="text-sm text-gray-900 truncate" title={order.customer?.businessName ?? order.customer?.business_name ?? order.customer?.displayName ?? order.customer?.name ?? order.customerInfo?.businessName ?? order.customerInfo?.business_name ?? order.customerInfo?.name ?? 'Walk-in Customer'}>
-                        {order.customer?.businessName ?? order.customer?.business_name ?? order.customer?.displayName ?? order.customer?.name ?? order.customerInfo?.businessName ?? order.customerInfo?.business_name ?? order.customerInfo?.name ?? 'Walk-in Customer'}
+                    <div className="col-span-2 min-w-0">
+                      <div className="text-sm text-gray-900 truncate">
+                        {order.customerInfo?.name || 'Walk-in Customer'}
                       </div>
                     </div>
 
                     {/* Date */}
                     <div className="col-span-1">
                       <span className="text-xs xl:text-sm text-gray-600">
-                        {formatOrderDate(order)}
+                        {order.billDate ? new Date(order.billDate).toLocaleDateString() : new Date(order.createdAt).toLocaleDateString()}
                       </span>
                     </div>
 
                     {/* Items */}
                     <div className="col-span-1">
                       <span className="text-xs xl:text-sm text-gray-600">
-                        {order.items?.length ?? 0}
+                        {order.items.length}
                       </span>
                     </div>
 
                     {/* Total */}
                     <div className="col-span-1">
                       <span className="font-semibold text-gray-900 text-sm xl:text-base">
-                        {Math.round(order.pricing?.total ?? order.total ?? 0)}
+                        {Math.round(order.pricing.total)}
                       </span>
                     </div>
 
                     {/* Status */}
                     <div className="col-span-2">
                       <div className="flex flex-wrap gap-1">
-                        <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${(order?.status === 'completed' || order?.status === 'delivered')
+                        <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${order.status === 'completed' || order.status === 'delivered'
                             ? 'bg-green-100 text-green-800'
-                            : (order?.status === 'pending' || order?.status === 'processing')
+                            : order.status === 'pending' || order.status === 'processing'
                               ? 'bg-yellow-100 text-yellow-800'
-                              : order?.status === 'cancelled'
+                              : order.status === 'cancelled'
                                 ? 'bg-red-100 text-red-800'
                                 : 'bg-gray-100 text-gray-800'
                           } `}>
-                          {order?.status ?? '—'}
+                          {order.status}
                         </span>
-                        <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${(order.payment?.status ?? order.payment_status ?? order.paymentStatus) === 'paid'
+                        <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${order.payment.status === 'paid'
                             ? 'bg-green-100 text-green-800'
-                            : (order.payment?.status ?? order.payment_status ?? order.paymentStatus) === 'partial'
+                            : order.payment.status === 'partial'
                               ? 'bg-yellow-100 text-yellow-800'
                               : 'bg-gray-100 text-gray-800'
                           } `}>
-                          {order.payment?.status ?? order.payment_status ?? order.paymentStatus ?? 'pending'}
+                          {order.payment.status}
                         </span>
                       </div>
                     </div>
@@ -523,7 +550,7 @@ export const Orders = () => {
                     {/* Type */}
                     <div className="col-span-1">
                       <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
-                        {order.orderType ?? order.order_type ?? '—'}
+                        {order.orderType}
                       </span>
                     </div>
 
@@ -538,31 +565,36 @@ export const Orders = () => {
                     </div>
 
                     {/* Actions */}
-                    <div className="col-span-1 flex justify-end">
-                      <div className="flex items-center flex-nowrap gap-1">
+                    <div className="col-span-1 min-w-0">
+                      <div className="flex items-center space-x-1 flex-wrap gap-1">
                         <button
                           onClick={() => handleView(order)}
-                          className="shrink-0 text-primary-600 hover:text-primary-800 p-1"
+                          className="text-primary-600 hover:text-primary-800 p-1 flex-shrink-0"
                           title="View Invoice"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handlePrint(order)}
-                          className="shrink-0 text-green-600 hover:text-green-800 p-1"
+                          className="text-green-600 hover:text-green-800 p-1 flex-shrink-0"
                           title="Print Invoice"
                         >
                           <Printer className="h-4 w-4" />
                         </button>
-                        {canEditInvoice(order) && (
-                          <button
-                            onClick={() => handleEdit(order)}
-                            className="shrink-0 text-blue-600 hover:text-blue-800 p-1"
-                            title="Edit Invoice"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleEdit(order)}
+                          className="text-blue-600 hover:text-blue-800 p-1 flex-shrink-0"
+                          title="Edit Invoice"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(order)}
+                          className="text-red-600 hover:text-red-800 p-1 flex-shrink-0"
+                          title="Delete Invoice"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -575,18 +607,18 @@ export const Orders = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <h3 className="text-base font-semibold text-gray-900 truncate">
-                          #{order.order_number ?? order.orderNumber ?? '—'}
+                          #{order.orderNumber}
                         </h3>
                         <p className="text-sm text-gray-600 mt-1 truncate">
-                          {order.customer?.businessName ?? order.customer?.business_name ?? order.customer?.displayName ?? order.customer?.name ?? order.customerInfo?.businessName ?? order.customerInfo?.business_name ?? order.customerInfo?.name ?? 'Walk-in Customer'}
+                          {order.customerInfo?.name || 'Walk-in Customer'}
                         </p>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-lg font-semibold text-gray-900">
-                          {Math.round(order.pricing?.total ?? order.total ?? 0)}
+                          {Math.round(order.pricing.total)}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {order.items?.length ?? 0} item{(order.items?.length ?? 0) !== 1 ? 's' : ''}
+                          {order.items.length} item{order.items.length !== 1 ? 's' : ''}
                         </p>
                       </div>
                     </div>
@@ -596,36 +628,36 @@ export const Orders = () => {
                       <div>
                         <p className="text-xs text-gray-500">Date</p>
                         <p className="text-sm font-medium text-gray-900">
-                          {formatOrderDate(order)}
+                          {order.billDate ? new Date(order.billDate).toLocaleDateString() : new Date(order.createdAt).toLocaleDateString()}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500">Type</p>
                         <span className="inline-flex text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
-                          {order.orderType ?? order.order_type ?? '—'}
+                          {order.orderType}
                         </span>
                       </div>
                     </div>
 
                     {/* Status Badges */}
                     <div className="flex flex-wrap gap-2">
-                      <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${(order?.status === 'completed' || order?.status === 'delivered')
+                      <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${order.status === 'completed' || order.status === 'delivered'
                           ? 'bg-green-100 text-green-800'
-                          : (order?.status === 'pending' || order?.status === 'processing')
+                          : order.status === 'pending' || order.status === 'processing'
                             ? 'bg-yellow-100 text-yellow-800'
-                            : order?.status === 'cancelled'
+                            : order.status === 'cancelled'
                               ? 'bg-red-100 text-red-800'
                               : 'bg-gray-100 text-gray-800'
                         } `}>
-                        {order?.status ?? '—'}
+                        {order.status}
                       </span>
-                      <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${(order.payment?.status ?? order.payment_status ?? order.paymentStatus) === 'paid'
+                      <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${order.payment.status === 'paid'
                           ? 'bg-green-100 text-green-800'
-                          : (order.payment?.status ?? order.payment_status ?? order.paymentStatus) === 'partial'
+                          : order.payment.status === 'partial'
                             ? 'bg-yellow-100 text-yellow-800'
                             : 'bg-gray-100 text-gray-800'
                         } `}>
-                        {order.payment?.status ?? order.payment_status ?? order.paymentStatus ?? 'pending'}
+                        {order.payment.status}
                       </span>
                     </div>
 
@@ -641,30 +673,35 @@ export const Orders = () => {
 
                     {/* Action Buttons */}
                     <div className="pt-3 border-t border-gray-200">
-                      <div className="flex items-center flex-nowrap gap-1">
+                      <div className="flex items-center flex-wrap gap-2 justify-start">
                         <button
                           onClick={() => handleView(order)}
-                          className="shrink-0 text-primary-600 hover:text-primary-800 p-2 rounded hover:bg-primary-50 transition-colors"
+                          className="text-primary-600 hover:text-primary-800 p-2 rounded hover:bg-primary-50 transition-colors flex-shrink-0"
                           title="View Invoice"
                         >
                           <Eye className="h-5 w-5" />
                         </button>
                         <button
                           onClick={() => handlePrint(order)}
-                          className="shrink-0 text-green-600 hover:text-green-800 p-2 rounded hover:bg-green-50 transition-colors"
+                          className="text-green-600 hover:text-green-800 p-2 rounded hover:bg-green-50 transition-colors flex-shrink-0"
                           title="Print Invoice"
                         >
                           <Printer className="h-5 w-5" />
                         </button>
-                        {canEditInvoice(order) && (
-                          <button
-                            onClick={() => handleEdit(order)}
-                            className="shrink-0 text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50 transition-colors"
-                            title="Edit Invoice"
-                          >
-                            <Edit className="h-5 w-5" />
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleEdit(order)}
+                          className="text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50 transition-colors flex-shrink-0"
+                          title="Edit Invoice"
+                        >
+                          <Edit className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(order)}
+                          className="text-red-600 hover:text-red-800 p-2 rounded hover:bg-red-50 transition-colors flex-shrink-0"
+                          title="Delete Invoice"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -722,7 +759,7 @@ export const Orders = () => {
                 <div>
                   <h3 className="font-semibold text-gray-900 border-b border-gray-300 pb-2 mb-4">Bill To:</h3>
                   <div className="space-y-1">
-                    <p className="font-medium">{selectedOrder.customer?.business_name ?? selectedOrder.customer?.businessName ?? selectedOrder.customer?.name ?? selectedOrder.customerInfo?.businessName ?? selectedOrder.customerInfo?.business_name ?? selectedOrder.customerInfo?.name ?? 'Walk-in Customer'}</p>
+                    <p className="font-medium">{selectedOrder.customerInfo?.name || 'Walk-in Customer'}</p>
                     <p className="text-gray-600">{selectedOrder.customerInfo?.email || ''}</p>
                     <p className="text-gray-600">{selectedOrder.customerInfo?.phone || ''}</p>
                     <p className="text-gray-600">{selectedOrder.customerInfo?.address || ''}</p>
@@ -738,13 +775,13 @@ export const Orders = () => {
                 <div className="text-right">
                   <h3 className="font-semibold text-gray-900 border-b border-gray-300 pb-2 mb-4">Invoice Details:</h3>
                   <div className="space-y-1">
-                    <p><span className="font-medium">Invoice #:</span> {selectedOrder.order_number ?? selectedOrder.orderNumber ?? '—'}</p>
-                    <p><span className="font-medium">Date:</span> {formatOrderDate(selectedOrder)}</p>
-                    {(selectedOrder.sale_date ?? selectedOrder.billDate) && (selectedOrder.created_at ?? selectedOrder.createdAt) && new Date(selectedOrder.sale_date ?? selectedOrder.billDate).getTime() !== new Date(selectedOrder.created_at ?? selectedOrder.createdAt).getTime() && (
-                      <p className="text-xs text-gray-500">(Original: {formatOrderDate({ created_at: selectedOrder.created_at, createdAt: selectedOrder.createdAt })})</p>
+                    <p><span className="font-medium">Invoice #:</span> {selectedOrder.orderNumber}</p>
+                    <p><span className="font-medium">Date:</span> {selectedOrder.billDate ? new Date(selectedOrder.billDate).toLocaleDateString() : new Date(selectedOrder.createdAt).toLocaleDateString()}</p>
+                    {selectedOrder.billDate && new Date(selectedOrder.billDate).getTime() !== new Date(selectedOrder.createdAt).getTime() && (
+                      <p className="text-xs text-gray-500">(Original: {new Date(selectedOrder.createdAt).toLocaleDateString()})</p>
                     )}
-                    <p><span className="font-medium">Status:</span> {selectedOrder.status ?? selectedOrder.Status ?? '—'}</p>
-                    <p><span className="font-medium">Type:</span> {selectedOrder.order_type ?? selectedOrder.orderType ?? '—'}</p>
+                    <p><span className="font-medium">Status:</span> {selectedOrder.status}</p>
+                    <p><span className="font-medium">Type:</span> {selectedOrder.orderType}</p>
                   </div>
                 </div>
 
@@ -752,9 +789,9 @@ export const Orders = () => {
                 <div className="text-right">
                   <h3 className="font-semibold text-gray-900 border-b border-gray-300 pb-2 mb-4">Payment:</h3>
                   <div className="space-y-1">
-                    <p><span className="font-medium">Status:</span> {selectedOrder.payment?.status ?? selectedOrder.payment_status ?? selectedOrder.paymentStatus ?? '—'}</p>
-                    <p><span className="font-medium">Method:</span> {selectedOrder.payment?.method ?? selectedOrder.payment_method ?? '—'}</p>
-                    <p><span className="font-medium">Amount:</span> {Math.round(selectedOrder.pricing?.total ?? selectedOrder.total ?? 0)}</p>
+                    <p><span className="font-medium">Status:</span> {selectedOrder.payment?.status}</p>
+                    <p><span className="font-medium">Method:</span> {selectedOrder.payment?.method}</p>
+                    <p><span className="font-medium">Amount:</span> {Math.round(selectedOrder.pricing?.total || 0)}</p>
                   </div>
                 </div>
               </div>
@@ -845,46 +882,31 @@ export const Orders = () => {
                 </div>
               </div>
 
-              {/* Totals - use top-level subtotal/tax/discount/total (sales from API) and fall back to sum from items when 0 */}
-              {(() => {
-                const items = Array.isArray(selectedOrder?.items) ? selectedOrder.items : [];
-                const sumFromItems = items.reduce((s, i) => {
-                  const qty = Number(i.quantity ?? i.qty) || 0;
-                  const price = Number(i.unitPrice ?? i.unit_price ?? i.price) || 0;
-                  const lineTotal = Number(i.total ?? i.subtotal ?? i.lineTotal) || (qty * price);
-                  return s + lineTotal;
-                }, 0);
-                const viewSubtotal = Number(selectedOrder?.subtotal ?? selectedOrder?.pricing?.subtotal) || (items.length > 0 ? sumFromItems : 0);
-                const viewDiscount = Number(selectedOrder?.discount ?? selectedOrder?.pricing?.discountAmount ?? selectedOrder?.pricing?.discount) || 0;
-                const viewTax = Number(selectedOrder?.tax ?? selectedOrder?.pricing?.taxAmount) || 0;
-                const viewTotal = Number(selectedOrder?.total ?? selectedOrder?.pricing?.total) || (viewSubtotal - viewDiscount + viewTax);
-                return (
-                  <div className="flex justify-end">
-                    <div className="w-80">
-                      <table className="w-full">
-                        <tbody>
-                          <tr>
-                            <td className="px-4 py-2">Subtotal:</td>
-                            <td className="px-4 py-2 text-right">{Math.round(viewSubtotal)}</td>
-                          </tr>
-                          <tr>
-                            <td className="px-4 py-2">Tax:</td>
-                            <td className="px-4 py-2 text-right">{Math.round(viewTax)}</td>
-                          </tr>
-                          <tr>
-                            <td className="px-4 py-2">Discount:</td>
-                            <td className="px-4 py-2 text-right">{Math.round(viewDiscount)}</td>
-                          </tr>
-                          <tr className="border-t-2 border-gray-900">
-                            <td className="px-4 py-2 font-bold">Total:</td>
-                            <td className="px-4 py-2 text-right font-bold">{Math.round(viewTotal)}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })()}
+              {/* Totals */}
+              <div className="flex justify-end">
+                <div className="w-80">
+                  <table className="w-full">
+                    <tbody>
+                      <tr>
+                        <td className="px-4 py-2">Subtotal:</td>
+                        <td className="px-4 py-2 text-right">{Math.round(selectedOrder.pricing?.subtotal || 0)}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2">Tax:</td>
+                        <td className="px-4 py-2 text-right">{Math.round(selectedOrder.pricing?.taxAmount || 0)}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2">Discount:</td>
+                        <td className="px-4 py-2 text-right">{Math.round(selectedOrder.pricing?.discountAmount || 0)}</td>
+                      </tr>
+                      <tr className="border-t-2 border-gray-900">
+                        <td className="px-4 py-2 font-bold">Total:</td>
+                        <td className="px-4 py-2 text-right font-bold">{Math.round(selectedOrder.pricing?.total || 0)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
               {/* Footer */}
               <div className="mt-8 text-center text-sm text-gray-500">
@@ -895,38 +917,37 @@ export const Orders = () => {
         </div>
       )}
 
-      {/* Edit Modal removed: editing opens Sales page in new tab (same as Purchase Invoice) */}
-
-      {false && selectedOrder && (
+      {/* Edit Modal */}
+      {showEditModal && selectedOrder && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-0">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
               {/* Header */}
-              <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex justify-between items-center">
-                <h2 className="text-xl sm:text-2xl font-bold text-white">Edit Sales Invoice</h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Edit Sales Invoice</h2>
                 <button
                   onClick={() => {
                     setShowEditModal(false);
                     setCustomerSearchTerm('');
                   }}
-                  className="bg-white text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-100"
+                  className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
                 >
                   Close
                 </button>
               </div>
 
               {/* Customer Information */}
-              <div className="px-6 py-5 bg-white border-b border-gray-200">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Customer Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Customer Information</h3>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Customer Selection</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Customer Selection</label>
                     <input
                       type="text"
                       placeholder="Search customers..."
                       value={customerSearchTerm}
                       onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                      className="input w-full"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     {/* Customer Suggestions */}
                     {customerSearchTerm && customers?.length > 0 && (
@@ -935,30 +956,19 @@ export const Orders = () => {
                           // Get city from addresses
                           const defaultAddress = customer.addresses?.find(addr => addr.isDefault) || customer.addresses?.[0];
                           const city = defaultAddress?.city || '';
-                          const displayName =
-                            customer.displayName ??
-                            customer.display_name ??
-                            customer.business_name ??
-                            customer.businessName ??
-                            customer.name ??
-                            customer.email ??
-                            'Customer';
 
                           return (
                             <div
-                              key={customer._id || customer.id || displayName}
+                              key={customer._id}
                               onClick={() => {
-                                setEditFormData({ ...editFormData, customer: customer._id || customer.id });
-                                setCustomerSearchTerm(displayName);
+                                setEditFormData({ ...editFormData, customer: customer._id });
+                                setCustomerSearchTerm(customer.displayName);
                               }}
                               className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 flex items-center justify-between"
                             >
                               <div className="flex-1">
-                                <div className="font-medium">{displayName}</div>
-                                <div className="text-sm text-gray-600">
-                                  {customer.email || '—'}
-                                  {customer.phone ? ` - ${customer.phone}` : ''}
-                                </div>
+                                <div className="font-medium">{customer.displayName}</div>
+                                <div className="text-sm text-gray-600">{customer.email}</div>
                               </div>
                               {city && (
                                 <div className="text-xs text-gray-500 ml-2">{city}</div>
@@ -972,17 +982,27 @@ export const Orders = () => {
                     {editFormData.customer && (
                       <div className="mt-2 p-2 bg-blue-50 rounded border">
                         <div className="text-sm font-medium text-blue-900">
-                          Selected: {selectedCustomerName || 'Customer'}
+                          Selected: {selectedOrder.customerInfo?.name || 'Customer'}
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditFormData({ ...editFormData, customer: null });
+                            setCustomerSearchTerm('');
+                          }}
+                          className="text-xs text-blue-600 hover:text-blue-800 mt-1"
+                        >
+                          Clear selection
+                        </button>
                       </div>
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Order Type</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Order Type</label>
                     <select
                       value={editFormData.orderType}
                       onChange={(e) => setEditFormData({ ...editFormData, orderType: e.target.value })}
-                      className="input w-full"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="retail">Retail</option>
                       <option value="wholesale">Wholesale</option>
@@ -991,29 +1011,29 @@ export const Orders = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                     <p className="text-gray-900">{selectedOrder.customerInfo?.email || 'N/A'}</p>
                   </div>
                   <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                     <p className="text-gray-900">{selectedOrder.customerInfo?.phone || 'N/A'}</p>
                   </div>
                   <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
-                    <p className="text-gray-900">{selectedOrder.order_number ?? selectedOrder.orderNumber ?? '—'}</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
+                    <p className="text-gray-900">{selectedOrder.orderNumber}</p>
                   </div>
                   <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Bill Date <span className="text-xs text-gray-500">(for backdating/postdating)</span>
                     </label>
                     <input
                       type="date"
                       value={editFormData.billDate}
                       onChange={(e) => setEditFormData({ ...editFormData, billDate: e.target.value })}
-                      className="input w-full"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Original date: {formatOrderDate(selectedOrder)}
+                      Original date: {new Date(selectedOrder.createdAt).toLocaleDateString()}
                     </p>
                     {selectedOrder.billStartTime && editFormData.billDate &&
                       new Date(editFormData.billDate).toDateString() !== new Date(selectedOrder.billStartTime).toDateString() && (
@@ -1030,7 +1050,7 @@ export const Orders = () => {
               </div>
 
               {/* Edit Form */}
-              <form className="px-6 py-6" onSubmit={(e) => {
+              <form onSubmit={(e) => {
                 e.preventDefault();
                 // Format items for backend - ensure product is ID, not object
                 const formattedItems = editFormData.items.map(item => ({
@@ -1052,9 +1072,7 @@ export const Orders = () => {
                   items: formattedItems,
                   orderType: editFormData.orderType,
                   customer: customerId || undefined, // Only include if not null
-                  billDate: editFormData.billDate || undefined, // Include billDate for backdating/postdating
-                  discount: editFormData.discount !== '' ? parseFloat(editFormData.discount) : undefined,
-                  amountReceived: editFormData.amountReceived !== '' ? parseFloat(editFormData.amountReceived) : undefined
+                  billDate: editFormData.billDate || undefined // Include billDate for backdating/postdating
                 };
 
                 handleUpdateOrder(selectedOrder._id, updateData);
@@ -1063,14 +1081,14 @@ export const Orders = () => {
 
                 {/* Notes */}
                 <div className="mb-6">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Notes
                   </label>
                   <textarea
                     value={editFormData.notes}
                     onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
                     rows={3}
-                    className="input w-full"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Add any notes or comments..."
                   />
                 </div>
@@ -1298,73 +1316,40 @@ export const Orders = () => {
                   </div>
 
                   {/* Order Summary */}
-                  {editFormData.items && editFormData.items.length > 0 && (() => {
-                    const subtotal = editFormData.items.reduce((sum, item) => sum + item.total, 0);
-                    const tax = Number(selectedOrder.pricing?.taxAmount || 0);
-                    const discount = Number(editFormData.discount) || selectedOrder.pricing?.discountAmount || selectedOrder?.discount || 0;
-                    const total = subtotal + tax - discount;
-                    return (
-                      <div className="mt-6">
-                        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-3 rounded-t-lg">
-                          <h3 className="text-base font-semibold text-white">Order Summary</h3>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-b-lg p-4 space-y-3">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-800 font-semibold">Subtotal:</span>
-                            <span className="text-lg font-bold text-gray-900">{subtotal.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-800 font-semibold">Tax:</span>
-                            <span className="text-lg font-bold text-gray-900">{tax.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-800 font-semibold">Discount:</span>
-                            <span className="text-lg font-bold text-gray-900">{Number(discount).toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-base font-bold border-t-2 border-blue-400 pt-3 mt-2">
-                            <span className="text-blue-900">Total:</span>
-                            <span className="text-blue-900 text-2xl">{total.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Payment and Discount Section */}
-                  <div className="mt-6 bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                      <div className="flex flex-col">
-                        <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-2">
-                          Discount
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="0"
-                          value={editFormData.discount}
-                          onChange={(e) => setEditFormData({ ...editFormData, discount: e.target.value })}
-                          className="w-full px-3 py-2 text-sm border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 h-[42px]"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Invoice-level discount amount</p>
-                      </div>
-                      <div className="flex flex-col">
-                        <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-2">
-                          Amount Received
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="0"
-                          value={editFormData.amountReceived}
-                          onChange={(e) => setEditFormData({ ...editFormData, amountReceived: e.target.value })}
-                          className="w-full px-3 py-2 text-sm border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 h-[42px]"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Amount paid/received for this invoice</p>
+                  {editFormData.items && editFormData.items.length > 0 && (
+                    <div className="mt-4 flex justify-end">
+                      <div className="w-80">
+                        <table className="w-full">
+                          <tbody>
+                            <tr>
+                              <td className="px-4 py-2">Subtotal:</td>
+                              <td className="px-4 py-2 text-right">
+                                {Math.round(editFormData.items.reduce((sum, item) => sum + item.total, 0))}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="px-4 py-2">Tax:</td>
+                              <td className="px-4 py-2 text-right">
+                                {Math.round(selectedOrder.pricing?.taxAmount || 0)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="px-4 py-2">Discount:</td>
+                              <td className="px-4 py-2 text-right">
+                                {Math.round(selectedOrder.pricing?.discountAmount || 0)}
+                              </td>
+                            </tr>
+                            <tr className="border-t-2 border-gray-900">
+                              <td className="px-4 py-2 font-bold">Total:</td>
+                              <td className="px-4 py-2 text-right font-bold">
+                                {Math.round(editFormData.items.reduce((sum, item) => sum + item.total, 0) + (selectedOrder.pricing?.taxAmount || 0) - (selectedOrder.pricing?.discountAmount || 0))}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Form Actions */}
@@ -1390,8 +1375,8 @@ export const Orders = () => {
         </div>
       )}
 
-      {/* Product Selection Modal - removed with edit modal */}
-      {false && (
+      {/* Product Selection Modal */}
+      {showProductModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">

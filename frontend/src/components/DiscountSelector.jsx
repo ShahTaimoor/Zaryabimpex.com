@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, Percent, TrendingUp, CheckCircle, AlertCircle, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { useCheckApplicableDiscountsMutation } from '../store/services/discountsApi';
 import { showSuccessToast, showErrorToast } from '../utils/errorHandler';
 
@@ -178,13 +177,13 @@ const DiscountSelector = ({
               disabled={isLoading}
             />
           </div>
-          <Button
+          <button
             onClick={handleApplyDiscount}
             disabled={isLoading || !discountCode.trim()}
-            variant="default"
+            className="btn btn-primary"
           >
             Apply
-          </Button>
+          </button>
         </div>
       </div>
 

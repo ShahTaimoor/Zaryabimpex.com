@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import {
   TrendingUp,
+  Calendar,
   Search,
   TrendingDown,
+  ArrowUpCircle,
+  ArrowDownCircle,
   FileText,
   Download,
   AlertCircle,
@@ -12,7 +15,7 @@ import { handleApiError } from '../utils/errorHandler';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { formatCurrency } from '../utils/formatters';
 import DateFilter from '../components/DateFilter';
-import { getCurrentDatePakistan, getStartOfMonth, formatDatePakistan } from '../utils/dateUtils';
+import { getCurrentDatePakistan, getStartOfMonth } from '../utils/dateUtils';
 
 // Helper function to format date for display (using Pakistan timezone utilities)
 const formatDate = (dateString) => {
@@ -44,8 +47,8 @@ export const PLStatements = () => {
   const [searchToDate, setSearchToDate] = useState(today);
   const [showData, setShowData] = useState(false);
 
-  // Fetch P&L summary when search is clicked (skip until showData is true)
-  const { data: summaryData, isLoading, isFetching, error } = useGetSummaryQuery(
+  // Fetch P&L summary when search is clicked
+  const { data: summaryData, isLoading, isFetching, error, refetch } = useGetSummaryQuery(
     {
       startDate: searchFromDate,
       endDate: searchToDate,
@@ -55,7 +58,8 @@ export const PLStatements = () => {
       onError: (error) => handleApiError(error, 'Profit & Loss Statement'),
     }
   );
-
+  
+  // Use isFetching to show loading state on every refetch, not just initial load
   const isButtonLoading = isLoading || isFetching;
 
   const handleSearch = () => {
@@ -63,14 +67,16 @@ export const PLStatements = () => {
       alert('Please select both From Date and To Date');
       return;
     }
+    
     if (new Date(fromDate) > new Date(toDate)) {
       alert('From Date cannot be after To Date');
       return;
     }
+    
     setSearchFromDate(fromDate);
     setSearchToDate(toDate);
     setShowData(true);
-    // Query runs automatically when showData becomes true; when dates change, new args trigger a refetch
+    refetch();
   };
 
   const handleExportPDF = () => {
@@ -268,7 +274,7 @@ export const PLStatements = () => {
       </div>
     `;
 
-    const pdfSalesReturns = salesReturns || 0;
+    // Build formatted table HTML
     const tableHTML = `
       <table>
         <tbody>
@@ -277,33 +283,10 @@ export const PLStatements = () => {
           </tr>
           <tr class="data-row">
             <td class="label-cell">Operating Revenue / Sales</td>
-            <td class="value-cell">${formatCurrency(salesRevenue || totalRevenue)}</td>
+            <td class="value-cell">${formatCurrency(totalRevenue)}</td>
           </tr>
           <tr class="summary-row">
             <td class="label-cell">Total Gross Revenue</td>
-            <td class="value-cell">${formatCurrency(salesRevenue || totalRevenue)}</td>
-          </tr>
-          ${pdfSalesReturns > 0 ? `
-          <tr class="section-header" style="background-color: #fffbeb;">
-            <td colspan="2">Returns</td>
-          </tr>
-          <tr class="data-row">
-            <td class="label-cell">Sales Returns</td>
-            <td class="value-cell value-negative">(${formatCurrency(pdfSalesReturns)})</td>
-          </tr>
-          <tr class="summary-row" style="background-color: #fffbeb;">
-            <td class="label-cell">Total Returns</td>
-            <td class="value-cell value-negative">(${formatCurrency(pdfSalesReturns)})</td>
-          </tr>
-          ` : ''}
-          ${otherIncome > 0 ? `
-          <tr class="data-row">
-            <td class="label-cell">Other Income</td>
-            <td class="value-cell">${formatCurrency(otherIncome)}</td>
-          </tr>
-          ` : ''}
-          <tr class="summary-row" style="font-weight: 700;">
-            <td class="label-cell">Total Revenue (Net of Returns)</td>
             <td class="value-cell">${formatCurrency(totalRevenue)}</td>
           </tr>
           <tr class="section-header">
@@ -374,69 +357,64 @@ export const PLStatements = () => {
   const summary = summaryData?.data || summaryData;
   
   // Extract values from summary - handle both direct values and nested structure
-  // Backend pl-statements/summary returns: revenue, returns, grossProfit, operatingExpenses, netIncome
-  const salesRevenue = summary?.revenue?.salesRevenue ?? summary?.statement?.revenue?.salesRevenue ?? 0;
-  const salesReturns = summary?.returns?.salesReturns ?? summary?.revenue?.salesReturns ?? summary?.statement?.returns?.salesReturns ?? 0;
-  const otherIncome = summary?.revenue?.otherIncome ?? summary?.statement?.revenue?.otherIncome ?? 0;
-  const totalRevenue = (summary?.revenue?.totalRevenue?.amount ?? summary?.revenue?.total) ?? (summary?.statement?.revenue?.totalRevenue?.amount ?? summary?.totalRevenue) ?? (salesRevenue - salesReturns + otherIncome);
-  const grossProfit = (summary?.grossProfit?.amount ?? summary?.grossProfit) ?? summary?.statement?.grossProfit?.amount ?? 0;
-  const operatingExpensesTotal = (summary?.operatingExpenses?.total ?? summary?.operatingExpenses) ?? 0;
-  const operatingIncome = (summary?.operatingIncome?.amount ?? (typeof summary?.operatingIncome === 'number' ? summary.operatingIncome : (grossProfit - operatingExpensesTotal))) ?? summary?.statement?.operatingIncome?.amount ?? (grossProfit - operatingExpensesTotal);
-  const netIncome = (summary?.netIncome?.amount ?? summary?.netIncome) ?? summary?.statement?.netIncome?.amount ?? 0;
-  // Margins: use API when provided, else compute from amounts (backend may not return margin %)
-  const rev = Number(totalRevenue) || 0;
-  const grossMargin =
-    summary?.grossProfit?.margin ?? summary?.statement?.grossProfit?.margin ?? summary?.grossMargin ??
-    (rev > 0 ? (Number(grossProfit) / rev) * 100 : 0);
-  const operatingMargin =
-    summary?.operatingIncome?.margin ?? summary?.statement?.operatingIncome?.margin ?? summary?.operatingMargin ??
-    (rev > 0 ? (Number(operatingIncome) / rev) * 100 : 0);
-  const netMargin =
-    summary?.netIncome?.margin ?? summary?.statement?.netIncome?.margin ?? summary?.netMargin ??
-    (rev > 0 ? (Number(netIncome) / rev) * 100 : 0);
+  // The backend might return a full statement object or just summary values
+  const totalRevenue = summary?.revenue?.totalRevenue?.amount || 
+                      summary?.statement?.revenue?.totalRevenue?.amount ||
+                      summary?.totalRevenue || 0;
+  const grossProfit = summary?.grossProfit?.amount || 
+                     summary?.statement?.grossProfit?.amount ||
+                     summary?.grossProfit || 0;
+  const operatingIncome = summary?.operatingIncome?.amount || 
+                         summary?.statement?.operatingIncome?.amount ||
+                         summary?.operatingIncome || 0;
+  const netIncome = summary?.netIncome?.amount || 
+                   summary?.statement?.netIncome?.amount ||
+                   summary?.netIncome || 0;
+  const grossMargin = summary?.grossProfit?.margin || 
+                     summary?.statement?.grossProfit?.margin ||
+                     summary?.grossMargin;
+  const operatingMargin = summary?.operatingIncome?.margin || 
+                         summary?.statement?.operatingIncome?.margin ||
+                         summary?.operatingMargin;
+  const netMargin = summary?.netIncome?.margin || 
+                   summary?.statement?.netIncome?.margin ||
+                   summary?.netMargin;
 
   return (
-    <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 min-h-screen bg-gray-100">
-      {/* Step 1: Header */}
-      <header className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white">
-              <FileText className="h-6 w-6 text-gray-700" />
-            </div>
+    <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-8 bg-gray-50/30 min-h-screen">
+      {/* Header & Date Selector */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden no-print">
+        <div className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+              <h1 className="text-2xl font-bold text-slate-900 flex items-center tracking-tight">
+                <div className="bg-primary-100 p-2 rounded-lg mr-4">
+                  <FileText className="h-6 w-6 text-primary-600" />
+                </div>
                 Profit & Loss Statement
               </h1>
-              <p className="text-sm text-gray-500 mt-0.5">
-                Financial performance for selected period
-              </p>
+              <p className="text-slate-500 mt-1 text-sm font-medium">Financial performance report and analysis</p>
+            </div>
+            
+            <div className="flex items-center space-x-3 no-print">
+              <button
+                onClick={handleExportPDF}
+                disabled={!showData || !summary || isButtonLoading}
+                className="flex items-center space-x-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="h-4 w-4" />
+                <span>Export PDF</span>
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleExportPDF}
-              disabled={!showData || !summary || isButtonLoading}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <Download className="h-4 w-4" />
-              Export PDF
-            </button>
-          </div>
         </div>
-      </header>
 
-      {/* Step 2: Date filter and Generate */}
-      <section className="bg-white border border-gray-200 rounded-lg shadow-sm mb-6 overflow-hidden no-print">
-        <div className="px-4 py-4 sm:px-6 sm:py-5 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
-            Statement Period
-          </h2>
-          <p className="text-sm text-gray-500 mt-0.5">Select date range to generate report</p>
-        </div>
-        <div className="px-4 py-4 sm:px-6 sm:py-5 bg-gray-50 border-t border-gray-100">
-          <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
-            <div className="flex-1 min-w-0">
+        <div className="p-6 bg-slate-50/50">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+            <div className="md:col-span-8">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">
+                Statement Period
+              </label>
               <DateFilter
                 startDate={fromDate}
                 endDate={toDate}
@@ -449,226 +427,261 @@ export const PLStatements = () => {
                 className="w-full"
               />
             </div>
-            <div className="sm:w-48 shrink-0">
+
+            <div className="md:col-span-4">
               <button
                 onClick={handleSearch}
                 disabled={isButtonLoading}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-gray-900 border border-gray-900 rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full flex items-center justify-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-6 rounded-lg transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isButtonLoading ? (
                   <LoadingSpinner className="h-5 w-5 border-2 border-white/30 border-t-white" />
                 ) : (
                   <>
-                    <Search className="h-4 w-4" />
-                    Generate
+                    <Search className="h-5 w-5" />
+                    <span>Generate Statement</span>
                   </>
                 )}
               </button>
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Loading State */}
+      {/* States */}
       {showData && isButtonLoading && (
-        <div className="flex flex-col items-center justify-center py-24 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div className="flex flex-col justify-center items-center py-20 bg-white rounded-xl border border-slate-200 shadow-sm">
           <LoadingSpinner />
-          <p className="mt-4 text-sm font-medium text-gray-600">Calculating financial data...</p>
+          <p className="mt-4 text-slate-600 font-medium animate-pulse">Calculating financial data...</p>
         </div>
       )}
 
-      {/* Error State */}
       {showData && error && (
-        <div className="bg-white border border-red-300 rounded-lg p-6 shadow-sm">
-          <div className="flex items-start gap-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50">
-              <TrendingDown className="h-5 w-5 text-red-600" />
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 shadow-sm">
+          <div className="flex items-center mb-4">
+            <div className="bg-red-100 p-2 rounded-lg mr-4">
+              <TrendingDown className="h-6 w-6 text-red-600" />
             </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base font-semibold text-gray-900">Unable to generate statement</h3>
-              <p className="mt-1 text-sm text-gray-600">{error?.data?.message || error?.message || 'An error occurred while fetching financial data.'}</p>
-              <button
-                onClick={handleSearch}
-                className="mt-4 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-red-600 rounded-md hover:bg-red-700 transition-colors"
-              >
-                Retry
-              </button>
-            </div>
+            <h3 className="text-lg font-bold text-red-900">Unable to generate statement</h3>
           </div>
+          <p className="text-red-700 text-sm mb-6">{error?.data?.message || error?.message || 'An error occurred while fetching financial data.'}</p>
+          <button
+            onClick={handleSearch}
+            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-all"
+          >
+            Retry Calculation
+          </button>
         </div>
       )}
 
       {/* Report Content */}
       {!isButtonLoading && !error && showData && summary && (
-        <div id="pl-statement-content" className="space-y-6">
-          {/* Step 3: Summary Cards */}
-          <section>
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
-              Key metrics
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Gross Revenue</p>
-                <p className="text-xl font-bold text-gray-900">{formatCurrency(totalRevenue)}</p>
-                <p className="mt-1 text-xs text-gray-500">Total sales income</p>
+        <div id="pl-statement-content" className="space-y-8 animate-in fade-in duration-500">
+          {/* Executive Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gross Revenue</span>
+                <div className="bg-emerald-50 p-1.5 rounded-md">
+                  <ArrowUpCircle className="h-5 w-5 text-emerald-600" />
+                </div>
               </div>
-              <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Gross Profit</p>
-                <p className={`text-xl font-bold ${grossProfit >= 0 ? 'text-gray-900' : 'text-red-600'}`}>{formatCurrency(grossProfit)}</p>
-                <p className="mt-1 text-xs text-gray-500">{grossMargin?.toFixed(1) || 0}% margin</p>
+              <div className="text-2xl font-bold text-slate-900 leading-tight">
+                {formatCurrency(totalRevenue)}
               </div>
-              <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Operating Income</p>
-                <p className={`text-xl font-bold ${operatingIncome >= 0 ? 'text-gray-900' : 'text-red-600'}`}>{formatCurrency(operatingIncome)}</p>
-                <p className="mt-1 text-xs text-gray-500">{operatingMargin?.toFixed(1) || 0}% margin</p>
-              </div>
-              <div className={`rounded-lg p-5 border shadow-sm ${netIncome >= 0 ? 'bg-gray-900 border-gray-900' : 'bg-white border-red-200'}`}>
-                <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${netIncome >= 0 ? 'text-gray-400' : 'text-red-600'}`}>Net Profit / Loss</p>
-                <p className={`text-xl font-bold ${netIncome >= 0 ? 'text-white' : 'text-red-600'}`}>{formatCurrency(netIncome)}</p>
-                <p className={`mt-1 text-xs ${netIncome >= 0 ? 'text-gray-400' : 'text-red-600'}`}>{netMargin?.toFixed(1) || 0}% net margin</p>
+              <div className="mt-2 text-xs font-medium text-slate-500 flex items-center">
+                <span className="text-emerald-600 font-bold mr-1">Total Sales</span> income
               </div>
             </div>
-          </section>
 
-          {/* Step 4: Statement Table */}
-          <section className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-            <div className="px-4 py-4 sm:px-6 border-b border-gray-200">
-              <h2 className="text-base font-semibold text-gray-900">Statement of Financial Performance</h2>
-              <p className="text-sm text-gray-500 mt-0.5">{formatDate(searchFromDate)} – {formatDate(searchToDate)}</p>
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gross Profit</span>
+                <div className="bg-blue-50 p-1.5 rounded-md">
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
+                </div>
+              </div>
+              <div className={`text-2xl font-bold leading-tight ${grossProfit >= 0 ? 'text-slate-900' : 'text-rose-600'}`}>
+                {formatCurrency(grossProfit)}
+              </div>
+              <div className="mt-2 text-xs font-medium text-slate-500 flex items-center">
+                <span className="text-blue-600 font-bold mr-1">{grossMargin?.toFixed(1) || 0}%</span> margin
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left min-w-[400px]">
-                <tbody className="divide-y divide-gray-200">
-                  <tr className="bg-gray-100">
-                    <td colSpan="2" className="px-4 py-3 sm:px-6 font-semibold text-gray-700 text-xs uppercase tracking-wider">Revenue</td>
-                  </tr>
-                  <tr className="border-b border-gray-100">
-                    <td className="px-4 py-3 sm:px-6 text-gray-600">Operating Revenue / Sales</td>
-                    <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(salesRevenue || totalRevenue)}</td>
-                  </tr>
-                  <tr className="bg-gray-50">
-                    <td className="px-4 py-3 sm:px-6 font-semibold text-gray-800">Total Gross Revenue</td>
-                    <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(salesRevenue || totalRevenue)}</td>
-                  </tr>
-                  {(salesReturns > 0 || (summary?.returns?.totalReturns ?? 0) > 0) && (
-                    <>
-                      <tr className="bg-gray-100">
-                        <td colSpan="2" className="px-4 py-3 sm:px-6 font-semibold text-gray-700 text-xs uppercase tracking-wider">Returns</td>
-                      </tr>
-                      <tr>
-                        <td className="px-4 py-3 sm:px-6 text-gray-600">Sales Returns</td>
-                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-red-600">({formatCurrency(salesReturns || summary?.returns?.salesReturns || 0)})</td>
-                      </tr>
-                      <tr className="bg-gray-50">
-                        <td className="px-4 py-3 sm:px-6 font-semibold text-gray-800">Total Returns</td>
-                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-red-600">({formatCurrency(summary?.returns?.totalReturns ?? salesReturns ?? 0)})</td>
-                      </tr>
-                    </>
+
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Operating Income</span>
+                <div className="bg-indigo-50 p-1.5 rounded-md">
+                  <TrendingUp className="h-5 w-5 text-indigo-600" />
+                </div>
+              </div>
+              <div className={`text-2xl font-bold leading-tight ${operatingIncome >= 0 ? 'text-slate-900' : 'text-rose-600'}`}>
+                {formatCurrency(operatingIncome)}
+              </div>
+              <div className="mt-2 text-xs font-medium text-slate-500 flex items-center">
+                <span className="text-indigo-600 font-bold mr-1">{operatingMargin?.toFixed(1) || 0}%</span> margin
+              </div>
+            </div>
+
+            <div className={`p-6 rounded-xl border shadow-sm hover:shadow-md transition-all ${
+              netIncome >= 0 
+                ? 'bg-slate-900 border-slate-900' 
+                : 'bg-white border-rose-200'
+            }`}>
+              <div className="flex items-center justify-between mb-4">
+                <span className={`text-xs font-bold uppercase tracking-wider ${
+                  netIncome >= 0 ? 'text-slate-400' : 'text-rose-500'
+                }`}>Net Profit / Loss</span>
+                <div className={`${netIncome >= 0 ? 'bg-slate-800' : 'bg-rose-50'} p-1.5 rounded-md`}>
+                  {netIncome >= 0 ? (
+                    <TrendingUp className="h-5 w-5 text-emerald-400" />
+                  ) : (
+                    <TrendingDown className="h-5 w-5 text-rose-600" />
                   )}
-                  {otherIncome > 0 && (
-                    <tr>
-                      <td className="px-4 py-3 sm:px-6 text-gray-600">Other Income</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(otherIncome)}</td>
-                    </tr>
-                  )}
-                  <tr className="bg-gray-100 border-t-2 border-gray-200">
-                    <td className="px-4 py-3 sm:px-6 font-bold text-gray-900">Total Revenue (Net of Returns)</td>
-                    <td className="px-4 py-3 sm:px-6 text-right font-bold text-gray-900">{formatCurrency(totalRevenue)}</td>
+                </div>
+              </div>
+              <div className={`text-2xl font-bold leading-tight ${
+                netIncome >= 0 ? 'text-white' : 'text-rose-700'
+              }`}>
+                {formatCurrency(netIncome)}
+              </div>
+              <div className={`mt-2 text-xs font-medium flex items-center ${
+                netIncome >= 0 ? 'text-slate-400' : 'text-rose-500'
+              }`}>
+                <span className={`font-bold mr-1 ${
+                  netIncome >= 0 ? 'text-emerald-400' : 'text-rose-600'
+                }`}>{netMargin?.toFixed(1) || 0}%</span> net margin
+              </div>
+            </div>
+          </div>
+
+          {/* Detailed Statement Table */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">Statement of Financial Performance</h2>
+              <p className="text-sm text-slate-500 font-medium">For the period {formatDate(searchFromDate)} - {formatDate(searchToDate)}</p>
+            </div>
+
+            <div className="p-0 overflow-x-auto">
+              <table className="w-full text-left">
+                <tbody>
+                  {/* Revenue Section */}
+                  <tr className="bg-slate-50/80">
+                    <td colSpan="2" className="px-6 py-3 font-bold text-slate-800 uppercase text-xs tracking-wider">Revenue</td>
                   </tr>
-                  <tr className="bg-gray-100">
-                    <td colSpan="2" className="px-4 py-3 sm:px-6 font-semibold text-gray-700 text-xs uppercase tracking-wider">Operating Expenses</td>
+                  <tr className="border-b border-slate-50">
+                    <td className="px-6 py-4 text-slate-600 font-medium">Operating Revenue / Sales</td>
+                    <td className="px-6 py-4 text-right font-bold text-slate-900">{formatCurrency(totalRevenue)}</td>
                   </tr>
-                  <tr>
-                    <td className="px-4 py-3 sm:px-6 text-gray-600">Cost of Goods Sold (COGS)</td>
-                    <td className="px-4 py-3 sm:px-6 text-right font-semibold text-red-600">({formatCurrency(totalRevenue - grossProfit)})</td>
+                  <tr className="border-b border-slate-100 bg-slate-50/30">
+                    <td className="px-6 py-4 text-slate-800 font-bold">Total Gross Revenue</td>
+                    <td className="px-6 py-4 text-right font-bold text-slate-900">{formatCurrency(totalRevenue)}</td>
                   </tr>
-                  <tr className="bg-gray-50">
-                    <td className="px-4 py-3 sm:px-6 font-semibold text-gray-800">Gross Profit</td>
-                    <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(grossProfit)}</td>
+
+                  {/* Expenses Section */}
+                  <tr className="bg-slate-50/80">
+                    <td colSpan="2" className="px-6 py-3 font-bold text-slate-800 uppercase text-xs tracking-wider">Operating Expenses</td>
                   </tr>
+                  <tr className="border-b border-slate-50">
+                    <td className="px-6 py-4 text-slate-600 font-medium">Cost of Goods Sold (COGS)</td>
+                    <td className="px-6 py-4 text-right font-bold text-rose-600">({formatCurrency(totalRevenue - grossProfit)})</td>
+                  </tr>
+                  <tr className="border-b border-slate-100 bg-slate-50/30">
+                    <td className="px-6 py-4 text-slate-800 font-bold underline decoration-slate-200 decoration-2 underline-offset-4">Gross Profit</td>
+                    <td className="px-6 py-4 text-right font-bold text-slate-900">{formatCurrency(grossProfit)}</td>
+                  </tr>
+
+                  {/* Operating Income Section */}
                   {operatingIncome !== undefined && (
                     <>
-                      <tr>
-                        <td className="px-4 py-3 sm:px-6 text-gray-600">Selling, General & Administrative</td>
-                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-red-600">({formatCurrency(grossProfit - operatingIncome)})</td>
+                      <tr className="border-b border-slate-50">
+                        <td className="px-6 py-4 text-slate-600 font-medium">Selling, General & Administrative</td>
+                        <td className="px-6 py-4 text-right font-bold text-rose-600">({formatCurrency(grossProfit - operatingIncome)})</td>
                       </tr>
-                      <tr className="bg-gray-100 border-t border-gray-200">
-                        <td className="px-4 py-3 sm:px-6 font-bold text-gray-900 uppercase text-xs tracking-wider">Operating Income (EBIT)</td>
-                        <td className="px-4 py-3 sm:px-6 text-right font-bold text-gray-900">{formatCurrency(operatingIncome)}</td>
+                      <tr className="border-b border-slate-200 bg-slate-100/50">
+                        <td className="px-6 py-4 text-slate-900 font-extrabold text-base uppercase tracking-tight">Operating Income (EBIT)</td>
+                        <td className="px-6 py-4 text-right font-extrabold text-slate-900 text-base">{formatCurrency(operatingIncome)}</td>
                       </tr>
                     </>
                   )}
-                  <tr className="bg-gray-900">
-                    <td className="px-4 py-4 sm:px-6 text-white font-bold uppercase text-xs tracking-wider">Net Profit / Loss for the Period</td>
-                    <td className={`px-4 py-4 sm:px-6 text-right font-bold text-lg ${netIncome >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(netIncome)}</td>
+
+                  {/* Net Income Summary */}
+                  <tr className="bg-slate-900">
+                    <td className="px-6 py-6 text-white font-extrabold text-lg tracking-tight uppercase">Net Profit / Loss for the Period</td>
+                    <td className={`px-6 py-6 text-right font-extrabold text-2xl ${
+                      netIncome >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                    }`}>
+                      {formatCurrency(netIncome)}
+                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
-          </section>
+          </div>
 
-          {/* Step 5: Notes & Analysis */}
-          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-gray-500" />
+          {/* Guidelines/Info */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
+              <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center">
+                <AlertCircle className="h-4 w-4 mr-2 text-primary-500" />
                 Notes on this Report
-              </h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex gap-2">
-                  <span className="inline-block w-1.5 h-1.5 shrink-0 rounded-full bg-gray-400 mt-1.5" />
-                  <span><strong className="text-gray-800">Sales Revenue</strong> matches the total of Sales Invoices for the selected period.</span>
+              </h4>
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                <li className="text-xs text-slate-600 flex items-start">
+                  <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2 mt-1 flex-shrink-0" />
+                  Values are calculated based on all approved transactions within the selected dates.
                 </li>
-                <li className="flex gap-2">
-                  <span className="inline-block w-1.5 h-1.5 shrink-0 rounded-full bg-gray-400 mt-1.5" />
-                  <span><strong className="text-gray-800">Net Profit / Loss</strong> is revenue minus COGS and expenses, not the invoice total.</span>
+                <li className="text-xs text-slate-600 flex items-start">
+                  <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2 mt-1 flex-shrink-0" />
+                  COGS is determined using the moving average cost method.
                 </li>
-                <li className="flex gap-2">
-                  <span className="inline-block w-1.5 h-1.5 shrink-0 rounded-full bg-gray-400 mt-1.5" />
-                  <span>Values are based on approved transactions in the selected date range.</span>
+                <li className="text-xs text-slate-600 flex items-start">
+                  <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2 mt-1 flex-shrink-0" />
+                  Margins are calculated relative to total gross revenue.
                 </li>
-                <li className="flex gap-2">
-                  <span className="inline-block w-1.5 h-1.5 shrink-0 rounded-full bg-gray-400 mt-1.5" />
-                  <span>COGS uses the moving average cost method.</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="inline-block w-1.5 h-1.5 shrink-0 rounded-full bg-gray-400 mt-1.5" />
-                  <span>Margins are relative to total gross revenue. Report follows accrual accounting principles.</span>
+                <li className="text-xs text-slate-600 flex items-start">
+                  <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2 mt-1 flex-shrink-0" />
+                  Report follows standard accrual accounting principles.
                 </li>
               </ul>
             </div>
-            <div className="bg-gray-900 border border-gray-900 rounded-lg p-5 shadow-sm">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Analysis Summary</h3>
+            
+            <div className="bg-slate-900 rounded-xl p-6 text-white shadow-lg shadow-slate-200">
+              <h4 className="text-sm font-bold mb-4 uppercase tracking-widest text-slate-400">Analysis Summary</h4>
               <div className="space-y-4">
                 <div>
-                  <div className="flex justify-between text-xs font-semibold text-gray-400 mb-1.5">
-                    <span>Net Margin</span>
+                  <div className="flex justify-between text-xs font-bold mb-1.5 text-slate-300 uppercase">
+                    <span>Efficiency</span>
                     <span>{netMargin?.toFixed(0) || 0}%</span>
                   </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2">
-                    <div
-                      className="bg-green-500 h-2 rounded-full"
+                  <div className="w-full bg-slate-800 rounded-full h-1.5">
+                    <div 
+                      className="bg-emerald-400 h-1.5 rounded-full" 
                       style={{ width: `${Math.max(0, Math.min(100, netMargin || 0))}%` }}
                     />
                   </div>
                 </div>
+                <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                  The net profit margin indicates that for every dollar of revenue, the company retains ${((netMargin || 0) / 100).toFixed(2)} as profit.
+                </p>
               </div>
             </div>
-          </section>
+          </div>
         </div>
       )}
 
       {/* Empty State */}
       {!showData && (
-        <section className="bg-white border border-gray-200 rounded-lg shadow-sm py-16 px-6 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-gray-200 bg-gray-50 mx-auto mb-6">
-            <FileText className="h-8 w-8 text-gray-400" />
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-20 text-center">
+          <div className="bg-slate-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
+            <FileText className="h-10 w-10 text-slate-300" />
           </div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Ready to generate your report</h2>
-          <p className="text-sm text-gray-500 max-w-md mx-auto">
-            Select a date range above and click Generate to view your Profit &amp; Loss statement.
+          <h3 className="text-xl font-bold text-slate-900 mb-2">Ready to generate your report</h3>
+          <p className="text-slate-500 max-w-sm mx-auto font-medium">
+            Select a date range above and click "Generate Statement" to view your business's financial performance.
           </p>
-        </section>
+        </div>
       )}
     </div>
   );

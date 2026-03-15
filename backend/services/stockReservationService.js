@@ -1,13 +1,4 @@
-const inventoryRepository = require('../repositories/InventoryRepository');
-
-function getReservations(inventory) {
-  const r = inventory?.reservations;
-  return Array.isArray(r) ? r : (typeof r === 'string' ? JSON.parse(r || '[]') : []);
-}
-
-function getCurrentStock(inventory) {
-  return Number(inventory?.current_stock ?? inventory?.currentStock ?? 0);
-}
+const Inventory = require('../models/Inventory');
 
 class StockReservationService {
   /**
@@ -20,34 +11,37 @@ class StockReservationService {
   async reserveStock(productId, quantity, options = {}) {
     const {
       userId,
-      expiresInMinutes = 15,
+      expiresInMinutes = 15, // Default 15 minutes for cart reservations
       referenceType = 'cart',
       referenceId = null,
       reservationId = null
     } = options;
 
-    const inventory = await inventoryRepository.findOne({ product: productId });
+    const inventory = await Inventory.findOne({ product: productId });
     if (!inventory) {
       throw new Error('Inventory record not found');
     }
 
-    const reservations = getReservations(inventory);
-    const now = new Date();
-    const totalReserved = reservations
-      .filter(r => new Date(r.expiresAt) > now)
+    // Calculate available stock (current - reserved)
+    const totalReserved = inventory.reservations
+      .filter(r => new Date(r.expiresAt) > new Date())
       .reduce((sum, r) => sum + r.quantity, 0);
-    const currentStock = getCurrentStock(inventory);
-    const availableStock = currentStock - totalReserved;
+    
+    const availableStock = inventory.currentStock - totalReserved;
 
     if (availableStock < quantity) {
       throw new Error(`Insufficient available stock. Available: ${availableStock}, Requested: ${quantity}`);
     }
 
+    // Generate reservation ID if not provided
     const resId = reservationId || `RES-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Calculate expiration date
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + expiresInMinutes);
 
-    reservations.push({
+    // Add reservation
+    inventory.reservations.push({
       reservationId: resId,
       quantity,
       expiresAt,
@@ -57,21 +51,18 @@ class StockReservationService {
       createdAt: new Date()
     });
 
-    const newReserved = totalReserved + quantity;
-    const newAvailable = Math.max(0, currentStock - newReserved);
+    // Update reserved stock
+    inventory.reservedStock = totalReserved + quantity;
+    inventory.availableStock = Math.max(0, inventory.currentStock - inventory.reservedStock);
 
-    await inventoryRepository.updateByProductId(productId, {
-      reservations,
-      reservedStock: newReserved,
-      availableStock: newAvailable
-    });
+    await inventory.save();
 
     return {
       reservationId: resId,
       quantity,
       expiresAt,
       productId,
-      availableStock: newAvailable
+      availableStock: inventory.availableStock
     };
   }
 
@@ -121,33 +112,40 @@ class StockReservationService {
    */
   async releaseExpiredReservations() {
     const now = new Date();
-    const allRows = await inventoryRepository.findAll({});
+    const inventories = await Inventory.find({
+      'reservations.expiresAt': { $lt: now }
+    });
+
     const results = {
       inventoriesProcessed: 0,
       reservationsReleased: 0,
       totalQuantityReleased: 0
     };
 
-    for (const inventory of allRows) {
-      const reservations = getReservations(inventory);
-      const expiredCount = reservations.filter(r => new Date(r.expiresAt) < now).length;
-      if (expiredCount === 0) continue;
+    for (const inventory of inventories) {
+      const initialCount = inventory.reservations.length;
+      
+      // Remove expired reservations
+      inventory.reservations = inventory.reservations.filter(
+        r => new Date(r.expiresAt) >= now
+      );
 
-      const stillActive = reservations.filter(r => new Date(r.expiresAt) >= now);
-      const totalReserved = stillActive
-        .filter(r => new Date(r.expiresAt) > now)
-        .reduce((sum, r) => sum + r.quantity, 0);
-      const currentStock = getCurrentStock(inventory);
-      const availableStock = Math.max(0, currentStock - totalReserved);
+      const removedCount = initialCount - inventory.reservations.length;
 
-      await inventoryRepository.updateById(inventory.id, {
-        reservations: stillActive,
-        reservedStock: totalReserved,
-        availableStock
-      });
+      if (removedCount > 0) {
+        // Recalculate reserved stock
+        const totalReserved = inventory.reservations
+          .filter(r => new Date(r.expiresAt) > new Date())
+          .reduce((sum, r) => sum + r.quantity, 0);
 
-      results.inventoriesProcessed++;
-      results.reservationsReleased += expiredCount;
+        inventory.reservedStock = totalReserved;
+        inventory.availableStock = Math.max(0, inventory.currentStock - inventory.reservedStock);
+
+        await inventory.save();
+
+        results.inventoriesProcessed++;
+        results.reservationsReleased += removedCount;
+      }
     }
 
     return results;
@@ -161,22 +159,25 @@ class StockReservationService {
    * @returns {Promise<Object>}
    */
   async extendReservation(productId, reservationId, additionalMinutes) {
-    const inventory = await inventoryRepository.findOne({ product: productId });
+    const inventory = await Inventory.findOne({ product: productId });
     if (!inventory) {
       throw new Error('Inventory record not found');
     }
 
-    const reservations = getReservations(inventory);
-    const reservation = reservations.find(r => r.reservationId === reservationId);
+    const reservation = inventory.reservations.find(
+      r => r.reservationId === reservationId
+    );
+
     if (!reservation) {
       throw new Error('Reservation not found');
     }
 
+    // Extend expiration
     const newExpiresAt = new Date(reservation.expiresAt);
     newExpiresAt.setMinutes(newExpiresAt.getMinutes() + additionalMinutes);
     reservation.expiresAt = newExpiresAt;
 
-    await inventoryRepository.updateByProductId(productId, { reservations });
+    await inventory.save();
 
     return {
       reservationId,
@@ -191,12 +192,13 @@ class StockReservationService {
    * @returns {Promise<Array>}
    */
   async getActiveReservations(productId) {
-    const inventory = await inventoryRepository.findOne({ product: productId });
+    const inventory = await Inventory.findOne({ product: productId });
     if (!inventory) {
       return [];
     }
+
     const now = new Date();
-    return getReservations(inventory).filter(r => new Date(r.expiresAt) > now);
+    return inventory.reservations.filter(r => new Date(r.expiresAt) > now);
   }
 }
 

@@ -1,7 +1,4 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import SpinningText from './SpinningText';
 
 export const LoadingSpinner = ({ size = 'md', className = '', inline = false }) => {
   const sizeClasses = {
@@ -18,15 +15,13 @@ export const LoadingSpinner = ({ size = 'md', className = '', inline = false }) 
   );
 };
 
-export const LoadingButton = ({ isLoading, loading, children, disabled, className = '', variant = 'default', size, ...props }) => {
+export const LoadingButton = ({ isLoading, loading, children, disabled, className = '', ...props }) => {
   const busy = isLoading || loading;
   return (
-    <Button
+    <button
       {...props}
       disabled={disabled || busy}
-      variant={variant}
-      size={size}
-      className={className}
+      className={`${className} ${(disabled || busy) ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       {busy ? (
         <div className="flex items-center justify-center">
@@ -36,7 +31,7 @@ export const LoadingButton = ({ isLoading, loading, children, disabled, classNam
       ) : (
         children
       )}
-    </Button>
+    </button>
   );
 };
 
@@ -87,46 +82,14 @@ export const LoadingTable = ({ rows = 5, columns = 4, className = '' }) => (
   </div>
 );
 
-export const LoadingPage = ({ message = 'Loading...', useSpinningText = true, showMessage = false }) => (
+export const LoadingPage = ({ message = 'Loading...' }) => (
   <div className="flex items-center justify-center h-64">
     <div className="text-center">
-      {useSpinningText ? (
-        <>
-          <div className="w-24 h-24 mx-auto flex items-center justify-center">
-            <SpinningText
-              text="WISERCONSULTING POS WEBSITE 03130922988 — "
-              radius={35}
-              textClassName="text-[6px] fill-gray-600"
-              speed={8}
-              direction="normal"
-              className="w-full h-full"
-            />
-          </div>
-          <p className="text-gray-600 mt-4 text-sm font-medium">Wiserconsulting Pos Website</p>
-          <p className="text-gray-500 mt-1 text-xs">03130922988</p>
-        </>
-      ) : (
-        <LoadingSpinner size="xl" className="mx-auto" />
-      )}
-      {showMessage && <p className="text-gray-600 mt-4">{message}</p>}
+      <LoadingSpinner size="xl" className="mx-auto mb-4" />
+      <p className="text-gray-600">{message}</p>
     </div>
   </div>
 );
-
-export const SpinningTextLoader = ({ text, size = 'md', className = '' }) => {
-  const sizeMap = { sm: 'w-12 h-12', md: 'w-20 h-20', lg: 'w-28 h-28' };
-  const textSizeMap = { sm: 'text-[5px]', md: 'text-[6px]', lg: 'text-[8px]' };
-  return (
-    <div className={cn('inline-flex items-center justify-center [&_svg]:text-gray-500', sizeMap[size], className)}>
-      <SpinningText
-        text={text || 'LOADING — LOADING — '}
-        radius={size === 'sm' ? 22 : size === 'lg' ? 42 : 35}
-        textClassName={cn('fill-gray-500', textSizeMap[size])}
-        speed={8}
-      />
-    </div>
-  );
-};
 
 export const LoadingInline = ({ message = 'Loading...' }) => (
   <span className="inline-flex items-center justify-center py-1">

@@ -5,9 +5,6 @@ import { X, TrendingUp, TrendingDown, Package, AlertTriangle } from 'lucide-reac
 import { useFormValidation } from '../hooks/useFormValidation';
 import { validateRequired, validatePositiveNumber } from '../utils/validation';
 import { LoadingButton } from './LoadingSpinner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { useUpdateStockMutation } from '../store/services/inventoryApi';
 
@@ -193,7 +190,7 @@ const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
                         {product?.product?.name || product?.name || 'Unknown Product'}
                       </div>
                       <div className="text-sm text-gray-500">
-                        Category: {typeof (product?.product?.category ?? product?.category) === 'object' ? ((product?.product?.category ?? product?.category)?.name ?? 'N/A') : (product?.product?.category || product?.category || 'N/A')}
+                        Category: {product?.product?.category || product?.category || 'N/A'}
                       </div>
                     </div>
                   </div>
@@ -264,13 +261,13 @@ const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {getQuantityLabel()} <span className="text-red-500">*</span>
                     </label>
-                    <Input
+                    <input
                       type="number"
                       name="quantity"
                       value={values.quantity}
                       onChange={handleChange}
                       onBlur={handleBlur}
-                      className={errors.quantity ? 'input-error' : ''}
+                      className={`input ${errors.quantity ? 'input-error' : ''}`}
                       placeholder={getQuantityPlaceholder()}
                       min="0"
                       step="0.01"
@@ -310,12 +307,13 @@ const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Cost per Unit
                     </label>
-                    <Input
+                    <input
                       type="number"
                       name="cost"
                       value={values.cost}
                       onChange={handleChange}
                       onBlur={handleBlur}
+                      className="input"
                       placeholder="0.00"
                       min="0"
                       step="0.01"
@@ -328,12 +326,13 @@ const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Notes
                     </label>
-                    <Textarea
+                    <textarea
                       name="notes"
                       value={values.notes}
                       onChange={handleChange}
                       onBlur={handleBlur}
                       rows={3}
+                      className="input"
                       placeholder="Additional notes (optional)"
                     />
                   </div>
@@ -367,17 +366,17 @@ const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
 
                   {/* Actions */}
                   <div className="flex justify-end space-x-3 pt-6 border-t">
-                    <Button
+                    <button
                       type="button"
                       onClick={handleClose}
-                      variant="secondary"
+                      className="btn btn-secondary"
                     >
                       Cancel
-                    </Button>
+                    </button>
                     <LoadingButton
                       type="submit"
                       isLoading={updating}
-                      variant="default"
+                      className="btn btn-primary"
                     >
                       Update Stock
                     </LoadingButton>
