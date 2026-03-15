@@ -38,7 +38,7 @@ class BaseRepository {
     // Validate and apply sort - only if sort is a valid value
     if (sort !== undefined && sort !== null) {
       // Ensure sort is a valid type (string, object, array, or map)
-      // Empty strings, empty objects {}, null, undefined are invalid for MongoDB sort
+      // Empty strings, empty objects {}, null, undefined are invalid for sort
       const isValidSort =
         (typeof sort === 'string' && sort.trim().length > 0) ||
         (typeof sort === 'object' && sort !== null && !Array.isArray(sort) && Object.keys(sort).length > 0) ||

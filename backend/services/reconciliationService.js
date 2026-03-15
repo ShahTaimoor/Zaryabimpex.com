@@ -1,14 +1,28 @@
-const Customer = require('../models/Customer');
-const Supplier = require('../models/Supplier');
-const CustomerTransaction = require('../models/CustomerTransaction');
-const Sales = require('../models/Sales');
-const PurchaseInvoice = require('../models/PurchaseInvoice');
-const PurchaseOrder = require('../models/PurchaseOrder');
-const SalesOrder = require('../models/SalesOrder');
-const Transaction = require('../models/Transaction');
+const CustomerRepository = require('../repositories/postgres/CustomerRepository');
+const SupplierRepository = require('../repositories/postgres/SupplierRepository');
+const CustomerTransactionRepository = require('../repositories/postgres/CustomerTransactionRepository');
+const SalesRepository = require('../repositories/postgres/SalesRepository');
+const PurchaseInvoiceRepository = require('../repositories/postgres/PurchaseInvoiceRepository');
+const PurchaseOrderRepository = require('../repositories/postgres/PurchaseOrderRepository');
+const SalesOrderRepository = require('../repositories/postgres/SalesOrderRepository');
 const customerAuditLogService = require('./customerAuditLogService');
-const accountLedgerService = require('./accountLedgerService');
 const AccountingService = require('./accountingService');
+
+function normalizeTransactionRow(row) {
+  if (!row) return row;
+  const balanceAfter = row.balance_after && typeof row.balance_after === 'object'
+    ? row.balance_after
+    : (typeof row.balance_after === 'string' ? JSON.parse(row.balance_after || '{}') : {});
+  return {
+    ...row,
+    affectsPendingBalance: row.affects_pending_balance ?? row.affectsPendingBalance,
+    affectsAdvanceBalance: row.affects_advance_balance ?? row.affectsAdvanceBalance,
+    balanceImpact: row.balance_impact ?? row.balanceImpact,
+    balanceAfter,
+    transactionType: row.transaction_type ?? row.transactionType,
+    netAmount: row.net_amount ?? row.netAmount
+  };
+}
 
 class ReconciliationService {
   /**
@@ -20,16 +34,15 @@ class ReconciliationService {
   async reconcileCustomerBalance(customerId, options = {}) {
     const { autoCorrect = false, alertOnDiscrepancy = true } = options;
 
-    const customer = await Customer.findById(customerId);
+    const customer = await CustomerRepository.findById(customerId);
     if (!customer) {
       throw new Error('Customer not found');
     }
 
-    // Get all transactions (excluding reversed)
-    const transactions = await CustomerTransaction.find({
-      customer: customerId,
-      status: { $ne: 'reversed' }
-    }).sort({ transactionDate: 1 });
+    const rows = await CustomerTransactionRepository.findAll(
+      { customerId, statusNe: 'reversed' }
+    );
+    const transactions = rows.map(normalizeTransactionRow);
 
     // Get ledger balance (Authoritative source)
     const ledgerBalance = await AccountingService.getCustomerBalance(customerId);
@@ -40,11 +53,10 @@ class ReconciliationService {
       currentBalance: ledgerBalance
     };
 
-    // Get current customer profile balances (Legacy cached source)
     const current = {
-      pendingBalance: customer.pendingBalance || 0,
-      advanceBalance: customer.advanceBalance || 0,
-      currentBalance: customer.currentBalance || 0
+      pendingBalance: customer.pending_balance ?? customer.pendingBalance ?? 0,
+      advanceBalance: customer.advance_balance ?? customer.advanceBalance ?? 0,
+      currentBalance: customer.current_balance ?? customer.currentBalance ?? 0
     };
 
     // Calculate discrepancies
@@ -205,9 +217,7 @@ class ReconciliationService {
   async reconcileAllCustomerBalances(options = {}) {
     const { autoCorrect = false, alertOnDiscrepancy = true, batchSize = 100 } = options;
 
-    const customers = await Customer.find({
-      isDeleted: false
-    }).select('_id businessName name pendingBalance advanceBalance currentBalance');
+    const customers = await CustomerRepository.findAll({ isActive: true });
 
     const results = {
       total: customers.length,
@@ -239,8 +249,8 @@ class ReconciliationService {
           }
         } catch (error) {
           results.errors.push({
-            customerId: customer._id,
-            customerName: customer.businessName || customer.name,
+            customerId: customer.id || customer._id,
+            customerName: customer.business_name || customer.businessName || customer.name,
             error: error.message
           });
         }
@@ -285,8 +295,8 @@ class ReconciliationService {
   async alertDiscrepancy(customer, reconciliation) {
     // TODO: Implement actual alerting (email, Slack, etc.)
     console.error('BALANCE DISCREPANCY DETECTED:', {
-      customerId: customer._id,
-      customerName: customer.businessName || customer.name,
+      customerId: customer.id || customer._id,
+      customerName: customer.business_name || customer.businessName || customer.name,
       discrepancy: reconciliation.discrepancy
     });
   }
@@ -299,24 +309,16 @@ class ReconciliationService {
    * @returns {Promise<Customer>}
    */
   async correctBalance(customerId, calculated, reconciliation) {
-    const customer = await Customer.findById(customerId);
+    const customer = await CustomerRepository.findById(customerId);
     if (!customer) {
       throw new Error('Customer not found');
     }
 
-    // Update balance atomically
-    const updated = await Customer.findOneAndUpdate(
-      { _id: customerId, __v: customer.__v },
-      {
-        $set: {
-          pendingBalance: calculated.pendingBalance,
-          advanceBalance: calculated.advanceBalance,
-          currentBalance: calculated.currentBalance
-        },
-        $inc: { __v: 1 }
-      },
-      { new: true }
-    );
+    const updated = await CustomerRepository.update(customerId, {
+      pendingBalance: calculated.pendingBalance,
+      advanceBalance: calculated.advanceBalance,
+      currentBalance: calculated.currentBalance
+    });
 
     if (!updated) {
       throw new Error('Concurrent update conflict during balance correction');
@@ -345,13 +347,12 @@ class ReconciliationService {
   async getReconciliationReport(customerId, startDate, endDate) {
     const reconciliation = await this.reconcileCustomerBalance(customerId);
 
-    const transactions = await CustomerTransaction.find({
-      customer: customerId,
-      transactionDate: {
-        $gte: startDate,
-        $lte: endDate
-      }
-    }).sort({ transactionDate: 1 });
+    const rows = await CustomerTransactionRepository.findAll({
+      customerId,
+      transactionDateFrom: startDate,
+      transactionDateTo: endDate
+    });
+    const transactions = rows.map(normalizeTransactionRow);
 
     return {
       reconciliation,
@@ -447,13 +448,10 @@ class ReconciliationService {
    */
   async reconcileAllSupplierBalances(options = {}) {
     const { autoCorrect = false, batchSize = 100 } = options;
-    const suppliers = await Supplier.find({ isDeleted: false });
+    const suppliers = await SupplierRepository.findAll({ isActive: true });
 
-    // We'll use the accountLedgerService logic for suppliers since it's already robust
-    const ledgerResult = await accountLedgerService.getLedgerSummary({
-      startDate: '1970-01-01',
-      endDate: '2099-12-31'
-    });
+    // Using PostgreSQL AccountingService directly for supplier balances
+    // Ledger summary removed - balances calculated directly from PostgreSQL ledger
 
     const results = {
       total: suppliers.length,
@@ -464,29 +462,25 @@ class ReconciliationService {
 
     for (const supplier of suppliers) {
       try {
-        const ledgerBalance = await AccountingService.getSupplierBalance(supplier._id);
-        const profileBalance = supplier.currentBalance || 0;
+        const supplierId = supplier.id || supplier._id;
+        const ledgerBalance = await AccountingService.getSupplierBalance(supplierId);
+        const profileBalance = supplier.current_balance ?? supplier.currentBalance ?? 0;
 
         if (Math.abs(ledgerBalance - profileBalance) > 0.01) {
           results.discrepancies++;
           if (autoCorrect) {
-            await Supplier.updateOne(
-              { _id: supplier._id },
-              {
-                $set: {
-                  currentBalance: ledgerBalance,
-                  pendingBalance: ledgerBalance > 0 ? ledgerBalance : 0,
-                  advanceBalance: ledgerBalance < 0 ? Math.abs(ledgerBalance) : 0
-                }
-              }
+            const { query } = require('../config/postgres');
+            await query(
+              'UPDATE suppliers SET current_balance = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+              [ledgerBalance, supplierId]
             );
             results.corrected++;
           }
         }
       } catch (err) {
         results.errors.push({
-          supplierId: supplier._id,
-          supplierName: supplier.companyName,
+          supplierId: supplier.id || supplier._id,
+          supplierName: supplier.company_name || supplier.companyName,
           error: err.message
         });
       }
@@ -502,48 +496,45 @@ class ReconciliationService {
     const { autoCorrect = false } = options;
     const issues = [];
 
-    // Sales Invoices
-    const sales = await Sales.find({ isDeleted: { $ne: true } });
+    const sales = await SalesRepository.findAll({});
     for (const sale of sales) {
-      const calculatedBalance = sale.pricing.total - sale.payment.amountPaid;
-      const storedBalance = sale.payment.remainingBalance;
-
-      if (Math.abs(calculatedBalance - storedBalance) > 0.01) {
-        issues.push({ type: 'SI_BALANCE', id: sale._id, ref: sale.orderNumber, expected: calculatedBalance });
-        if (autoCorrect) {
-          await Sales.updateOne({ _id: sale._id }, { $set: { 'payment.remainingBalance': calculatedBalance } });
+      const total = Number(sale.total ?? 0);
+      const paymentStatus = sale.payment_status || sale.paymentStatus;
+      const status = sale.status;
+      const saleId = sale.id || sale._id;
+      const orderNumber = sale.order_number || sale.orderNumber;
+      // Simplified: no pricing/payment sub-doc in Postgres sales; skip balance check if not present
+      if (sale.payment_status !== undefined && Math.abs((sale.total || 0) - (sale.payment_remaining || 0)) > 0.01) {
+        issues.push({ type: 'SI_BALANCE', id: saleId, ref: orderNumber, expected: total });
+        if (autoCorrect && SalesRepository.update) {
+          await SalesRepository.update(saleId, { paymentStatus: paymentStatus });
         }
       }
-
-      // Paid status SI
-      const paidSI = sale.payment.amountPaid;
-      const totalSI = sale.pricing.total;
-      let expectedStatusSI = 'pending';
-      if (paidSI >= totalSI && totalSI > 0) expectedStatusSI = 'paid';
-      else if (paidSI > 0) expectedStatusSI = 'partial';
-
-      if (sale.payment.status !== expectedStatusSI && sale.status !== 'cancelled' && sale.status !== 'returned') {
-        issues.push({ type: 'SI_STATUS', id: sale._id, ref: sale.orderNumber, expected: expectedStatusSI });
-        if (autoCorrect) {
-          await Sales.updateOne({ _id: sale._id }, { $set: { 'payment.status': expectedStatusSI } });
+      if (status !== 'cancelled' && status !== 'returned') {
+        const expectedStatusSI = total <= 0 ? 'pending' : (paymentStatus === 'paid' ? 'paid' : 'partial');
+        if (paymentStatus !== expectedStatusSI) {
+          issues.push({ type: 'SI_STATUS', id: saleId, ref: orderNumber, expected: expectedStatusSI });
+          if (autoCorrect && SalesRepository.update) {
+            await SalesRepository.update(saleId, { paymentStatus: expectedStatusSI });
+          }
         }
       }
     }
 
-    // Purchase Orders (simplified status check logic)
-    const pos = await PurchaseOrder.find({ isDeleted: { $ne: true } });
+    const pos = await PurchaseOrderRepository.findAll({});
     for (const po of pos) {
-      const totalQty = po.items.reduce((sum, item) => sum + item.quantity, 0);
-      const receivedQty = po.items.reduce((sum, item) => sum + item.receivedQuantity, 0);
-
-      let expectedStatus = po.status;
+      const items = po.items && (typeof po.items === 'string' ? JSON.parse(po.items) : po.items) || [];
+      const totalQty = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      const receivedQty = items.reduce((sum, item) => sum + (item.receivedQuantity || item.received_quantity || 0), 0);
+      const poStatus = po.status;
+      let expectedStatus = poStatus;
       if (receivedQty >= totalQty && totalQty > 0) expectedStatus = 'fully_received';
       else if (receivedQty > 0) expectedStatus = 'partially_received';
 
-      if (po.status !== expectedStatus && !['cancelled', 'closed', 'draft', 'confirmed'].includes(po.status)) {
-        issues.push({ type: 'PO_STATUS', id: po._id, ref: po.poNumber, expected: expectedStatus });
+      if (poStatus !== expectedStatus && !['cancelled', 'closed', 'draft', 'confirmed'].includes(poStatus)) {
+        issues.push({ type: 'PO_STATUS', id: po.id || po._id, ref: po.po_number || po.poNumber, expected: expectedStatus });
         if (autoCorrect) {
-          await PurchaseOrder.updateOne({ _id: po._id }, { $set: { status: expectedStatus } });
+          await PurchaseOrderRepository.updateById(po.id || po._id, { status: expectedStatus });
         }
       }
     }

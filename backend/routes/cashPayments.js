@@ -4,13 +4,11 @@ const { body, validationResult, query } = require('express-validator');
 const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
-const CashPayment = require('../models/CashPayment'); // Still needed for new CashPayment() and static methods
-const Sales = require('../models/Sales'); // Still needed for model reference in populate
-const cashPaymentRepository = require('../repositories/CashPaymentRepository');
-const supplierRepository = require('../repositories/SupplierRepository');
-const customerRepository = require('../repositories/CustomerRepository');
-const chartOfAccountsRepository = require('../repositories/ChartOfAccountsRepository');
-const salesRepository = require('../repositories/SalesRepository');
+const cashPaymentRepository = require('../repositories/postgres/CashPaymentRepository');
+const supplierRepository = require('../repositories/postgres/SupplierRepository');
+const customerRepository = require('../repositories/postgres/CustomerRepository');
+const AccountingService = require('../services/accountingService');
+const { validateUuidParam } = require('../middleware/validation');
 
 // @route   GET /api/cash-payments
 // @desc    Get all cash payments with filtering and pagination
@@ -50,58 +48,31 @@ router.get('/', [
       particular
     } = req.query;
 
-    // Build filter object
-    const filter = {};
+    // Build Postgres filter
+    // Normalize dates to start/end of day for proper filtering
+    const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
+    const filter = {
+      startDate: req.dateRange?.startDate ? (getStartOfDayPakistan(req.dateRange.startDate) || new Date(req.dateRange.startDate)) : null,
+      endDate: req.dateRange?.endDate ? (getEndOfDayPakistan(req.dateRange.endDate) || new Date(req.dateRange.endDate)) : null,
+      voucherCode: voucherCode || undefined,
+      amount: amount ? parseFloat(amount) : undefined,
+      particular: particular || undefined
+    };
 
-    // Date range filter - use dateFilter from middleware (Pakistan timezone)
-    if (req.dateFilter && Object.keys(req.dateFilter).length > 0) {
-      Object.assign(filter, req.dateFilter);
-    }
-
-    // Voucher code filter
-    if (voucherCode) {
-      filter.voucherCode = { $regex: voucherCode, $options: 'i' };
-    }
-
-    // Amount filter
-    if (amount) {
-      filter.amount = parseFloat(amount);
-    }
-
-    // Particular filter
-    if (particular) {
-      filter.particular = { $regex: particular, $options: 'i' };
-    }
-
-    // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    // Get cash payments with pagination
     const result = await cashPaymentRepository.findWithPagination(filter, {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sort: { date: -1, createdAt: -1 },
-      populate: [
-        { path: 'order', model: 'Sales', select: 'orderNumber' },
-        { path: 'supplier', select: 'companyName contactPerson' },
-        { path: 'customer', select: 'name businessName email' },
-        { path: 'createdBy', select: 'firstName lastName' },
-        { path: 'expenseAccount', select: 'accountName accountCode' }
-      ]
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10)
     });
-
-    const cashPayments = result.cashPayments;
-    const total = result.total;
 
     res.json({
       success: true,
       data: {
-        cashPayments,
+        cashPayments: result.cashPayments,
         pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / parseInt(limit)),
-          totalItems: total,
-          itemsPerPage: parseInt(limit)
+          currentPage: result.pagination.page,
+          totalPages: result.pagination.pages,
+          totalItems: result.pagination.total,
+          itemsPerPage: result.pagination.limit
         }
       }
     });
@@ -124,11 +95,11 @@ router.post('/', [
   body('date').optional().isISO8601().withMessage('Date must be a valid date'),
   body('amount').isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
   body('particular').optional().isString().trim().isLength({ max: 500 }).withMessage('Particular must be less than 500 characters'),
-  body('order').optional().isMongoId().withMessage('Invalid order ID'),
-  body('supplier').optional().isMongoId().withMessage('Invalid supplier ID'),
-  body('customer').optional().isMongoId().withMessage('Invalid customer ID'),
+  body('order').optional().isUUID(4).withMessage('Invalid order ID'),
+  body('supplier').optional().isUUID(4).withMessage('Invalid supplier ID'),
+  body('customer').optional().isUUID(4).withMessage('Invalid customer ID'),
   body('paymentMethod').optional().isIn(['cash', 'check', 'other']).withMessage('Invalid payment method'),
-  body('expenseAccount').optional().isMongoId().withMessage('Invalid expense account ID'),
+  body('expenseAccount').optional().isUUID(4).withMessage('Invalid expense account ID'),
   body('notes').optional().isString().trim().isLength({ max: 1000 }).withMessage('Notes must be less than 1000 characters')
 ], async (req, res) => {
   try {
@@ -149,16 +120,7 @@ router.post('/', [
       expenseAccount
     } = req.body;
 
-    // Validate order exists if provided
-    if (order) {
-      const orderExists = await salesRepository.findById(order);
-      if (!orderExists) {
-        return res.status(400).json({
-          success: false,
-          message: 'Order not found'
-        });
-      }
-    }
+    // Order validation removed - orders handled separately
 
     // Validate supplier exists if provided
     if (supplier) {
@@ -182,87 +144,99 @@ router.post('/', [
       }
     }
 
-    let expenseAccountDoc = null;
-    if (expenseAccount) {
-      expenseAccountDoc = await chartOfAccountsRepository.findById(expenseAccount);
-      if (!expenseAccountDoc) {
-        return res.status(400).json({
-          success: false,
-          message: 'Expense account not found'
-        });
-      }
+    // Validation: Must have either customer, supplier, or expense account (Record Expense)
+    if (customer && supplier) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cash payment must be for either a customer OR a supplier, not both'
+      });
     }
 
+    const isExpenseOnly = Boolean(expenseAccount) && !customer && !supplier;
+    if (!customer && !supplier && !expenseAccount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cash payment must specify either a customer, a supplier, or an expense account (Record Expense)'
+      });
+    }
+
+    // Validate amount
+    const paymentAmount = parseFloat(amount);
+    if (isNaN(paymentAmount) || paymentAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount must be a positive number'
+      });
+    }
+
+    // Expense account validation removed - Chart of Accounts will be migrated separately
     const resolvedParticular = particular
       ? particular.trim()
-      : expenseAccountDoc
-        ? `Expense - ${expenseAccountDoc.accountName}`
-        : 'Cash Payment';
+      : 'Cash Payment';
 
-    // Create cash payment
-    const cashPaymentData = {
-      date: date ? new Date(date) : new Date(),
-      amount: parseFloat(amount),
-      particular: resolvedParticular,
-      order: order || null,
-      supplier: supplier || null,
-      customer: customer || null,
-      paymentMethod,
-      notes: notes ? notes.trim() : null,
-      createdBy: req.user._id,
-      expenseAccount: expenseAccountDoc ? expenseAccountDoc._id : null
+    // Create cash payment with atomic transaction
+    const { transaction } = require('../config/postgres');
+    
+    const cashPayment = await transaction(async (client) => {
+      const cashPaymentData = {
+        date: date ? new Date(date) : new Date(),
+        amount: paymentAmount,
+        particular: resolvedParticular,
+        order: order || null,
+        supplierId: supplier || null,
+        customerId: customer || null,
+        paymentMethod: paymentMethod || 'cash',
+        notes: notes ? notes.trim() : null,
+        createdBy: (req.user._id || req.user.id || req.user?.id)?.toString(),
+      };
+
+      // Create payment
+      const payment = await cashPaymentRepository.create(cashPaymentData, client);
+
+      // Post to account ledger atomically (using same client)
+      if (isExpenseOnly && expenseAccount) {
+        await AccountingService.recordExpenseCashPayment(payment, expenseAccount, client);
+      } else {
+        await AccountingService.recordCashPayment(payment, client);
+      }
+
+      return payment;
+    });
+
+    // Fetch related data
+    let supplierDetails = null;
+    let customerDetails = null;
+    if (cashPayment.supplier_id) {
+      supplierDetails = await supplierRepository.findById(cashPayment.supplier_id);
+    }
+    if (cashPayment.customer_id) {
+      customerDetails = await customerRepository.findById(cashPayment.customer_id);
+    }
+
+    // Map payment_number to voucherCode for frontend compatibility
+    const responseData = {
+      ...cashPayment,
+      voucherCode: cashPayment.payment_number,
+      supplier: supplierDetails ? {
+        id: supplierDetails.id,
+        _id: supplierDetails.id,
+        companyName: supplierDetails.company_name,
+        name: supplierDetails.name,
+        displayName: supplierDetails.company_name || supplierDetails.name
+      } : null,
+      customer: customerDetails ? {
+        id: customerDetails.id,
+        _id: customerDetails.id,
+        name: customerDetails.name,
+        businessName: customerDetails.business_name,
+        displayName: customerDetails.business_name || customerDetails.name
+      } : null
     };
-
-    const cashPayment = new CashPayment(cashPaymentData);
-    await cashPayment.save();
-
-    // Update supplier balance if supplier is provided
-    if (supplier && amount > 0) {
-      try {
-        const SupplierBalanceService = require('../services/supplierBalanceService');
-        await SupplierBalanceService.recordPayment(supplier, amount, order);
-      } catch (error) {
-        console.error('Error updating supplier balance for cash payment:', error);
-        // Don't fail the cash payment creation if balance update fails
-      }
-    }
-
-    // Update customer balance if customer is provided
-    // When we pay cash to a customer, we're giving them money (refund/advance)
-    // This should use recordRefund() which properly handles reducing advanceBalance first,
-    // then increasing advanceBalance if we're paying more than their credit
-    if (customer && amount > 0) {
-      try {
-        const CustomerBalanceService = require('../services/customerBalanceService');
-        await CustomerBalanceService.recordRefund(customer, amount, order);
-      } catch (error) {
-        console.error('Error updating customer balance for cash payment:', error);
-        // Don't fail the cash payment creation if balance update fails
-      }
-    }
-
-    // Create accounting entries
-    try {
-      const AccountingService = require('../services/accountingService');
-      await AccountingService.recordCashPayment(cashPayment);
-    } catch (error) {
-      console.error('Error creating accounting entries for cash payment:', error);
-      // Don't fail the cash payment creation if accounting fails
-    }
-
-    // Populate the created payment
-    await cashPayment.populate([
-      { path: 'order', select: 'orderNumber' },
-      { path: 'supplier', select: 'companyName contactPerson' },
-      { path: 'customer', select: 'name businessName email' },
-      { path: 'createdBy', select: 'firstName lastName' },
-      { path: 'expenseAccount', select: 'accountName accountCode' }
-    ]);
 
     res.status(201).json({
       success: true,
       message: 'Cash payment created successfully',
-      data: cashPayment
+      data: responseData
     });
   } catch (error) {
     console.error('Create cash payment error:', error);
@@ -292,30 +266,16 @@ router.get('/summary/date-range', [
 
     const { fromDate, toDate } = req.query;
 
-    const filter = {
-      date: {
-        $gte: new Date(fromDate),
-        $lte: new Date(toDate + 'T23:59:59.999Z')
-      }
-    };
-
-    // Get summary data
-    const summary = await cashPaymentRepository.getSummary(filter);
-
-    const result = summary.length > 0 ? summary[0] : {
-      totalAmount: 0,
-      totalCount: 0,
-      averageAmount: 0
-    };
+    const summary = await cashPaymentRepository.getSummary(fromDate, toDate);
 
     res.json({
       success: true,
       data: {
         fromDate,
         toDate,
-        totalAmount: result.totalAmount,
-        totalCount: result.totalCount,
-        averageAmount: result.averageAmount
+        totalAmount: summary.totalAmount || 0,
+        totalCount: summary.totalCount || 0,
+        averageAmount: summary.averageAmount || 0
       }
     });
   } catch (error) {
@@ -337,16 +297,16 @@ router.put('/:id', [
   body('date').optional().isISO8601().withMessage('Date must be a valid date'),
   body('amount').optional().isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
   body('particular').optional().isString().trim().isLength({ min: 1, max: 500 }).withMessage('Particular must be between 1 and 500 characters'),
-  body('order').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid order ID'),
-  body('supplier').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid supplier ID'),
-  body('customer').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid customer ID'),
+  body('order').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid order ID'),
+  body('supplier').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid supplier ID'),
+  body('customer').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid customer ID'),
   body('paymentMethod').optional().isIn(['cash', 'check', 'other']).withMessage('Invalid payment method'),
-  body('expenseAccount').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid expense account ID'),
+  body('expenseAccount').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid expense account ID'),
   body('notes').optional().isString().trim().isLength({ max: 1000 }).withMessage('Notes must be less than 1000 characters'),
   handleValidationErrors
 ], async (req, res) => {
   try {
-    const cashPayment = await CashPayment.findById(req.params.id);
+    const cashPayment = await cashPaymentRepository.findById(req.params.id);
     if (!cashPayment) {
       return res.status(404).json({
         success: false,
@@ -366,34 +326,71 @@ router.put('/:id', [
       expenseAccount
     } = req.body;
 
-    // Update fields
-    if (date !== undefined) cashPayment.date = new Date(date);
-    if (amount !== undefined) cashPayment.amount = parseFloat(amount);
-    if (particular !== undefined) cashPayment.particular = particular.trim();
-    if (order !== undefined) cashPayment.order = order || null;
-    if (supplier !== undefined) cashPayment.supplier = supplier || null;
-    if (customer !== undefined) cashPayment.customer = customer || null;
-    if (paymentMethod !== undefined) cashPayment.paymentMethod = paymentMethod;
-    if (notes !== undefined) cashPayment.notes = notes ? notes.trim() : null;
-    if (expenseAccount !== undefined) cashPayment.expenseAccount = expenseAccount || null;
+    // Build update data object
+    const updateData = {};
+    if (date !== undefined) updateData.date = new Date(date);
+    if (amount !== undefined) updateData.amount = parseFloat(amount);
+    if (particular !== undefined) updateData.particular = particular.trim();
+    if (supplier !== undefined) updateData.supplierId = supplier || null;
+    if (customer !== undefined) updateData.customerId = customer || null;
+    if (paymentMethod !== undefined) updateData.paymentMethod = paymentMethod;
+    if (notes !== undefined) updateData.notes = notes ? notes.trim() : null;
+    updateData.updatedBy = req.user._id.toString();
 
-    cashPayment.updatedBy = req.user._id;
+    // Update with ledger adjustment (reverse old entries, update record, re-post new entries)
+    const { transaction } = require('../config/postgres');
+    const updatedPayment = await transaction(async (client) => {
+      await AccountingService.reverseLedgerEntriesByReference('cash_payment', req.params.id, client);
+      const payment = await cashPaymentRepository.update(req.params.id, updateData, client);
+      if (!payment) return null;
+      // Re-post only for supplier/customer payments (not expense-only)
+      if (payment.supplier_id || payment.customer_id) {
+        await AccountingService.recordCashPayment(payment, client);
+      }
+      return payment;
+    });
+    
+    if (!updatedPayment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cash payment not found'
+      });
+    }
 
-    await cashPayment.save();
+    // Fetch supplier and customer details if they exist
+    let supplierDetails = null;
+    let customerDetails = null;
+    if (updatedPayment.supplier_id) {
+      supplierDetails = await supplierRepository.findById(updatedPayment.supplier_id);
+    }
+    if (updatedPayment.customer_id) {
+      customerDetails = await customerRepository.findById(updatedPayment.customer_id);
+    }
 
-    // Populate the updated payment
-    await cashPayment.populate([
-      { path: 'order', select: 'orderNumber' },
-      { path: 'supplier', select: 'companyName contactPerson' },
-      { path: 'customer', select: 'name businessName email' },
-      { path: 'createdBy', select: 'firstName lastName' },
-      { path: 'expenseAccount', select: 'accountName accountCode' }
-    ]);
+    // Map payment_number to voucherCode for frontend compatibility
+    const responseData = {
+      ...updatedPayment,
+      voucherCode: updatedPayment.payment_number,
+      supplier: supplierDetails ? {
+        id: supplierDetails.id,
+        _id: supplierDetails.id,
+        companyName: supplierDetails.company_name,
+        name: supplierDetails.name,
+        displayName: supplierDetails.company_name || supplierDetails.name
+      } : null,
+      customer: customerDetails ? {
+        id: customerDetails.id,
+        _id: customerDetails.id,
+        name: customerDetails.name,
+        businessName: customerDetails.business_name,
+        displayName: customerDetails.business_name || customerDetails.name
+      } : null
+    };
 
     res.json({
       success: true,
       message: 'Cash payment updated successfully',
-      data: cashPayment
+      data: responseData
     });
   } catch (error) {
     console.error('Update cash payment error:', error);
@@ -410,10 +407,12 @@ router.put('/:id', [
 // @access  Private
 router.delete('/:id', [
   auth,
-  requirePermission('delete_orders')
+  requirePermission('delete_orders'),
+  validateUuidParam('id'),
+  handleValidationErrors
 ], async (req, res) => {
   try {
-    const cashPayment = await CashPayment.findById(req.params.id);
+    const cashPayment = await cashPaymentRepository.findById(req.params.id);
     if (!cashPayment) {
       return res.status(404).json({
         success: false,
@@ -421,7 +420,14 @@ router.delete('/:id', [
       });
     }
 
-    await CashPayment.findByIdAndDelete(req.params.id);
+    // Reverse ledger entries so account ledger reflects the deletion
+    try {
+      await AccountingService.reverseLedgerEntriesByReference('cash_payment', req.params.id);
+    } catch (ledgerErr) {
+      console.error('Reverse ledger for cash payment delete:', ledgerErr);
+    }
+
+    await cashPaymentRepository.delete(req.params.id);
 
     res.json({
       success: true,

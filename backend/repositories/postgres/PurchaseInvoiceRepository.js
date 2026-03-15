@@ -291,15 +291,14 @@ class PurchaseInvoiceRepository {
       params.push(term, term, term, term);
       paramCount += 4;
     }
+    // Filter by invoice date (bill date) only so "today" shows only today's invoices
     if (filters.dateFrom) {
-      sql += ` AND (pi.invoice_date >= $${paramCount++} OR pi.created_at >= $${paramCount})`;
-      params.push(filters.dateFrom, filters.dateFrom);
-      paramCount++;
+      sql += ` AND COALESCE(pi.invoice_date, pi.created_at) >= $${paramCount++}`;
+      params.push(filters.dateFrom);
     }
     if (filters.dateTo) {
-      sql += ` AND (pi.invoice_date <= $${paramCount++} OR pi.created_at <= $${paramCount})`;
-      params.push(filters.dateTo, filters.dateTo);
-      paramCount++;
+      sql += ` AND COALESCE(pi.invoice_date, pi.created_at) <= $${paramCount++}`;
+      params.push(filters.dateTo);
     }
 
     sql += ' ORDER BY pi.created_at DESC';
@@ -458,6 +457,7 @@ class PurchaseInvoiceRepository {
       countSql += ` AND (pi.invoice_number ILIKE $${paramCount++} OR pi.notes ILIKE $${paramCount++} OR (pi.supplier_info->>'companyName') ILIKE $${paramCount++})`;
       countParams.push(term, term, term);
     }
+    // Same as list: filter by invoice date (bill date) only
     if (filter.dateFrom) {
       countSql += ` AND COALESCE(pi.invoice_date, pi.created_at) >= $${paramCount++}`;
       countParams.push(filter.dateFrom);

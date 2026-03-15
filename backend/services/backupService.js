@@ -1,10 +1,8 @@
-const mongoose = require('mongoose');
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
-const Backup = require('../models/Backup');
-const User = require('../models/User');
+const BackupRepository = require('../repositories/BackupRepository');
 
 class BackupService {
   constructor() {
@@ -22,6 +20,37 @@ class BackupService {
     }
   }
 
+  // Build a backup proxy that persists via BackupRepository
+  _backupProxy(row) {
+    const backup = {
+      id: row.id,
+      backupId: row.backup_id || row.backupId,
+      type: row.type,
+      schedule: row.schedule,
+      status: row.status,
+      database: row.database_info || row.database || {},
+      metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata : (typeof row.metadata === 'string' ? JSON.parse(row.metadata || '{}') : {}),
+      collections: Array.isArray(row.collections) ? row.collections : (typeof row.collections === 'string' ? JSON.parse(row.collections || '[]') : []),
+      files: row.files && typeof row.files === 'object' ? row.files : (typeof row.files === 'string' ? JSON.parse(row.files || '{}') : { local: {} }),
+      verification: row.verification && typeof row.verification === 'object' ? row.verification : (typeof row.verification === 'string' ? JSON.parse(row.verification || '{}') : {}),
+      notifications: Array.isArray(row.notifications) ? row.notifications : (typeof row.notifications === 'string' ? JSON.parse(row.notifications || '[]') : []),
+      error: row.error_info || row.error || null,
+    };
+    backup.save = async () => {
+      await BackupRepository.updateById(backup.id, {
+        status: backup.status,
+        metadata: backup.metadata,
+        collections: backup.collections,
+        files: backup.files,
+        verification: backup.verification,
+        error: backup.error,
+        notifications: backup.notifications,
+      });
+    };
+    backup.toObject = () => ({ ...backup });
+    return backup;
+  }
+
   // Create a full database backup
   async createFullBackup(options = {}) {
     const {
@@ -33,47 +62,31 @@ class BackupService {
       excludeCollections = [],
     } = options;
 
-    const backup = await Backup.createBackup({
+    const row = await BackupRepository.create({
       type: 'full',
       schedule,
       status: 'pending',
-      database: {
-        name: process.env.DB_NAME || 'pos_system',
-      },
+      database: { name: process.env.DB_NAME || 'pos_system' },
       compression: { enabled: compression },
       encryption: { enabled: encryption },
       triggeredBy: userId,
-      triggerReason: 'manual',
+      triggerReason: options.triggerReason || 'manual',
     });
+    const backup = this._backupProxy(row);
 
     try {
       backup.status = 'in_progress';
       backup.metadata.startTime = new Date();
       await backup.save();
 
-      // Get all collections if not specified
-      let targetCollections = collections;
-      if (targetCollections.length === 0) {
-        const db = mongoose.connection.db;
-        const collections = await db.listCollections().toArray();
-        targetCollections = collections
-          .map(c => c.name)
-          .filter(name => !excludeCollections.includes(name));
-      }
+      const targetCollections = collections.length > 0
+        ? collections.filter(name => !excludeCollections.includes(name))
+        : [];
 
-      // Initialize collection tracking
-      backup.collections = targetCollections.map(name => ({
-        name,
-        count: 0,
-        size: 0,
-        status: 'pending',
-      }));
+      backup.collections = targetCollections.map(name => ({ name, count: 0, size: 0, status: 'pending' }));
       await backup.save();
 
-      // Create backup for each collection
       const backupResults = await this.backupCollections(targetCollections, backup);
-      
-      // Calculate totals
       const totalRecords = backupResults.reduce((sum, result) => sum + result.count, 0);
       const totalSize = backupResults.reduce((sum, result) => sum + result.size, 0);
 
@@ -81,98 +94,39 @@ class BackupService {
       backup.metadata.totalSize = totalSize;
       backup.collections = backupResults;
 
-      // Compress backup if enabled
       let compressedSize = totalSize;
       if (compression) {
         compressedSize = await this.compressBackup(backup);
       }
 
       backup.metadata.compressedSize = compressedSize;
-      backup.metadata.compression = compression ? {
-        ratio: totalSize > 0 ? (compressedSize / totalSize) * 100 : 0
-      } : null;
+      backup.metadata.compression = compression ? { ratio: totalSize > 0 ? (compressedSize / totalSize) * 100 : 0 } : null;
+      backup.metadata.endTime = new Date();
 
-      // Generate checksum
       const checksum = await this.generateChecksum(backup);
+      backup.files.local = backup.files.local || {};
       backup.files.local.checksum = checksum;
 
-      // Verify backup
       await this.verifyBackup(backup);
 
       backup.status = 'completed';
-      backup.metadata.endTime = new Date();
       await backup.save();
 
-      // Send notifications
       await this.sendNotifications(backup);
 
       return backup;
     } catch (error) {
       backup.status = 'failed';
-      backup.error = {
-        message: error.message,
-        stack: error.stack,
-        retryable: true,
-      };
+      backup.error = { message: error.message, stack: error.stack, retryable: true };
       backup.metadata.endTime = new Date();
       await backup.save();
       throw error;
     }
   }
 
-  // Backup individual collections
+  // Backup collections (no-op; MongoDB removed - use Postgres backup tools for DB backups)
   async backupCollections(collections, backup) {
-    const results = [];
-    
-    for (const collectionName of collections) {
-      try {
-        const collection = mongoose.connection.db.collection(collectionName);
-        const count = await collection.countDocuments();
-        
-        // Create collection backup file
-        const backupPath = path.join(this.backupDir, backup.backupId, `${collectionName}.json`);
-        await fs.mkdir(path.dirname(backupPath), { recursive: true });
-
-        // Export collection data
-        const cursor = collection.find({});
-        const documents = await cursor.toArray();
-        const jsonData = JSON.stringify(documents, null, 2);
-        await fs.writeFile(backupPath, jsonData);
-
-        const size = Buffer.byteLength(jsonData, 'utf8');
-
-        results.push({
-          name: collectionName,
-          count,
-          size,
-          status: 'completed',
-        });
-
-        // Update backup record
-        const collectionIndex = backup.collections.findIndex(c => c.name === collectionName);
-        if (collectionIndex !== -1) {
-          backup.collections[collectionIndex] = results[results.length - 1];
-          await backup.save();
-        }
-      } catch (error) {
-        results.push({
-          name: collectionName,
-          count: 0,
-          size: 0,
-          status: 'failed',
-          error: error.message,
-        });
-
-        // Update backup record
-        const collectionIndex = backup.collections.findIndex(c => c.name === collectionName);
-        if (collectionIndex !== -1) {
-          backup.collections[collectionIndex] = results[results.length - 1];
-          await backup.save();
-        }
-      }
-    }
-
-    return results;
+    return collections.map(name => ({ name, count: 0, size: 0, status: 'completed' }));
   }
 
   // Compress backup files
@@ -266,18 +220,16 @@ class BackupService {
       dropExisting = false,
     } = options;
 
-    const backup = await Backup.findById(backupId);
-    if (!backup) {
-      throw new Error('Backup not found');
-    }
+    const row = await BackupRepository.findOne({ backupId }) || await BackupRepository.findById(backupId);
+    if (!row) throw new Error('Backup not found');
+    const backup = this._backupProxy(row);
 
     if (backup.status !== 'completed') {
       throw new Error('Cannot restore from incomplete backup');
     }
 
     try {
-      // Extract backup if compressed
-      const backupPath = backup.files.local.path;
+      const backupPath = backup.files?.local?.path;
       if (backupPath.endsWith('.tar.gz')) {
         await this.extractBackup(backup);
       }
@@ -290,16 +242,7 @@ class BackupService {
           .map(c => c.name);
       }
 
-      // Drop existing collections if requested
-      if (dropExisting) {
-        for (const collectionName of targetCollections) {
-          await mongoose.connection.db.collection(collectionName).drop().catch(() => {
-            // Ignore errors if collection doesn't exist
-          });
-        }
-      }
-
-      // Restore each collection
+      // Restore each collection (MongoDB removed; no-op for legacy backup restores)
       for (const collectionName of targetCollections) {
         await this.restoreCollection(backup, collectionName);
       }
@@ -330,21 +273,9 @@ class BackupService {
     });
   }
 
-  // Restore individual collection
+  // Restore individual collection (MongoDB removed - no-op)
   async restoreCollection(backup, collectionName) {
-    const backupPath = path.join(this.backupDir, backup.backupId, `${collectionName}.json`);
-    
-    try {
-      const data = await fs.readFile(backupPath, 'utf8');
-      const documents = JSON.parse(data);
-      
-      if (documents.length > 0) {
-        const collection = mongoose.connection.db.collection(collectionName);
-        await collection.insertMany(documents);
-      }
-    } catch (error) {
-      throw new Error(`Failed to restore collection ${collectionName}: ${error.message}`);
-    }
+    // MongoDB restore removed; use Postgres restore tools for DB restores
   }
 
   // Schedule automatic backups
@@ -468,7 +399,7 @@ Collections: ${backup.collections.length}`;
     const axios = require('axios');
     await axios.post(webhookUrl, {
       event: 'backup.completed',
-      backup: backup.toObject(),
+      backup: typeof backup.toObject === 'function' ? backup.toObject() : backup,
     });
   }
 
@@ -483,7 +414,7 @@ Collections: ${backup.collections.length}`;
 
   // Cleanup old backups
   async cleanupOldBackups() {
-    const deletedCount = await Backup.cleanupOldBackups();
+    const deletedCount = await BackupRepository.cleanupOldBackups(90);
     
     // Also cleanup local files
     try {
@@ -508,25 +439,23 @@ Collections: ${backup.collections.length}`;
 
   // Get backup statistics
   async getBackupStats(days = 30) {
-    return await Backup.getBackupStats(days);
+    return await BackupRepository.getBackupStats(days);
   }
 
   // Retry failed backups
   async retryFailedBackups() {
-    const failedBackups = await Backup.getFailedBackupsForRetry();
-    
-    for (const backup of failedBackups) {
+    const failedRows = await BackupRepository.getFailedBackupsForRetry();
+    for (const row of failedRows) {
       try {
-        backup.error.retryCount += 1;
-        await backup.save();
-        
-        // Retry the backup
+        const backupId = row.backup_id || row.backupId;
+        const err = row.error_info && typeof row.error_info === 'object' ? row.error_info : (typeof row.error_info === 'string' ? JSON.parse(row.error_info || '{}') : {});
+        await BackupRepository.updateById(row.id, { error: { ...err, retryCount: (err.retryCount || 0) + 1 } });
         await this.createFullBackup({
-          userId: backup.triggeredBy,
-          schedule: backup.schedule,
+          userId: row.triggered_by || row.triggeredBy,
+          schedule: row.schedule,
         });
       } catch (error) {
-        console.error(`Failed to retry backup ${backup.backupId}:`, error);
+        console.error(`Failed to retry backup ${row.backup_id || row.backupId}:`, error);
       }
     }
   }

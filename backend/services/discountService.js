@@ -2,8 +2,34 @@ const DiscountRepository = require('../repositories/DiscountRepository');
 const SalesRepository = require('../repositories/SalesRepository');
 const CustomerRepository = require('../repositories/CustomerRepository');
 const ProductRepository = require('../repositories/ProductRepository');
-const Discount = require('../models/Discount'); // Still needed for model methods
-const Sales = require('../models/Sales'); // Still needed for model methods
+
+function discountToObject(d) {
+  return d && typeof d === 'object' ? { ...d, _id: d.id, id: d.id } : d;
+}
+
+function calculateDiscountAmount(discount, orderTotal) {
+  const total = Number(orderTotal ?? 0);
+  const type = discount.type || discount.discount_type;
+  const value = Number(discount.value ?? 0);
+  if (type === 'percentage') {
+    const cap = discount.maximum_discount ?? discount.maximumDiscount;
+    const amount = Math.min((total * value) / 100, cap != null ? Number(cap) : Infinity);
+    return Math.max(0, amount);
+  }
+  return Math.min(value, total);
+}
+
+function isApplicableToOrder(discount, order, orderCustomer) {
+  const now = new Date();
+  const validFrom = discount.valid_from || discount.validFrom;
+  const validUntil = discount.valid_until || discount.validUntil;
+  if (validFrom && new Date(validFrom) > now) return { applicable: false, reason: 'Discount not yet valid' };
+  if (validUntil && new Date(validUntil) < now) return { applicable: false, reason: 'Discount expired' };
+  const minOrder = discount.minimum_order_amount ?? discount.minimumOrderAmount ?? 0;
+  const orderTotal = Number(order?.total ?? order?.totalAmount ?? 0);
+  if (orderTotal < minOrder) return { applicable: false, reason: `Minimum order amount is ${minOrder}` };
+  return { applicable: true };
+}
 
 class DiscountService {
   constructor() {
@@ -56,46 +82,23 @@ class DiscountService {
         throw new Error('Discount not found');
       }
 
-      // Validate update data
-      const validation = await this.validateDiscountData({ ...discount.toObject(), ...updateData });
+      const merged = { ...discount, ...updateData };
+      const validation = await this.validateDiscountData(merged);
       if (!validation.isValid) {
         throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
       }
 
-      // Check if code is being changed and if it already exists
-      if (updateData.code && updateData.code !== discount.code) {
+      if (updateData.code && updateData.code !== (discount.code || discount.discount_code)) {
         const codeExists = await DiscountRepository.codeExists(updateData.code, discountId);
-        if (codeExists) {
-          throw new Error('Discount code already exists');
-        }
+        if (codeExists) throw new Error('Discount code already exists');
       }
 
-      // Store original values for audit trail
-      const originalValues = discount.toObject();
-
-      // Prepare update data with audit trail
-      const updateDataWithAudit = {
+      const updatePayload = {
         ...updateData,
-        lastModifiedBy: modifiedBy
+        lastModifiedBy: modifiedBy,
       };
-
-      // Get existing audit trail and add new entry
-      const existingAuditTrail = discount.auditTrail || [];
-      const updatedDiscount = await DiscountRepository.update(discountId, updateDataWithAudit);
-      
-      // Add audit trail entry (need to update the document after getting it)
-      const updatedDiscountDoc = await DiscountRepository.findById(discountId);
-      updatedDiscountDoc.auditTrail = existingAuditTrail;
-      updatedDiscountDoc.auditTrail.push({
-        action: 'updated',
-        performedBy: modifiedBy,
-        details: 'Discount updated',
-        changes: this.getChangedFields(originalValues, { ...originalValues, ...updateData }),
-        performedAt: new Date()
-      });
-      await updatedDiscountDoc.save();
-
-      return updatedDiscountDoc;
+      const updatedDiscount = await DiscountRepository.updateById(discountId, updatePayload);
+      return updatedDiscount;
     } catch (error) {
       console.error('Error updating discount:', error);
       throw error;
@@ -162,10 +165,11 @@ class DiscountService {
         populate
       });
 
-      // Apply status filter after fetching (since it's a virtual field)
       let filteredDiscounts = discounts;
       if (status) {
-        filteredDiscounts = discounts.filter(discount => discount.status === status);
+        const statusVal = status === 'active' ? true : status === 'inactive' ? false : null;
+        if (statusVal !== null) filteredDiscounts = discounts.filter(d => (d.is_active ?? d.isActive) === statusVal);
+        else filteredDiscounts = discounts.filter(d => (d.status || (d.is_active ? 'active' : 'inactive')) === status);
       }
 
       return {
@@ -186,171 +190,168 @@ class DiscountService {
 
   // Get discount by ID
   async getDiscountById(discountId) {
-    try {
-      const populate = [
-        { path: 'createdBy', select: 'firstName lastName email' },
-        { path: 'lastModifiedBy', select: 'firstName lastName email' },
-        { path: 'applicableProducts', select: 'name description price' },
-        { path: 'applicableCategories', select: 'name description' },
-        { path: 'applicableCustomers', select: 'displayName email businessType customerTier' },
-        { path: 'analytics.usageHistory.orderId', select: 'orderNumber total createdAt' },
-        { path: 'analytics.usageHistory.customerId', select: 'displayName email' }
-      ];
-
-      const discount = await DiscountRepository.findById(discountId, populate);
-
-      if (!discount) {
-        throw new Error('Discount not found');
-      }
-
-      return discount;
-    } catch (error) {
-      console.error('Error fetching discount:', error);
-      throw error;
-    }
+    const discount = await DiscountRepository.findById(discountId);
+    if (!discount) throw new Error('Discount not found');
+    return discount;
   }
 
   // Get discount by code
   async getDiscountByCode(code) {
-    try {
-      const populate = [
-        { path: 'applicableProducts', select: 'name description' },
-        { path: 'applicableCategories', select: 'name' },
-        { path: 'applicableCustomers', select: 'displayName email' }
-      ];
-
-      const discount = await DiscountRepository.findByCode(code.toUpperCase(), { populate });
-
-      return discount;
-    } catch (error) {
-      console.error('Error fetching discount by code:', error);
-      throw error;
-    }
+    return await DiscountRepository.findByCode((code || '').toUpperCase());
   }
 
   // Apply discount to an order
   async applyDiscountToOrder(orderId, discountCode, customerId = null) {
-    try {
-      const order = await SalesRepository.findById(orderId, [{ path: 'customer' }]);
-      if (!order) {
-        throw new Error('Order not found');
-      }
+    const order = await SalesRepository.findById(orderId);
+    if (!order) throw new Error('Order not found');
 
-      const discount = await this.getDiscountByCode(discountCode);
-      if (!discount) {
-        throw new Error('Discount code not found');
-      }
+    const discount = await this.getDiscountByCode(discountCode);
+    if (!discount) throw new Error('Discount code not found');
 
-      // Check if discount is applicable
-      const applicability = discount.isApplicableToOrder(order, order.customer);
-      if (!applicability.applicable) {
-        throw new Error(applicability.reason);
-      }
-
-      // Check if discount is already applied to this order
-      if (order.appliedDiscounts && order.appliedDiscounts.some(d => d.discountId.toString() === discount._id.toString())) {
-        throw new Error('Discount already applied to this order');
-      }
-
-      // Calculate discount amount
-      const discountAmount = discount.calculateDiscountAmount(order.total);
-
-      // Check if discount can be combined with other discounts
-      if (order.appliedDiscounts && order.appliedDiscounts.length > 0 && !discount.combinableWithOtherDiscounts) {
-        throw new Error('This discount cannot be combined with other discounts');
-      }
-
-      // Apply the discount
-      const appliedDiscount = {
-        discountId: discount._id,
-        code: discount.code,
-        type: discount.type,
-        value: discount.value,
-        amount: discountAmount,
-        appliedAt: new Date()
-      };
-
-      // Update order
-      order.appliedDiscounts = order.appliedDiscounts || [];
-      order.appliedDiscounts.push(appliedDiscount);
-      order.total = order.total - discountAmount;
-      order.total = Math.max(0, order.total); // Ensure total doesn't go negative
-
-      await order.save();
-
-      // Record discount usage
-      await discount.recordUsage(orderId, customerId, discountAmount, order.total + discountAmount);
-
-      return {
-        discount,
-        appliedDiscount,
-        newTotal: order.total
-      };
-    } catch (error) {
-      console.error('Error applying discount:', error);
-      throw error;
+    // Enforce total usage limit
+    const usageLimit = discount.usage_limit ?? discount.usageLimit;
+    const usageSoFar = discount.current_usage ?? discount.currentUsage ?? 0;
+    if (usageLimit != null && usageLimit > 0 && usageSoFar >= usageLimit) {
+      throw new Error('Discount usage limit reached');
     }
+
+    // Enforce per-customer usage limit
+    const orderCustomerId = order.customer_id || order.customer || customerId;
+    const perCustomerLimit = discount.usage_limit_per_customer ?? discount.usageLimitPerCustomer;
+    if (perCustomerLimit != null && perCustomerLimit > 0 && orderCustomerId) {
+      const analytics = discount.analytics && typeof discount.analytics === 'object' ? discount.analytics : {};
+      const usageHistory = Array.isArray(analytics.usageHistory) ? analytics.usageHistory : [];
+      const customerUsageCount = usageHistory.filter(
+        u => String(u.customerId || u.customer_id || '') === String(orderCustomerId)
+      ).length;
+      if (customerUsageCount >= perCustomerLimit) {
+        throw new Error('You have reached the maximum uses of this discount');
+      }
+    }
+
+    const applicability = isApplicableToOrder(discount, order, order.customer_id || order.customer);
+    if (!applicability.applicable) throw new Error(applicability.reason);
+
+    const orderTotal = Number(order.total ?? 0);
+    const appliedDiscounts = order.applied_discounts && Array.isArray(order.applied_discounts) ? order.applied_discounts : (typeof order.applied_discounts === 'string' ? JSON.parse(order.applied_discounts || '[]') : []);
+    const discountIdStr = String(discount.id || discount._id);
+    if (appliedDiscounts.some(d => String(d.discountId || d.discount_id) === discountIdStr)) {
+      throw new Error('Discount already applied to this order');
+    }
+
+    const discountAmount = calculateDiscountAmount(discount, orderTotal);
+    if (appliedDiscounts.length > 0 && !(discount.combinable_with_other_discounts ?? discount.combinableWithOtherDiscounts)) {
+      throw new Error('This discount cannot be combined with other discounts');
+    }
+
+    const newTotal = Math.max(0, orderTotal - discountAmount);
+    const appliedDiscount = {
+      discountId: discount.id || discount._id,
+      code: discount.code || discount.discount_code,
+      type: discount.type,
+      value: discount.value,
+      amount: discountAmount,
+      appliedAt: new Date(),
+    };
+    const updatedApplied = [...appliedDiscounts, appliedDiscount];
+    const totalDiscountAmount = (Number(order.discount ?? 0) || 0) + discountAmount;
+
+    await SalesRepository.update(orderId, {
+      total: newTotal,
+      discount: totalDiscountAmount,
+      appliedDiscounts: updatedApplied,
+    });
+
+    const currentUsage = (discount.current_usage ?? discount.currentUsage ?? 0) + 1;
+    const analytics = discount.analytics && typeof discount.analytics === 'object' ? discount.analytics : {};
+    const usageHistory = Array.isArray(analytics.usageHistory) ? analytics.usageHistory : [];
+    const orderCustomerIdForHistory = order.customer_id || order.customer || customerId;
+    usageHistory.push({ orderId, customerId: orderCustomerIdForHistory, discountAmount, orderTotal: orderTotal, appliedAt: new Date() });
+    await DiscountRepository.updateById(discount.id, { currentUsage, analytics: { ...analytics, usageHistory } });
+
+    return {
+      discount,
+      appliedDiscount,
+      newTotal,
+    };
+  }
+
+  /**
+   * Record that a discount code was used (e.g. when creating a sale with applied discounts).
+   * Increments usage and appends to analytics.usageHistory. Does not modify the order.
+   */
+  async recordDiscountUsage(discountCode, customerId, amount, orderId) {
+    const discount = await this.getDiscountByCode(discountCode);
+    if (!discount) return;
+    const currentUsage = (discount.current_usage ?? discount.currentUsage ?? 0) + 1;
+    const analytics = discount.analytics && typeof discount.analytics === 'object' ? discount.analytics : {};
+    const usageHistory = Array.isArray(analytics.usageHistory) ? analytics.usageHistory : [];
+    usageHistory.push({ orderId, customerId, discountAmount: amount, appliedAt: new Date() });
+    await DiscountRepository.updateById(discount.id ?? discount._id, { currentUsage, analytics: { ...analytics, usageHistory } });
   }
 
   // Remove discount from an order
   async removeDiscountFromOrder(orderId, discountCode) {
-    try {
-      const order = await SalesRepository.findById(orderId);
-      if (!order) {
-        throw new Error('Order not found');
-      }
+    const order = await SalesRepository.findById(orderId);
+    if (!order) throw new Error('Order not found');
 
-      const discount = await this.getDiscountByCode(discountCode);
-      if (!discount) {
-        throw new Error('Discount code not found');
-      }
+    const discount = await this.getDiscountByCode(discountCode);
+    if (!discount) throw new Error('Discount code not found');
 
-      // Find and remove the discount from the order
-      const discountIndex = order.appliedDiscounts.findIndex(
-        d => d.discountId.toString() === discount._id.toString()
-      );
+    const appliedDiscounts = order.applied_discounts && Array.isArray(order.applied_discounts) ? order.applied_discounts : (typeof order.applied_discounts === 'string' ? JSON.parse(order.applied_discounts || '[]') : []);
+    const discountIdStr = String(discount.id || discount._id);
+    const index = appliedDiscounts.findIndex(d => String(d.discountId || d.discount_id) === discountIdStr);
+    if (index === -1) throw new Error('Discount not applied to this order');
 
-      if (discountIndex === -1) {
-        throw new Error('Discount not applied to this order');
-      }
+    const appliedDiscount = appliedDiscounts[index];
+    appliedDiscounts.splice(index, 1);
+    const newTotal = Number(order.total ?? 0) + (appliedDiscount.amount ?? 0);
+    const totalDiscount = Math.max(0, (Number(order.discount ?? 0) || 0) - (appliedDiscount.amount ?? 0));
 
-      const appliedDiscount = order.appliedDiscounts[discountIndex];
-      order.appliedDiscounts.splice(discountIndex, 1);
-      order.total += appliedDiscount.amount;
+    await SalesRepository.update(orderId, { total: newTotal, discount: totalDiscount, appliedDiscounts });
 
-      await order.save();
-
-      return {
-        removedDiscount: appliedDiscount,
-        newTotal: order.total
-      };
-    } catch (error) {
-      console.error('Error removing discount:', error);
-      throw error;
-    }
+    return {
+      removedDiscount: appliedDiscount,
+      newTotal,
+    };
   }
 
   // Get applicable discounts for an order
   async getApplicableDiscounts(orderData, customerData = null) {
-    try {
-      // Note: findApplicableDiscounts is a static method on the Discount model
-      // This should remain as is since it's a model-level method
-      const applicableDiscounts = await Discount.findApplicableDiscounts(orderData, customerData);
-      
-      // Sort by priority and discount amount
-      return applicableDiscounts.sort((a, b) => {
-        if (a.discount.priority !== b.discount.priority) {
-          return b.discount.priority - a.discount.priority;
-        }
-        
-        const aAmount = a.discount.calculateDiscountAmount(orderData.total);
-        const bAmount = b.discount.calculateDiscountAmount(orderData.total);
-        return bAmount - aAmount;
-      });
-    } catch (error) {
-      console.error('Error getting applicable discounts:', error);
-      throw error;
+    const orderTotal = Number(orderData?.total ?? 0);
+    const customerId = orderData?.customerId ?? orderData?.customer_id ?? customerData?.id ?? customerData?._id ?? null;
+    const all = await DiscountRepository.findAll({ isActive: true }, { limit: 200 });
+    const now = new Date();
+    const applicable = [];
+    for (const d of all) {
+      const validFrom = d.valid_from || d.validFrom;
+      const validUntil = d.valid_until || d.validUntil;
+      if (validFrom && new Date(validFrom) > now) continue;
+      if (validUntil && new Date(validUntil) < now) continue;
+      const minOrder = Number(d.minimum_order_amount ?? d.minimumOrderAmount ?? 0);
+      if (orderTotal < minOrder) continue;
+      // Skip if total usage limit reached
+      const usageLimit = d.usage_limit ?? d.usageLimit;
+      const usageSoFar = d.current_usage ?? d.currentUsage ?? 0;
+      if (usageLimit != null && usageLimit > 0 && usageSoFar >= usageLimit) continue;
+      // Skip if per-customer limit reached for this customer
+      const perCustomerLimit = d.usage_limit_per_customer ?? d.usageLimitPerCustomer;
+      if (perCustomerLimit != null && perCustomerLimit > 0 && customerId) {
+        const analytics = d.analytics && typeof d.analytics === 'object' ? d.analytics : {};
+        const usageHistory = Array.isArray(analytics.usageHistory) ? analytics.usageHistory : [];
+        const customerUsageCount = usageHistory.filter(
+          u => String(u.customerId || u.customer_id || '') === String(customerId)
+        ).length;
+        if (customerUsageCount >= perCustomerLimit) continue;
+      }
+      const amount = calculateDiscountAmount(d, orderTotal);
+      applicable.push({ discount: d, amount });
     }
+    const priority = d => d.priority ?? 0;
+    return applicable.sort((a, b) => {
+      if (priority(a.discount) !== priority(b.discount)) return priority(b.discount) - priority(a.discount);
+      return b.amount - a.amount;
+    });
   }
 
   // Validate discount data
@@ -476,23 +477,12 @@ class DiscountService {
       const newStatus = !discount.isActive;
       
       // Update discount
-      const updatedDiscount = await DiscountRepository.update(discountId, {
+      const updatedDiscount = await DiscountRepository.updateById(discountId, {
         isActive: newStatus,
         lastModifiedBy: modifiedBy
       });
 
-      // Add audit trail entry
-      const discountDoc = await DiscountRepository.findById(discountId);
-      discountDoc.auditTrail = discountDoc.auditTrail || [];
-      discountDoc.auditTrail.push({
-        action: newStatus ? 'activated' : 'deactivated',
-        performedBy: modifiedBy,
-        details: `Discount ${newStatus ? 'activated' : 'deactivated'}`,
-        performedAt: new Date()
-      });
-
-      await discountDoc.save();
-      return discountDoc;
+      return updatedDiscount;
     } catch (error) {
       console.error('Error toggling discount status:', error);
       throw error;
@@ -507,12 +497,12 @@ class DiscountService {
         throw new Error('Discount not found');
       }
 
-      // Check if discount has been used
-      if (discount.currentUsage > 0) {
+      const usage = discount.current_usage ?? discount.currentUsage ?? 0;
+      if (usage > 0) {
         throw new Error('Cannot delete discount that has been used');
       }
 
-      await DiscountRepository.softDelete(discountId);
+      await DiscountRepository.updateById(discountId, { isActive: false });
       return { message: 'Discount deleted successfully' };
     } catch (error) {
       console.error('Error deleting discount:', error);
@@ -522,25 +512,21 @@ class DiscountService {
 
   // Get discount statistics
   async getDiscountStats(period = {}) {
-    try {
-      const stats = await Discount.getDiscountStats(period);
-      return stats;
-    } catch (error) {
-      console.error('Error getting discount stats:', error);
-      throw error;
-    }
+    return await DiscountRepository.getDiscountStats(period);
   }
 
   // Generate discount code suggestions
   generateDiscountCodeSuggestions(name, type) {
     const suggestions = [];
-    const baseName = name.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    const nameStr = (name != null && name !== '') ? String(name) : '';
+    const typeStr = (type != null && type !== '') ? String(type) : '';
+    const baseName = nameStr.replace(/[^A-Z0-9]/gi, '').toUpperCase();
     
     // Simple suggestions based on name and type
     suggestions.push(baseName.substring(0, 8));
-    suggestions.push(`${baseName.substring(0, 4)}${type.toUpperCase().substring(0, 4)}`);
+    suggestions.push(`${baseName.substring(0, 4)}${typeStr.toUpperCase().substring(0, 4)}`);
     suggestions.push(`${baseName.substring(0, 6)}${Date.now().toString().slice(-2)}`);
-    suggestions.push(`${type.toUpperCase()}${baseName.substring(0, 6)}`);
+    suggestions.push(`${typeStr.toUpperCase()}${baseName.substring(0, 6)}`);
     
     return suggestions.filter(s => s.length >= 4 && s.length <= 20);
   }

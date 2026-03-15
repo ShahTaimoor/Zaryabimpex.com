@@ -3,7 +3,7 @@ const { body, param, query } = require('express-validator');
 const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors, sanitizeRequest } = require('../middleware/validation');
 const employeeService = require('../services/employeeService');
-const Employee = require('../models/Employee');
+const EmployeeRepository = require('../repositories/EmployeeRepository');
 
 const router = express.Router();
 
@@ -64,7 +64,7 @@ router.get('/', [
 router.get('/:id', [
   auth,
   requirePermission('manage_users'),
-  param('id').isMongoId().withMessage('Invalid employee ID'),
+  param('id').isUUID(4).withMessage('Invalid employee ID'),
   handleValidationErrors, // Use as middleware
 ], async (req, res) => {
   try {
@@ -101,7 +101,7 @@ router.post('/', [
   body('hireDate').optional().isISO8601().withMessage('Valid hire date is required'),
   body('employmentType').optional().isIn(['full_time', 'part_time', 'contract', 'temporary', 'intern']),
   body('status').optional().isIn(['active', 'inactive', 'terminated', 'on_leave']),
-  body('userAccount').optional().isMongoId().withMessage('Invalid user account ID'),
+  body('userAccount').optional().isUUID(4).withMessage('Invalid user account ID'),
   handleValidationErrors, // Use as middleware
 ], async (req, res) => {
   try {
@@ -128,7 +128,7 @@ router.put('/:id', [
   auth,
   requirePermission('manage_users'),
   sanitizeRequest,
-  param('id').isMongoId().withMessage('Invalid employee ID'),
+  param('id').isUUID(4).withMessage('Invalid employee ID'),
   body('firstName').optional().trim().isLength({ min: 1 }),
   body('lastName').optional().trim().isLength({ min: 1 }),
   body('employeeId').optional().trim().isString(),
@@ -137,7 +137,7 @@ router.put('/:id', [
   body('position').optional().trim().isLength({ min: 1 }),
   body('department').optional().isString(),
   body('status').optional().isIn(['active', 'inactive', 'terminated', 'on_leave']),
-  body('userAccount').optional().isMongoId(),
+  body('userAccount').optional().isUUID(4),
   handleValidationErrors, // Use as middleware
 ], async (req, res) => {
   try {
@@ -170,7 +170,7 @@ router.put('/:id', [
 router.delete('/:id', [
   auth,
   requirePermission('manage_users'),
-  param('id').isMongoId().withMessage('Invalid employee ID'),
+  param('id').isUUID(4).withMessage('Invalid employee ID'),
   handleValidationErrors, // Use as middleware
 ], async (req, res) => {
   try {
@@ -211,7 +211,7 @@ router.get('/departments/list', auth, async (req, res) => {
 // @access  Private
 router.get('/positions/list', auth, async (req, res) => {
   try {
-    const positions = await Employee.distinct('position', { position: { $ne: null, $ne: '' } });
+    const positions = await EmployeeRepository.getDistinctPositions();
     res.json({
       success: true,
       data: { positions: positions.sort() }

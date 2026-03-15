@@ -1,165 +1,155 @@
-const Batch = require('../models/Batch');
-const Product = require('../models/Product');
-const Inventory = require('../models/Inventory');
-const StockMovement = require('../models/StockMovement');
+const BatchRepository = require('../repositories/BatchRepository');
+const ProductRepository = require('../repositories/ProductRepository');
+const InventoryRepository = require('../repositories/InventoryRepository');
+const StockMovementRepository = require('../repositories/StockMovementRepository');
 const auditLogService = require('./auditLogService');
 
+function toId(v) {
+  if (v == null) return null;
+  if (typeof v === 'string') return v;
+  if (v && typeof v.toString === 'function') return v.toString();
+  return String(v);
+}
+
+function isExpired(batch) {
+  const exp = batch.expiryDate ?? batch.expiry_date;
+  return exp && new Date(exp) < new Date();
+}
+
+function canBeUsed(batch) {
+  return batch.status === 'active' &&
+    (parseFloat(batch.currentQuantity ?? batch.current_quantity) || 0) > 0 &&
+    !isExpired(batch);
+}
+
 class ExpiryManagementService {
-  /**
-   * Get products/batches expiring soon
-   * @param {number} days - Number of days ahead to check (default: 30)
-   * @returns {Promise<Array>}
-   */
   async getExpiringSoon(days = 30) {
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + days);
+    const expiryEnd = new Date();
+    expiryEnd.setDate(expiryEnd.getDate() + days);
+    const now = new Date();
 
-    // Get batches expiring soon
-    const expiringBatches = await Batch.find({
+    const expiringBatches = await BatchRepository.findAll({
       status: 'active',
-      expiryDate: { $lte: expiryDate, $gte: new Date() },
-      currentQuantity: { $gt: 0 }
-    })
-    .populate('product', 'name sku')
-    .sort({ expiryDate: 1 });
+      expiryGte: now,
+      expiryLte: expiryEnd,
+      currentQuantityGt: 0
+    }, { limit: 500 });
 
-    // Get products with expiry dates (non-batch tracking)
-    const expiringProducts = await Product.find({
-      expiryDate: { $lte: expiryDate, $gte: new Date() },
-      status: 'active',
-      'inventory.currentStock': { $gt: 0 }
-    })
-    .select('name sku expiryDate inventory.currentStock')
-    .sort({ expiryDate: 1 });
+    const productIds = [...new Set(expiringBatches.map(b => toId(b.productId ?? b.product)))];
+    const productMap = {};
+    for (const id of productIds) {
+      const p = await ProductRepository.findById(id);
+      if (p) productMap[id] = { id: p.id, name: p.name, sku: p.sku };
+    }
+    const batchesWithProduct = expiringBatches.map(b => ({
+      ...b,
+      product: productMap[toId(b.productId ?? b.product)] || null
+    }));
 
     return {
-      batches: expiringBatches,
-      products: expiringProducts,
-      totalItems: expiringBatches.length + expiringProducts.length
+      batches: batchesWithProduct,
+      products: [],
+      totalItems: batchesWithProduct.length
     };
   }
 
-  /**
-   * Get expired products/batches
-   * @returns {Promise<Array>}
-   */
   async getExpired() {
     const now = new Date();
 
-    // Get expired batches
-    const expiredBatches = await Batch.find({
-      status: { $in: ['active', 'expired'] },
-      expiryDate: { $lt: now },
-      currentQuantity: { $gt: 0 }
-    })
-    .populate('product', 'name sku')
-    .sort({ expiryDate: 1 });
+    const expiredBatches = await BatchRepository.findAll({
+      statusIn: ['active', 'expired'],
+      expiryLte: now,
+      currentQuantityGt: 0
+    }, { limit: 500 });
 
-    // Get expired products
-    const expiredProducts = await Product.find({
-      expiryDate: { $lt: now },
-      status: 'active',
-      'inventory.currentStock': { $gt: 0 }
-    })
-    .select('name sku expiryDate inventory.currentStock')
-    .sort({ expiryDate: 1 });
+    const productIds = [...new Set(expiredBatches.map(b => toId(b.productId ?? b.product)))];
+    const productMap = {};
+    for (const id of productIds) {
+      const p = await ProductRepository.findById(id);
+      if (p) productMap[id] = { id: p.id, name: p.name, sku: p.sku };
+    }
+    const batchesWithProduct = expiredBatches.map(b => ({
+      ...b,
+      product: productMap[toId(b.productId ?? b.product)] || null
+    }));
 
     return {
-      batches: expiredBatches,
-      products: expiredProducts,
-      totalItems: expiredBatches.length + expiredProducts.length
+      batches: batchesWithProduct,
+      products: [],
+      totalItems: batchesWithProduct.length
     };
   }
 
-  /**
-   * Write off expired inventory
-   * @param {string} batchId - Batch ID (optional, if null, processes all expired)
-   * @param {string} userId - User ID performing write-off
-   * @param {object} req - Express request object
-   * @returns {Promise<Object>}
-   */
   async writeOffExpired(batchId = null, userId, req = null) {
     const now = new Date();
     let batchesToWriteOff = [];
 
     if (batchId) {
-      const batch = await Batch.findById(batchId);
-      if (!batch) {
-        throw new Error('Batch not found');
-      }
+      const batch = await BatchRepository.findById(batchId);
+      if (!batch) throw new Error('Batch not found');
       if (batch.expiryDate && new Date(batch.expiryDate) >= now) {
         throw new Error('Batch is not expired yet');
       }
       batchesToWriteOff = [batch];
     } else {
-      // Get all expired batches
-      batchesToWriteOff = await Batch.find({
-        status: { $in: ['active', 'expired'] },
-        expiryDate: { $lt: now },
-        currentQuantity: { $gt: 0 }
-      });
+      batchesToWriteOff = await BatchRepository.findAll({
+        statusIn: ['active', 'expired'],
+        expiryLte: now,
+        currentQuantityGt: 0
+      }, { limit: 500 });
     }
 
-    const results = {
-      batchesProcessed: 0,
-      totalQuantity: 0,
-      totalValue: 0,
-      errors: []
-    };
+    const results = { batchesProcessed: 0, totalQuantity: 0, totalValue: 0, errors: [] };
 
     for (const batch of batchesToWriteOff) {
       try {
-        const quantity = batch.currentQuantity;
-        const value = quantity * batch.unitCost;
+        const quantity = parseFloat(batch.currentQuantity ?? batch.current_quantity) || 0;
+        const unitCost = parseFloat(batch.unitCost ?? batch.unit_cost) || 0;
+        const value = quantity * unitCost;
+        const productId = toId(batch.productId ?? batch.product);
 
-        // Create stock movement for expiry write-off
-        await StockMovement.create({
-          product: batch.product,
-          productName: (await Product.findById(batch.product)).name,
+        const product = await ProductRepository.findById(productId);
+        const inv = await InventoryRepository.findOne({ productId });
+        const previousStock = inv ? (parseFloat(inv.current_stock ?? inv.currentStock) || 0) : 0;
+        const newStock = Math.max(0, previousStock - quantity);
+
+        await StockMovementRepository.create({
+          productId,
+          productName: product?.name ?? '',
+          productSku: product?.sku ?? null,
           movementType: 'expiry',
           quantity,
-          unitCost: batch.unitCost,
+          unitCost,
           totalValue: value,
-          previousStock: (await Inventory.findOne({ product: batch.product }))?.currentStock || 0,
-          newStock: ((await Inventory.findOne({ product: batch.product }))?.currentStock || 0) - quantity,
+          previousStock,
+          newStock,
           referenceType: 'system_generated',
-          referenceId: batch._id,
-          referenceNumber: `EXP-${batch.batchNumber}`,
+          referenceId: batch.id,
+          referenceNumber: `EXP-${batch.batchNumber ?? batch.batch_number}`,
           reason: 'Expired inventory write-off',
           user: userId,
-          userName: req?.user?.firstName || 'System',
-          batchNumber: batch.batchNumber,
-          expiryDate: batch.expiryDate,
+          userName: req?.user?.firstName ?? req?.user?.name ?? 'System',
+          batchNumber: batch.batchNumber ?? batch.batch_number,
+          expiryDate: batch.expiryDate ?? batch.expiry_date,
           status: 'completed'
         });
 
-        // Update inventory
-        const inventory = await Inventory.findOne({ product: batch.product });
-        if (inventory) {
-          await Inventory.updateStock(batch.product, {
-            type: 'expiry',
-            quantity,
-            reason: 'Expired inventory write-off',
-            reference: `Batch ${batch.batchNumber}`,
-            date: new Date(),
-            performedBy: userId
+        if (inv) {
+          await InventoryRepository.updateByProductId(productId, {
+            currentStock: newStock
           });
         }
 
-        // Update batch status
-        batch.status = 'expired';
-        batch.currentQuantity = 0;
-        await batch.save();
+        await BatchRepository.updateById(batch.id, { status: 'expired', currentQuantity: 0 });
 
         results.batchesProcessed++;
         results.totalQuantity += quantity;
         results.totalValue += value;
 
-        // Log audit
         if (req) {
           await auditLogService.createAuditLog({
             entityType: 'Product',
-            entityId: batch.product,
+            entityId: productId,
             action: 'STOCK_ADJUSTMENT',
             changes: {
               before: { batchQuantity: quantity },
@@ -168,19 +158,19 @@ class ExpiryManagementService {
             },
             user: userId,
             ipAddress: req?.ip,
-            userAgent: req?.headers['user-agent'],
-            reason: `Expired batch write-off: ${batch.batchNumber}`,
+            userAgent: req?.headers?.['user-agent'],
+            reason: `Expired batch write-off: ${batch.batchNumber ?? batch.batch_number}`,
             metadata: {
-              batchNumber: batch.batchNumber,
-              quantity: quantity,
-              value: value
+              batchNumber: batch.batchNumber ?? batch.batch_number,
+              quantity,
+              value
             }
           });
         }
       } catch (error) {
         results.errors.push({
-          batchId: batch._id,
-          batchNumber: batch.batchNumber,
+          batchId: batch.id,
+          batchNumber: batch.batchNumber ?? batch.batch_number,
           error: error.message
         });
       }
@@ -189,28 +179,18 @@ class ExpiryManagementService {
     return results;
   }
 
-  /**
-   * Get FEFO batches for a product (First Expired First Out)
-   * @param {string} productId - Product ID
-   * @param {number} quantity - Quantity needed
-   * @returns {Promise<Array>} Array of batches to use
-   */
   async getFEFOBatches(productId, quantity) {
-    const batches = await Batch.findFEFOBatches(productId, quantity);
-    
+    const batches = await BatchRepository.findFEFOBatches(productId, quantity);
     let remainingQty = quantity;
     const batchesToUse = [];
 
     for (const batch of batches) {
       if (remainingQty <= 0) break;
-      if (!batch.canBeUsed()) continue;
+      if (!canBeUsed(batch)) continue;
 
-      const qtyToUse = Math.min(remainingQty, batch.currentQuantity);
-      batchesToUse.push({
-        batch: batch,
-        quantity: qtyToUse
-      });
-
+      const qty = parseFloat(batch.currentQuantity ?? batch.current_quantity) || 0;
+      const qtyToUse = Math.min(remainingQty, qty);
+      batchesToUse.push({ batch, quantity: qtyToUse });
       remainingQty -= qtyToUse;
     }
 
@@ -221,11 +201,6 @@ class ExpiryManagementService {
     return batchesToUse;
   }
 
-  /**
-   * Send expiry alerts
-   * @param {number} days - Days before expiry to alert (default: 30, 15, 7)
-   * @returns {Promise<Object>}
-   */
   async sendExpiryAlerts(days = [30, 15, 7]) {
     const alerts = {
       expiring30Days: [],
@@ -241,15 +216,9 @@ class ExpiryManagementService {
       if (day === 7) alerts.expiring7Days = expiring;
     }
 
-    const expired = await this.getExpired();
-    alerts.expired = expired;
-
-    // TODO: Send notifications (email, SMS, etc.)
-    // await notificationService.sendExpiryAlerts(alerts);
-
+    alerts.expired = await this.getExpired();
     return alerts;
   }
 }
 
 module.exports = new ExpiryManagementService();
-

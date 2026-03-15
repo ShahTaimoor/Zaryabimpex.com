@@ -6,6 +6,7 @@
 import React from 'react';
 import { X, Keyboard } from 'lucide-react';
 import { useKeyboardShortcutsContext } from '../contexts/KeyboardShortcutsContext';
+import { Button } from '@/components/ui/button';
 
 export const KeyboardShortcutsHints = () => {
   const { shortcuts, showHints, setShowHints, formatKeyDisplay } = useKeyboardShortcutsContext();
@@ -95,12 +96,14 @@ export const KeyboardShortcutsHints = () => {
 
           {/* Footer */}
           <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-gray-200">
-            <button
+            <Button
               onClick={() => setShowHints(false)}
-              className="btn btn-primary btn-md w-full sm:w-auto"
+              variant="default"
+              size="default"
+              className="w-full sm:w-auto"
             >
               Close
-            </button>
+            </Button>
           </div>
         </div>
       </div>

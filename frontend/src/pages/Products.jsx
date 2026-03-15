@@ -18,9 +18,8 @@ import {
   useLinkInvestorsMutation,
 } from '../store/services/productsApi';
 import { useGetCategoriesQuery } from '../store/services/categoriesApi';
-import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { LoadingPage } from '../components/LoadingSpinner';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
@@ -41,10 +40,17 @@ import { ProductList } from '../components/ProductList';
 import { useAppDispatch } from '../store/hooks';
 import { api } from '../store/api';
 import { useProductOperations } from '../hooks/useProductOperations';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+
+const LIMIT_OPTIONS = [50, 500, 1000, 5000];
+const DEFAULT_LIMIT = 50;
 
 const Products = () => {
   const dispatch = useAppDispatch();
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_LIMIT);
   const [filters, setFilters] = useState({});
   const [bulkUpdateType, setBulkUpdateType] = useState(null);
   const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false);
@@ -56,8 +62,9 @@ const Products = () => {
   const { openTab } = useTab();
 
   const queryParams = { 
-    search: searchTerm,
-    limit: 999999,
+    search: searchTerm || undefined,
+    page: currentPage,
+    limit: itemsPerPage,
     ...filters
   };
 
@@ -65,7 +72,7 @@ const Products = () => {
     refetchOnMountOrArgChange: true,
   });
 
-  const { data: categoriesDataRaw } = useGetCategoriesQuery(undefined, {
+  const { data: categoriesDataRaw } = useGetCategoriesQuery({ limit: 999999 }, {
     refetchOnMountOrArgChange: true,
   });
 
@@ -87,17 +94,20 @@ const Products = () => {
     if (data?.items) return data.items;
     return [];
   }, [data]);
-  
-  const products = useFuzzySearch(
-    allProducts,
-    searchTerm,
-    ['name', 'description', 'brand', 'category.name'],
-    {
-      threshold: 0.4,
-      minScore: 0.3,
-      limit: null
-    }
-  );
+
+  const pagination = useMemo(() => {
+    const raw = data?.pagination || data?.data?.pagination || {};
+    return {
+      current: raw.current ?? raw.page ?? 1,
+      pages: raw.pages ?? 1,
+      total: raw.total ?? 0,
+      limit: raw.limit ?? itemsPerPage,
+      hasPrev: (raw.current ?? raw.page ?? 1) > 1,
+      hasNext: (raw.current ?? raw.page ?? 1) < (raw.pages ?? 1),
+    };
+  }, [data, itemsPerPage]);
+
+  const products = allProducts;
 
   const bulkOps = useBulkOperations(products, {
     idField: '_id',
@@ -116,11 +126,23 @@ const Products = () => {
 
   const handleFiltersChange = (newFilters) => {
     setFilters(newFilters);
+    setCurrentPage(1);
   };
+
+  const handleLimitChange = (e) => {
+    const val = Number(e.target.value);
+    setItemsPerPage(val);
+    setCurrentPage(1);
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const handleClearFilters = () => {
     setFilters({});
     setSearchTerm('');
+    setCurrentPage(1);
   };
 
   const handleBulkUpdate = async (updates) => {
@@ -164,13 +186,14 @@ const Products = () => {
         <p className="text-sm text-gray-600 mb-4">
           {errorMessage}
         </p>
-        <button
+        <Button
           onClick={() => refetch()}
-          className="btn btn-primary btn-md"
+          variant="default"
+          size="default"
         >
           <RefreshCw className="h-4 w-4 mr-2" />
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
@@ -183,7 +206,7 @@ const Products = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your product catalog</p>
         </div>
         <div className="flex-shrink-0 grid grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-          <button
+          <Button
             onClick={() => {
               const componentInfo = getComponentInfo('/categories');
               if (componentInfo) {
@@ -197,61 +220,84 @@ const Products = () => {
                 });
               }
             }}
-            className="btn btn-outline btn-md flex items-center justify-center gap-2"
+            variant="outline"
+            size="default"
+            className="flex items-center justify-center gap-2"
           >
             <Tag className="h-4 w-4" />
             <span className="hidden sm:inline">Category</span>
             <span className="sm:hidden">Category</span>
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={refreshCategories}
-            className="btn btn-outline btn-md flex items-center justify-center gap-2"
+            variant="outline"
+            size="default"
+            className="flex items-center justify-center gap-2"
             title="Refresh categories list"
           >
             <RefreshCw className="h-4 w-4" />
             <span className="hidden sm:inline">Refresh</span>
             <span className="sm:hidden">Refresh</span>
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => setShowBarcodeScanner(true)}
-            className="btn btn-outline btn-md flex items-center justify-center gap-2"
+            variant="outline"
+            size="default"
+            className="flex items-center justify-center gap-2"
             title="Scan barcode to search product"
           >
             <Camera className="h-4 w-4" />
             <span className="hidden sm:inline">Scan</span>
             <span className="sm:hidden">Scan</span>
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => setShowLabelPrinter(true)}
-            className="btn btn-outline btn-md flex items-center justify-center gap-2"
+            variant="outline"
+            size="default"
+            className="flex items-center justify-center gap-2"
             title="Print barcode labels"
           >
             <Printer className="h-4 w-4" />
             <span className="hidden sm:inline">Print</span>
             <span className="sm:hidden">Print</span>
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => productOps.setIsModalOpen(true)}
-            className="btn btn-primary btn-md flex items-center justify-center gap-2 col-span-2 sm:col-span-1"
+            variant="default"
+            size="default"
+            className="flex items-center justify-center gap-2 col-span-2 sm:col-span-1"
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Add Product</span>
             <span className="sm:hidden">Add</span>
-          </button>
+          </Button>
         </div>
       </div>
 
       <div className="w-full">
-        <div className="flex items-center space-x-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="flex-1 relative min-w-0">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
+            <Input
               type="text"
               placeholder="Search products..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="input pl-10 w-full text-sm sm:text-base"
+              className="pl-10 w-full text-sm sm:text-base"
             />
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <label htmlFor="limit-select" className="text-sm text-gray-600 whitespace-nowrap">Show:</label>
+            <select
+              id="limit-select"
+              value={itemsPerPage}
+              onChange={handleLimitChange}
+              className="input text-sm py-2 pr-8 pl-3 min-w-[80px]"
+            >
+              {LIMIT_OPTIONS.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
@@ -260,7 +306,7 @@ const Products = () => {
         onImportComplete={() => {
           dispatch(api.util.invalidateTags([{ type: 'Products', id: 'LIST' }]));
         }}
-        filters={queryParams}
+        filters={{ ...queryParams, limit: 999999, page: 1 }}
       />
 
       <ProductFilters 
@@ -335,6 +381,48 @@ const Products = () => {
           setShowBarcodeGenerator(true);
         }}
       />
+
+      {/* Pagination */}
+      {pagination.pages > 1 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-4 border-t border-gray-200">
+          <p className="text-sm text-gray-600">
+            Showing{' '}
+            <span className="font-medium">
+              {(pagination.current - 1) * pagination.limit + 1}
+            </span>
+            {' - '}
+            <span className="font-medium">
+              {Math.min(pagination.current * pagination.limit, pagination.total)}
+            </span>
+            {' of '}
+            <span className="font-medium">{pagination.total}</span>
+            {' products'}
+          </p>
+          <nav className="flex items-center gap-2">
+            <Button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={!pagination.hasPrev}
+              variant="outline"
+              size="sm"
+              className="disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-gray-600 px-2">
+              Page {pagination.current} of {pagination.pages}
+            </span>
+            <Button
+              onClick={() => setCurrentPage((p) => Math.min(pagination.pages, p + 1))}
+              disabled={!pagination.hasNext}
+              variant="outline"
+              size="sm"
+              className="disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </Button>
+          </nav>
+        </div>
+      )}
 
       <ProductModal
         product={productOps.selectedProduct}

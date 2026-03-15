@@ -1,21 +1,18 @@
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const { auth, requirePermission } = require('../middleware/auth');
-const RecurringExpense = require('../models/RecurringExpense'); // Still needed for new RecurringExpense(), static methods, and session
-const Supplier = require('../models/Supplier'); // Still needed for model reference
-const Customer = require('../models/Customer'); // Still needed for model reference
-const Bank = require('../models/Bank'); // Still needed for model reference
-const CashPayment = require('../models/CashPayment'); // Still needed for new CashPayment()
-const BankPayment = require('../models/BankPayment'); // Still needed for new BankPayment()
 const {
   calculateInitialDueDate,
   calculateNextDueDate,
   hasReminderWindowStarted
 } = require('../services/recurringExpenseService');
-const recurringExpenseRepository = require('../repositories/RecurringExpenseRepository');
-const supplierRepository = require('../repositories/SupplierRepository');
-const customerRepository = require('../repositories/CustomerRepository');
-const bankRepository = require('../repositories/BankRepository');
+const recurringExpenseRepository = require('../repositories/postgres/RecurringExpenseRepository');
+const supplierRepository = require('../repositories/postgres/SupplierRepository');
+const customerRepository = require('../repositories/postgres/CustomerRepository');
+const bankRepository = require('../repositories/postgres/BankRepository');
+const cashPaymentRepository = require('../repositories/postgres/CashPaymentRepository');
+const bankPaymentRepository = require('../repositories/postgres/BankPaymentRepository');
+const { transaction } = require('../config/postgres');
 
 const router = express.Router();
 
@@ -30,15 +27,15 @@ const handleValidation = (req, res) => {
 
 const validateRelatedEntities = async ({ supplier, customer, bank }) => {
   if (supplier) {
-    const supplierExists = await supplierRepository.exists({ _id: supplier });
-    if (!supplierExists) {
+    const supplierDoc = await supplierRepository.findById(supplier);
+    if (!supplierDoc) {
       throw new Error('Supplier not found');
     }
   }
 
   if (customer) {
-    const customerExists = await customerRepository.exists({ _id: customer });
-    if (!customerExists) {
+    const customerDoc = await customerRepository.findById(customer);
+    if (!customerDoc) {
       throw new Error('Customer not found');
     }
   }
@@ -48,7 +45,7 @@ const validateRelatedEntities = async ({ supplier, customer, bank }) => {
     if (!bankDoc) {
       throw new Error('Bank account not found');
     }
-    if (!bankDoc.isActive) {
+    if (bankDoc.is_active === false) {
       throw new Error('Bank account is inactive');
     }
   }
@@ -81,39 +78,16 @@ router.get(
       if (status !== 'all') {
         filter.status = status;
       }
-
       if (search) {
-        filter.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { description: { $regex: search, $options: 'i' } },
-          { notes: { $regex: search, $options: 'i' } },
-          { tags: { $regex: search, $options: 'i' } }
-        ];
+        filter.search = search;
       }
-
       if (typeof dueInDays !== 'undefined') {
-        const days = parseInt(dueInDays, 10);
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        const end = new Date(now);
-        end.setDate(end.getDate() + days);
-        end.setHours(23, 59, 59, 999);
-
-        filter.nextDueDate = {};
-        if (!includePastDue) {
-          filter.nextDueDate.$gte = now;
-        }
-        filter.nextDueDate.$lte = end;
+        filter.dueInDays = dueInDays;
+        filter.includePastDue = includePastDue;
       }
 
       const recurringExpenses = await recurringExpenseRepository.findWithFilter(filter, {
-        sort: { nextDueDate: 1, name: 1 },
-        populate: [
-          { path: 'supplier', select: 'name companyName businessName displayName' },
-          { path: 'customer', select: 'name firstName lastName businessName displayName email' },
-          { path: 'bank', select: 'bankName accountNumber accountName' },
-          { path: 'expenseAccount', select: 'accountName accountCode' }
-        ]
+        sort: { nextDueDate: 1, name: 1 }
       });
 
       res.json({
@@ -134,7 +108,6 @@ router.get(
   '/upcoming',
   [
     auth,
-    requirePermission('view_reports'),
     query('days').optional().isInt({ min: 1, max: 90 })
   ],
   async (req, res) => {
@@ -152,14 +125,9 @@ router.get(
     try {
       const upcomingExpenses = await recurringExpenseRepository.findWithFilter({
         status: 'active',
-        nextDueDate: { $lte: end }
+        nextDueDateLte: end
       }, {
-        sort: { nextDueDate: 1 },
-        populate: [
-          { path: 'supplier', select: 'name companyName businessName displayName' },
-          { path: 'customer', select: 'name firstName lastName businessName displayName email' },
-          { path: 'bank', select: 'bankName accountNumber accountName' }
-        ]
+        sort: { nextDueDate: 1 }
       });
 
       const filtered = upcomingExpenses.filter((expense) =>
@@ -195,10 +163,10 @@ router.post(
     body('dayOfMonth').isInt({ min: 1, max: 31 }).withMessage('Day of month must be between 1 and 31'),
     body('reminderDaysBefore').optional().isInt({ min: 0, max: 31 }),
     body('defaultPaymentType').optional().isIn(['cash', 'bank']),
-    body('supplier').optional().isMongoId(),
-    body('customer').optional().isMongoId(),
-    body('expenseAccount').optional().isMongoId(),
-    body('bank').optional().isMongoId(),
+    body('supplier').optional().isUUID(4),
+    body('customer').optional().isUUID(4),
+    body('expenseAccount').optional().isUUID(4),
+    body('bank').optional().isUUID(4),
     body('startFromDate').optional().isISO8601().withMessage('startFromDate must be a valid date'),
     body('tags').optional().isArray(),
     body('tags.*').optional().isString().trim()
@@ -237,7 +205,8 @@ router.post(
       const baseDate = startFromDate ? new Date(startFromDate) : new Date();
       const nextDueDate = calculateInitialDueDate(dayOfMonth, baseDate);
 
-      const recurringExpense = new RecurringExpense({
+      const userId = req.user?.id || req.user?._id;
+      const created = await recurringExpenseRepository.create({
         name: name.trim(),
         description: description ? description.trim() : undefined,
         amount: parseFloat(amount),
@@ -251,18 +220,9 @@ router.post(
         notes: notes ? notes.trim() : undefined,
         nextDueDate,
         tags,
-        createdBy: req.user._id,
-        updatedBy: req.user._id
+        createdBy: userId
       });
-
-      await recurringExpense.save();
-
-      await recurringExpense.populate([
-        { path: 'supplier', select: 'name companyName businessName displayName' },
-        { path: 'customer', select: 'name firstName lastName businessName displayName email' },
-        { path: 'bank', select: 'bankName accountNumber accountName' },
-        { path: 'expenseAccount', select: 'accountName accountCode' }
-      ]);
+      const recurringExpense = await recurringExpenseRepository.findByIdWithJoins(created.id);
 
       res.status(201).json({
         success: true,
@@ -284,17 +244,17 @@ router.put(
   [
     auth,
     requirePermission('create_orders'),
-    param('id').isMongoId(),
+    param('id').isUUID(4),
     body('name').optional().trim().notEmpty(),
     body('description').optional().isString().trim(),
     body('amount').optional().isFloat({ min: 0 }),
     body('dayOfMonth').optional().isInt({ min: 1, max: 31 }),
     body('reminderDaysBefore').optional().isInt({ min: 0, max: 31 }),
     body('defaultPaymentType').optional().isIn(['cash', 'bank']),
-    body('supplier').optional().isMongoId(),
-    body('customer').optional().isMongoId(),
-    body('expenseAccount').optional().isMongoId(),
-    body('bank').optional().isMongoId(),
+    body('supplier').optional().isUUID(4),
+    body('customer').optional().isUUID(4),
+    body('expenseAccount').optional().isUUID(4),
+    body('bank').optional().isUUID(4),
     body('status').optional().isIn(['active', 'inactive']),
     body('notes').optional().isString().trim(),
     body('nextDueDate').optional().isISO8601().withMessage('nextDueDate must be a valid date'),
@@ -324,16 +284,17 @@ router.put(
         tags
       } = req.body;
 
-      const recurringExpense = await recurringExpenseRepository.findById(req.params.id);
-      if (!recurringExpense) {
+      const existing = await recurringExpenseRepository.findById(req.params.id);
+      if (!existing) {
         return res.status(404).json({
           success: false,
           message: 'Recurring expense not found'
         });
       }
 
-      if (defaultPaymentType === 'bank' || (defaultPaymentType === undefined && recurringExpense.defaultPaymentType === 'bank')) {
-        const bankId = typeof bank !== 'undefined' ? bank : recurringExpense.bank;
+      const currentPaymentType = existing.default_payment_type || existing.defaultPaymentType;
+      if (defaultPaymentType === 'bank' || (defaultPaymentType === undefined && currentPaymentType === 'bank')) {
+        const bankId = typeof bank !== 'undefined' ? bank : (existing.bank_id || existing.bank);
         if (!bankId) {
           return res.status(400).json({
             success: false,
@@ -345,50 +306,39 @@ router.put(
         await validateRelatedEntities({ supplier, customer });
       }
 
-      if (name) recurringExpense.name = name.trim();
-      if (typeof description !== 'undefined') recurringExpense.description = description ? description.trim() : undefined;
-      if (typeof amount !== 'undefined') recurringExpense.amount = parseFloat(amount);
-      if (typeof reminderDaysBefore !== 'undefined') recurringExpense.reminderDaysBefore = reminderDaysBefore;
-      if (typeof defaultPaymentType !== 'undefined') recurringExpense.defaultPaymentType = defaultPaymentType;
-      if (typeof supplier !== 'undefined') recurringExpense.supplier = supplier || undefined;
-      if (typeof customer !== 'undefined') recurringExpense.customer = customer || undefined;
-      if (typeof expenseAccount !== 'undefined') recurringExpense.expenseAccount = expenseAccount || undefined;
-      if (typeof status !== 'undefined') recurringExpense.status = status;
-      if (typeof notes !== 'undefined') recurringExpense.notes = notes ? notes.trim() : undefined;
-      if (Array.isArray(tags)) recurringExpense.tags = tags;
+      const update = {};
+      if (name) update.name = name.trim();
+      if (typeof description !== 'undefined') update.description = description ? description.trim() : undefined;
+      if (typeof amount !== 'undefined') update.amount = parseFloat(amount);
+      if (typeof reminderDaysBefore !== 'undefined') update.reminderDaysBefore = reminderDaysBefore;
+      if (typeof defaultPaymentType !== 'undefined') update.defaultPaymentType = defaultPaymentType;
+      if (typeof supplier !== 'undefined') update.supplierId = supplier || null;
+      if (typeof customer !== 'undefined') update.customerId = customer || null;
+      if (typeof expenseAccount !== 'undefined') update.expenseAccountId = expenseAccount || null;
+      if (typeof status !== 'undefined') update.status = status;
+      if (typeof notes !== 'undefined') update.notes = notes ? notes.trim() : undefined;
+      if (Array.isArray(tags)) update.tags = tags;
 
       if (typeof bank !== 'undefined') {
-        if (recurringExpense.defaultPaymentType === 'bank') {
-          recurringExpense.bank = bank || undefined;
-        } else {
-          recurringExpense.bank = undefined;
-        }
+        update.bankId = (defaultPaymentType === 'bank' || currentPaymentType === 'bank') ? (bank || null) : null;
       }
 
       let dueDateToUpdate = null;
-      if (typeof dayOfMonth !== 'undefined' && dayOfMonth !== recurringExpense.dayOfMonth) {
-        recurringExpense.dayOfMonth = dayOfMonth;
+      const currentDayOfMonth = existing.day_of_month || existing.dayOfMonth;
+      if (typeof dayOfMonth !== 'undefined' && dayOfMonth !== currentDayOfMonth) {
+        update.dayOfMonth = dayOfMonth;
         dueDateToUpdate = calculateInitialDueDate(dayOfMonth, new Date());
       }
-
       if (typeof nextDueDate !== 'undefined') {
         dueDateToUpdate = new Date(nextDueDate);
       }
-
       if (dueDateToUpdate) {
-        recurringExpense.nextDueDate = dueDateToUpdate;
-        recurringExpense.lastReminderSentAt = undefined;
+        update.nextDueDate = dueDateToUpdate;
+        update.lastReminderSentAt = null;
       }
 
-      recurringExpense.updatedBy = req.user._id;
-
-      await recurringExpense.save();
-      await recurringExpense.populate([
-        { path: 'supplier', select: 'name companyName businessName displayName' },
-        { path: 'customer', select: 'name firstName lastName businessName displayName email' },
-        { path: 'bank', select: 'bankName accountNumber accountName' },
-        { path: 'expenseAccount', select: 'accountName accountCode' }
-      ]);
+      await recurringExpenseRepository.updateById(req.params.id, update);
+      const recurringExpense = await recurringExpenseRepository.findByIdWithJoins(req.params.id);
 
       res.json({
         success: true,
@@ -410,7 +360,7 @@ router.delete(
   [
     auth,
     requirePermission('create_orders'),
-    param('id').isMongoId()
+    param('id').isUUID(4)
   ],
   async (req, res) => {
     if (!handleValidation(req, res)) {
@@ -418,17 +368,14 @@ router.delete(
     }
 
     try {
-      const recurringExpense = await recurringExpenseRepository.findById(req.params.id);
-      if (!recurringExpense) {
+      const existing = await recurringExpenseRepository.findById(req.params.id);
+      if (!existing) {
         return res.status(404).json({
           success: false,
           message: 'Recurring expense not found'
         });
       }
-
-      recurringExpense.status = 'inactive';
-      recurringExpense.updatedBy = req.user._id;
-      await recurringExpense.save();
+      await recurringExpenseRepository.updateById(req.params.id, { status: 'inactive' });
 
       res.json({
         success: true,
@@ -449,7 +396,7 @@ router.post(
   [
     auth,
     requirePermission('create_orders'),
-    param('id').isMongoId(),
+    param('id').isUUID(4),
     body('paymentDate').optional().isISO8601().withMessage('paymentDate must be a valid date'),
     body('paymentType').optional().isIn(['cash', 'bank']),
     body('notes').optional().isString().trim()
@@ -459,166 +406,115 @@ router.post(
       return;
     }
 
-    const session = await RecurringExpense.startSession();
-    session.startTransaction();
+    const userId = req.user?.id || req.user?._id;
+    const { paymentDate, paymentType, notes } = req.body;
 
     try {
-      const { paymentDate, paymentType, notes } = req.body;
-      const recurringExpense = await recurringExpenseRepository.findByIdWithSession(req.params.id, { session });
-
+      const recurringExpense = await recurringExpenseRepository.findById(req.params.id);
       if (!recurringExpense) {
-        await session.abortTransaction();
         return res.status(404).json({
           success: false,
           message: 'Recurring expense not found'
         });
       }
-
       if (recurringExpense.status !== 'active') {
-        await session.abortTransaction();
         return res.status(400).json({
           success: false,
           message: 'Recurring expense is inactive'
         });
       }
 
-      const effectivePaymentType = paymentType || recurringExpense.defaultPaymentType || 'cash';
+      const effectivePaymentType = paymentType || recurringExpense.default_payment_type || 'cash';
       const effectivePaymentDate = paymentDate ? new Date(paymentDate) : new Date();
       effectivePaymentDate.setHours(0, 0, 0, 0);
 
-      let paymentRecord = null;
+      const amount = parseFloat(recurringExpense.amount);
+      const supplierId = recurringExpense.supplier_id || null;
+      const customerId = recurringExpense.customer_id || null;
+      const bankId = recurringExpense.bank_id || null;
+      const name = recurringExpense.name;
+      const notesVal = notes ? notes.trim() : (recurringExpense.notes || null);
 
-      if (effectivePaymentType === 'bank') {
-        if (!recurringExpense.bank) {
-          await session.abortTransaction();
-          return res.status(400).json({
-            success: false,
-            message: 'Bank account is required for bank payments'
-          });
-        }
+      const { paymentRecord, updatedRecurring } = await transaction(async (client) => {
+        let paymentRecord;
 
-        const bankPayment = new BankPayment({
-          date: effectivePaymentDate,
-          amount: recurringExpense.amount,
-          particular: recurringExpense.name,
-          bank: recurringExpense.bank,
-          supplier: recurringExpense.supplier || undefined,
-          customer: recurringExpense.customer || undefined,
-          notes: notes ? notes.trim() : recurringExpense.notes,
-          createdBy: req.user._id
-        });
-
-        await bankPayment.save({ session });
-        paymentRecord = bankPayment;
-
-        // Update supplier/customer balances asynchronously, don't abort transaction on failure
-        if (recurringExpense.supplier && recurringExpense.amount > 0) {
-          try {
-            const SupplierBalanceService = require('../services/supplierBalanceService');
-            await SupplierBalanceService.recordPayment(recurringExpense.supplier, recurringExpense.amount, null);
-          } catch (error) {
-            console.error('Error updating supplier balance for recurring bank payment:', error);
+        if (effectivePaymentType === 'bank') {
+          if (!bankId) {
+            throw new Error('Bank account is required for bank payments');
           }
+          paymentRecord = await bankPaymentRepository.create({
+            date: effectivePaymentDate,
+            amount,
+            particular: name,
+            bankId,
+            supplierId,
+            customerId,
+            notes: notesVal,
+            createdBy: userId
+          }, client);
+        } else {
+          paymentRecord = await cashPaymentRepository.create({
+            date: effectivePaymentDate,
+            amount,
+            particular: name,
+            supplierId,
+            customerId,
+            paymentMethod: 'cash',
+            notes: notesVal,
+            createdBy: userId
+          }, client);
         }
 
-        if (recurringExpense.customer && recurringExpense.amount > 0) {
-          try {
-            const CustomerBalanceService = require('../services/customerBalanceService');
-            await CustomerBalanceService.recordPayment(recurringExpense.customer, recurringExpense.amount, null);
-          } catch (error) {
-            console.error('Error updating customer balance for recurring bank payment:', error);
-          }
+        const anchorDate = recurringExpense.next_due_date
+          ? new Date(recurringExpense.next_due_date)
+          : calculateInitialDueDate(recurringExpense.day_of_month, effectivePaymentDate);
+        let nextDue = calculateNextDueDate(anchorDate, recurringExpense.day_of_month);
+        if (effectivePaymentDate > anchorDate) {
+          nextDue = calculateNextDueDate(effectivePaymentDate, recurringExpense.day_of_month);
         }
 
+        const updated = await recurringExpenseRepository.updateById(req.params.id, {
+          lastPaidAt: effectivePaymentDate,
+          nextDueDate: nextDue,
+          lastReminderSentAt: null
+        }, client);
+
+        return { paymentRecord, updatedRecurring: updated };
+      });
+
+      if (supplierId && amount > 0) {
         try {
-          const AccountingService = require('../services/accountingService');
-          await AccountingService.recordBankPayment(bankPayment);
-        } catch (error) {
-          console.error('Error creating accounting entries for recurring bank payment:', error);
+          const SupplierBalanceService = require('../services/supplierBalanceService');
+          await SupplierBalanceService.recordPayment(supplierId, amount, null);
+        } catch (err) {
+          console.error('Error updating supplier balance for recurring payment:', err);
         }
-      } else {
-        const cashPayment = new CashPayment({
-          date: effectivePaymentDate,
-          amount: recurringExpense.amount,
-          particular: recurringExpense.name,
-          supplier: recurringExpense.supplier || undefined,
-          customer: recurringExpense.customer || undefined,
-          paymentMethod: 'cash',
-          notes: notes ? notes.trim() : recurringExpense.notes,
-          createdBy: req.user._id
-        });
-
-        await cashPayment.save({ session });
-        paymentRecord = cashPayment;
-
-        if (recurringExpense.supplier && recurringExpense.amount > 0) {
-          try {
-            const SupplierBalanceService = require('../services/supplierBalanceService');
-            await SupplierBalanceService.recordPayment(recurringExpense.supplier, recurringExpense.amount, null);
-          } catch (error) {
-            console.error('Error updating supplier balance for recurring cash payment:', error);
-          }
-        }
-
-        if (recurringExpense.customer && recurringExpense.amount > 0) {
-          try {
-            const CustomerBalanceService = require('../services/customerBalanceService');
-            await CustomerBalanceService.recordPayment(recurringExpense.customer, recurringExpense.amount, null);
-          } catch (error) {
-            console.error('Error updating customer balance for recurring cash payment:', error);
-          }
-        }
-
+      }
+      if (customerId && amount > 0) {
         try {
-          const AccountingService = require('../services/accountingService');
-          await AccountingService.recordCashPayment(cashPayment);
-        } catch (error) {
-          console.error('Error creating accounting entries for recurring cash payment:', error);
+          const CustomerBalanceService = require('../services/customerBalanceService');
+          await CustomerBalanceService.recordPayment(customerId, amount, null);
+        } catch (err) {
+          console.error('Error updating customer balance for recurring payment:', err);
         }
       }
 
-      const anchorDate = recurringExpense.nextDueDate && recurringExpense.nextDueDate instanceof Date
-        ? recurringExpense.nextDueDate
-        : calculateInitialDueDate(recurringExpense.dayOfMonth, effectivePaymentDate);
-
-      let nextDueDate = calculateNextDueDate(anchorDate, recurringExpense.dayOfMonth);
-      if (effectivePaymentDate > anchorDate) {
-        nextDueDate = calculateNextDueDate(effectivePaymentDate, recurringExpense.dayOfMonth);
-      }
-
-      recurringExpense.lastPaidAt = effectivePaymentDate;
-      recurringExpense.nextDueDate = nextDueDate;
-      recurringExpense.lastReminderSentAt = undefined;
-      recurringExpense.updatedBy = req.user._id;
-
-      await recurringExpense.save({ session });
-
-      await session.commitTransaction();
-
-      await paymentRecord.populate([
-        { path: 'supplier', select: 'name companyName businessName displayName' },
-        { path: 'customer', select: 'name firstName lastName businessName displayName email' },
-        { path: 'createdBy', select: 'firstName lastName' },
-        { path: 'bank', select: 'bankName accountNumber accountName' }
-      ]);
+      const recurringExpenseData = await recurringExpenseRepository.findByIdWithJoins(req.params.id);
 
       res.status(201).json({
         success: true,
         message: 'Recurring expense payment recorded successfully',
         data: {
           payment: paymentRecord,
-          recurringExpense
+          recurringExpense: recurringExpenseData
         }
       });
     } catch (error) {
-      await session.abortTransaction();
       console.error('Error recording recurring expense payment:', error);
       res.status(500).json({
         success: false,
         message: error.message || 'Server error'
       });
-    } finally {
-      session.endSession();
     }
   }
 );
@@ -628,7 +524,7 @@ router.post(
   [
     auth,
     requirePermission('create_orders'),
-    param('id').isMongoId(),
+    param('id').isUUID(4),
     body('snoozeDays').optional().isInt({ min: 1, max: 30 }),
     body('targetDate').optional().isISO8601()
   ],
@@ -639,38 +535,43 @@ router.post(
 
     try {
       const { snoozeDays, targetDate } = req.body;
-      const recurringExpense = await recurringExpenseRepository.findById(req.params.id);
+      const existing = await recurringExpenseRepository.findById(req.params.id);
 
-      if (!recurringExpense) {
+      if (!existing) {
         return res.status(404).json({
           success: false,
           message: 'Recurring expense not found'
         });
       }
 
-      if (recurringExpense.status !== 'active') {
+      if (existing.status !== 'active') {
         return res.status(400).json({
           success: false,
           message: 'Recurring expense is inactive'
         });
       }
 
+      let nextDueDate;
       if (targetDate) {
         const newDate = new Date(targetDate);
         newDate.setHours(0, 0, 0, 0);
-        recurringExpense.nextDueDate = newDate;
+        nextDueDate = newDate;
       } else if (snoozeDays) {
-        const newDate = new Date(recurringExpense.nextDueDate);
+        const currentDue = existing.next_due_date || existing.nextDueDate;
+        const newDate = new Date(currentDue);
         newDate.setDate(newDate.getDate() + parseInt(snoozeDays, 10));
-        recurringExpense.nextDueDate = newDate;
+        nextDueDate = newDate;
       } else {
-        const nextDueDate = calculateNextDueDate(recurringExpense.nextDueDate, recurringExpense.dayOfMonth);
-        recurringExpense.nextDueDate = nextDueDate;
+        const currentDue = existing.next_due_date || existing.nextDueDate;
+        const dayOfMonth = existing.day_of_month || existing.dayOfMonth;
+        nextDueDate = calculateNextDueDate(currentDue, dayOfMonth);
       }
 
-      recurringExpense.lastReminderSentAt = undefined;
-      recurringExpense.updatedBy = req.user._id;
-      await recurringExpense.save();
+      await recurringExpenseRepository.updateById(req.params.id, {
+        nextDueDate,
+        lastReminderSentAt: null
+      });
+      const recurringExpense = await recurringExpenseRepository.findByIdWithJoins(req.params.id);
 
       res.json({
         success: true,

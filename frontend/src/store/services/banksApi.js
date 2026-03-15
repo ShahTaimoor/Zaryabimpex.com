@@ -32,7 +32,11 @@ export const banksApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Banks', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Banks', id: 'LIST' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
+      ],
     }),
     updateBank: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -43,6 +47,8 @@ export const banksApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Banks', id },
         { type: 'Banks', id: 'LIST' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     deleteBank: builder.mutation({
@@ -53,6 +59,8 @@ export const banksApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'Banks', id },
         { type: 'Banks', id: 'LIST' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
   }),

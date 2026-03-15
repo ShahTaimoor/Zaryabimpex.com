@@ -6,7 +6,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useKeyboardShortcuts, detectConflicts, DEFAULT_SHORTCUTS } from '../hooks/useKeyboardShortcuts';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 const KeyboardShortcutsContext = createContext();
 

@@ -10,8 +10,8 @@ const { body, param, query } = require('express-validator');
 router.post('/', [
   auth,
   requirePermission('create_disputes'),
-  body('transactionId').isMongoId().withMessage('Valid transaction ID is required'),
-  body('customerId').isMongoId().withMessage('Valid customer ID is required'),
+  body('transactionId').isUUID(4).withMessage('Valid transaction ID is required'),
+  body('customerId').isUUID(4).withMessage('Valid customer ID is required'),
   body('disputeType').isIn(['chargeback', 'refund_request', 'billing_error', 'duplicate_charge', 'unauthorized', 'other']).withMessage('Valid dispute type is required'),
   body('disputedAmount').isFloat({ min: 0.01 }).withMessage('Disputed amount must be positive'),
   body('reason').trim().isLength({ min: 1 }).withMessage('Reason is required'),
@@ -32,7 +32,7 @@ router.post('/', [
 router.post('/:id/resolve', [
   auth,
   requirePermission('resolve_disputes'),
-  param('id').isMongoId().withMessage('Valid dispute ID is required'),
+  param('id').isUUID(4).withMessage('Valid dispute ID is required'),
   body('resolution').isIn(['refund_full', 'refund_partial', 'credit_note', 'adjustment', 'rejected', 'other']).withMessage('Valid resolution is required'),
   body('resolutionAmount').optional().isFloat({ min: 0 }).withMessage('Resolution amount must be positive'),
   body('resolutionNotes').optional().trim().isLength({ max: 2000 })
@@ -56,7 +56,7 @@ router.post('/:id/resolve', [
 router.get('/customers/:customerId', [
   auth,
   requirePermission('view_disputes'),
-  param('customerId').isMongoId().withMessage('Valid customer ID is required'),
+  param('customerId').isUUID(4).withMessage('Valid customer ID is required'),
   query('status').optional().isIn(['open', 'under_review', 'resolved', 'rejected', 'escalated']),
   query('disputeType').optional()
 ], async (req, res) => {
@@ -84,7 +84,7 @@ router.get('/open', [
   auth,
   requirePermission('view_disputes'),
   query('priority').optional().isIn(['low', 'medium', 'high', 'urgent']),
-  query('assignedTo').optional().isMongoId(),
+  query('assignedTo').optional().isUUID(4),
   query('overdue').optional().isBoolean()
 ], async (req, res) => {
   try {

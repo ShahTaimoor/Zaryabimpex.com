@@ -20,7 +20,7 @@ export const OfflineIndicator = () => {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 animate-pulse max-w-sm">
+    <div className="fixed bottom-20 left-4 lg:bottom-4 z-50 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 animate-pulse max-w-sm">
       <WifiOff className="h-5 w-5 flex-shrink-0" />
       <span className="text-sm font-medium flex-grow">You're offline</span>
       <button

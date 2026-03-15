@@ -3,7 +3,7 @@ const PurchaseOrderRepository = require('../repositories/PurchaseOrderRepository
 const SupplierRepository = require('../repositories/SupplierRepository');
 const SalesRepository = require('../repositories/SalesRepository');
 const InventoryAlertService = require('./inventoryAlertService');
-const PurchaseOrder = require('../models/PurchaseOrder'); // Keep for static methods and instance creation
+const purchaseOrderRepository = require('../repositories/PurchaseOrderRepository');
 
 class AutoPurchaseOrderService {
   /**
@@ -123,7 +123,7 @@ class AutoPurchaseOrderService {
           const total = subtotal + tax;
 
           // Generate PO number
-          const poNumber = PurchaseOrder.generatePONumber();
+          const poNumber = purchaseOrderRepository.generatePONumber();
 
           // Create purchase order
           const poData = {
@@ -305,34 +305,7 @@ class AutoPurchaseOrderService {
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-      const sales = await SalesRepository.aggregate([
-        {
-          $match: {
-            createdAt: { $gte: ninetyDaysAgo },
-            status: 'completed',
-            'items.product': productId
-          }
-        },
-        {
-          $unwind: '$items'
-        },
-        {
-          $match: {
-            'items.product': productId
-          }
-        },
-        {
-          $group: {
-            _id: {
-              $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
-            },
-            dailyQuantity: { $sum: '$items.quantity' }
-          }
-        },
-        {
-          $sort: { _id: 1 }
-        }
-      ]);
+      const sales = await SalesRepository.getDailyProductSales(productId, ninetyDaysAgo);
 
       if (!sales || sales.length === 0) {
         return defaultQuantity;

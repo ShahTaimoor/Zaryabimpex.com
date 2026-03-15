@@ -18,6 +18,7 @@ import {
 import { useGetProductsQuery } from '../store/services/productsApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
+import { Button } from '@/components/ui/button';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import ValidatedInput, { ValidatedSelect } from '../components/ValidatedInput';
@@ -42,6 +43,26 @@ const ProductVariants = () => {
 
   const variants = variantsData?.variants || variantsData?.data?.variants || [];
   const products = productsData?.products || productsData?.data?.products || [];
+
+  const getBaseProductName = (variant) => {
+    const baseProductId = variant.baseProduct?._id ?? variant.baseProduct ?? variant.base_product_id ?? variant.baseProductId;
+    if (!baseProductId) return null;
+    const product = products.find(p => (p._id || p.id) === baseProductId);
+    return product?.name ?? product?.productName ?? null;
+  };
+
+  // Normalize variant fields (backend returns snake_case from Postgres)
+  const getVariantDisplayName = (v) => v.displayName ?? v.display_name ?? '';
+  const getVariantType = (v) => v.variantType ?? v.variant_type ?? '';
+  const getVariantValue = (v) => v.variantValue ?? v.variant_value ?? '';
+  const getVariantStatus = (v) => {
+    if (v.status) return v.status;
+    const isActive = v.is_active ?? v.isActive;
+    return isActive === false ? 'inactive' : 'active';
+  };
+  const getVariantStock = (v) => v.inventory?.currentStock ?? v.inventory_data?.current_stock ?? v.inventory?.current_stock ?? v.inventory_data?.currentStock ?? 0;
+  const getVariantRetail = (v) => v.pricing?.retail ?? v.pricing?.wholesale ?? 0;
+  const getVariantTransformationCost = (v) => v.transformationCost ?? v.transformation_cost ?? 0;
 
   // Delete mutation
   const [deleteVariant, { isLoading: isDeleting }] = useDeleteVariantMutation();
@@ -87,13 +108,15 @@ const ProductVariants = () => {
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Product Variants</h1>
             <p className="mt-1 text-sm sm:text-base text-gray-600">Manage product variants and transformations</p>
           </div>
-          <button
+          <Button
             onClick={() => setIsModalOpen(true)}
-            className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+            variant="default"
+            size="default"
+            className="flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             Add Variant
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -136,12 +159,13 @@ const ProductVariants = () => {
           <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No variants found</h3>
           <p className="text-sm sm:text-base text-gray-500 mb-4">Get started by creating a new product variant.</p>
-          <button
+          <Button
             onClick={() => setIsModalOpen(true)}
-            className="btn btn-primary btn-md"
+            variant="default"
+            size="default"
           >
             Add Variant
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -165,36 +189,36 @@ const ProductVariants = () => {
                   <tr key={variant._id} className="hover:bg-gray-50">
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                       <div className="text-xs sm:text-sm font-medium text-gray-900">
-                        {variant.baseProduct?.name || 'N/A'}
+                        {getBaseProductName(variant) || 'N/A'}
                       </div>
                     </td>
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
-                      <div className="text-xs sm:text-sm text-gray-900">{variant.displayName}</div>
+                      <div className="text-xs sm:text-sm text-gray-900">{getVariantDisplayName(variant)}</div>
                     </td>
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                       <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {variant.variantType}
+                        {getVariantType(variant)}
                       </span>
                     </td>
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
-                      {variant.variantValue}
+                      {getVariantValue(variant)}
                     </td>
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
-                      {variant.inventory?.currentStock || 0}
+                      {getVariantStock(variant)}
                     </td>
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
-                      ${variant.pricing?.retail?.toFixed(2) || '0.00'}
+                      {Number(getVariantRetail(variant)).toFixed(2)}
                     </td>
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
-                      ${variant.transformationCost?.toFixed(2) || '0.00'}
+                      {Number(getVariantTransformationCost(variant)).toFixed(2)}
                     </td>
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        variant.status === 'active' ? 'bg-green-100 text-green-800' :
-                        variant.status === 'inactive' ? 'bg-gray-100 text-gray-800' :
+                        getVariantStatus(variant) === 'active' ? 'bg-green-100 text-green-800' :
+                        getVariantStatus(variant) === 'inactive' ? 'bg-gray-100 text-gray-800' :
                         'bg-red-100 text-red-800'
                       }`}>
-                        {variant.status}
+                        {getVariantStatus(variant)}
                       </span>
                     </td>
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-right text-xs sm:text-sm font-medium">
@@ -206,7 +230,7 @@ const ProductVariants = () => {
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => openDeleteDialog(variant._id, variant.displayName)}
+                          onClick={() => openDeleteDialog(variant._id || variant.id, getVariantDisplayName(variant))}
                           className="text-red-600 hover:text-red-900 p-1"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -270,17 +294,18 @@ const VariantModal = ({ variant, products, isOpen, onClose, onSuccess }) => {
 
   React.useEffect(() => {
     if (variant) {
+      const status = variant.status ?? (variant.is_active === false ? 'inactive' : 'active');
       setFormData({
-        baseProduct: variant.baseProduct?._id || variant.baseProduct || '',
-        variantName: variant.variantName || '',
-        variantType: variant.variantType || 'color',
-        variantValue: variant.variantValue || '',
-        displayName: variant.displayName || '',
-        description: variant.description || '',
-        pricing: variant.pricing || { cost: 0, retail: 0, wholesale: 0, distributor: 0 },
-        transformationCost: variant.transformationCost || 0,
-        sku: variant.sku || '',
-        status: variant.status || 'active'
+        baseProduct: variant.baseProduct?._id ?? variant.base_product_id ?? variant.baseProductId ?? variant.baseProduct ?? '',
+        variantName: variant.variantName ?? variant.variant_name ?? '',
+        variantType: variant.variantType ?? variant.variant_type ?? 'color',
+        variantValue: variant.variantValue ?? variant.variant_value ?? '',
+        displayName: variant.displayName ?? variant.display_name ?? '',
+        description: variant.description ?? '',
+        pricing: variant.pricing ?? { cost: 0, retail: 0, wholesale: 0, distributor: 0 },
+        transformationCost: variant.transformationCost ?? variant.transformation_cost ?? 0,
+        sku: variant.sku ?? '',
+        status
       });
     } else {
       setFormData({
@@ -517,18 +542,22 @@ const VariantModal = ({ variant, products, isOpen, onClose, onSuccess }) => {
           />
 
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t">
-            <button
+            <Button
               type="button"
               onClick={onClose}
-              className="btn btn-secondary btn-md w-full sm:w-auto"
+              variant="secondary"
+              size="default"
+              className="w-full sm:w-auto"
               disabled={isSubmitting}
             >
               Cancel
-            </button>
+            </Button>
             <LoadingButton
               type="submit"
               isLoading={isSubmitting}
-              className="btn btn-primary btn-md w-full sm:w-auto"
+              variant="default"
+              size="default"
+              className="w-full sm:w-auto"
             >
               {variant ? 'Update' : 'Create'}
             </LoadingButton>

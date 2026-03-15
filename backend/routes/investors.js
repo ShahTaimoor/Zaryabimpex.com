@@ -2,7 +2,6 @@ const express = require('express');
 const { body, query, param } = require('express-validator');
 const { auth, requireAnyPermission } = require('../middleware/auth');
 const investorService = require('../services/investorService');
-const Investor = require('../models/Investor'); // Still needed for some operations
 
 const router = express.Router();
 
@@ -37,7 +36,7 @@ router.get('/', [
 router.get('/:id', [
   auth,
   requireAnyPermission(['view_investors', 'manage_investors', 'view_reports']),
-  param('id').isMongoId().withMessage('Invalid investor ID')
+  param('id').isUUID(4).withMessage('Invalid investor ID')
 ], async (req, res) => {
   try {
     const result = await investorService.getInvestorById(req.params.id);
@@ -95,7 +94,7 @@ router.post('/', [
 router.put('/:id', [
   auth,
   requireAnyPermission(['manage_investors', 'edit_investors']),
-  param('id').isMongoId().withMessage('Invalid investor ID'),
+  param('id').isUUID(4).withMessage('Invalid investor ID'),
   body('name').optional().isString().trim().notEmpty(),
   body('email').optional().isEmail(),
   body('phone').optional().isString().trim(),
@@ -137,7 +136,7 @@ router.put('/:id', [
 router.delete('/:id', [
   auth,
   requireAnyPermission(['manage_investors']),
-  param('id').isMongoId().withMessage('Invalid investor ID')
+  param('id').isUUID(4).withMessage('Invalid investor ID')
 ], async (req, res) => {
   try {
     const result = await investorService.deleteInvestor(req.params.id);
@@ -172,7 +171,7 @@ router.delete('/:id', [
 router.post('/:id/payout', [
   auth,
   requireAnyPermission(['manage_investors', 'payout_investors']),
-  param('id').isMongoId().withMessage('Invalid investor ID'),
+  param('id').isUUID(4).withMessage('Invalid investor ID'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Payout amount must be greater than 0')
 ], async (req, res) => {
   try {
@@ -209,7 +208,7 @@ router.post('/:id/payout', [
 router.post('/:id/investment', [
   auth,
   requireAnyPermission(['manage_investors', 'payout_investors']),
-  param('id').isMongoId().withMessage('Invalid investor ID'),
+  param('id').isUUID(4).withMessage('Invalid investor ID'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Investment amount must be greater than 0'),
   body('notes').optional().isString().trim().isLength({ max: 500 }).withMessage('Notes too long')
 ], async (req, res) => {
@@ -241,7 +240,7 @@ router.post('/:id/investment', [
 router.get('/:id/profit-shares', [
   auth,
   requireAnyPermission(['view_investors', 'manage_investors', 'view_reports']),
-  param('id').isMongoId().withMessage('Invalid investor ID'),
+  param('id').isUUID(4).withMessage('Invalid investor ID'),
   query('startDate').optional().isISO8601(),
   query('endDate').optional().isISO8601()
 ], async (req, res) => {
@@ -297,7 +296,7 @@ router.get('/profit-shares/summary', [
 router.get('/profit-shares/order/:orderId', [
   auth,
   requireAnyPermission(['view_investors', 'manage_investors', 'view_reports']),
-  param('orderId').isMongoId().withMessage('Invalid order ID')
+  param('orderId').isUUID(4).withMessage('Invalid order ID')
 ], async (req, res) => {
   try {
     const profitShares = await profitDistributionService.getProfitSharesForOrder(req.params.orderId);
@@ -320,7 +319,7 @@ router.get('/profit-shares/order/:orderId', [
 router.get('/:id/products', [
   auth,
   requireAnyPermission(['view_investors', 'manage_investors']),
-  param('id').isMongoId().withMessage('Invalid investor ID')
+  param('id').isUUID(4).withMessage('Invalid investor ID')
 ], async (req, res) => {
   try {
     const products = await investorService.getProductsForInvestor(req.params.id);

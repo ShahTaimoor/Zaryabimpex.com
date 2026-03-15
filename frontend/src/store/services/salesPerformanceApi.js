@@ -8,7 +8,14 @@ export const salesPerformanceApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Reports', id: 'SALES_PERFORMANCE' }],
+      invalidatesTags: [
+        { type: 'Reports', id: 'SALES_PERFORMANCE' },
+        { type: 'Reports', id: 'SALES_PERFORMANCE_STATS' },
+        { type: 'Reports', id: 'SALES_PERFORMANCE_TOP_PRODUCTS' },
+        { type: 'Reports', id: 'SALES_PERFORMANCE_TOP_CUSTOMERS' },
+        { type: 'Reports', id: 'SALES_PERFORMANCE_TOP_SALES_REPS' },
+        { type: 'Reports', id: 'SALES_PERFORMANCE_QUICK_SUMMARY' },
+      ],
     }),
     getReports: builder.query({
       query: (params) => ({
@@ -42,6 +49,11 @@ export const salesPerformanceApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'Reports', id },
         { type: 'Reports', id: 'SALES_PERFORMANCE' },
+        { type: 'Reports', id: 'SALES_PERFORMANCE_STATS' },
+        { type: 'Reports', id: 'SALES_PERFORMANCE_TOP_PRODUCTS' },
+        { type: 'Reports', id: 'SALES_PERFORMANCE_TOP_CUSTOMERS' },
+        { type: 'Reports', id: 'SALES_PERFORMANCE_TOP_SALES_REPS' },
+        { type: 'Reports', id: 'SALES_PERFORMANCE_QUICK_SUMMARY' },
       ],
     }),
     toggleFavorite: builder.mutation({
@@ -50,7 +62,10 @@ export const salesPerformanceApi = api.injectEndpoints({
         method: 'put',
         data: { isFavorite },
       }),
-      invalidatesTags: (_r, _e, { id }) => [{ type: 'Reports', id }],
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Reports', id },
+        { type: 'Reports', id: 'SALES_PERFORMANCE' },
+      ],
     }),
     updateTags: builder.mutation({
       query: ({ id, tags }) => ({
@@ -58,7 +73,10 @@ export const salesPerformanceApi = api.injectEndpoints({
         method: 'put',
         data: { tags },
       }),
-      invalidatesTags: (_r, _e, { id }) => [{ type: 'Reports', id }],
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Reports', id },
+        { type: 'Reports', id: 'SALES_PERFORMANCE' },
+      ],
     }),
     updateNotes: builder.mutation({
       query: ({ id, notes }) => ({
@@ -66,7 +84,10 @@ export const salesPerformanceApi = api.injectEndpoints({
         method: 'put',
         data: { notes },
       }),
-      invalidatesTags: (_r, _e, { id }) => [{ type: 'Reports', id }],
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Reports', id },
+        { type: 'Reports', id: 'SALES_PERFORMANCE' },
+      ],
     }),
     exportReport: builder.mutation({
       query: ({ id, format }) => ({

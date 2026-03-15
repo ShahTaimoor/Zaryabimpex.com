@@ -69,19 +69,14 @@ const Discounts = () => {
     }
   });
 
-  // Fetch discount statistics
+  // Fetch discount statistics (always; period is optional for filtered stats)
   const { 
     data: statsData, 
     isLoading: statsLoading 
-  } = useGetDiscountStatsQuery(
-    {
-      startDate: filters.validFrom,
-      endDate: filters.validUntil
-    },
-    {
-      skip: !filters.validFrom || !filters.validUntil,
-    }
-  );
+  } = useGetDiscountStatsQuery({
+    startDate: filters.validFrom || undefined,
+    endDate: filters.validUntil || undefined,
+  });
 
   // Get selected discount details
   const { data: selectedDiscountData } = useGetDiscountQuery(selectedDiscount?._id, {
@@ -159,9 +154,46 @@ const Discounts = () => {
     });
   };
 
-  const discounts = discountsData?.data?.discounts || discountsData?.discounts || [];
+  // Compute status when API returns snake_case / no status (e.g. Postgres)
+  const getDiscountStatus = (d) => {
+    if (d.status) return d.status;
+    const isActive = d.isActive ?? d.is_active ?? false;
+    const validFrom = d.validFrom ?? d.valid_from;
+    const validUntil = d.validUntil ?? d.valid_until;
+    const now = new Date();
+    if (!isActive) return 'inactive';
+    if (d.usage_limit != null && d.current_usage != null && d.current_usage >= d.usage_limit) return 'exhausted';
+    if (d.usageLimit != null && d.currentUsage != null && d.currentUsage >= d.usageLimit) return 'exhausted';
+    if (validUntil && new Date(validUntil) < now) return 'expired';
+    if (validFrom && new Date(validFrom) > now) return 'scheduled';
+    return 'active';
+  };
+
+  // Normalize discount for display (support both snake_case from API and camelCase)
+  const normalizeDiscount = (d) => ({
+    ...d,
+    _id: d._id ?? d.id,
+    status: getDiscountStatus(d),
+    validFrom: d.validFrom ?? d.valid_from,
+    validUntil: d.validUntil ?? d.valid_until,
+    applicableTo: (d.applicableTo ?? d.applicable_to ?? 'all') || 'all',
+    currentUsage: d.currentUsage ?? d.current_usage ?? 0,
+    usageLimit: d.usageLimit ?? d.usage_limit,
+    isActive: d.isActive ?? d.is_active,
+    maximumDiscount: d.maximumDiscount ?? d.maximum_discount,
+  });
+
+  const rawDiscounts = discountsData?.data?.discounts || discountsData?.discounts || [];
+  const discounts = rawDiscounts.map(normalizeDiscount);
   const pagination = discountsData?.data?.pagination || discountsData?.pagination || {};
-  const stats = statsData?.data || {};
+  // API returns { total, active, byStatus, totalUsage, totalDiscountAmount }; normalize for UI
+  const rawStats = statsData?.data ?? statsData ?? {};
+  const stats = {
+    totalDiscounts: rawStats.totalDiscounts ?? rawStats.total,
+    activeDiscounts: rawStats.activeDiscounts ?? rawStats.active,
+    totalUsage: rawStats.totalUsage ?? 0,
+    totalDiscountAmount: rawStats.totalDiscountAmount ?? 0,
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-8 bg-gray-50/30 min-h-screen">
@@ -366,7 +398,7 @@ const Discounts = () => {
                               : 'bg-slate-100 text-slate-600'
                           }`}
                         >
-                          {discount.status.replace('_', ' ')}
+                          {(discount.status ?? '').replace(/_/g, ' ')}
                         </span>
                       </div>
                     </td>
@@ -389,15 +421,15 @@ const Discounts = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
-                        {discount.applicableTo === 'all' && <Users className="h-3.5 w-3.5 text-slate-400" />}
-                        {discount.applicableTo === 'products' && <Package className="h-3.5 w-3.5 text-slate-400" />}
-                        {discount.applicableTo === 'categories' && <Tag className="h-3.5 w-3.5 text-slate-400" />}
-                        {discount.applicableTo === 'customers' && <Users className="h-3.5 w-3.5 text-slate-400" />}
-                        <span className="text-sm font-bold text-slate-700 capitalize">{discount.applicableTo}</span>
+                        {(discount.applicableTo || 'all') === 'all' && <Users className="h-3.5 w-3.5 text-slate-400" />}
+                        {(discount.applicableTo || 'all') === 'products' && <Package className="h-3.5 w-3.5 text-slate-400" />}
+                        {(discount.applicableTo || 'all') === 'categories' && <Tag className="h-3.5 w-3.5 text-slate-400" />}
+                        {(discount.applicableTo || 'all') === 'customers' && <Users className="h-3.5 w-3.5 text-slate-400" />}
+                        <span className="text-sm font-bold text-slate-700 capitalize">{(discount.applicableTo || 'all').replace(/_/g, ' ')}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-end space-x-2">
                         <button
                           onClick={() => handleDiscountSelect(discount._id)}
                           className="p-2 bg-white border border-slate-200 text-slate-600 hover:text-primary-600 hover:border-primary-200 rounded-lg shadow-sm transition-all"

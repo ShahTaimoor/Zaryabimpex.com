@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { handleError, reportError } from '../utils/errorHandler';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 export const useErrorHandler = () => {
   const [errors, setErrors] = useState({});

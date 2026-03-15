@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
 import { handleApiError, ERROR_SEVERITY } from '../utils/errorHandler';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 // Error context
 const ErrorContext = createContext();

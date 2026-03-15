@@ -34,12 +34,17 @@ export const api = createApi({
     'Warehouses',
     'RecurringExpenses',
     'Returns',
+    'SaleReturns',
+    'PurchaseReturns',
     'Discounts',
     'JournalVouchers',
     'Users',
     'Payments',
     'Recommendations',
     'Company',
+    'Shops',
+    'Admins',
+    'StockLedger',
   ],
   endpoints: (builder) => ({
     health: builder.query({

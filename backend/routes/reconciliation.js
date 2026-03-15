@@ -10,7 +10,7 @@ const { param, query } = require('express-validator');
 router.post('/customers/:customerId', [
   auth,
   requirePermission('reconcile_balances'),
-  param('customerId').isMongoId().withMessage('Valid customer ID is required'),
+  param('customerId').isUUID(4).withMessage('Valid customer ID is required'),
   query('autoCorrect').optional().isBoolean().withMessage('autoCorrect must be boolean')
 ], async (req, res) => {
   try {
@@ -68,7 +68,7 @@ router.post('/customers', [
 router.get('/customers/:customerId/report', [
   auth,
   requirePermission('view_reconciliation_reports'),
-  param('customerId').isMongoId().withMessage('Valid customer ID is required'),
+  param('customerId').isUUID(4).withMessage('Valid customer ID is required'),
   query('startDate').optional().isISO8601().withMessage('startDate must be valid ISO date'),
   query('endDate').optional().isISO8601().withMessage('endDate must be valid ISO date')
 ], async (req, res) => {

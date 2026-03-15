@@ -21,8 +21,9 @@ import {
 } from '../store/services/inventoryApi';
 import { useGetWarehousesQuery } from '../store/services/warehousesApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage } from '../components/LoadingSpinner';
-import { useResponsive, ResponsiveContainer, ResponsiveGrid } from '../components/ResponsiveContainer';
+import { LoadingSpinner, LoadingButton, LoadingPage } from '../components/LoadingSpinner';
+import { Button } from '@/components/ui/button';
+import { useResponsive, ResponsiveContainer } from '../components/ResponsiveContainer';
 import ResponsiveTable from '../components/ResponsiveTable';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
@@ -33,13 +34,16 @@ import { useNavigate } from 'react-router-dom';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../utils/componentUtils';
 
+const LIMIT_OPTIONS = [50, 500, 1000, 5000];
+const DEFAULT_LIMIT = 50;
+
 export const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [lowStockFilter, setLowStockFilter] = useState(false);
   const [warehouseFilter, setWarehouseFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_LIMIT);
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -92,6 +96,12 @@ export const Inventory = () => {
     return warehousesData?.data?.warehouses || warehousesData?.warehouses || warehousesData?.data || warehousesData || [];
   }, [warehousesData]);
 
+  const handleLimitChange = (e) => {
+    const val = Number(e.target.value);
+    setItemsPerPage(val);
+    setCurrentPage(1);
+  };
+
   const warehouseOptions = useMemo(() => {
     const options = [
       { value: '', label: 'All Warehouses' },
@@ -141,7 +151,7 @@ export const Inventory = () => {
           </div>
           <div>
             <div className="font-medium text-gray-900">{item.product?.name || 'N/A'}</div>
-            <div className="text-sm text-gray-500">Category: {item.product?.category || 'N/A'}</div>
+            <div className="text-sm text-gray-500">Category: {typeof item.product?.category === 'object' ? (item.product?.category?.name ?? 'N/A') : (item.product?.category || 'N/A')}</div>
           </div>
         </div>
       ),
@@ -234,7 +244,7 @@ export const Inventory = () => {
 
   // Mobile card component for responsive table
   const MobileInventoryCard = ({ item, index }) => (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm min-w-0">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center space-x-3">
           <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -242,7 +252,7 @@ export const Inventory = () => {
           </div>
           <div>
             <h3 className="font-medium text-gray-900">{item.product?.name || 'N/A'}</h3>
-            <p className="text-sm text-gray-500">Category: {item.product?.category || 'N/A'}</p>
+            <p className="text-sm text-gray-500">Category: {typeof item.product?.category === 'object' ? (item.product?.category?.name ?? 'N/A') : (item.product?.category || 'N/A')}</p>
           </div>
         </div>
         <div className="text-right">
@@ -315,19 +325,20 @@ export const Inventory = () => {
         <AlertTriangle className="mx-auto h-12 w-12 text-red-400" />
         <h3 className="mt-2 text-sm font-medium text-gray-900">Error loading inventory</h3>
         <p className="mt-1 text-sm text-gray-500">{error.message}</p>
-        <button
+        <Button
           onClick={() => refetch()}
-          className="mt-4 btn btn-primary"
+          variant="default"
+          className="mt-4"
         >
           <RefreshCw className="h-4 w-4 mr-2" />
           Try Again
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <ResponsiveContainer className="space-y-6">
+    <ResponsiveContainer className="space-y-4 xl:space-y-6 min-w-0">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
         <div>
@@ -335,113 +346,141 @@ export const Inventory = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Track and manage product stock levels</p>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-          <button
-            onClick={() => setShowAdjustmentModal(true)}
-            className="btn btn-primary btn-md flex items-center justify-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Stock Adjustment
-          </button>
-          <button
+        <div className="flex flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto flex-shrink-0">
+          {!lowStockFilter && (
+            <Button
+              onClick={() => setShowAdjustmentModal(true)}
+              variant="default"
+              size="default"
+              className="flex items-center justify-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Stock Adjustment
+            </Button>
+          )}
+          <Button
             onClick={() => refetch()}
-            className="btn btn-secondary btn-md flex items-center justify-center gap-2"
+            variant="secondary"
+            size="default"
+            className="flex items-center justify-center gap-2"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleOpenWarehousesTab}
-            className="btn btn-light btn-md flex items-center justify-center gap-2"
+            variant="ghost"
+            size="default"
+            className="flex items-center justify-center gap-2"
           >
             <Warehouse className="h-4 w-4" />
             Add Warehouse
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <ResponsiveGrid cols={{ default: 2, md: 4 }} gap={4}>
-        <LoadingCard isLoading={summaryLoading} className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Package className="h-6 w-6 text-blue-600" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {summaryLoading ? (
+          <>
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 animate-pulse">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-full bg-gray-200" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-24" />
+                    <div className="h-7 bg-gray-200 rounded w-12" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 xl:p-5 min-w-0">
+              <div className="flex items-center gap-4">
+                <div className="p-2.5 bg-blue-100 rounded-full">
+                  <Package className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Products</p>
+                  <p className="text-2xl font-bold text-gray-900">{summaryData?.totalProducts ?? 0}</p>
+                </div>
+              </div>
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Products</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {summaryData?.totalProducts || 0}
-              </p>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 xl:p-5 min-w-0">
+              <div className="flex items-center gap-4">
+                <div className="p-2.5 bg-green-100 rounded-full">
+                  <TrendingUp className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">In Stock</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {(summaryData?.totalProducts ?? 0) - (summaryData?.outOfStock ?? 0)}
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-        </LoadingCard>
-        
-        <LoadingCard isLoading={summaryLoading} className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <TrendingUp className="h-6 w-6 text-green-600" />
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 xl:p-5 min-w-0">
+              <div className="flex items-center gap-4">
+                <div className="p-2.5 bg-yellow-100 rounded-full">
+                  <AlertTriangle className="h-6 w-6 text-yellow-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Low Stock</p>
+                  <p className="text-2xl font-bold text-gray-900">{summaryData?.lowStock ?? 0}</p>
+                </div>
+              </div>
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">In Stock</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {(summaryData?.totalProducts || 0) - (summaryData?.outOfStock || 0)}
-              </p>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 xl:p-5 min-w-0">
+              <div className="flex items-center gap-4">
+                <div className="p-2.5 bg-red-100 rounded-full">
+                  <TrendingDown className="h-6 w-6 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Out of Stock</p>
+                  <p className="text-2xl font-bold text-gray-900">{summaryData?.outOfStock ?? 0}</p>
+                </div>
+              </div>
             </div>
-          </div>
-        </LoadingCard>
-        
-        <LoadingCard isLoading={summaryLoading} className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="p-2 bg-yellow-100 rounded-lg">
-              <AlertTriangle className="h-6 w-6 text-yellow-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Low Stock</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {summaryData?.lowStock || 0}
-              </p>
-            </div>
-          </div>
-        </LoadingCard>
-        
-        <LoadingCard isLoading={summaryLoading} className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <TrendingDown className="h-6 w-6 text-red-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Out of Stock</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {summaryData?.outOfStock || 0}
-              </p>
-            </div>
-          </div>
-        </LoadingCard>
-      </ResponsiveGrid>
+          </>
+        )}
+      </div>
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-4 xl:p-5 min-w-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 xl:gap-4">
           <div>
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Search</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Show</label>
+            <select
+              value={itemsPerPage}
+              onChange={handleLimitChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+            >
+              {LIMIT_OPTIONS.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Search</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search products..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 input"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
-          
           <div>
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Status</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="input"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
             >
               <option value="">All Status</option>
               <option value="active">Active</option>
@@ -450,14 +489,13 @@ export const Inventory = () => {
               <option value="discontinued">Discontinued</option>
             </select>
           </div>
-          
           <div>
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Warehouse</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Warehouse</label>
             <select
               value={warehouseFilter}
               onChange={(e) => setWarehouseFilter(e.target.value)}
-              className="input"
               disabled={warehouseListLoading}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white disabled:bg-gray-50"
             >
               {warehouseOptions.map((option) => (
                 <option key={option.value || 'all'} value={option.value}>
@@ -466,37 +504,35 @@ export const Inventory = () => {
               ))}
             </select>
             {warehouseListError && (
-              <p className="mt-1 text-xs text-red-500">
-                Unable to load warehouses. Showing default filter options.
-              </p>
+              <p className="mt-1 text-xs text-red-500">Unable to load warehouses.</p>
             )}
           </div>
-          
-          <div className="flex items-end">
-            <label className="flex items-center space-x-2">
+          <div className="flex items-center sm:items-end lg:col-span-2 sm:col-span-2">
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={lowStockFilter}
                 onChange={(e) => setLowStockFilter(e.target.checked)}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-4 w-4"
               />
-              <span className="text-xs sm:text-sm font-medium text-gray-700">Low Stock Only</span>
+              <span className="text-sm font-medium text-gray-700">Low Stock Only</span>
             </label>
           </div>
         </div>
       </div>
 
       {/* Inventory Table */}
-      <div className="bg-white rounded-lg shadow">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden min-w-0">
         <ResponsiveTable
-          data={inventoryData?.inventory || inventoryData?.data?.inventory || []}
+          data={inventoryData?.inventory ?? inventoryData?.data?.inventory ?? inventoryData?.data?.items ?? []}
           columns={columns}
           onRowClick={handleRowClick}
           onEdit={handleEdit}
           onView={handleView}
           mobileCardComponent={MobileInventoryCard}
-          searchable={false} // We have our own search
+          searchable={false}
           emptyMessage="No inventory items found"
+          useMobileCardsOnTablet
         />
       </div>
 
@@ -517,20 +553,24 @@ export const Inventory = () => {
               const pagination = inventoryData?.pagination || inventoryData?.data?.pagination;
               return (
                 <>
-                  <button
+                  <Button
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={!pagination?.hasPrev}
-                    className="btn btn-secondary btn-md flex-1 sm:flex-none"
+                    variant="secondary"
+                    size="default"
+                    className="flex-1 sm:flex-none"
                   >
                     Previous
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={() => setCurrentPage(prev => prev + 1)}
                     disabled={!pagination?.hasNext}
-                    className="btn btn-secondary btn-md flex-1 sm:flex-none"
+                    variant="secondary"
+                    size="default"
+                    className="flex-1 sm:flex-none"
                   >
                     Next
-                  </button>
+                  </Button>
                 </>
               );
             })()}

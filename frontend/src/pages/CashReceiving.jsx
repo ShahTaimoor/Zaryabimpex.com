@@ -10,11 +10,15 @@ import {
 } from 'lucide-react';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatCurrency } from '../utils/formatters';
-import { useCitiesQuery, useLazyGetCustomersQuery } from '../store/services/customersApi';
+import { 
+  useCitiesQuery, 
+  useLazyGetCustomersByCitiesQuery 
+} from '../store/services/customersApi';
 import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useCreateBatchCashReceiptsMutation } from '../store/services/cashReceiptsApi';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import PrintModal from '../components/PrintModal';
+import { Button } from '@/components/ui/button';
 
 // Helper function to get local date in YYYY-MM-DD format (avoids timezone issues with toISOString)
 const getLocalDateString = (date = new Date()) => {
@@ -50,7 +54,7 @@ const CashReceiving = () => {
   const [customers, setCustomers] = useState([]);
   const [customerEntries, setCustomerEntries] = useState([]);
   const [fetchCustomersByCities, { data: customersResponse, isFetching: customersLoading }] =
-    useLazyGetCustomersQuery();
+    useLazyGetCustomersByCitiesQuery();
 
   // Print modal state
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -115,8 +119,8 @@ const CashReceiving = () => {
     }
 
     const citiesParam = selectedCities.join(',');
-    // Always fetch all customers, filtering is done on frontend
-    fetchCustomersByCities({ cities: citiesParam, showZeroBalance: true })
+    // Increase limit to 1000 to ensure all customers are loaded
+    fetchCustomersByCities({ cities: citiesParam, showZeroBalance: true, limit: 1000 })
       .unwrap()
       .then((response) => {
         const loadedCustomers = response?.data?.customers || response?.customers || response?.data || response || [];
@@ -132,20 +136,35 @@ const CashReceiving = () => {
           
           // Extract city from customer data - check multiple possible locations
           let customerCity = customer.city || '';
-          if (!customerCity && customer.addresses && customer.addresses.length > 0) {
-            const defaultAddress = customer.addresses.find(addr => addr.isDefault) || customer.addresses[0];
-            customerCity = defaultAddress?.city || '';
+          if (!customerCity) {
+            // Check address field which can be a string or object in Postgres
+            const rawAddr = customer.address || customer.addresses;
+            let addr = rawAddr;
+            if (typeof rawAddr === 'string') {
+              try {
+                addr = JSON.parse(rawAddr);
+              } catch (e) {
+                addr = null;
+              }
+            }
+            
+            if (Array.isArray(addr) && addr.length > 0) {
+              const defaultAddr = addr.find(a => a.isDefault) || addr[0];
+              customerCity = defaultAddr?.city || '';
+            } else if (addr && typeof addr === 'object') {
+              customerCity = addr.city || '';
+            }
           }
           
           return {
-            customerId: customer._id,
-            accountName: customer.accountName || customer.businessName || customer.name,
+            customerId: customer.id || customer._id,
+            accountName: customer.accountName || customer.businessName || customer.business_name || customer.name,
             balance: netBalance, // Use net balance to match account ledger
             particular: '',
             amount: '',
             city: customerCity, // Store city for printing
             phone: customer.phone || '', // Store phone for printing
-            name: customer.businessName || customer.name || '', // Store name for printing
+            name: customer.businessName || customer.business_name || customer.name || '', // Store name for printing
           };
         });
 
@@ -218,6 +237,7 @@ const CashReceiving = () => {
       voucherDate: voucherData.voucherDate,
       cashAccount: voucherData.cashAccount,
       paymentType: voucherData.paymentType,
+      voucherNo: voucherData.voucherNo,
       receipts
     };
 
@@ -599,7 +619,7 @@ const CashReceiving = () => {
               >
                 <option value="CASH IN HAND">CASH IN HAND</option>
                 {cashAccounts.map(account => (
-                  <option key={account._id} value={account.accountName}>
+                  <option key={account.id || account._id} value={account.accountName}>
                     {account.accountName}
                   </option>
                 ))}
@@ -705,25 +725,30 @@ const CashReceiving = () => {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2">
-              <button
+              <Button
                 onClick={handlePrintCustomerList}
                 disabled={customers.length === 0}
-                className="btn btn-md flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="success"
+                size="default"
+                className="flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Print customer balance list"
               >
                 <Printer className="h-4 w-4" />
                 <span>Print List</span>
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleUnselectAll}
-                className="btn btn-md bg-gray-500 hover:bg-gray-600 text-white"
+                variant="secondary"
+                size="default"
               >
                 UnSelect All
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={loadCustomers}
                 disabled={customersLoading || selectedCities.length === 0}
-                className="btn btn-md flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="default"
+                size="default"
+                className="flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {customersLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -731,7 +756,7 @@ const CashReceiving = () => {
                   <RefreshCw className="h-4 w-4" />
                 )}
                 <span>Load</span>
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -933,10 +958,12 @@ const CashReceiving = () => {
 
       {/* Action Buttons */}
       <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 bg-white rounded-lg shadow p-4 sm:p-6">
-        <button
+        <Button
           onClick={handleSave}
           disabled={creating || total === 0}
-          className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="default"
+          size="default"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {creating ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -944,22 +971,26 @@ const CashReceiving = () => {
             <Save className="h-4 w-4" />
           )}
           <span>Save</span>
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={handleReset}
-          className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+          variant="outline"
+          size="default"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           <RotateCcw className="h-4 w-4" />
           <span>Reset</span>
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={handlePrint}
           disabled={customerEntries.filter(e => parseFloat(e.amount) > 0).length === 0}
-          className="btn btn-md flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+          variant="success"
+          size="default"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Printer className="h-4 w-4" />
           <span>Print</span>
-        </button>
+        </Button>
       </div>
 
       {/* Print Modal */}

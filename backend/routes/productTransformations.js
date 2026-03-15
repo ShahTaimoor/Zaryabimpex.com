@@ -1,11 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { body, param, query, validationResult } = require('express-validator');
-const ProductTransformation = require('../models/ProductTransformation'); // Still needed for new ProductTransformation()
-const ProductVariant = require('../models/ProductVariant'); // Still needed for model reference
-const Product = require('../models/Product'); // Still needed for model reference
-const Inventory = require('../models/Inventory'); // Still needed for new Inventory()
-const StockMovement = require('../models/StockMovement'); // Still needed for new StockMovement()
 const { auth, requirePermission } = require('../middleware/auth');
 const productTransformationRepository = require('../repositories/ProductTransformationRepository');
 const productVariantRepository = require('../repositories/ProductVariantRepository');
@@ -16,13 +11,16 @@ const stockMovementRepository = require('../repositories/StockMovementRepository
 // @route   GET /api/product-transformations
 // @desc    Get all product transformations with filters
 // @access  Private
+const userRepository = require('../repositories/UserRepository');
+
 router.get('/', [
   auth,
   requirePermission('view_inventory'),
-  query('baseProduct').optional().isMongoId(),
-  query('targetVariant').optional().isMongoId(),
+  query('baseProduct').optional().isUUID(4),
+  query('targetVariant').optional().isUUID(4),
   query('status').optional().isIn(['pending', 'in_progress', 'completed', 'cancelled']),
   query('transformationType').optional().isIn(['color', 'warranty', 'size', 'finish', 'custom']),
+  query('search').optional().isString().trim(),
   query('startDate').optional().isISO8601(),
   query('endDate').optional().isISO8601()
 ], async (req, res) => {
@@ -32,13 +30,13 @@ router.get('/', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { baseProduct, targetVariant, status, transformationType, startDate, endDate } = req.query;
+    const { baseProduct, targetVariant, status, transformationType, search, startDate, endDate } = req.query;
     const filter = {};
-
     if (baseProduct) filter.baseProduct = baseProduct;
     if (targetVariant) filter.targetVariant = targetVariant;
     if (status) filter.status = status;
     if (transformationType) filter.transformationType = transformationType;
+    if (search) filter.search = search;
     if (startDate || endDate) {
       filter.transformationDate = {};
       if (startDate) filter.transformationDate.$gte = new Date(startDate);
@@ -46,18 +44,25 @@ router.get('/', [
     }
 
     const transformations = await productTransformationRepository.findWithFilter(filter, {
-      sort: { transformationDate: -1 },
-      populate: [
-        { path: 'baseProduct', select: 'name description pricing' },
-        { path: 'targetVariant', select: 'variantName displayName pricing transformationCost' },
-        { path: 'performedBy', select: 'firstName lastName' }
-      ]
+      sort: { transformationDate: -1 }
     });
+
+    const createdByIds = [...new Set(transformations.map(t => t.created_by).filter(Boolean))];
+    const usersMap = {};
+    for (const uid of createdByIds) {
+      const user = await userRepository.findById(uid);
+      if (user) usersMap[uid] = { firstName: user.firstName, lastName: user.lastName };
+    }
+
+    const transformed = transformations.map(t => ({
+      ...t,
+      performedBy: t.created_by ? (usersMap[t.created_by] || null) : null
+    }));
 
     res.json({
       success: true,
-      count: transformations.length,
-      transformations
+      count: transformed.length,
+      transformations: transformed
     });
   } catch (error) {
     console.error('Error fetching product transformations:', error);
@@ -71,7 +76,7 @@ router.get('/', [
 router.get('/:id', [
   auth,
   requirePermission('view_inventory'),
-  param('id').isMongoId()
+  param('id').isUUID(4)
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -79,14 +84,7 @@ router.get('/:id', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const transformation = await productTransformationRepository.findById(req.params.id, {
-      populate: [
-        { path: 'baseProduct', select: 'name description pricing inventory' },
-        { path: 'targetVariant', select: 'variantName displayName pricing transformationCost inventory' },
-        { path: 'performedBy', select: 'firstName lastName email' }
-      ]
-    });
-
+    const transformation = await productTransformationRepository.findById(req.params.id);
     if (!transformation) {
       return res.status(404).json({ message: 'Product transformation not found' });
     }
@@ -107,8 +105,8 @@ router.get('/:id', [
 router.post('/', [
   auth,
   requirePermission('update_inventory'),
-  body('baseProduct').isMongoId().withMessage('Valid base product ID is required'),
-  body('targetVariant').isMongoId().withMessage('Valid target variant ID is required'),
+  body('baseProduct').isUUID(4).withMessage('Valid base product ID is required'),
+  body('targetVariant').isUUID(4).withMessage('Valid target variant ID is required'),
   body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('unitTransformationCost').optional().isFloat({ min: 0 }),
   body('notes').optional().isString().trim().isLength({ max: 1000 })
@@ -120,68 +118,70 @@ router.post('/', [
     }
 
     const { baseProduct, targetVariant, quantity, unitTransformationCost, notes } = req.body;
+    const userId = req.user?.id ?? req.user?._id;
+    const userName = (req.user?.firstName && req.user?.lastName)
+      ? `${req.user.firstName} ${req.user.lastName}`
+      : (req.user?.email || 'System User');
 
-    // Get base product
     const baseProductDoc = await productRepository.findById(baseProduct);
     if (!baseProductDoc) {
       return res.status(404).json({ message: 'Base product not found' });
     }
 
-    // Get target variant
-    const variantDoc = await productVariantRepository.findById(targetVariant, {
-      populate: [{ path: 'baseProduct' }]
-    });
-    
+    const variantDoc = await productVariantRepository.findById(targetVariant);
     if (!variantDoc) {
       return res.status(404).json({ message: 'Target variant not found' });
     }
 
-    // Verify variant belongs to base product
-    if (variantDoc.baseProduct._id.toString() !== baseProduct.toString()) {
-      return res.status(400).json({ 
-        message: 'Target variant does not belong to the specified base product' 
+    const variantBaseProductId = variantDoc.base_product_id || variantDoc.baseProductId;
+    if (variantBaseProductId !== baseProduct) {
+      return res.status(400).json({
+        message: 'Target variant does not belong to the specified base product'
       });
     }
 
-    // Check base product stock
     const baseInventory = await inventoryRepository.findByProduct(baseProduct);
-    if (!baseInventory || baseInventory.currentStock < quantity) {
-      return res.status(400).json({ 
-        message: `Insufficient stock. Available: ${baseInventory?.currentStock || 0}, Required: ${quantity}` 
+    const baseStockCurrent = baseInventory ? Number(baseInventory.current_stock ?? baseInventory.currentStock ?? 0) : 0;
+    if (baseStockCurrent < quantity) {
+      return res.status(400).json({
+        message: `Insufficient stock. Available: ${baseStockCurrent}, Required: ${quantity}`
       });
     }
 
-    // Get or create variant inventory
     let variantInventory = await inventoryRepository.findByProduct(targetVariant);
     if (!variantInventory) {
-      variantInventory = new Inventory({
+      variantInventory = await inventoryRepository.create({
+        productId: targetVariant,
         product: targetVariant,
+        productModel: 'ProductVariant',
         currentStock: 0,
-        reorderPoint: variantDoc.inventory.minStock || 10,
+        reorderPoint: (variantDoc.inventory_data && variantDoc.inventory_data.minStock) || 10,
         reorderQuantity: 50,
         status: 'active'
       });
-      await variantInventory.save();
     }
 
-    // Record stock levels before transformation
-    const baseStockBefore = baseInventory.currentStock;
+    const baseStockBefore = baseStockCurrent;
     const baseStockAfter = baseStockBefore - quantity;
-    const variantStockBefore = variantInventory.currentStock;
+    const variantStockBefore = Number(variantInventory.current_stock ?? variantInventory.currentStock ?? 0);
     const variantStockAfter = variantStockBefore + quantity;
 
-    // Use provided cost or variant's default transformation cost
-    const transformationCost = unitTransformationCost !== undefined 
-      ? unitTransformationCost 
-      : variantDoc.transformationCost;
+    const transformationCost = unitTransformationCost !== undefined
+      ? unitTransformationCost
+      : Number(variantDoc.transformation_cost ?? variantDoc.transformationCost ?? 0);
     const totalCost = quantity * transformationCost;
 
-    // Create transformation record
-    const transformation = new ProductTransformation({
+    const baseProductName = baseProductDoc.name || baseProductDoc.productName || 'Base Product';
+    const targetVariantName = variantDoc.display_name || variantDoc.displayName || variantDoc.variant_name || 'Variant';
+
+    const transformationNumber = `PT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now().toString(36).toUpperCase()}`;
+
+    const transformation = await productTransformationRepository.create({
+      transformationNumber,
       baseProduct,
-      baseProductName: baseProductDoc.name,
+      baseProductName,
       targetVariant,
-      targetVariantName: variantDoc.displayName,
+      targetVariantName,
       quantity,
       unitTransformationCost: transformationCost,
       totalTransformationCost: totalCost,
@@ -189,110 +189,55 @@ router.post('/', [
       baseProductStockAfter: baseStockAfter,
       variantStockBefore: variantStockBefore,
       variantStockAfter: variantStockAfter,
-      transformationType: variantDoc.variantType,
-      notes,
+      transformationType: variantDoc.variant_type || variantDoc.variantType,
+      notes: notes || null,
       status: 'completed',
-      performedBy: req.user._id,
-      transformationDate: new Date(),
-      completedAt: new Date()
+      createdBy: userId
     });
 
-    await transformation.save();
-
-    // Update base product stock (decrease)
-    baseInventory.currentStock = baseStockAfter;
-    baseInventory.movements.push({
-      type: 'out',
-      quantity: quantity,
-      reason: `Transformed to variant: ${variantDoc.displayName}`,
-      reference: transformation.transformationNumber,
-      referenceId: transformation._id,
-      referenceModel: 'ProductTransformation',
-      cost: baseProductDoc.pricing.cost,
-      date: new Date(),
-      performedBy: req.user._id,
-      notes: `Product transformation: ${transformation.transformationNumber}`
+    await inventoryRepository.updateByProductId(baseProduct, {
+      currentStock: baseStockAfter
     });
-    await baseInventory.save();
 
-    // Update base product document
-    baseProductDoc.inventory.currentStock = baseStockAfter;
-    await baseProductDoc.save();
+    const productStockQty = Number(baseProductDoc.stock_quantity ?? baseProductDoc.stockQuantity ?? 0);
+    if (productStockQty !== baseStockAfter) {
+      await productRepository.update(baseProduct, { stockQuantity: baseStockAfter });
+    }
 
-    // Update variant stock (increase)
-    variantInventory.currentStock = variantStockAfter;
-    variantInventory.movements.push({
-      type: 'in',
-      quantity: quantity,
-      reason: `Transformed from base product: ${baseProductDoc.name}`,
-      reference: transformation.transformationNumber,
-      referenceId: transformation._id,
-      referenceModel: 'ProductTransformation',
-      cost: baseProductDoc.pricing.cost + transformationCost,
-      date: new Date(),
-      performedBy: req.user._id,
-      notes: `Product transformation: ${transformation.transformationNumber}`
+    await inventoryRepository.updateByProductId(targetVariant, {
+      currentStock: variantStockAfter
     });
-    await variantInventory.save();
 
-    // Update variant document
-    variantDoc.inventory.currentStock = variantStockAfter;
-    await variantDoc.save();
+    const existingInventoryData = variantDoc.inventory_data && typeof variantDoc.inventory_data === 'object'
+      ? variantDoc.inventory_data
+      : {};
+    await productVariantRepository.updateById(targetVariant, {
+      inventory: { ...existingInventoryData, currentStock: variantStockAfter }
+    });
 
-    // Get user name for StockMovement
-    const userName = req.user.firstName && req.user.lastName 
-      ? `${req.user.firstName} ${req.user.lastName}`
-      : req.user.email || 'System User';
-
-    // Create stock movement records
-    const baseMovement = new StockMovement({
+    const unitCost = Number(baseProductDoc.cost_price ?? baseProductDoc.costPrice ?? (baseProductDoc.pricing && baseProductDoc.pricing.cost) ?? 0);
+    await stockMovementRepository.create({
+      productId: baseProduct,
       product: baseProduct,
-      productName: baseProductDoc.name,
+      productName: baseProductName,
       movementType: 'consumption',
-      quantity: quantity,
-      unitCost: baseProductDoc.pricing.cost,
-      totalValue: quantity * baseProductDoc.pricing.cost,
+      quantity,
+      unitCost,
+      totalValue: quantity * unitCost,
       previousStock: baseStockBefore,
       newStock: baseStockAfter,
       referenceType: 'production',
-      referenceId: transformation._id,
-      referenceNumber: transformation.transformationNumber,
-      notes: `Transformed to ${variantDoc.displayName}`,
-      user: req.user._id,
-      userName: userName
-    });
-    await baseMovement.save();
-
-    const variantMovement = new StockMovement({
-      product: targetVariant,
-      productName: variantDoc.displayName,
-      movementType: 'production',
-      quantity: quantity,
-      unitCost: baseProductDoc.pricing.cost + transformationCost,
-      totalValue: quantity * (baseProductDoc.pricing.cost + transformationCost),
-      previousStock: variantStockBefore,
-      newStock: variantStockAfter,
-      referenceType: 'production',
-      referenceId: transformation._id,
-      referenceNumber: transformation.transformationNumber,
-      notes: `Transformed from ${baseProductDoc.name}`,
-      user: req.user._id,
-      userName: userName
-    });
-    await variantMovement.save();
-
-    const populatedTransformation = await productTransformationRepository.findById(transformation._id, {
-      populate: [
-        { path: 'baseProduct', select: 'name description pricing' },
-        { path: 'targetVariant', select: 'variantName displayName pricing' },
-        { path: 'performedBy', select: 'firstName lastName' }
-      ]
+      referenceId: transformation.id || transformation._id,
+      referenceNumber: transformation.transformation_number || transformation.transformationNumber,
+      notes: notes || `Transformed to ${targetVariantName}`,
+      userId,
+      userName
     });
 
     res.status(201).json({
       success: true,
       message: 'Product transformation completed successfully',
-      transformation: populatedTransformation
+      transformation
     });
   } catch (error) {
     console.error('Error creating product transformation:', error);
@@ -306,7 +251,7 @@ router.post('/', [
 router.put('/:id/cancel', [
   auth,
   requirePermission('update_inventory'),
-  param('id').isMongoId()
+  param('id').isUUID(4)
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -319,19 +264,19 @@ router.put('/:id/cancel', [
       return res.status(404).json({ message: 'Product transformation not found' });
     }
 
-    if (transformation.status === 'completed') {
-      return res.status(400).json({ 
-        message: 'Cannot cancel a completed transformation. Please create a reverse transformation instead.' 
+    const status = transformation.status;
+    if (status === 'completed') {
+      return res.status(400).json({
+        message: 'Cannot cancel a completed transformation. Please create a reverse transformation instead.'
       });
     }
 
-    transformation.status = 'cancelled';
-    await transformation.save();
+    const updated = await productTransformationRepository.updateById(req.params.id, { status: 'cancelled' });
 
     res.json({
       success: true,
       message: 'Product transformation cancelled successfully',
-      transformation
+      transformation: updated
     });
   } catch (error) {
     console.error('Error cancelling product transformation:', error);
@@ -340,4 +285,3 @@ router.put('/:id/cancel', [
 });
 
 module.exports = router;
-

@@ -1,17 +1,16 @@
 /**
- * Global Error Handling Middleware for MongoDB Errors
- * Handles duplicate key errors (11000) and WriteConflict errors (112)
+ * Global Error Handling Middleware
+ * Handles duplicate key errors (PostgreSQL 23505, MongoDB 11000) and WriteConflict (112)
  * Ensures the server never crashes from database errors
  */
 
-const mongoose = require('mongoose');
 const logger = require('../utils/logger');
 
 /**
- * Check if error is a MongoDB duplicate key error (E11000)
+ * Check if error is a duplicate key error (PostgreSQL unique_violation or MongoDB E11000)
  */
 const isDuplicateKeyError = (error) => {
-  return error.code === 11000 || error.codeName === 'DuplicateKey';
+  return error.code === '23505' || error.code === 11000 || error.codeName === 'DuplicateKey';
 };
 
 /**
@@ -25,10 +24,16 @@ const isWriteConflictError = (error) => {
  * Extract duplicate key field name from error
  */
 const getDuplicateKeyField = (error) => {
-  if (!error.keyPattern) return 'unknown';
-  
-  const keys = Object.keys(error.keyPattern);
-  return keys.length > 0 ? keys[0] : 'unknown';
+  if (error.keyPattern) {
+    const keys = Object.keys(error.keyPattern);
+    return keys.length > 0 ? keys[0] : 'unknown';
+  }
+  // PostgreSQL: constraint detail in error.detail, e.g. "Key (email)=(x@y.com) already exists"
+  if (error.detail && typeof error.detail === 'string') {
+    const m = error.detail.match(/Key \(([^)]+)\)/);
+    return m ? m[1] : 'unknown';
+  }
+  return 'unknown';
 };
 
 /**
@@ -36,7 +41,12 @@ const getDuplicateKeyField = (error) => {
  */
 const formatDuplicateKeyMessage = (error) => {
   const field = getDuplicateKeyField(error);
-  const value = error.keyValue ? error.keyValue[field] : 'unknown';
+  let value = 'unknown';
+  if (error.keyValue && error.keyValue[field]) value = error.keyValue[field];
+  else if (error.detail && typeof error.detail === 'string') {
+    const m = error.detail.match(/\(([^)]+)\)=\(([^)]*)\)/);
+    if (m) value = m[2];
+  }
   
   // Common field mappings for user-friendly messages
   const fieldMessages = {
@@ -129,7 +139,7 @@ const errorHandler = (err, req, res, next) => {
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
   });
 
-  // Handle MongoDB duplicate key error (11000) - return HTTP 409 Conflict
+  // Handle duplicate key error (PostgreSQL 23505, MongoDB 11000) - return HTTP 409 Conflict
   if (isDuplicateKeyError(err)) {
     const formatted = formatDuplicateKeyMessage(err);
     // Ensure status code is 409 for duplicate key errors
@@ -140,7 +150,7 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Handle MongoDB WriteConflict error (112) and TransientTransactionError - return HTTP 409 Conflict
+  // Handle WriteConflict (112) and TransientTransactionError - return HTTP 409 Conflict
   if (isWriteConflictError(err)) {
     const formatted = formatWriteConflictMessage(err);
     formatted.statusCode = 409;
@@ -165,7 +175,7 @@ const errorHandler = (err, req, res, next) => {
     }
   }
 
-  // Handle Mongoose validation errors
+  // Handle validation errors
   const validationError = formatValidationError(err);
   if (validationError) {
     return res.status(validationError.statusCode).json({
@@ -174,7 +184,7 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Handle Mongoose CastError (invalid ObjectId)
+  // Handle CastError (invalid ID)
   const castError = formatCastError(err);
   if (castError) {
     return res.status(castError.statusCode).json({
@@ -183,8 +193,8 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Handle Mongoose connection errors
-  if (err.name === 'MongoNetworkError' || err.name === 'MongoTimeoutError') {
+  // Handle database connection errors
+  if (err.name === 'MongoNetworkError' || err.name === 'MongoTimeoutError' || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
     return res.status(503).json({
       success: false,
       error: {

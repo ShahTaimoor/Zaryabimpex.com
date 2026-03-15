@@ -32,7 +32,11 @@ export const discountsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Discounts', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Discounts', id: 'LIST' },
+        { type: 'Discounts', id: 'STATS' },
+        { type: 'Discounts', id: 'ACTIVE' },
+      ],
     }),
     updateDiscount: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -43,6 +47,8 @@ export const discountsApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Discounts', id },
         { type: 'Discounts', id: 'LIST' },
+        { type: 'Discounts', id: 'STATS' },
+        { type: 'Discounts', id: 'ACTIVE' },
       ],
     }),
     deleteDiscount: builder.mutation({
@@ -53,6 +59,8 @@ export const discountsApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'Discounts', id },
         { type: 'Discounts', id: 'LIST' },
+        { type: 'Discounts', id: 'STATS' },
+        { type: 'Discounts', id: 'ACTIVE' },
       ],
     }),
     toggleDiscountStatus: builder.mutation({
@@ -63,6 +71,8 @@ export const discountsApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'Discounts', id },
         { type: 'Discounts', id: 'LIST' },
+        { type: 'Discounts', id: 'STATS' },
+        { type: 'Discounts', id: 'ACTIVE' },
       ],
     }),
     applyDiscount: builder.mutation({
@@ -71,7 +81,22 @@ export const discountsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Discounts', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Discounts', id: 'LIST' },
+        { type: 'Discounts', id: 'STATS' },
+        { type: 'Discounts', id: 'ACTIVE' },
+        { type: 'Sales', id: 'LIST' },
+        { type: 'Sales', id: 'TODAY_SUMMARY' },
+        { type: 'Sales', id: 'PERIOD_SUMMARY' },
+        { type: 'Orders', id: 'LIST' },
+        { type: 'Customers', id: 'LIST' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'SALES_REPORT' },
+        { type: 'Reports', id: 'CUSTOMER_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     removeDiscount: builder.mutation({
       query: (data) => ({
@@ -79,7 +104,22 @@ export const discountsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Discounts', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Discounts', id: 'LIST' },
+        { type: 'Discounts', id: 'STATS' },
+        { type: 'Discounts', id: 'ACTIVE' },
+        { type: 'Sales', id: 'LIST' },
+        { type: 'Sales', id: 'TODAY_SUMMARY' },
+        { type: 'Sales', id: 'PERIOD_SUMMARY' },
+        { type: 'Orders', id: 'LIST' },
+        { type: 'Customers', id: 'LIST' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'SALES_REPORT' },
+        { type: 'Reports', id: 'CUSTOMER_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     checkApplicableDiscounts: builder.mutation({
       query: (data) => ({

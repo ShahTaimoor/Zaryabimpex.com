@@ -26,6 +26,10 @@ export const categoriesApi = api.injectEndpoints({
       invalidatesTags: [
         { type: 'Categories', id: 'LIST' },
         { type: 'Categories', id: 'TREE' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
     updateCategory: builder.mutation({
@@ -34,9 +38,14 @@ export const categoriesApi = api.injectEndpoints({
         method: 'put',
         data,
       }),
-      invalidatesTags: [
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Categories', id },
         { type: 'Categories', id: 'LIST' },
         { type: 'Categories', id: 'TREE' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
     deleteCategory: builder.mutation({
@@ -44,43 +53,24 @@ export const categoriesApi = api.injectEndpoints({
         url: `categories/${id}`,
         method: 'delete',
       }),
-      invalidatesTags: [
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'Categories', id },
         { type: 'Categories', id: 'LIST' },
         { type: 'Categories', id: 'TREE' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
-    exportCategoriesCSV: builder.mutation({
-      query: (params) => ({
-        url: 'categories/export/csv',
-        method: 'get',
-        params,
-        responseType: 'blob',
-      }),
-    }),
-    exportCategoriesExcel: builder.mutation({
-      query: (params) => ({
+    exportCategories: builder.mutation({
+      query: (filters) => ({
         url: 'categories/export/excel',
-        method: 'get',
-        params,
-        responseType: 'blob',
+        method: 'post',
+        data: { filters },
       }),
     }),
-    importCategoriesCSV: builder.mutation({
-      query: (file) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        return {
-          url: 'categories/import/csv',
-          method: 'post',
-          data: formData,
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        };
-      },
-      invalidatesTags: [{ type: 'Categories', id: 'LIST' }, { type: 'Categories', id: 'TREE' }],
-    }),
-    importCategoriesExcel: builder.mutation({
+    importCategories: builder.mutation({
       query: (file) => {
         const formData = new FormData();
         formData.append('file', file);
@@ -93,11 +83,25 @@ export const categoriesApi = api.injectEndpoints({
           },
         };
       },
-      invalidatesTags: [{ type: 'Categories', id: 'LIST' }, { type: 'Categories', id: 'TREE' }],
+      invalidatesTags: [
+        { type: 'Categories', id: 'LIST' },
+        { type: 'Categories', id: 'TREE' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     downloadCategoryTemplate: builder.query({
       query: () => ({
-        url: 'categories/import/template',
+        url: 'categories/template/excel',
+        method: 'get',
+        responseType: 'blob',
+      }),
+    }),
+    downloadCategoryExportFile: builder.query({
+      query: (filename) => ({
+        url: `categories/download/${filename}`,
         method: 'get',
         responseType: 'blob',
       }),
@@ -112,10 +116,9 @@ export const {
   useCreateCategoryMutation,
   useUpdateCategoryMutation,
   useDeleteCategoryMutation,
-  useExportCategoriesCSVMutation,
-  useExportCategoriesExcelMutation,
-  useImportCategoriesCSVMutation,
-  useImportCategoriesExcelMutation,
-  useLazyDownloadCategoryTemplateQuery,
+  useExportCategoriesMutation,
+  useImportCategoriesMutation,
+  useDownloadCategoryTemplateQuery,
+  useLazyDownloadCategoryExportFileQuery,
 } = categoriesApi;
 

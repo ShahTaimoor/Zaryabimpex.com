@@ -46,7 +46,17 @@ export const productsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Products', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'LOW_STOCK' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     updateProduct: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -57,6 +67,14 @@ export const productsApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { id }) => [
         { type: 'Products', id },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'LOW_STOCK' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
     deleteProduct: builder.mutation({
@@ -67,6 +85,14 @@ export const productsApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, id) => [
         { type: 'Products', id },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'LOW_STOCK' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
     bulkUpdateProducts: builder.mutation({
@@ -75,7 +101,17 @@ export const productsApi = api.injectEndpoints({
         method: 'put',
         data: { productIds, updates },
       }),
-      invalidatesTags: [{ type: 'Products', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'LOW_STOCK' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     bulkDeleteProducts: builder.mutation({
       query: ({ productIds }) => ({
@@ -83,7 +119,17 @@ export const productsApi = api.injectEndpoints({
         method: 'delete',
         data: { productIds },
       }),
-      invalidatesTags: [{ type: 'Products', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'LOW_STOCK' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     searchProducts: builder.query({
       query: (query) => ({
@@ -120,6 +166,12 @@ export const productsApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { productId }) => [
         { type: 'Products', id: productId },
         { type: 'Products', id: 'LIST' },
+        { type: 'Settings', id: 'INVESTORS_LIST' },
+        { type: 'Accounting', id: 'PROFIT_SHARES' },
+        { type: 'Accounting', id: 'PROFIT_SUMMARY' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
     exportCSV: builder.mutation({
@@ -146,7 +198,17 @@ export const productsApi = api.injectEndpoints({
           data: formData,
         };
       },
-      invalidatesTags: [{ type: 'Products', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'LOW_STOCK' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     importCSV: builder.mutation({
       query: (file) => {
@@ -158,7 +220,17 @@ export const productsApi = api.injectEndpoints({
           data: formData,
         };
       },
-      invalidatesTags: [{ type: 'Products', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'LOW_STOCK' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     downloadFile: builder.query({
       query: (filename) => ({

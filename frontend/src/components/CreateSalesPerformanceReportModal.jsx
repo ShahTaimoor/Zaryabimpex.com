@@ -18,6 +18,8 @@ import {
 import { useGenerateReportMutation } from '../store/services/salesPerformanceApi';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { LoadingButton } from '../components/LoadingSpinner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const CreateSalesPerformanceReportModal = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -319,13 +321,12 @@ const CreateSalesPerformanceReportModal = ({ isOpen, onClose, onSuccess }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Limit Results
                     </label>
-                    <input
+                    <Input
                       type="number"
-                      min="1"
-                      max="100"
+                      min={1}
+                      max={100}
                       value={formData.limit}
                       onChange={(e) => handleInputChange('limit', parseInt(e.target.value))}
-                      className="input"
                       placeholder="10"
                     />
                     {errors.limit && (
@@ -423,11 +424,10 @@ const CreateSalesPerformanceReportModal = ({ isOpen, onClose, onSuccess }) => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Start Date
                         </label>
-                        <input
+                        <Input
                           type="date"
                           value={formData.startDate}
                           onChange={(e) => handleInputChange('startDate', e.target.value)}
-                          className="input"
                         />
                         {errors.startDate && (
                           <p className="mt-2 text-sm text-red-600">{errors.startDate}</p>
@@ -437,11 +437,10 @@ const CreateSalesPerformanceReportModal = ({ isOpen, onClose, onSuccess }) => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           End Date
                         </label>
-                        <input
+                        <Input
                           type="date"
                           value={formData.endDate}
                           onChange={(e) => handleInputChange('endDate', e.target.value)}
-                          className="input"
                         />
                         {errors.endDate && (
                           <p className="mt-2 text-sm text-red-600">{errors.endDate}</p>
@@ -576,17 +575,17 @@ const CreateSalesPerformanceReportModal = ({ isOpen, onClose, onSuccess }) => {
 
             {/* Footer */}
             <div className="bg-gray-50 px-6 py-4 flex justify-end space-x-3">
-              <button
+              <Button
                 type="button"
                 onClick={handleClose}
-                className="btn btn-secondary"
+                variant="secondary"
               >
                 Cancel
-              </button>
+              </Button>
               <LoadingButton
                 type="submit"
                 isLoading={isGenerating}
-                className="btn btn-primary"
+                variant="default"
               >
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Generate Report

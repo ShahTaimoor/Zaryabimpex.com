@@ -28,6 +28,7 @@ export const authApi = api.injectEndpoints({
         method: 'post',
         data: { currentPassword, newPassword },
       }),
+      invalidatesTags: [{ type: 'Auth', id: 'CURRENT_USER' }],
     }),
     logout: builder.mutation({
       query: () => ({

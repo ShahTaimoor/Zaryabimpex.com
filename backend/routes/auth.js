@@ -139,12 +139,13 @@ router.get('/me', auth, async (req, res) => {
 });
 
 // @route   PUT /api/auth/profile
-// @desc    Update user profile
+// @desc    Update user profile (firstName, lastName, email, phone). For password use POST /api/auth/change-password.
 // @access  Private
 router.put('/profile', [
   auth,
   body('firstName').optional().trim().isLength({ min: 1 }),
   body('lastName').optional().trim().isLength({ min: 1 }),
+  body('email').optional().isEmail().normalizeEmail(),
   body('phone').optional().trim(),
   body('department').optional().trim()
 ], async (req, res) => {
@@ -163,6 +164,9 @@ router.put('/profile', [
   } catch (error) {
     if (error.message === 'User not found') {
       return res.status(404).json({ message: 'User not found' });
+    }
+    if (error.message === 'Email already exists') {
+      return res.status(400).json({ message: 'Email already exists' });
     }
     console.error('Profile update error:', error);
     res.status(500).json({ message: 'Server error' });

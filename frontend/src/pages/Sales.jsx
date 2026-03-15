@@ -20,23 +20,42 @@ import {
   EyeOff,
   Download,
   XCircle,
-  ArrowUpDown
+  ArrowUpDown,
+  ChevronDown
 } from 'lucide-react';
 import { useGetProductsQuery, useLazyGetLastPurchasePriceQuery, useGetLastPurchasePricesMutation } from '../store/services/productsApi';
 import { useGetVariantsQuery, useGetVariantsByBaseProductQuery } from '../store/services/productVariantsApi';
-import { useGetCustomersQuery, useLazySearchCustomersQuery } from '../store/services/customersApi';
-import { useCreateSaleMutation, useUpdateOrderMutation, useLazyGetLastPricesQuery } from '../store/services/salesApi';
+import { useGetCustomersQuery, useGetCustomerQuery, useLazySearchCustomersQuery } from '../store/services/customersApi';
+import {
+  useCreateSaleMutation,
+  useUpdateOrderMutation,
+  useLazyGetLastPricesQuery,
+  useExportExcelMutation,
+  useExportCSVMutation,
+  useExportPDFMutation,
+  useExportJSONMutation,
+  useLazyDownloadExportFileQuery,
+} from '../store/services/salesApi';
+import { useCheckApplicableDiscountsMutation } from '../store/services/discountsApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import AsyncErrorBoundary from '../components/AsyncErrorBoundary';
 import { ClearConfirmationDialog } from '../components/ConfirmationDialog';
 import { useClearConfirmation } from '../hooks/useConfirmation';
 import PaymentModal from '../components/PaymentModal';
-import PrintModal from '../components/PrintModal';
+import PrintModal, { DirectPrintInvoice } from '../components/PrintModal';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useResponsive, ResponsiveGrid } from '../components/ResponsiveContainer';
 import RecommendationSection from '../components/RecommendationSection';
 import useBehaviorTracking from '../hooks/useBehaviorTracking';
@@ -259,11 +278,12 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
       const unitPrice = parseInt(customRate) || Math.round(calculatedRate);
 
       // Check if sale price is less than cost price (always check, regardless of showCostPrice)
-      if (lastPurchasePrice !== null && unitPrice < lastPurchasePrice) {
-        const loss = lastPurchasePrice - unitPrice;
-        const lossPercent = ((loss / lastPurchasePrice) * 100).toFixed(1);
+      const costPrice = lastPurchasePrice !== null ? lastPurchasePrice : selectedProduct?.pricing?.cost;
+      if (costPrice !== undefined && costPrice !== null && unitPrice < costPrice) {
+        const loss = costPrice - unitPrice;
+        const lossPercent = ((loss / costPrice) * 100).toFixed(1);
         const shouldProceed = window.confirm(
-          `⚠️ WARNING: Sale price (${unitPrice}) is below cost price (${Math.round(lastPurchasePrice)}).\n\n` +
+          `⚠️ WARNING: Sale price (${unitPrice}) is below cost price (${Math.round(costPrice)}).\n\n` +
           `Loss per unit: ${Math.round(loss)} (${lossPercent}%)\n` +
           `Total loss for ${quantity} unit(s): ${Math.round(loss * quantity)}\n\n` +
           `Do you want to proceed?`
@@ -367,7 +387,7 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
           <div className={`text-sm ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-orange-600' : 'text-gray-600'}`}>
             Stock: {inventory.currentStock || 0}
           </div>
-          {showCostPrice && hasCostPricePermission && purchasePrice > 0 && (
+          {showCostPrice && hasCostPricePermission && (purchasePrice !== undefined && purchasePrice !== null) && (
             <div className="text-sm text-red-600 font-medium">Cost: {Math.round(purchasePrice)}</div>
           )}
           <div className="text-sm text-gray-600">Price: {Math.round(unitPrice)}</div>
@@ -443,15 +463,16 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Quantity
               </label>
-              <input
+              <Input
                 type="number"
                 min="1"
+                autoComplete="off"
                 max={selectedProduct?.inventory.currentStock}
                 value={quantity}
                 onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
                 onKeyDown={handleKeyDown}
                 onFocus={(e) => e.target.select()}
-                className="input text-center h-10"
+                className="text-center h-10"
                 placeholder="1"
                 autoFocus={isAddingProduct}
               />
@@ -462,14 +483,15 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Rate
               </label>
-              <input
+              <Input
                 type="number"
                 step="1"
+                autoComplete="off"
                 value={customRate}
                 onChange={(e) => setCustomRate(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onFocus={(e) => e.target.select()}
-                className="input text-center h-10"
+                className="text-center h-10"
                 placeholder="0"
                 required
               />
@@ -484,7 +506,7 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
                 <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-2 rounded border border-red-200 block text-center h-10 flex items-center justify-center" title="Cost Price">
                   {lastPurchasePrice !== null
                     ? `${Math.round(lastPurchasePrice)}`
-                    : selectedProduct?.pricing?.cost
+                    : (selectedProduct?.pricing?.cost !== undefined && selectedProduct?.pricing?.cost !== null)
                       ? `${Math.round(selectedProduct.pricing.cost)}`
                       : selectedProduct ? 'N/A' : '0'}
                 </span>
@@ -498,7 +520,8 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
               type="button"
               onClick={handleAddToCart}
               isLoading={isAddingToCart}
-              className="w-full btn btn-primary flex items-center justify-center px-4 py-2.5 h-11"
+              variant="default"
+              className="w-full flex items-center justify-center px-4 py-2.5 h-11"
               disabled={!selectedProduct || isAddingToCart}
               title="Add to cart (or press Enter in Quantity/Rate fields - focus returns to search)"
             >
@@ -557,15 +580,16 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Quantity
             </label>
-            <input
+            <Input
               type="number"
               min="1"
+              autoComplete="off"
               max={selectedProduct?.inventory.currentStock}
               value={quantity}
               onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
               onKeyDown={handleKeyDown}
               onFocus={(e) => e.target.select()}
-              className="input text-center"
+              className="text-center"
               placeholder="1 (Enter to add & focus search)"
               autoFocus={isAddingProduct}
             />
@@ -580,7 +604,7 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
               <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-10 flex items-center justify-center" title="Cost Price">
                 {lastPurchasePrice !== null
                   ? `${Math.round(lastPurchasePrice)}`
-                  : selectedProduct?.pricing?.cost
+                  : (selectedProduct?.pricing?.cost !== undefined && selectedProduct?.pricing?.cost !== null)
                     ? `${Math.round(selectedProduct.pricing.cost)}`
                     : selectedProduct ? 'N/A' : '0'}
               </span>
@@ -592,14 +616,15 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Rate
             </label>
-            <input
+            <Input
               type="number"
               step="1"
+              autoComplete="off"
               value={customRate}
               onChange={(e) => setCustomRate(e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={(e) => e.target.select()}
-              className="input text-center"
+              className="text-center"
               placeholder="0 (Enter to add & focus search)"
               required
             />
@@ -621,7 +646,8 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
               type="button"
               onClick={handleAddToCart}
               isLoading={isAddingToCart}
-              className="w-full btn btn-primary flex items-center justify-center px-3 py-2"
+              variant="default"
+              className="w-full flex items-center justify-center px-3 py-2"
               disabled={!selectedProduct || isAddingToCart}
               title="Add to cart (or press Enter in Quantity/Rate fields - focus returns to search)"
             >
@@ -670,6 +696,7 @@ export const Sales = ({ tabId, editData }) => {
   const [amountPaid, setAmountPaid] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [directPrintOrder, setDirectPrintOrder] = useState(null);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [appliedDiscounts, setAppliedDiscounts] = useState([]);
   const [isTaxExempt, setIsTaxExempt] = useState(true);
@@ -677,6 +704,7 @@ export const Sales = ({ tabId, editData }) => {
   const [isAdvancePayment, setIsAdvancePayment] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [autoGenerateInvoice, setAutoGenerateInvoice] = useState(true);
+  const [autoPrint, setAutoPrint] = useState(false); // Default to false as requested
   const [billDate, setBillDate] = useState(getLocalDateString()); // Default to current date for backdating invoices
   const [notes, setNotes] = useState('');
   const [isLoadingLastPrices, setIsLoadingLastPrices] = useState(false);
@@ -726,7 +754,7 @@ export const Sales = ({ tabId, editData }) => {
     return cart.reduce((sum, item) => {
       if (!item?.product) return sum;
 
-      const productId = item.product._id;
+      const productId = item.product._id ?? item.product.id;
       const quantity = Number(item.quantity) || 0;
       const salePrice = Number(item.unitPrice) || 0;
 
@@ -759,12 +787,13 @@ export const Sales = ({ tabId, editData }) => {
     const day = String(now.getDate()).padStart(2, '0');
     const time = String(now.getTime()).slice(-4); // Last 4 digits of timestamp
 
-    // Format: CUSTOMER-INITIALS-YYYYMMDD-XXXX
-    const customerInitials = customer.displayName
+    // Format: CUSTOMER-INITIALS-YYYYMMDD-XXXX (displayName may be missing from API; use businessName/name fallback)
+    const nameStr = customer.displayName ?? customer.businessName ?? customer.name ?? 'CUST';
+    const customerInitials = String(nameStr)
       .split(' ')
       .map(word => word.charAt(0).toUpperCase())
       .join('')
-      .substring(0, 3);
+      .substring(0, 3) || 'CUS';
 
     return `INV-${customerInitials}-${year}${month}${day}-${time}`;
   };
@@ -807,7 +836,7 @@ export const Sales = ({ tabId, editData }) => {
       // Set payment method and amount paid if available
       if (editData.payment) {
         setPaymentMethod(editData.payment.method || 'cash');
-        setAmountPaid(editData.payment.amount || 0);
+        setAmountPaid(editData.payment.amountPaid ?? editData.payment.amount ?? 0);
         if (editData.payment.method === 'bank') {
           setSelectedBankAccount(editData.payment.bankAccount || '');
         } else {
@@ -815,9 +844,19 @@ export const Sales = ({ tabId, editData }) => {
         }
       }
 
-      // Set order type
+      // Set price type from order type (so user can see and change it in edit mode)
       if (editData.orderType) {
-        // Order type is handled by customer selection
+        const ot = String(editData.orderType).toLowerCase();
+        if (ot === 'retail' || ot === 'wholesale' || ot === 'distributor' || ot === 'custom') {
+          setPriceType(ot);
+        }
+      }
+      // Bill date: when editing, show the existing invoice date
+      if (editData.billDate) {
+        const d = editData.billDate instanceof Date ? editData.billDate : new Date(editData.billDate);
+        setBillDate(!isNaN(d.getTime()) ? getLocalDateString(d) : getLocalDateString());
+      } else {
+        setBillDate(getLocalDateString());
       }
 
       // Data loaded successfully (no toast needed as Orders already shows opening message)
@@ -846,6 +885,15 @@ export const Sales = ({ tabId, editData }) => {
   const [createSale, { isLoading: isCreatingSale }] = useCreateSaleMutation();
   const [updateOrder, { isLoading: isUpdatingOrder }] = useUpdateOrderMutation();
   const [getLastPrices] = useLazyGetLastPricesQuery();
+  const [exportExcel] = useExportExcelMutation();
+  const [exportCSV] = useExportCSVMutation();
+  const [exportPDF] = useExportPDFMutation();
+  const [exportJSON] = useExportJSONMutation();
+  const [downloadExportFile] = useLazyDownloadExportFileQuery();
+  const [checkApplicableDiscounts, { isLoading: checkingDiscount }] = useCheckApplicableDiscountsMutation();
+
+  const [discountCodeInput, setDiscountCodeInput] = useState('');
+  const [applicableDiscountList, setApplicableDiscountList] = useState([]);
 
   // Duplicate prevention: use BOTH ref (synchronous check) and state (button disable)
   const isSubmittingRef = useRef(false); // For immediate synchronous checks
@@ -861,6 +909,14 @@ export const Sales = ({ tabId, editData }) => {
   const customers = useMemo(() => {
     return customersData?.data?.customers || customersData?.customers || customersData?.data || customersData || [];
   }, [customersData]);
+
+  const selectedCustomerId = selectedCustomer?.id ?? selectedCustomer?._id ?? null;
+  const { data: selectedCustomerDetail } = useGetCustomerQuery(selectedCustomerId, {
+    skip: !selectedCustomerId,
+    refetchOnMountOrArgChange: true,
+    refetchOnFocus: true // Refetch when window regains focus
+  });
+  const customerWithBalance = selectedCustomerDetail?.data?.customer ?? selectedCustomerDetail?.customer ?? selectedCustomerDetail ?? selectedCustomer;
 
   const activeBanks = useMemo(
     () => {
@@ -900,6 +956,29 @@ export const Sales = ({ tabId, editData }) => {
 
   const subtotal = cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
   const codeDiscountAmount = appliedDiscounts.reduce((sum, discount) => sum + discount.amount, 0);
+
+  // Fetch applicable discount codes when cart subtotal or customer changes
+  useEffect(() => {
+    if (subtotal <= 0) {
+      setApplicableDiscountList([]);
+      return;
+    }
+    let cancelled = false;
+    checkApplicableDiscounts({
+      orderData: { total: subtotal },
+      customerData: selectedCustomer ? { id: selectedCustomer._id || selectedCustomer.id } : null
+    })
+      .unwrap()
+      .then((res) => {
+        if (cancelled) return;
+        const list = res?.applicableDiscounts ?? res?.data?.applicableDiscounts ?? [];
+        setApplicableDiscountList(Array.isArray(list) ? list : []);
+      })
+      .catch(() => {
+        if (!cancelled) setApplicableDiscountList([]);
+      });
+    return () => { cancelled = true; };
+  }, [subtotal, selectedCustomer?._id, selectedCustomer?.id]);
 
   let directDiscountAmount = 0;
   if (directDiscount.value > 0) {
@@ -954,7 +1033,8 @@ export const Sales = ({ tabId, editData }) => {
     // Update tab title to show customer name
     const activeTab = getActiveTab();
     if (activeTab && customer) {
-      updateTabTitle(activeTab.id, `Sales - ${customer.displayName}`);
+      const customerLabel = customer.businessName ?? customer.business_name ?? customer.displayName ?? customer.name ?? 'Customer';
+      updateTabTitle(activeTab.id, `Sales - ${customerLabel}`);
     }
   };
 
@@ -969,7 +1049,7 @@ export const Sales = ({ tabId, editData }) => {
     const fetchLastPurchasePrices = async () => {
       if (cart.length === 0) return;
 
-      const productIds = cart.map(item => item.product._id);
+      const productIds = cart.map((item) => item?.product?._id ?? item?.product?.id).filter(Boolean);
       if (productIds.length === 0) return;
 
       try {
@@ -990,30 +1070,37 @@ export const Sales = ({ tabId, editData }) => {
   }, [cart]);
 
   const addToCart = async (newItem) => {
+    // Normalize: accept either { product, quantity, unitPrice } or product directly
+    const item = newItem?.product
+      ? newItem
+      : { product: newItem, quantity: 1, unitPrice: newItem?.selling_price ?? newItem?.sellingPrice ?? newItem?.pricing?.retail ?? 0 };
+    const product = item?.product;
+    if (!product) return;
+
     setCart(prevCart => {
       // For variants, use variant _id; for products, use product _id
-      const itemId = newItem.product._id;
-      const existingItem = prevCart.find(item => item.product._id === itemId);
+      const itemId = product._id ?? product.id;
+      const existingItem = prevCart.find(c => (c.product?._id ?? c.product?.id) === itemId);
 
       if (existingItem) {
         // Check if combined quantity exceeds available stock
-        const combinedQuantity = existingItem.quantity + newItem.quantity;
-        const availableStock = newItem.product.inventory?.currentStock || 0;
+        const combinedQuantity = existingItem.quantity + item.quantity;
+        const availableStock = product.inventory?.currentStock || 0;
 
         if (combinedQuantity > availableStock) {
-          const displayName = newItem.product.isVariant
-            ? (newItem.product.displayName || newItem.product.variantName || newItem.product.name)
-            : newItem.product.name;
+          const displayName = product.isVariant
+            ? (product.displayName || product.variantName || product.name)
+            : product.name;
           toast.error(`Cannot add ${newItem.quantity} more units. Only ${availableStock - existingItem.quantity} additional units available (${existingItem.quantity} already in cart).`);
           return prevCart; // Return unchanged cart
         }
 
         // If this is an existing item and we have original price stored, keep it
         // Otherwise, if last prices were applied and original price exists, preserve it
-        const updatedCart = prevCart.map(item =>
-          item.product._id === itemId
-            ? { ...item, quantity: item.quantity + newItem.quantity, unitPrice: newItem.unitPrice }
-            : item
+        const updatedCart = prevCart.map(c =>
+          (c.product?._id ?? c.product?.id) === itemId
+            ? { ...c, quantity: c.quantity + item.quantity, unitPrice: item.unitPrice }
+            : c
         );
 
         return updatedCart;
@@ -1021,9 +1108,9 @@ export const Sales = ({ tabId, editData }) => {
 
       // New item added - fetch its last purchase price (always, for loss alerts)
       // For variants, use base product ID to get purchase price
-      const productIdForPrice = newItem.product.isVariant
-        ? newItem.product.baseProductId
-        : newItem.product._id;
+      const productIdForPrice = product.isVariant
+        ? product.baseProductId
+        : (product._id ?? product.id);
 
       if (productIdForPrice) {
         getLastPurchasePrice(productIdForPrice)
@@ -1043,7 +1130,7 @@ export const Sales = ({ tabId, editData }) => {
 
       // New item added - don't store in originalPrices since it wasn't there before
       // applying last prices, so there's nothing to restore
-      return [...prevCart, newItem];
+      return [...prevCart, item];
     });
   };
 
@@ -1079,8 +1166,10 @@ export const Sales = ({ tabId, editData }) => {
     // Check if sale price is less than cost price (always check, regardless of showCostPrice)
     const cartItem = cart.find(item => item.product._id === productId);
     if (cartItem) {
-      const costPrice = lastPurchasePrices[productId];
-      if (costPrice !== undefined && newPrice < costPrice) {
+      const costPrice = lastPurchasePrices[productId] !== undefined
+        ? lastPurchasePrices[productId]
+        : cartItem.product.pricing?.cost;
+      if (costPrice !== undefined && costPrice !== null && newPrice < costPrice) {
         const loss = costPrice - newPrice;
         const lossPercent = ((loss / costPrice) * 100).toFixed(1);
         toast.error(
@@ -1323,6 +1412,72 @@ export const Sales = ({ tabId, editData }) => {
 
   const { confirmation: clearConfirmation, confirmClear, handleConfirm: handleClearConfirm, handleCancel: handleClearCancel } = useClearConfirmation();
 
+  const applyDiscountFromItem = (match) => {
+    const discount = match.discount || {};
+    const code = (discount.code || discount.discount_code || '').toString().toUpperCase();
+    if (!code) return;
+    if (appliedDiscounts.some((d) => (d.code || '').toUpperCase() === code)) {
+      showErrorToast('This discount is already applied');
+      return;
+    }
+    const amount = match.calculatedAmount ?? (discount.type === 'percentage' ? (subtotal * (discount.value || 0)) / 100 : Math.min(discount.value || 0, subtotal));
+    setAppliedDiscounts((prev) => [
+      ...prev,
+      {
+        code: discount.code || discount.discount_code || code,
+        amount: Number(amount) || 0,
+        discountId: discount.id || discount._id,
+        type: discount.type,
+        value: discount.value
+      }
+    ]);
+    setDiscountCodeInput('');
+    showSuccessToast(`Discount ${code} applied`);
+  };
+
+  const handleApplyDiscountCode = async () => {
+    const code = discountCodeInput?.trim?.()?.toUpperCase?.() || '';
+    if (!code) {
+      showErrorToast('Please enter a discount code');
+      return;
+    }
+    if (subtotal <= 0) {
+      showErrorToast('Add items to the cart before applying a discount');
+      return;
+    }
+    try {
+      const res = await checkApplicableDiscounts({
+        orderData: { total: subtotal },
+        customerData: selectedCustomer ? { id: selectedCustomer._id || selectedCustomer.id } : null
+      }).unwrap();
+      const list = res?.applicableDiscounts ?? res?.data?.applicableDiscounts ?? [];
+      const match = list.find(
+        (item) => (item.discount?.code || item.discount?.discount_code || '').toString().toUpperCase() === code
+      );
+      if (!match) {
+        showErrorToast('Invalid or not applicable discount code');
+        return;
+      }
+      applyDiscountFromItem(match);
+    } catch (e) {
+      showErrorToast(e?.data?.message || e?.message || 'Failed to apply discount code');
+    }
+  };
+
+  const handleSelectDiscountFromDropdown = (e) => {
+    const value = e.target.value;
+    if (!value) return;
+    const match = applicableDiscountList.find(
+      (item) => (item.discount?.code || item.discount?.discount_code || '').toString().toUpperCase() === value
+    );
+    if (match) applyDiscountFromItem(match);
+    e.target.value = '';
+  };
+
+  const handleRemoveDiscountCode = (code) => {
+    setAppliedDiscounts((prev) => prev.filter((d) => (d.code || '').toUpperCase() !== (code || '').toUpperCase()));
+  };
+
   const handleClearCart = () => {
     if (cart.length > 0) {
       setIsClearingCart(true);
@@ -1332,6 +1487,7 @@ export const Sales = ({ tabId, editData }) => {
           setSelectedCustomer(null);
           setCustomerSearchTerm('');
           setAppliedDiscounts([]);
+          setDiscountCodeInput('');
           setIsTaxExempt(true);
           setDirectDiscount({ type: 'amount', value: 0 });
           setIsAdvancePayment(false);
@@ -1376,17 +1532,17 @@ export const Sales = ({ tabId, editData }) => {
 
       let response;
       if (exportFormat === 'excel') {
-        response = await salesAPI.exportExcel(filters);
+        response = await exportExcel(filters).unwrap();
       } else if (exportFormat === 'csv') {
-        response = await salesAPI.exportCSV(filters);
+        response = await exportCSV(filters).unwrap();
       } else if (exportFormat === 'json') {
-        response = await salesAPI.exportJSON(filters);
+        response = await exportJSON(filters).unwrap();
       } else if (exportFormat === 'pdf') {
-        response = await salesAPI.exportPDF(filters);
+        response = await exportPDF(filters).unwrap();
       }
 
-      if (response?.data?.filename) {
-        const filename = response.data.filename;
+      if (response?.filename) {
+        const filename = response.filename;
 
         try {
           // Add a small delay to ensure file is written (PDF generation is async)
@@ -1395,61 +1551,25 @@ export const Sales = ({ tabId, editData }) => {
           }
 
           // Download the file
-          let downloadResponse;
-          try {
-            downloadResponse = await salesAPI.downloadFile(filename);
-          } catch (downloadErr) {
-            // Handle axios errors
-            if (downloadErr.response) {
-              // Server returned an error status
-              const errorData = downloadErr.response.data;
-              if (errorData instanceof Blob) {
-                // Error response is a blob, try to read it
-                const reader = new FileReader();
-                reader.onload = () => {
-                  const text = reader.result;
-                  try {
-                    const parsedError = JSON.parse(text);
-                    showErrorToast(parsedError.message || `Download failed: ${downloadErr.response.status}`);
-                  } catch {
-                    showErrorToast(`Download failed: ${downloadErr.response.status}`);
-                  }
-                };
-                reader.readAsText(errorData);
-              } else if (typeof errorData === 'object' && errorData !== null) {
-                showErrorToast(errorData.message || `Download failed: ${downloadErr.response.status}`);
-              } else {
-                showErrorToast(`Download failed: ${downloadErr.response.status}`);
-              }
-            } else {
-              showErrorToast('Download failed: ' + (downloadErr.message || 'Network error'));
-            }
+          const downloadResult = await downloadExportFile(filename);
+
+          if (downloadResult.error) {
+            const err = downloadResult.error;
+            const msg = err?.data?.message || err?.data?.error || err?.message || 'Download failed';
+            showErrorToast(typeof msg === 'string' ? msg : 'Download failed');
             return;
           }
 
-          // Check if response is successful
-          if (!downloadResponse) {
-            showErrorToast('Download failed: No response received');
-            return;
-          }
-
-          if (downloadResponse.status !== 200) {
-            showErrorToast(`Download failed with status ${downloadResponse.status}`);
-            return;
-          }
-
-          // Check if data exists
-          if (!downloadResponse.data) {
+          const blob = downloadResult.data;
+          if (!blob) {
             showErrorToast('Download failed: No data received from server');
             return;
           }
 
-          // Check content type from headers
-          const contentType = downloadResponse.headers?.['content-type'] || downloadResponse.headers?.['Content-Type'] || '';
+          const contentType = blob.type || '';
 
           if (exportFormat === 'pdf') {
             // For PDF, open in new tab for preview
-            const blob = downloadResponse.data;
 
             // Check if blob is valid
             if (!blob || !(blob instanceof Blob)) {
@@ -1556,14 +1676,7 @@ export const Sales = ({ tabId, editData }) => {
             // Revoke URL after a delay to ensure it loads
             setTimeout(() => URL.revokeObjectURL(url), 10000);
           } else {
-            // For other formats, download directly
-            const blob = new Blob([downloadResponse.data], {
-              type: exportFormat === 'excel'
-                ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                : exportFormat === 'csv'
-                  ? 'text/csv'
-                  : 'application/json'
-            });
+            // For other formats, download directly (blob from server has correct type)
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -1635,6 +1748,7 @@ export const Sales = ({ tabId, editData }) => {
       // setSelectedCustomer(null);
       setAmountPaid(0);
       setAppliedDiscounts([]);
+      setDiscountCodeInput('');
       setDirectDiscount({ type: 'amount', value: 0 });
       setNotes('');
       setInvoiceNumber('');
@@ -1644,10 +1758,12 @@ export const Sales = ({ tabId, editData }) => {
       setIsLastPricesApplied(false);
       setPriceStatus({});
 
-      // Show print modal if order was created
+      // Show print modal if order was created and autoPrint is enabled
       if (result?.order) {
-        setCurrentOrder(result.order);
-        setShowPrintModal(true);
+        if (autoPrint) {
+          setCurrentOrder(result.order);
+          setShowPrintModal(true);
+        }
       }
       resetSubmittingState();
     } catch (error) {
@@ -1706,10 +1822,12 @@ export const Sales = ({ tabId, editData }) => {
       setIsLastPricesApplied(false);
       setPriceStatus({});
 
-      // Show print modal if order was updated
+      // Show print modal if order was updated and autoPrint is enabled
       if (result?.order) {
-        setCurrentOrder(result.order);
-        setShowPrintModal(true);
+        if (autoPrint) {
+          setCurrentOrder(result.order);
+          setShowPrintModal(true);
+        }
       }
       resetSubmittingState();
     } catch (error) {
@@ -1757,32 +1875,30 @@ export const Sales = ({ tabId, editData }) => {
     }
 
     // Check credit limit before proceeding
-    if (selectedCustomer && selectedCustomer.creditLimit > 0) {
+    const custCreditLimit = Number(selectedCustomer?.creditLimit ?? selectedCustomer?.credit_limit ?? 0) || 0;
+    if (selectedCustomer && custCreditLimit > 0) {
       const currentPaymentMethod = paymentMethod || 'cash';
       const currentAmountPaid = amountPaid || 0;
       const unpaidAmount = total - currentAmountPaid;
 
       // For account payments or partial payments, check credit limit
       if (currentPaymentMethod === 'account' || unpaidAmount > 0) {
-        const currentBalance = selectedCustomer.currentBalance || 0;
-        const pendingBalance = selectedCustomer.pendingBalance || 0;
+        const currentBalance = Number(selectedCustomer.currentBalance ?? selectedCustomer.current_balance ?? 0) || 0;
         const totalOutstanding = currentBalance;
         const newBalanceAfterOrder = totalOutstanding + unpaidAmount;
-        const availableCredit = selectedCustomer.creditLimit - totalOutstanding;
+        const availableCredit = Math.max(0, custCreditLimit - totalOutstanding);
 
-        if (newBalanceAfterOrder > selectedCustomer.creditLimit) {
-          // Show simple and clear message when credit limit is exceeded
-          toast.error(`Your credit limit is full. Credit limit: ${selectedCustomer.creditLimit.toFixed(2)}. Please collect payment or reduce the order amount.`, {
+        if (newBalanceAfterOrder > custCreditLimit) {
+          toast.error(`Your credit limit is full. Credit limit: ${custCreditLimit.toFixed(2)}. Please collect payment or reduce the order amount.`, {
             duration: 8000,
             position: 'top-center',
             icon: '⚠️'
           });
           return;
-        } else if (availableCredit - unpaidAmount < (selectedCustomer.creditLimit * 0.1)) {
-          // Warning when credit limit is almost reached (within 10%)
-          const warningMessage = `Warning: ${selectedCustomer.displayName || selectedCustomer.name} is near credit limit. ` +
+        } else if (availableCredit - unpaidAmount < (custCreditLimit * 0.1)) {
+          const warningMessage = `Warning: ${selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name} is near credit limit. ` +
             `Available credit: ${availableCredit.toFixed(2)}, ` +
-            `After this order: ${(availableCredit - unpaidAmount).toFixed(2)} remaining.`;
+            `After this order: ${(Math.max(0, availableCredit - unpaidAmount)).toFixed(2)} remaining.`;
 
           toast.warning(warningMessage, {
             duration: 6000,
@@ -1852,7 +1968,10 @@ export const Sales = ({ tabId, editData }) => {
             total: itemTotal
           };
         }),
-        notes: notes || ''
+        notes: notes || '',
+        amountReceived: amountPaid ?? 0,
+        billDate: billDate || undefined,
+        discount: totalDiscountAmount > 0 ? totalDiscountAmount : undefined
       };
       handleUpdateOrder(orderId, updateData);
     } else {
@@ -1874,6 +1993,7 @@ export const Sales = ({ tabId, editData }) => {
     tax,
     isTaxExempt,
     invoiceNumber,
+    billDate,
     notes,
     selectedBankAccount,
     isAdvancePayment,
@@ -1898,19 +2018,20 @@ export const Sales = ({ tabId, editData }) => {
       <div className="space-y-4 lg:space-y-6">
         <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start justify-between'}`}>
           <div>
-            <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Point of Sale</h1>
+            <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Point of Sales</h1>
             <p className="text-gray-600">Process sales transactions</p>
           </div>
           <div className="flex items-center space-x-2">
-            <button
+            <Button
               onClick={handleExport}
-              className="btn btn-secondary btn-md"
+              variant="secondary"
+              size="default"
               title="Export Sales Report"
             >
               <Download className="h-4 w-4 mr-2" />
               Export Sales Report
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => {
                 const componentInfo = getComponentInfo('/sales');
                 if (componentInfo) {
@@ -1925,18 +2046,19 @@ export const Sales = ({ tabId, editData }) => {
                   });
                 }
               }}
-              className="btn btn-primary btn-md"
+              variant="default"
+              size="default"
             >
               <Plus className="h-4 w-4 mr-2" />
               New Sales
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Customer Selection and Information Row */}
-        <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start space-x-4'}`}>
+        <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start space-x-12'}`}>
           {/* Customer Selection */}
-          <div className={`${isMobile ? 'w-full' : 'w-[500px] flex-shrink-0'}`}>
+          <div className={`${isMobile ? 'w-full' : 'w-[750px] flex-shrink-0'}`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <label className="block text-sm font-medium text-gray-700">
@@ -1979,17 +2101,17 @@ export const Sales = ({ tabId, editData }) => {
               selectedItem={selectedCustomer}
               rightContentKey="city"
               displayKey={(customer) => {
-                // Calculate total balance: currentBalance (which is net balance)
-                const totalBalance = customer.currentBalance !== undefined
-                  ? customer.currentBalance
-                  : ((customer.pendingBalance || 0) - (customer.advanceBalance || 0));
-                const hasBalance = totalBalance !== 0;
+                const name = customer?.displayName ?? customer?.display_name ?? customer?.businessName ?? customer?.business_name ?? customer?.name ?? 'Customer';
+                const totalBalance = customer?.currentBalance !== undefined && customer?.currentBalance !== null
+                  ? Number(customer.currentBalance)
+                  : (Number(customer?.pendingBalance ?? 0) - Number(customer?.advanceBalance ?? 0));
+                const hasBalance = totalBalance !== 0 && !Number.isNaN(totalBalance);
                 const isPayable = totalBalance < 0;
                 const isReceivable = totalBalance > 0;
 
                 return (
                   <div>
-                    <div className="font-medium">{customer.displayName}</div>
+                    <div className="font-medium">{name}</div>
                     {hasBalance ? (
                       <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
                         Total Balance: {isPayable ? '-' : '+'}{Math.abs(totalBalance).toFixed(2)}
@@ -2005,70 +2127,76 @@ export const Sales = ({ tabId, editData }) => {
 
           {/* Customer Information - Right Side */}
           <div className={`${isMobile ? 'w-full' : 'flex-1'}`}>
-            {selectedCustomer ? (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                <div className="flex items-center space-x-3">
-                  <User className="h-5 w-5 text-gray-400" />
-                  <div className="flex-1">
-                    <p className="font-medium">{selectedCustomer.displayName}</p>
-                    <p className="text-sm text-gray-600 capitalize">
-                      {selectedCustomer.businessType} • {selectedCustomer.phone || 'No phone'}
-                    </p>
-                    <div className="flex items-center space-x-4 mt-2">
-                      {(() => {
-                        // Calculate total balance: currentBalance (which is the net total balance)
-                        const totalBalance = selectedCustomer.currentBalance !== undefined
-                          ? selectedCustomer.currentBalance
-                          : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
-                        const hasBalance = totalBalance !== 0;
-                        const isPayable = totalBalance < 0;
-                        const isReceivable = totalBalance > 0;
-
-                        return hasBalance ? (
-                          <div className="flex items-center space-x-1">
-                            <span className="text-xs text-gray-500">Total Balance:</span>
-                            <span className={`text-sm font-medium ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'
-                              }`}>
-                              {isPayable ? '-' : '+'}{Math.abs(totalBalance).toFixed(2)}
-                            </span>
-                          </div>
-                        ) : null;
-                      })()}
-                      <div className="flex items-center space-x-1">
-                        <span className="text-xs text-gray-500">Credit Limit:</span>
-                        <span className={`text-sm font-medium ${selectedCustomer.creditLimit > 0 ? (
-                          (selectedCustomer.currentBalance || 0) >= selectedCustomer.creditLimit * 0.9
-                            ? 'text-red-600'
-                            : (selectedCustomer.currentBalance || 0) >= selectedCustomer.creditLimit * 0.7
-                              ? 'text-yellow-600'
-                              : 'text-blue-600'
-                        ) : 'text-gray-600'
-                          }`}>
-                          {(selectedCustomer.creditLimit || 0).toFixed(2)}
-                        </span>
-                        {selectedCustomer.creditLimit > 0 &&
-                          (selectedCustomer.currentBalance || 0) >= selectedCustomer.creditLimit * 0.9 && (
+            {selectedCustomer ? (() => {
+              // Prioritize balance from selectedCustomer (from list with bulk balances - already correct)
+              // Then fallback to customerWithBalance (from detail query) if needed
+              const balanceSource = selectedCustomer ?? customerWithBalance;
+              const creditLimitNum = Math.max(0, Number(selectedCustomer?.creditLimit ?? selectedCustomer?.credit_limit ?? balanceSource?.creditLimit ?? balanceSource?.credit_limit ?? 0) || 0);
+              // Use currentBalance from selectedCustomer first (already correct from bulk query)
+              const rawBalance = selectedCustomer?.currentBalance !== undefined && selectedCustomer?.currentBalance !== null
+                ? Number(selectedCustomer.currentBalance)
+                : (balanceSource?.currentBalance !== undefined && balanceSource?.currentBalance !== null
+                  ? Number(balanceSource.currentBalance)
+                  : (Number(balanceSource?.pendingBalance ?? 0) - Number(balanceSource?.advanceBalance ?? 0)));
+              const currentBalanceNum = (isNaN(rawBalance) || rawBalance === null || rawBalance === undefined) ? 0 : rawBalance;
+              const availableCreditNum = Math.max(0, creditLimitNum - currentBalanceNum);
+              return (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div className="flex items-center space-x-3">
+                    <User className="h-5 w-5 text-gray-400" />
+                    <div className="flex-1">
+                      <p className="font-medium">{selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name}</p>
+                      <p className="text-sm text-gray-600 capitalize">
+                        {selectedCustomer.businessType ?? '—'} • {selectedCustomer.phone || 'No phone'}
+                      </p>
+                      <div className="flex items-center space-x-4 mt-2 flex-wrap gap-y-1">
+                        {(() => {
+                          const isPayable = currentBalanceNum < 0;
+                          const isReceivable = currentBalanceNum > 0;
+                          return (
+                            <div className="flex items-center space-x-1">
+                              <span className="text-xs text-gray-500">Balance:</span>
+                              <span className={`text-sm font-medium ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'}`}>
+                                {isPayable ? '-' : ''}{Math.abs(currentBalanceNum).toFixed(2)}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                        <div className="flex items-center space-x-1">
+                          <span className="text-xs text-gray-500">Credit Limit:</span>
+                          <span className={`text-sm font-medium ${(creditLimitNum > 0) ? (
+                            currentBalanceNum >= creditLimitNum * 0.9
+                              ? 'text-red-600'
+                              : currentBalanceNum >= creditLimitNum * 0.7
+                                ? 'text-yellow-600'
+                                : 'text-blue-600'
+                          ) : 'text-gray-600'
+                            }`}>
+                            {creditLimitNum.toFixed(2)}
+                          </span>
+                          {creditLimitNum > 0 && currentBalanceNum >= creditLimitNum * 0.9 && (
                             <span className="text-xs text-red-600 font-bold ml-1">⚠️</span>
                           )}
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <span className="text-xs text-gray-500">Available Credit:</span>
-                        <span className={`text-sm font-medium ${selectedCustomer.creditLimit > 0 ? (
-                          (selectedCustomer.creditLimit - (selectedCustomer.currentBalance || 0)) <= selectedCustomer.creditLimit * 0.1
-                            ? 'text-red-600'
-                            : (selectedCustomer.creditLimit - (selectedCustomer.currentBalance || 0)) <= selectedCustomer.creditLimit * 0.3
-                              ? 'text-yellow-600'
-                              : 'text-green-600'
-                        ) : 'text-gray-600'
-                          }`}>
-                          {(selectedCustomer.creditLimit - (selectedCustomer.currentBalance || 0)).toFixed(2)}
-                        </span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <span className="text-xs text-gray-500">Available Credit:</span>
+                          <span className={`text-sm font-medium ${creditLimitNum > 0 ? (
+                            availableCreditNum <= creditLimitNum * 0.1
+                              ? 'text-red-600'
+                              : availableCreditNum <= creditLimitNum * 0.3
+                                ? 'text-yellow-600'
+                                : 'text-green-600'
+                          ) : 'text-gray-600'
+                            }`}>
+                            {availableCreditNum.toFixed(2)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ) : (
+              );
+            })() : (
               <div className="hidden lg:block">
                 {/* Empty space to maintain layout consistency */}
               </div>
@@ -2084,9 +2212,12 @@ export const Sales = ({ tabId, editData }) => {
               <div className="flex flex-wrap items-center justify-start lg:justify-end gap-2">
                 {/* Show/Hide Cost Price Toggle Button */}
                 <div className="flex items-center space-x-2">
-                  <button
+                  <Button
+                    type="button"
                     onClick={() => setShowCostPrice(!showCostPrice)}
-                    className="btn btn-secondary btn-sm flex items-center space-x-2"
+                    variant="secondary"
+                    size="sm"
+                    className="flex items-center space-x-2"
                     title={showCostPrice ? "Hide purchase cost prices" : "Show purchase cost prices"}
                   >
                     {showCostPrice ? (
@@ -2100,17 +2231,20 @@ export const Sales = ({ tabId, editData }) => {
                         <span>Show Cost</span>
                       </>
                     )}
-                  </button>
+                  </Button>
                   {user?.role === 'admin' && (
                     <>
-                      <button
+                      <Button
+                        type="button"
                         onClick={() => setShowProfit((prev) => !prev)}
-                        className="btn btn-secondary btn-sm flex items-center space-x-2"
+                        variant="secondary"
+                        size="sm"
+                        className="flex items-center space-x-2"
                         title="Show estimated profit (BP)"
                       >
                         <Calculator className="h-4 w-4" />
                         <span>{showProfit ? 'Hide BP' : 'Show BP'}</span>
-                      </button>
+                      </Button>
                       {showProfit && (
                         <span
                           className={`text-sm font-semibold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'
@@ -2131,7 +2265,8 @@ export const Sales = ({ tabId, editData }) => {
                       <LoadingButton
                         onClick={handleApplyLastPrices}
                         isLoading={isLoadingLastPrices}
-                        className="btn btn-secondary btn-sm"
+                        variant="secondary"
+                        size="sm"
                         title="Apply prices from last order for this customer"
                       >
                         <History className="h-4 w-4 mr-2" />
@@ -2141,7 +2276,9 @@ export const Sales = ({ tabId, editData }) => {
                       <LoadingButton
                         onClick={handleRestoreCurrentPrices}
                         isLoading={isRestoringPrices}
-                        className="btn btn-secondary btn-sm flex items-center space-x-2"
+                        variant="secondary"
+                        size="sm"
+                        className="flex items-center space-x-2"
                         title="Restore original/current prices"
                       >
                         <RotateCcw className="h-4 w-4" />
@@ -2183,15 +2320,17 @@ export const Sales = ({ tabId, editData }) => {
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-md font-medium text-gray-700">Cart Items</h4>
                   <div className="flex items-center space-x-3">
-                    <button
+                    <Button
                       type="button"
                       onClick={handleSortCartItems}
-                      className="btn btn-secondary btn-sm flex items-center space-x-2"
+                      variant="secondary"
+                      size="sm"
+                      className="flex items-center space-x-2"
                       title="Sort products alphabetically"
                     >
                       <ArrowUpDown className="h-4 w-4" />
                       <span>Sort A-Z</span>
-                    </button>
+                    </Button>
                     {isLastPricesApplied && Object.keys(priceStatus).length > 0 && (
                       <div className="flex items-center space-x-3 text-xs">
                         <span className="text-gray-600 font-medium">Price Status:</span>
@@ -2292,7 +2431,9 @@ export const Sales = ({ tabId, editData }) => {
                           <LoadingButton
                             onClick={() => removeFromCart(item.product._id)}
                             isLoading={isRemovingFromCart[item.product._id]}
-                            className="btn btn-danger btn-sm h-8 w-8 p-0 flex-shrink-0 ml-2"
+                            variant="destructive"
+                            size="sm"
+                            className="h-8 w-8 p-0 flex-shrink-0 ml-2"
                             title="Delete"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -2318,23 +2459,25 @@ export const Sales = ({ tabId, editData }) => {
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
-                            <input
+                            <Input
                               type="number"
+                              autoComplete="off"
                               value={item.quantity}
                               onChange={(e) => updateQuantity(item.product._id, parseInt(e.target.value) || 1)}
-                              className="input text-center h-8 w-full"
+                              className="text-center h-8 w-full"
                               min="1"
                               max={item.product.inventory?.currentStock || 999999}
                             />
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">Rate</label>
-                            <input
+                            <Input
                               type="number"
                               step="1"
+                              autoComplete="off"
                               value={Math.round(item.unitPrice)}
                               onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
-                              className={`input text-center h-8 w-full ${(lastPurchasePrices[item.product._id] !== undefined &&
+                              className={`text-center h-8 w-full ${(lastPurchasePrices[item.product._id] !== undefined &&
                                 item.unitPrice < lastPurchasePrices[item.product._id])
                                 ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
                                 : ''
@@ -2417,11 +2560,12 @@ export const Sales = ({ tabId, editData }) => {
 
                           {/* Quantity - 1 column */}
                           <div className="col-span-1">
-                            <input
+                            <Input
                               type="number"
+                              autoComplete="off"
                               value={item.quantity}
                               onChange={(e) => updateQuantity(item.product._id, parseInt(e.target.value) || 1)}
-                              className="input text-center h-8"
+                              className="text-center h-8"
                               min="1"
                               max={item.product.inventory?.currentStock || 999999}
                               title={`Maximum available: ${item.product.inventory?.currentStock || 0}`}
@@ -2431,42 +2575,52 @@ export const Sales = ({ tabId, editData }) => {
                           {/* Purchase Price (Cost) - 1 column (conditional) - Between Quantity and Rate */}
                           {showCostPrice && hasPermission('view_cost_prices') && (
                             <div className="col-span-1">
-                              <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-8 flex items-center justify-center" title="Last Purchase Price">
+                              <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-8 flex items-center justify-center" title="Cost Price">
                                 {lastPurchasePrices[item.product._id] !== undefined
                                   ? `${Math.round(lastPurchasePrices[item.product._id])}`
-                                  : 'N/A'}
+                                  : item.product.pricing?.cost !== undefined
+                                    ? `${Math.round(item.product.pricing.cost)}`
+                                    : 'N/A'}
                               </span>
                             </div>
                           )}
 
                           {/* Rate - 1 column */}
                           <div className="col-span-1 relative">
-                            <input
-                              type="number"
-                              step="1"
-                              value={Math.round(item.unitPrice)}
-                              onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
-                              className={`input text-center h-8 ${
-                                // Check if sale price is less than cost price - highest priority styling (always check)
-                                (lastPurchasePrices[item.product._id] !== undefined &&
-                                  item.unitPrice < lastPurchasePrices[item.product._id])
-                                  ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
-                                  : priceStatus[item.product._id] === 'updated'
-                                    ? 'bg-green-50 border-green-300 ring-1 ring-green-200'
-                                    : priceStatus[item.product._id] === 'not-found'
-                                      ? 'bg-yellow-50 border-yellow-300 ring-1 ring-yellow-200'
-                                      : priceStatus[item.product._id] === 'unchanged'
-                                        ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200'
-                                        : ''
-                                }`}
-                              min="0"
-                              title={
-                                (lastPurchasePrices[item.product._id] !== undefined &&
-                                  item.unitPrice < lastPurchasePrices[item.product._id])
-                                  ? `⚠️ WARNING: Sale price ($${Math.round(item.unitPrice)}) is below cost price ($${Math.round(lastPurchasePrices[item.product._id])})`
-                                  : ''
-                              }
-                            />
+                            {(() => {
+                              const effectiveCost = lastPurchasePrices[item.product._id] !== undefined
+                                ? lastPurchasePrices[item.product._id]
+                                : item.product.pricing?.cost;
+                              const isBelowCost = effectiveCost !== undefined && effectiveCost !== null && item.unitPrice < effectiveCost;
+
+                              return (
+                                <Input
+                                  type="number"
+                                  step="1"
+                                  autoComplete="off"
+                                  value={Math.round(item.unitPrice)}
+                                  onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
+                                  className={`text-center h-8 ${
+                                    // Check if sale price is less than cost price - highest priority styling (always check)
+                                    isBelowCost
+                                      ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
+                                      : priceStatus[item.product._id] === 'updated'
+                                        ? 'bg-green-50 border-green-300 ring-1 ring-green-200'
+                                        : priceStatus[item.product._id] === 'not-found'
+                                          ? 'bg-yellow-50 border-yellow-300 ring-1 ring-yellow-200'
+                                          : priceStatus[item.product._id] === 'unchanged'
+                                            ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200'
+                                            : ''
+                                    }`}
+                                  min="0"
+                                  title={
+                                    isBelowCost
+                                      ? `⚠️ WARNING: Sale price ($${Math.round(item.unitPrice)}) is below cost price ($${Math.round(effectiveCost)})`
+                                      : ''
+                                  }
+                                />
+                              );
+                            })()}
                             {isLastPricesApplied && priceStatus[item.product._id] && (
                               <div
                                 className="absolute -right-7 top-1/2 transform -translate-y-1/2 flex items-center z-10"
@@ -2503,7 +2657,9 @@ export const Sales = ({ tabId, editData }) => {
                             <LoadingButton
                               onClick={() => removeFromCart(item.product._id)}
                               isLoading={isRemovingFromCart[item.product._id]}
-                              className="btn btn-danger btn-sm h-8 w-full"
+                              variant="destructive"
+                              size="sm"
+                              className="h-8 w-full"
                             >
                               <Trash2 className="h-4 w-4" />
                             </LoadingButton>
@@ -2534,7 +2690,7 @@ export const Sales = ({ tabId, editData }) => {
                   </label>
                   <select
                     value={selectedCustomer?.businessType || 'wholesale'}
-                    className="input h-10 text-sm w-full"
+                    className="h-10 text-sm w-full"
                     disabled
                   >
                     <option value="retail">Retail</option>
@@ -2550,7 +2706,7 @@ export const Sales = ({ tabId, editData }) => {
                     Tax Status
                   </label>
                   <div className="flex items-center space-x-2 px-3 py-2 border border-gray-200 rounded h-10">
-                    <input
+                    <Input
                       type="checkbox"
                       id="taxExemptMobile"
                       checked={isTaxExempt}
@@ -2580,7 +2736,7 @@ export const Sales = ({ tabId, editData }) => {
                       htmlFor="autoGenerateInvoiceMobile"
                       className="flex items-center space-x-1 text-xs text-gray-600 cursor-pointer select-none"
                     >
-                      <input
+                      <Input
                         type="checkbox"
                         id="autoGenerateInvoiceMobile"
                         checked={autoGenerateInvoice}
@@ -2596,11 +2752,12 @@ export const Sales = ({ tabId, editData }) => {
                     </label>
                   </div>
                   <div className="relative">
-                    <input
+                    <Input
                       type="text"
+                      autoComplete="off"
                       value={invoiceNumber}
                       onChange={(e) => setInvoiceNumber(e.target.value)}
-                      className="w-full input pr-20 h-10 text-sm"
+                      className="w-full pr-20 h-10 text-sm"
                       placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
                       disabled={autoGenerateInvoice}
                     />
@@ -2625,18 +2782,14 @@ export const Sales = ({ tabId, editData }) => {
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     Bill Date <span className="text-gray-500">(Optional - for backdating)</span>
                   </label>
-                  <input
+                  <Input
                     type="date"
+                    autoComplete="off"
                     value={billDate}
                     onChange={(e) => setBillDate(e.target.value)}
-                    className="input h-10 text-sm w-full"
+                    className="h-10 text-sm w-full"
                     max={getLocalDateString()} // Prevent future dates
                   />
-                  {billDate && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Invoice number will be generated based on this date
-                    </p>
-                  )}
                 </div>
 
                 {/* Notes */}
@@ -2644,11 +2797,12 @@ export const Sales = ({ tabId, editData }) => {
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     Notes
                   </label>
-                  <input
+                  <Input
                     type="text"
+                    autoComplete="off"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="input h-10 text-sm w-full"
+                    className="h-10 text-sm w-full"
                     placeholder="Additional notes..."
                   />
                 </div>
@@ -2663,7 +2817,7 @@ export const Sales = ({ tabId, editData }) => {
                   </label>
                   <select
                     value={selectedCustomer?.businessType || 'wholesale'}
-                    className="input h-8 text-sm"
+                    className="h-8 text-sm"
                     disabled
                   >
                     <option value="retail">Retail</option>
@@ -2679,7 +2833,7 @@ export const Sales = ({ tabId, editData }) => {
                     Tax Status
                   </label>
                   <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
-                    <input
+                    <Input
                       type="checkbox"
                       id="taxExempt"
                       checked={isTaxExempt}
@@ -2709,7 +2863,7 @@ export const Sales = ({ tabId, editData }) => {
                       htmlFor="autoGenerateInvoice"
                       className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
                     >
-                      <input
+                      <Input
                         type="checkbox"
                         id="autoGenerateInvoice"
                         checked={autoGenerateInvoice}
@@ -2725,11 +2879,12 @@ export const Sales = ({ tabId, editData }) => {
                     </label>
                   </div>
                   <div className="relative">
-                    <input
+                    <Input
                       type="text"
+                      autoComplete="off"
                       value={invoiceNumber}
                       onChange={(e) => setInvoiceNumber(e.target.value)}
-                      className="w-full input pr-16 h-8 text-sm"
+                      className="w-full pr-16 h-8 text-sm"
                       placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
                       disabled={autoGenerateInvoice}
                     />
@@ -2754,18 +2909,14 @@ export const Sales = ({ tabId, editData }) => {
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     Bill Date <span className="text-gray-500">(Optional)</span>
                   </label>
-                  <input
+                  <Input
                     type="date"
+                    autoComplete="off"
                     value={billDate}
                     onChange={(e) => setBillDate(e.target.value)}
-                    className="input h-8 text-sm"
+                    className="h-8 text-sm"
                     max={getLocalDateString()} // Prevent future dates
                   />
-                  {billDate && (
-                    <p className="text-[10px] text-gray-500 mt-0.5">
-                      Invoice number based on this date
-                    </p>
-                  )}
                 </div>
 
                 {/* Notes */}
@@ -2773,11 +2924,11 @@ export const Sales = ({ tabId, editData }) => {
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     Notes
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="input h-8 text-sm"
+                    className="h-8 text-sm"
                     placeholder="Additional notes..."
                   />
                 </div>
@@ -2807,61 +2958,143 @@ export const Sales = ({ tabId, editData }) => {
                   </div>
                 )}
                 {selectedCustomer && (() => {
-                  // Calculate total balance: currentBalance (which is net balance)
-                  const totalBalance = selectedCustomer.currentBalance !== undefined
-                    ? selectedCustomer.currentBalance
+                  // Match Print logic: invoiceBalance = net amount - received; previousBalance = ledger - invoiceBalance; totalReceivables = ledger
+                  const ledgerBalance = selectedCustomer.currentBalance !== undefined && selectedCustomer.currentBalance !== null
+                    ? Number(selectedCustomer.currentBalance)
                     : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
-                  const hasPreviousBalance = totalBalance !== 0;
-
-                  if (!hasPreviousBalance) return null;
+                  const receivedAmount = amountPaid || 0;
+                  const invoiceBalance = total - receivedAmount;
+                  // In edit mode, ledger already includes this invoice; in new sale, it does not
+                  const previousBalance = editData?.isEditMode
+                    ? ledgerBalance - invoiceBalance
+                    : ledgerBalance;
+                  const totalReceivables = editData?.isEditMode
+                    ? ledgerBalance
+                    : ledgerBalance + invoiceBalance;
 
                   return (
-                    <div className="flex justify-between items-center mt-2">
-                      <span className="text-gray-800 font-semibold">
-                        Previous Total Balance:
-                      </span>
-                      <span className={`text-xl font-bold ${totalBalance < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {totalBalance < 0 ? '-' : '+'}{Math.abs(Math.round(totalBalance))}
-                      </span>
-                    </div>
+                    <>
+                      {(previousBalance !== 0 || editData?.isEditMode) && (
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-gray-800 font-semibold">Previous Balance:</span>
+                          <span className={`text-xl font-bold ${previousBalance < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {previousBalance < 0 ? '-' : '+'}{Math.abs(Number(previousBalance.toFixed(2)))}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center text-xl font-bold border-t-2 border-blue-400 pt-3 mt-2">
+                        <span className="text-blue-900">Net Amount:</span>
+                        <span className="text-blue-900 text-3xl">{Number(total.toFixed(2))}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-lg font-bold border-t-2 border-red-400 pt-3 mt-2">
+                        <span className={totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}>
+                          Total Receivables:
+                        </span>
+                        <span className={`text-2xl ${totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}`}>
+                          {totalReceivables < 0 ? '-' : '+'}{Math.abs(Number(totalReceivables.toFixed(2)))}
+                        </span>
+                      </div>
+                    </>
                   );
                 })()}
+                {!selectedCustomer && (
                 <div className="flex justify-between items-center text-xl font-bold border-t-2 border-blue-400 pt-3 mt-2">
                   <span className="text-blue-900">Total:</span>
                   <span className="text-blue-900 text-3xl">{Math.round(total)}</span>
                 </div>
-                {selectedCustomer && (() => {
-                  // Calculate total balance: currentBalance (which is net balance)
-                  const totalBalance = selectedCustomer.currentBalance !== undefined
-                    ? selectedCustomer.currentBalance
-                    : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
-                  const hasPreviousBalance = totalBalance !== 0;
-
-                  if (!hasPreviousBalance) return null;
-
-                  const totalBalanceAfterOrder = total + totalBalance;
-                  const isPayable = totalBalanceAfterOrder < 0;
-
-                  return (
-                    <div className="flex justify-between items-center text-lg font-bold border-t-2 border-red-400 pt-3 mt-2">
-                      <span className={isPayable ? 'text-red-700' : 'text-green-700'}>
-                        Total Balance After Order:
-                      </span>
-                      <span className={`text-2xl ${isPayable ? 'text-red-700' : 'text-green-700'}`}>
-                        {isPayable ? '-' : '+'}{Math.abs(Math.round(totalBalanceAfterOrder))}
-                      </span>
-                    </div>
-                  );
-                })()}
+                )}
               </div>
 
               {/* Payment and Discount Section - One Row */}
               <div className="mt-4 bg-white rounded-lg p-4 shadow-sm">
+                {/* Discount code (from Discount Management) */}
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    Discount code
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value=""
+                      onChange={handleSelectDiscountFromDropdown}
+                      disabled={subtotal <= 0 || applicableDiscountList.length === 0}
+                      className="px-3 py-2 border-2 border-slate-200 rounded-md bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 min-w-[180px]"
+                      title="Choose an applicable discount"
+                    >
+                      <option value="">
+                        {subtotal <= 0
+                          ? 'Add items to see discounts'
+                          : applicableDiscountList.length === 0
+                            ? 'No applicable discounts'
+                            : 'Select discount code...'}
+                      </option>
+                      {applicableDiscountList
+                        .filter(
+                          (item) =>
+                            !appliedDiscounts.some(
+                              (d) =>
+                                (d.code || '').toUpperCase() ===
+                                (item.discount?.code || item.discount?.discount_code || '').toString().toUpperCase()
+                            )
+                        )
+                        .map((item) => {
+                          const d = item.discount || {};
+                          const code = (d.code || d.discount_code || '').toString();
+                          const amt = item.calculatedAmount ?? 0;
+                          const label =
+                            d.type === 'percentage'
+                              ? `${code} - ${d.value}% off (${typeof amt === 'number' ? amt.toFixed(2) : amt})`
+                              : `${code} - ${typeof amt === 'number' ? amt.toFixed(2) : amt} off`;
+                          return (
+                            <option key={code} value={code}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                    </select>
+                    <span className="text-slate-400 text-sm hidden sm:inline">or</span>
+                    <Input
+                      type="text"
+                      placeholder="Enter code (e.g. SUMMER)"
+                      value={discountCodeInput}
+                      onChange={(e) => setDiscountCodeInput((e.target.value || '').toUpperCase())}
+                      onKeyDown={(e) => e.key === 'Enter' && handleApplyDiscountCode()}
+                      className="px-3 py-2 border-2 border-slate-200 rounded-md bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 w-40"
+                    />
+                    <LoadingButton
+                      onClick={handleApplyDiscountCode}
+                      isLoading={checkingDiscount}
+                      disabled={!discountCodeInput?.trim() || subtotal <= 0}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold"
+                    >
+                      Apply code
+                    </LoadingButton>
+                  </div>
+                  {appliedDiscounts.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {appliedDiscounts.map((d) => (
+                        <span
+                          key={d.code}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded text-sm font-medium"
+                        >
+                          {d.code} -{typeof d.amount === 'number' ? d.amount.toFixed(2) : d.amount}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDiscountCode(d.code)}
+                            className="ml-1 text-green-600 hover:text-green-900"
+                            aria-label="Remove"
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-4 items-start">
-                  {/* Apply Discount */}
+                  {/* Manual discount (amount or %) */}
                   <div className="flex flex-col">
                     <label className="block text-sm font-semibold text-gray-800 mb-2">
-                      Apply Discount
+                      Apply Discount (manual)
                     </label>
                     <div className="flex space-x-2">
                       <select
@@ -2872,7 +3105,7 @@ export const Sales = ({ tabId, editData }) => {
                         <option value="amount">Amount</option>
                         <option value="percentage">%</option>
                       </select>
-                      <input
+                      <Input
                         type="number"
                         placeholder={directDiscount.type === 'amount' ? 'Enter amount...' : 'Enter percentage...'}
                         value={directDiscount.value || ''}
@@ -2954,7 +3187,7 @@ export const Sales = ({ tabId, editData }) => {
                     <label className="block text-sm font-semibold text-gray-800 mb-2">
                       Amount Paid
                     </label>
-                    <input
+                    <Input
                       type="number"
                       step="1"
                       value={Math.round(amountPaid)}
@@ -2985,80 +3218,138 @@ export const Sales = ({ tabId, editData }) => {
                   <LoadingButton
                     onClick={handleClearCart}
                     isLoading={isClearingCart}
-                    className="btn btn-secondary flex-1"
+                    variant="secondary"
+                    className="flex-1"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Clear Cart
                   </LoadingButton>
                 )}
                 {cart.length > 0 && (
-                  <button
-                    onClick={() => {
-                      // Format address from customer for print (same logic as backend/PrintDocument)
-                      let customerAddress = '';
-                      if (selectedCustomer?.addresses?.length) {
-                        const addr = selectedCustomer.addresses.find(a => a.isDefault) || selectedCustomer.addresses.find(a => a.type === 'billing' || a.type === 'both') || selectedCustomer.addresses[0];
-                        if (addr) customerAddress = [addr.street, addr.city, addr.state, addr.country, addr.zipCode || addr.zip].filter(Boolean).join(', ');
-                      } else if (selectedCustomer?.address) customerAddress = selectedCustomer.address;
-                      const tempOrder = {
-                        orderNumber: `TEMP-${Date.now()}`,
-                        orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
-                        customer: selectedCustomer ?? undefined,
-                        customerInfo: selectedCustomer ? {
-                          name: selectedCustomer.displayName,
-                          email: selectedCustomer.email,
-                          phone: selectedCustomer.phone,
-                          businessName: selectedCustomer.businessName,
-                          address: customerAddress || undefined,
-                          currentBalance: selectedCustomer.currentBalance,
-                          pendingBalance: selectedCustomer.pendingBalance,
-                          advanceBalance: selectedCustomer.advanceBalance
-                        } : null,
-                        items: cart.map(item => ({
-                          product: {
-                            name: item.product.name
-                          },
-                          quantity: item.quantity,
-                          unitPrice: item.unitPrice
-                        })),
-                        pricing: {
-                          subtotal: subtotal,
-                          discountAmount: totalDiscountAmount,
-                          taxAmount: tax,
-                          isTaxExempt: isTaxExempt,
-                          total: total
-                        },
-                        payment: {
-                          method: paymentMethod,
-                          bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
-                          amountPaid: amountPaid,
-                          remainingBalance: total - amountPaid,
-                          isPartialPayment: amountPaid < total,
-                          isAdvancePayment: isAdvancePayment,
-                          advanceAmount: isAdvancePayment ? (amountPaid - total) : 0
-                        },
-                        createdAt: new Date(),
-                        createdBy: user ? {
-                          firstName: user.firstName,
-                          lastName: user.lastName,
-                          name: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Admin'
-                        } : { name: 'Admin' },
-                        invoiceNumber: invoiceNumber
-                      };
-                      setCurrentOrder(tempOrder);
-                      setShowPrintModal(true);
-                    }}
-                    className="btn btn-secondary flex-1"
-                  >
-                    <Printer className="h-4 w-4 mr-2" />
-                    Print Preview
-                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="secondary" className="flex-1">
+                        <Printer className="h-4 w-4 mr-2" />
+                        Print
+                        <ChevronDown className="h-4 w-4 ml-2" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          let customerAddress = '';
+                          if (selectedCustomer?.addresses?.length) {
+                            const addr = selectedCustomer.addresses.find(a => a.isDefault) || selectedCustomer.addresses.find(a => a.type === 'billing' || a.type === 'both') || selectedCustomer.addresses[0];
+                            if (addr) customerAddress = [addr.street, addr.city, addr.state, addr.country, addr.zipCode || addr.zip].filter(Boolean).join(', ');
+                          } else if (selectedCustomer?.address) customerAddress = selectedCustomer.address;
+                          const tempOrder = {
+                            orderNumber: `TEMP-${Date.now()}`,
+                            orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
+                            customer: selectedCustomer ?? undefined,
+                            customerInfo: selectedCustomer ? {
+                              name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,
+                              email: selectedCustomer.email,
+                              phone: selectedCustomer.phone,
+                              businessName: selectedCustomer.businessName || selectedCustomer.business_name,
+                              address: customerAddress || undefined,
+                              currentBalance: selectedCustomer.currentBalance,
+                              pendingBalance: selectedCustomer.pendingBalance,
+                              advanceBalance: selectedCustomer.advanceBalance
+                            } : null,
+                            items: cart.map(item => ({
+                              product: { name: item.product.name },
+                              quantity: item.quantity,
+                              unitPrice: item.unitPrice
+                            })),
+                            pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt, total },
+                            payment: {
+                              method: paymentMethod,
+                              bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
+                              amountPaid,
+                              remainingBalance: total - amountPaid,
+                              isPartialPayment: amountPaid < total,
+                              isAdvancePayment,
+                              advanceAmount: isAdvancePayment ? (amountPaid - total) : 0
+                            },
+                            createdAt: new Date(),
+                            createdBy: user ? { firstName: user.firstName, lastName: user.lastName, name: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Admin' } : { name: 'Admin' },
+                            invoiceNumber
+                          };
+                          setDirectPrintOrder(tempOrder);
+                        }}
+                      >
+                        <Printer className="h-4 w-4 mr-2" />
+                        Print
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          let customerAddress = '';
+                          if (selectedCustomer?.addresses?.length) {
+                            const addr = selectedCustomer.addresses.find(a => a.isDefault) || selectedCustomer.addresses.find(a => a.type === 'billing' || a.type === 'both') || selectedCustomer.addresses[0];
+                            if (addr) customerAddress = [addr.street, addr.city, addr.state, addr.country, addr.zipCode || addr.zip].filter(Boolean).join(', ');
+                          } else if (selectedCustomer?.address) customerAddress = selectedCustomer.address;
+                          const tempOrder = {
+                            orderNumber: `TEMP-${Date.now()}`,
+                            orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
+                            customer: selectedCustomer ?? undefined,
+                            customerInfo: selectedCustomer ? {
+                              name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,
+                              email: selectedCustomer.email,
+                              phone: selectedCustomer.phone,
+                              businessName: selectedCustomer.businessName || selectedCustomer.business_name,
+                              address: customerAddress || undefined,
+                              currentBalance: selectedCustomer.currentBalance,
+                              pendingBalance: selectedCustomer.pendingBalance,
+                              advanceBalance: selectedCustomer.advanceBalance
+                            } : null,
+                            items: cart.map(item => ({
+                              product: { name: item.product.name },
+                              quantity: item.quantity,
+                              unitPrice: item.unitPrice
+                            })),
+                            pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt, total },
+                            payment: {
+                              method: paymentMethod,
+                              bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
+                              amountPaid,
+                              remainingBalance: total - amountPaid,
+                              isPartialPayment: amountPaid < total,
+                              isAdvancePayment,
+                              advanceAmount: isAdvancePayment ? (amountPaid - total) : 0
+                            },
+                            createdAt: new Date(),
+                            createdBy: user ? { firstName: user.firstName, lastName: user.lastName, name: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Admin' } : { name: 'Admin' },
+                            invoiceNumber
+                          };
+                          setCurrentOrder(tempOrder);
+                          setShowPrintModal(true);
+                        }}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        Print Preview
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
+                <div className="flex items-center space-x-2 px-2">
+                  <Input
+                    type="checkbox"
+                    id="autoPrint"
+                    checked={autoPrint}
+                    onChange={(e) => setAutoPrint(e.target.checked)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="autoPrint" className="text-sm font-medium text-gray-700 cursor-pointer">
+                    Print after sale
+                  </label>
+                </div>
                 <LoadingButton
                   onClick={handleCheckout}
                   isLoading={isSubmitting || isCreatingSale || isUpdatingOrder}
                   disabled={isSubmitting || isCreatingSale || isUpdatingOrder}
-                  className="btn btn-primary btn-lg flex-2"
+                  variant="default"
+                  size="lg"
+                  className="flex-2"
                 >
                   <Receipt className="h-4 w-4 mr-2" />
                   {editData?.isEditMode
@@ -3079,9 +3370,11 @@ export const Sales = ({ tabId, editData }) => {
               algorithm="frequently_bought"
               context={{
                 page: 'sales',
-                currentProducts: cart.map(item => item.product._id),
+                currentProduct: cart[0]?.product?._id ?? cart[0]?.product?.id,
+                currentProducts: cart.map((item) => item?.product?._id ?? item?.product?.id).filter(Boolean),
                 customerTier: selectedCustomer?.customerTier,
                 businessType: selectedCustomer?.businessType,
+                limit: 4,
               }}
               limit={4}
               onAddToCart={addToCart}
@@ -3115,7 +3408,17 @@ export const Sales = ({ tabId, editData }) => {
         onPaymentError={handlePaymentError}
       />
 
-      {/* Print Modal */}
+      {/* Direct Print - no modal, opens print dialog immediately */}
+      {directPrintOrder && (
+        <DirectPrintInvoice
+          orderData={directPrintOrder}
+          documentTitle="Sales Invoice"
+          partyLabel="Customer"
+          onComplete={() => setDirectPrintOrder(null)}
+        />
+      )}
+
+      {/* Print Preview Modal */}
       <PrintModal
         isOpen={showPrintModal}
         onClose={() => {
@@ -3154,7 +3457,7 @@ export const Sales = ({ tabId, editData }) => {
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
+                      <Input
                         type="radio"
                         name="format"
                         value="pdf"
@@ -3169,7 +3472,7 @@ export const Sales = ({ tabId, editData }) => {
                     </label>
 
                     <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
+                      <Input
                         type="radio"
                         name="format"
                         value="excel"
@@ -3184,7 +3487,7 @@ export const Sales = ({ tabId, editData }) => {
                     </label>
 
                     <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
+                      <Input
                         type="radio"
                         name="format"
                         value="csv"
@@ -3199,7 +3502,7 @@ export const Sales = ({ tabId, editData }) => {
                     </label>
 
                     <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
+                      <Input
                         type="radio"
                         name="format"
                         value="json"
@@ -3223,7 +3526,7 @@ export const Sales = ({ tabId, editData }) => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs text-gray-600 mb-1">From Date</label>
-                      <input
+                      <Input
                         type="date"
                         value={exportDateFrom}
                         onChange={(e) => setExportDateFrom(e.target.value)}
@@ -3232,7 +3535,7 @@ export const Sales = ({ tabId, editData }) => {
                     </div>
                     <div>
                       <label className="block text-xs text-gray-600 mb-1">To Date</label>
-                      <input
+                      <Input
                         type="date"
                         value={exportDateTo}
                         onChange={(e) => setExportDateTo(e.target.value)}
@@ -3257,22 +3560,22 @@ export const Sales = ({ tabId, editData }) => {
 
                 {/* Action Buttons */}
                 <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                  <button
+                  <Button
                     type="button"
                     onClick={() => {
                       setShowExportModal(false);
                       setExportDateFrom(defaultDateRange.from);
                       setExportDateTo(defaultDateRange.to);
                     }}
-                    className="btn btn-secondary"
+                    variant="secondary"
                     disabled={isExporting}
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
                     onClick={handleExportConfirm}
-                    className="btn btn-primary"
+                    variant="default"
                     disabled={isExporting}
                   >
                     {isExporting ? (
@@ -3286,7 +3589,7 @@ export const Sales = ({ tabId, editData }) => {
                         Export
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>

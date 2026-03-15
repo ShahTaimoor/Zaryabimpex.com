@@ -30,7 +30,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { formatDate, formatTime } from '../utils/formatters';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 const Attendance = () => {
   const { user, hasPermission } = useAuth();

@@ -1,8 +1,8 @@
 const express = require('express');
 const { auth, requirePermission } = require('../middleware/auth');
 const balanceCalculationService = require('../services/balanceCalculationService');
-const Customer = require('../models/Customer');
-const Supplier = require('../models/Supplier');
+const CustomerRepository = require('../repositories/postgres/CustomerRepository');
+const SupplierRepository = require('../repositories/postgres/SupplierRepository');
 
 const router = express.Router();
 
@@ -16,7 +16,7 @@ router.get('/customer/:id', [
     requirePermission('view_reports')
 ], async (req, res) => {
     try {
-        const customer = await Customer.findById(req.params.id);
+        const customer = await CustomerRepository.findById(req.params.id);
 
         if (!customer) {
             return res.status(404).json({
@@ -51,7 +51,7 @@ router.get('/supplier/:id', [
     requirePermission('view_reports')
 ], async (req, res) => {
     try {
-        const supplier = await Supplier.findById(req.params.id);
+        const supplier = await SupplierRepository.findById(req.params.id);
 
         if (!supplier) {
             return res.status(404).json({

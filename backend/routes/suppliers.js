@@ -6,16 +6,13 @@ const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
-const mongoose = require('mongoose');
 const { auth, requirePermission } = require('../middleware/auth');
-const ledgerAccountService = require('../services/ledgerAccountService');
-const supplierService = require('../services/supplierService');
-const supplierRepository = require('../repositories/SupplierRepository');
-const Supplier = require('../models/Supplier'); // Still needed for new Supplier() in transaction helpers
+const { validateUuidParam, handleValidationErrors } = require('../middleware/validation');
+const supplierService = require('../services/supplierServicePostgres');
+const supplierRepository = require('../repositories/postgres/SupplierRepository');
+const AccountingService = require('../services/accountingService');
 
 const router = express.Router();
-
-const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
 // Helper function to transform supplier names to uppercase
 const transformSupplierToUppercase = (supplier) => {
@@ -68,106 +65,50 @@ const upload = multer({
   }
 });
 
-const saveSupplierWithLedger = async (supplierData, userId) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  try {
-    const openingBalance = parseOpeningBalance(supplierData.openingBalance);
-    if (openingBalance !== null) {
-      supplierData.openingBalance = openingBalance;
-    }
-
-    let supplier = new Supplier(supplierData);
-    applyOpeningBalance(supplier, openingBalance);
-    await supplier.save({ session });
-
-    await ledgerAccountService.syncSupplierLedgerAccount(supplier, {
-      session,
-      userId
-    });
-
-    await session.commitTransaction();
-    session.endSession();
-
-    supplier = await supplierService.getSupplierByIdWithLedger(supplier._id);
-    return supplier;
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    throw error;
-  }
+const buildSupplierCreatePayload = (body, userId) => {
+  const openingBalance = parseOpeningBalance(body.openingBalance);
+  const address = body.address ?? (Array.isArray(body.addresses) && body.addresses.length > 0 ? body.addresses : null);
+  const payload = {
+    companyName: body.companyName,
+    contactPerson: body.contactPerson?.name != null ? { name: body.contactPerson.name } : (body.contactPersonName ? { name: body.contactPersonName } : null),
+    email: body.email || null,
+    phone: body.phone || null,
+    address: address || null,
+    paymentTerms: body.paymentTerms || null,
+    taxId: body.taxId || null,
+    notes: body.notes || null,
+    status: body.status || 'active',
+    businessType: body.businessType || body.supplierType || 'other',
+    rating: body.rating != null ? Math.min(5, Math.max(0, parseInt(body.rating, 10) || 3)) : 3,
+    createdBy: userId
+  };
+  if (openingBalance !== null) payload.openingBalance = openingBalance;
+  if (body.creditLimit !== undefined && body.creditLimit !== null) payload.creditLimit = parseFloat(body.creditLimit) || 0;
+  return payload;
 };
 
-const updateSupplierWithLedger = async (supplierId, updateData, userId) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  try {
-    const supplier = await supplierRepository.findById(supplierId, { session });
-
-    if (!supplier) {
-      await session.abortTransaction();
-      session.endSession();
-      return null;
-    }
-
-    const openingBalance = parseOpeningBalance(updateData.openingBalance);
-    if (openingBalance !== null) {
-      updateData.openingBalance = openingBalance;
-      applyOpeningBalance(supplier, openingBalance);
-    }
-
-    Object.assign(supplier, {
-      ...updateData,
-      lastModifiedBy: userId
-    });
-
-    await supplier.save({ session });
-    await ledgerAccountService.syncSupplierLedgerAccount(supplier, {
-      session,
-      userId
-    });
-
-    await session.commitTransaction();
-    session.endSession();
-
-    return supplierService.getSupplierByIdWithLedger(supplier._id);
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    throw error;
+const buildSupplierUpdatePayload = (body, userId) => {
+  const payload = { updatedBy: userId };
+  if (body.companyName !== undefined) payload.companyName = body.companyName;
+  if (body.contactPerson !== undefined) payload.contactPerson = body.contactPerson;
+  if (body.email !== undefined) payload.email = body.email;
+  if (body.phone !== undefined) payload.phone = body.phone;
+  if (body.address !== undefined) payload.address = body.address;
+  if (body.addresses !== undefined) payload.address = body.addresses;
+  if (body.paymentTerms !== undefined) payload.paymentTerms = body.paymentTerms;
+  if (body.taxId !== undefined) payload.taxId = body.taxId;
+  if (body.notes !== undefined) payload.notes = body.notes;
+  if (body.status !== undefined) payload.status = body.status;
+  if (body.businessType !== undefined || body.supplierType !== undefined) payload.businessType = body.businessType || body.supplierType;
+  if (body.rating !== undefined) payload.rating = body.rating;
+  if (body.creditLimit !== undefined && body.creditLimit !== null) payload.creditLimit = parseFloat(body.creditLimit) || 0;
+  const ob = parseOpeningBalance(body.openingBalance);
+  if (ob !== null) {
+    payload.openingBalance = ob;
+    payload.pendingBalance = ob >= 0 ? ob : 0;
+    payload.advanceBalance = ob < 0 ? Math.abs(ob) : 0;
   }
-};
-
-const deleteSupplierWithLedger = async (supplierId, userId) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  try {
-    const supplier = await supplierRepository.findById(supplierId, { session });
-
-    if (!supplier) {
-      await session.abortTransaction();
-      session.endSession();
-      return null;
-    }
-
-    if (supplier.ledgerAccount) {
-      await ledgerAccountService.deactivateLedgerAccount(supplier.ledgerAccount, {
-        session,
-        userId
-      });
-    }
-
-    await supplier.deleteOne({ session });
-
-    await session.commitTransaction();
-    session.endSession();
-
-    return supplier;
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    throw error;
-  }
+  return payload;
 };
 
 
@@ -218,10 +159,93 @@ router.get('/', [
   }
 });
 
+// Fixed paths must come before /:id so they are not matched as id
+// @route   GET /api/suppliers/deleted
+router.get('/deleted', [
+  auth,
+  requirePermission('view_suppliers')
+], async (req, res) => {
+  try {
+    const deletedSuppliers = await supplierRepository.findDeleted({}, { limit: 9999 });
+    res.json(deletedSuppliers);
+  } catch (error) {
+    console.error('Get deleted suppliers error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/suppliers/search/:query
+router.get('/search/:query', auth, async (req, res) => {
+  try {
+    const searchQuery = req.params.query;
+    const suppliers = await supplierService.searchSuppliers(searchQuery, 10);
+    res.json({ suppliers });
+  } catch (error) {
+    console.error('Search suppliers error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/suppliers/check-email/:email
+router.get('/check-email/:email', auth, async (req, res) => {
+  try {
+    const email = req.params.email;
+    const excludeId = req.query.excludeId;
+    if (!email || email.trim() === '') return res.json({ exists: false });
+    const emailLower = email.trim().toLowerCase();
+    const exists = await supplierService.supplierExists({ email: emailLower, id: excludeId });
+    res.json({ exists, email: emailLower });
+  } catch (error) {
+    console.error('Check email error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/suppliers/check-company-name/:companyName
+router.get('/check-company-name/:companyName', auth, async (req, res) => {
+  try {
+    const companyName = req.params.companyName;
+    const excludeId = req.query.excludeId;
+    if (!companyName || companyName.trim() === '') return res.json({ exists: false });
+    const exists = await supplierService.checkCompanyNameExists(companyName, excludeId);
+    res.json({ exists, companyName: companyName.trim() });
+  } catch (error) {
+    console.error('Check company name error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/suppliers/check-contact-name/:contactName
+router.get('/check-contact-name/:contactName', auth, async (req, res) => {
+  try {
+    const contactName = req.params.contactName;
+    const excludeId = req.query.excludeId;
+    if (!contactName || contactName.trim() === '') return res.json({ exists: false });
+    const contactNameTrimmed = contactName.trim();
+    const exists = await supplierService.supplierExists({ 'contactPerson.name': contactNameTrimmed, id: excludeId });
+    res.json({ exists, contactName: contactNameTrimmed });
+  } catch (error) {
+    console.error('Check contact name error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/suppliers/active/list
+router.get('/active/list', auth, async (req, res) => {
+  try {
+    const suppliers = await supplierService.getAllSuppliers({ status: 'active' });
+    const transformedSuppliers = suppliers.map(transformSupplierToUppercase);
+    res.json({ suppliers: transformedSuppliers });
+  } catch (error) {
+    console.error('Get active suppliers list error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   GET /api/suppliers/:id
 // @desc    Get single supplier
 // @access  Private
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', [auth, validateUuidParam('id'), handleValidationErrors], async (req, res) => {
   try {
     const supplier = await supplierService.getSupplierById(req.params.id);
     res.json({ supplier });
@@ -241,22 +265,20 @@ router.post('/', [
   auth,
   requirePermission('create_suppliers'),
   body('companyName').trim().isLength({ min: 1 }).withMessage('Company name is required'),
-  body('contactPerson.name').trim().isLength({ min: 1 }).withMessage('Contact name is required'),
+  body('contactPerson.name').optional().trim(),
   body('email').optional({ checkFalsy: true }).isEmail().normalizeEmail().withMessage('Valid email is required'),
   body('phone').optional({ checkFalsy: true }).trim(),
   body('businessType').optional().isIn(['manufacturer', 'distributor', 'wholesaler', 'dropshipper', 'other']),
   body('paymentTerms').optional().isIn(['cash', 'net15', 'net30', 'net45', 'net60', 'net90']),
   body('openingBalance').optional().isFloat().withMessage('Opening balance must be a valid number'),
-  body('status').optional().isIn(['active', 'inactive', 'suspended', 'blacklisted'])
+  body('creditLimit').optional().isFloat({ min: 0 }).withMessage('Credit limit must be a non-negative number'),
+  body('status').optional().isIn(['active', 'inactive', 'suspended', 'blacklisted']),
+  handleValidationErrors
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    
-    
-    // Clean up empty strings
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
     const cleanData = { ...req.body };
     if (cleanData.email === '') cleanData.email = undefined;
     if (cleanData.phone === '') cleanData.phone = undefined;
@@ -264,26 +286,35 @@ router.post('/', [
     if (cleanData.notes === '') cleanData.notes = undefined;
     if (cleanData.taxId === '') cleanData.taxId = undefined;
     if (cleanData.openingBalance === '') cleanData.openingBalance = undefined;
-    
-    const supplierData = {
-      ...cleanData,
-      createdBy: req.user._id
-    };
-    
-    const supplier = await saveSupplierWithLedger(supplierData, req.user._id);
-    
+    if (cleanData.creditLimit === '') cleanData.creditLimit = undefined;
+
+    const userId = req.user?.id || req.user?._id;
+    const supplierData = buildSupplierCreatePayload(cleanData, userId);
+
+    const row = await supplierRepository.create(supplierData);
+    // Post opening balance to account ledger if set
+    const openingBalance = parseFloat(row.opening_balance ?? 0) || 0;
+    if (Math.abs(openingBalance) >= 0.01) {
+      try {
+        await AccountingService.postSupplierOpeningBalance(row.id, openingBalance, {
+          createdBy: userId,
+          transactionDate: row.created_at
+        });
+      } catch (err) {
+        console.error('Error posting supplier opening balance to ledger:', err);
+        // Don't fail create - balance will be off until corrected
+      }
+    }
+    const supplier = await supplierService.getSupplierByIdWithLedger(row.id);
+
     res.status(201).json({
       message: 'Supplier created successfully',
       supplier
     });
   } catch (error) {
     console.error('Create supplier error:', error);
-    if (error.code === 11000) {
-      return res.status(400).json({ message: 'Supplier with this email already exists' });
-    }
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({ message: 'Validation failed', errors });
+    if (error.code === '23505') {
+      return res.status(400).json({ message: 'Supplier with this email or company already exists' });
     }
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -302,6 +333,7 @@ router.put('/:id', [
   body('businessType').optional().isIn(['manufacturer', 'distributor', 'wholesaler', 'dropshipper', 'other']),
   body('paymentTerms').optional().isIn(['cash', 'net15', 'net30', 'net45', 'net60', 'net90']),
   body('openingBalance').optional().isFloat().withMessage('Opening balance must be a valid number'),
+  body('creditLimit').optional().isFloat({ min: 0 }).withMessage('Credit limit must be a non-negative number'),
   body('status').optional().isIn(['active', 'inactive', 'suspended', 'blacklisted'])
 ], async (req, res) => {
   try {
@@ -310,15 +342,13 @@ router.put('/:id', [
       return res.status(400).json({ errors: errors.array() });
     }
     
-    if (req.body.openingBalance === '') {
-      req.body.openingBalance = undefined;
-    }
+    if (req.body.openingBalance === '') req.body.openingBalance = undefined;
+    if (req.body.creditLimit === '') req.body.creditLimit = undefined;
 
-    const supplier = await updateSupplierWithLedger(
-      req.params.id,
-      req.body,
-      req.user._id
-    );
+    const userId = req.user?.id || req.user?._id;
+    const supplierData = buildSupplierUpdatePayload(req.body, userId);
+    const updatedRow = await supplierService.updateSupplier(req.params.id, supplierData, userId);
+    const supplier = updatedRow ? await supplierService.getSupplierById(updatedRow.id) : null;
 
     if (!supplier) {
       return res.status(404).json({ message: 'Supplier not found' });
@@ -342,17 +372,19 @@ router.put('/:id', [
 // @access  Private
 router.delete('/:id', [
   auth,
-  requirePermission('delete_suppliers')
+  requirePermission('delete_suppliers'),
+  validateUuidParam('id'),
+  handleValidationErrors
 ], async (req, res) => {
   try {
-    const supplier = await deleteSupplierWithLedger(req.params.id, req.user?._id);
-    
-    if (!supplier) {
-      return res.status(404).json({ message: 'Supplier not found' });
-    }
-    
+    const supplier = await supplierService.deleteSupplier(req.params.id);
+    if (!supplier) return res.status(404).json({ message: 'Supplier not found' });
     res.json({ message: 'Supplier deleted successfully' });
   } catch (error) {
+    if (error.message === 'Supplier not found') return res.status(404).json({ message: 'Supplier not found' });
+    if (error.message && error.message.includes('outstanding balance')) {
+      return res.status(400).json({ message: error.message });
+    }
     console.error('Delete supplier error:', error);
     res.status(500).json({ message: 'Server error' });
   }
@@ -363,222 +395,17 @@ router.delete('/:id', [
 // @access  Private
 router.post('/:id/restore', [
   auth,
-  requirePermission('delete_suppliers')
+  requirePermission('delete_suppliers'),
+  validateUuidParam('id'),
+  handleValidationErrors
 ], async (req, res) => {
   try {
-    const supplierRepository = require('../repositories/SupplierRepository');
     const supplier = await supplierRepository.findDeletedById(req.params.id);
-    if (!supplier) {
-      return res.status(404).json({ message: 'Deleted supplier not found' });
-    }
-    
+    if (!supplier) return res.status(404).json({ message: 'Deleted supplier not found' });
     await supplierRepository.restore(req.params.id);
     res.json({ message: 'Supplier restored successfully' });
   } catch (error) {
     console.error('Restore supplier error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   GET /api/suppliers/deleted
-// @desc    Get all deleted suppliers
-// @access  Private
-router.get('/deleted', [
-  auth,
-  requirePermission('view_suppliers')
-], async (req, res) => {
-  try {
-    const supplierRepository = require('../repositories/SupplierRepository');
-    const deletedSuppliers = await supplierRepository.findDeleted({}, {
-      sort: { deletedAt: -1 }
-    });
-    res.json(deletedSuppliers);
-  } catch (error) {
-    console.error('Get deleted suppliers error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   GET /api/suppliers/search/:query
-// @desc    Search suppliers by company name, contact person, or email
-// @access  Private
-router.get('/search/:query', auth, async (req, res) => {
-  try {
-    const query = req.params.query;
-    const suppliers = await supplierService.searchSuppliers(query, 10);
-    res.json({ suppliers });
-  } catch (error) {
-    console.error('Search suppliers error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   GET /api/suppliers/check-email/:email
-// @desc    Check if email already exists
-// @access  Private
-router.get('/check-email/:email', auth, async (req, res) => {
-  try {
-    const email = req.params.email;
-    const excludeId = req.query.excludeId; // Optional: exclude current supplier when editing
-    
-    if (!email || email.trim() === '') {
-      return res.json({ exists: false });
-    }
-    
-    // Use case-insensitive search to match how emails are stored (lowercase)
-    const emailLower = email.trim().toLowerCase();
-    const query = { email: emailLower };
-    if (excludeId && isValidObjectId(excludeId)) {
-      query._id = { $ne: excludeId };
-    }
-    
-    const exists = await supplierService.supplierExists(query);
-    
-    res.json({ 
-      exists,
-      email: emailLower
-    });
-  } catch (error) {
-    console.error('Check email error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   GET /api/suppliers/check-company-name/:companyName
-// @desc    Check if company name already exists
-// @access  Private
-router.get('/check-company-name/:companyName', auth, async (req, res) => {
-  try {
-    const companyName = req.params.companyName;
-    const excludeId = req.query.excludeId; // Optional: exclude current supplier when editing
-    
-    if (!companyName || companyName.trim() === '') {
-      return res.json({ exists: false });
-    }
-    
-    const exists = await supplierService.checkCompanyNameExists(companyName, excludeId);
-    
-    res.json({ 
-      exists,
-      companyName: companyName.trim()
-    });
-  } catch (error) {
-    console.error('Check company name error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   GET /api/suppliers/check-contact-name/:contactName
-// @desc    Check if contact person name already exists
-// @access  Private
-router.get('/check-contact-name/:contactName', auth, async (req, res) => {
-  try {
-    const contactName = req.params.contactName;
-    const excludeId = req.query.excludeId; // Optional: exclude current supplier when editing
-    
-    if (!contactName || contactName.trim() === '') {
-      return res.json({ exists: false });
-    }
-    
-    // Use case-insensitive search (contact names are stored in uppercase via transform)
-    const contactNameTrimmed = contactName.trim();
-    const query = { 'contactPerson.name': { $regex: new RegExp(`^${contactNameTrimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } };
-    if (excludeId && isValidObjectId(excludeId)) {
-      query._id = { $ne: excludeId };
-    }
-    
-    const exists = await supplierService.supplierExists(query);
-    
-    res.json({ 
-      exists,
-      contactName: contactNameTrimmed
-    });
-  } catch (error) {
-    console.error('Check contact name error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   POST /api/suppliers
-// @desc    Create a new supplier
-// @access  Private
-router.post('/', [
-  auth,
-  requirePermission('create_suppliers'),
-  body('companyName').trim().isLength({ min: 1, max: 200 }).withMessage('Company name is required and must be less than 200 characters'),
-  body('contactPerson.name').trim().isLength({ min: 1, max: 100 }).withMessage('Contact person name is required'),
-  body('email').optional({ checkFalsy: true }).isEmail().normalizeEmail().withMessage('Valid email is required'),
-  body('phone').optional({ checkFalsy: true }).trim(),
-  body('website').optional({ checkFalsy: true }).isURL().withMessage('Website must be a valid URL'),
-  body('taxId').optional().trim(),
-  body('businessType').isIn(['manufacturer', 'distributor', 'wholesaler', 'dropshipper', 'other']).withMessage('Valid business type is required'),
-  body('paymentTerms').optional().trim(),
-  body('address.street').optional().trim(),
-  body('address.city').optional().trim(),
-  body('address.state').optional().trim(),
-  body('address.zipCode').optional().trim(),
-  body('address.country').optional().trim(),
-  body('status').optional().isIn(['active', 'inactive', 'suspended', 'blacklisted']),
-  body('reliability').optional().isIn(['excellent', 'good', 'average', 'poor']),
-  body('notes').optional().trim()
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation failed',
-        errors: errors.array() 
-      });
-    }
-
-    // Clean up empty strings
-    const cleanData = { ...req.body };
-    if (cleanData.email === '') cleanData.email = undefined;
-    if (cleanData.phone === '') cleanData.phone = undefined;
-    if (cleanData.website === '') cleanData.website = undefined;
-    if (cleanData.notes === '') cleanData.notes = undefined;
-    if (cleanData.taxId === '') cleanData.taxId = undefined;
-    
-    const supplierData = cleanData;
-    
-    // Check if supplier with same email already exists (only if email is provided)
-    if (supplierData.email) {
-      const emailExists = await supplierService.supplierExists({ email: supplierData.email });
-      if (emailExists) {
-        return res.status(400).json({ 
-          message: 'Supplier with this email already exists' 
-        });
-      }
-    }
-
-    const supplier = await saveSupplierWithLedger({
-      ...supplierData,
-      createdBy: req.user._id
-    }, req.user._id);
-
-
-    res.status(201).json({
-      message: 'Supplier created successfully',
-      supplier
-    });
-  } catch (error) {
-    console.error('Create supplier error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   GET /api/suppliers/active/list
-// @desc    Get list of active suppliers for dropdowns
-// @access  Private
-router.get('/active/list', auth, async (req, res) => {
-  try {
-    const suppliers = await supplierService.getAllSuppliers({ status: 'active' });
-    
-    // Transform supplier names to uppercase
-    const transformedSuppliers = suppliers.map(transformSupplierToUppercase);
-    res.json({ suppliers: transformedSuppliers });
-  } catch (error) {
-    console.error('Get active suppliers list error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -661,27 +488,19 @@ router.post('/import/excel', [
           continue;
         }
         
-        // Create supplier
-        const supplier = new Supplier({
+        const userId = req.user?.id || req.user?._id;
+        const contactName = supplierData.contactPersonName.toString().trim();
+        await supplierRepository.create({
           companyName: supplierData.companyName.toString().trim(),
-          contactPerson: {
-            name: supplierData.contactPersonName.toString().trim(),
-            title: supplierData.contactPersonTitle.toString().trim() || ''
-          },
-          email: supplierData.email ? supplierData.email.toString().trim() : undefined,
-          phone: supplierData.phone.toString().trim() || '',
-          website: supplierData.website.toString().trim() || '',
-          taxId: supplierData.taxId.toString().trim() || '',
-          businessType: supplierData.businessType.toString().toLowerCase(),
-          paymentTerms: supplierData.paymentTerms.toString().toLowerCase(),
-          reliability: supplierData.reliability.toString().toLowerCase(),
-          rating: parseFloat(supplierData.rating) || 3,
-          status: supplierData.status.toString().toLowerCase(),
-          notes: supplierData.notes.toString().trim() || '',
-          createdBy: req.user._id
+          contactPerson: contactName,
+          email: supplierData.email ? supplierData.email.toString().trim() : null,
+          phone: (supplierData.phone || '').toString().trim() || null,
+          taxId: (supplierData.taxId || '').toString().trim() || null,
+          paymentTerms: (supplierData.paymentTerms || 'net30').toString().toLowerCase(),
+          notes: (supplierData.notes || '').toString().trim() || null,
+          status: (supplierData.status || 'active').toString().toLowerCase(),
+          createdBy: userId
         });
-        
-        await supplier.save();
         results.success++;
         
       } catch (error) {
@@ -721,23 +540,22 @@ router.post('/export/excel', [auth, requirePermission('view_suppliers')], async 
     
     const suppliers = await supplierService.getSuppliersForExport(query);
     
-    // Prepare Excel data
     const excelData = suppliers.map(supplier => ({
-      'Company Name': supplier.companyName,
-      'Contact Person': supplier.contactPerson?.name || '',
+      'Company Name': supplier.company_name || supplier.companyName || '',
+      'Contact Person': supplier.contact_person || supplier.contactPerson?.name || '',
       'Contact Title': supplier.contactPerson?.title || '',
       'Email': supplier.email || '',
       'Phone': supplier.phone || '',
       'Website': supplier.website || '',
-      'Tax ID': supplier.taxId || '',
+      'Tax ID': supplier.tax_id || supplier.taxId || '',
       'Business Type': supplier.businessType || '',
-      'Payment Terms': supplier.paymentTerms || '',
+      'Payment Terms': supplier.payment_terms || supplier.paymentTerms || '',
       'Reliability': supplier.reliability || '',
       'Rating': supplier.rating || 3,
       'Current Balance': supplier.currentBalance || 0,
-      'Status': supplier.status || 'active',
+      'Status': supplier.status || (supplier.is_active ? 'active' : 'inactive'),
       'Notes': supplier.notes || '',
-      'Created Date': supplier.createdAt?.toISOString().split('T')[0] || ''
+      'Created Date': (supplier.created_at || supplier.createdAt)?.toISOString?.()?.split?.('T')[0] || ''
     }));
     
     // Create Excel workbook

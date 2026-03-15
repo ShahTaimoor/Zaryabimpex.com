@@ -150,11 +150,18 @@ export const formatName = (firstName, lastName) => {
 export const formatAddress = (address) => {
   if (!address) return '';
   
+  // Handle string addresses (legacy format)
+  if (typeof address === 'string') {
+    return address;
+  }
+  
+  // Handle object addresses
   const parts = [
     address.street,
     address.city,
-    address.state,
-    address.zipCode
+    address.state || address.province,
+    address.zipCode || address.zip || address.postalCode,
+    address.country
   ].filter(Boolean);
   
   return parts.join(', ');

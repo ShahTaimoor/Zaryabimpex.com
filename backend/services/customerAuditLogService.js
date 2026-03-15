@@ -1,4 +1,4 @@
-const AuditLog = require('../models/AuditLog');
+const AuditLogRepository = require('../repositories/AuditLogRepository');
 
 class CustomerAuditLogService {
   /**
@@ -6,12 +6,12 @@ class CustomerAuditLogService {
    * @param {Object} customer - Created customer
    * @param {Object} user - User creating the customer
    * @param {Object} req - Express request object
-   * @returns {Promise<AuditLog>}
+   * @returns {Promise<Object>}
    */
   async logCustomerCreation(customer, user, req) {
-    return await AuditLog.create({
+    return await AuditLogRepository.create({
       entityType: 'Customer',
-      entityId: customer._id,
+      entityId: customer?.id ?? customer?._id,
       action: 'CREATE',
       changes: {
         after: this.sanitizeCustomer(customer)
@@ -40,16 +40,16 @@ class CustomerAuditLogService {
   async logCustomerUpdate(oldCustomer, newCustomer, user, req, reason = 'Customer updated') {
     const fieldsChanged = this.getChangedFields(oldCustomer, newCustomer);
     
-    return await AuditLog.create({
+    return await AuditLogRepository.create({
       entityType: 'Customer',
-      entityId: newCustomer._id,
+      entityId: newCustomer?.id ?? newCustomer?._id,
       action: 'UPDATE',
       changes: {
         before: this.sanitizeCustomer(oldCustomer),
         after: this.sanitizeCustomer(newCustomer),
         fieldsChanged
       },
-      user: user._id,
+      user: user?.id ?? user?._id,
       ipAddress: req?.ip || req?.connection?.remoteAddress,
       userAgent: req?.headers['user-agent'],
       reason,
@@ -99,7 +99,7 @@ class CustomerAuditLogService {
    * @returns {Promise<AuditLog>}
    */
   async logBalanceAdjustment(customerId, oldBalance, newBalance, user, req, reason) {
-    return await AuditLog.create({
+    return await AuditLogRepository.create({
       entityType: 'Customer',
       entityId: customerId,
       action: 'STOCK_ADJUSTMENT', // Reuse action type
@@ -108,7 +108,7 @@ class CustomerAuditLogService {
         after: { currentBalance: newBalance },
         fieldsChanged: ['currentBalance', 'pendingBalance', 'advanceBalance']
       },
-      user: user._id,
+      user: user?.id ?? user?._id,
       ipAddress: req?.ip || req?.connection?.remoteAddress,
       userAgent: req?.headers['user-agent'],
       reason: reason || 'Balance adjustment',
@@ -130,7 +130,7 @@ class CustomerAuditLogService {
    * @returns {Promise<AuditLog>}
    */
   async logCreditLimitChange(customerId, oldLimit, newLimit, user, req, reason) {
-    return await AuditLog.create({
+    return await AuditLogRepository.create({
       entityType: 'Customer',
       entityId: customerId,
       action: 'UPDATE',
@@ -139,7 +139,7 @@ class CustomerAuditLogService {
         after: { creditLimit: newLimit },
         fieldsChanged: ['creditLimit']
       },
-      user: user._id,
+      user: user?.id ?? user?._id,
       ipAddress: req?.ip || req?.connection?.remoteAddress,
       userAgent: req?.headers['user-agent'],
       reason: reason || 'Credit limit changed',
@@ -158,7 +158,7 @@ class CustomerAuditLogService {
    * @returns {Promise<AuditLog>}
    */
   async logCustomerSuspension(customerId, reason, user, req) {
-    return await AuditLog.create({
+    return await AuditLogRepository.create({
       entityType: 'Customer',
       entityId: customerId,
       action: 'STATUS_CHANGE',
@@ -166,7 +166,7 @@ class CustomerAuditLogService {
         after: { status: 'suspended' },
         fieldsChanged: ['status']
       },
-      user: user._id,
+      user: user?.id ?? user?._id,
       ipAddress: req?.ip || req?.connection?.remoteAddress,
       userAgent: req?.headers['user-agent'],
       reason: reason || 'Customer suspended',
@@ -184,27 +184,15 @@ class CustomerAuditLogService {
    */
   async getCustomerAuditLogs(customerId, options = {}) {
     const { limit = 50, skip = 0, action, startDate, endDate } = options;
-    
-    const filter = {
+    const filters = {
       entityType: 'Customer',
-      entityId: customerId
+      entityId: typeof customerId === 'string' ? customerId : (customerId?.id ?? customerId?._id?.toString?.() ?? customerId?._id)
     };
-
-    if (action) {
-      filter.action = action;
-    }
-
-    if (startDate || endDate) {
-      filter.timestamp = {};
-      if (startDate) filter.timestamp.$gte = new Date(startDate);
-      if (endDate) filter.timestamp.$lte = new Date(endDate);
-    }
-
-    return await AuditLog.find(filter)
-      .populate('user', 'firstName lastName email')
-      .sort({ timestamp: -1 })
-      .limit(limit)
-      .skip(skip);
+    if (action) filters.action = action;
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+    const rows = await AuditLogRepository.find(filters, { limit, skip });
+    return rows;
   }
 
   /**
@@ -264,7 +252,7 @@ class CustomerAuditLogService {
    * @returns {Promise<AuditLog>}
    */
   async logCustomerMerge(sourceCustomerId, targetCustomerId, user, mergeDetails) {
-    return await AuditLog.create({
+    return await AuditLogRepository.create({
       entityType: 'Customer',
       entityId: targetCustomerId,
       action: 'UPDATE', // Using UPDATE as merge is a form of update
@@ -277,7 +265,7 @@ class CustomerAuditLogService {
         },
         fieldsChanged: ['pendingBalance', 'advanceBalance', 'currentBalance']
       },
-      user: user._id,
+      user: user?.id ?? user?._id,
       reason: `Customer merged: ${mergeDetails.sourceName} into ${mergeDetails.targetName}`,
       metadata: {
         mergeOperation: true,
@@ -300,7 +288,7 @@ class CustomerAuditLogService {
     const customerObj = customer.toObject ? customer.toObject() : customer;
     
     return {
-      _id: customerObj._id,
+      _id: customerObj.id ?? customerObj._id,
       name: customerObj.name,
       email: customerObj.email,
       phone: customerObj.phone,

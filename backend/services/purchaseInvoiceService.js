@@ -1,5 +1,6 @@
 const purchaseInvoiceRepository = require('../repositories/PurchaseInvoiceRepository');
 const supplierRepository = require('../repositories/SupplierRepository');
+const AccountingService = require('./accountingService');
 
 class PurchaseInvoiceService {
   /**
@@ -45,75 +46,34 @@ class PurchaseInvoiceService {
    */
   async buildFilter(queryParams) {
     const filter = {};
+    if (queryParams.search && queryParams.search.trim()) filter.search = queryParams.search.trim();
+    if (queryParams.status) filter.status = queryParams.status;
+    if (queryParams.paymentStatus) filter.paymentStatus = queryParams.paymentStatus;
+    if (queryParams.invoiceType) filter.invoiceType = queryParams.invoiceType;
+    if (queryParams.supplier) filter.supplierId = queryParams.supplier;
 
-    // Search filter
-    if (queryParams.search) {
-      const searchTerm = queryParams.search.trim();
-      const searchConditions = [
-        { invoiceNumber: { $regex: searchTerm, $options: 'i' } },
-        { notes: { $regex: searchTerm, $options: 'i' } },
-        { 'supplierInfo.companyName': { $regex: searchTerm, $options: 'i' } },
-        { 'supplierInfo.name': { $regex: searchTerm, $options: 'i' } }
-      ];
-
-      // Search in Supplier collection and match by supplier ID
-      const supplierMatches = await supplierRepository.search(searchTerm, { limit: 1000 });
-      
-      if (supplierMatches.length > 0) {
-        const supplierIds = supplierMatches.map(s => s._id);
-        searchConditions.push({ supplier: { $in: supplierIds } });
-      }
-
-      // If search term is numeric, also search in pricing.total
-      if (!isNaN(searchTerm)) {
-        searchConditions.push({ 'pricing.total': parseFloat(searchTerm) });
-      }
-
-      filter.$or = searchConditions;
-    }
-
-    // Status filter
-    if (queryParams.status) {
-      filter.status = queryParams.status;
-    }
-
-    // Payment status filter
-    if (queryParams.paymentStatus) {
-      filter['payment.status'] = queryParams.paymentStatus;
-    }
-
-    // Invoice type filter
-    if (queryParams.invoiceType) {
-      filter.invoiceType = queryParams.invoiceType;
-    }
-
-    // Date range filter - use dateFilter from middleware if available (Pakistan timezone)
     if (queryParams.dateFilter && Object.keys(queryParams.dateFilter).length > 0) {
-      // dateFilter may contain $or condition for multiple fields
-      if (queryParams.dateFilter.$or) {
-        if (filter.$and) {
-          filter.$and.push(queryParams.dateFilter);
-        } else {
-          filter.$and = [queryParams.dateFilter];
-        }
-      } else {
-        Object.assign(filter, queryParams.dateFilter);
+      const df = queryParams.dateFilter;
+      if (df.invoiceDate) {
+        if (df.invoiceDate.$gte) filter.dateFrom = df.invoiceDate.$gte;
+        if (df.invoiceDate.$lte) filter.dateTo = df.invoiceDate.$lte;
       }
-    } else if (queryParams.dateFrom || queryParams.dateTo) {
-      // Legacy date filtering (for backward compatibility)
-      const { buildMultiFieldDateFilter } = require('../utils/dateFilter');
-      const dateFilter = buildMultiFieldDateFilter(queryParams.dateFrom, queryParams.dateTo, ['invoiceDate', 'createdAt']);
-      if (dateFilter.$or) {
-        if (filter.$and) {
-          filter.$and.push(dateFilter);
-        } else {
-          filter.$and = [dateFilter];
+      if (df.createdAt) {
+        if (df.createdAt.$gte && !filter.dateFrom) filter.dateFrom = df.createdAt.$gte;
+        if (df.createdAt.$lte && !filter.dateTo) filter.dateTo = df.createdAt.$lte;
+      }
+      if (df.$or && Array.isArray(df.$or)) {
+        for (const cond of df.$or) {
+          const key = cond.invoiceDate ? 'invoiceDate' : cond.createdAt ? 'createdAt' : null;
+          if (key && cond[key]) {
+            if (cond[key].$gte && !filter.dateFrom) filter.dateFrom = cond[key].$gte;
+            if (cond[key].$lte && !filter.dateTo) filter.dateTo = cond[key].$lte;
+          }
         }
-      } else {
-        Object.assign(filter, dateFilter);
       }
     }
-
+    if (queryParams.dateFrom && !filter.dateFrom) filter.dateFrom = queryParams.dateFrom;
+    if (queryParams.dateTo && !filter.dateTo) filter.dateTo = queryParams.dateTo;
     return filter;
   }
 
@@ -125,33 +85,24 @@ class PurchaseInvoiceService {
   async getPurchaseInvoices(queryParams) {
     const page = parseInt(queryParams.page) || 1;
     const limit = parseInt(queryParams.limit) || 20;
-
     const filter = await this.buildFilter(queryParams);
+    const result = await purchaseInvoiceRepository.findWithPagination(filter, { page, limit });
 
-    const result = await purchaseInvoiceRepository.findWithPagination(filter, {
-      page,
-      limit,
-      sort: { createdAt: -1 },
-      populate: [
-        { path: 'supplier', select: 'name companyName email phone' },
-        { path: 'items.product', select: 'name description pricing' }
-      ]
-    });
-
-    // Transform names to uppercase
-    result.invoices.forEach(invoice => {
-      if (invoice.supplier) {
-        invoice.supplier = this.transformSupplierToUppercase(invoice.supplier);
+    // Repository now handles invoiceNumber mapping and supplierInfo transformation
+    // Just ensure items are parsed if needed (should already be done by repository)
+    for (const invoice of result.invoices) {
+      if (invoice.items && typeof invoice.items === 'string') {
+        try {
+          invoice.items = JSON.parse(invoice.items);
+        } catch (e) {
+          invoice.items = [];
+        }
       }
-      if (invoice.items && Array.isArray(invoice.items)) {
-        invoice.items.forEach(item => {
-          if (item.product) {
-            item.product = this.transformProductToUppercase(item.product);
-          }
-        });
+      // supplierInfo is now populated by repository JOIN, but keep supplier for backward compatibility
+      if (invoice.supplierInfo && !invoice.supplier) {
+        invoice.supplier = this.transformSupplierToUppercase(invoice.supplierInfo);
       }
-    });
-
+    }
     return result;
   }
 
@@ -162,32 +113,80 @@ class PurchaseInvoiceService {
    */
   async getPurchaseInvoiceById(id) {
     const invoice = await purchaseInvoiceRepository.findById(id);
-    
-    if (!invoice) {
-      throw new Error('Purchase invoice not found');
-    }
+    if (!invoice) throw new Error('Purchase invoice not found');
 
-    // Populate related fields
-    await invoice.populate([
-      { path: 'supplier', select: 'name companyName email phone address' },
-      { path: 'items.product', select: 'name description pricing inventory' },
-      { path: 'createdBy', select: 'name email' },
-      { path: 'lastModifiedBy', select: 'name email' }
-    ]);
-
-    // Transform names to uppercase
-    if (invoice.supplier) {
-      invoice.supplier = this.transformSupplierToUppercase(invoice.supplier);
+    // Repository now handles invoiceNumber mapping and supplierInfo transformation
+    // Just ensure items are parsed if needed (should already be done by repository)
+    if (invoice.items && typeof invoice.items === 'string') {
+      try {
+        invoice.items = JSON.parse(invoice.items);
+      } catch (e) {
+        invoice.items = [];
+      }
     }
-    if (invoice.items && Array.isArray(invoice.items)) {
-      invoice.items.forEach(item => {
-        if (item.product) {
-          item.product = this.transformProductToUppercase(item.product);
-        }
-      });
+    // supplierInfo is now populated by repository JOIN, but keep supplier for backward compatibility
+    if (invoice.supplierInfo && !invoice.supplier) {
+      invoice.supplier = this.transformSupplierToUppercase(invoice.supplierInfo);
     }
-
     return invoice;
+  }
+
+  /**
+   * Sync purchase invoices to ledger (update existing entries, post missing).
+   * Use to fix old edited invoices not reflected in ledger.
+   * @param {object} options - { dateFrom?, dateTo? } optional date range (invoice_date/created_at)
+   * @returns {Promise<{ posted: number, updated: number, skipped: number, errors: Array<{ invoiceId, message }> }>}
+   */
+  async syncPurchaseInvoicesLedger(options = {}) {
+    const filter = await this.buildFilter(options);
+    const invoices = await purchaseInvoiceRepository.findAll(filter, { limit: 10000 });
+    let posted = 0;
+    let updated = 0;
+    const errors = [];
+    for (const invoice of invoices) {
+      const idStr = invoice.id && invoice.id.toString();
+      try {
+        const hasLedger = await AccountingService.hasPurchaseInvoiceLedgerEntries(idStr);
+        const refNum = invoice.invoice_number || invoice.invoiceNumber || invoice.id;
+        const txnDate = invoice.invoice_date || invoice.invoiceDate || invoice.created_at || invoice.createdAt || new Date();
+        const supplierId = invoice.supplier_id || invoice.supplierId || null;
+        const pricing = invoice.pricing || {};
+        const total = parseFloat(pricing.total || invoice.total || 0);
+        const payment = invoice.payment || {};
+        const paidAmount = parseFloat(payment.paidAmount || payment.amount || 0);
+        const paymentMethod = payment.method || 'cash';
+
+        if (!hasLedger) {
+          await AccountingService.recordPurchaseInvoice(invoice);
+          posted++;
+        } else {
+          await AccountingService.updatePurchaseInvoiceLedgerEntries({
+            invoiceId: idStr,
+            total,
+            transactionDate: txnDate,
+            supplierId,
+            referenceNumber: refNum,
+            paidAmount,
+            paymentMethod
+          });
+          const hasPayment = await AccountingService.hasPurchaseInvoicePaymentEntries(idStr);
+          if (paidAmount > 0 && !hasPayment) {
+            await AccountingService.recordPurchasePaymentAdjustment({
+              invoiceId: idStr,
+              invoiceNumber: refNum,
+              supplierId,
+              oldAmountPaid: 0,
+              newAmountPaid: paidAmount,
+              paymentMethod
+            });
+          }
+          updated++;
+        }
+      } catch (err) {
+        errors.push({ invoiceId: idStr, invoiceNumber: invoice.invoice_number || invoice.invoiceNumber, message: err.message || String(err) });
+      }
+    }
+    return { posted, updated, skipped: invoices.length - posted - updated - errors.length, errors };
   }
 }
 

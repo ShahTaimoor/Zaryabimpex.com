@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
 import { Barcode, Download, Printer, Copy, Check, X } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 /**
  * Barcode Generator Component

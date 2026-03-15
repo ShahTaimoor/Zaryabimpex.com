@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
+import BaseModal from './BaseModal';
 import {
-  X,
   Download,
   Star,
   Trash2,
@@ -133,77 +133,60 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
     { id: 'insights', name: 'Insights', icon: AlertTriangle }
   ];
 
-  if (isLoading) {
-    return (
-      <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-        <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-6xl shadow-lg rounded-md bg-white">
-          <div className="flex items-center justify-center h-64">
-            <RefreshCw className="h-8 w-8 text-blue-600 animate-spin" />
-            <span className="ml-2 text-gray-600">Loading report details...</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const reportData = detailedReport || report;
 
+  const headerExtra = !isLoading ? (
+    <div className="flex items-center space-x-2">
+      <button
+        onClick={() => onToggleFavorite(reportData.reportId, !reportData.isFavorite)}
+        className={`p-2 rounded-md ${reportData.isFavorite ? 'text-yellow-400' : 'text-gray-400'} hover:text-yellow-400`}
+        title={reportData.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+      >
+        <Star className={`h-5 w-5 ${reportData.isFavorite ? 'fill-current' : ''}`} />
+      </button>
+      <button
+        onClick={() => onExport(reportData.reportId, 'pdf')}
+        className="p-2 text-gray-400 hover:text-gray-600"
+        title="Export Report"
+      >
+        <Download className="h-5 w-5" />
+      </button>
+      <button
+        onClick={() => onDelete(reportData.reportId)}
+        className="p-2 text-red-400 hover:text-red-600"
+        title="Delete Report"
+      >
+        <Trash2 className="h-5 w-5" />
+      </button>
+    </div>
+  ) : null;
+
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-6xl shadow-lg rounded-md bg-white">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex-1">
-            <div className="flex items-center">
-              <h3 className="text-xl font-semibold text-gray-900 mr-3">
-                {reportData.reportName}
-              </h3>
-              {reportData.isFavorite && (
-                <Star className="h-5 w-5 text-yellow-400 fill-current" />
-              )}
-            </div>
-            <div className="mt-2 flex items-center space-x-4">
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(reportData.status)}`}>
-                {getStatusIcon(reportData.status)}
-                <span className="ml-1">{reportData.status.toUpperCase()}</span>
-              </span>
-              <span className="text-sm text-gray-500">
-                Generated {formatDate(reportData.generatedAt)}
-              </span>
-              <span className="text-sm text-gray-500">
-                {reportData.viewCount} views
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => onToggleFavorite(reportData.reportId, !reportData.isFavorite)}
-              className={`p-2 rounded-md ${reportData.isFavorite ? 'text-yellow-400' : 'text-gray-400'} hover:text-yellow-400`}
-              title={reportData.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-            >
-              <Star className={`h-5 w-5 ${reportData.isFavorite ? 'fill-current' : ''}`} />
-            </button>
-            <button
-              onClick={() => onExport(reportData.reportId, 'pdf')}
-              className="p-2 text-gray-400 hover:text-gray-600"
-              title="Export Report"
-            >
-              <Download className="h-5 w-5" />
-            </button>
-            <button
-              onClick={() => onDelete(reportData.reportId)}
-              className="p-2 text-red-400 hover:text-red-600"
-              title="Delete Report"
-            >
-              <Trash2 className="h-5 w-5" />
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+    <BaseModal
+      isOpen={true}
+      onClose={onClose}
+      title={isLoading ? 'Loading...' : reportData.reportName}
+      subtitle={!isLoading && reportData.generatedAt ? `Generated ${formatDate(reportData.generatedAt)}` : ''}
+      headerExtra={headerExtra}
+      maxWidth="2xl"
+      variant="scrollable"
+      contentClassName="p-5"
+    >
+      {isLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <RefreshCw className="h-8 w-8 text-blue-600 animate-spin" />
+          <span className="ml-2 text-gray-600">Loading report details...</span>
+        </div>
+      ) : (
+        <>
+        <div className="flex items-center space-x-4 mb-6">
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(reportData.status)}`}>
+            {getStatusIcon(reportData.status)}
+            <span className="ml-1">{reportData.status.toUpperCase()}</span>
+          </span>
+          <span className="text-sm text-gray-500">
+            {reportData.viewCount} views
+          </span>
         </div>
 
         {/* Tabs */}
@@ -606,8 +589,9 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
             </div>
           )}
         </div>
-      </div>
-    </div>
+        </>
+      )}
+    </BaseModal>
   );
 };
 

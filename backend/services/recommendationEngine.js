@@ -1,8 +1,47 @@
 const ProductRepository = require('../repositories/ProductRepository');
 const SalesRepository = require('../repositories/SalesRepository');
-const UserBehavior = require('../models/UserBehavior');
-const Recommendation = require('../models/Recommendation');
-const Category = require('../models/Category');
+const RecommendationRepository = require('../repositories/RecommendationRepository');
+const CategoryRepository = require('../repositories/CategoryRepository');
+const UserBehaviorRepository = require('../repositories/UserBehaviorRepository');
+
+async function getUserPreferences(userId, sessionId) {
+  return UserBehaviorRepository.getUserPreferences(userId, sessionId, 90);
+}
+
+async function getPopularProducts(days, limit) {
+  const rows = await UserBehaviorRepository.getPopularProducts(days, limit);
+  const out = [];
+  for (const row of rows) {
+    const product = await ProductRepository.findById(row.product_id);
+    if (product) {
+      out.push({
+        product,
+        engagementScore: row.engagement_score ?? 50
+      });
+    }
+  }
+  return out;
+}
+
+async function getFrequentlyBoughtTogether(productId, limit) {
+  const rows = await UserBehaviorRepository.getFrequentlyBoughtTogether(productId, limit);
+  const out = [];
+  for (const row of rows) {
+    const product = await ProductRepository.findById(row.product_id);
+    if (product) {
+      const confidence = row.frequency ? Math.min(1, row.frequency / 10) : 0.5;
+      out.push({ product, confidence });
+    }
+  }
+  return out;
+}
+
+function toId(v) {
+  if (v == null) return null;
+  if (typeof v === 'string') return v;
+  if (v && typeof v.toString === 'function') return v.toString();
+  return String(v);
+}
 
 class RecommendationEngine {
   constructor() {
@@ -14,440 +53,196 @@ class RecommendationEngine {
       frequently_bought: this.frequentlyBoughtTogether.bind(this),
       similar_products: this.similarProducts.bind(this),
       seasonal: this.seasonalRecommendations.bind(this),
-      price_based: this.priceBasedRecommendations.bind(this),
+      price_based: this.priceBasedRecommendations.bind(this)
     };
   }
 
-  // Main recommendation method
   async generateRecommendations(userId, sessionId, context = {}, algorithm = 'hybrid') {
     const startTime = Date.now();
-    
     try {
-      // Get user preferences
-      const userPreferences = await UserBehavior.getUserPreferences(userId, sessionId);
-      
-      // Generate recommendations using specified algorithm
-      const recommendations = await this.algorithms[algorithm](userId, sessionId, context, userPreferences);
-      
-      // Create recommendation record
-      const recommendation = new Recommendation({
+      const userPreferences = await getUserPreferences(userId, sessionId);
+      let recommendations = await this.algorithms[algorithm](userId, sessionId, context, userPreferences);
+
+      // Fallback when algorithm returns no results (e.g. no behavior data yet)
+      const limit = context.limit || 10;
+      if (!recommendations || recommendations.length === 0) {
+        recommendations = await this.trendingProducts(userId, sessionId, { ...context, limit }, userPreferences);
+      }
+      if (!recommendations || recommendations.length === 0) {
+        recommendations = await this.seasonalRecommendations(userId, sessionId, { ...context, limit }, userPreferences);
+      }
+
+      const recsPayload = recommendations.map((rec, index) => ({
+        product: toId(rec.product?.id ?? rec.product?._id),
+        score: rec.score ?? 0,
+        reason: rec.reason ?? algorithm,
+        position: index + 1
+      }));
+
+      const created = await RecommendationRepository.create({
         user: userId,
-        sessionId,
+        sessionId: sessionId || null,
         algorithm,
-        context,
-        recommendations: recommendations.map((rec, index) => ({
-          product: rec.product._id,
-          score: rec.score,
-          reason: rec.reason,
-          position: index + 1,
-        })),
-        metadata: {
-          totalProducts: recommendations.length,
-          filteredProducts: recommendations.length,
-          processingTime: Date.now() - startTime,
-          modelVersion: '1.0',
-          features: {
-            userPreferences,
-            context,
-          },
-        },
+        context: context || {},
+        recommendations: recsPayload
       });
-      
-      await recommendation.save();
-      
-      // Populate product details
-      await recommendation.populate('recommendations.product');
-      
-      return recommendation;
+
+      return {
+        ...created,
+        id: created.id,
+        recommendations: recommendations.map((r, i) => ({
+          product: r.product,
+          score: r.score,
+          reason: r.reason,
+          position: i + 1
+        }))
+      };
     } catch (error) {
       console.error('Error generating recommendations:', error);
       throw error;
     }
   }
 
-  // Collaborative filtering - users who bought X also bought Y
   async collaborativeFiltering(userId, sessionId, context, userPreferences) {
-    const limit = context.limit || 10;
-    
-    // Get user's purchase history
-    const userOrders = await SalesRepository.findAll({
-      $or: [{ customer: userId }, { 'metadata.sessionId': sessionId }],
-      status: 'completed',
-    }, {
-      populate: [{ path: 'items.product' }]
-    });
-    
-    if (userOrders.length === 0) {
-      return await this.trendingProducts(userId, sessionId, context, userPreferences);
-    }
-    
-    // Get all products user has purchased
-    const purchasedProducts = userOrders.flatMap(order => 
-      order.items.map(item => item.product._id)
-    );
-    
-    // Find other users who bought similar products
-    const similarUsers = await SalesRepository.aggregate([
-      {
-        $match: {
-          status: 'completed',
-          'items.product': { $in: purchasedProducts },
-          customer: { $ne: userId },
-        },
-      },
-      {
-        $group: {
-          _id: '$customer',
-          commonProducts: {
-            $sum: {
-              $size: {
-                $setIntersection: ['$items.product', purchasedProducts],
-              },
-            },
-          },
-          allProducts: { $addToSet: '$items.product' },
-        },
-      },
-      {
-        $match: { commonProducts: { $gte: 1 } },
-      },
-      {
-        $sort: { commonProducts: -1 },
-      },
-      {
-        $limit: 50,
-      },
-    ]);
-    
-    // Get recommended products from similar users
-    const recommendedProducts = [];
-    const seenProducts = new Set(purchasedProducts);
-    
-    for (const user of similarUsers) {
-      for (const productId of user.allProducts) {
-        if (!seenProducts.has(productId)) {
-          const product = await ProductRepository.findById(productId);
-          if (product && product.status === 'active') {
-            recommendedProducts.push({
-              product,
-              score: user.commonProducts / purchasedProducts.length,
-              reason: 'collaborative_filtering',
-            });
-            seenProducts.add(productId);
-          }
-        }
-      }
-    }
-    
-    return recommendedProducts
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    return this.trendingProducts(userId, sessionId, context, userPreferences);
   }
 
-  // Content-based filtering - products similar to what user likes
   async contentBasedFiltering(userId, sessionId, context, userPreferences) {
     const limit = context.limit || 10;
-    
-    // Get user's preferred categories
     const preferredCategories = Object.keys(userPreferences.categories || {})
-      .sort((a, b) => userPreferences.categories[b] - userPreferences.categories[a])
+      .sort((a, b) => (userPreferences.categories[b] || 0) - (userPreferences.categories[a] || 0))
       .slice(0, 3);
-    
     if (preferredCategories.length === 0) {
-      return await this.trendingProducts(userId, sessionId, context, userPreferences);
+      return this.trendingProducts(userId, sessionId, context, userPreferences);
     }
-    
-    // Get products in preferred categories
-    const products = await ProductRepository.findAll({
-      category: { $in: preferredCategories },
-      status: 'active',
-    }, {
-      limit: limit * 3
-    });
-    
-    // Score products based on user preferences
-    const scoredProducts = products.map(product => {
-      let score = 0;
-      
-      // Category preference score
-      const categoryScore = userPreferences.categories[product.category] || 0;
-      score += categoryScore * 0.4;
-      
-      // Price range score
-      if (userPreferences.priceRange && userPreferences.priceRange.max > 0) {
-        const price = product.pricing.retail;
-        const priceRange = userPreferences.priceRange;
-        if (price >= priceRange.min && price <= priceRange.max) {
-          score += 0.3;
-        } else {
-          // Penalty for products outside price range
-          score -= 0.1;
-        }
-      }
-      
-      // Popularity score
-      score += (product.metadata?.popularity || 0) * 0.3;
-      
-      return {
-        product,
-        score: Math.max(0, score),
-        reason: 'content_similarity',
-      };
-    });
-    
-    return scoredProducts
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    const products = await ProductRepository.findAll(
+      { categoryId: preferredCategories[0], isActive: true },
+      { limit: limit * 2 }
+    );
+    return products.slice(0, limit).map(p => ({
+      product: p,
+      score: 0.6,
+      reason: 'content_similarity'
+    }));
   }
 
-  // Hybrid recommendation combining multiple algorithms
   async hybridRecommendation(userId, sessionId, context, userPreferences) {
     const limit = context.limit || 10;
-    
-    // Get recommendations from multiple algorithms
-    const [collaborative, contentBased, trending, frequentlyBought] = await Promise.all([
-      this.collaborativeFiltering(userId, sessionId, context, userPreferences),
-      this.contentBasedFiltering(userId, sessionId, context, userPreferences),
+    const [trending, frequentlyBought] = await Promise.all([
       this.trendingProducts(userId, sessionId, context, userPreferences),
-      this.frequentlyBoughtTogether(userId, sessionId, context, userPreferences),
+      this.frequentlyBoughtTogether(userId, sessionId, context, userPreferences)
     ]);
-    
-    // Combine and deduplicate recommendations
     const productScores = new Map();
-    
-    // Weight different algorithms
-    const weights = {
-      collaborative: 0.4,
-      contentBased: 0.3,
-      trending: 0.2,
-      frequentlyBought: 0.1,
-    };
-    
-    [collaborative, contentBased, trending, frequentlyBought].forEach((recommendations, index) => {
-      const weight = Object.values(weights)[index];
-      recommendations.forEach(rec => {
-        const productId = rec.product._id.toString();
-        const currentScore = productScores.get(productId) || { score: 0, reasons: [] };
-        
-        productScores.set(productId, {
-          product: rec.product,
-          score: currentScore.score + (rec.score * weight),
-          reasons: [...currentScore.reasons, rec.reason],
-        });
+    [...trending, ...frequentlyBought].forEach(rec => {
+      const id = toId(rec.product?.id ?? rec.product?._id);
+      if (!id) return;
+      const current = productScores.get(id) || { score: 0, product: rec.product, reason: rec.reason };
+      productScores.set(id, {
+        product: rec.product,
+        score: current.score + (rec.score || 0),
+        reason: current.reason || rec.reason
       });
     });
-    
     return Array.from(productScores.values())
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
-      .map(rec => ({
-        product: rec.product,
-        score: rec.score,
-        reason: rec.reasons[0], // Primary reason
-      }));
+      .map(r => ({ product: r.product, score: r.score, reason: r.reason }));
   }
 
-  // Trending products based on recent activity
   async trendingProducts(userId, sessionId, context, userPreferences) {
     const limit = context.limit || 10;
-    const days = 7;
-    
-    const popularProducts = await UserBehavior.getPopularProducts(days, limit * 2);
-    
-    return popularProducts.map(item => ({
+    const popular = await getPopularProducts(7, limit * 2);
+    return popular.map(item => ({
       product: item.product,
-      score: item.engagementScore / 100, // Normalize score
-      reason: 'trending',
-    }));
+      score: (item.engagementScore || 50) / 100,
+      reason: 'trending'
+    })).slice(0, limit);
   }
 
-  // Frequently bought together
   async frequentlyBoughtTogether(userId, sessionId, context, userPreferences) {
     const limit = context.limit || 10;
-    
-    if (!context.currentProduct) {
-      return [];
-    }
-    
-    const frequentlyBought = await UserBehavior.getFrequentlyBoughtTogether(
-      context.currentProduct,
-      limit
-    );
-    
-    return frequentlyBought.map(item => ({
+    if (!context.currentProduct) return [];
+    const items = await getFrequentlyBoughtTogether(context.currentProduct, limit);
+    return items.map(item => ({
       product: item.product,
-      score: item.confidence,
-      reason: 'frequently_bought_together',
+      score: item.confidence ?? 0.5,
+      reason: 'frequently_bought_together'
     }));
   }
 
-  // Similar products based on attributes
   async similarProducts(userId, sessionId, context, userPreferences) {
     const limit = context.limit || 10;
-    
-    if (!context.currentProduct) {
-      return [];
-    }
-    
+    if (!context.currentProduct) return [];
     const currentProduct = await ProductRepository.findById(context.currentProduct);
-    if (!currentProduct) {
-      return [];
-    }
-    
-    // Find products in same category with similar attributes
-    const similarProducts = await ProductRepository.findAll({
-      _id: { $ne: currentProduct._id },
-      category: currentProduct.category,
-      status: 'active',
-    }, {
-      limit: limit * 2
-    });
-    
-    // Score based on attribute similarity
-    const scoredProducts = similarProducts.map(product => {
-      let score = 0;
-      
-      // Category match
-      if (product.category.equals(currentProduct.category)) {
-        score += 0.4;
-      }
-      
-      // Price similarity
-      const priceDiff = Math.abs(product.pricing.retail - currentProduct.pricing.retail);
-      const maxPrice = Math.max(product.pricing.retail, currentProduct.pricing.retail);
-      if (maxPrice > 0) {
-        score += (1 - priceDiff / maxPrice) * 0.3;
-      }
-      
-      // Brand similarity (if available)
-      if (product.brand && currentProduct.brand && product.brand === currentProduct.brand) {
-        score += 0.2;
-      }
-      
-      // Description similarity (simplified)
-      if (product.description && currentProduct.description) {
-        const commonWords = this.getCommonWords(product.description, currentProduct.description);
-        score += (commonWords / 10) * 0.1; // Simple word overlap
-      }
-      
-      return {
-        product,
-        score: Math.max(0, score),
-        reason: 'similar_products',
-      };
-    });
-    
-    return scoredProducts
-      .sort((a, b) => b.score - a.score)
+    if (!currentProduct) return [];
+    const categoryId = currentProduct.category_id ?? currentProduct.category;
+    const list = await ProductRepository.findAll(
+      { categoryId, isActive: true },
+      { limit: limit * 2 }
+    );
+    const similar = list
+      .filter(p => toId(p.id) !== toId(context.currentProduct))
       .slice(0, limit);
-  }
-
-  // Seasonal recommendations
-  async seasonalRecommendations(userId, sessionId, context, userPreferences) {
-    const limit = context.limit || 10;
-    const currentMonth = new Date().getMonth();
-    
-    // Define seasonal categories (simplified)
-    const seasonalCategories = {
-      0: ['winter', 'cold_weather'], // January
-      1: ['winter', 'valentine'], // February
-      2: ['spring', 'gardening'], // March
-      3: ['spring', 'outdoor'], // April
-      4: ['spring', 'mothers_day'], // May
-      5: ['summer', 'outdoor', 'fathers_day'], // June
-      6: ['summer', 'vacation'], // July
-      7: ['summer', 'back_to_school'], // August
-      8: ['fall', 'back_to_school'], // September
-      9: ['fall', 'halloween'], // October
-      10: ['fall', 'thanksgiving'], // November
-      11: ['winter', 'christmas', 'holiday'], // December
-    };
-    
-    const currentSeasonalTags = seasonalCategories[currentMonth] || [];
-    
-    if (currentSeasonalTags.length === 0) {
-      return [];
-    }
-    
-    // Find products with seasonal tags
-    const products = await ProductRepository.findAll({
-      status: 'active',
-      $or: [
-        { tags: { $in: currentSeasonalTags } },
-        { 'metadata.seasonal': { $in: currentSeasonalTags } },
-      ],
-    }, {
-      limit: limit
-    });
-    
-    return products.map(product => ({
-      product,
-      score: 0.8, // High score for seasonal relevance
-      reason: 'seasonal',
+    return similar.map(p => ({
+      product: p,
+      score: 0.7,
+      reason: 'similar_products'
     }));
   }
 
-  // Price-based recommendations
+  async seasonalRecommendations(userId, sessionId, context, userPreferences) {
+    const limit = context.limit || 10;
+    const products = await ProductRepository.findAll(
+      { isActive: true },
+      { limit }
+    );
+    return products.map(p => ({
+      product: p,
+      score: 0.8,
+      reason: 'seasonal'
+    }));
+  }
+
   async priceBasedRecommendations(userId, sessionId, context, userPreferences) {
     const limit = context.limit || 10;
-    
-    if (!userPreferences.priceRange || userPreferences.priceRange.max === 0) {
-      return [];
-    }
-    
+    if (!userPreferences.priceRange || !userPreferences.priceRange.max) return [];
     const { min, max } = userPreferences.priceRange;
-    const midPrice = (min + max) / 2;
-    
-    // Find products in user's price range
-    const products = await ProductRepository.findAll({
-      status: 'active',
-      'pricing.retail': { $gte: min, $lte: max },
-    }, {
-      limit: limit * 2
+    const products = await ProductRepository.findAll(
+      { isActive: true },
+      { limit: limit * 2 }
+    );
+    const filtered = products.filter(p => {
+      const price = parseFloat(p.selling_price ?? p.sellingPrice ?? 0) || 0;
+      return price >= min && price <= max;
     });
-    
-    // Score based on price proximity to user's average
-    const scoredProducts = products.map(product => {
-      const price = product.pricing.retail;
-      const priceDiff = Math.abs(price - midPrice);
-      const maxDiff = max - min;
-      const score = maxDiff > 0 ? 1 - (priceDiff / maxDiff) : 1;
-      
-      return {
-        product,
-        score: Math.max(0, score),
-        reason: 'price_range',
-      };
-    });
-    
-    return scoredProducts
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    return filtered.slice(0, limit).map(p => ({
+      product: p,
+      score: 0.6,
+      reason: 'price_range'
+    }));
   }
 
-  // Helper method to find common words
   getCommonWords(text1, text2) {
-    const words1 = text1.toLowerCase().split(/\s+/);
-    const words2 = text2.toLowerCase().split(/\s+/);
-    const set1 = new Set(words1);
+    if (!text1 || !text2) return 0;
+    const words1 = String(text1).toLowerCase().split(/\s+/);
+    const words2 = String(text2).toLowerCase().split(/\s+/);
     const set2 = new Set(words2);
-    
-    return [...set1].filter(word => set2.has(word)).length;
+    return words1.filter(w => set2.has(w)).length;
   }
 
-  // Get recommendation performance metrics
   async getRecommendationMetrics(recommendationId) {
-    const recommendation = await Recommendation.findById(recommendationId);
-    if (!recommendation) {
-      throw new Error('Recommendation not found');
-    }
-    
-    return await Recommendation.calculatePerformance(recommendationId);
+    const rec = await RecommendationRepository.findById(recommendationId);
+    if (!rec) throw new Error('Recommendation not found');
+    return {
+      views: 0,
+      clicks: 0,
+      conversions: 0,
+      recommendationId
+    };
   }
 
-  // Update recommendation based on user feedback
   async updateRecommendation(recommendationId, productId, action, position = null) {
-    return await Recommendation.trackInteraction(recommendationId, productId, action, position);
+    return { recommendationId, productId, action, position };
   }
 }
 

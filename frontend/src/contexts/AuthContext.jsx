@@ -1,5 +1,5 @@
-import toast from 'react-hot-toast';
-import { useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
   useLoginMutation,
@@ -14,6 +14,7 @@ export const AuthProvider = ({ children }) => children;
 export const useAuth = () => {
   const dispatch = useAppDispatch();
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, token, isAuthenticated, status, error } = useAppSelector((s) => s.auth);
   const isLoginPage = location.pathname === '/login';
 
@@ -23,10 +24,8 @@ export const useAuth = () => {
     error: currentUserErrorData,
     refetch: refetchCurrentUser,
   } = useCurrentUserQuery(undefined, {
-    // Skip query if:
-    // 1. We already have a user and are authenticated, OR
-    // 2. We're on the login page (no need to check auth status there)
-    skip: (isAuthenticated && !!user) || isLoginPage,
+    // Skip when: on login page, or already authenticated with user (no need to refetch)
+    skip: isLoginPage || (isAuthenticated && !!user),
     // Disable retries completely to prevent infinite loading
     retry: false,
     // Don't refetch on window focus to prevent unnecessary requests
@@ -60,6 +59,7 @@ export const useAuth = () => {
     }
     dispatch(logoutAction());
     toast.success('Logged out successfully');
+    navigate('/login', { replace: true });
   };
 
   const updateUser = (userData) => {

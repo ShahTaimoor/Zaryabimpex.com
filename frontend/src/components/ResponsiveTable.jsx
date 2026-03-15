@@ -14,7 +14,8 @@ const ResponsiveTable = ({
   sortable = true,
   className = '',
   mobileCardComponent,
-  emptyMessage = 'No data available'
+  emptyMessage = 'No data available',
+  useMobileCardsOnTablet = false
 }) => {
   const [sortField, setSortField] = useState('');
   const [sortDirection, setSortDirection] = useState('asc');
@@ -198,14 +199,14 @@ const ResponsiveTable = ({
 
   // Desktop table component
   const DesktopTable = () => (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
+    <div className="overflow-x-auto min-w-0">
+      <table className="min-w-full divide-y divide-gray-200 min-w-[600px]">
         <thead className="bg-gray-50">
           <tr>
             {columns.map((column) => (
               <th
                 key={column.key}
-                className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
+                className={`px-4 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
                   sortable ? 'cursor-pointer hover:bg-gray-100' : ''
                 }`}
                 onClick={() => sortable && handleSort(column.key)}
@@ -221,7 +222,7 @@ const ResponsiveTable = ({
               </th>
             ))}
             {actions && (
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 sm:px-6 py-2.5 sm:py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
             )}
@@ -242,13 +243,13 @@ const ResponsiveTable = ({
                   ) : '';
                 
                 return (
-                  <td key={column.key} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td key={column.key} className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-900">
                     {column.render ? column.render(value, item) : value}
                   </td>
                 );
               })}
               {actions && (
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex items-center justify-end space-x-2">
                     {onView && (
                       <button
@@ -302,7 +303,7 @@ const ResponsiveTable = ({
   }
 
   return (
-    <div className={`bg-white ${className}`}>
+    <div className={`bg-white min-w-0 overflow-hidden ${className}`}>
       {/* Search */}
       {searchable && (
         <div className="p-4 border-b border-gray-200">
@@ -317,8 +318,8 @@ const ResponsiveTable = ({
       )}
 
       {/* Table/Cards */}
-      <div className="p-4">
-        {isMobile ? (
+      <div className="p-3 sm:p-4 min-w-0">
+        {(isMobile || (useMobileCardsOnTablet && isTablet)) ? (
           <div className="space-y-4">
             {sortedData.map((item, index) => (
               <MobileCard key={index} item={item} index={index} />

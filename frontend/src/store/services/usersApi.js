@@ -32,7 +32,10 @@ export const usersApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Users', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Users', id: 'LIST' },
+        { type: 'Users', id: 'EMPLOYEES_LIST' },
+      ],
     }),
     updateUser: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -42,7 +45,9 @@ export const usersApi = api.injectEndpoints({
       }),
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Users', id },
+        { type: 'Users', id: `ACTIVITY_${id}` },
         { type: 'Users', id: 'LIST' },
+        { type: 'Users', id: 'EMPLOYEES_LIST' },
       ],
     }),
     deleteUser: builder.mutation({
@@ -52,7 +57,9 @@ export const usersApi = api.injectEndpoints({
       }),
       invalidatesTags: (_r, _e, id) => [
         { type: 'Users', id },
+        { type: 'Users', id: `ACTIVITY_${id}` },
         { type: 'Users', id: 'LIST' },
+        { type: 'Users', id: 'EMPLOYEES_LIST' },
       ],
     }),
     toggleUserStatus: builder.mutation({
@@ -62,7 +69,9 @@ export const usersApi = api.injectEndpoints({
       }),
       invalidatesTags: (_r, _e, id) => [
         { type: 'Users', id },
+        { type: 'Users', id: `ACTIVITY_${id}` },
         { type: 'Users', id: 'LIST' },
+        { type: 'Users', id: 'EMPLOYEES_LIST' },
       ],
     }),
     resetPassword: builder.mutation({
@@ -71,7 +80,11 @@ export const usersApi = api.injectEndpoints({
         method: 'patch',
         data: { newPassword },
       }),
-      invalidatesTags: (_r, _e, { id }) => [{ type: 'Users', id }],
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Users', id },
+        { type: 'Users', id: 'LIST' },
+        { type: 'Users', id: 'EMPLOYEES_LIST' },
+      ],
     }),
     updateRolePermissions: builder.mutation({
       query: ({ role, permissions }) => ({
@@ -79,7 +92,10 @@ export const usersApi = api.injectEndpoints({
         method: 'patch',
         data: { role, permissions },
       }),
-      invalidatesTags: [{ type: 'Users', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Users', id: 'LIST' },
+        { type: 'Users', id: 'EMPLOYEES_LIST' },
+      ],
     }),
     getUserActivity: builder.query({
       query: (id) => ({

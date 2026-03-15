@@ -9,8 +9,10 @@ import {
   Folder,
   FolderOpen
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage } from '../components/LoadingSpinner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import CategoryImportExport from '../components/CategoryImportExport';
@@ -260,18 +262,22 @@ const CategoryModal = ({ category, isOpen, onClose, onSave, isSubmitting, catego
                 type="submit"
                 isLoading={isSubmitting}
                 disabled={!formData.name || isSubmitting}
-                className="btn btn-primary btn-md w-full sm:w-auto sm:ml-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="default"
+                size="default"
+                className="w-full sm:w-auto sm:ml-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {category ? 'Update Category' : 'Create Category'}
               </LoadingButton>
-              <button
+              <Button
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="btn btn-secondary btn-md w-full sm:w-auto mt-3 sm:mt-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="secondary"
+                size="default"
+                className="w-full sm:w-auto mt-3 sm:mt-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </form>
         </div>
@@ -299,7 +305,7 @@ export const Categories = () => {
   }, [searchParams]);
 
   const { data, isLoading, error, refetch } = useGetCategoriesQuery(
-    { search: searchTerm },
+    { search: searchTerm, limit: 999999 },
     { refetchOnMountOrArgChange: true }
   );
 
@@ -401,33 +407,37 @@ export const Categories = () => {
             <p className="text-gray-600">Manage your product categories</p>
           </div>
           <div className="flex-shrink-0 flex flex-col sm:flex-row gap-3">
-            <button
+            <Button
               onClick={() => {
                 setSelectedCategory(null);
                 setCategoryType('parent');
                 setIsModalOpen(true);
               }}
-              className="btn btn-primary btn-lg w-full sm:w-auto shadow-lg hover:shadow-xl transition-shadow"
+              variant="default"
+              size="lg"
+              className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-shadow"
             >
               <FolderOpen className="h-5 w-5 mr-2" />
               Add Parent Category
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => {
                 setSelectedCategory(null);
                 setCategoryType('child');
                 setIsModalOpen(true);
               }}
-              className="btn btn-outline btn-lg w-full sm:w-auto shadow-lg hover:shadow-xl transition-shadow"
+              variant="outline"
+              size="lg"
+              className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-shadow"
             >
               <Folder className="h-5 w-5 mr-2" />
               Add Child Category
-            </button>
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Import/Export */}
+      {/* Import/Export Section */}
       <CategoryImportExport 
         onImportComplete={() => refetch()}
         filters={{ search: searchTerm }}
@@ -437,12 +447,12 @@ export const Categories = () => {
       <div className="flex items-center space-x-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
+          <Input
             type="text"
             placeholder="Search categories..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10"
+            className="pl-10"
           />
         </div>
       </div>
@@ -456,12 +466,14 @@ export const Categories = () => {
       ) : error ? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
           <p className="text-red-600">Error loading categories: {error.message}</p>
-          <button
+          <Button
             onClick={() => refetch()}
-            className="mt-4 btn btn-secondary btn-sm"
+            variant="secondary"
+            size="sm"
+            className="mt-4"
           >
             Retry
-          </button>
+          </Button>
         </div>
       ) : categories.length === 0 ? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
@@ -471,24 +483,28 @@ export const Categories = () => {
             {searchTerm ? 'Try adjusting your search terms.' : 'Get started by adding your first category.'}
           </p>
           <p className="mt-2 text-xs text-gray-400">Total in database: {pagination?.total || 0}</p>
-          <button
+          <Button
             onClick={() => refetch()}
-            className="mt-4 btn btn-secondary btn-sm"
+            variant="secondary"
+            size="sm"
+            className="mt-4"
           >
             Refresh
-          </button>
+          </Button>
           {!searchTerm && (
             <div className="mt-6">
-              <button
+              <Button
                 onClick={() => {
                   setCategoryType('parent');
                   setIsModalOpen(true);
                 }}
-                className="btn btn-primary btn-lg shadow-lg hover:shadow-xl transition-shadow"
+                variant="default"
+                size="lg"
+                className="shadow-lg hover:shadow-xl transition-shadow"
               >
                 <FolderOpen className="h-5 w-5 mr-2" />
                 Add Your First Parent Category
-              </button>
+              </Button>
               <p className="mt-3 text-xs text-gray-400">
                 💡 Tip: Start with parent categories (like "Electronics"), then add subcategories
               </p>

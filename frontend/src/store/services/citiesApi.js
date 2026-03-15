@@ -58,6 +58,45 @@ export const citiesApi = api.injectEndpoints({
       }),
       providesTags: [{ type: 'Cities', id: 'ACTIVE' }],
     }),
+    exportCities: builder.mutation({
+      query: (filters) => ({
+        url: 'cities/export/excel',
+        method: 'post',
+        data: { filters },
+      }),
+    }),
+    importCities: builder.mutation({
+      query: (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return {
+          url: 'cities/import/excel',
+          method: 'post',
+          data: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        };
+      },
+      invalidatesTags: [
+        { type: 'Cities', id: 'LIST' },
+        { type: 'Cities', id: 'ACTIVE' },
+      ],
+    }),
+    downloadCityTemplate: builder.query({
+      query: () => ({
+        url: 'cities/template/excel',
+        method: 'get',
+        responseType: 'blob',
+      }),
+    }),
+    downloadCityExportFile: builder.query({
+      query: (filename) => ({
+        url: `cities/download/${filename}`,
+        method: 'get',
+        responseType: 'blob',
+      }),
+    }),
   }),
   overrideExisting: false,
 });
@@ -69,5 +108,9 @@ export const {
   useUpdateCityMutation,
   useDeleteCityMutation,
   useGetActiveCitiesQuery,
+  useExportCitiesMutation,
+  useImportCitiesMutation,
+  useDownloadCityTemplateQuery,
+  useLazyDownloadCityExportFileQuery,
 } = citiesApi;
 

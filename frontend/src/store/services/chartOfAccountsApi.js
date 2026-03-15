@@ -42,7 +42,19 @@ export const chartOfAccountsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'ChartOfAccounts', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'HIERARCHY' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
+      ],
     }),
     updateAccount: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -53,6 +65,16 @@ export const chartOfAccountsApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'ChartOfAccounts', id },
         { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'HIERARCHY' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     deleteAccount: builder.mutation({
@@ -63,6 +85,16 @@ export const chartOfAccountsApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'ChartOfAccounts', id },
         { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'HIERARCHY' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     getAccountHierarchy: builder.query({
@@ -86,6 +118,25 @@ export const chartOfAccountsApi = api.injectEndpoints({
       }),
       providesTags: [{ type: 'ChartOfAccounts', id: 'CATEGORIES' }],
     }),
+    syncPartyAccounts: builder.mutation({
+      query: () => ({
+        url: 'chart-of-accounts/sync-party-accounts',
+        method: 'post',
+      }),
+      invalidatesTags: [
+        { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'HIERARCHY' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
+      ],
+    }),
   }),
   overrideExisting: false,
 });
@@ -99,5 +150,6 @@ export const {
   useGetAccountHierarchyQuery,
   useGetAccountStatsQuery,
   useGetCategoriesGroupedQuery,
+  useSyncPartyAccountsMutation,
 } = chartOfAccountsApi;
 

@@ -8,7 +8,11 @@ export const balanceSheetsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Reports', id: 'BALANCE_SHEETS' }],
+      invalidatesTags: [
+        { type: 'Reports', id: 'BALANCE_SHEETS' },
+        { type: 'Reports', id: 'BALANCE_SHEETS_LATEST' },
+        { type: 'Reports', id: 'BALANCE_SHEETS_STATS' },
+      ],
     }),
     getBalanceSheets: builder.query({
       query: (params) => ({
@@ -70,6 +74,8 @@ export const balanceSheetsApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Reports', id },
         { type: 'Reports', id: 'BALANCE_SHEETS' },
+        { type: 'Reports', id: 'BALANCE_SHEETS_LATEST' },
+        { type: 'Reports', id: 'BALANCE_SHEETS_STATS' },
       ],
     }),
     updateBalanceSheetStatus: builder.mutation({
@@ -81,6 +87,8 @@ export const balanceSheetsApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Reports', id },
         { type: 'Reports', id: 'BALANCE_SHEETS' },
+        { type: 'Reports', id: 'BALANCE_SHEETS_LATEST' },
+        { type: 'Reports', id: 'BALANCE_SHEETS_STATS' },
       ],
     }),
     deleteBalanceSheet: builder.mutation({
@@ -91,6 +99,8 @@ export const balanceSheetsApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'Reports', id },
         { type: 'Reports', id: 'BALANCE_SHEETS' },
+        { type: 'Reports', id: 'BALANCE_SHEETS_LATEST' },
+        { type: 'Reports', id: 'BALANCE_SHEETS_STATS' },
       ],
     }),
     getComparison: builder.query({
@@ -134,7 +144,12 @@ export const balanceSheetsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: (_r, _e, { id }) => [{ type: 'Reports', id }],
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Reports', id },
+        { type: 'Reports', id: 'BALANCE_SHEETS' },
+        { type: 'Reports', id: 'BALANCE_SHEETS_LATEST' },
+        { type: 'Reports', id: 'BALANCE_SHEETS_STATS' },
+      ],
     }),
   }),
   overrideExisting: false,

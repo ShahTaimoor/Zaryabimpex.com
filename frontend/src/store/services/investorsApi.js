@@ -31,7 +31,11 @@ export const investorsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Settings', id: 'INVESTORS_LIST' }],
+      invalidatesTags: [
+        { type: 'Settings', id: 'INVESTORS_LIST' },
+        { type: 'Accounting', id: 'PROFIT_SHARES' },
+        { type: 'Accounting', id: 'PROFIT_SUMMARY' },
+      ],
     }),
     updateInvestor: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -42,6 +46,8 @@ export const investorsApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { id }) => [
         { type: 'Settings', id },
         { type: 'Settings', id: 'INVESTORS_LIST' },
+        { type: 'Accounting', id: 'PROFIT_SHARES' },
+        { type: 'Accounting', id: 'PROFIT_SUMMARY' },
       ],
     }),
     deleteInvestor: builder.mutation({
@@ -52,6 +58,8 @@ export const investorsApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, id) => [
         { type: 'Settings', id },
         { type: 'Settings', id: 'INVESTORS_LIST' },
+        { type: 'Accounting', id: 'PROFIT_SHARES' },
+        { type: 'Accounting', id: 'PROFIT_SUMMARY' },
       ],
     }),
     recordPayout: builder.mutation({
@@ -62,7 +70,18 @@ export const investorsApi = api.injectEndpoints({
       }),
       invalidatesTags: (_res, _err, { id }) => [
         { type: 'Settings', id },
+        { type: 'Settings', id: 'INVESTORS_LIST' },
         { type: 'Accounting', id: 'INVESTOR_PAYOUTS' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     recordInvestment: builder.mutation({
@@ -73,7 +92,18 @@ export const investorsApi = api.injectEndpoints({
       }),
       invalidatesTags: (_res, _err, { id }) => [
         { type: 'Settings', id },
+        { type: 'Settings', id: 'INVESTORS_LIST' },
         { type: 'Accounting', id: 'INVESTOR_INVESTMENTS' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     getProfitShares: builder.query({

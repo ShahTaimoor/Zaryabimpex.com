@@ -1,6 +1,6 @@
 const supplierRepository = require('../repositories/SupplierRepository');
-const ledgerAccountService = require('../services/ledgerAccountService');
-const AccountingService = require('./accountingService');
+// ledgerAccountService removed - using PostgreSQL Chart of Accounts directly
+const SupplierBalanceService = require('./supplierBalanceService');
 
 class SupplierService {
   /**
@@ -137,14 +137,14 @@ class SupplierService {
       sort: { createdAt: -1 }
     });
 
-    const supplierIds = result.suppliers.map(s => s._id.toString());
+    const supplierIds = result.suppliers.map(s => s.id);
     const balanceMap = await AccountingService.getBulkSupplierBalances(supplierIds);
 
-    // Transform supplier names to uppercase and attach dynamic balances
+    // Transform supplier names to uppercase and attach balances
     result.suppliers = result.suppliers.map(s => {
       const transformed = this.transformSupplierToUppercase(s);
-      const ledgerBalance = balanceMap.get(s._id.toString()) || 0;
-      const netBalance = (s.openingBalance || 0) + ledgerBalance;
+      const balance = balanceMap.get(s.id) || 0;
+      const netBalance = (s.opening_balance || 0) + balance;
 
       return {
         ...transformed,
@@ -170,7 +170,8 @@ class SupplierService {
     }
 
     const transformed = this.transformSupplierToUppercase(supplier);
-    const balance = await AccountingService.getSupplierBalance(id);
+    const summary = await SupplierBalanceService.getBalanceSummary(id);
+    const balance = summary.currentBalance || 0;
 
     return {
       ...transformed,
@@ -193,13 +194,13 @@ class SupplierService {
       lean: true
     });
 
-    const supplierIds = suppliers.map(s => s._id.toString());
+    const supplierIds = suppliers.map(s => s.id);
     const balanceMap = await AccountingService.getBulkSupplierBalances(supplierIds);
 
     return suppliers.map(supplier => {
       const transformed = this.transformSupplierToUppercase(supplier);
-      const ledgerBalance = balanceMap.get(supplier._id.toString()) || 0;
-      const netBalance = (supplier.openingBalance || 0) + ledgerBalance;
+      const balance = balanceMap.get(supplier.id) || 0;
+      const netBalance = (supplier.opening_balance || 0) + balance;
 
       return {
         ...transformed,

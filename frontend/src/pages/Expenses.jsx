@@ -27,6 +27,9 @@ import {
   useDeleteBankPaymentMutation,
 } from '../store/services/bankPaymentsApi';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import RecurringExpensesPanel from '../components/RecurringExpensesPanel';
 
@@ -437,14 +440,16 @@ const Expenses = () => {
               <div>
                 <label className="form-label flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
                   <span>Expense Account</span>
-                  <button
+                  <Button
                     type="button"
                     onClick={resetForm}
-                    className="btn btn-outline btn-md flex items-center justify-center gap-2 text-xs sm:text-sm"
+                    variant="outline"
+                    size="default"
+                    className="flex items-center justify-center gap-2 text-xs sm:text-sm"
                   >
                     <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
                     <span>Reset</span>
-                  </button>
+                  </Button>
                 </label>
                 <select
                   className="input"
@@ -499,9 +504,8 @@ const Expenses = () => {
 
               <div>
                 <label className="form-label">Description (optional)</label>
-                <input
+                <Input
                   type="text"
-                  className="input"
                   placeholder={selectedAccount ? selectedAccount.accountName : 'e.g., Rent for November'}
                   value={formData.particular}
                   onChange={(e) => setFormData((prev) => ({ ...prev, particular: e.target.value }))}
@@ -533,8 +537,7 @@ const Expenses = () => {
             <div className="space-y-4">
               <div>
                 <label className="form-label">Notes</label>
-                <textarea
-                  className="input"
+                <Textarea
                   rows={6}
                   placeholder="Optional internal notes..."
                   value={formData.notes}
@@ -565,9 +568,11 @@ const Expenses = () => {
               </div>
 
               <div className="flex justify-end">
-                <button
+                <Button
                   type="submit"
-                  className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+                  variant="default"
+                  size="default"
+                  className="flex items-center justify-center gap-2 w-full sm:w-auto"
                   disabled={
                     creatingCashPayment ||
                     updatingCashPayment ||
@@ -577,7 +582,7 @@ const Expenses = () => {
                 >
                   <Plus className="h-4 w-4" />
                   <span>{editingExpense ? 'Update Expense' : 'Save Expense'}</span>
-                </button>
+                </Button>
               </div>
             </div>
           </form>

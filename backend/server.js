@@ -3,13 +3,35 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
-const mongoose = require('mongoose');
-const connectDB = require('./config/db');
+const { connectDB: connectPostgres } = require('./config/postgres');
 const logger = require('./utils/logger');
 const { v4: uuidv4 } = require('uuid');
 
 // Load environment variables
 require('dotenv').config();
+
+// Global error handlers - prevents app crash on unhandled async errors
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', {
+    promise,
+    reason: reason instanceof Error ? {
+      message: reason.message,
+      stack: reason.stack,
+      code: reason.code
+    } : reason
+  });
+  // In production, you might want to restart the process gracefully
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', {
+    message: error.message,
+    stack: error.stack,
+    code: error.code
+  });
+  // CRITICAL: Always exit on uncaughtException to avoid undefined state
+  process.exit(1);
+});
 
 
 
@@ -39,23 +61,31 @@ app.use('/api', createRateLimiter({
   windowMs: 60000, // 1 minute
   max: 100 // 100 requests per minute
 }));
-// Stricter rate limiter for auth endpoints: 5 requests per minute per IP
+// Auth endpoints: allow normal use (user list, profile, update). Login brute-force still limited by global /api limit.
 app.use('/api/auth', createRateLimiter({
   windowMs: 60000, // 1 minute
-  max: 5 // 5 requests per minute (prevents brute force)
+  max: 120 // 120 per minute so loading/updating users and profile don't hit 429
 }));
 
+
+// CORS configuration - include env origins plus local dev defaults
+const defaultOrigins = [
+  'https://sa.wiserconsulting.info',
+  'http://localhost:3000', // Allow local development
+  'http://localhost:5173', // Allow Vite dev server
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+  process.env.FRONTEND_URL // Allow from environment variable if set
+].filter(Boolean);
+
+const envOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim()).filter(Boolean)
+  : [];
+
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
 // CORS configuration - use environment variable for allowed origins
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-  : [
-    'https://sa.wiserconsulting.info',
-    'http://localhost:3000', // Allow local development
-    'http://localhost:5173', // Allow Vite dev server
-    'http://localhost:5174',
-    'http://localhost:5175', // Allow Vite dev server
-    process.env.FRONTEND_URL // Allow from environment variable if set
-  ].filter(Boolean); // Remove undefined values
 
 app.use(cors({
   origin: allowedOrigins,
@@ -78,23 +108,7 @@ app.use(preventDuplicates({
   requireIdempotencyKey: false // Auto-generate if not provided, but allow explicit keys
 }));
 
-// Middleware to check database connection before handling API requests (except health check)
-app.use((req, res, next) => {
-  // Allow health check endpoint without database connection
-  if (req.path === '/health' || req.path === '/api/health') {
-    return next();
-  }
-
-  // Check if MongoDB is connected
-  if (mongoose.connection.readyState !== 1 && mongoose.connection.readyState !== 2) {
-    return res.status(503).json({
-      message: 'Database connection not available. Please wait for the server to connect.',
-      error: 'Database connection pending',
-      readyState: mongoose.connection.readyState
-    });
-  }
-  next();
-});
+// Database check uses PostgreSQL only (MongoDB removed)
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -107,10 +121,16 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Connect to database
-connectDB().catch(err => {
-  logger.error('Failed to initialize database:', err);
-});
+// Connect to PostgreSQL (primary database; MongoDB removed)
+(async () => {
+  try {
+    await connectPostgres();
+    logger.info('PostgreSQL connected');
+  } catch (err) {
+    logger.error('PostgreSQL connection failed:', err);
+    process.exit(1);
+  }
+})();
 
 // Serve static files for exports (if needed)
 const path = require('path');
@@ -131,7 +151,7 @@ app.use('/api/customers', require('./routes/customers'));
 app.use('/api/customer-transactions', require('./routes/customerTransactions'));
 app.use('/api/customer-merges', require('./routes/customerMerges'));
 app.use('/api/reconciliation', require('./routes/reconciliation'));
-app.use('/api/accounting-periods', require('./routes/accountingPeriods'));
+// accounting-periods route removed (file no longer exists)
 app.use('/api/disputes', require('./routes/disputes'));
 app.use('/api/customer-analytics', require('./routes/customerAnalytics'));
 app.use('/api/anomaly-detection', require('./routes/anomalyDetection'));
@@ -155,6 +175,9 @@ app.use('/api/payments', require('./routes/payments'));
 app.use('/api/returns', require('./routes/returns')); // Legacy route - kept for backward compatibility
 app.use('/api/recurring-expenses', require('./routes/recurringExpenses'));
 app.use('/api/balance-sheets', require('./routes/balanceSheets'));
+app.use('/api/chart-of-accounts', require('./routes/chartOfAccounts'));
+app.use('/api/account-ledger', require('./routes/accountLedger'));
+app.use('/api/journal-vouchers', require('./routes/journalVouchers'));
 app.use('/api/discounts', require('./routes/discounts'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/sales-performance', require('./routes/salesPerformance'));
@@ -166,9 +189,6 @@ app.use('/api/bank-payments', require('./routes/bankPayments'));
 app.use('/api/banks', require('./routes/banks'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/company', require('./routes/company'));
-app.use('/api/chart-of-accounts', require('./routes/chartOfAccounts'));
-app.use('/api/account-categories', require('./routes/accountCategories'));
-app.use('/api/account-ledger', require('./routes/accountLedger'));
 app.use('/api/images', require('./routes/images'));
 app.use('/api/backdate-report', require('./routes/backdateReport'));
 app.use('/api/stock-movements', require('./routes/stockMovements'));
@@ -179,36 +199,17 @@ app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/tills', require('./routes/tills'));
 app.use('/api/investors', require('./routes/investors'));
 app.use('/api/drop-shipping', require('./routes/dropShipping'));
-app.use('/api/journal-vouchers', require('./routes/journalVouchers'));
 app.use('/api/customer-balances', require('./routes/customerBalances'));
 app.use('/api/supplier-balances', require('./routes/supplierBalances'));
-app.use('/api/accounting', require('./routes/accounting'));
-app.use('/api/trial-balance', require('./routes/trialBalance')); // Trial balance routes
-app.use('/api/audit-reporting', require('./routes/auditReporting')); // Audit reporting routes
-app.use('/api/data-integrity', require('./routes/dataIntegrity')); // Data integrity routes
-app.use('/api/financial-validation', require('./routes/financialValidation')); // Financial validation routes
-app.use('/api/audit-forensics', require('./routes/auditForensics')); // Audit forensics routes
-app.use('/api/ledger-automation', require('./routes/ledgerAutomation')); // Ledger automation routes
-app.use('/api/balance-verification', require('./routes/balanceVerification')); // Balance verification routes
+app.use('/api/pl-statements', require('./routes/plStatements'));
 
-// Health check endpoint (API version)
+// Health check endpoint (API version) - PostgreSQL only
 app.get('/api/health', (req, res) => {
-  const dbStatus = mongoose.connection.readyState;
-  const dbStatusText = {
-    0: 'disconnected',
-    1: 'connected',
-    2: 'connecting',
-    3: 'disconnecting'
-  }[dbStatus] || 'unknown';
-
   res.json({
-    status: dbStatus === 1 ? 'OK' : 'DEGRADED',
+    status: 'OK',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    database: {
-      status: dbStatusText,
-      connected: dbStatus === 1
-    },
+    database: 'PostgreSQL',
     uptime: process.uptime()
   });
 });
@@ -260,7 +261,7 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
         }
       });
 
-      // Financial validation (hourly)
+      // Financial validation (hourly) - stub, original removed with MongoDB migration
       const financialValidationService = require('./services/financialValidationService');
       financialValidationService.scheduleValidation();
       logger.info('Financial validation scheduler started');
@@ -344,15 +345,8 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   const { startReconciliationJobs } = require('./jobs/reconciliationJobs');
   startReconciliationJobs();
 
-  // Start ledger automation jobs (runs every 3 minutes)
-  const { initializeLedgerAutomation } = require('./jobs/ledgerAutomationJobs');
-  initializeLedgerAutomation();
-  logger.info('Ledger automation scheduler started (runs every 3 minutes)');
-
-  // Start balance rebuild jobs (runs every 1 minute)
-  const { initializeBalanceRebuild } = require('./jobs/balanceRebuildJobs');
-  initializeBalanceRebuild();
-  logger.info('Balance rebuild scheduler started (runs every 1 minute)');
+  // Ledger automation jobs removed (file no longer exists - using PostgreSQL)
+  // Balance rebuild jobs removed (file no longer exists - using PostgreSQL)
 
   // Initialize production critical features scheduled jobs
   try {
@@ -373,7 +367,7 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
       }
     });
 
-    // Financial validation (hourly)
+    // Financial validation (hourly) - stub, original removed with MongoDB migration
     const financialValidationService = require('./services/financialValidationService');
     financialValidationService.scheduleValidation();
     logger.info('Financial validation scheduler started');

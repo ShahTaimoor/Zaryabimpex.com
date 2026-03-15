@@ -6,7 +6,7 @@ import { sanitizeObject, sanitizeInput, escapeHtml } from './validation';
 export const sanitizeRequestData = (data) => {
   if (!data) return data;
   
-  // Don't sanitize databaseUrl field - it's a MongoDB connection string that needs to stay intact
+  // Don't sanitize databaseUrl field - connection string that needs to stay intact
   if (data.databaseUrl && typeof data.databaseUrl === 'string') {
     const databaseUrl = data.databaseUrl;
     const sanitized = sanitizeObject(data);
@@ -23,7 +23,30 @@ export const sanitizeResponseData = (data) => {
   if (!data) return data;
   
   // Use a lighter sanitization for API responses
-  return sanitizeObjectLight(data);
+  const sanitized = sanitizeObjectLight(data);
+  // Normalize entities: add _id from id for PostgreSQL compatibility (frontend expects _id)
+  return normalizeIdsForPostgres(sanitized);
+};
+
+// Ensure entities have _id for Postgres (backend returns id, frontend uses _id)
+const normalizeIdsForPostgres = (obj) => {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => normalizeIdsForPostgres(item));
+  }
+  if (typeof obj === 'object') {
+    const result = { ...obj };
+    if (result.id !== undefined && result._id === undefined) {
+      result._id = result.id;
+    }
+    for (const key in result) {
+      if (result.hasOwnProperty(key) && typeof result[key] === 'object') {
+        result[key] = normalizeIdsForPostgres(result[key]);
+      }
+    }
+    return result;
+  }
+  return obj;
 };
 
 // Light sanitization that doesn't HTML-encode everything
@@ -44,7 +67,9 @@ export const sanitizeObjectLight = (obj) => {
     return sanitized;
   }
   
-  // Only sanitize strings by trimming and removing dangerous characters
+  // Only sanitize strings by trimming and removing dangerous characters.
+  // Do NOT HTML-encode & " ' - that corrupts display data (e.g. "Smith & Sons", "O'Brien").
+  // React escapes values automatically; encoding causes literal "&amp;" to show in form fields.
   if (typeof obj === 'string') {
     return obj
       .trim()
@@ -52,9 +77,6 @@ export const sanitizeObjectLight = (obj) => {
       .replace(/javascript:/gi, '') // Remove javascript: protocols
       .replace(/on\w+=/gi, '') // Remove event handlers
       .replace(/script/gi, '') // Remove script tags
-      .replace(/&/g, '&amp;') // Only encode ampersands
-      .replace(/"/g, '&quot;') // Only encode quotes
-      .replace(/'/g, '&#x27;'); // Only encode single quotes
   }
   
   return obj;

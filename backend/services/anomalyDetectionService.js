@@ -4,6 +4,9 @@ const ProductRepository = require('../repositories/ProductRepository');
 const CashReceiptRepository = require('../repositories/CashReceiptRepository');
 const CashPaymentRepository = require('../repositories/CashPaymentRepository');
 const StockMovementRepository = require('../repositories/StockMovementRepository');
+const CustomerRepository = require('../repositories/CustomerRepository');
+const SupplierRepository = require('../repositories/SupplierRepository');
+const UserRepository = require('../repositories/UserRepository');
 
 /**
  * Anomaly Detection Service
@@ -45,14 +48,31 @@ class AnomalyDetectionService {
 
       // Get all sales in the period
       const sales = await SalesRepository.findAll({
-        createdAt: { $gte: startDate, $lte: endDate },
+        dateFrom: startDate,
+        dateTo: endDate,
         status: 'completed'
-      }, {
-        populate: [
-          { path: 'customer', select: 'name businessName email' },
-          { path: 'items.product', select: 'name sku pricing' }
-        ],
-        lean: true
+      });
+
+      // Fetch customers and products for all sales to emulate population
+      const customerIds = [...new Set(sales.map(s => s.customer_id).filter(Boolean))];
+      const customers = await CustomerRepository.findAll({ customerIds });
+      const customerMap = {};
+      customers.forEach(c => customerMap[c.id] = c);
+
+      const productIds = [...new Set(sales.flatMap(s => (s.items || []).map(item => item.product || item.product_id)).filter(Boolean))];
+      const products = await ProductRepository.findAll({ productIds });
+      const productMap = {};
+      products.forEach(p => productMap[p.id] = p);
+
+      // Map joined data back to sales
+      sales.forEach(sale => {
+        sale.customer = customerMap[sale.customer_id] || null;
+        if (sale.items) {
+          sale.items.forEach(item => {
+            const pid = item.product || item.product_id;
+            item.product = productMap[pid] || null;
+          });
+        }
       });
 
       // 1. Detect unusually large transactions
@@ -98,7 +118,7 @@ class AnomalyDetectionService {
   static async detectLargeTransactions(sales) {
     if (sales.length === 0) return [];
 
-    const amounts = sales.map(s => s.total || 0);
+    const amounts = sales.map(s => parseFloat(s.total) || 0);
     const mean = amounts.reduce((a, b) => a + b, 0) / amounts.length;
     const variance = amounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / amounts.length;
     const stdDev = Math.sqrt(variance);
@@ -108,22 +128,23 @@ class AnomalyDetectionService {
     const anomalies = [];
 
     for (const sale of sales) {
-      if (sale.total > threshold && sale.total > mean * 2) {
+      const total = parseFloat(sale.total) || 0;
+      if (total > threshold && total > mean * 2) {
         anomalies.push({
           type: 'large_transaction',
-          severity: sale.total > mean * 5 ? 'critical' : sale.total > mean * 3 ? 'high' : 'medium',
+          severity: total > mean * 5 ? 'critical' : total > mean * 3 ? 'high' : 'medium',
           title: 'Unusually Large Transaction',
-          description: `Transaction amount (${this.formatCurrency(sale.total)}) is significantly higher than average (${this.formatCurrency(mean)})`,
-          transactionId: sale._id,
+          description: `Transaction amount (${this.formatAmount(total)}) is significantly higher than average (${this.formatAmount(mean)})`,
+          transactionId: sale.id,
           transactionType: 'sales',
-          amount: sale.total,
+          amount: total,
           averageAmount: mean,
-          deviation: ((sale.total - mean) / mean * 100).toFixed(1),
+          deviation: ((total - mean) / mean * 100).toFixed(1),
           customer: sale.customer,
-          date: sale.createdAt,
+          date: sale.created_at || sale.sale_date,
           metadata: {
             itemsCount: sale.items?.length || 0,
-            voucherCode: sale.voucherCode
+            voucherCode: sale.order_number
           }
         });
       }
@@ -143,7 +164,7 @@ class AnomalyDetectionService {
 
     // Group transactions by customer
     for (const sale of sales) {
-      const customerId = sale.customer?._id?.toString() || sale.customer?.toString() || 'unknown';
+      const customerId = sale.customer_id || 'unknown';
       if (!customerTransactions[customerId]) {
         customerTransactions[customerId] = [];
       }
@@ -155,29 +176,29 @@ class AnomalyDetectionService {
       if (transactions.length < 2) continue;
 
       // Sort by date
-      transactions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      transactions.sort((a, b) => new Date(a.created_at || a.sale_date) - new Date(b.created_at || b.sale_date));
 
       for (let i = 1; i < transactions.length; i++) {
         const prev = transactions[i - 1];
         const curr = transactions[i];
-        const timeDiff = new Date(curr.createdAt) - new Date(prev.createdAt);
+        const timeDiff = new Date(curr.created_at || curr.sale_date) - new Date(prev.created_at || prev.sale_date);
         const minutesDiff = timeDiff / (1000 * 60);
 
         // Multiple transactions within 5 minutes is suspicious
         if (minutesDiff < 5) {
-          const totalAmount = prev.total + curr.total;
+          const totalAmount = (parseFloat(prev.total) || 0) + (parseFloat(curr.total) || 0);
           anomalies.push({
             type: 'rapid_transactions',
             severity: minutesDiff < 1 ? 'high' : 'medium',
             title: 'Rapid Successive Transactions',
             description: `Multiple transactions from same customer within ${minutesDiff.toFixed(1)} minutes`,
-            transactionId: curr._id,
+            transactionId: curr.id,
             transactionType: 'sales',
             customer: curr.customer,
-            date: curr.createdAt,
+            date: curr.created_at || curr.sale_date,
             metadata: {
               timeDifference: minutesDiff.toFixed(1),
-              previousTransactionId: prev._id,
+              previousTransactionId: prev.id,
               totalAmount: totalAmount,
               transactionCount: transactions.length
             }
@@ -198,8 +219,9 @@ class AnomalyDetectionService {
     const anomalies = [];
 
     for (const sale of sales) {
-      const discount = sale.discount || 0;
-      const subtotal = sale.subtotal || sale.total || 0;
+      const discount = parseFloat(sale.discount_amount || sale.discount) || 0;
+      const total = parseFloat(sale.total) || 0;
+      const subtotal = parseFloat(sale.subtotal) || total || 0;
       const discountPercentage = subtotal > 0 ? (discount / subtotal) * 100 : 0;
 
       // Discounts over 50% are suspicious
@@ -208,17 +230,17 @@ class AnomalyDetectionService {
           type: 'unusual_discount',
           severity: discountPercentage > 80 ? 'critical' : discountPercentage > 70 ? 'high' : 'medium',
           title: 'Unusually High Discount',
-          description: `Discount of ${discountPercentage.toFixed(1)}% (${this.formatCurrency(discount)}) applied`,
-          transactionId: sale._id,
+          description: `Discount of ${discountPercentage.toFixed(1)}% (${this.formatAmount(discount)}) applied`,
+          transactionId: sale.id,
           transactionType: 'sales',
-          amount: sale.total,
+          amount: total,
           discount: discount,
           discountPercentage: discountPercentage.toFixed(1),
           customer: sale.customer,
-          date: sale.createdAt,
+          date: sale.created_at || sale.sale_date,
           metadata: {
             subtotal: subtotal,
-            voucherCode: sale.voucherCode
+            voucherCode: sale.order_number
           }
         });
       }
@@ -242,21 +264,21 @@ class AnomalyDetectionService {
         const product = item.product;
         if (!product) continue;
 
-        const sellingPrice = item.price || item.unitPrice || 0;
-        const costPrice = product.pricing?.cost || product.cost || 0;
+        const sellingPrice = parseFloat(item.price || item.unitPrice || 0);
+        const costPrice = parseFloat(product.pricing?.cost || product.cost || 0);
 
         // Selling below cost is suspicious
         if (costPrice > 0 && sellingPrice < costPrice) {
-          const loss = (costPrice - sellingPrice) * item.quantity;
+          const loss = (costPrice - sellingPrice) * (item.quantity || 0);
           anomalies.push({
             type: 'price_anomaly',
             severity: loss > 1000 ? 'critical' : loss > 500 ? 'high' : 'medium',
             title: 'Product Sold Below Cost',
-            description: `Product "${product.name || product.sku}" sold at ${this.formatCurrency(sellingPrice)} (cost: ${this.formatCurrency(costPrice)})`,
-            transactionId: sale._id,
+            description: `Product "${product.name || product.sku}" sold at ${this.formatAmount(sellingPrice)} (cost: ${this.formatAmount(costPrice)})`,
+            transactionId: sale.id,
             transactionType: 'sales',
             product: {
-              _id: product._id,
+              id: product.id,
               name: product.name,
               sku: product.sku
             },
@@ -265,9 +287,9 @@ class AnomalyDetectionService {
             quantity: item.quantity,
             estimatedLoss: loss,
             customer: sale.customer,
-            date: sale.createdAt,
+            date: sale.created_at || sale.sale_date,
             metadata: {
-              voucherCode: sale.voucherCode
+              voucherCode: sale.order_number
             }
           });
         }
@@ -290,7 +312,7 @@ class AnomalyDetectionService {
     for (const sale of sales) {
       if (!sale.items) continue;
       for (const item of sale.items) {
-        const productId = item.product?._id?.toString() || item.product?.toString();
+        const productId = item.product?.id || item.product_id;
         if (!productId) continue;
 
         if (!productQuantities[productId]) {
@@ -299,7 +321,7 @@ class AnomalyDetectionService {
             product: item.product
           };
         }
-        productQuantities[productId].quantities.push(item.quantity || 0);
+        productQuantities[productId].quantities.push(parseFloat(item.quantity) || 0);
       }
     }
 
@@ -314,8 +336,8 @@ class AnomalyDetectionService {
       if (max > mean * 5 && mean > 0) {
         const sale = sales.find(s => 
           s.items?.some(item => 
-            (item.product?._id?.toString() || item.product?.toString()) === productId && 
-            item.quantity === max
+            (item.product?.id || item.product_id) === productId && 
+            (parseFloat(item.quantity) || 0) === max
           )
         );
 
@@ -325,15 +347,15 @@ class AnomalyDetectionService {
             severity: max > mean * 10 ? 'high' : 'medium',
             title: 'Unusually Large Quantity',
             description: `Quantity of ${max} is significantly higher than average (${mean.toFixed(1)})`,
-            transactionId: sale._id,
+            transactionId: sale.id,
             transactionType: 'sales',
             product: data.product,
             quantity: max,
             averageQuantity: mean.toFixed(1),
             customer: sale.customer,
-            date: sale.createdAt,
+            date: sale.created_at || sale.sale_date,
             metadata: {
-              voucherCode: sale.voucherCode
+              voucherCode: sale.order_number
             }
           });
         }
@@ -354,7 +376,7 @@ class AnomalyDetectionService {
 
     // Calculate customer statistics
     for (const sale of sales) {
-      const customerId = sale.customer?._id?.toString() || sale.customer?.toString();
+      const customerId = sale.customer_id;
       if (!customerId) continue;
 
       if (!customerStats[customerId]) {
@@ -367,7 +389,7 @@ class AnomalyDetectionService {
       }
 
       customerStats[customerId].transactions.push(sale);
-      customerStats[customerId].totalAmount += sale.total || 0;
+      customerStats[customerId].totalAmount += parseFloat(sale.total) || 0;
       customerStats[customerId].transactionCount++;
     }
 
@@ -378,12 +400,12 @@ class AnomalyDetectionService {
           type: 'new_customer_large_transaction',
           severity: 'medium',
           title: 'New Customer Large Transaction',
-          description: `New customer made a large transaction of ${this.formatCurrency(stats.totalAmount)}`,
+          description: `New customer made a large transaction of ${this.formatAmount(stats.totalAmount)}`,
           customer: stats.customer,
-          transactionId: stats.transactions[0]._id,
+          transactionId: stats.transactions[0].id,
           transactionType: 'sales',
           amount: stats.totalAmount,
-          date: stats.transactions[0].createdAt,
+          date: stats.transactions[0].created_at || stats.transactions[0].sale_date,
           metadata: {
             isFirstTransaction: true
           }
@@ -403,23 +425,20 @@ class AnomalyDetectionService {
       const anomalies = [];
 
       // Get all products with inventory
-      const products = await ProductRepository.findAll({ status: 'active' }, {
-        populate: [{ path: 'category', select: 'name' }],
-        lean: true
-      });
+      const products = await ProductRepository.findAll({ status: 'active' });
 
-      const inventories = await InventoryRepository.findAll({}, { lean: true });
+      const inventories = await InventoryRepository.findAll({});
       const inventoryMap = {};
       inventories.forEach(inv => {
-        inventoryMap[inv.product.toString()] = inv;
+        inventoryMap[inv.product_id] = inv;
       });
 
       // Check for negative stock
       for (const product of products) {
-        const inventory = inventoryMap[product._id.toString()];
+        const inventory = inventoryMap[product.id];
         if (!inventory) continue;
 
-        const currentStock = inventory.currentStock || 0;
+        const currentStock = parseFloat(inventory.current_stock) || 0;
 
         if (currentStock < 0) {
           anomalies.push({
@@ -428,23 +447,23 @@ class AnomalyDetectionService {
             title: 'Negative Stock Detected',
             description: `Product "${product.name}" has negative stock: ${currentStock}`,
             product: {
-              _id: product._id,
+              id: product.id,
               name: product.name,
               sku: product.sku
             },
             currentStock: currentStock,
             date: new Date(),
             metadata: {
-              category: product.category?.name
+              category: product.category_name || product.category_id
             }
           });
         }
 
         // Check for sudden stock drops
-        const reorderPoint = inventory.reorderPoint || 10;
+        const reorderPoint = parseFloat(inventory.reorder_point) || 10;
         if (currentStock < reorderPoint && currentStock > 0) {
           // This is handled by inventory alerts, but we can flag sudden drops
-          const recentMovements = await this.getRecentStockMovements(product._id, { days: 7, limit: 5 });
+          const recentMovements = await this.getRecentStockMovements(product.id, { days: 7, limit: 5 });
           if (recentMovements.length > 0) {
             // Find the most recent stock-out movement
             const stockOutMovements = recentMovements.filter(m => m.quantityChange < 0);
@@ -461,7 +480,7 @@ class AnomalyDetectionService {
                   title: 'Sudden Stock Drop',
                   description: `Product "${product.name}" stock dropped by ${dropAmount} units (from ${lastMovement.previousStock} to ${lastMovement.newStock})`,
                   product: {
-                    _id: product._id,
+                    id: product.id,
                     name: product.name,
                     sku: product.sku
                   },
@@ -507,31 +526,34 @@ class AnomalyDetectionService {
       
       // Query recent stock movements for the product
       const movements = await StockMovementRepository.findAll({
-        product: productId,
+        productId: productId,
         status: 'completed', // Only completed movements
-        createdAt: { $gte: dateThreshold },
-        isReversal: { $ne: true } // Exclude reversals
+        dateFrom: dateThreshold
       }, {
-        sort: { createdAt: -1 }, // Most recent first
-        limit: limit,
-        populate: [
-          { path: 'user', select: 'firstName lastName' },
-          { path: 'product', select: 'name sku' }
-        ],
-        lean: true
+        sort: 'created_at DESC', // Most recent first
+        limit: limit
       });
+
+      // Fetch users for movements
+      const userIds = [...new Set(movements.map(m => m.user_id).filter(Boolean))];
+      const users = await UserRepository.findAll({ userIds });
+      const userMap = {};
+      users.forEach(u => userMap[u.id] = u);
       
       // Transform movements to match expected format
-      return movements.map(movement => ({
-        type: movement.movementType,
-        quantityChange: this.getQuantityChangeForMovement(movement),
-        date: movement.createdAt,
-        previousStock: movement.previousStock || 0,
-        newStock: movement.newStock || 0,
-        reason: movement.reason || movement.notes || '',
-        reference: movement.referenceNumber || movement.referenceType,
-        performedBy: movement.user ? `${movement.user.firstName} ${movement.user.lastName}` : 'System'
-      }));
+      return movements.map(movement => {
+        const user = userMap[movement.user_id];
+        return {
+          type: movement.movement_type,
+          quantityChange: this.getQuantityChangeForMovement(movement),
+          date: movement.created_at,
+          previousStock: parseFloat(movement.previous_stock) || 0,
+          newStock: parseFloat(movement.new_stock) || 0,
+          reason: movement.reason || movement.notes || '',
+          reference: movement.reference_number || movement.reference_type,
+          performedBy: user ? `${user.firstName} ${user.lastName}` : (movement.user_name || 'System')
+        };
+      });
     } catch (error) {
       console.error(`Error fetching recent stock movements for product ${productId}:`, error);
       // Return empty array on error to prevent breaking anomaly detection
@@ -545,19 +567,19 @@ class AnomalyDetectionService {
    * @returns {number} Quantity change (positive for stock in, negative for stock out)
    */
   static getQuantityChangeForMovement(movement) {
-    // Use previousStock and newStock if available (more accurate)
-    if (movement.previousStock !== undefined && movement.newStock !== undefined) {
-      return movement.newStock - movement.previousStock;
+    // Use previous_stock and new_stock if available (more accurate)
+    if (movement.previous_stock !== undefined && movement.new_stock !== undefined) {
+      return (parseFloat(movement.new_stock) || 0) - (parseFloat(movement.previous_stock) || 0);
     }
     
     // Fallback to movement type-based calculation
     const stockInTypes = ['purchase', 'return_in', 'adjustment_in', 'transfer_in', 'production', 'initial_stock'];
     const stockOutTypes = ['sale', 'return_out', 'adjustment_out', 'transfer_out', 'damage', 'expiry', 'theft', 'consumption'];
     
-    if (stockInTypes.includes(movement.movementType)) {
-      return movement.quantity || 0;
-    } else if (stockOutTypes.includes(movement.movementType)) {
-      return -(movement.quantity || 0);
+    if (stockInTypes.includes(movement.movement_type)) {
+      return parseFloat(movement.quantity) || 0;
+    } else if (stockOutTypes.includes(movement.movement_type)) {
+      return -(parseFloat(movement.quantity) || 0);
     }
     
     return 0;
@@ -595,30 +617,35 @@ class AnomalyDetectionService {
 
       // Check cash receipts
       const cashReceipts = await CashReceiptRepository.findAll({
-        createdAt: { $gte: startDate, $lte: endDate }
-      }, {
-        populate: [{ path: 'customer', select: 'name businessName' }],
-        lean: true
+        startDate: startDate,
+        endDate: endDate
       });
+
+      // Fetch customers for receipts
+      const customerIds = [...new Set(cashReceipts.map(r => r.customer_id).filter(Boolean))];
+      const customers = await CustomerRepository.findAll({ customerIds });
+      const customerMap = {};
+      customers.forEach(c => customerMap[c.id] = c);
 
       // Check for duplicate receipts
       const receiptMap = {};
       for (const receipt of cashReceipts) {
-        const key = `${receipt.customer?._id || receipt.customer}-${receipt.amount}-${receipt.voucherDate}`;
+        const customer = customerMap[receipt.customer_id];
+        const key = `${receipt.customer_id}-${receipt.amount}-${receipt.voucher_date}`;
         if (receiptMap[key]) {
           anomalies.push({
             type: 'duplicate_payment',
             severity: 'medium',
             title: 'Potential Duplicate Payment',
             description: `Duplicate cash receipt detected: ${this.formatCurrency(receipt.amount)}`,
-            transactionId: receipt._id,
+            transactionId: receipt.id,
             transactionType: 'cash_receipt',
-            amount: receipt.amount,
-            customer: receipt.customer,
-            date: receipt.createdAt,
+            amount: parseFloat(receipt.amount) || 0,
+            customer: customer,
+            date: receipt.created_at || receipt.voucher_date,
             metadata: {
-              voucherCode: receipt.voucherCode,
-              duplicateOf: receiptMap[key]._id
+              voucherCode: receipt.voucher_number || receipt.voucher_code,
+              duplicateOf: receiptMap[key].id
             }
           });
         } else {
@@ -628,33 +655,39 @@ class AnomalyDetectionService {
 
       // Check cash payments
       const cashPayments = await CashPaymentRepository.findAll({
-        createdAt: { $gte: startDate, $lte: endDate }
-      }, {
-        populate: [{ path: 'supplier', select: 'companyName' }],
-        lean: true
+        startDate: startDate,
+        endDate: endDate
       });
 
+      // Fetch suppliers for payments
+      const supplierIds = [...new Set(cashPayments.map(p => p.supplier_id).filter(Boolean))];
+      const suppliers = await SupplierRepository.findAll({ supplierIds });
+      const supplierMap = {};
+      suppliers.forEach(s => supplierMap[s.id] = s);
+
       // Check for unusually large payments
-      const paymentAmounts = cashPayments.map(p => p.amount || 0);
+      const paymentAmounts = cashPayments.map(p => parseFloat(p.amount) || 0);
       if (paymentAmounts.length > 0) {
         const mean = paymentAmounts.reduce((a, b) => a + b, 0) / paymentAmounts.length;
         const threshold = mean * 3;
 
         for (const payment of cashPayments) {
-          if (payment.amount > threshold) {
+          const amount = parseFloat(payment.amount) || 0;
+          const supplier = supplierMap[payment.supplier_id];
+          if (amount > threshold) {
             anomalies.push({
               type: 'large_payment',
-              severity: payment.amount > mean * 5 ? 'high' : 'medium',
+              severity: amount > mean * 5 ? 'high' : 'medium',
               title: 'Unusually Large Payment',
-              description: `Payment of ${this.formatCurrency(payment.amount)} is significantly higher than average`,
-              transactionId: payment._id,
+              description: `Payment of ${this.formatAmount(amount)} is significantly higher than average`,
+              transactionId: payment.id,
               transactionType: 'cash_payment',
-              amount: payment.amount,
+              amount: amount,
               averageAmount: mean,
-              supplier: payment.supplier,
-              date: payment.createdAt,
+              supplier: supplier,
+              date: payment.created_at || payment.voucher_date,
               metadata: {
-                voucherCode: payment.voucherCode
+                voucherCode: payment.voucher_number || payment.voucher_code
               }
             });
           }
@@ -723,7 +756,7 @@ class AnomalyDetectionService {
   }
 
   /**
-   * Format currency
+   * Format currency (with $ symbol)
    */
   static formatCurrency(amount) {
     return new Intl.NumberFormat('en-US', {
@@ -731,7 +764,18 @@ class AnomalyDetectionService {
       currency: 'USD'
     }).format(amount || 0);
   }
+
+  /**
+   * Format amount without currency symbol (for display in descriptions)
+   */
+  static formatAmount(amount) {
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount || 0);
+  }
 }
 
 module.exports = AnomalyDetectionService;
+
 

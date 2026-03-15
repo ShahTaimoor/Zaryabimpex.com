@@ -1,114 +1,81 @@
-const CashReceiptRepository = require('../repositories/CashReceiptRepository');
-const CustomerRepository = require('../repositories/CustomerRepository');
+const cashReceiptRepository = require('../repositories/postgres/CashReceiptRepository');
+const { query } = require('../config/postgres');
 
+/**
+ * Cash Receipt Service - PostgreSQL Implementation
+ */
 class CashReceiptService {
   /**
-   * Get cash receipts with filters and pagination
-   * @param {object} queryParams - Query parameters
-   * @returns {Promise<object>}
+   * Get cash receipts with filters
    */
-  async getCashReceipts(queryParams) {
-    const page = parseInt(queryParams.page) || 1;
-    const limit = parseInt(queryParams.limit) || 50;
-
-    const fromDate = queryParams.fromDate || queryParams.dateFrom;
-    const toDate = queryParams.toDate || queryParams.dateTo;
-
+  async getCashReceipts(options = {}) {
     const filter = {};
-
-    // Date range filter
-    if (fromDate || toDate) {
-      filter.date = {};
-      if (fromDate) {
-        const startOfDay = new Date(fromDate);
-        startOfDay.setHours(0, 0, 0, 0);
-        filter.date.$gte = startOfDay;
-      }
-      if (toDate) {
-        const endOfDay = new Date(toDate);
-        endOfDay.setDate(endOfDay.getDate() + 1);
-        endOfDay.setHours(0, 0, 0, 0);
-        filter.date.$lt = endOfDay;
-      }
+    
+    if (options.fromDate || options.dateFrom) {
+      filter.startDate = new Date(options.fromDate || options.dateFrom);
+    }
+    if (options.toDate || options.dateTo) {
+      filter.endDate = new Date(options.toDate || options.dateTo);
     }
 
-    // Voucher code filter
-    if (queryParams.voucherCode) {
-      filter.voucherCode = { $regex: queryParams.voucherCode, $options: 'i' };
-    }
-
-    // Amount filter
-    if (queryParams.amount) {
-      filter.amount = parseFloat(queryParams.amount);
-    }
-
-    // Particular filter
-    if (queryParams.particular) {
-      filter.particular = { $regex: queryParams.particular, $options: 'i' };
-    }
-
-    const result = await CashReceiptRepository.findWithPagination(filter, {
-      page,
-      limit,
-      sort: { date: -1, createdAt: -1 }
+    const receipts = await cashReceiptRepository.findAll(filter, {
+      limit: options.limit || 50,
+      offset: ((options.page || 1) - 1) * (options.limit || 50),
+      sort: 'date DESC'
     });
 
+    const countResult = await query('SELECT COUNT(*) FROM cash_receipts WHERE deleted_at IS NULL', []);
+    const total = parseInt(countResult.rows[0].count);
+
     return {
-      cashReceipts: result.cashReceipts,
-      pagination: result.pagination
+      cashReceipts: receipts,
+      pagination: {
+        page: options.page || 1,
+        limit: options.limit || 50,
+        total,
+        pages: Math.ceil(total / (options.limit || 50))
+      }
     };
   }
 
   /**
-   * Get single cash receipt by ID
-   * @param {string} id - Cash receipt ID
-   * @returns {Promise<object>}
+   * Get cash receipt by ID
    */
   async getCashReceiptById(id) {
-    const cashReceipt = await CashReceiptRepository.findById(id, [
-      { path: 'order', model: 'Sales', select: 'orderNumber' },
-      { path: 'customer', select: 'name businessName' },
-      { path: 'supplier', select: 'name businessName' },
-      { path: 'createdBy', select: 'firstName lastName' }
-    ]);
-
-    if (!cashReceipt) {
-      throw new Error('Cash receipt not found');
-    }
-
-    return cashReceipt;
+    return await cashReceiptRepository.findById(id);
   }
 
   /**
-   * Get cash receipt summary
-   * @param {Date} fromDate - Start date
-   * @param {Date} toDate - End date
-   * @returns {Promise<object>}
+   * Get summary for date range
    */
   async getSummary(fromDate, toDate) {
-    const startOfDay = new Date(fromDate);
-    startOfDay.setHours(0, 0, 0, 0);
-    
-    const endOfDay = new Date(toDate);
-    endOfDay.setDate(endOfDay.getDate() + 1);
-    endOfDay.setHours(0, 0, 0, 0);
+    const result = await query(
+      `SELECT 
+        COUNT(*) AS total_receipts,
+        COALESCE(SUM(amount), 0) AS total_amount
+       FROM cash_receipts
+       WHERE deleted_at IS NULL
+         AND date >= $1
+         AND date <= $2`,
+      [fromDate, toDate]
+    );
 
-    return await CashReceiptRepository.getSummary(startOfDay, endOfDay);
+    return result.rows[0] || { total_receipts: 0, total_amount: 0 };
   }
 
   /**
    * Get customers by IDs
-   * @param {Array<string>} customerIds - Customer IDs
-   * @returns {Promise<Array>}
    */
   async getCustomersByIds(customerIds) {
-    // Select only basic fields and lean for speed; avoid passing an array (would be mis-read as sort)
-    return await CustomerRepository.findByIds(customerIds, {
-      select: 'name businessName email phone',
-      lean: true
-    });
+    if (!customerIds || customerIds.length === 0) return [];
+    
+    const result = await query(
+      'SELECT id, name, business_name FROM customers WHERE id = ANY($1) AND is_deleted = FALSE',
+      [customerIds]
+    );
+    
+    return result.rows;
   }
 }
 
 module.exports = new CashReceiptService();
-

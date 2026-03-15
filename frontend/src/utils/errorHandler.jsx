@@ -1,5 +1,5 @@
 import React from 'react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 // Error types and their corresponding user messages
 const ERROR_MESSAGES = {

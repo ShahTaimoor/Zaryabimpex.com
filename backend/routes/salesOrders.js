@@ -4,14 +4,16 @@ const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
-const SalesOrder = require('../models/SalesOrder'); // Still needed for new SalesOrder() and static methods
 const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const inventoryService = require('../services/inventoryService');
 const salesService = require('../services/salesService');
-const salesOrderRepository = require('../repositories/SalesOrderRepository');
-const customerRepository = require('../repositories/CustomerRepository');
+const salesOrderRepository = require('../repositories/postgres/SalesOrderRepository');
+const customerRepository = require('../repositories/postgres/CustomerRepository');
+const productRepository = require('../repositories/postgres/ProductRepository');
+const productVariantRepository = require('../repositories/postgres/ProductVariantRepository');
+const inventoryRepository = require('../repositories/InventoryRepository');
 
 const router = express.Router();
 
@@ -41,6 +43,50 @@ const transformProductToUppercase = (product) => {
   return product;
 };
 
+// Format customer address for print (handles string, array, object)
+const formatCustomerAddress = (customerData) => {
+  if (!customerData) return '';
+  if (typeof customerData.address === 'string' && customerData.address.trim()) return customerData.address.trim();
+  const addrRaw = customerData.address ?? customerData.addresses;
+  if (Array.isArray(addrRaw) && addrRaw.length > 0) {
+    const a = addrRaw.find(x => x.isDefault) || addrRaw.find(x => x.type === 'billing' || x.type === 'both') || addrRaw[0];
+    const parts = [a.street || a.address_line1 || a.addressLine1 || a.line1, a.city, a.state || a.province, a.country, a.zipCode || a.zip || a.postalCode || a.postal_code].filter(Boolean);
+    return parts.join(', ');
+  }
+  if (addrRaw && typeof addrRaw === 'object' && !Array.isArray(addrRaw)) {
+    const parts = [addrRaw.street || addrRaw.address_line1 || addrRaw.addressLine1 || addrRaw.line1, addrRaw.city, addrRaw.state || addrRaw.province, addrRaw.country, addrRaw.zipCode || addrRaw.zip || addrRaw.postalCode || addrRaw.postal_code].filter(Boolean);
+    return parts.join(', ');
+  }
+  if (typeof customerData.location === 'string' && customerData.location.trim()) return customerData.location.trim();
+  if (typeof customerData.companyAddress === 'string' && customerData.companyAddress.trim()) return customerData.companyAddress.trim();
+  return '';
+};
+
+// Enrich items with product objects when product is just an ID (for print)
+const enrichItemsWithProducts = async (items) => {
+  if (!items || !Array.isArray(items)) return;
+  for (const item of items) {
+    const productId = item.product || item.product_id;
+    if (!productId) continue;
+    const id = typeof productId === 'object' ? (productId.id || productId._id) : productId;
+    if (typeof id !== 'string') continue;
+    if (typeof item.product === 'object' && item.product && (item.product.name || item.product.displayName)) continue; // Already populated
+    try {
+      let p = await productRepository.findById(id);
+      if (p) {
+        item.product = { ...p, name: p.name || p.displayName };
+      } else {
+        p = await productVariantRepository.findById(id);
+        if (p) {
+          item.product = { name: p.display_name ?? p.displayName ?? p.variant_name ?? p.variantName ?? 'Product' };
+        }
+      }
+    } catch (e) {
+      // Keep item.product as-is on error
+    }
+  }
+};
+
 // @route   GET /api/sales-orders
 // @desc    Get all sales orders with filtering and pagination
 // @access  Private
@@ -51,7 +97,7 @@ router.get('/', [
   query('all').optional({ checkFalsy: true }).isBoolean(),
   query('search').optional().trim(),
   query('status').optional({ checkFalsy: true }).isIn(['draft', 'confirmed', 'partially_invoiced', 'fully_invoiced', 'cancelled', 'closed']),
-  query('customer').optional({ checkFalsy: true }).isMongoId(),
+  query('customer').optional({ checkFalsy: true }).isUUID(4),
   ...validateDateParams,
   query('orderNumber').optional().trim(),
   handleValidationErrors,
@@ -71,48 +117,31 @@ router.get('/', [
     const limit = getAllSalesOrders ? 999999 : (parseInt(req.query.limit) || 20);
     const skip = getAllSalesOrders ? 0 : ((page - 1) * limit);
 
-    // Build filter
     const filter = {};
 
     if (req.query.search) {
       const searchTerm = req.query.search.trim();
-      const searchConditions = [
-        { soNumber: { $regex: searchTerm, $options: 'i' } },
-        { notes: { $regex: searchTerm, $options: 'i' } }
-      ];
-
-      // Search in Customer collection and match by customer ID
-      const customerMatches = await customerRepository.search(searchTerm, {
-        limit: 1000,
-        select: '_id',
-        lean: true
-      });
-
+      filter.searchTerm = searchTerm;
+      const customerMatches = await customerRepository.search(searchTerm, { limit: 1000 });
       if (customerMatches.length > 0) {
-        const customerIds = customerMatches.map(c => c._id);
-        searchConditions.push({ customer: { $in: customerIds } });
+        filter.searchCustomerIds = customerMatches.map(c => c.id || c._id).filter(Boolean);
       }
-
-      filter.$or = searchConditions;
     }
 
-    if (req.query.status) {
-      filter.status = req.query.status;
-    }
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.customer) filter.customer = req.query.customer;
+    if (req.query.orderNumber) filter.soNumberIlike = req.query.orderNumber.trim();
 
-    if (req.query.customer) {
-      filter.customer = req.query.customer;
-    }
-
-    if (req.query.orderNumber) {
-      filter.soNumber = { $regex: req.query.orderNumber, $options: 'i' };
-    }
-
-    // Date filtering - use dateFilter from middleware (Pakistan timezone)
     if (req.dateFilter && Object.keys(req.dateFilter).length > 0) {
-      Object.assign(filter, req.dateFilter);
+      if (req.dateFilter.createdAt && req.dateFilter.createdAt.$gte) filter.createdAtFrom = req.dateFilter.createdAt.$gte;
+      if (req.dateFilter.createdAt && req.dateFilter.createdAt.$lte) filter.createdAtTo = req.dateFilter.createdAt.$lte;
+      if (req.dateFilter.$or) {
+        req.dateFilter.$or.forEach((cond) => {
+          if (cond.createdAt && cond.createdAt.$gte) filter.createdAtFrom = filter.createdAtFrom || cond.createdAt.$gte;
+          if (cond.createdAt && cond.createdAt.$lte) filter.createdAtTo = filter.createdAtTo || cond.createdAt.$lte;
+        });
+      }
     }
-
 
     const result = await salesOrderRepository.findWithPagination(filter, {
       page,
@@ -129,15 +158,32 @@ router.get('/', [
 
     const salesOrders = result.salesOrders;
 
-    // Transform names to uppercase and add displayName to each customer
+    // Attach customer to each sales order (PostgreSQL repo does not populate; use customer_id to fetch)
+    const customerIds = [...new Set(salesOrders.map(so => so.customer_id).filter(Boolean))];
+    const customerMap = {};
+    for (const cid of customerIds) {
+      const c = await customerRepository.findById(cid);
+      if (c) {
+        c.businessName = c.business_name ?? c.businessName;
+        c._id = c.id;
+        customerMap[cid] = c;
+      }
+    }
+    await enrichItemsWithProducts(salesOrders.flatMap(so => so.items || []));
     salesOrders.forEach(so => {
+      so.customer = so.customer_id ? customerMap[so.customer_id] : null;
       if (so.customer) {
         so.customer = transformCustomerToUppercase(so.customer);
-        so.customer.displayName = (so.customer.businessName || so.customer.name || `${so.customer.firstName || ''} ${so.customer.lastName || ''}`.trim() || so.customer.email || 'Unknown Customer').toUpperCase();
+        const custName = (so.customer.business_name ?? so.customer.businessName) || so.customer.name || `${(so.customer.first_name || so.customer.firstName || '')} ${(so.customer.last_name || so.customer.lastName || '')}`.trim() || so.customer.email || 'Unknown Customer';
+        so.customer.displayName = custName.toUpperCase();
+        so.customerInfo = {
+          ...so.customerInfo,
+          address: formatCustomerAddress(so.customer) || so.customerInfo?.address
+        };
       }
       if (so.items && Array.isArray(so.items)) {
         so.items.forEach(item => {
-          if (item.product) {
+          if (item.product && typeof item.product === 'object') {
             item.product = transformProductToUppercase(item.product);
           }
         });
@@ -159,28 +205,34 @@ router.get('/', [
 // @access  Private
 router.get('/:id', auth, async (req, res) => {
   try {
-    const salesOrder = await salesOrderRepository.findById(req.params.id, {
-      populate: [
-        { path: 'customer', select: 'businessName name firstName lastName email phone businessType customerTier paymentTerms currentBalance pendingBalance' },
-        { path: 'items.product', select: 'name description pricing inventory' },
-        { path: 'createdBy', select: 'firstName lastName email' },
-        { path: 'lastModifiedBy', select: 'firstName lastName email' },
-        { path: 'conversions.convertedBy', select: 'firstName lastName email' }
-      ]
-    });
+    const salesOrder = await salesOrderRepository.findById(req.params.id);
 
     if (!salesOrder) {
       return res.status(404).json({ message: 'Sales order not found' });
     }
 
-    // Transform names to uppercase and add displayName to customer
+    // Attach customer (PostgreSQL repo does not populate)
+    if (salesOrder.customer_id) {
+      const c = await customerRepository.findById(salesOrder.customer_id);
+      if (c) {
+        c.businessName = c.business_name ?? c.businessName;
+        c._id = c.id;
+        salesOrder.customer = c;
+      }
+    }
     if (salesOrder.customer) {
       salesOrder.customer = transformCustomerToUppercase(salesOrder.customer);
-      salesOrder.customer.displayName = (salesOrder.customer.businessName || salesOrder.customer.name || `${salesOrder.customer.firstName || ''} ${salesOrder.customer.lastName || ''}`.trim() || salesOrder.customer.email || 'Unknown Customer').toUpperCase();
+      const custName = (salesOrder.customer.business_name ?? salesOrder.customer.businessName) || salesOrder.customer.name || `${(salesOrder.customer.first_name || salesOrder.customer.firstName || '')} ${(salesOrder.customer.last_name || salesOrder.customer.lastName || '')}`.trim() || salesOrder.customer.email || 'Unknown Customer';
+      salesOrder.customer.displayName = custName.toUpperCase();
+      salesOrder.customerInfo = {
+        ...salesOrder.customerInfo,
+        address: formatCustomerAddress(salesOrder.customer) || salesOrder.customerInfo?.address
+      };
     }
     if (salesOrder.items && Array.isArray(salesOrder.items)) {
+      await enrichItemsWithProducts(salesOrder.items);
       salesOrder.items.forEach(item => {
-        if (item.product) {
+        if (item.product && typeof item.product === 'object') {
           item.product = transformProductToUppercase(item.product);
         }
       });
@@ -199,9 +251,9 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/', [
   auth,
   requirePermission('create_sales_orders'),
-  body('customer').isMongoId().withMessage('Valid customer is required'),
+  body('customer').isUUID(4).withMessage('Valid customer is required'),
   body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
-  body('items.*.product').isMongoId().withMessage('Valid product is required'),
+  body('items.*.product').isUUID(4).withMessage('Valid product is required'),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('items.*.unitPrice').isFloat({ min: 0 }).withMessage('Unit price must be positive'),
   body('items.*.totalPrice').isFloat({ min: 0 }).withMessage('Total price must be positive'),
@@ -221,34 +273,25 @@ router.post('/', [
 
     const soData = {
       ...req.body,
-      soNumber: SalesOrder.generateSONumber(),
-      createdBy: req.user._id
+      soNumber: salesOrderRepository.generateSONumber(),
+      createdBy: req.user?.id || req.user?._id
     };
 
-    const salesOrder = new SalesOrder(soData);
-    await salesOrder.save();
-
-    await salesOrder.populate([
-      { path: 'customer', select: 'displayName firstName lastName email phone businessType customerTier' },
-      { path: 'items.product', select: 'name description pricing inventory' },
-      { path: 'createdBy', select: 'firstName lastName email' }
-    ]);
-
-    // Transform names to uppercase
-    if (salesOrder.customer) {
-      salesOrder.customer = transformCustomerToUppercase(salesOrder.customer);
+    const created = await salesOrderRepository.create(soData);
+    let salesOrder = await salesOrderRepository.findById(created.id);
+    if (salesOrder && salesOrder.customer_id) {
+      const customer = await customerRepository.findById(salesOrder.customer_id);
+      if (customer) salesOrder.customer = transformCustomerToUppercase(customer);
     }
-    if (salesOrder.items && Array.isArray(salesOrder.items)) {
+    if (salesOrder && salesOrder.items && Array.isArray(salesOrder.items)) {
       salesOrder.items.forEach(item => {
-        if (item.product) {
-          item.product = transformProductToUppercase(item.product);
-        }
+        if (item.product) item.product = transformProductToUppercase(item.product);
       });
     }
 
     res.status(201).json({
       message: 'Sales order created successfully',
-      salesOrder
+      salesOrder: salesOrder || created
     });
   } catch (error) {
     console.error('Create sales order error:', error);
@@ -262,12 +305,12 @@ router.post('/', [
 router.put('/:id', [
   auth,
   requirePermission('edit_sales_orders'),
-  body('customer').optional().isMongoId().withMessage('Valid customer is required'),
+  body('customer').optional({ checkFalsy: true }).isUUID(4).withMessage('Valid customer is required'),
   body('orderType').optional().isIn(['retail', 'wholesale', 'return', 'exchange']).withMessage('Invalid order type'),
   body('items').optional().isArray({ min: 1 }).withMessage('At least one item is required'),
-  body('items.*.product').optional().isMongoId().withMessage('Valid product is required'),
-  body('items.*.quantity').optional().isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  body('items.*.unitPrice').optional().isFloat({ min: 0 }).withMessage('Unit price must be positive'),
+  body('items.*.product').optional({ checkFalsy: true }).isUUID(4).withMessage('Valid product is required'),
+  body('items.*.quantity').optional().custom((v) => (Number.isInteger(Number(v)) && Number(v) >= 1)).withMessage('Quantity must be at least 1'),
+  body('items.*.unitPrice').optional().custom((v) => !isNaN(parseFloat(v)) && parseFloat(v) >= 0).withMessage('Unit price must be positive'),
   body('expectedDelivery').optional().isISO8601().withMessage('Valid delivery date required'),
   body('notes').optional().trim().isLength({ max: 1000 }).withMessage('Notes too long'),
   body('terms').optional().trim().isLength({ max: 1000 }).withMessage('Terms too long'),
@@ -293,31 +336,13 @@ router.put('/:id', [
 
     const updateData = {
       ...req.body,
-      lastModifiedBy: req.user._id
+      lastModifiedBy: req.user?.id || req.user?._id
     };
 
-    const updatedSO = await salesOrderRepository.update(req.params.id, updateData, {
-      new: true,
-      runValidators: true
-    });
-
-    await updatedSO.populate([
-      { path: 'customer', select: 'displayName firstName lastName email phone businessType customerTier' },
-      { path: 'items.product', select: 'name description pricing inventory' },
-      { path: 'createdBy', select: 'firstName lastName email' },
-      { path: 'lastModifiedBy', select: 'firstName lastName email' }
-    ]);
-
-    // Transform names to uppercase
-    if (updatedSO.customer) {
-      updatedSO.customer = transformCustomerToUppercase(updatedSO.customer);
-    }
-    if (updatedSO.items && Array.isArray(updatedSO.items)) {
-      updatedSO.items.forEach(item => {
-        if (item.product) {
-          item.product = transformProductToUppercase(item.product);
-        }
-      });
+    const updatedSO = await salesOrderRepository.update(req.params.id, updateData);
+    if (updatedSO && updatedSO.customer_id) {
+      const customer = await customerRepository.findById(updatedSO.customer_id);
+      if (customer) updatedSO.customer = transformCustomerToUppercase(customer);
     }
 
     res.json({
@@ -326,6 +351,65 @@ router.put('/:id', [
     });
   } catch (error) {
     console.error('Update sales order error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/sales-orders/:id/stock-status
+// @desc    Check which items have insufficient/out-of-stock before confirm
+// @access  Private
+router.get('/:id/stock-status', auth, async (req, res) => {
+  try {
+    const salesOrder = await salesOrderRepository.findById(req.params.id);
+    if (!salesOrder) {
+      return res.status(404).json({ message: 'Sales order not found' });
+    }
+    const items = Array.isArray(salesOrder.items) ? salesOrder.items : (typeof salesOrder.items === 'string' ? JSON.parse(salesOrder.items || '[]') : []);
+    const outOfStock = [];
+
+    for (const item of items) {
+      const productId = item.product || item.product_id;
+      if (!productId) continue;
+
+      let currentStock = 0;
+      try {
+        const inv = await inventoryRepository.findByProduct(productId);
+        if (inv) {
+          currentStock = Number(inv.current_stock ?? inv.currentStock ?? 0);
+        } else {
+          const product = await productRepository.findById(productId);
+          if (product) currentStock = Number(product.stock_quantity ?? product.stockQuantity ?? 0);
+        }
+      } catch {
+        currentStock = 0;
+      }
+
+      const requestedQty = Number(item.quantity) || 0;
+      if (requestedQty > 0 && currentStock < requestedQty) {
+        let productName = 'Unknown';
+        try {
+          let p = await productRepository.findById(productId);
+          if (p) productName = p.name || p.displayName || 'Product';
+          else {
+            p = await productVariantRepository.findById(productId);
+            if (p) productName = (p.display_name ?? p.displayName) || (p.variant_name ?? p.variantName) || 'Variant';
+          }
+        } catch {}
+        outOfStock.push({
+          productId,
+          productName,
+          requestedQty,
+          availableStock: currentStock
+        });
+      }
+    }
+
+    res.json({
+      outOfStock,
+      canConfirm: outOfStock.length === 0
+    });
+  } catch (error) {
+    console.error('Stock status check error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -349,92 +433,89 @@ router.put('/:id/confirm', [
       });
     }
 
-    // Update inventory for each item in the sales order
+    const userId = req.user?.id || req.user?._id;
+    const items = Array.isArray(salesOrder.items) ? salesOrder.items : (typeof salesOrder.items === 'string' ? JSON.parse(salesOrder.items || '[]') : []);
+
     const inventoryUpdates = [];
-    for (const item of salesOrder.items) {
+    for (const item of items) {
+      const productId = item.product || item.product_id;
       try {
         const inventoryUpdate = await inventoryService.updateStock({
-          productId: item.product,
+          productId,
           type: 'out',
           quantity: item.quantity,
           reason: 'Sales Order Confirmation',
           reference: 'Sales Order',
-          referenceId: salesOrder._id,
+          referenceId: salesOrder.id,
           referenceModel: 'SalesOrder',
-          performedBy: req.user._id,
-          notes: `Stock reduced due to sales order confirmation - SO: ${salesOrder.soNumber}`
+          performedBy: userId,
+          notes: `Stock reduced due to sales order confirmation - SO: ${salesOrder.so_number || salesOrder.soNumber}`
         });
 
         inventoryUpdates.push({
-          productId: item.product,
+          productId,
           quantity: item.quantity,
           newStock: inventoryUpdate.currentStock,
           success: true
         });
-
       } catch (inventoryError) {
-        console.error(`Failed to update inventory for product ${item.product}:`, inventoryError.message);
+        console.error(`Failed to update inventory for product ${productId}:`, inventoryError.message);
         inventoryUpdates.push({
-          productId: item.product,
+          productId,
           quantity: item.quantity,
           success: false,
           error: inventoryError.message
         });
 
-        // If inventory update fails, rollback any successful updates and return error
         return res.status(400).json({
-          message: `Insufficient stock for product ${item.product}. Cannot confirm sales order.`,
+          message: `Insufficient stock for product ${productId}. Cannot confirm sales order.`,
           details: inventoryError.message,
-          inventoryUpdates: inventoryUpdates
+          inventoryUpdates
         });
       }
     }
 
-    // Update sales order status only after successful inventory updates
-    salesOrder.status = 'confirmed';
-    salesOrder.confirmedDate = new Date();
-    salesOrder.lastModifiedBy = req.user._id;
+    await salesOrderRepository.update(req.params.id, {
+      status: 'confirmed',
+      confirmedDate: new Date(),
+      lastModifiedBy: userId
+    });
 
-    await salesOrder.save();
-
-    // Automatically create a Sales Invoice (Sale) from this confirmed order
     let automaticSale = null;
     let saleError = null;
     try {
-      automaticSale = await salesService.createSaleFromSalesOrder(salesOrder, req.user);
+      const soForSale = await salesOrderRepository.findById(req.params.id);
+      automaticSale = await salesService.createSaleFromSalesOrder(soForSale, req.user);
 
-      // If invoice is successfully created, mark order as fully invoiced
-      salesOrder.status = 'fully_invoiced';
-
-      // Update items' invoiced and remaining quantities
-      salesOrder.items = salesOrder.items.map(item => ({
-        ...item.toObject(),
+      const updatedItems = items.map(item => ({
+        ...item,
         invoicedQuantity: item.quantity,
         remainingQuantity: 0
       }));
 
-      await salesOrder.save();
+      await salesOrderRepository.update(req.params.id, {
+        status: 'fully_invoiced',
+        items: updatedItems,
+        lastModifiedBy: userId
+      });
     } catch (createSaleError) {
       console.error('Failed to automatically create sales invoice during SO confirmation:', createSaleError);
       saleError = createSaleError.message;
     }
 
-    await salesOrder.populate([
-      { path: 'customer', select: 'displayName firstName lastName email phone businessType customerTier' },
-      { path: 'items.product', select: 'name description pricing inventory' },
-      { path: 'createdBy', select: 'firstName lastName email' },
-      { path: 'lastModifiedBy', select: 'firstName lastName email' }
-    ]);
+    let salesOrderResult = await salesOrderRepository.findById(req.params.id);
+    if (salesOrderResult && salesOrderResult.customer_id) {
+      const customer = await customerRepository.findById(salesOrderResult.customer_id);
+      if (customer) salesOrderResult.customer = transformCustomerToUppercase(customer);
+    }
 
     // Transform names to uppercase
-    if (salesOrder.customer) {
-      salesOrder.customer = transformCustomerToUppercase(salesOrder.customer);
+    if (salesOrderResult && salesOrderResult.customer) {
+      salesOrderResult.customer = transformCustomerToUppercase(salesOrderResult.customer);
     }
-    if (salesOrder.items && Array.isArray(salesOrder.items)) {
-      salesOrder.items.forEach(item => {
-        if (item.product) {
-          item.product = transformProductToUppercase(item.product);
-        }
+    if (salesOrderResult && salesOrderResult.items && Array.isArray(salesOrderResult.items)) {
+      salesOrderResult.items.forEach(item => {
+        if (item.product) item.product = transformProductToUppercase(item.product);
       });
     }
 
@@ -442,9 +523,9 @@ router.put('/:id/confirm', [
       message: automaticSale
         ? 'Sales order confirmed and invoice generated successfully'
         : `Sales order confirmed but failed to generate invoice: ${saleError}`,
-      salesOrder,
+      salesOrder: salesOrderResult,
       sale: automaticSale,
-      inventoryUpdates: inventoryUpdates,
+      inventoryUpdates,
       invoiceError: saleError
     });
   } catch (error) {
@@ -472,25 +553,28 @@ router.put('/:id/cancel', [
       });
     }
 
-    // If the sales order was confirmed, restore inventory
+    const soItems = Array.isArray(salesOrder.items) ? salesOrder.items : (typeof salesOrder.items === 'string' ? JSON.parse(salesOrder.items || '[]') : []);
+    const userId = req.user?.id || req.user?._id;
+
     const inventoryUpdates = [];
     if (salesOrder.status === 'confirmed') {
-      for (const item of salesOrder.items) {
+      for (const item of soItems) {
+        const productId = item.product || item.product_id;
         try {
           const inventoryUpdate = await inventoryService.updateStock({
-            productId: item.product,
+            productId,
             type: 'return',
             quantity: item.quantity,
             reason: 'Sales Order Cancellation',
             reference: 'Sales Order',
-            referenceId: salesOrder._id,
+            referenceId: salesOrder.id,
             referenceModel: 'SalesOrder',
-            performedBy: req.user._id,
-            notes: `Stock restored due to sales order cancellation - SO: ${salesOrder.soNumber}`
+            performedBy: userId,
+            notes: `Stock restored due to sales order cancellation - SO: ${salesOrder.so_number || salesOrder.soNumber}`
           });
 
           inventoryUpdates.push({
-            productId: item.product,
+            productId,
             quantity: item.quantity,
             newStock: inventoryUpdate.currentStock,
             success: true
@@ -505,22 +589,21 @@ router.put('/:id/cancel', [
             error: inventoryError.message
           });
 
-          // Continue with cancellation even if inventory restoration fails
-          console.warn(`Continuing with sales order cancellation despite inventory restoration failure for product ${item.product}`);
+          console.warn(`Continuing with sales order cancellation despite inventory restoration failure for product ${productId}`);
         }
       }
     }
 
-    salesOrder.status = 'cancelled';
-    salesOrder.lastModifiedBy = req.user._id;
-
-    await salesOrder.save();
+    const updated = await salesOrderRepository.update(req.params.id, {
+      status: 'cancelled',
+      lastModifiedBy: userId
+    });
 
     res.json({
       message: salesOrder.status === 'confirmed'
         ? 'Sales order cancelled successfully and inventory restored'
         : 'Sales order cancelled successfully',
-      salesOrder,
+      salesOrder: updated || salesOrder,
       inventoryUpdates: inventoryUpdates.length > 0 ? inventoryUpdates : undefined
     });
   } catch (error) {
@@ -543,14 +626,13 @@ router.put('/:id/close', [
     }
 
     if (salesOrder.status === 'fully_invoiced') {
-      salesOrder.status = 'closed';
-      salesOrder.lastModifiedBy = req.user._id;
-
-      await salesOrder.save();
-
+      const updated = await salesOrderRepository.update(req.params.id, {
+        status: 'closed',
+        lastModifiedBy: req.user?.id || req.user?._id
+      });
       res.json({
         message: 'Sales order closed successfully',
-        salesOrder
+        salesOrder: updated || salesOrder
       });
     } else {
       return res.status(400).json({
@@ -613,8 +695,9 @@ router.get('/:id/convert', auth, async (req, res) => {
 
     res.json({
       salesOrder: {
-        _id: salesOrder._id,
-        soNumber: salesOrder.soNumber,
+        id: salesOrder.id,
+        _id: salesOrder.id,
+        soNumber: salesOrder.so_number || salesOrder.soNumber,
         customer: salesOrder.customer,
         status: salesOrder.status
       },

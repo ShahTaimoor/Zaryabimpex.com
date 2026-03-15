@@ -1,6 +1,25 @@
-const purchaseOrderRepository = require('../repositories/PurchaseOrderRepository');
-const supplierRepository = require('../repositories/SupplierRepository');
-const PurchaseOrder = require('../models/PurchaseOrder'); // Still needed for generatePONumber static method
+const purchaseOrderRepository = require('../repositories/postgres/PurchaseRepository');
+const supplierRepository = require('../repositories/postgres/SupplierRepository');
+const productRepository = require('../repositories/postgres/ProductRepository');
+const productVariantRepository = require('../repositories/postgres/ProductVariantRepository');
+const AccountingService = require('./accountingService');
+
+// Format supplier address for print/display
+function formatSupplierAddress(supplierData) {
+  if (!supplierData) return '';
+  if (supplierData.address && typeof supplierData.address === 'string') return supplierData.address.trim();
+  const addrRaw = supplierData.address ?? supplierData.addresses;
+  if (Array.isArray(addrRaw) && addrRaw.length > 0) {
+    const a = addrRaw.find(x => x.isDefault) || addrRaw.find(x => x.type === 'billing' || x.type === 'both') || addrRaw[0];
+    const parts = [a.street || a.address_line1 || a.addressLine1 || a.line1, a.city, a.state || a.province, a.country, a.zipCode || a.zip || a.postalCode || a.postal_code].filter(Boolean);
+    return parts.join(', ');
+  }
+  if (addrRaw && typeof addrRaw === 'object' && !Array.isArray(addrRaw)) {
+    const parts = [addrRaw.street || addrRaw.address_line1 || addrRaw.addressLine1 || addrRaw.line1, addrRaw.city, addrRaw.state || addrRaw.province, addrRaw.country, addrRaw.zipCode || addrRaw.zip || addrRaw.postalCode || addrRaw.postal_code].filter(Boolean);
+    return parts.join(', ');
+  }
+  return '';
+}
 
 class PurchaseOrderService {
   /**
@@ -11,9 +30,12 @@ class PurchaseOrderService {
   transformSupplierToUppercase(supplier) {
     if (!supplier) return supplier;
     if (supplier.toObject) supplier = supplier.toObject();
-    if (supplier.companyName) supplier.companyName = supplier.companyName.toUpperCase();
-    if (supplier.contactPerson && supplier.contactPerson.name) {
-      supplier.contactPerson.name = supplier.contactPerson.name.toUpperCase();
+    const name = supplier.companyName || supplier.company_name;
+    if (name) supplier.companyName = (typeof name === 'string' ? name : '').toUpperCase();
+    const cp = supplier.contactPerson || supplier.contact_person;
+    if (cp && (typeof cp === 'object' ? cp.name : cp)) {
+      if (!supplier.contactPerson) supplier.contactPerson = {};
+      supplier.contactPerson.name = String(cp.name || cp).toUpperCase();
     }
     return supplier;
   }
@@ -91,47 +113,80 @@ class PurchaseOrderService {
 
     const filter = this.buildFilter(queryParams);
 
-    const result = await purchaseOrderRepository.findWithPagination(filter, {
+    // Convert MongoDB-style filter to PostgreSQL filter
+    const pgFilter = {};
+    if (filter.supplier) pgFilter.supplierId = filter.supplier;
+    if (filter.status) pgFilter.status = filter.status;
+    if (filter.poNumber) pgFilter.purchaseOrderNumber = filter.poNumber;
+    if (queryParams.dateFrom) pgFilter.dateFrom = queryParams.dateFrom;
+    if (queryParams.dateTo) pgFilter.dateTo = queryParams.dateTo;
+    if (filter.dateFilter?.orderDate) {
+      if (filter.dateFilter.orderDate.$gte) pgFilter.dateFrom = filter.dateFilter.orderDate.$gte;
+      if (filter.dateFilter.orderDate.$lte) pgFilter.dateTo = filter.dateFilter.orderDate.$lte;
+    }
+
+    const result = await purchaseOrderRepository.findWithPagination(pgFilter, {
       page,
       limit,
-      getAll: getAllPurchaseOrders,
-      sort: { createdAt: -1 },
-      populate: [
-        { path: 'supplier', select: 'companyName contactPerson email phone businessType openingBalance addresses' },
-        { path: 'items.product', select: 'name description pricing inventory' },
-        { path: 'createdBy', select: 'firstName lastName email' },
-        { path: 'lastModifiedBy', select: 'firstName lastName email' }
-      ]
+      sort: 'created_at DESC'
     });
 
     // Fetch dynamic balances from ledger for all suppliers in this page
-    const supplierIds = result.purchaseOrders
-      .filter(po => po.supplier)
-      .map(po => po.supplier._id.toString());
+    const supplierIds = result.purchases
+      .filter(po => po.supplier_id)
+      .map(po => po.supplier_id);
 
-    const balanceMap = await AccountingService.getBulkSupplierBalances(supplierIds);
+    const balanceMap = supplierIds.length > 0
+      ? await AccountingService.getBulkSupplierBalances(supplierIds)
+      : new Map();
 
-    // Transform names to uppercase and attach dynamic balances
-    result.purchaseOrders.forEach(po => {
-      if (po.supplier) {
-        po.supplier = this.transformSupplierToUppercase(po.supplier);
-        const ledgerBalance = balanceMap.get(po.supplier._id.toString()) || 0;
-        const netBalance = (po.supplier.openingBalance || 0) + ledgerBalance;
+    // Fetch supplier details, enrich items with products, and transform
+    for (const purchase of result.purchases) {
+      if (purchase.supplier_id) {
+        const supplier = await supplierRepository.findById(purchase.supplier_id);
+        if (supplier) {
+          purchase.supplier = this.transformSupplierToUppercase(supplier);
+          purchase.supplierInfo = { ...purchase.supplierInfo, address: formatSupplierAddress(supplier) || purchase.supplierInfo?.address };
+          const ledgerBalance = balanceMap.get(purchase.supplier_id) || 0;
+          const netBalance = (supplier.opening_balance || 0) + ledgerBalance;
 
-        po.supplier.currentBalance = netBalance;
-        po.supplier.pendingBalance = netBalance > 0 ? netBalance : 0;
-        po.supplier.advanceBalance = netBalance < 0 ? Math.abs(netBalance) : 0;
+          purchase.supplier.currentBalance = netBalance;
+          purchase.supplier.pendingBalance = netBalance > 0 ? netBalance : 0;
+          purchase.supplier.advanceBalance = netBalance < 0 ? Math.abs(netBalance) : 0;
+        }
       }
-      if (po.items && Array.isArray(po.items)) {
-        po.items.forEach(item => {
-          if (item.product) {
-            item.product = this.transformProductToUppercase(item.product);
+      if (purchase.items && Array.isArray(purchase.items)) {
+        for (const item of purchase.items) {
+          const productId = item.product_id || item.product;
+          if (!productId) continue;
+          const id = typeof productId === 'object' ? (productId.id || productId._id) : productId;
+          if (typeof id !== 'string') continue;
+          if (typeof item.product === 'object' && item.product && (item.product.name || item.product.displayName)) continue;
+          try {
+            let p = await productRepository.findById(id);
+            if (p) {
+              item.product = { ...p, name: p.name || p.displayName };
+            } else {
+              p = await productVariantRepository.findById(id);
+              if (p) {
+                item.product = { name: p.display_name ?? p.displayName ?? p.variant_name ?? p.variantName ?? 'Product' };
+              }
+            }
+            if (item.product) item.product = this.transformProductToUppercase(item.product);
+          } catch (e) {
+            // Keep item.product as-is on error
           }
-        });
+        }
       }
-    });
+    }
 
-    return result;
+    return {
+      purchaseOrders: result.purchases,
+      pagination: {
+        ...result.pagination,
+        totalItems: result.pagination.total
+      }
+    };
   }
 
   /**
@@ -146,30 +201,34 @@ class PurchaseOrderService {
       throw new Error('Purchase order not found');
     }
 
-    // Populate related fields
-    await purchaseOrder.populate([
-      { path: 'supplier', select: 'companyName contactPerson email phone businessType paymentTerms openingBalance addresses' },
-      { path: 'items.product', select: 'name description pricing inventory' },
-      { path: 'createdBy', select: 'firstName lastName email' },
-      { path: 'lastModifiedBy', select: 'firstName lastName email' },
-      { path: 'conversions.convertedBy', select: 'firstName lastName email' }
-    ]);
+    if (purchaseOrder.items && typeof purchaseOrder.items === 'string') {
+      purchaseOrder.items = JSON.parse(purchaseOrder.items);
+    }
 
-    // Transform names to uppercase and attach dynamic balance
-    if (purchaseOrder.supplier) {
-      purchaseOrder.supplier = this.transformSupplierToUppercase(purchaseOrder.supplier);
-      const balance = await AccountingService.getSupplierBalance(purchaseOrder.supplier._id);
-
-      purchaseOrder.supplier.currentBalance = balance;
-      purchaseOrder.supplier.pendingBalance = balance > 0 ? balance : 0;
-      purchaseOrder.supplier.advanceBalance = balance < 0 ? Math.abs(balance) : 0;
+    if (purchaseOrder.supplier_id) {
+      const supplier = await supplierRepository.findById(purchaseOrder.supplier_id);
+      if (supplier) {
+        purchaseOrder.supplier = this.transformSupplierToUppercase(supplier);
+        purchaseOrder.supplierInfo = { ...purchaseOrder.supplierInfo, address: formatSupplierAddress(supplier) || purchaseOrder.supplierInfo?.address };
+        const balance = await AccountingService.getSupplierBalance(purchaseOrder.supplier_id);
+        purchaseOrder.supplier.currentBalance = balance;
+        purchaseOrder.supplier.pendingBalance = balance > 0 ? balance : 0;
+        purchaseOrder.supplier.advanceBalance = balance < 0 ? Math.abs(balance) : 0;
+      }
     }
     if (purchaseOrder.items && Array.isArray(purchaseOrder.items)) {
-      purchaseOrder.items.forEach(item => {
-        if (item.product) {
+      for (const item of purchaseOrder.items) {
+        const productId = item.product_id || item.product;
+        if (productId && (typeof productId === 'string' || typeof productId === 'object')) {
+          const id = typeof productId === 'object' ? (productId.id || productId._id) : productId;
+          const product = await productRepository.findById(id);
+          if (product) {
+            item.product = this.transformProductToUppercase(product);
+          }
+        } else if (item.product) {
           item.product = this.transformProductToUppercase(item.product);
         }
-      });
+      }
     }
 
     return purchaseOrder;
@@ -182,23 +241,38 @@ class PurchaseOrderService {
    * @returns {Promise<PurchaseOrder>}
    */
   async createPurchaseOrder(poData, userId) {
-    const purchaseOrderData = {
-      ...poData,
-      poNumber: PurchaseOrder.generatePONumber(),
+    // Generate PO number
+    const poNumber = poData.poNumber || purchaseOrderRepository.generatePONumber();
+
+    // Prepare purchase data for PostgreSQL
+    const purchaseData = {
+      purchaseOrderNumber: poNumber,
+      supplierId: poData.supplier || poData.supplierId || null,
+      purchaseDate: poData.orderDate || new Date(),
+      items: poData.items || [],
+      subtotal: poData.subtotal || 0,
+      discount: poData.discount || 0,
+      tax: poData.tax || 0,
+      total: poData.total || 0,
+      paymentMethod: poData.paymentMethod || null,
+      paymentStatus: 'pending',
+      status: poData.status || 'draft',
+      notes: poData.notes || null,
       createdBy: userId
     };
 
-    const purchaseOrder = await purchaseOrderRepository.create(purchaseOrderData);
+    const purchaseOrder = await purchaseOrderRepository.create(purchaseData);
 
     // Note: Manual increment of supplier.pendingBalance removed.
     // Balances are now dynamically derived from the Account Ledger transactions.
 
-    // Populate related fields
-    await purchaseOrder.populate([
-      { path: 'supplier', select: 'companyName contactPerson email phone businessType addresses' },
-      { path: 'items.product', select: 'name description pricing inventory' },
-      { path: 'createdBy', select: 'firstName lastName email' }
-    ]);
+    // Fetch supplier details if exists
+    if (purchaseOrder.supplier_id) {
+      const supplier = await supplierRepository.findById(purchaseOrder.supplier_id);
+      if (supplier) {
+        purchaseOrder.supplier = supplier;
+      }
+    }
 
     return purchaseOrder;
   }
@@ -216,55 +290,21 @@ class PurchaseOrderService {
       throw new Error('Purchase order not found');
     }
 
-    // Don't allow editing if already confirmed or received
     if (['confirmed', 'partially_received', 'fully_received'].includes(purchaseOrder.status)) {
       throw new Error('Cannot edit purchase order that has been confirmed or received');
     }
 
-    // Store old values for comparison
-    const oldTotal = purchaseOrder.total;
-    const oldSupplier = purchaseOrder.supplier;
+    const updatedData = { ...updateData, updatedBy: userId };
 
-    const updatedData = {
-      ...updateData,
-      lastModifiedBy: userId
-    };
+    const updatedPO = await purchaseOrderRepository.update(id, updatedData);
+    if (!updatedPO) return null;
 
-    const updatedPO = await purchaseOrderRepository.update(id, updatedData, {
-      new: true,
-      runValidators: true
-    });
-
-    // Handle supplier balance updates if supplier or total changed
-    if (oldSupplier && oldTotal > 0) {
-      try {
-        // Reduce old supplier balance
-        await supplierRepository.update(oldSupplier, {
-          $inc: { pendingBalance: -oldTotal }
-        });
-      } catch (error) {
-        console.error('Error reducing old supplier balance:', error);
-      }
+    if (updatedPO.items && typeof updatedPO.items === 'string') {
+      updatedPO.items = JSON.parse(updatedPO.items);
     }
-
-    if (updatedPO.supplier && updatedPO.total > 0) {
-      try {
-        // Add new supplier balance
-        await supplierRepository.update(updatedPO.supplier, {
-          $inc: { pendingBalance: updatedPO.total }
-        });
-      } catch (error) {
-        console.error('Error updating new supplier balance:', error);
-      }
+    if (updatedPO.supplier_id) {
+      updatedPO.supplier = await supplierRepository.findById(updatedPO.supplier_id);
     }
-
-    // Populate related fields
-    await updatedPO.populate([
-      { path: 'supplier', select: 'companyName contactPerson email phone businessType addresses' },
-      { path: 'items.product', select: 'name description pricing inventory' },
-      { path: 'createdBy', select: 'firstName lastName email' },
-      { path: 'lastModifiedBy', select: 'firstName lastName email' }
-    ]);
 
     return updatedPO;
   }
@@ -284,11 +324,11 @@ class PurchaseOrderService {
       throw new Error('Only draft purchase orders can be confirmed');
     }
 
-    purchaseOrder.status = 'confirmed';
-    purchaseOrder.confirmedDate = new Date();
-    await purchaseOrder.save();
+    const updatedPO = await purchaseOrderRepository.update(id, {
+      status: 'confirmed'
+    });
 
-    return purchaseOrder;
+    return updatedPO;
   }
 
   /**
@@ -307,23 +347,11 @@ class PurchaseOrderService {
       throw new Error('Cannot cancel purchase order in current status');
     }
 
-    // If confirmed, reduce supplier balance
-    if (purchaseOrder.status === 'confirmed' && purchaseOrder.supplier && purchaseOrder.total > 0) {
-      try {
-        await supplierRepository.update(purchaseOrder.supplier, {
-          $inc: { pendingBalance: -purchaseOrder.total }
-        });
-      } catch (error) {
-        console.error('Error reducing supplier balance on cancellation:', error);
-      }
-    }
-
-    purchaseOrder.status = 'cancelled';
-    purchaseOrder.cancelledDate = new Date();
-    purchaseOrder.lastModifiedBy = userId;
-    await purchaseOrder.save();
-
-    return purchaseOrder;
+    const updated = await purchaseOrderRepository.update(id, {
+      status: 'cancelled',
+      updatedBy: userId
+    });
+    return updated || purchaseOrder;
   }
 
   /**
@@ -338,15 +366,16 @@ class PurchaseOrderService {
       throw new Error('Purchase order not found');
     }
 
-    if (purchaseOrder.status !== 'fully_received') {
+    if (purchaseOrder.status !== 'fully_received' && purchaseOrder.status !== 'received') {
       throw new Error('Only fully received purchase orders can be closed');
     }
 
-    purchaseOrder.status = 'closed';
-    purchaseOrder.lastModifiedBy = userId;
-    await purchaseOrder.save();
+    const updatedPO = await purchaseOrderRepository.update(id, {
+      status: 'completed',
+      updatedBy: userId
+    });
 
-    return purchaseOrder;
+    return updatedPO;
   }
 
   /**
@@ -360,20 +389,8 @@ class PurchaseOrderService {
       throw new Error('Purchase order not found');
     }
 
-    // Only allow deletion of draft orders
     if (purchaseOrder.status !== 'draft') {
       throw new Error('Only draft purchase orders can be deleted');
-    }
-
-    // Reduce supplier balance if order was created
-    if (purchaseOrder.supplier && purchaseOrder.total > 0) {
-      try {
-        await supplierRepository.update(purchaseOrder.supplier, {
-          $inc: { pendingBalance: -purchaseOrder.total }
-        });
-      } catch (error) {
-        console.error('Error reducing supplier balance on deletion:', error);
-      }
     }
 
     await purchaseOrderRepository.softDelete(id);
@@ -385,24 +402,28 @@ class PurchaseOrderService {
    * @returns {Promise<object>}
    */
   async getPurchaseOrderForConversion(id) {
-    const purchaseOrder = await purchaseOrderRepository.findById(id, {
-      populate: [
-        { path: 'items.product', select: 'name description pricing inventory' },
-        { path: 'supplier', select: 'companyName contactPerson email phone businessType addresses' }
-      ]
-    });
+    const purchaseOrder = await purchaseOrderRepository.findById(id);
 
     if (!purchaseOrder) {
       throw new Error('Purchase order not found');
     }
 
-    // Filter items that have remaining quantities
-    const availableItems = purchaseOrder.items.filter(item => item.remainingQuantity > 0);
+    // Fetch supplier details if exists
+    if (purchaseOrder.supplier_id) {
+      const supplier = await supplierRepository.findById(purchaseOrder.supplier_id);
+      if (supplier) {
+        purchaseOrder.supplier = supplier;
+      }
+    }
+
+    // Filter items that have remaining quantities (if items have remainingQuantity field)
+    const items = Array.isArray(purchaseOrder.items) ? purchaseOrder.items : [];
+    const availableItems = items.filter(item => !item.remainingQuantity || item.remainingQuantity > 0);
 
     return {
       purchaseOrder: {
-        _id: purchaseOrder._id,
-        poNumber: purchaseOrder.poNumber,
+        id: purchaseOrder.id,
+        purchaseOrderNumber: purchaseOrder.purchase_order_number,
         supplier: purchaseOrder.supplier,
         status: purchaseOrder.status
       },
@@ -418,49 +439,39 @@ class PurchaseOrderService {
    * @returns {Promise<object>}
    */
   async createInvoiceFromPurchaseOrder(purchaseOrder, userId, convertItems = null) {
-    const PurchaseInvoice = require('../models/PurchaseInvoice');
+    const purchaseInvoiceRepository = require('../repositories/postgres/PurchaseInvoiceRepository');
 
-    // Ensure supplier is populated to get info
-    if (purchaseOrder.supplier && !purchaseOrder.supplier.companyName) {
-      await purchaseOrder.populate('supplier');
+    let supplier = purchaseOrder.supplier;
+    if (!supplier && purchaseOrder.supplier_id) {
+      supplier = await supplierRepository.findById(purchaseOrder.supplier_id);
     }
 
-    const items = convertItems || purchaseOrder.items;
+    const items = convertItems || purchaseOrder.items || [];
+    const subtotal = items.reduce((sum, item) => sum + (item.quantity * (item.costPerUnit || item.unit_cost || item.unitCost || 0)), 0);
+    const poNum = purchaseOrder.purchase_order_number || purchaseOrder.poNumber;
 
-    // Calculate subtotal for the items being converted
-    const subtotal = items.reduce((sum, item) => sum + (item.quantity * (item.costPerUnit || item.unitCost || 0)), 0);
-
+    const invoiceNumber = `PI-${Date.now()}`;
     const invoiceData = {
-      supplier: purchaseOrder.supplier?._id || purchaseOrder.supplier,
-      supplierInfo: purchaseOrder.supplier ? {
-        name: purchaseOrder.supplier.contactPerson?.name || purchaseOrder.supplier.companyName,
-        email: purchaseOrder.supplier.email || '',
-        phone: purchaseOrder.supplier.phone || '',
-        companyName: purchaseOrder.supplier.companyName || '',
-        address: purchaseOrder.supplier.address || ''
+      invoiceNumber,
+      invoiceType: 'purchase',
+      supplier: purchaseOrder.supplier_id || purchaseOrder.supplier?.id || purchaseOrder.supplier,
+      supplierInfo: supplier ? {
+        name: supplier.contact_person || supplier.company_name || '',
+        email: supplier.email || '',
+        phone: supplier.phone || '',
+        companyName: supplier.company_name || '',
+        address: supplier.address || ''
       } : null,
-      items: (items || []).map(item => ({
-        product: item.product,
+      items: items.map(item => ({
+        product: item.product_id || item.product,
         productName: item.displayName || 'Product',
         quantity: item.quantity,
-        unitCost: item.costPerUnit || item.unitCost || 0,
-        totalCost: item.quantity * (item.costPerUnit || item.unitCost || 0)
+        unitCost: item.costPerUnit || item.unit_cost || item.cost_per_unit || 0,
+        totalCost: item.quantity * (item.costPerUnit || item.unit_cost || 0)
       })),
-      pricing: {
-        subtotal: subtotal,
-        discountAmount: 0,
-        taxAmount: 0, // Simplified tax handling for partial conversions
-        isTaxExempt: purchaseOrder.isTaxExempt || true,
-        total: subtotal
-      },
-      payment: {
-        status: 'pending',
-        method: 'credit',
-        paidAmount: 0,
-        isPartialPayment: false
-      },
-      expectedDelivery: purchaseOrder.expectedDelivery,
-      notes: purchaseOrder.notes || `Generated from Purchase Order ${purchaseOrder.poNumber}`,
+      pricing: { subtotal, discountAmount: 0, taxAmount: 0, total: subtotal },
+      payment: { status: 'pending', method: 'credit', paidAmount: 0 },
+      notes: purchaseOrder.notes || `Generated from Purchase Order ${poNum}`,
       terms: purchaseOrder.terms,
       status: 'confirmed',
       confirmedDate: new Date(),
@@ -468,8 +479,18 @@ class PurchaseOrderService {
       invoiceDate: new Date()
     };
 
-    const invoice = new PurchaseInvoice(invoiceData);
-    return await invoice.save();
+    const invoice = await purchaseInvoiceRepository.create(invoiceData);
+    
+    // Post to account ledger
+    try {
+      const AccountingService = require('./accountingService');
+      await AccountingService.recordPurchaseInvoice(invoice);
+    } catch (error) {
+      console.error('Error creating accounting entries for purchase invoice from PO:', error);
+      // Don't fail the invoice creation if ledger posting fails
+    }
+    
+    return invoice;
   }
 }
 

@@ -8,7 +8,7 @@ const router = express.Router();
 
 const validateWarehouseId = [
   param('id')
-    .isMongoId()
+    .isUUID(4)
     .withMessage('Valid warehouse ID is required'),
 ];
 
@@ -37,6 +37,8 @@ const createWarehouseValidators = ({ allowPartial = false } = {}) => {
   const chain = [];
 
   const nameValidator = body('name')
+    .notEmpty()
+    .withMessage('Warehouse name is required')
     .isString()
     .trim()
     .isLength({ min: 2, max: 150 })
@@ -44,6 +46,8 @@ const createWarehouseValidators = ({ allowPartial = false } = {}) => {
   chain.push(allowPartial ? nameValidator.optional({ nullable: true }) : nameValidator);
 
   const codeValidator = body('code')
+    .notEmpty()
+    .withMessage('Warehouse code is required')
     .isString()
     .trim()
     .isLength({ min: 2, max: 50 })
@@ -58,31 +62,31 @@ const createWarehouseValidators = ({ allowPartial = false } = {}) => {
   chain.push(descriptionValidator);
 
   const addressValidator = body('address')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isObject()
     .withMessage('Address must be an object');
   chain.push(addressValidator);
 
-  chain.push(body('address.line1').optional().isString().trim().isLength({ max: 150 }));
-  chain.push(body('address.line2').optional().isString().trim().isLength({ max: 150 }));
-  chain.push(body('address.city').optional().isString().trim().isLength({ max: 100 }));
-  chain.push(body('address.state').optional().isString().trim().isLength({ max: 100 }));
+  chain.push(body('address.line1').optional({ nullable: true, checkFalsy: true }).isString().trim().isLength({ max: 150 }));
+  chain.push(body('address.line2').optional({ nullable: true, checkFalsy: true }).isString().trim().isLength({ max: 150 }));
+  chain.push(body('address.city').optional({ nullable: true, checkFalsy: true }).isString().trim().isLength({ max: 100 }));
+  chain.push(body('address.state').optional({ nullable: true, checkFalsy: true }).isString().trim().isLength({ max: 100 }));
   chain.push(
-    body('address.postalCode').optional().isString().trim().isLength({ max: 30 })
+    body('address.postalCode').optional({ nullable: true, checkFalsy: true }).isString().trim().isLength({ max: 30 })
   );
-  chain.push(body('address.country').optional().isString().trim().isLength({ max: 100 }));
+  chain.push(body('address.country').optional({ nullable: true, checkFalsy: true }).isString().trim().isLength({ max: 100 }));
 
   const contactValidator = body('contact')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isObject()
     .withMessage('Contact must be an object');
   chain.push(contactValidator);
 
-  chain.push(body('contact.name').optional().isString().trim().isLength({ max: 150 }));
-  chain.push(body('contact.phone').optional().isString().trim().isLength({ max: 50 }));
+  chain.push(body('contact.name').optional({ nullable: true, checkFalsy: true }).isString().trim().isLength({ max: 150 }));
+  chain.push(body('contact.phone').optional({ nullable: true, checkFalsy: true }).isString().trim().isLength({ max: 50 }));
   chain.push(
     body('contact.email')
-      .optional()
+      .optional({ nullable: true, checkFalsy: true })
       .isString()
       .trim()
       .isEmail()
@@ -92,7 +96,7 @@ const createWarehouseValidators = ({ allowPartial = false } = {}) => {
   chain.push(body('notes').optional().isString().trim().isLength({ max: 1000 }));
   chain.push(
     body('capacity')
-      .optional()
+      .optional({ nullable: true, checkFalsy: true })
       .isFloat({ min: 0 })
       .withMessage('Capacity must be a positive number')
   );
@@ -198,14 +202,23 @@ router.post(
   ],
   async (req, res) => {
     try {
+      const { name, code } = req.body;
+      
+      if (!name || !code) {
+        return res.status(400).json({
+          success: false,
+          message: 'Warehouse name and code are required'
+        });
+      }
+
       const payload = {
         ...req.body,
-        code: req.body.code.toUpperCase(),
+        code: String(code).toUpperCase(),
       };
 
       let warehouse;
       try {
-        warehouse = await warehouseService.createWarehouse(payload, req.user._id);
+        warehouse = await warehouseService.createWarehouse(payload, req.user.id || req.user._id);
       } catch (err) {
         if (err.message === 'Warehouse code already exists') {
           return res.status(400).json({
@@ -222,12 +235,6 @@ router.post(
       });
     } catch (error) {
       console.error('Error creating warehouse:', error);
-      if (error.code === 11000) {
-        return res.status(409).json({
-          success: false,
-          message: 'Warehouse code must be unique',
-        });
-      }
       res.status(500).json({
         success: false,
         message: 'Server error creating warehouse',
@@ -252,10 +259,10 @@ router.put(
       const updates = { ...req.body };
 
       if (updates.code) {
-        updates.code = updates.code.toUpperCase();
+        updates.code = String(updates.code).toUpperCase();
       }
 
-      const warehouse = await warehouseService.updateWarehouse(req.params.id, updates, req.user._id);
+      const warehouse = await warehouseService.updateWarehouse(req.params.id, updates, req.user.id || req.user._id);
 
       res.json({
         success: true,

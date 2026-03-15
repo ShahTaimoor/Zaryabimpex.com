@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Building, Phone, MapPin, Mail, FileText, Image, Save } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import {
   useFetchCompanyQuery,
   useUpdateCompanyMutation,

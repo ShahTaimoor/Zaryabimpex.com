@@ -4,9 +4,8 @@ const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors, sanitizeRequest } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const returnManagementService = require('../services/returnManagementService');
-const ReturnRepository = require('../repositories/ReturnRepository');
-const PurchaseInvoice = require('../models/PurchaseInvoice');
-const PurchaseOrder = require('../models/PurchaseOrder');
+const ReturnRepository = require('../repositories/postgres/ReturnRepository');
+const PurchaseInvoiceRepository = require('../repositories/PurchaseInvoiceRepository');
 
 const router = express.Router();
 
@@ -35,10 +34,10 @@ router.post('/', [
   auth,
   requirePermission('create_orders'),
   sanitizeRequest,
-  body('originalOrder').isMongoId().withMessage('Valid original purchase invoice/order ID is required'),
+  body('originalOrder').isUUID(4).withMessage('Valid original purchase invoice/order ID is required'),
   body('items').isArray({ min: 1 }).withMessage('At least one return item is required'),
-  body('items.*.product').isMongoId().withMessage('Valid product ID is required'),
-  body('items.*.originalOrderItem').isMongoId().withMessage('Valid order item ID is required'),
+  body('items.*.product').isUUID(4).withMessage('Valid product ID is required'),
+  body('items.*.originalOrderItem').notEmpty().withMessage('Valid order item ID is required'),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Valid quantity is required'),
   body('items.*.returnReason').isIn([
     'defective', 'wrong_item', 'not_as_described', 'damaged_shipping',
@@ -49,35 +48,32 @@ router.post('/', [
   body('items.*.action').isIn(['refund', 'exchange', 'store_credit', 'repair', 'replace']).withMessage('Valid action is required'),
   body('refundMethod').optional().isIn(['original_payment', 'store_credit', 'cash', 'check', 'bank_transfer']),
   body('priority').optional().isIn(['low', 'normal', 'high', 'urgent']),
+  body('deferProcess').optional().isBoolean().withMessage('deferProcess must be boolean'),
   handleValidationErrors,
 ], async (req, res) => {
   try {
     // Ensure origin is set to 'purchase'
+    const userId = req.user?.id || req.user?._id;
     const returnData = {
       ...req.body,
       origin: 'purchase',
-      requestedBy: req.user._id
+      requestedBy: userId
     };
 
-    const returnRequest = await returnManagementService.createReturn(returnData, req.user._id);
-    
-    // Populate the return with related data
-    await returnRequest.populate([
-      { path: 'originalOrder', populate: { path: 'supplier' } },
-      { path: 'supplier', select: 'name businessName email phone companyName contactPerson' },
-      { path: 'items.product' },
-      { path: 'requestedBy', select: 'firstName lastName email' }
-    ]);
+    const returnRequest = await returnManagementService.createReturn(returnData, userId);
 
-    // Transform names to uppercase
-    if (returnRequest.supplier) {
-      returnRequest.supplier = transformSupplierToUppercase(returnRequest.supplier);
+    if (typeof returnRequest.populate === 'function') {
+      await returnRequest.populate([
+        { path: 'originalOrder', populate: { path: 'supplier' } },
+        { path: 'supplier' },
+        { path: 'items.product' },
+        { path: 'requestedBy' }
+      ]);
     }
+    if (returnRequest.supplier) returnRequest.supplier = transformSupplierToUppercase(returnRequest.supplier);
     if (returnRequest.items && Array.isArray(returnRequest.items)) {
       returnRequest.items.forEach(item => {
-        if (item.product) {
-          item.product = transformProductToUppercase(item.product);
-        }
+        if (item.product) item.product = transformProductToUppercase(item.product);
       });
     }
     if (returnRequest.originalOrder && returnRequest.originalOrder.supplier) {
@@ -101,7 +97,7 @@ router.get('/', [
   auth,
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
-  query('status').optional().isIn(['pending', 'approved', 'rejected', 'processing', 'received', 'completed', 'cancelled']),
+  query('status').optional().isIn(['pending', 'inspected', 'approved', 'rejected', 'processing', 'received', 'completed', 'processed', 'cancelled']),
   query('returnType').optional().isIn(['return', 'exchange', 'warranty', 'recall']),
   query('priority').optional().isIn(['low', 'normal', 'high', 'urgent']),
   ...validateDateParams,
@@ -137,7 +133,7 @@ router.get('/', [
 // @access  Private
 router.get('/:id', [
   auth,
-  param('id').isMongoId().withMessage('Valid return ID is required'),
+  param('id').isUUID(4).withMessage('Valid return ID is required'),
   handleValidationErrors,
 ], async (req, res) => {
   try {
@@ -162,7 +158,7 @@ router.get('/:id', [
 // @access  Private
 router.get('/supplier/:supplierId/invoices', [
   auth,
-  param('supplierId').isMongoId().withMessage('Valid supplier ID is required'),
+  param('supplierId').isUUID(4).withMessage('Valid supplier ID is required'),
   handleValidationErrors,
 ], async (req, res) => {
   try {
@@ -191,36 +187,37 @@ router.get('/supplier/:supplierId/invoices', [
 // @access  Private
 router.get('/supplier/:supplierId/products', [
   auth,
-  param('supplierId').isMongoId().withMessage('Valid supplier ID is required'),
+  param('supplierId').isUUID(4).withMessage('Valid supplier ID is required'),
   query('search').optional().trim(),
   handleValidationErrors,
 ], async (req, res) => {
   try {
     const { supplierId } = req.params;
     const { search } = req.query;
-    const Return = require('../models/Return');
-    const Product = require('../models/Product');
+    const ProductRepository = require('../repositories/postgres/ProductRepository');
 
-    // Get all purchase invoices for this supplier
-    const invoices = await PurchaseInvoice.find({ supplier: supplierId })
-      .populate('items.product', 'name sku barcode')
-      .select('invoiceNumber createdAt items')
-      .sort({ createdAt: -1 })
-      .lean();
+    const invoices = await PurchaseInvoiceRepository.findAll(
+      { supplierId, supplier: supplierId },
+      { limit: 500, sort: 'created_at DESC' }
+    );
 
-    // Collect all product items from invoices
     const productMap = new Map();
+    for (const invoice of invoices || []) {
+      let items = invoice.items;
+      if (typeof items === 'string') items = JSON.parse(items);
+      if (!items || items.length === 0) continue;
+      const invoiceId = invoice.id || invoice._id;
+      const existingReturns = await ReturnRepository.findAll({ referenceId: invoiceId, returnType: 'purchase_return' });
 
-    for (const invoice of invoices) {
-      if (!invoice.items || invoice.items.length === 0) continue;
-
-      for (const item of invoice.items) {
-        if (!item.product) continue;
-
-        const productId = item.product._id.toString();
-        const productName = item.product.name || '';
-        const productSku = item.product.sku || '';
-        const productBarcode = item.product.barcode || '';
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        const productId = item.product || item.product_id;
+        if (!productId) continue;
+        const id = typeof productId === 'object' ? (productId.id || productId._id) : productId;
+        const product = await ProductRepository.findById(id);
+        const productName = product?.name || '';
+        const productSku = product?.sku || '';
+        const productBarcode = product?.barcode || '';
 
         // Filter by search term if provided
         if (search) {
@@ -234,43 +231,28 @@ router.get('/supplier/:supplierId/products', [
           }
         }
 
-        // Get existing returns for this invoice item
-        const existingReturns = await Return.find({
-          origin: 'purchase',
-          'items.originalOrderItem': item._id,
-          status: { $nin: ['cancelled', 'rejected'] }
-        }).lean();
-
-        // Calculate returned quantity
+        const itemId = item.id || item._id || `${invoiceId}-${idx}`;
         let returnedQuantity = 0;
-        for (const returnDoc of existingReturns) {
-          for (const returnItem of returnDoc.items || []) {
-            if (returnItem.originalOrderItem && returnItem.originalOrderItem.toString() === item._id.toString()) {
-              returnedQuantity += returnItem.quantity || 0;
-            }
+        for (const returnDoc of existingReturns || []) {
+          if (['cancelled', 'rejected'].includes(returnDoc.status)) continue;
+          const docItems = returnDoc.items && (typeof returnDoc.items === 'string' ? JSON.parse(returnDoc.items) : returnDoc.items) || [];
+          for (const returnItem of docItems) {
+            if (String(returnItem.originalOrderItem) === String(itemId)) returnedQuantity += returnItem.quantity || 0;
           }
         }
 
         const remainingQuantity = (item.quantity || 0) - returnedQuantity;
-
         if (remainingQuantity <= 0) continue;
 
-        // Group by product, keeping track of all purchases
-        if (!productMap.has(productId)) {
-          productMap.set(productId, {
-            product: item.product,
-            purchases: []
-          });
-        }
-
-        const productData = productMap.get(productId);
+        if (!productMap.has(id)) productMap.set(id, { product, purchases: [] });
+        const productData = productMap.get(id);
         productData.purchases.push({
-          invoiceId: invoice._id,
-          invoiceNumber: invoice.invoiceNumber,
-          invoiceItemId: item._id,
+          invoiceId,
+          invoiceNumber: invoice.invoice_number || invoice.invoiceNumber,
+          invoiceItemId: itemId,
           quantityPurchased: item.quantity || 0,
-          price: item.unitCost || item.price || 0,
-          date: invoice.createdAt,
+          price: item.unit_cost || item.unitCost || item.price || 0,
+          date: invoice.created_at || invoice.createdAt,
           returnedQuantity,
           remainingQuantity
         });
@@ -312,7 +294,7 @@ router.get('/supplier/:supplierId/products', [
 router.put('/:id/approve', [
   auth,
   requirePermission('approve_returns'),
-  param('id').isMongoId().withMessage('Valid return ID is required'),
+  param('id').isUUID(4).withMessage('Valid return ID is required'),
   body('notes').optional().isString().isLength({ max: 1000 }),
   handleValidationErrors,
 ], async (req, res) => {
@@ -344,7 +326,7 @@ router.put('/:id/approve', [
 router.put('/:id/reject', [
   auth,
   requirePermission('approve_returns'),
-  param('id').isMongoId().withMessage('Valid return ID is required'),
+  param('id').isUUID(4).withMessage('Valid return ID is required'),
   body('reason').isString().isLength({ min: 1, max: 500 }).withMessage('Rejection reason is required'),
   handleValidationErrors,
 ], async (req, res) => {
@@ -376,7 +358,7 @@ router.put('/:id/reject', [
 router.put('/:id/process', [
   auth,
   requirePermission('process_returns'),
-  param('id').isMongoId().withMessage('Valid return ID is required'),
+  param('id').isUUID(4).withMessage('Valid return ID is required'),
   body('inspection').optional().isObject(),
   body('inspection.resellable').optional().isBoolean(),
   body('inspection.conditionVerified').optional().isBoolean(),
@@ -410,26 +392,22 @@ router.put('/:id/process', [
 // @access  Private
 router.get('/stats/summary', [
   auth,
-  ...validateDateParams,
+  query('startDate').optional().custom((v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v)).withMessage('startDate must be YYYY-MM-DD'),
+  query('endDate').optional().custom((v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v)).withMessage('endDate must be YYYY-MM-DD'),
   handleValidationErrors,
-  processDateFilter('createdAt'),
 ], async (req, res) => {
   try {
+    const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
     const period = {};
-    if (req.dateRange.startDate) period.startDate = req.dateRange.startDate;
-    if (req.dateRange.endDate) period.endDate = req.dateRange.endDate;
+    if (req.query.startDate) period.startDate = getStartOfDayPakistan(req.query.startDate);
+    if (req.query.endDate) period.endDate = getEndOfDayPakistan(req.query.endDate);
+    period.origin = 'purchase'; // Only purchase returns
 
     const stats = await returnManagementService.getReturnStats(period);
-    
-    // Filter to only purchase returns
-    const purchaseReturnStats = {
-      ...stats,
-      origin: 'purchase'
-    };
 
     res.json({
       success: true,
-      data: purchaseReturnStats
+      data: { ...stats, origin: 'purchase' }
     });
   } catch (error) {
     console.error('Error fetching purchase return stats:', error);

@@ -1,411 +1,426 @@
 const express = require('express');
 const router = express.Router();
-const AccountingService = require('../services/accountingService');
-const { auth, requirePermission } = require('../middleware/auth');
-const ledgerAccountService = require('../services/ledgerAccountService');
-const chartOfAccountsService = require('../services/chartOfAccountsService');
-const { body, param, query } = require('express-validator');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
+const chartOfAccountsRepository = require('../repositories/ChartOfAccountsRepository');
+const accountCategoryRepository = require('../repositories/AccountCategoryRepository');
 
-// @route   GET /api/chart-of-accounts
-// @desc    Get all accounts with optional filters
-// @access  Private
-router.get('/', auth, async (req, res) => {
+const chartView = requireAnyPermission(['view_chart_of_accounts', 'view_reports']);
+const chartManage = requireAnyPermission(['manage_chart_of_accounts', 'view_reports']);
+
+// GET /api/chart-of-accounts - list accounts (query: accountType, accountCategory, isActive, includeBalances)
+router.get('/', auth, chartView, async (req, res) => {
   try {
-    const { accountType, accountCategory, isActive, search, allowDirectPosting, includePartyAccounts, includeBalances } = req.query;
-
-    if (includePartyAccounts === 'true') {
-      await ledgerAccountService.ensureCustomerLedgerAccounts({ userId: req.user?._id });
-      await ledgerAccountService.ensureSupplierLedgerAccounts({ userId: req.user?._id });
-    }
-    
-    const accounts = await chartOfAccountsService.getAccounts({
-      accountType,
-      accountCategory,
-      isActive,
-      search,
-      allowDirectPosting
-    });
-    
-    // Calculate dynamic balances from transactions if requested
-    let accountsWithBalances = accounts;
-    if (includeBalances === 'true') {
-      const asOfDate = req.query.asOfDate ? new Date(req.query.asOfDate) : new Date();
-      accountsWithBalances = await Promise.all(
-        accounts.map(async (account) => {
-          try {
-            const balance = await AccountingService.getAccountBalance(account.accountCode, asOfDate);
-            return {
-              ...account.toObject(),
-              currentBalance: balance
-            };
-          } catch (error) {
-            console.error(`Error calculating balance for account ${account.accountCode}:`, error);
-            return {
-              ...account.toObject(),
-              currentBalance: account.currentBalance || 0
-            };
-          }
-        })
-      );
-    }
-    
-    res.json({
-      success: true,
-      data: accountsWithBalances,
-      count: accountsWithBalances.length
-    });
-  } catch (error) {
-    console.error('Get accounts error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch accounts',
-      error: error.message
-    });
-  }
-});
-
-// @route   GET /api/chart-of-accounts/hierarchy
-// @desc    Get account hierarchy tree
-// @access  Private
-router.get('/hierarchy', auth, async (req, res) => {
-  try {
-    const hierarchy = await chartOfAccountsService.getAccountHierarchy();
-    
-    res.json({
-      success: true,
-      data: hierarchy
-    });
-  } catch (error) {
-    console.error('Get account hierarchy error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch account hierarchy',
-      error: error.message
-    });
-  }
-});
-
-// @route   GET /api/chart-of-accounts/:id
-// @desc    Get account by ID
-// @access  Private
-router.get('/:id', auth, async (req, res) => {
-  try {
-    const account = await chartOfAccountsService.getAccountById(req.params.id);
-    
-    res.json({
-      success: true,
-      data: account
-    });
-  } catch (error) {
-    if (error.message === 'Account not found') {
-      return res.status(404).json({
-        success: false,
-        message: 'Account not found'
-      });
-    }
-    console.error('Get account error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch account',
-      error: error.message
-    });
-  }
-});
-
-// @route   POST /api/chart-of-accounts
-// @desc    Create new account
-// @access  Private
-router.post('/', auth, async (req, res) => {
-  try {
-    const {
-      accountCode,
-      accountName,
-      accountType,
-      accountCategory,
-      parentAccount,
-      level,
-      normalBalance,
-      openingBalance,
-      description,
-      allowDirectPosting,
-      isTaxable,
-      taxRate,
-      requiresReconciliation
-    } = req.body;
-
-    const account = await chartOfAccountsService.createAccount(req.body, req.user.id);
-
-    res.status(201).json({
-      success: true,
-      message: 'Account created successfully',
-      data: account
-    });
-  } catch (error) {
-    if (error.message === 'Account code, name, type, category, and normal balance are required' || 
-        error.message === 'Account code already exists') {
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-    console.error('Create account error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create account',
-      error: error.message
-    });
-  }
-});
-
-// @route   PUT /api/chart-of-accounts/:id
-// @desc    Update account
-// @access  Private
-router.put('/:id', auth, async (req, res) => {
-  try {
-    const account = await chartOfAccountsService.updateAccount(req.params.id, req.body, req.user.id);
-
-    res.json({
-      success: true,
-      message: 'Account updated successfully',
-      data: account
-    });
-  } catch (error) {
-    if (error.message === 'Account not found') {
-      return res.status(404).json({
-        success: false,
-        message: 'Account not found'
-      });
-    }
-    if (error.message === 'Cannot modify system accounts') {
-      return res.status(403).json({
-        success: false,
-        message: 'Cannot modify system accounts'
-      });
-    }
-    console.error('Update account error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update account',
-      error: error.message
-    });
-  }
-});
-
-// @route   DELETE /api/chart-of-accounts/:id
-// @desc    Delete account
-// @access  Private
-router.delete('/:id', auth, async (req, res) => {
-  try {
-    const result = await chartOfAccountsService.deleteAccount(req.params.id);
-
-    res.json({
-      success: true,
-      message: result.message
-    });
-  } catch (error) {
-    if (error.message === 'Account not found') {
-      return res.status(404).json({
-        success: false,
-        message: 'Account not found'
-      });
-    }
-    if (error.message === 'Cannot delete system accounts') {
-      return res.status(403).json({
-        success: false,
-        message: 'Cannot delete system accounts'
-      });
-    }
-    if (error.message.includes('sub-accounts') || error.message.includes('non-zero balance')) {
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-    console.error('Delete account error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete account',
-      error: error.message
-    });
-  }
-});
-
-// @route   GET /api/chart-of-accounts/stats/summary
-// @desc    Get account statistics summary
-// @access  Private
-router.get('/stats/summary', auth, async (req, res) => {
-  try {
-    const stats = await chartOfAccountsService.getStats();
-
-    res.json({
-      success: true,
-      data: stats
-    });
-  } catch (error) {
-    console.error('Get account stats error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch account statistics',
-      error: error.message
-    });
-  }
-});
-
-// @route   POST /api/chart-of-accounts/:id/lock-reconciliation
-// @desc    Lock account for reconciliation
-// @access  Private (requires 'reconcile_accounts' permission)
-router.post('/:id/lock-reconciliation', [
-  auth,
-  requirePermission('reconcile_accounts'),
-  param('id').isMongoId().withMessage('Valid account ID is required'),
-  body('durationMinutes').optional().isInt({ min: 1, max: 480 }).withMessage('Duration must be between 1 and 480 minutes')
-], async (req, res) => {
-  try {
-    const ChartOfAccounts = require('../models/ChartOfAccounts');
-    const account = await ChartOfAccounts.findById(req.params.id);
-    
-    if (!account) {
-      return res.status(404).json({
-        success: false,
-        message: 'Account not found'
-      });
-    }
-
-    const durationMinutes = req.body.durationMinutes || 30;
-    await account.lockForReconciliation(req.user._id, durationMinutes);
-
-    res.json({
-      success: true,
-      message: 'Account locked for reconciliation',
-      data: {
-        accountCode: account.accountCode,
-        accountName: account.accountName,
-        reconciliationStatus: account.reconciliationStatus,
-        lockExpiresAt: account.reconciliationStatus.lockExpiresAt
+    const { accountType, accountCategory, includePartyAccounts, isActive, includeBalances } = req.query;
+    const filters = {};
+    if (accountType) filters.accountType = accountType;
+    if (isActive !== undefined) filters.isActive = isActive === 'true';
+    if (accountCategory) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(accountCategory)) {
+        const cat = await accountCategoryRepository.findById(accountCategory);
+        filters.accountCategory = cat ? (cat.name || cat.account_name) : accountCategory;
+      } else {
+        filters.accountCategory = accountCategory;
       }
-    });
-  } catch (error) {
-    console.error('Error locking account for reconciliation:', error);
-    if (error.message.includes('already locked')) {
-      return res.status(409).json({
-        success: false,
-        message: error.message
-      });
     }
-    res.status(500).json({
-      success: false,
-      message: 'Server error locking account',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    let accounts = await chartOfAccountsRepository.findAll(filters, { limit: 5000 });
+    
+    // If includeBalances is true, calculate real-time balances for customer/supplier accounts
+    if (includeBalances === 'true' || includeBalances === true) {
+      const { query } = require('../config/postgres');
+      const AccountingService = require('../services/accountingService');
+      
+      // For each account, if it's a customer or supplier account (CUST- or SUPP- prefix), 
+      // calculate balance from ledger
+      const accountsWithBalances = await Promise.all(accounts.map(async (account) => {
+        try {
+          // Check if this is a customer-specific account (starts with CUST-)
+          if (account.accountCode && account.accountCode.startsWith('CUST-')) {
+            // Extract customer ID from account code (format: CUST-{customerId})
+            const customerId = account.accountCode.substring(5);
+            try {
+              const balance = await AccountingService.getCustomerBalance(customerId);
+              return { ...account, currentBalance: balance };
+            } catch (err) {
+              console.warn(`Could not calculate balance for customer account ${account.accountCode}:`, err.message);
+              return account;
+            }
+          }
+          
+          // Check if this is a supplier-specific account (starts with SUPP-)
+          if (account.accountCode && account.accountCode.startsWith('SUPP-')) {
+            const supplierId = account.accountCode.substring(5);
+            try {
+              const balance = await AccountingService.getSupplierBalance(supplierId);
+              return { ...account, currentBalance: balance };
+            } catch (err) {
+              console.warn(`Could not calculate balance for supplier account ${account.accountCode}:`, err.message);
+              return account;
+            }
+          }
+          
+          // For regular accounts, use the stored balance or recalculate
+          return account;
+        } catch (err) {
+          console.error(`Error processing account ${account.accountCode}:`, err);
+          return account;
+        }
+      }));
+      
+      const data = accountsWithBalances;
+      return res.json(Array.isArray(data) ? data : { success: true, data: data || accounts });
+    }
+    
+    const data = accounts.map(a => ({ ...a, currentBalance: undefined, openingBalance: undefined }));
+    res.json(Array.isArray(data) ? data : { success: true, data: data || accounts });
+  } catch (error) {
+    console.error('Chart of accounts list error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch chart of accounts', error: error.message });
   }
 });
 
-// @route   POST /api/chart-of-accounts/:id/unlock-reconciliation
-// @desc    Unlock account after reconciliation
-// @access  Private (requires 'reconcile_accounts' permission)
-router.post('/:id/unlock-reconciliation', [
-  auth,
-  requirePermission('reconcile_accounts'),
-  param('id').isMongoId().withMessage('Valid account ID is required'),
-  body('reconciled').optional().isBoolean().withMessage('Reconciled must be a boolean'),
-  body('discrepancyAmount').optional().isFloat().withMessage('Discrepancy amount must be a number'),
-  body('discrepancyReason').optional().isString().trim().isLength({ max: 500 }).withMessage('Discrepancy reason too long')
-], async (req, res) => {
+// GET /api/chart-of-accounts/hierarchy
+router.get('/hierarchy', auth, chartView, async (req, res) => {
   try {
-    const ChartOfAccounts = require('../models/ChartOfAccounts');
-    const account = await ChartOfAccounts.findById(req.params.id);
+    const accounts = await chartOfAccountsRepository.findAll({ isActive: true }, { limit: 5000 });
+    const byId = new Map(accounts.map(a => [a.id, { ...a, children: [] }]));
+    const roots = [];
+    for (const a of byId.values()) {
+      if (a.parentAccountId && byId.has(a.parentAccountId)) {
+        byId.get(a.parentAccountId).children.push(a);
+      } else {
+        roots.push(a);
+      }
+    }
+    roots.sort((a, b) => (a.accountCode || '').localeCompare(b.accountCode || ''));
+    res.json(roots);
+  } catch (error) {
+    console.error('Chart of accounts hierarchy error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch hierarchy', error: error.message });
+  }
+});
+
+// GET /api/chart-of-accounts/stats/summary
+router.get('/stats/summary', auth, chartView, async (req, res) => {
+  try {
+    const accounts = await chartOfAccountsRepository.findAll({ isActive: true }, { limit: 5000 });
+    const total = accounts.length;
+    const withBalance = accounts.filter(a => (a.currentBalance || 0) !== 0).length;
+    res.json({ success: true, data: { totalAccounts: total, accountsWithBalance: withBalance } });
+  } catch (error) {
+    console.error('Chart of accounts stats error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch stats', error: error.message });
+  }
+});
+
+// GET /api/chart-of-accounts/:id
+router.get('/:id', auth, chartView, async (req, res) => {
+  try {
+    const account = await chartOfAccountsRepository.findById(req.params.id);
+    if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
+    res.json(account);
+  } catch (error) {
+    console.error('Chart of accounts get error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch account', error: error.message });
+  }
+});
+
+// POST /api/chart-of-accounts
+router.post('/', auth, chartManage, async (req, res) => {
+  try {
+    const data = { ...req.body, createdBy: req.user?.id || req.user?._id };
     
-    if (!account) {
-      return res.status(404).json({
-        success: false,
-        message: 'Account not found'
+    // Validate required fields
+    if (!data.accountCode || !data.accountName || !data.accountType) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Account code, name, and type are required' 
       });
     }
 
-    const reconciled = req.body.reconciled !== undefined ? req.body.reconciled : true;
-    const discrepancyAmount = req.body.discrepancyAmount || null;
-    const discrepancyReason = req.body.discrepancyReason || null;
+    // Check for duplicate account code
+    const existing = await chartOfAccountsRepository.findByAccountCode(data.accountCode);
+    if (existing) {
+      return res.status(409).json({ 
+        success: false, 
+        message: `Account code ${data.accountCode} already exists. Please use a different code.` 
+      });
+    }
 
-    await account.unlockAfterReconciliation(
-      req.user._id,
-      reconciled,
-      discrepancyAmount,
-      discrepancyReason
+    // Validate account code is numeric and within valid range
+    const code = parseInt(data.accountCode);
+    if (isNaN(code) || code < 1000 || code > 5999) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Account code must be a number between 1000 and 5999' 
+      });
+    }
+
+    // Validate normal balance matches account type
+    const expectedNormalBalance = ['asset', 'expense'].includes(data.accountType) ? 'debit' : 'credit';
+    if (data.normalBalance && data.normalBalance !== expectedNormalBalance) {
+      console.warn(`Warning: Account ${data.accountCode} has normal balance ${data.normalBalance} but type ${data.accountType} typically uses ${expectedNormalBalance}`);
+    }
+
+    const account = await chartOfAccountsRepository.create(data);
+    res.status(201).json(account);
+  } catch (error) {
+    console.error('Chart of accounts create error:', error);
+    
+    // Handle unique constraint violations
+    if (error.code === '23505') {
+      return res.status(409).json({ 
+        success: false, 
+        message: 'Account code already exists. Please use a different code.' 
+      });
+    }
+    
+    res.status(500).json({ success: false, message: 'Failed to create account', error: error.message });
+  }
+});
+
+// PUT /api/chart-of-accounts/:id
+router.put('/:id', auth, chartManage, async (req, res) => {
+  try {
+    const data = { ...req.body, updatedBy: req.user?.id || req.user?._id };
+    const account = await chartOfAccountsRepository.updateById(req.params.id, data);
+    if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
+    res.json(account);
+  } catch (error) {
+    console.error('Chart of accounts update error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update account', error: error.message });
+  }
+});
+
+// DELETE /api/chart-of-accounts/:id (soft delete if supported, else 501)
+router.delete('/:id', auth, chartManage, async (req, res) => {
+  try {
+    const account = await chartOfAccountsRepository.findById(req.params.id);
+    if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
+    if (account.isSystemAccount) return res.status(403).json({ success: false, message: 'Cannot delete system account' });
+    if (chartOfAccountsRepository.softDelete) {
+      await chartOfAccountsRepository.softDelete(req.params.id);
+    } else {
+      return res.status(501).json({ success: false, message: 'Delete not implemented' });
+    }
+    res.json({ success: true, message: 'Account deleted' });
+  } catch (error) {
+    console.error('Chart of accounts delete error:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete account', error: error.message });
+  }
+});
+
+// POST /api/chart-of-accounts/recalculate-balances - Recalculate all account balances
+router.post('/recalculate-balances', auth, chartManage, async (req, res) => {
+  try {
+    const { query } = require('../config/postgres');
+    const AccountingService = require('../services/accountingService');
+    
+    // Get all active accounts
+    const accounts = await chartOfAccountsRepository.findAll({ isActive: true }, { limit: 5000 });
+    
+    const results = {
+      total: accounts.length,
+      updated: 0,
+      errors: [],
+      accountDetails: []
+    };
+
+    // Recalculate balance for each account
+    for (const account of accounts) {
+      try {
+        const oldBalance = parseFloat(account.currentBalance || 0);
+        
+        // Get calculated balance from ledger
+        const newBalance = await AccountingService.getAccountBalance(account.accountCode);
+        
+        // Update if different
+        if (Math.abs(oldBalance - newBalance) > 0.01) {
+          await query(
+            'UPDATE chart_of_accounts SET current_balance = $1, updated_at = CURRENT_TIMESTAMP WHERE account_code = $2',
+            [newBalance, account.accountCode]
+          );
+          results.updated++;
+          results.accountDetails.push({
+            code: account.accountCode,
+            name: account.accountName,
+            oldBalance,
+            newBalance,
+            difference: newBalance - oldBalance
+          });
+        }
+      } catch (err) {
+        results.errors.push({
+          code: account.accountCode,
+          name: account.accountName,
+          error: err.message
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Recalculated ${results.updated} account balances`,
+      data: results
+    });
+  } catch (error) {
+    console.error('Recalculate balances error:', error);
+    res.status(500).json({ success: false, message: 'Failed to recalculate balances', error: error.message });
+  }
+});
+
+// POST /api/chart-of-accounts/sync-party-accounts - Sync all customer and supplier accounts
+router.post('/sync-party-accounts', auth, chartManage, async (req, res) => {
+  try {
+    const { query } = require('../config/postgres');
+    
+    const results = {
+      customersProcessed: 0,
+      customersCreated: 0,
+      suppliersProcessed: 0,
+      suppliersCreated: 0,
+      errors: []
+    };
+
+    // Get all customers
+    const customersResult = await query(
+      'SELECT id, business_name, name FROM customers WHERE deleted_at IS NULL ORDER BY business_name'
+    );
+    
+    for (const customer of customersResult.rows) {
+      results.customersProcessed++;
+      const accountCode = `CUST-${customer.id}`;
+      const accountName = customer.business_name || customer.name || 'Unknown Customer';
+      
+      try {
+        // Check if account already exists
+        const existing = await chartOfAccountsRepository.findByAccountCode(accountCode);
+        if (!existing) {
+          // Create customer account
+          await chartOfAccountsRepository.create({
+            accountCode: accountCode,
+            accountName: accountName,
+            accountType: 'asset',
+            accountCategory: 'Trade Receivables',
+            normalBalance: 'debit',
+            openingBalance: 0,
+            currentBalance: 0,
+            allowDirectPosting: false,
+            isSystemAccount: false,
+            isActive: true,
+            description: `Customer Account: ${accountName}`,
+            createdBy: req.user?.id || req.user?._id
+          });
+          results.customersCreated++;
+        }
+      } catch (err) {
+        results.errors.push({
+          type: 'customer',
+          id: customer.id,
+          name: accountName,
+          error: err.message
+        });
+      }
+    }
+
+    // Get all suppliers
+    const suppliersResult = await query(
+      'SELECT id, company_name, business_name, name FROM suppliers WHERE deleted_at IS NULL ORDER BY company_name'
+    );
+    
+    for (const supplier of suppliersResult.rows) {
+      results.suppliersProcessed++;
+      const accountCode = `SUPP-${supplier.id}`;
+      const accountName = supplier.company_name || supplier.business_name || supplier.name || 'Unknown Supplier';
+      
+      try {
+        // Check if account already exists
+        const existing = await chartOfAccountsRepository.findByAccountCode(accountCode);
+        if (!existing) {
+          // Create supplier account
+          await chartOfAccountsRepository.create({
+            accountCode: accountCode,
+            accountName: accountName,
+            accountType: 'liability',
+            accountCategory: 'Trade Payables',
+            normalBalance: 'credit',
+            openingBalance: 0,
+            currentBalance: 0,
+            allowDirectPosting: false,
+            isSystemAccount: false,
+            isActive: true,
+            description: `Supplier Account: ${accountName}`,
+            createdBy: req.user?.id || req.user?._id
+          });
+          results.suppliersCreated++;
+        }
+      } catch (err) {
+        results.errors.push({
+          type: 'supplier',
+          id: supplier.id,
+          name: accountName,
+          error: err.message
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Synced ${results.customersCreated} customer accounts and ${results.suppliersCreated} supplier accounts`,
+      data: results
+    });
+  } catch (error) {
+    console.error('Sync party accounts error:', error);
+    res.status(500).json({ success: false, message: 'Failed to sync party accounts', error: error.message });
+  }
+});
+
+// GET /api/chart-of-accounts/check/:accountCode - Check specific account balance
+router.get('/check/:accountCode', auth, chartView, async (req, res) => {
+  try {
+    const { query } = require('../config/postgres');
+    const AccountingService = require('../services/accountingService');
+    const accountCode = req.params.accountCode.toUpperCase();
+    
+    // Get account details
+    const account = await chartOfAccountsRepository.findByAccountCode(accountCode);
+    if (!account) {
+      return res.status(404).json({ 
+        success: false, 
+        message: `Account ${accountCode} not found. Please create it in Chart of Accounts.` 
+      });
+    }
+
+    // Get calculated balance
+    const calculatedBalance = await AccountingService.getAccountBalance(accountCode);
+    
+    // Get ledger entries count
+    const ledgerCount = await query(
+      `SELECT COUNT(*) as count FROM account_ledger 
+       WHERE account_code = $1 AND status = 'completed' AND reversed_at IS NULL`,
+      [accountCode]
     );
 
     res.json({
       success: true,
-      message: reconciled ? 'Account reconciled successfully' : 'Account unlocked with discrepancy',
       data: {
         accountCode: account.accountCode,
         accountName: account.accountName,
-        reconciliationStatus: account.reconciliationStatus
+        accountType: account.accountType,
+        normalBalance: account.normalBalance,
+        isActive: account.isActive,
+        openingBalance: account.openingBalance,
+        currentBalance: account.currentBalance,
+        calculatedBalance: calculatedBalance,
+        difference: calculatedBalance - (account.currentBalance || 0),
+        ledgerEntriesCount: parseInt(ledgerCount.rows[0].count),
+        needsUpdate: Math.abs(calculatedBalance - (account.currentBalance || 0)) > 0.01
       }
     });
   } catch (error) {
-    console.error('Error unlocking account:', error);
-    if (error.message.includes('Only the user who locked')) {
-      return res.status(403).json({
-        success: false,
-        message: error.message
-      });
-    }
-    res.status(500).json({
-      success: false,
-      message: 'Server error unlocking account',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// @route   GET /api/chart-of-accounts/:id/reconciliation-status
-// @desc    Get reconciliation status of an account
-// @access  Private (requires 'view_reports' permission)
-router.get('/:id/reconciliation-status', [
-  auth,
-  requirePermission('view_reports'),
-  param('id').isMongoId().withMessage('Valid account ID is required')
-], async (req, res) => {
-  try {
-    const ChartOfAccounts = require('../models/ChartOfAccounts');
-    const account = await ChartOfAccounts.findById(req.params.id)
-      .populate('reconciliationStatus.lockedBy', 'firstName lastName email')
-      .populate('reconciliationStatus.reconciledBy', 'firstName lastName email');
-    
-    if (!account) {
-      return res.status(404).json({
-        success: false,
-        message: 'Account not found'
-      });
-    }
-
-    const isLocked = account.reconciliationStatus.lockedBy && 
-                     account.reconciliationStatus.lockExpiresAt &&
-                     account.reconciliationStatus.lockExpiresAt > new Date();
-
-    res.json({
-      success: true,
-      data: {
-        accountId: account._id,
-        accountCode: account.accountCode,
-        accountName: account.accountName,
-        reconciliationStatus: account.reconciliationStatus,
-        isLocked: isLocked,
-        canBeLocked: !isLocked || account.reconciliationStatus.lockedBy.toString() === req.user._id.toString(),
-        lockExpiresIn: isLocked && account.reconciliationStatus.lockExpiresAt 
-          ? Math.max(0, Math.floor((account.reconciliationStatus.lockExpiresAt - new Date()) / 60000))
-          : 0
-      }
-    });
-  } catch (error) {
-    console.error('Error getting reconciliation status:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error getting reconciliation status',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('Check account error:', error);
+    res.status(500).json({ success: false, message: 'Failed to check account', error: error.message });
   }
 });
 
 module.exports = router;
-

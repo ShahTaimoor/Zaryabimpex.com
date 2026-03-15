@@ -136,14 +136,21 @@ const PrintReportModal = ({
             {/* Summary Section (Optional) */}
             {summaryData && (
               <div className="grid grid-cols-4 gap-4 mb-8">
-                {Object.entries(summaryData).map(([label, value]) => (
-                  <div key={label} className="border border-gray-200 p-3 rounded-lg">
-                    <div className="text-[10px] text-gray-500 uppercase font-bold">{label}</div>
-                    <div className="text-lg font-bold text-gray-900">
-                      {typeof value === 'number' ? value.toLocaleString(undefined, { minimumFractionDigits: 2 }) : value}
+                {Object.entries(summaryData).map(([label, value]) => {
+                  const isCount = /Total Items|In Stock|Out of Stock|Low Stock|Count|Items Found/i.test(label);
+                  const formatted =
+                    typeof value === 'number'
+                      ? isCount
+                        ? Math.round(value).toLocaleString()
+                        : value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      : value;
+                  return (
+                    <div key={label} className="border border-gray-200 p-3 rounded-lg">
+                      <div className="text-[10px] text-gray-500 uppercase font-bold">{label}</div>
+                      <div className="text-lg font-bold text-gray-900">{formatted}</div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

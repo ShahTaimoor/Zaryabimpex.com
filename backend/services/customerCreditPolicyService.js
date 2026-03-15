@@ -1,6 +1,15 @@
-const Customer = require('../models/Customer');
-const CustomerTransaction = require('../models/CustomerTransaction');
-const customerAuditLogService = require('./customerAuditLogService');
+const CustomerRepository = require('../repositories/postgres/CustomerRepository');
+const CustomerTransactionRepository = require('../repositories/postgres/CustomerTransactionRepository');
+
+function toNum(v) {
+  return v != null ? Number(v) : 0;
+}
+
+function creditPolicy(customer) {
+  const raw = customer.credit_policy ?? customer.creditPolicy;
+  if (!raw) return {};
+  return typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (_) { return {}; } })() : raw;
+}
 
 class CustomerCreditPolicyService {
   /**
@@ -8,81 +17,68 @@ class CustomerCreditPolicyService {
    * @returns {Promise<Object>}
    */
   async checkAndSuspendOverdueCustomers() {
-    const activeCustomers = await Customer.find({
-      status: 'active',
-      isDeleted: false
-    });
+    const activeCustomers = await CustomerRepository.findAll(
+      { status: 'active', isActive: true },
+      {}
+    );
 
-    const results = {
-      checked: 0,
-      suspended: 0,
-      warnings: 0,
-      errors: []
-    };
+    const results = { checked: 0, suspended: 0, warnings: 0, errors: [] };
 
-    for (const customer of activeCustomers) {
+    for (const row of activeCustomers) {
       try {
         results.checked++;
-        
-        // Skip if cash-only customer
-        if (customer.paymentTerms === 'cash') {
-          continue;
-        }
+        const paymentTerms = row.payment_terms ?? row.paymentTerms;
+        if (paymentTerms === 'cash') continue;
 
-        // Get overdue invoices
-        const overdueInvoices = await CustomerTransaction.find({
-          customer: customer._id,
-          transactionType: 'invoice',
-          status: { $in: ['posted', 'partially_paid'] },
-          dueDate: { $lt: new Date() },
-          remainingAmount: { $gt: 0 }
-        });
-
-        if (overdueInvoices.length === 0) {
-          continue;
-        }
-
-        // Find maximum days overdue
-        const maxDaysOverdue = Math.max(
-          ...overdueInvoices.map(inv => inv.daysOverdue || 0)
+        const overdueInvoices = await CustomerTransactionRepository.findAll(
+          {
+            customerId: row.id,
+            transactionType: 'invoice',
+            statusIn: ['posted', 'partially_paid'],
+            dueDateBefore: new Date(),
+            remainingAmountGt: 0
+          },
+          {}
         );
 
-        // Check if should be suspended
-        const autoSuspendDays = customer.creditPolicy?.autoSuspendDays || 90;
-        
-        if (maxDaysOverdue >= autoSuspendDays) {
-          // Auto-suspend
-          customer.status = 'suspended';
-          customer.suspendedAt = new Date();
-          customer.suspensionReason = `Auto-suspended: ${maxDaysOverdue} days overdue`;
-          customer.suspendedBy = null; // System action
-          await customer.save();
+        if (overdueInvoices.length === 0) continue;
 
+        const maxDaysOverdue = Math.max(
+          ...overdueInvoices.map((inv) => toNum(inv.days_overdue ?? inv.daysOverdue))
+        );
+
+        const policy = creditPolicy(row);
+        const autoSuspendDays = policy.autoSuspendDays ?? 90;
+
+        if (maxDaysOverdue >= autoSuspendDays) {
+          await CustomerRepository.update(row.id, {
+            status: 'suspended',
+            isActive: false,
+            suspendedAt: new Date(),
+            suspensionReason: `Auto-suspended: ${maxDaysOverdue} days overdue`,
+            suspendedBy: null
+          });
           results.suspended++;
 
-          // Log audit (system action, no req object)
+          // Optional: log to customer audit (uses Mongoose AuditLog until migrated)
           try {
+            const customerAuditLogService = require('./customerAuditLogService');
             await customerAuditLogService.logCustomerSuspension(
-              customer._id,
-              customer.suspensionReason,
-              { _id: null }, // System user
-              null // No req object
+              row.id,
+              `Auto-suspended: ${maxDaysOverdue} days overdue`,
+              { _id: null },
+              null
             );
           } catch (auditError) {
-            console.error('Audit logging error:', auditError);
+            console.error('Audit logging error (optional):', auditError.message);
           }
-
-          // TODO: Send notification to customer
-          // await notificationService.notifyCustomer(customer, 'suspension');
         } else if (maxDaysOverdue >= (autoSuspendDays - 30)) {
-          // Warning threshold (30 days before suspension)
           results.warnings++;
-          // TODO: Send warning notification
         }
       } catch (error) {
         results.errors.push({
-          customerId: customer._id,
-          businessName: customer.businessName,
+          customerId: row.id,
+          businessName: row.business_name ?? row.businessName,
           error: error.message
         });
       }
@@ -93,8 +89,6 @@ class CustomerCreditPolicyService {
 
   /**
    * Get customers with overdue invoices
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>}
    */
   async getCustomersWithOverdueInvoices(options = {}) {
     const {
@@ -103,33 +97,32 @@ class CustomerCreditPolicyService {
       includeSuspended = false
     } = options;
 
-    // Find all customers with overdue invoices
-    const overdueInvoices = await CustomerTransaction.find({
+    const filters = {
       transactionType: 'invoice',
-      status: { $in: ['posted', 'partially_paid'] },
+      statusIn: ['posted', 'partially_paid'],
       isOverdue: true,
-      daysOverdue: {
-        $gte: minDaysOverdue,
-        ...(maxDaysOverdue ? { $lte: maxDaysOverdue } : {})
-      },
-      remainingAmount: { $gt: 0 }
-    })
-    .populate('customer', 'name businessName email phone status creditLimit currentBalance')
-    .sort({ daysOverdue: -1 });
+      remainingAmountGt: 0,
+      daysOverdueMin: minDaysOverdue
+    };
+    if (maxDaysOverdue != null) filters.daysOverdueMax = maxDaysOverdue;
 
-    // Group by customer
+    const overdueInvoices = await CustomerTransactionRepository.findAll(
+      filters,
+      { sort: 'days_overdue DESC' }
+    );
+
     const customerMap = new Map();
 
-    overdueInvoices.forEach(invoice => {
-      const customerId = invoice.customer._id.toString();
-      
-      if (!includeSuspended && invoice.customer.status === 'suspended') {
-        return; // Skip suspended customers
-      }
+    for (const inv of overdueInvoices) {
+      const customerId = (inv.customer_id ?? inv.customer)?.toString?.() ?? inv.customer_id;
+      if (!customerId) continue;
+
+      const customer = await CustomerRepository.findById(customerId);
+      if (!includeSuspended && (customer?.status === 'suspended')) continue;
 
       if (!customerMap.has(customerId)) {
         customerMap.set(customerId, {
-          customer: invoice.customer,
+          customer: customer || { id: customerId, _id: customerId },
           overdueInvoices: [],
           totalOverdue: 0,
           maxDaysOverdue: 0,
@@ -137,161 +130,148 @@ class CustomerCreditPolicyService {
         });
       }
 
-      const customerData = customerMap.get(customerId);
-      customerData.overdueInvoices.push(invoice);
-      customerData.totalOverdue += invoice.remainingAmount;
-      customerData.maxDaysOverdue = Math.max(
-        customerData.maxDaysOverdue,
-        invoice.daysOverdue
-      );
-
-      if (!customerData.oldestInvoice || 
-          invoice.dueDate < customerData.oldestInvoice.dueDate) {
-        customerData.oldestInvoice = invoice;
+      const data = customerMap.get(customerId);
+      data.overdueInvoices.push(inv);
+      data.totalOverdue += toNum(inv.remaining_amount ?? inv.remainingAmount);
+      const daysOverdue = toNum(inv.days_overdue ?? inv.daysOverdue);
+      data.maxDaysOverdue = Math.max(data.maxDaysOverdue, daysOverdue);
+      const dueDate = inv.due_date ?? inv.dueDate;
+      if (!data.oldestInvoice || (dueDate && new Date(dueDate) < new Date(data.oldestInvoice.due_date || data.oldestInvoice.dueDate))) {
+        data.oldestInvoice = inv;
       }
-    });
+    }
 
-    return Array.from(customerMap.values()).sort((a, b) => 
-      b.maxDaysOverdue - a.maxDaysOverdue
+    return Array.from(customerMap.values()).sort(
+      (a, b) => (b.maxDaysOverdue || 0) - (a.maxDaysOverdue || 0)
     );
   }
 
   /**
    * Check if customer is in grace period
-   * @param {String} customerId - Customer ID
-   * @returns {Promise<Object>}
    */
   async checkGracePeriod(customerId) {
-    const customer = await Customer.findById(customerId);
-    if (!customer) {
-      throw new Error('Customer not found');
-    }
+    const customer = await CustomerRepository.findById(customerId);
+    if (!customer) throw new Error('Customer not found');
 
-    const gracePeriodDays = customer.creditPolicy?.gracePeriodDays || 0;
-    
-    // Get invoices that are past due but within grace period
+    const policy = creditPolicy(customer);
+    const gracePeriodDays = policy.gracePeriodDays ?? 0;
     const today = new Date();
-    const gracePeriodEnd = new Date(today);
-    gracePeriodEnd.setDate(today.getDate() + gracePeriodDays);
+    const gracePeriodStart = new Date(today);
+    gracePeriodStart.setDate(today.getDate() - gracePeriodDays);
 
-    const invoicesInGracePeriod = await CustomerTransaction.find({
-      customer: customerId,
-      transactionType: 'invoice',
-      status: { $in: ['posted', 'partially_paid'] },
-      dueDate: {
-        $lt: today,
-        $gte: new Date(today.getTime() - gracePeriodDays * 24 * 60 * 60 * 1000)
+    const invoicesInGracePeriod = await CustomerTransactionRepository.findAll(
+      {
+        customerId,
+        transactionType: 'invoice',
+        statusIn: ['posted', 'partially_paid'],
+        dueDateBefore: today,
+        dueDateAfter: gracePeriodStart,
+        remainingAmountGt: 0
       },
-      remainingAmount: { $gt: 0 }
-    });
+      {}
+    );
+
+    const totalAmount = invoicesInGracePeriod.reduce(
+      (sum, inv) => sum + toNum(inv.remaining_amount ?? inv.remainingAmount),
+      0
+    );
 
     return {
       inGracePeriod: invoicesInGracePeriod.length > 0,
       gracePeriodDays,
       invoicesInGracePeriod: invoicesInGracePeriod.length,
-      totalAmount: invoicesInGracePeriod.reduce((sum, inv) => sum + inv.remainingAmount, 0)
+      totalAmount
     };
   }
 
   /**
    * Send overdue warnings based on policy
-   * @param {String} customerId - Customer ID
-   * @returns {Promise<Object>}
    */
   async sendOverdueWarnings(customerId) {
-    const customer = await Customer.findById(customerId);
-    if (!customer) {
-      throw new Error('Customer not found');
-    }
+    const customer = await CustomerRepository.findById(customerId);
+    if (!customer) throw new Error('Customer not found');
 
-    const overdueInvoices = await CustomerTransaction.find({
-      customer: customerId,
-      transactionType: 'invoice',
-      status: { $in: ['posted', 'partially_paid'] },
-      isOverdue: true,
-      remainingAmount: { $gt: 0 }
-    });
+    const overdueInvoices = await CustomerTransactionRepository.findAll(
+      {
+        customerId,
+        transactionType: 'invoice',
+        statusIn: ['posted', 'partially_paid'],
+        isOverdue: true,
+        remainingAmountGt: 0
+      },
+      {}
+    );
 
+    const policy = creditPolicy(customer);
+    const thresholds = policy.warningThresholds || [];
     const warnings = [];
-    const thresholds = customer.creditPolicy?.warningThresholds || [];
 
     for (const invoice of overdueInvoices) {
+      const daysOverdue = toNum(invoice.days_overdue ?? invoice.daysOverdue);
+      const txnNum = invoice.transaction_number ?? invoice.transactionNumber;
       for (const threshold of thresholds) {
-        if (invoice.daysOverdue >= threshold.daysOverdue) {
+        if (daysOverdue >= (threshold.daysOverdue ?? 0)) {
           warnings.push({
-            invoice: invoice.transactionNumber,
-            daysOverdue: invoice.daysOverdue,
-            amount: invoice.remainingAmount,
+            invoice: txnNum,
+            daysOverdue,
+            amount: toNum(invoice.remaining_amount ?? invoice.remainingAmount),
             action: threshold.action,
-            message: threshold.message || `Invoice ${invoice.transactionNumber} is ${invoice.daysOverdue} days overdue`
+            message: threshold.message || `Invoice ${txnNum} is ${daysOverdue} days overdue`
           });
         }
       }
     }
 
-    // TODO: Send actual notifications based on action type
-    // await notificationService.sendWarnings(customer, warnings);
-
-    return {
-      customerId,
-      warningsSent: warnings.length,
-      warnings
-    };
+    return { customerId, warningsSent: warnings.length, warnings };
   }
 
   /**
    * Calculate customer credit score
-   * @param {String} customerId - Customer ID
-   * @returns {Promise<Object>}
    */
   async calculateCreditScore(customerId) {
-    const customer = await Customer.findById(customerId);
-    if (!customer) {
-      throw new Error('Customer not found');
-    }
+    const customer = await CustomerRepository.findById(customerId);
+    if (!customer) throw new Error('Customer not found');
 
-    // Get all transactions
-    const transactions = await CustomerTransaction.find({
-      customer: customerId,
-      transactionType: { $in: ['invoice', 'payment'] }
-    }).sort({ transactionDate: -1 });
+    const transactions = await CustomerTransactionRepository.findAll(
+      { customerId },
+      { sort: 'transaction_date DESC', limit: 10000 }
+    );
 
-    // Calculate metrics
-    const totalInvoiced = transactions
-      .filter(t => t.transactionType === 'invoice')
-      .reduce((sum, t) => sum + t.netAmount, 0);
+    const invoiceOrPayment = transactions.filter((t) => {
+      const type = t.transaction_type ?? t.transactionType;
+      return type === 'invoice' || type === 'payment';
+    });
 
-    const totalPaid = transactions
-      .filter(t => t.transactionType === 'payment')
-      .reduce((sum, t) => sum + t.netAmount, 0);
+    const totalInvoiced = invoiceOrPayment
+      .filter((t) => (t.transaction_type ?? t.transactionType) === 'invoice')
+      .reduce((sum, t) => sum + toNum(t.net_amount ?? t.netAmount), 0);
+    const totalPaid = invoiceOrPayment
+      .filter((t) => (t.transaction_type ?? t.transactionType) === 'payment')
+      .reduce((sum, t) => sum + toNum(t.net_amount ?? t.netAmount), 0);
 
     const paymentRate = totalInvoiced > 0 ? (totalPaid / totalInvoiced) * 100 : 0;
 
-    // Get overdue history
-    const overdueInvoices = await CustomerTransaction.find({
-      customer: customerId,
-      transactionType: 'invoice',
-      isOverdue: true
-    });
+    const overdueInvoices = await CustomerTransactionRepository.findAll(
+      {
+        customerId,
+        transactionType: 'invoice',
+        isOverdue: true
+      },
+      {}
+    );
 
-    const averageDaysOverdue = overdueInvoices.length > 0
-      ? overdueInvoices.reduce((sum, inv) => sum + inv.daysOverdue, 0) / overdueInvoices.length
-      : 0;
+    const averageDaysOverdue =
+      overdueInvoices.length > 0
+        ? overdueInvoices.reduce(
+            (sum, inv) => sum + toNum(inv.days_overdue ?? inv.daysOverdue),
+            0
+          ) / overdueInvoices.length
+        : 0;
 
-    // Calculate score (0-100)
     let score = 100;
-    
-    // Deduct for payment rate
-    if (paymentRate < 100) {
-      score -= (100 - paymentRate) * 0.5;
-    }
-    
-    // Deduct for overdue history
+    if (paymentRate < 100) score -= (100 - paymentRate) * 0.5;
     score -= Math.min(averageDaysOverdue * 2, 50);
-    
-    // Deduct for number of overdue invoices
     score -= Math.min(overdueInvoices.length * 5, 30);
-    
     score = Math.max(0, Math.min(100, score));
 
     return {
@@ -305,11 +285,6 @@ class CustomerCreditPolicyService {
     };
   }
 
-  /**
-   * Get risk level from score
-   * @param {Number} score - Credit score
-   * @returns {String}
-   */
   getRiskLevel(score) {
     if (score >= 80) return 'low';
     if (score >= 60) return 'medium';
@@ -319,4 +294,3 @@ class CustomerCreditPolicyService {
 }
 
 module.exports = new CustomerCreditPolicyService();
-

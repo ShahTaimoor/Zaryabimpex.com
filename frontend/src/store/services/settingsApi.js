@@ -15,7 +15,10 @@ export const settingsApi = api.injectEndpoints({
         method: 'put',
         data,
       }),
-      invalidatesTags: [{ type: 'Settings', id: 'COMPANY' }],
+      invalidatesTags: [
+        { type: 'Settings', id: 'COMPANY' },
+        { type: 'Company', id: 'SETTINGS' },
+      ],
     }),
     getUserPreferences: builder.query({
       query: () => ({

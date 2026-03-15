@@ -32,7 +32,16 @@ export const warehousesApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Warehouses', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Warehouses', id: 'LIST' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     updateWarehouse: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -43,6 +52,13 @@ export const warehousesApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Warehouses', id },
         { type: 'Warehouses', id: 'LIST' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
     deleteWarehouse: builder.mutation({
@@ -53,6 +69,13 @@ export const warehousesApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'Warehouses', id },
         { type: 'Warehouses', id: 'LIST' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
   }),

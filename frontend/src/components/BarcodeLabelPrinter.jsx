@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import JsBarcode from 'jsbarcode';
 import { Printer, Download, X, Package, Settings } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 /**
  * Barcode Label Printer Component

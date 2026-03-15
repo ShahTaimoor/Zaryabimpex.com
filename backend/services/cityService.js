@@ -6,18 +6,14 @@ class CityService {
   /**
    * Build filter query from request parameters
    * @param {object} queryParams - Request query parameters
-   * @returns {object} - MongoDB filter object
+   * @returns {object} - Filter object
    */
   buildFilter(queryParams) {
     const filter = {};
 
     // Search filter
     if (queryParams.search) {
-      filter.$or = [
-        { name: { $regex: queryParams.search, $options: 'i' } },
-        { state: { $regex: queryParams.search, $options: 'i' } },
-        { country: { $regex: queryParams.search, $options: 'i' } }
-      ];
+      filter.search = queryParams.search;
     }
 
     // Active status filter
@@ -27,7 +23,7 @@ class CityService {
 
     // State filter
     if (queryParams.state) {
-      filter.state = { $regex: queryParams.state, $options: 'i' };
+      filter.state = queryParams.state;
     }
 
     return filter;
@@ -47,11 +43,7 @@ class CityService {
     const result = await cityRepository.findWithPagination(filter, {
       page,
       limit,
-      sort: { name: 1 },
-      populate: [
-        { path: 'createdBy', select: 'firstName lastName' },
-        { path: 'updatedBy', select: 'firstName lastName' }
-      ]
+      sort: { name: 1 }
     });
 
     return result;
@@ -76,12 +68,6 @@ class CityService {
     if (!city) {
       throw new Error('City not found');
     }
-
-    // Populate related fields
-    await city.populate([
-      { path: 'createdBy', select: 'firstName lastName' },
-      { path: 'updatedBy', select: 'firstName lastName' }
-    ]);
 
     return city;
   }
@@ -110,9 +96,6 @@ class CityService {
 
     const city = await cityRepository.create(dataWithUser);
     
-    // Populate createdBy
-    await city.populate('createdBy', 'firstName lastName');
-
     return {
       city,
       message: 'City created successfully'
@@ -151,16 +134,7 @@ class CityService {
     if (dataToUpdate.country !== undefined) dataToUpdate.country = dataToUpdate.country.trim();
     if (dataToUpdate.description !== undefined) dataToUpdate.description = dataToUpdate.description ? dataToUpdate.description.trim() : undefined;
 
-    const updatedCity = await cityRepository.update(id, dataToUpdate, {
-      new: true,
-      runValidators: true
-    });
-
-    // Populate related fields
-    await updatedCity.populate([
-      { path: 'createdBy', select: 'firstName lastName' },
-      { path: 'updatedBy', select: 'firstName lastName' }
-    ]);
+    const updatedCity = await cityRepository.updateById(id, dataToUpdate);
 
     return {
       city: updatedCity,
@@ -180,23 +154,32 @@ class CityService {
     }
 
     // Check if city is being used by customers or suppliers
-    const customersUsingCity = await customerRepository.findOne({
-      'addresses.city': city.name
-    });
+    // Using PostgreSQL JSONB search for city name in address field
+    const { query } = require('../config/postgres');
+    
+    const customersUsingCity = await query(
+      "SELECT 1 FROM customers WHERE address::text ILIKE $1 AND is_deleted = FALSE LIMIT 1",
+      [`%${city.name}%`]
+    );
 
-    const suppliersUsingCity = await supplierRepository.findOne({
-      'addresses.city': city.name
-    });
+    const suppliersUsingCity = await query(
+      "SELECT 1 FROM suppliers WHERE address::text ILIKE $1 AND is_deleted = FALSE LIMIT 1",
+      [`%${city.name}%`]
+    );
 
-    if (customersUsingCity || suppliersUsingCity) {
+    if (customersUsingCity.rows.length > 0 || suppliersUsingCity.rows.length > 0) {
       throw new Error('Cannot delete city. It is being used by customers or suppliers. Deactivate it instead.');
     }
 
-    await cityRepository.softDelete(id);
+    await cityRepository.updateById(id, { isActive: false });
 
     return {
       message: 'City deleted successfully'
     };
+  }
+
+  async checkNameExists(name, excludeId = null) {
+    return await cityRepository.nameExists(name, excludeId);
   }
 }
 

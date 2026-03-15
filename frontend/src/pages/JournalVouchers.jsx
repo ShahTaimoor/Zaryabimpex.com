@@ -7,11 +7,14 @@ import {
   RefreshCcw,
   FileText
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import AsyncSelect from 'react-select/async';
 import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useGetJournalVouchersQuery, useCreateJournalVoucherMutation } from '../store/services/journalVouchersApi';
 import { handleApiError } from '../utils/errorHandler';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan } from '../utils/dateUtils';
@@ -107,11 +110,11 @@ export const JournalVouchers = () => {
       // Use RTK Query's lazy query or fetch directly
       // For now, we'll use the existing query data and filter
       const accounts = extractAccounts(accountsResponse);
-      const filteredAccounts = searchQuery 
-        ? accounts.filter(acc => 
-            acc.accountCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            acc.accountName?.toLowerCase().includes(searchQuery.toLowerCase())
-          )
+      const filteredAccounts = searchQuery
+        ? accounts.filter(acc =>
+          acc.accountCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          acc.accountName?.toLowerCase().includes(searchQuery.toLowerCase())
+        )
         : accounts;
       updateAccountMap(filteredAccounts);
       const groups = filteredAccounts.reduce((acc, account) => {
@@ -310,11 +313,12 @@ export const JournalVouchers = () => {
               </label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
+                <Input
                   type="date"
+                  autoComplete="off"
                   value={formState.voucherDate}
                   onChange={(e) => setFormState((prev) => ({ ...prev, voucherDate: e.target.value }))}
-                  className="input pl-10"
+                  className="pl-10"
                   required
                 />
               </div>
@@ -324,11 +328,11 @@ export const JournalVouchers = () => {
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                 Reference
               </label>
-              <input
+              <Input
                 type="text"
+                autoComplete="off"
                 value={formState.reference}
                 onChange={(e) => setFormState((prev) => ({ ...prev, reference: e.target.value }))}
-                className="input"
                 placeholder="Optional reference number"
                 maxLength={100}
               />
@@ -338,11 +342,11 @@ export const JournalVouchers = () => {
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                 Description
               </label>
-              <input
+              <Input
                 type="text"
+                autoComplete="off"
                 value={formState.description}
                 onChange={(e) => setFormState((prev) => ({ ...prev, description: e.target.value }))}
-                className="input"
                 placeholder="Purpose of this journal voucher"
                 maxLength={1000}
               />
@@ -387,9 +391,9 @@ export const JournalVouchers = () => {
                           value={
                             entry.accountId && accountMap.has(entry.accountId)
                               ? {
-                                  value: entry.accountId,
-                                  label: `${accountMap.get(entry.accountId).accountCode} — ${accountMap.get(entry.accountId).accountName}`
-                                }
+                                value: entry.accountId,
+                                label: `${accountMap.get(entry.accountId).accountCode} — ${accountMap.get(entry.accountId).accountName}`
+                              }
                               : null
                           }
                           onChange={(option) => handleEntryChange(index, 'accountId', option ? option.value : '')}
@@ -410,34 +414,37 @@ export const JournalVouchers = () => {
                       </div>
                     </td>
                     <td className="px-2 sm:px-4 py-3">
-                      <input
+                      <Input
                         type="text"
+                        autoComplete="off"
                         value={entry.particulars}
                         onChange={(e) => handleEntryChange(index, 'particulars', e.target.value)}
-                        className="input w-full min-w-[150px] sm:min-w-[220px]"
+                        className="w-full min-w-[150px] sm:min-w-[220px]"
                         placeholder="Narration / memo"
                         maxLength={500}
                       />
                     </td>
                     <td className="px-2 sm:px-4 py-3 w-24 sm:w-28">
-                      <input
+                      <Input
                         type="number"
                         min="0"
                         step="0.01"
+                        autoComplete="off"
                         value={entry.debit}
                         onChange={(e) => handleEntryChange(index, 'debit', e.target.value)}
-                        className="input text-right w-full min-w-[70px] sm:min-w-[90px]"
+                        className="text-right w-full min-w-[70px] sm:min-w-[90px]"
                         placeholder="0.00"
                       />
                     </td>
                     <td className="px-2 sm:px-4 py-3 w-24 sm:w-28">
-                      <input
+                      <Input
                         type="number"
                         min="0"
                         step="0.01"
+                        autoComplete="off"
                         value={entry.credit}
                         onChange={(e) => handleEntryChange(index, 'credit', e.target.value)}
-                        className="input text-right w-full min-w-[70px] sm:min-w-[90px]"
+                        className="text-right w-full min-w-[70px] sm:min-w-[90px]"
                         placeholder="0.00"
                       />
                     </td>
@@ -457,14 +464,16 @@ export const JournalVouchers = () => {
               <tfoot className="bg-gray-50">
                 <tr>
                   <td className="px-2 sm:px-4 py-3">
-                    <button
+                    <Button
                       type="button"
                       onClick={handleAddEntry}
-                      className="btn btn-secondary btn-md flex items-center gap-2"
+                      variant="secondary"
+                      size="default"
+                      className="flex items-center gap-2"
                     >
                       <Plus className="h-4 w-4" />
                       Add Line
-                    </button>
+                    </Button>
                   </td>
                   <td className="px-2 sm:px-4 py-3 text-right font-medium text-gray-700">Totals</td>
                   <td className="px-2 sm:px-4 py-3 text-right font-semibold text-gray-900">
@@ -478,9 +487,8 @@ export const JournalVouchers = () => {
                 <tr>
                   <td colSpan="5" className="px-2 sm:px-4 pb-3 text-right">
                     <span
-                      className={`text-sm font-medium ${
-                        Math.abs(totals.difference) < 0.01 ? 'text-green-600' : 'text-red-600'
-                      }`}
+                      className={`text-sm font-medium ${Math.abs(totals.difference) < 0.01 ? 'text-green-600' : 'text-red-600'
+                        }`}
                     >
                       Difference: {totals.difference.toFixed(2)}
                     </span>
@@ -494,19 +502,21 @@ export const JournalVouchers = () => {
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
               Notes
             </label>
-            <textarea
+            <Textarea
               value={formState.notes}
               onChange={(e) => setFormState((prev) => ({ ...prev, notes: e.target.value }))}
-              className="input"
+              autoComplete="off"
               rows={3}
               placeholder="Optional notes or supporting details"
             />
           </div>
 
           <div className="flex justify-end">
-            <button
+            <Button
               type="submit"
-              className="btn btn-primary btn-md flex items-center gap-2"
+              variant="default"
+              size="default"
+              className="flex items-center gap-2"
               disabled={creatingJournalVoucher || accountsLoading}
             >
               {creatingJournalVoucher ? (
@@ -520,7 +530,7 @@ export const JournalVouchers = () => {
                   Save Voucher
                 </>
               )}
-            </button>
+            </Button>
           </div>
         </div>
       </form>
@@ -530,6 +540,9 @@ export const JournalVouchers = () => {
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 w-full">
               <div className="sm:col-span-2 md:col-span-2">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                  Date Range
+                </label>
                 <DateFilter
                   startDate={filters.fromDate}
                   endDate={filters.toDate}
@@ -546,23 +559,25 @@ export const JournalVouchers = () => {
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   Search
                 </label>
-                <input
+                <Input
                   type="text"
+                  autoComplete="off"
                   value={filters.search}
                   onChange={(e) => handleFilterChange('search', e.target.value)}
-                  className="input"
                   placeholder="Voucher no, account, description..."
                 />
               </div>
             </div>
-            <button
+            <Button
               type="button"
               onClick={() => queryClient.invalidateQueries('journalVouchers')}
-              className="btn btn-secondary btn-md flex items-center gap-2 self-start md:self-auto"
+              variant="secondary"
+              size="default"
+              className="flex items-center gap-2 self-start md:self-auto"
             >
               <FileText className="h-4 w-4" />
               Refresh List
-            </button>
+            </Button>
           </div>
 
           <div className="overflow-x-auto">

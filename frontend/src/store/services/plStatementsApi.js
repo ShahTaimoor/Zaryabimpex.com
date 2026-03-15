@@ -8,7 +8,12 @@ export const plStatementsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Reports', id: 'PL_STATEMENTS' }],
+      invalidatesTags: [
+        { type: 'Reports', id: 'PL_STATEMENTS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PL_STATEMENTS_TRENDS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_LATEST' },
+      ],
     }),
     getStatements: builder.query({
       query: (params) => ({
@@ -43,6 +48,9 @@ export const plStatementsApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Reports', id },
         { type: 'Reports', id: 'PL_STATEMENTS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PL_STATEMENTS_TRENDS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_LATEST' },
       ],
     }),
     updateStatementStatus: builder.mutation({
@@ -54,6 +62,9 @@ export const plStatementsApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Reports', id },
         { type: 'Reports', id: 'PL_STATEMENTS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PL_STATEMENTS_TRENDS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_LATEST' },
       ],
     }),
     deleteStatement: builder.mutation({
@@ -64,6 +75,9 @@ export const plStatementsApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'Reports', id },
         { type: 'Reports', id: 'PL_STATEMENTS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PL_STATEMENTS_TRENDS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_LATEST' },
       ],
     }),
     getSummary: builder.query({

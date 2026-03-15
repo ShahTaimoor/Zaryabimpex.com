@@ -1,4 +1,4 @@
-const userRepository = require('../repositories/UserRepository');
+const userRepository = require('../repositories/postgres/UserRepository');
 
 class UserService {
   /**
@@ -25,12 +25,7 @@ class UserService {
     if (!user) {
       throw new Error('User not found');
     }
-    // Remove sensitive fields
-    const userObj = user.toObject ? user.toObject() : user;
-    delete userObj.password;
-    delete userObj.loginAttempts;
-    delete userObj.lockUntil;
-    return userObj;
+    return user.toSafeObject ? user.toSafeObject() : user;
   }
 
   /**
@@ -48,8 +43,8 @@ class UserService {
 
     // Check if email is being changed and if it's already taken
     if (updateData.email && updateData.email !== user.email) {
-      const existingUser = await userRepository.findByEmail(updateData.email);
-      if (existingUser && existingUser._id.toString() !== id) {
+      const emailTaken = await userRepository.emailExists(updateData.email, id);
+      if (emailTaken) {
         throw new Error('Email already exists');
       }
     }
@@ -67,7 +62,7 @@ class UserService {
     if (updateData.role && updateData.role !== oldData.role) {
       await userRepository.trackPermissionChange(
         id,
-        changedBy._id || changedBy,
+        changedBy?.id || changedBy?._id || changedBy,
         'role_changed',
         oldData,
         { role: updatedUser.role, permissions: updatedUser.permissions },
@@ -76,7 +71,7 @@ class UserService {
     } else if (updateData.permissions && JSON.stringify(updateData.permissions) !== JSON.stringify(oldData.permissions)) {
       await userRepository.trackPermissionChange(
         id,
-        changedBy._id || changedBy,
+        changedBy?.id || changedBy?._id || changedBy,
         'permissions_modified',
         oldData,
         { role: updatedUser.role, permissions: updatedUser.permissions },
@@ -84,12 +79,7 @@ class UserService {
       );
     }
 
-    // Remove sensitive fields
-    const userObj = updatedUser.toObject ? updatedUser.toObject() : updatedUser;
-    delete userObj.password;
-    delete userObj.loginAttempts;
-    delete userObj.lockUntil;
-    return userObj;
+    return updatedUser.toSafeObject ? updatedUser.toSafeObject() : updatedUser;
   }
 
   /**
@@ -119,25 +109,23 @@ class UserService {
    * @returns {Promise<object>}
    */
   async getUserActivity(id) {
-    const user = await userRepository.findById(id, [
-      { path: 'permissionHistory.changedBy', select: 'firstName lastName email' }
-    ]);
+    const user = await userRepository.findById(id);
 
     if (!user) {
       throw new Error('User not found');
     }
 
-    // Calculate online status (online if logged in within last 30 minutes)
-    const isOnline = user.lastLogin && (Date.now() - user.lastLogin.getTime()) < 30 * 60 * 1000;
+    const lastLogin = user.lastLogin ? new Date(user.lastLogin) : null;
+    const isOnline = lastLogin && (Date.now() - lastLogin.getTime()) < 30 * 60 * 1000;
 
     return {
-      userId: user._id,
+      userId: user.id || user._id,
       lastLogin: user.lastLogin,
-      loginCount: user.loginCount,
+      loginCount: user.loginCount ?? 0,
       isOnline,
       isActive: user.isActive,
-      loginHistory: user.loginHistory ? user.loginHistory.slice(0, 5) : [], // Last 5 logins
-      permissionHistory: user.permissionHistory ? user.permissionHistory.slice(0, 10) : [] // Last 10 permission changes
+      loginHistory: [],
+      permissionHistory: []
     };
   }
 

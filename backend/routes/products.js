@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { auth, requirePermission } = require('../middleware/auth');
 const { sanitizeRequest, handleValidationErrors } = require('../middleware/validation');
-const productService = require('../services/productService');
+const productService = require('../services/productServicePostgres');
 const auditLogService = require('../services/auditLogService');
 const expiryManagementService = require('../services/expiryManagementService');
 const costingService = require('../services/costingService');
@@ -56,7 +56,7 @@ router.get('/', [
   query('limit').optional({ checkFalsy: true }).isInt({ min: 1, max: 999999 }),
   query('all').optional({ checkFalsy: true }).isBoolean(),
   query('search').optional({ checkFalsy: true }).trim(),
-  query('category').optional({ checkFalsy: true }).isMongoId(),
+  query('category').optional({ checkFalsy: true }).isUUID().withMessage('Category must be a valid UUID'),
   query('categories').optional({ checkFalsy: true }).custom((value) => {
     if (typeof value === 'string') {
       try {
@@ -195,7 +195,7 @@ router.post('/', [
     }
     
     // Call service to create product (pass req for audit logging)
-    const result = await productService.createProduct(req.body, req.user._id, req);
+    const result = await productService.createProduct(req.body, req.user?.id || req.user?._id, req);
     
     res.status(201).json(result);
   } catch (error) {
@@ -243,7 +243,7 @@ router.put('/:id', [
     }
     
     // Call service to update product (pass req for audit logging and optimistic locking)
-    const result = await productService.updateProduct(req.params.id, req.body, req.user._id, req);
+    const result = await productService.updateProduct(req.params.id, req.body, req.user?.id || req.user?._id, req);
     
     res.json(result);
   } catch (error) {
@@ -285,15 +285,12 @@ router.post('/:id/restore', [
   requirePermission('delete_products')
 ], async (req, res) => {
   try {
-    const productRepository = require('../repositories/ProductRepository');
-    const product = await productRepository.findDeletedById(req.params.id);
-    if (!product) {
+    const result = await productService.restoreProduct(req.params.id);
+    res.json(result);
+  } catch (error) {
+    if (error.message === 'Deleted product not found') {
       return res.status(404).json({ message: 'Deleted product not found' });
     }
-    
-    await productRepository.restore(req.params.id);
-    res.json({ message: 'Product restored successfully' });
-  } catch (error) {
     console.error('Restore product error:', error);
     res.status(500).json({ message: 'Server error' });
   }
@@ -307,11 +304,7 @@ router.get('/deleted', [
   requirePermission('view_products')
 ], async (req, res) => {
   try {
-    const productRepository = require('../repositories/ProductRepository');
-    const deletedProducts = await productRepository.findDeleted({}, {
-      sort: { deletedAt: -1 },
-      populate: [{ path: 'category', select: 'name' }]
-    });
+    const deletedProducts = await productService.getDeletedProducts();
     res.json(deletedProducts);
   } catch (error) {
     console.error('Get deleted products error:', error);
@@ -425,35 +418,27 @@ router.post('/export/csv', [auth, requirePermission('view_products')], async (re
     const products = await productService.getProductsForExport(filters);
     
     // Prepare CSV data with proper string conversion
-    const csvData = products.map(product => {
-      // Robust field access
-      const inventory = product.inventory || {};
-      const pricing = product.pricing || {};
-      const category = product.category || {};
-      const taxSettings = product.taxSettings || {};
-
-      return {
-        name: String(product.name || ''),
-        description: String(product.description || ''),
-        category: String(category.name || ''),
-        brand: String(product.brand || ''),
-        barcode: String(product.barcode || ''),
-        sku: String(product.sku || ''),
-        cost: String(pricing.cost || 0),
-        retail: String(pricing.retail || 0),
-        wholesale: String(pricing.wholesale || 0),
-        distributor: String(pricing.distributor || 0),
-        currentStock: String(inventory.currentStock || 0),
-        minStock: String(inventory.minStock || 0),
-        maxStock: String(inventory.maxStock || 0),
-        reorderPoint: String(inventory.reorderPoint || 0),
-        weight: String(product.weight || 0),
-        status: String(product.status || 'active'),
-        taxable: String(taxSettings.taxable !== undefined ? taxSettings.taxable : true),
-        taxRate: String(taxSettings.taxRate || 0),
-        createdAt: String(product.createdAt ? (product.createdAt instanceof Date ? product.createdAt.toISOString().split('T')[0] : String(product.createdAt).split('T')[0]) : '')
-      };
-    });
+    const csvData = products.map(product => ({
+      name: String(product.name || ''),
+      description: String(product.description || ''),
+      category: String(product.category?.name || ''),
+      brand: String(product.brand || ''),
+      barcode: String(product.barcode || ''),
+      sku: String(product.sku || ''),
+      cost: String(product.pricing?.cost || 0),
+      retail: String(product.pricing?.retail || 0),
+      wholesale: String(product.pricing?.wholesale || 0),
+      distributor: String(product.pricing?.distributor || 0),
+      currentStock: String(product.inventory?.currentStock || 0),
+      minStock: String(product.inventory?.minStock || 0),
+      maxStock: String(product.inventory?.maxStock || 0),
+      reorderPoint: String(product.inventory?.reorderPoint || 0),
+      weight: String(product.weight || 0),
+      status: String(product.status || 'active'),
+      taxable: String(product.taxSettings?.taxable || true),
+      taxRate: String(product.taxSettings?.taxRate || 0),
+      createdAt: String(product.createdAt?.toISOString().split('T')[0] || '')
+    }));
     
     // Ensure exports directory exists
     if (!fs.existsSync('exports')) {
@@ -546,35 +531,27 @@ router.post('/export/excel', [auth, requirePermission('view_products')], async (
     };
 
     // Prepare Excel data with proper data types and object handling
-    const excelData = products.map(product => {
-      // Robust field access
-      const inventory = product.inventory || {};
-      const pricing = product.pricing || {};
-      const category = product.category || {};
-      const taxSettings = product.taxSettings || {};
-
-      return {
-        'Product Name': safeString(product.name),
-        'Description': safeString(product.description),
-        'Category': safeString(category.name || product.category),
-        'Brand': safeString(product.brand),
-        'Barcode': safeString(product.barcode),
-        'SKU': safeString(product.sku),
-        'Cost Price': safeNumber(pricing.cost),
-        'Retail Price': safeNumber(pricing.retail),
-        'Wholesale Price': safeNumber(pricing.wholesale),
-        'Distributor Price': safeNumber(pricing.distributor),
-        'Current Stock': safeNumber(inventory.currentStock),
-        'Min Stock': safeNumber(inventory.minStock),
-        'Max Stock': safeNumber(inventory.maxStock),
-        'Reorder Point': safeNumber(inventory.reorderPoint),
-        'Weight': safeNumber(product.weight),
-        'Status': safeString(product.status),
-        'Taxable': safeString(taxSettings.taxable),
-        'Tax Rate': safeNumber(taxSettings.taxRate),
-        'Created Date': safeString(product.createdAt)
-      };
-    });
+    const excelData = products.map(product => ({
+      'Product Name': safeString(product.name),
+      'Description': safeString(product.description),
+      'Category': safeString(product.category?.name || product.category),
+      'Brand': safeString(product.brand),
+      'Barcode': safeString(product.barcode),
+      'SKU': safeString(product.sku),
+      'Cost Price': safeNumber(product.pricing?.cost),
+      'Retail Price': safeNumber(product.pricing?.retail),
+      'Wholesale Price': safeNumber(product.pricing?.wholesale),
+      'Distributor Price': safeNumber(product.pricing?.distributor),
+      'Current Stock': safeNumber(product.inventory?.currentStock),
+      'Min Stock': safeNumber(product.inventory?.minStock),
+      'Max Stock': safeNumber(product.inventory?.maxStock),
+      'Reorder Point': safeNumber(product.inventory?.reorderPoint),
+      'Weight': safeNumber(product.weight),
+      'Status': safeString(product.status),
+      'Taxable': safeString(product.taxSettings?.taxable),
+      'Tax Rate': safeNumber(product.taxSettings?.taxRate),
+      'Created Date': safeString(product.createdAt)
+    }));
     
     // Create Excel workbook with proper options
     const workbook = XLSX.utils.book_new();
@@ -590,21 +567,13 @@ router.post('/export/excel', [auth, requirePermission('view_products')], async (
       { wch: 25 }, // Product Name
       { wch: 30 }, // Description
       { wch: 15 }, // Category
-      { wch: 15 }, // Brand
-      { wch: 15 }, // Barcode
-      { wch: 15 }, // SKU
+      { wch: 20 }, // Supplier
       { wch: 12 }, // Cost Price
       { wch: 12 }, // Retail Price
       { wch: 15 }, // Wholesale Price
-      { wch: 15 }, // Distributor Price
       { wch: 12 }, // Current Stock
-      { wch: 12 }, // Min Stock
-      { wch: 12 }, // Max Stock
       { wch: 12 }, // Reorder Point
-      { wch: 10 }, // Weight
       { wch: 10 }, // Status
-      { wch: 10 }, // Taxable
-      { wch: 10 }, // Tax Rate
       { wch: 12 }  // Created Date
     ];
     worksheet['!cols'] = columnWidths;
@@ -795,36 +764,35 @@ router.post('/import/csv', [
             // Check if product already exists
             const existingProduct = await productService.getProductByName(mapped.name.toString().trim());
             
-            if (existingProduct) {
-              // Update existing product instead of skipping
-              const productData = {
-                description: mapped.description?.toString().trim() || existingProduct.description,
-                category: mapped.category?.toString().trim() || existingProduct.category?.name || 'Uncategorized',
-                brand: mapped.brand?.toString().trim() || existingProduct.brand,
-                barcode: mapped.barcode?.toString().trim() || existingProduct.barcode,
-                sku: mapped.sku?.toString().trim() || existingProduct.sku,
-                supplier: mapped.supplier?.toString().trim() || existingProduct.supplier,
-                pricing: {
-                  cost: !isNaN(parseFloat(mapped.cost)) ? parseFloat(mapped.cost) : existingProduct.pricing?.cost,
-                  retail: !isNaN(parseFloat(mapped.retail)) ? parseFloat(mapped.retail) : existingProduct.pricing?.retail,
-                  wholesale: !isNaN(parseFloat(mapped.wholesale)) ? parseFloat(mapped.wholesale) : existingProduct.pricing?.wholesale
-                },
-                inventory: {
-                  currentStock: !isNaN(parseInt(mapped.currentStock)) ? parseInt(mapped.currentStock) : existingProduct.inventory?.currentStock,
-                  reorderPoint: !isNaN(parseInt(mapped.reorderPoint)) ? parseInt(mapped.reorderPoint) : existingProduct.inventory?.reorderPoint
-                },
-                status: mapped.status?.toString().toLowerCase() || existingProduct.status
-              };
-              
-              await productService.updateProduct(existingProduct._id, productData, req.user._id);
-              results.success++;
-              continue;
-            }
-            
             // Validate and parse pricing
             const cost = parseFloat(mapped.cost);
             const retail = parseFloat(mapped.retail);
             const wholesale = parseFloat(mapped.wholesale);
+
+            if (existingProduct) {
+              // Update existing product instead of skipping
+              const updateData = {
+                description: mapped.description?.toString().trim() || existingProduct.description,
+                category: mapped.category?.toString().trim() || (existingProduct.category?.name || existingProduct.category),
+                brand: mapped.brand?.toString().trim() || existingProduct.brand,
+                barcode: mapped.barcode?.toString().trim() || existingProduct.barcode,
+                sku: mapped.sku?.toString().trim() || existingProduct.sku,
+                pricing: {
+                  cost: isNaN(cost) ? existingProduct.pricing?.cost || 0 : cost,
+                  retail: isNaN(retail) ? existingProduct.pricing?.retail || 0 : retail,
+                  wholesale: isNaN(wholesale) ? existingProduct.pricing?.wholesale || 0 : wholesale
+                },
+                inventory: {
+                  currentStock: parseInt(mapped.currentStock) || existingProduct.inventory?.currentStock || 0,
+                  reorderPoint: parseInt(mapped.reorderPoint) || existingProduct.inventory?.reorderPoint || 0
+                },
+                status: mapped.status?.toString().toLowerCase() === 'inactive' ? 'inactive' : 'active'
+              };
+
+              await productService.updateProduct(existingProduct._id, updateData, req.user?.id || req.user?._id);
+              results.success++;
+              continue;
+            }
             
             if (isNaN(cost) || cost < 0) {
               results.errors.push({
@@ -885,7 +853,7 @@ router.post('/import/csv', [
               status: mapped.status?.toString().toLowerCase() === 'inactive' ? 'inactive' : 'active'
             };
             
-            await productService.createProduct(productData, req.user._id);
+            await productService.createProduct(productData, req.user?.id || req.user?._id);
             results.success++;
             
           } catch (error) {
@@ -975,36 +943,35 @@ router.post('/import/excel', [
         // Check if product already exists
         const existingProduct = await productService.getProductByName(productData.name.toString().trim());
         
-        if (existingProduct) {
-          // Update existing product instead of skipping
-          const productPayload = {
-            description: productData.description?.toString().trim() || existingProduct.description,
-            category: productData.category?.toString().trim() || existingProduct.category?.name || 'Uncategorized',
-            brand: productData.brand?.toString().trim() || existingProduct.brand,
-            barcode: productData.barcode?.toString().trim() || existingProduct.barcode,
-            sku: productData.sku?.toString().trim() || existingProduct.sku,
-            supplier: productData.supplier?.toString().trim() || existingProduct.supplier,
-            pricing: {
-              cost: !isNaN(parseFloat(productData.cost)) ? parseFloat(productData.cost) : existingProduct.pricing?.cost,
-              retail: !isNaN(parseFloat(productData.retail)) ? parseFloat(productData.retail) : existingProduct.pricing?.retail,
-              wholesale: !isNaN(parseFloat(productData.wholesale)) ? parseFloat(productData.wholesale) : existingProduct.pricing?.wholesale
-            },
-            inventory: {
-              currentStock: !isNaN(parseInt(productData.currentStock)) ? parseInt(productData.currentStock) : existingProduct.inventory?.currentStock,
-              reorderPoint: !isNaN(parseInt(productData.reorderPoint)) ? parseInt(productData.reorderPoint) : existingProduct.inventory?.reorderPoint
-            },
-            status: productData.status?.toString().toLowerCase() || existingProduct.status
-          };
-          
-          await productService.updateProduct(existingProduct._id, productPayload, req.user._id);
-          results.success++;
-          continue;
-        }
-        
         // Validate and parse pricing
         const cost = parseFloat(productData.cost);
         const retail = parseFloat(productData.retail);
         const wholesale = parseFloat(productData.wholesale);
+
+        if (existingProduct) {
+          // Update existing product instead of skipping
+          const updatePayload = {
+            description: productData.description?.toString().trim() || existingProduct.description,
+            category: productData.category?.toString().trim() || (existingProduct.category?.name || existingProduct.category),
+            brand: productData.brand?.toString().trim() || existingProduct.brand,
+            barcode: productData.barcode?.toString().trim() || existingProduct.barcode,
+            sku: productData.sku?.toString().trim() || existingProduct.sku,
+            pricing: {
+              cost: isNaN(cost) ? existingProduct.pricing?.cost || 0 : cost,
+              retail: isNaN(retail) ? existingProduct.pricing?.retail || 0 : retail,
+              wholesale: isNaN(wholesale) ? existingProduct.pricing?.wholesale || 0 : wholesale
+            },
+            inventory: {
+              currentStock: parseInt(productData.currentStock) || existingProduct.inventory?.currentStock || 0,
+              reorderPoint: parseInt(productData.reorderPoint) || existingProduct.inventory?.reorderPoint || 0
+            },
+            status: productData.status?.toString().toLowerCase() === 'inactive' ? 'inactive' : 'active'
+          };
+
+          await productService.updateProduct(existingProduct._id, updatePayload, req.user?.id || req.user?._id);
+          results.success++;
+          continue;
+        }
         
         if (isNaN(cost) || cost < 0) {
           results.errors.push({
@@ -1065,7 +1032,7 @@ router.post('/import/excel', [
           status: productData.status?.toString().toLowerCase() === 'inactive' ? 'inactive' : 'active'
         };
         
-        await productService.createProduct(productPayload, req.user._id);
+        await productService.createProduct(productPayload, req.user?.id || req.user?._id);
         results.success++;
         
       } catch (error) {
@@ -1161,7 +1128,7 @@ router.post('/:id/investors', [
   auth,
   requirePermission('edit_products'),
   body('investors').isArray().withMessage('Investors must be an array'),
-  body('investors.*.investor').isMongoId().withMessage('Invalid investor ID'),
+  body('investors.*.investor').isUUID(4).withMessage('Invalid investor ID'),
   body('investors.*.sharePercentage').optional().isFloat({ min: 0, max: 100 })
 ], async (req, res) => {
   try {
@@ -1315,7 +1282,7 @@ router.post('/:id/write-off-expired', [
 ], async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await expiryManagementService.writeOffExpired(id, req.user._id, req);
+    const result = await expiryManagementService.writeOffExpired(id, req.user?.id ?? req.user?._id, req);
     
     res.json({
       success: true,

@@ -1,18 +1,10 @@
-const mongoose = require('mongoose');
-const logger = require('../utils/logger');
-
+/**
+ * MongoDB connection removed - app uses PostgreSQL only.
+ * This file is kept so any code that require('./config/db') does not break.
+ * connectDB is a no-op.
+ */
 const connectDB = async () => {
-
-  try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI);
-
-    logger.info(`MongoDB Connected: ${conn.connection.host}`);
-
-    return conn;
-  } catch (error) {
-    logger.error(`Error: ${error.message}`);
-    process.exit(1);
-  }
+  return null;
 };
 
 module.exports = connectDB;

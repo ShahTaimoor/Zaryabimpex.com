@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { Package, TrendingUp, Heart, ShoppingCart, Eye, Star, AlertTriangle } from 'lucide-react';
+import { Package, TrendingUp, Heart, ShoppingCart, Star, AlertTriangle } from 'lucide-react';
 import { useResponsive } from './ResponsiveContainer';
 import { useTrackInteractionMutation } from '../store/services/recommendationsApi';
 import { handleApiError } from '../utils/errorHandler';
+import { Button } from '@/components/ui/button';
 import { OptimizedImage } from './OptimizedImage';
 
 const ProductRecommendationCard = ({ 
   recommendation, 
   position, 
   onAddToCart, 
-  onViewProduct,
   showReason = true,
   showScore = false,
   className = ''
@@ -20,6 +20,9 @@ const ProductRecommendationCard = ({
   const [trackInteraction] = useTrackInteractionMutation();
 
   const { product, score, reason } = recommendation;
+  const productId = product?._id ?? product?.id;
+
+  if (!product) return null;
 
   const handleAddToCart = async () => {
     if (isAddingToCart) return;
@@ -28,10 +31,10 @@ const ProductRecommendationCard = ({
     
     try {
       // Track the interaction
-      if (recommendation._id) {
+      if (recommendation._id && productId) {
         await trackInteraction({
           recommendationId: recommendation._id,
-          productId: product._id,
+          productId,
           action: 'add_to_cart',
           position,
         }).unwrap();
@@ -45,27 +48,6 @@ const ProductRecommendationCard = ({
       handleApiError(error, 'Add to Cart');
     } finally {
       setIsAddingToCart(false);
-    }
-  };
-
-  const handleViewProduct = async () => {
-    try {
-      // Track the interaction
-      if (recommendation._id) {
-        await trackInteraction({
-          recommendationId: recommendation._id,
-          productId: product._id,
-          action: 'click',
-          position,
-        }).unwrap();
-      }
-      
-      // Call the parent handler
-      if (onViewProduct) {
-        onViewProduct(product);
-      }
-    } catch (error) {
-      handleApiError(error, 'View Product');
     }
   };
 
@@ -116,7 +98,7 @@ const ProductRecommendationCard = ({
 
   return (
     <div 
-      className={`bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 ${className}`}
+      className={`bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 min-w-0 ${className}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -137,8 +119,8 @@ const ProductRecommendationCard = ({
             lazy={true}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Package className="h-12 w-12 text-gray-400" />
+          <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400">
+            <Package className="h-12 w-12" />
           </div>
         )}
         
@@ -180,89 +162,62 @@ const ProductRecommendationCard = ({
       </div>
 
       {/* Product Info */}
-      <div className="p-4">
-        <div className="mb-2">
+      <div className="p-4 space-y-3">
+        <div>
           <h3 className="font-medium text-gray-900 text-sm line-clamp-2 mb-1">
             {product.name}
           </h3>
-          <p className="text-xs text-gray-500">Category: {product.category || 'N/A'}</p>
+          {(typeof product.category === 'object' ? product.category?.name : product.category) && (
+            <p className="text-xs text-gray-500">Category: {typeof product.category === 'object' ? product.category.name : product.category}</p>
+          )}
         </div>
 
         {/* Price */}
-        <div className="mb-3">
+        <div>
           <div className="flex items-center space-x-2">
             <span className="text-lg font-bold text-gray-900">
-              ${product.pricing?.retail?.toFixed(2) || '0.00'}
+              {(Number(product.pricing?.retail ?? product.selling_price ?? product.sellingPrice ?? 0) || 0).toFixed(2)}
             </span>
             {product.pricing?.wholesale && product.pricing.wholesale !== product.pricing.retail && (
               <span className="text-sm text-gray-500 line-through">
-                ${product.pricing.wholesale.toFixed(2)}
+                {product.pricing.wholesale.toFixed(2)}
               </span>
             )}
           </div>
         </div>
 
-        {/* Stock Info */}
-        <div className="mb-3">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-500">Stock:</span>
-            <span className={`font-medium ${
-              isOutOfStock ? 'text-red-600' : 
-              isLowStock ? 'text-yellow-600' : 
-              'text-green-600'
-            }`}>
-              {product.inventory?.currentStock || 0}
-            </span>
+        {/* Stock Info - only show when we have inventory data and stock > 0 */}
+        {product.inventory?.currentStock != null && product.inventory.currentStock > 0 && (
+          <div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">Stock:</span>
+              <span className={`font-medium ${
+                isLowStock ? 'text-yellow-600' : 'text-green-600'
+              }`}>
+                {product.inventory.currentStock}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Actions */}
-        <div className="flex space-x-2">
-          <button
-            onClick={handleViewProduct}
-            className="flex-1 btn btn-secondary btn-sm flex items-center justify-center"
-          >
-            <Eye className="h-4 w-4 mr-1" />
-            {isMobile ? 'View' : 'View Details'}
-          </button>
-          
-          <button
+        <div className="flex flex-col gap-2">
+          <Button
             onClick={handleAddToCart}
             disabled={isOutOfStock || isAddingToCart}
-            className="flex-1 btn btn-primary btn-sm flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="default"
+            size="sm"
+            className="w-full flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isAddingToCart ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
             ) : (
               <>
-                <ShoppingCart className="h-4 w-4 mr-1" />
-                {isMobile ? 'Add' : 'Add to Cart'}
+                <ShoppingCart className="h-4 w-4 shrink-0" />
+                <span className="whitespace-nowrap">Add to Cart</span>
               </>
             )}
-          </button>
-        </div>
-
-        {/* Dismiss Button */}
-        <div className="mt-2 flex justify-center">
-          <button
-            onClick={async () => {
-              try {
-                if (recommendation._id) {
-                  await trackInteraction({
-                    recommendationId: recommendation._id,
-                    productId: product._id,
-                    action: 'dismiss',
-                    position,
-                  }).unwrap();
-                }
-              } catch (error) {
-                handleApiError(error, 'Dismiss Recommendation');
-              }
-            }}
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            Not interested
-          </button>
+          </Button>
         </div>
       </div>
     </div>

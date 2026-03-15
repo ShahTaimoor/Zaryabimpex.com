@@ -32,6 +32,11 @@ import {
 } from '../store/services/bankReceiptsApi';
 import ReceiptPaymentPrintModal from '../components/ReceiptPaymentPrintModal';
 import DateFilter from '../components/DateFilter';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import BaseModal from '../components/BaseModal';
+import FormField from '../components/FormField';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
 
 const BankReceipts = () => {
@@ -91,8 +96,8 @@ const BankReceipts = () => {
 
   // Fetch customers for dropdown
   const { data: customersData, isLoading: customersLoading, error: customersError, refetch: refetchCustomers } = useGetCustomersQuery(
-    { search: '', limit: 100 },
-    { skip: false }
+    { search: '', limit: 999999 },
+    { refetchOnMountOrArgChange: true }
   );
   const customers = React.useMemo(() => {
     return customersData?.data?.customers || customersData?.customers || [];
@@ -145,9 +150,10 @@ const BankReceipts = () => {
   };
 
   const handleCustomerSelect = (customerId) => {
-    const customer = customers?.find(c => c._id === customerId);
+    const customer = customers?.find(c => (c.id || c._id) === customerId);
     setSelectedCustomer(customer);
     setFormData(prev => ({ ...prev, customer: customerId }));
+    setCustomerSearchTerm(customer?.businessName || customer?.business_name || customer?.displayName || customer?.name || '');
   };
 
   const handleCustomerSearch = (searchTerm) => {
@@ -256,7 +262,7 @@ const BankReceipts = () => {
       notes: formData.notes
     };
 
-    updateBankReceipt({ id: selectedReceipt._id, ...submissionData })
+    updateBankReceipt({ id: selectedReceipt.id || selectedReceipt._id, ...submissionData })
       .unwrap()
       .then(() => {
         setShowEditModal(false);
@@ -278,7 +284,7 @@ const BankReceipts = () => {
 
   const handleDelete = (receipt) => {
     if (window.confirm('Are you sure you want to delete this bank receipt?')) {
-      deleteBankReceipt(receipt._id)
+      deleteBankReceipt(receipt.id || receipt._id)
         .unwrap()
         .then(() => {
           showSuccessToast('Bank receipt deleted successfully');
@@ -302,10 +308,10 @@ const BankReceipts = () => {
       date: receipt.date ? receipt.date.split('T')[0] : today,
       amount: receipt.amount || '',
       particular: receipt.particular || '',
-      bank: receipt.bank?._id || '',
+      bank: receipt.bank?._id || receipt.bank?.id || receipt.bank_id || receipt.bankId || '',
       transactionReference: receipt.transactionReference || '',
-      customer: receipt.customer?._id || '',
-      supplier: receipt.supplier?._id || '',
+      customer: receipt.customer?._id || receipt.customer?.id || '',
+      supplier: receipt.supplier?._id || receipt.supplier?.id || '',
       notes: receipt.notes || ''
     });
 
@@ -395,6 +401,12 @@ const BankReceipts = () => {
     bankReceiptsData?.data?.receipts ||
     bankReceiptsData?.receipts ||
     [];
+  const resolveBankInfo = (receipt) => {
+    if (receipt?.bank && typeof receipt.bank === 'object') return receipt.bank;
+    const bankId = receipt?.bank_id || receipt?.bankId || receipt?.bank;
+    if (!bankId) return null;
+    return (banks || []).find(b => (b._id || b.id) === bankId) || null;
+  };
   const paginationInfo =
     bankReceiptsData?.data?.pagination ||
     bankReceiptsData?.pagination ||
@@ -409,20 +421,24 @@ const BankReceipts = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage and view all bank receipt transactions</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-          <button
+          <Button
             onClick={handleExport}
-            className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+            variant="outline"
+            size="default"
+            className="flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <Download className="h-4 w-4" />
             <span>Export</span>
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={resetForm}
-            className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+            variant="default"
+            size="default"
+            className="flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             <span>New Receipt</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -442,7 +458,7 @@ const BankReceipts = () => {
                 </label>
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   <label className="flex items-center">
-                    <input
+                    <Input
                       type="radio"
                       value="customer"
                       checked={paymentType === 'customer'}
@@ -457,7 +473,7 @@ const BankReceipts = () => {
                     <span className="text-xs sm:text-sm text-gray-700">Customer</span>
                   </label>
                   <label className="flex items-center">
-                    <input
+                    <Input
                       type="radio"
                       value="supplier"
                       checked={paymentType === 'supplier'}
@@ -481,19 +497,19 @@ const BankReceipts = () => {
                     Customer
                   </label>
                   <div className="relative">
-                    <input
+                    <Input
                       type="text"
                       value={customerSearchTerm}
                       onChange={(e) => handleCustomerSearch(e.target.value)}
-                      className="input w-full pr-10"
+                      className="w-full pr-10"
                       placeholder="Search or select customer..."
                     />
                     <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   </div>
                   {customerSearchTerm && (
-                    <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
+                    <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
                       {customers?.filter(customer =>
-                        (customer.businessName || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+                        (customer.businessName || customer.business_name || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
                         (customer.phone || '').includes(customerSearchTerm)
                       ).map((customer) => {
                         const receivables = customer.pendingBalance || 0;
@@ -505,17 +521,19 @@ const BankReceipts = () => {
 
                         return (
                           <div
-                            key={customer._id}
+                            key={customer.id || customer._id}
                             onClick={() => {
-                              handleCustomerSelect(customer._id);
-                              setCustomerSearchTerm(customer.businessName || customer.name || '');
+                              handleCustomerSelect(customer.id || customer._id);
                             }}
                             className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
                           >
-                            <div className="font-medium text-gray-900">{customer.businessName || customer.name || 'Unknown'}</div>
+                            <div className="font-medium text-gray-900">{customer.businessName || customer.business_name || customer.name || 'Unknown'}</div>
+                            {(customer.businessName || customer.business_name) && customer.name && (
+                              <div className="text-xs text-gray-500">Contact: {customer.name}</div>
+                            )}
                             {hasBalance && (
                               <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
-                                {isPayable ? 'Payables:' : 'Receivables:'} ${Math.abs(netBalance).toFixed(2)}
+                                {isPayable ? 'Payables:' : 'Receivables:'} {Math.abs(netBalance).toFixed(2)}
                               </div>
                             )}
                           </div>
@@ -567,11 +585,11 @@ const BankReceipts = () => {
                     Supplier
                   </label>
                   <div className="relative">
-                    <input
+                    <Input
                       type="text"
                       value={supplierSearchTerm}
                       onChange={(e) => handleSupplierSearch(e.target.value)}
-                      className="input w-full pr-10"
+                      className="w-full pr-10"
                       placeholder="Search or select supplier..."
                     />
                     <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -642,7 +660,7 @@ const BankReceipts = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Amount *
                 </label>
-                <input
+                <Input
                   type="number"
                   step="0.01"
                   min="0"
@@ -651,7 +669,7 @@ const BankReceipts = () => {
                     const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
                     setFormData(prev => ({ ...prev, amount: value }));
                   }}
-                  className="input w-full"
+                  className="w-full"
                   placeholder="0.00"
                   required
                 />
@@ -666,11 +684,11 @@ const BankReceipts = () => {
                   Receipt Date
                 </label>
                 <div className="relative">
-                  <input
+                  <Input
                     type="date"
                     value={formData.date}
                     onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                    className="input w-full pr-10"
+                    className="w-full pr-10"
                   />
                   <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 </div>
@@ -688,8 +706,8 @@ const BankReceipts = () => {
                   required
                 >
                   <option value="">Select bank account...</option>
-                  {banks?.map((bank) => (
-                    <option key={bank._id} value={bank._id}>
+                  {(banks || []).map((bank) => (
+                    <option key={bank._id || bank.id} value={bank._id || bank.id}>
                       {bank.bankName} - {bank.accountNumber} {bank.accountName ? `(${bank.accountName})` : ''}
                     </option>
                   ))}
@@ -700,6 +718,9 @@ const BankReceipts = () => {
                 {banksError && (
                   <p className="text-sm text-red-500 mt-1">Error loading banks</p>
                 )}
+                {!banksLoading && !banksError && (!banks || banks.length === 0) && (
+                  <p className="text-sm text-amber-600 mt-1">No bank accounts. Add one in Settings → Banks.</p>
+                )}
               </div>
 
               {/* Transaction Reference */}
@@ -707,11 +728,11 @@ const BankReceipts = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Transaction Reference
                 </label>
-                <input
+                <Input
                   type="text"
                   value={formData.transactionReference}
                   onChange={(e) => setFormData(prev => ({ ...prev, transactionReference: e.target.value }))}
-                  className="input w-full"
+                  className="w-full"
                   placeholder="Enter transaction reference..."
                 />
               </div>
@@ -721,11 +742,11 @@ const BankReceipts = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Description
                 </label>
-                <input
+                <Input
                   type="text"
                   value={formData.particular}
                   onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
-                  className="input w-full"
+                  className="w-full"
                   placeholder="Enter receipt description or notes..."
                 />
               </div>
@@ -735,10 +756,10 @@ const BankReceipts = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Notes (Optional)
                 </label>
-                <textarea
+                <Textarea
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="input w-full h-20 resize-none"
+                  className="w-full h-20 resize-none"
                   placeholder="Additional notes..."
                 />
               </div>
@@ -747,21 +768,25 @@ const BankReceipts = () => {
 
           {/* Action Buttons */}
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
-            <button
+            <Button
               onClick={resetForm}
-              className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+              variant="outline"
+              size="default"
+              className="flex items-center justify-center gap-2 w-full sm:w-auto"
             >
               <RotateCcw className="h-4 w-4" />
               <span>Reset</span>
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleCreate}
               disabled={creating}
-              className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+              variant="default"
+              size="default"
+              className="flex items-center justify-center gap-2 w-full sm:w-auto"
             >
               <Save className="h-4 w-4" />
               <span>{creating ? 'Saving...' : 'Save Receipt'}</span>
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -778,6 +803,9 @@ const BankReceipts = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             {/* Date Range */}
             <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Date Range
+              </label>
               <DateFilter
                 startDate={filters.fromDate}
                 endDate={filters.toDate}
@@ -795,12 +823,11 @@ const BankReceipts = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Voucher Code
               </label>
-              <input
+              <Input
                 type="text"
                 placeholder="Contains..."
                 value={filters.voucherCode}
                 onChange={(e) => handleFilterChange('voucherCode', e.target.value)}
-                className="input"
               />
             </div>
 
@@ -809,12 +836,11 @@ const BankReceipts = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Amount
               </label>
-              <input
+              <Input
                 type="number"
                 placeholder="Equals..."
                 value={filters.amount}
                 onChange={(e) => handleFilterChange('amount', e.target.value)}
-                className="input"
               />
             </div>
 
@@ -823,24 +849,25 @@ const BankReceipts = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Particular
               </label>
-              <input
+              <Input
                 type="text"
                 placeholder="Contains..."
                 value={filters.particular}
                 onChange={(e) => handleFilterChange('particular', e.target.value)}
-                className="input"
               />
             </div>
 
             {/* Search Button */}
             <div className="flex items-end">
-              <button
+              <Button
                 onClick={() => refetch()}
-                className="btn btn-primary btn-md w-full flex items-center justify-center gap-2"
+                variant="default"
+                size="default"
+                className="w-full flex items-center justify-center gap-2"
               >
                 <Search className="h-4 w-4" />
                 <span>Search</span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -948,19 +975,19 @@ const BankReceipts = () => {
                           {receipt.particular}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {receipt.bank ? (
+                          {resolveBankInfo(receipt) ? (
                             <div>
-                              <div className="font-medium">{receipt.bank.bankName}</div>
-                              <div className="text-gray-500 text-xs">{receipt.bank.accountNumber}</div>
+                              <div className="font-medium">{resolveBankInfo(receipt).bankName}</div>
+                              <div className="text-gray-500 text-xs">{resolveBankInfo(receipt).accountNumber}</div>
                             </div>
                           ) : (
-                            receipt.bankAccount || 'N/A'
+                            receipt.bankAccount || receipt.bankName || receipt.bank_name || '-'
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {receipt.customer ? (
                             <div>
-                              <div className="font-medium">{(receipt.customer.businessName || receipt.customer.name || '').toUpperCase()}</div>
+                              <div className="font-medium">{(receipt.customer.businessName || receipt.customer.business_name || receipt.customer.name || '').toUpperCase()}</div>
                               <div className="text-gray-500 text-xs">{receipt.customer.email}</div>
                             </div>
                           ) : (
@@ -983,7 +1010,7 @@ const BankReceipts = () => {
                             >
                               <Eye className="h-4 w-4" />
                             </button>
-                            {formatDateForInput(receipt.date) === today && (
+                            {(
                               <>
                                 <button
                                   onClick={() => handleEdit(receipt)}
@@ -1050,19 +1077,19 @@ const BankReceipts = () => {
                     Customer
                   </label>
                   <div className="relative">
-                    <input
+                    <Input
                       type="text"
                       value={customerSearchTerm}
                       onChange={(e) => handleCustomerSearch(e.target.value)}
-                      className="input w-full pr-10"
+                      className="w-full pr-10"
                       placeholder="Search or select customer..."
                     />
                     <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   </div>
                   {customerSearchTerm && (
-                    <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
+                    <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
                       {customers?.filter(customer =>
-                        (customer.businessName || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+                        (customer.businessName || customer.business_name || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
                         (customer.phone || '').includes(customerSearchTerm)
                       ).map((customer) => {
                         const receivables = customer.pendingBalance || 0;
@@ -1074,17 +1101,19 @@ const BankReceipts = () => {
 
                         return (
                           <div
-                            key={customer._id}
+                            key={customer.id || customer._id}
                             onClick={() => {
-                              handleCustomerSelect(customer._id);
-                              setCustomerSearchTerm(customer.businessName || customer.name || '');
+                              handleCustomerSelect(customer.id || customer._id);
                             }}
                             className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
                           >
-                            <div className="font-medium text-gray-900">{customer.businessName || customer.name || 'Unknown'}</div>
+                            <div className="font-medium text-gray-900">{customer.businessName || customer.business_name || customer.name || 'Unknown'}</div>
+                            {(customer.businessName || customer.business_name) && customer.name && (
+                              <div className="text-xs text-gray-500">Contact: {customer.name}</div>
+                            )}
                             {hasBalance && (
                               <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
-                                {isPayable ? 'Payables:' : 'Receivables:'} ${Math.abs(netBalance).toFixed(2)}
+                                {isPayable ? 'Payables:' : 'Receivables:'} {Math.abs(netBalance).toFixed(2)}
                               </div>
                             )}
                           </div>
@@ -1098,10 +1127,10 @@ const BankReceipts = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Receivables
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={selectedCustomer?.pendingBalance ? `${selectedCustomer.pendingBalance}` : 'No pending balance'}
-                    className="input w-full bg-gray-50"
+                    className="w-full bg-gray-50"
                     readOnly
                   />
                 </div>
@@ -1117,8 +1146,8 @@ const BankReceipts = () => {
                     required
                   >
                     <option value="">Select bank account...</option>
-                    {banks?.map((bank) => (
-                      <option key={bank._id} value={bank._id}>
+                    {(banks || []).map((bank) => (
+                      <option key={bank._id || bank.id} value={bank._id || bank.id}>
                         {bank.bankName} - {bank.accountNumber} {bank.accountName ? `(${bank.accountName})` : ''}
                       </option>
                     ))}
@@ -1132,10 +1161,10 @@ const BankReceipts = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Description
                   </label>
-                  <textarea
+                  <Textarea
                     value={formData.particular}
                     onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
-                    className="input w-full resize-none"
+                    className="w-full resize-none"
                     rows="4"
                     placeholder="Enter bank receipt description or notes..."
                     required
@@ -1150,11 +1179,11 @@ const BankReceipts = () => {
                     Receipt Date
                   </label>
                   <div className="relative">
-                    <input
+                    <Input
                       type="date"
                       value={formData.date}
                       onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                      className="input w-full pr-10"
+                      className="w-full pr-10"
                     />
                     <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   </div>
@@ -1164,7 +1193,7 @@ const BankReceipts = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Amount <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <Input
                     type="number"
                     step="0.01"
                     min="0"
@@ -1173,7 +1202,7 @@ const BankReceipts = () => {
                       const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
                       setFormData(prev => ({ ...prev, amount: value }));
                     }}
-                    className="input w-full"
+                    className="w-full"
                     placeholder="0.00"
                     required
                   />
@@ -1183,11 +1212,11 @@ const BankReceipts = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Transaction Reference
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={formData.transactionReference}
                     onChange={(e) => setFormData(prev => ({ ...prev, transactionReference: e.target.value }))}
-                    className="input w-full"
+                    className="w-full"
                     placeholder="Enter transaction reference (optional)"
                   />
                 </div>
@@ -1196,10 +1225,10 @@ const BankReceipts = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Notes (Optional)
                   </label>
-                  <textarea
+                  <Textarea
                     value={formData.notes}
                     onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    className="input w-full resize-none"
+                    className="w-full resize-none"
                     rows="3"
                     placeholder="Additional notes..."
                   />
@@ -1209,183 +1238,150 @@ const BankReceipts = () => {
 
             {/* Action Buttons */}
             <div className="flex flex-col-reverse sm:flex-row justify-between items-stretch sm:items-center gap-3 mt-8 pt-6 border-t border-gray-200">
-              <button
+              <Button
                 onClick={resetForm}
-                className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+                variant="outline"
+                size="default"
+                className="flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <RotateCcw className="h-4 w-4" />
                 <span>Reset</span>
-              </button>
+              </Button>
 
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-                <button
-                  className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+                <Button
+                  variant="outline"
+                  size="default"
+                  className="flex items-center justify-center gap-2 w-full sm:w-auto"
                 >
                   <Printer className="h-4 w-4" />
                   <span>Print Preview</span>
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleCreate}
                   disabled={creating}
-                  className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+                  variant="default"
+                  size="default"
+                  className="flex items-center justify-center gap-2 w-full sm:w-auto"
                 >
                   <Save className="h-4 w-4" />
                   <span>{creating ? 'Saving...' : 'Save Receipt'}</span>
-                </button>
+                </Button>
               </div>
             </div>
           </div>
         </div>
       )}
       {/* Edit Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Edit Bank Receipt</h3>
-                <button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setSelectedReceipt(null);
-                    resetForm();
-                  }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Date
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                    className="input w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Bank Account
-                  </label>
-                  <select
-                    value={formData.bank}
-                    onChange={(e) => setFormData(prev => ({ ...prev, bank: e.target.value }))}
-                    className="input w-full"
-                  >
-                    <option value="">Select bank account...</option>
-                    {banks?.map((bank) => (
-                      <option key={bank._id} value={bank._id}>
-                        {bank.bankName} - {bank.accountNumber}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Amount
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.amount}
-                    onChange={(e) => {
-                      const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
-                      setFormData(prev => ({ ...prev, amount: value }));
-                    }}
-                    className="input w-full"
-                    placeholder="0.00"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Transaction Reference
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.transactionReference}
-                    onChange={(e) => setFormData(prev => ({ ...prev, transactionReference: e.target.value }))}
-                    className="input w-full"
-                    placeholder="Enter reference..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Particular
-                  </label>
-                  <textarea
-                    value={formData.particular}
-                    onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
-                    className="input w-full"
-                    rows="3"
-                    placeholder="Enter transaction details..."
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Notes (Optional)
-                  </label>
-                  <textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    className="input w-full"
-                    rows="2"
-                    placeholder="Additional notes..."
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setSelectedReceipt(null);
-                    resetForm();
-                  }}
-                  className="btn btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdate}
-                  disabled={updating}
-                  className="btn btn-primary"
-                >
-                  {updating ? 'Updating...' : 'Update'}
-                </button>
-              </div>
-            </div>
+      <BaseModal
+        isOpen={showEditModal}
+        onClose={() => { setShowEditModal(false); setSelectedReceipt(null); resetForm(); }}
+        title="Edit Bank Receipt"
+        maxWidth="sm"
+        variant="centered"
+        contentClassName="p-5"
+        footer={
+          <div className="flex justify-end space-x-3">
+            <Button onClick={() => { setShowEditModal(false); setSelectedReceipt(null); resetForm(); }} variant="secondary">
+              Cancel
+            </Button>
+            <Button onClick={handleUpdate} disabled={updating} variant="default">
+              {updating ? 'Updating...' : 'Update'}
+            </Button>
           </div>
+        }
+      >
+        <div className="space-y-4">
+          <FormField label="Date" htmlFor="edit-date">
+            <Input
+              id="edit-date"
+              type="date"
+              value={formData.date}
+              onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+              className="w-full"
+            />
+          </FormField>
+          <FormField label="Bank Account" htmlFor="edit-bank">
+            <select
+              id="edit-bank"
+              value={formData.bank}
+              onChange={(e) => setFormData(prev => ({ ...prev, bank: e.target.value }))}
+              className="input w-full"
+            >
+              <option value="">Select bank account...</option>
+              {(banks || []).map((bank) => (
+                <option key={bank._id || bank.id} value={bank._id || bank.id}>{bank.bankName} - {bank.accountNumber}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Amount" htmlFor="edit-amount" required>
+            <Input
+              id="edit-amount"
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.amount}
+              onChange={(e) => {
+                const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
+                setFormData(prev => ({ ...prev, amount: value }));
+              }}
+              className="w-full"
+              placeholder="0.00"
+              required
+            />
+          </FormField>
+          <FormField label="Transaction Reference" htmlFor="edit-ref">
+            <Input
+              id="edit-ref"
+              type="text"
+              value={formData.transactionReference}
+              onChange={(e) => setFormData(prev => ({ ...prev, transactionReference: e.target.value }))}
+              className="w-full"
+              placeholder="Enter reference..."
+            />
+          </FormField>
+          <FormField label="Particular" htmlFor="edit-particular" required>
+            <Textarea
+              id="edit-particular"
+              value={formData.particular}
+              onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
+              className="w-full"
+              rows={3}
+              placeholder="Enter transaction details..."
+              required
+            />
+          </FormField>
+          <FormField label="Notes (Optional)" htmlFor="edit-notes">
+            <Textarea
+              id="edit-notes"
+              value={formData.notes}
+              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              className="w-full"
+              rows={2}
+              placeholder="Additional notes..."
+            />
+          </FormField>
         </div>
-      )}
+      </BaseModal>
 
       {/* View Modal */}
-      {showViewModal && selectedReceipt && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Bank Receipt Details</h3>
-                <button
-                  onClick={() => {
-                    setShowViewModal(false);
-                    setSelectedReceipt(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="space-y-3">
+      <BaseModal
+        isOpen={showViewModal && !!selectedReceipt}
+        onClose={() => { setShowViewModal(false); setSelectedReceipt(null); }}
+        title="Bank Receipt Details"
+        maxWidth="sm"
+        variant="centered"
+        contentClassName="p-5"
+        footer={
+          <div className="flex justify-end">
+            <Button onClick={() => { setShowViewModal(false); setSelectedReceipt(null); }} variant="secondary" className="w-full">
+              Close
+            </Button>
+          </div>
+        }
+      >
+        {selectedReceipt && (
+          <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <span className="font-medium text-gray-500">Voucher Code:</span>
                   <span className="text-gray-900">{selectedReceipt.voucherCode}</span>
@@ -1396,11 +1392,11 @@ const BankReceipts = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <span className="font-medium text-gray-500">Amount:</span>
-                  <span className="text-gray-900 font-bold">${Math.round(selectedReceipt.amount)}</span>
+                  <span className="text-gray-900 font-bold">{Math.round(selectedReceipt.amount)}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <span className="font-medium text-gray-500">Bank:</span>
-                  <span className="text-gray-900">{selectedReceipt.bank?.bankName || 'N/A'}</span>
+                  <span className="text-gray-900">{resolveBankInfo(selectedReceipt)?.bankName || selectedReceipt.bankName || selectedReceipt.bank_name || '-'}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <span className="font-medium text-gray-500">Reference:</span>
@@ -1413,7 +1409,7 @@ const BankReceipts = () => {
                 {selectedReceipt.customer && (
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <span className="font-medium text-gray-500">Customer:</span>
-                    <span className="text-gray-900">{selectedReceipt.customer.displayName || selectedReceipt.customer.businessName || selectedReceipt.customer.name}</span>
+                    <span className="text-gray-900">{selectedReceipt.customer.businessName || selectedReceipt.customer.business_name || selectedReceipt.customer.displayName || selectedReceipt.customer.name}</span>
                   </div>
                 )}
                 {selectedReceipt.supplier && (
@@ -1432,22 +1428,9 @@ const BankReceipts = () => {
                   <span>Created By:</span>
                   <span>{selectedReceipt.createdBy?.prefix} {selectedReceipt.createdBy?.firstName}</span>
                 </div>
-              </div>
-              <div className="flex justify-end mt-6">
-                <button
-                  onClick={() => {
-                    setShowViewModal(false);
-                    setSelectedReceipt(null);
-                  }}
-                  className="btn btn-secondary w-full"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </BaseModal>
     </div>
   );
 };

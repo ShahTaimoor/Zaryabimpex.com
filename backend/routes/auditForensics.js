@@ -3,7 +3,6 @@ const router = express.Router();
 const { param, query } = require('express-validator');
 const { auth, requirePermission } = require('../middleware/auth');
 const comprehensiveAuditService = require('../services/comprehensiveAuditService');
-const ImmutableAuditLog = require('../models/ImmutableAuditLog');
 const { handleValidationErrors } = require('../middleware/validation');
 
 /**
@@ -14,7 +13,7 @@ const { handleValidationErrors } = require('../middleware/validation');
 router.get('/user/:userId', [
   auth,
   requirePermission('view_audit_logs'),
-  param('userId').isMongoId().withMessage('Valid user ID is required'),
+  param('userId').isUUID(4).withMessage('Valid user ID is required'),
   query('startDate').optional().isISO8601().withMessage('Invalid start date format'),
   query('endDate').optional().isISO8601().withMessage('Invalid end date format'),
   handleValidationErrors
@@ -55,7 +54,7 @@ router.get('/entity/:entityType/:entityId', [
   auth,
   requirePermission('view_audit_logs'),
   param('entityType').notEmpty().withMessage('Entity type is required'),
-  param('entityId').isMongoId().withMessage('Valid entity ID is required'),
+  param('entityId').isUUID(4).withMessage('Valid entity ID is required'),
   handleValidationErrors
 ], async (req, res) => {
   try {

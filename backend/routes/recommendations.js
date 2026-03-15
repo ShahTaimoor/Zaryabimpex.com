@@ -3,10 +3,8 @@ const { body, param, query } = require('express-validator');
 const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors, sanitizeRequest } = require('../middleware/validation');
 const recommendationEngine = require('../services/recommendationEngine');
-const UserBehavior = require('../models/UserBehavior'); // Still needed for static methods
-const Recommendation = require('../models/Recommendation'); // Still needed for model reference
-const Product = require('../models/Product'); // Still needed for model reference
-const recommendationRepository = require('../repositories/RecommendationRepository');
+const userBehaviorService = require('../services/userBehaviorService');
+const recommendationRepository = require('../repositories/postgres/RecommendationRepository');
 
 const router = express.Router();
 
@@ -26,9 +24,9 @@ router.post('/generate', [
   body('algorithm').optional().isIn(['collaborative', 'content_based', 'hybrid', 'trending', 'frequently_bought', 'similar_products', 'seasonal', 'price_based']),
   body('context').optional().isObject(),
   body('context.page').optional().isIn(['home', 'product', 'cart', 'checkout', 'search', 'category', 'sales']),
-  body('context.currentProduct').optional().isMongoId(),
+  body('context.currentProduct').optional().isUUID(4),
   body('context.currentProducts').optional().isArray(),
-  body('context.category').optional().isMongoId(),
+  body('context.category').optional().isUUID(4),
   body('context.searchQuery').optional().trim(),
   body('context.customerTier').optional().isIn(['bronze', 'silver', 'gold', 'platinum']),
   body('context.businessType').optional().isIn(['individual', 'wholesale', 'distributor', 'retail']),
@@ -92,7 +90,7 @@ router.get('/:recommendationId', [
   auth,
   requirePermission('view_recommendations'),
   sanitizeRequest,
-  param('recommendationId').isMongoId().withMessage('Valid Recommendation ID is required'),
+  param('recommendationId').isUUID(4).withMessage('Valid Recommendation ID is required'),
   handleValidationErrors,
 ], async (req, res) => {
   try {
@@ -130,8 +128,8 @@ router.post('/:recommendationId/interact', [
   auth,
   requirePermission('view_recommendations'),
   sanitizeRequest,
-  param('recommendationId').isMongoId().withMessage('Valid Recommendation ID is required'),
-  body('productId').isMongoId().withMessage('Valid Product ID is required'),
+  param('recommendationId').isUUID(4).withMessage('Valid Recommendation ID is required'),
+  body('productId').isUUID(4).withMessage('Valid Product ID is required'),
   body('action').isIn(['view', 'click', 'add_to_cart', 'purchase', 'dismiss']).withMessage('Invalid action'),
   body('position').optional().isInt({ min: 1 }),
   handleValidationErrors,
@@ -192,7 +190,7 @@ router.get('/trending', [
   try {
     const { limit = 10, days = 7 } = req.query;
 
-    const trendingProducts = await UserBehavior.getPopularProducts(days, limit);
+    const trendingProducts = await userBehaviorService.getPopularProducts(days, limit);
 
     res.json({
       trending: trendingProducts.map(item => ({
@@ -219,7 +217,7 @@ router.get('/trending', [
 // @access  Public
 router.get('/frequently-bought/:productId', [
   sanitizeRequest,
-  param('productId').isMongoId().withMessage('Valid Product ID is required'),
+  param('productId').isUUID(4).withMessage('Valid Product ID is required'),
   query('limit').optional().isInt({ min: 1, max: 20 }),
   handleValidationErrors,
 ], async (req, res) => {
@@ -248,7 +246,7 @@ router.get('/frequently-bought/:productId', [
 // @access  Public
 router.get('/similar/:productId', [
   sanitizeRequest,
-  param('productId').isMongoId().withMessage('Valid Product ID is required'),
+  param('productId').isUUID(4).withMessage('Valid Product ID is required'),
   query('limit').optional().isInt({ min: 1, max: 20 }),
   handleValidationErrors,
 ], async (req, res) => {
@@ -286,7 +284,7 @@ router.post('/behavior', [
   body('sessionId').notEmpty().withMessage('Session ID is required'),
   body('action').isIn(['page_view', 'product_view', 'product_click', 'add_to_cart', 'remove_from_cart', 'purchase', 'search', 'filter', 'category_view']).withMessage('Invalid action'),
   body('entity.type').isIn(['product', 'category', 'search', 'page']).withMessage('Invalid entity type'),
-  body('entity.id').optional().isMongoId(),
+  body('entity.id').optional().isUUID(4),
   body('context').optional().isObject(),
   body('metadata').optional().isObject(),
   handleValidationErrors,
@@ -295,7 +293,7 @@ router.post('/behavior', [
     const { sessionId, action, entity, context = {}, metadata = {} } = req.body;
     const userId = req.user?.id;
 
-    const behavior = await UserBehavior.trackBehavior({
+    const behavior = await userBehaviorService.trackBehavior({
       user: userId,
       sessionId,
       action,
@@ -311,7 +309,7 @@ router.post('/behavior', [
 
     res.json({
       message: 'Behavior tracked successfully',
-      behaviorId: behavior._id,
+      behaviorId: behavior._id || behavior.id,
     });
   } catch (error) {
     console.error('Error tracking behavior:', error);
@@ -418,7 +416,7 @@ router.get('/user/:userId', [
   auth,
   requirePermission('view_recommendations'),
   sanitizeRequest,
-  param('userId').isMongoId().withMessage('Valid User ID is required'),
+  param('userId').isUUID(4).withMessage('Valid User ID is required'),
   query('limit').optional().isInt({ min: 1, max: 50 }),
   handleValidationErrors,
 ], async (req, res) => {

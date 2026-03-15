@@ -34,6 +34,7 @@ import { handleApiError, showSuccessToast, showErrorToast } from '../utils/error
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import { useResponsive, ResponsiveContainer, ResponsiveGrid } from '../components/ResponsiveContainer';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
+import { Button } from '@/components/ui/button';
 
 const BackupCard = ({ backup, onRestore, onDelete, onRetry, onVerify }) => {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -169,38 +170,44 @@ const BackupCard = ({ backup, onRestore, onDelete, onRetry, onVerify }) => {
       {/* Actions */}
       <div className="flex space-x-2">
         {backup.status === 'completed' && (
-          <button
+          <Button
             onClick={() => handleAction('restore', { confirmRestore: true })}
-            className="flex-1 btn btn-secondary btn-sm"
+            variant="secondary"
+            size="sm"
+            className="flex-1"
           >
             <Upload className="h-4 w-4 mr-1" />
             Restore
-          </button>
+          </Button>
         )}
         
         {backup.status === 'failed' && (
-          <button
+          <Button
             onClick={() => handleAction('retry')}
-            className="flex-1 btn btn-primary btn-sm"
+            variant="default"
+            size="sm"
+            className="flex-1"
           >
             <RefreshCw className="h-4 w-4 mr-1" />
             Retry
-          </button>
+          </Button>
         )}
         
-        <button
+        <Button
           onClick={() => handleAction('verify')}
-          className="btn btn-secondary btn-sm"
+          variant="secondary"
+          size="sm"
         >
           <Shield className="h-4 w-4" />
-        </button>
+        </Button>
         
-        <button
+        <Button
           onClick={() => handleAction('delete', { confirmDelete: true })}
-          className="btn btn-danger btn-sm"
+          variant="destructive"
+          size="sm"
         >
           <Trash2 className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
 
       {/* Confirm Dialog */}
@@ -219,7 +226,7 @@ const BackupCard = ({ backup, onRestore, onDelete, onRetry, onVerify }) => {
             : 'Are you sure you want to verify this backup?'
         }
         confirmText={action?.type === 'delete' ? 'Delete' : action?.type === 'restore' ? 'Restore' : 'Confirm'}
-        confirmClass={action?.type === 'delete' ? 'btn-danger' : 'btn-primary'}
+        type={action?.type === 'delete' ? 'danger' : 'warning'}
       />
     </div>
   );
@@ -277,30 +284,33 @@ const SchedulerStatus = ({ status, onStart, onStop, onTrigger }) => {
       {/* Actions */}
       <div className="flex space-x-2">
         {status.running ? (
-          <button
+          <Button
             onClick={onStop}
-            className="btn btn-danger btn-sm"
+            variant="destructive"
+            size="sm"
           >
             <Pause className="h-4 w-4 mr-1" />
             Stop
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             onClick={onStart}
-            className="btn btn-primary btn-sm"
+            variant="default"
+            size="sm"
           >
             <Play className="h-4 w-4 mr-1" />
             Start
-          </button>
+          </Button>
         )}
         
-        <button
+        <Button
           onClick={() => setTriggerDialog(true)}
-          className="btn btn-secondary btn-sm"
+          variant="secondary"
+          size="sm"
         >
           <Zap className="h-4 w-4 mr-1" />
           Trigger
-        </button>
+        </Button>
       </div>
 
       {/* Trigger Dialog */}
@@ -500,12 +510,12 @@ export const Backups = () => {
         </div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">Error loading backups</h3>
         <p className="text-gray-500 mb-4">{backupsError.message}</p>
-        <button
+        <Button
           onClick={() => queryClient.invalidateQueries('backups')}
-          className="btn btn-primary"
+          variant="default"
         >
           Try Again
-        </button>
+        </Button>
       </ResponsiveContainer>
     );
   }
@@ -518,13 +528,13 @@ export const Backups = () => {
           <h1 className="text-2xl font-bold text-gray-900">Backup Management</h1>
           <p className="text-gray-600">Manage automated backups and restore data</p>
         </div>
-        <button
+        <Button
           onClick={() => setShowCreateDialog(true)}
-          className="btn btn-primary"
+          variant="default"
         >
           <Database className="h-5 w-5 mr-2" />
           Create Backup
-        </button>
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -606,12 +616,12 @@ export const Backups = () => {
               <Database className="h-12 w-12 mx-auto text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No backups found</h3>
               <p className="text-gray-500 mb-4">Create your first backup to get started</p>
-              <button
+              <Button
                 onClick={() => setShowCreateDialog(true)}
-                className="btn btn-primary"
+                variant="default"
               >
                 Create Backup
-              </button>
+              </Button>
             </div>
           ) : (
             <ResponsiveGrid cols={{ default: 1, md: 2, lg: 3 }} gap={4}>

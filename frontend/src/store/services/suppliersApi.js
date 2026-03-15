@@ -36,7 +36,12 @@ export const suppliersApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Suppliers', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Suppliers', id: 'LIST' },
+        { type: 'Suppliers', id: 'ACTIVE' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+      ],
     }),
     updateSupplier: builder.mutation({
       query: ({ id, data }) => ({
@@ -47,6 +52,11 @@ export const suppliersApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Suppliers', id },
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Suppliers', id: 'ACTIVE' },
+        { type: 'Orders', id: 'PO_LIST' },
+        { type: 'Orders', id: 'PI_LIST' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
       ],
     }),
     deleteSupplier: builder.mutation({
@@ -57,6 +67,11 @@ export const suppliersApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'Suppliers', id },
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Suppliers', id: 'ACTIVE' },
+        { type: 'Orders', id: 'PO_LIST' },
+        { type: 'Orders', id: 'PI_LIST' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
       ],
     }),
     checkEmail: builder.query({
@@ -118,7 +133,12 @@ export const suppliersApi = api.injectEndpoints({
           data: formData,
         };
       },
-      invalidatesTags: [{ type: 'Suppliers', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Suppliers', id: 'LIST' },
+        { type: 'Suppliers', id: 'ACTIVE' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+      ],
     }),
     downloadTemplate: builder.query({
       query: () => ({
@@ -148,6 +168,7 @@ export const {
   useLazyCheckContactNameQuery,
   useGetActiveSuppliersQuery,
   useGetSupplierQuery,
+  useLazyGetSupplierQuery,
   useSearchSuppliersQuery,
   useLazySearchSuppliersQuery,
   useExportExcelMutation,

@@ -10,7 +10,7 @@ const noteService = require('../services/noteService');
 router.get('/', [
   auth,
   query('entityType').isIn(['Customer', 'Product', 'SalesOrder', 'PurchaseOrder', 'Supplier', 'Sale', 'PurchaseInvoice', 'SalesInvoice']).optional(),
-  query('entityId').isMongoId().optional(),
+  query('entityId').isUUID(4).optional(),
   query('isPrivate').isBoolean().optional(),
   query('search').isString().optional(),
   query('tags').isString().optional()
@@ -58,7 +58,7 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/', [
   auth,
   body('entityType').isIn(['Customer', 'Product', 'SalesOrder', 'PurchaseOrder', 'Supplier', 'Sale', 'PurchaseInvoice', 'SalesInvoice']),
-  body('entityId').isMongoId(),
+  body('entityId').isUUID(4),
   body('content').trim().isLength({ min: 1, max: 10000 }),
   body('htmlContent').optional().isString(),
   body('isPrivate').optional().isBoolean(),

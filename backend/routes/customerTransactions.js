@@ -10,7 +10,7 @@ const { body, param, query } = require('express-validator');
 router.post('/', [
   auth,
   requirePermission('create_customer_transactions'),
-  body('customerId').isMongoId().withMessage('Valid customer ID is required'),
+  body('customerId').isUUID(4).withMessage('Valid customer ID is required'),
   body('transactionType').isIn(['invoice', 'payment', 'refund', 'credit_note', 'debit_note', 'adjustment', 'write_off', 'reversal', 'opening_balance']).withMessage('Valid transaction type is required'),
   body('netAmount').isFloat({ min: 0 }).withMessage('Net amount must be a positive number'),
   body('referenceType').isIn(['sales_order', 'payment', 'refund', 'adjustment', 'manual_entry', 'system_generated', 'opening_balance']).withMessage('Valid reference type is required')
@@ -30,7 +30,7 @@ router.post('/', [
 router.get('/customer/:customerId', [
   auth,
   requirePermission('view_customer_transactions'),
-  param('customerId').isMongoId().withMessage('Valid customer ID is required')
+  param('customerId').isUUID(4).withMessage('Valid customer ID is required')
 ], async (req, res) => {
   try {
     const options = {
@@ -57,10 +57,10 @@ router.get('/customer/:customerId', [
 router.post('/apply-payment', [
   auth,
   requirePermission('create_customer_transactions'),
-  body('customerId').isMongoId().withMessage('Valid customer ID is required'),
+  body('customerId').isUUID(4).withMessage('Valid customer ID is required'),
   body('paymentAmount').isFloat({ min: 0.01 }).withMessage('Payment amount must be positive'),
   body('applications').isArray().withMessage('Applications must be an array'),
-  body('applications.*.invoiceId').isMongoId().withMessage('Valid invoice ID is required'),
+  body('applications.*.invoiceId').isUUID(4).withMessage('Valid invoice ID is required'),
   body('applications.*.amount').isFloat({ min: 0.01 }).withMessage('Application amount must be positive')
 ], async (req, res) => {
   try {
@@ -83,7 +83,7 @@ router.post('/apply-payment', [
 router.post('/:id/reverse', [
   auth,
   requirePermission('reverse_customer_transactions'),
-  param('id').isMongoId().withMessage('Valid transaction ID is required'),
+  param('id').isUUID(4).withMessage('Valid transaction ID is required'),
   body('reason').trim().isLength({ min: 1 }).withMessage('Reason is required')
 ], async (req, res) => {
   try {
@@ -105,7 +105,7 @@ router.post('/:id/reverse', [
 router.post('/:id/partial-reverse', [
   auth,
   requirePermission('reverse_customer_transactions'),
-  param('id').isMongoId().withMessage('Valid transaction ID is required'),
+  param('id').isUUID(4).withMessage('Valid transaction ID is required'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Amount must be positive'),
   body('reason').trim().isLength({ min: 1 }).withMessage('Reason is required')
 ], async (req, res) => {
@@ -129,7 +129,7 @@ router.post('/:id/partial-reverse', [
 router.get('/customer/:customerId/overdue', [
   auth,
   requirePermission('view_customer_transactions'),
-  param('customerId').isMongoId().withMessage('Valid customer ID is required')
+  param('customerId').isUUID(4).withMessage('Valid customer ID is required')
 ], async (req, res) => {
   try {
     const overdueInvoices = await customerTransactionService.getOverdueInvoices(req.params.customerId);
@@ -146,7 +146,7 @@ router.get('/customer/:customerId/overdue', [
 router.get('/customer/:customerId/aging', [
   auth,
   requirePermission('view_customer_reports'),
-  param('customerId').isMongoId().withMessage('Valid customer ID is required')
+  param('customerId').isUUID(4).withMessage('Valid customer ID is required')
 ], async (req, res) => {
   try {
     const aging = await customerTransactionService.getCustomerAging(req.params.customerId);

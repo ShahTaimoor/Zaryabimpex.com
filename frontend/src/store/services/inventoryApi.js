@@ -47,7 +47,20 @@ export const inventoryApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Inventory', id: 'LIST' }, { type: 'Inventory', id: 'SUMMARY' }, { type: 'Inventory', id: 'LOW_STOCK' }],
+      invalidatesTags: [
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Inventory', id: 'MOVEMENTS' },
+        { type: 'Inventory', id: 'MOVEMENTS_LIST' },
+        { type: 'Inventory', id: 'MOVEMENTS_STATS' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
+      ],
     }),
     updateStock: builder.mutation({
       query: (data) => ({
@@ -55,7 +68,20 @@ export const inventoryApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Inventory', id: 'LIST' }, { type: 'Inventory', id: 'SUMMARY' }, { type: 'Inventory', id: 'LOW_STOCK' }],
+      invalidatesTags: [
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Inventory', id: 'MOVEMENTS' },
+        { type: 'Inventory', id: 'MOVEMENTS_LIST' },
+        { type: 'Inventory', id: 'MOVEMENTS_STATS' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
+      ],
     }),
     // Inventory Alerts
     getLowStockAlerts: builder.query({
@@ -93,7 +119,19 @@ export const inventoryApi = api.injectEndpoints({
       invalidatesTags: [
         { type: 'Inventory', id: 'ALERTS' },
         { type: 'Inventory', id: 'ALERTS_SUMMARY' },
+        { type: 'Inventory', id: 'MOVEMENTS' },
+        { type: 'Inventory', id: 'MOVEMENTS_LIST' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Products', id: 'LIST' },
         { type: 'Orders', id: 'PO_LIST' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
       ],
     }),
     // Stock Ledger
@@ -161,7 +199,20 @@ export const inventoryApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Inventory', id: 'MOVEMENTS' }, { type: 'Inventory', id: 'LIST' }, { type: 'Inventory', id: 'SUMMARY' }],
+      invalidatesTags: [
+        { type: 'Inventory', id: 'MOVEMENTS' },
+        { type: 'Inventory', id: 'MOVEMENTS_LIST' },
+        { type: 'Inventory', id: 'MOVEMENTS_STATS' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
+      ],
     }),
     createStockMovementAdjustment: builder.mutation({
       query: (data) => ({
@@ -169,7 +220,20 @@ export const inventoryApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Inventory', id: 'MOVEMENTS' }, { type: 'Inventory', id: 'LIST' }, { type: 'Inventory', id: 'SUMMARY' }],
+      invalidatesTags: [
+        { type: 'Inventory', id: 'MOVEMENTS' },
+        { type: 'Inventory', id: 'MOVEMENTS_LIST' },
+        { type: 'Inventory', id: 'MOVEMENTS_STATS' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
+      ],
     }),
     reverseStockMovement: builder.mutation({
       query: ({ id, reason }) => ({
@@ -177,7 +241,20 @@ export const inventoryApi = api.injectEndpoints({
         method: 'post',
         data: { reason },
       }),
-      invalidatesTags: [{ type: 'Inventory', id: 'MOVEMENTS' }, { type: 'Inventory', id: 'LIST' }, { type: 'Inventory', id: 'SUMMARY' }],
+      invalidatesTags: [
+        { type: 'Inventory', id: 'MOVEMENTS' },
+        { type: 'Inventory', id: 'MOVEMENTS_LIST' },
+        { type: 'Inventory', id: 'MOVEMENTS_STATS' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'StockLedger', id: 'LIST' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
+      ],
     }),
     // Inventory Reports
     getReports: builder.query({
@@ -276,14 +353,21 @@ export const inventoryApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Inventory', id: 'REPORTS' }],
+      invalidatesTags: [
+        { type: 'Inventory', id: 'REPORTS' },
+        { type: 'Inventory', id: 'REPORTS_SUMMARY' },
+      ],
     }),
     deleteReport: builder.mutation({
       query: (id) => ({
         url: `inventory-reports/${id}`,
         method: 'delete',
       }),
-      invalidatesTags: [{ type: 'Inventory', id: 'REPORTS' }],
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'Inventory', id: 'REPORTS' },
+        { type: 'Inventory', id: 'REPORTS_SUMMARY' },
+        { type: 'Inventory', id: `REPORT_${id}` },
+      ],
     }),
     exportReport: builder.mutation({
       query: ({ id, format }) => ({

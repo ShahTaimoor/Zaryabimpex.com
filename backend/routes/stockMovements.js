@@ -1,12 +1,10 @@
 const express = require('express');
 const { body, query, param } = require('express-validator');
-const StockMovement = require('../models/StockMovement'); // Still needed for new StockMovement() and static methods
-const Product = require('../models/Product'); // Still needed for model reference
 const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
-const stockMovementRepository = require('../repositories/StockMovementRepository');
-const productRepository = require('../repositories/ProductRepository');
+const stockMovementRepository = require('../repositories/postgres/StockMovementRepository');
+const productRepository = require('../repositories/postgres/ProductRepository');
 
 const router = express.Router();
 
@@ -47,7 +45,7 @@ router.get('/', [
   query('page').optional({ checkFalsy: true }).isInt({ min: 1 }).withMessage('Page must be a positive integer'),
   query('limit').optional({ checkFalsy: true }).isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
   query('search').optional({ checkFalsy: true }).trim(),
-  query('product').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid product ID'),
+  query('product').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid product ID'),
   query('movementType').optional({ checkFalsy: true }).isIn([
     'purchase', 'sale', 'return_in', 'return_out', 'adjustment_in', 'adjustment_out',
     'transfer_in', 'transfer_out', 'damage', 'expiry', 'theft', 'production', 'consumption', 'initial_stock'
@@ -70,102 +68,52 @@ router.get('/', [
     } = req.query;
     const decodedSearch = decodeHtmlEntities(search);
 
-    // Build query
-    const query = {};
-    
-    if (product) query.product = product;
-    if (movementType) query.movementType = movementType;
-    if (location) query.location = location;
-    if (status) query.status = status;
-    
-    // Date range filter - use dateFilter from middleware (Pakistan timezone)
+    const filter = {};
+    if (product) filter.product = product;
+    if (movementType) filter.movementType = movementType;
+    if (location) filter.location = location;
+    if (status) filter.status = status;
+
     if (req.dateFilter && Object.keys(req.dateFilter).length > 0) {
-      Object.assign(query, req.dateFilter);
-    }
-    
-    if (decodedSearch) {
-      const searchVariants = Array.from(new Set([
-        decodedSearch,
-        search
-      ].filter(Boolean)));
-
-      const orConditions = [];
-
-      for (const variant of searchVariants) {
-        orConditions.push(
-          { productName: { $regex: variant, $options: 'i' } },
-          { productSku: { $regex: variant, $options: 'i' } },
-          { referenceNumber: { $regex: variant, $options: 'i' } },
-          { userName: { $regex: variant, $options: 'i' } },
-          { notes: { $regex: variant, $options: 'i' } }
-        );
+      const df = req.dateFilter;
+      if (df.movementDate) {
+        if (df.movementDate.$gte) filter.dateFrom = df.movementDate.$gte;
+        if (df.movementDate.$lte) filter.dateTo = df.movementDate.$lte;
       }
+      if (df.createdAt) {
+        if (df.createdAt.$gte) filter.dateFrom = filter.dateFrom || df.createdAt.$gte;
+        if (df.createdAt.$lte) filter.dateTo = filter.dateTo || df.createdAt.$lte;
+      }
+      if (df.$or) {
+        df.$or.forEach((cond) => {
+          const c = cond.movementDate || cond.createdAt;
+          if (c && c.$gte) filter.dateFrom = filter.dateFrom || c.$gte;
+          if (c && c.$lte) filter.dateTo = filter.dateTo || c.$lte;
+        });
+      }
+    }
 
+    if (decodedSearch) {
+      filter.searchIlike = decodedSearch;
       try {
-        const matchingProducts = await productRepository.findAll({
-          name: { $regex: decodedSearch, $options: 'i' }
-        }, { select: '_id' });
-
+        const matchingProducts = await productRepository.search(decodedSearch, { limit: 500 });
         if (matchingProducts.length > 0) {
-          orConditions.push({
-            product: { $in: matchingProducts.map(product => product._id) }
-          });
+          filter.productIds = matchingProducts.map(p => p.id || p._id).filter(Boolean);
         }
       } catch (productLookupError) {
         console.error('Error matching products for stock movement search:', productLookupError);
       }
-
-      if (orConditions.length > 0) {
-        query.$or = orConditions;
-      }
     }
 
-    // Get movements with pagination
-    const result = await stockMovementRepository.findWithPagination(query, {
+    const result = await stockMovementRepository.findWithPagination(filter, {
       page: parseInt(page),
-      limit: parseInt(limit),
-      sort: { createdAt: -1 },
-      populate: [
-        { path: 'product', select: 'name sku category' },
-        { path: 'user', select: 'firstName lastName email' },
-        { path: 'supplier', select: 'name' },
-        { path: 'customer', select: 'name businessName' }
-      ],
-      lean: true
+      limit: parseInt(limit)
     });
-    
+
     const movements = result.movements;
     const total = result.total;
 
-    // Calculate summary statistics
-    const summary = await stockMovementRepository.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: null,
-          totalMovements: { $sum: 1 },
-          totalValue: { $sum: '$totalValue' },
-          stockIn: {
-            $sum: {
-              $cond: [
-                { $in: ['$movementType', ['purchase', 'return_in', 'adjustment_in', 'transfer_in', 'production', 'initial_stock']] },
-                '$quantity',
-                0
-              ]
-            }
-          },
-          stockOut: {
-            $sum: {
-              $cond: [
-                { $in: ['$movementType', ['sale', 'return_out', 'adjustment_out', 'transfer_out', 'damage', 'expiry', 'theft', 'consumption']] },
-                '$quantity',
-                0
-              ]
-            }
-          }
-        }
-      }
-    ]);
+    const summary = await stockMovementRepository.getSummary(filter);
 
     res.json({
       success: true,
@@ -177,7 +125,7 @@ router.get('/', [
           total,
           limit: parseInt(limit)
         },
-        summary: summary[0] || {
+        summary: summary || {
           totalMovements: 0,
           totalValue: 0,
           stockIn: 0,
@@ -199,7 +147,7 @@ router.get('/', [
 router.get('/product/:productId', [
   auth, 
   requirePermission('view_inventory'),
-  param('productId').isMongoId().withMessage('Invalid product ID'),
+  param('productId').isUUID(4).withMessage('Invalid product ID'),
   query('dateFrom').optional({ checkFalsy: true }).isISO8601().withMessage('Invalid date format'),
   query('dateTo').optional({ checkFalsy: true }).isISO8601().withMessage('Invalid date format'),
   query('movementType').optional({ checkFalsy: true }).isIn([
@@ -216,15 +164,9 @@ router.get('/product/:productId', [
     if (dateTo) options.dateTo = dateTo;
     if (movementType) options.movementType = movementType;
 
-    const movements = await StockMovement.getProductMovements(productId, options);
-    
-    // Get stock summary
-    const summary = await StockMovement.getStockSummary(productId);
-    
-    // Get current stock from product
-    const product = await productRepository.findById(productId, {
-      select: 'inventory.currentStock'
-    });
+    const movements = await stockMovementRepository.getProductMovements(productId, options);
+    const summary = await stockMovementRepository.getStockSummary(productId);
+    const product = await productRepository.findById(productId);
 
     res.json({
       success: true,
@@ -236,7 +178,7 @@ router.get('/product/:productId', [
           totalValueIn: 0,
           totalValueOut: 0
         },
-        currentStock: product?.inventory?.currentStock || 0
+        currentStock: product?.stock_quantity ?? product?.inventory?.currentStock ?? 0
       }
     });
   } catch (error) {
@@ -253,19 +195,10 @@ router.get('/product/:productId', [
 router.get('/:id', [
   auth, 
   requirePermission('view_inventory'),
-  param('id').isMongoId().withMessage('Invalid movement ID')
+  param('id').isUUID(4).withMessage('Invalid movement ID')
 ], async (req, res) => {
   try {
-    const movement = await stockMovementRepository.findById(req.params.id, {
-      populate: [
-        { path: 'product', select: 'name sku category' },
-        { path: 'user', select: 'firstName lastName email' },
-        { path: 'supplier', select: 'name' },
-        { path: 'customer', select: 'name businessName' },
-        { path: 'originalMovement' },
-        { path: 'reversedBy', select: 'firstName lastName' }
-      ]
-    });
+    const movement = await stockMovementRepository.findById(req.params.id);
 
     if (!movement) {
       return res.status(404).json({
@@ -292,7 +225,7 @@ router.get('/:id', [
 router.post('/adjustment', [
   auth, 
   requirePermission('update_inventory'),
-  body('productId').isMongoId().withMessage('Invalid product ID'),
+  body('productId').isUUID(4).withMessage('Invalid product ID'),
   body('movementType').isIn(['adjustment_in', 'adjustment_out']).withMessage('Invalid adjustment type'),
   body('quantity').isFloat({ min: 0.01 }).withMessage('Quantity must be greater than 0'),
   body('unitCost').isFloat({ min: 0 }).withMessage('Unit cost must be non-negative'),
@@ -311,7 +244,6 @@ router.post('/adjustment', [
       location = 'main_warehouse'
     } = req.body;
 
-    // Get product
     const product = await productRepository.findById(productId);
     if (!product) {
       return res.status(404).json({
@@ -320,9 +252,9 @@ router.post('/adjustment', [
       });
     }
 
-    const currentStock = product.inventory.currentStock || 0;
-    const newStock = movementType === 'adjustment_in' 
-      ? currentStock + quantity 
+    const currentStock = product.stock_quantity ?? product.inventory?.currentStock ?? 0;
+    const newStock = movementType === 'adjustment_in'
+      ? currentStock + quantity
       : currentStock - quantity;
 
     if (newStock < 0) {
@@ -332,9 +264,9 @@ router.post('/adjustment', [
       });
     }
 
-    // Create stock movement
-    const movement = new StockMovement({
+    const movement = await stockMovementRepository.create({
       product: productId,
+      productId,
       productName: product.name,
       productSku: product.sku,
       movementType,
@@ -347,24 +279,15 @@ router.post('/adjustment', [
       referenceId: productId,
       referenceNumber: `ADJ-${Date.now()}`,
       location,
-      user: req.user._id,
-      userName: `${req.user.firstName} ${req.user.lastName}`,
+      user: req.user.id || req.user._id,
+      userId: req.user.id || req.user._id,
+      userName: `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email,
       reason,
       notes,
       status: 'completed'
     });
 
-    await movement.save();
-
-    // Update product stock
-    product.inventory.currentStock = newStock;
-    await product.save();
-
-    // Populate and return
-    await movement.populate([
-      { path: 'product', select: 'name sku category' },
-      { path: 'user', select: 'firstName lastName email' }
-    ]);
+    await productRepository.update(productId, { stockQuantity: newStock });
 
     res.status(201).json({
       success: true,
@@ -383,14 +306,13 @@ router.post('/adjustment', [
 
 // Reverse a stock movement
 router.post('/:id/reverse', [
-  auth, 
+  auth,
   requirePermission('update_inventory'),
-  param('id').isMongoId().withMessage('Invalid movement ID'),
+  param('id').isUUID(4).withMessage('Invalid movement ID'),
   body('reason').optional().isString().trim().isLength({ max: 500 }).withMessage('Reason too long')
 ], async (req, res) => {
   try {
     const movement = await stockMovementRepository.findById(req.params.id);
-    
     if (!movement) {
       return res.status(404).json({
         success: false,
@@ -398,18 +320,18 @@ router.post('/:id/reverse', [
       });
     }
 
-    const reversedMovement = await movement.reverse(req.user._id, req.body.reason);
-    
-    // Update product stock
-    const product = await productRepository.findById(movement.product);
-    if (product) {
-      product.inventory.currentStock = reversedMovement.newStock;
-      await product.save();
-    }
+    const userName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email;
+    const reversedMovement = await stockMovementRepository.reverse(
+      req.params.id,
+      req.user.id || req.user._id,
+      userName,
+      req.body.reason
+    );
 
-    // Mark original movement as reversed
-    movement.status = 'reversed';
-    await movement.save();
+    await productRepository.update(movement.product_id || movement.product, {
+      stockQuantity: reversedMovement.new_stock ?? reversedMovement.newStock
+    });
+    await stockMovementRepository.updateStatus(req.params.id, 'reversed');
 
     res.json({
       success: true,
@@ -428,73 +350,24 @@ router.post('/:id/reverse', [
 
 // Get stock movement statistics
 router.get('/stats/overview', [
-  auth, 
+  auth,
   requirePermission('view_inventory'),
   query('dateFrom').optional({ checkFalsy: true }).isISO8601().withMessage('Invalid date format'),
   query('dateTo').optional({ checkFalsy: true }).isISO8601().withMessage('Invalid date format')
 ], async (req, res) => {
   try {
     const { dateFrom, dateTo } = req.query;
-    
-    const matchStage = {};
-    if (dateFrom || dateTo) {
-      matchStage.createdAt = {};
-      const fromDate = toStartOfDay(dateFrom);
-      const toDate = toEndOfDay(dateTo);
-      if (fromDate) matchStage.createdAt.$gte = fromDate;
-      if (toDate) matchStage.createdAt.$lte = toDate;
-      if (Object.keys(matchStage.createdAt).length === 0) {
-        delete matchStage.createdAt;
-      }
-    }
+    const filter = {};
+    if (dateFrom) filter.dateFrom = toStartOfDay(dateFrom);
+    if (dateTo) filter.dateTo = toEndOfDay(dateTo);
 
-    const stats = await stockMovementRepository.aggregate([
-      { $match: matchStage },
-      {
-        $group: {
-          _id: '$movementType',
-          count: { $sum: 1 },
-          totalQuantity: { $sum: '$quantity' },
-          totalValue: { $sum: '$totalValue' }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          movements: {
-            $push: {
-              type: '$_id',
-              count: '$count',
-              totalQuantity: '$totalQuantity',
-              totalValue: '$totalValue'
-            }
-          },
-          totalMovements: { $sum: '$count' },
-          totalValue: { $sum: '$totalValue' }
-        }
-      }
-    ]);
-
-    // Get top products by movement
-    const topProducts = await stockMovementRepository.aggregate([
-      { $match: matchStage },
-      {
-        $group: {
-          _id: '$product',
-          productName: { $first: '$productName' },
-          totalMovements: { $sum: 1 },
-          totalQuantity: { $sum: '$quantity' },
-          totalValue: { $sum: '$totalValue' }
-        }
-      },
-      { $sort: { totalMovements: -1 } },
-      { $limit: 10 }
-    ]);
+    const [overview] = await stockMovementRepository.getStatsOverview(filter);
+    const topProducts = await stockMovementRepository.getTopProducts(filter, 10);
 
     res.json({
       success: true,
       data: {
-        overview: stats[0] || { movements: [], totalMovements: 0, totalValue: 0 },
+        overview: overview || { movements: [], totalMovements: 0, totalValue: 0 },
         topProducts
       }
     });

@@ -18,8 +18,11 @@ import { useLazySearchSuppliersQuery, useGetActiveSuppliersQuery } from '../stor
 import { useGetCustomersQuery } from '../store/services/customersApi';
 import { useGetProductsQuery } from '../store/services/productsApi';
 import { SearchableDropdown } from '../components/SearchableDropdown';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { LoadingButton } from '../components/LoadingSpinner';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 const DropShipping = () => {
   // Supplier Section
@@ -365,43 +368,40 @@ const DropShipping = () => {
 
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Bill No</label>
-              <input
+              <Input
                 type="text"
                 value={billNumber}
                 onChange={(e) => setBillNumber(e.target.value)}
-                className="input"
                 placeholder="Enter bill number"
               />
             </div>
 
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Description</label>
-              <textarea
+              <Textarea
                 value={supplierDescription}
                 onChange={(e) => setSupplierDescription(e.target.value)}
-                className="input"
-                rows="2"
+                rows={2}
                 placeholder="Supplier description"
               />
             </div>
 
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Invoice Amount</label>
-              <input
+              <Input
                 type="number"
                 value={supplierInvoiceAmount}
-                className="input bg-yellow-50 border-yellow-200"
+                className="bg-yellow-50 border-yellow-200"
                 disabled
               />
             </div>
 
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Paid Amount</label>
-              <input
+              <Input
                 type="number"
                 value={supplierPaidAmount}
                 onChange={(e) => setSupplierPaidAmount(parseFloat(e.target.value) || 0)}
-                className="input"
                 placeholder="0"
               />
             </div>
@@ -508,55 +508,54 @@ const DropShipping = () => {
 
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Description</label>
-              <textarea
+              <Textarea
                 value={customerDescription}
                 onChange={(e) => setCustomerDescription(e.target.value)}
-                className="input"
-                rows="2"
+                rows={2}
                 placeholder="Customer description"
               />
             </div>
 
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Invoice Amount</label>
-              <input
+              <Input
                 type="number"
                 value={customerInvoiceAmount}
-                className="input bg-yellow-50 border-yellow-200"
+                className="bg-yellow-50 border-yellow-200"
                 disabled
               />
             </div>
 
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Received Amount</label>
-              <input
+              <Input
                 type="number"
                 value={customerReceivedAmount}
                 onChange={(e) => setCustomerReceivedAmount(parseFloat(e.target.value) || 0)}
-                className="input"
                 placeholder="0"
               />
             </div>
 
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Customer Amount</label>
-              <input
+              <Input
                 type="number"
                 value={customerAmount}
                 onChange={(e) => setCustomerAmount(parseFloat(e.target.value) || 0)}
-                className="input"
                 placeholder="0"
               />
             </div>
 
-            <button
+            <Button
               onClick={handleAddToCart}
-              className="w-full btn btn-success btn-md flex items-center justify-center gap-2"
+              variant="success"
+              size="default"
+              className="w-full flex items-center justify-center gap-2"
               disabled={!selectedProduct}
             >
               <Plus className="h-4 w-4" />
               Add
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -584,73 +583,72 @@ const DropShipping = () => {
             </div>
 
             <div className="sm:col-span-1 md:col-span-1">
-              <button className="btn btn-secondary btn-md w-full mt-7 sm:mt-7 flex items-center justify-center">
+              <Button variant="secondary" size="default" className="w-full mt-7 sm:mt-7 flex items-center justify-center">
                 <RefreshCw className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
 
             <div className="sm:col-span-1 md:col-span-2">
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Quantity</label>
-              <input
+              <Input
                 type="number"
                 value={quantity}
                 onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                className="input"
-                min="1"
+                min={1}
               />
             </div>
 
             <div className="sm:col-span-1 md:col-span-2">
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Supplier Rate</label>
-              <input
+              <Input
                 type="number"
                 value={supplierRate}
                 onChange={(e) => setSupplierRate(e.target.value)}
-                className="input"
                 placeholder="0"
               />
             </div>
 
             <div className="sm:col-span-1 md:col-span-2">
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Supplier Amount</label>
-              <input
+              <Input
                 type="number"
                 value={quantity * (supplierRate || 0)}
-                className="input bg-gray-50"
+                className="bg-gray-50"
                 disabled
               />
             </div>
 
             <div className="sm:col-span-1 md:col-span-2">
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Customer Rate</label>
-              <input
+              <Input
                 type="number"
                 value={customerRate}
                 onChange={(e) => setCustomerRate(e.target.value)}
-                className="input"
                 placeholder="0"
               />
             </div>
 
             <div className="sm:col-span-1 md:col-span-2">
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Customer Amount</label>
-              <input
+              <Input
                 type="number"
                 value={quantity * (customerRate || 0)}
-                className="input bg-gray-50"
+                className="bg-gray-50"
                 disabled
               />
             </div>
           </div>
 
-          <button
+          <Button
             onClick={handleAddToCart}
-            className="btn btn-success btn-md flex items-center justify-center gap-2"
+            variant="success"
+            size="default"
+            className="flex items-center justify-center gap-2"
             disabled={!selectedProduct}
           >
             <Plus className="h-4 w-4" />
             Add
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -740,19 +738,23 @@ const DropShipping = () => {
         <LoadingButton
           onClick={handleSave}
           isLoading={creating}
-          className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+          variant="default"
+          size="default"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           <Save className="h-4 w-4" />
           Save
         </LoadingButton>
 
-        <button
+        <Button
           onClick={handleReset}
-          className="btn btn-secondary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+          variant="secondary"
+          size="default"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           <RefreshCw className="h-4 w-4" />
           Reset
-        </button>
+        </Button>
       </div>
     </div>
   );

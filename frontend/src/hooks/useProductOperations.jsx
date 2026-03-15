@@ -10,7 +10,7 @@ import {
   useLinkInvestorsMutation,
 } from '../store/services/productsApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 export const useProductOperations = (products, refetch) => {
   const dispatch = useAppDispatch();
@@ -162,13 +162,12 @@ export const useProductOperations = (products, refetch) => {
     const selectedItems = bulkOps.getSelectedItems();
     if (selectedItems.length === 0) return;
 
-    const headers = ['Name', 'Description', 'SKU', 'Stock', 'Reorder Point', 'Cost', 'Retail', 'Wholesale', 'Category', 'Status'];
+    const headers = ['Name', 'Description', 'SKU', 'Stock', 'Cost', 'Retail', 'Wholesale', 'Category', 'Status'];
     const rows = selectedItems.map(item => [
       item.name || '',
       item.description || '',
       item.sku || '',
       item.inventory?.currentStock || 0,
-      item.inventory?.reorderPoint || 0,
       item.pricing?.cost || 0,
       item.pricing?.retail || 0,
       item.pricing?.wholesale || 0,

@@ -1,8 +1,248 @@
 const express = require('express');
-const router = express.Router();
 const { body, validationResult, query } = require('express-validator');
 const { auth, requirePermission } = require('../middleware/auth');
 const cityService = require('../services/cityService');
+const XLSX = require('xlsx');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
+
+const router = express.Router();
+
+// @route   POST /api/cities/import/excel
+// @desc    Import cities from Excel
+// @access  Private (requires 'manage_users' permission)
+router.post('/import/excel', [
+  auth,
+  requirePermission('manage_users'),
+  upload.single('file')
+], async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    
+    const results = {
+      total: 0,
+      success: 0,
+      errors: []
+    };
+    
+    // Read Excel file
+    const workbook = XLSX.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const cities = XLSX.utils.sheet_to_json(worksheet);
+    
+    results.total = cities.length;
+    
+    for (let i = 0; i < cities.length; i++) {
+      try {
+        const rawRow = cities[i];
+        // Normalize keys to handle spaces and case sensitivity
+        const row = {};
+        Object.keys(rawRow).forEach(key => {
+          row[key.trim()] = rawRow[key];
+        });
+        
+        // Map Excel columns to our format
+        const cityData = {
+          name: row['Name'] || row['name'] || row['City Name'] || row['city name'] || row.name,
+          state: row['State'] || row['state'] || row.state || '',
+          country: row['Country'] || row['country'] || row.country || 'US',
+          description: row['Description'] || row['description'] || row.description || '',
+          isActive: row['Status'] || row['status'] ? (row['Status'] || row['status']).toString().toLowerCase() === 'active' : true
+        };
+        
+        // Validate required fields
+        if (!cityData.name) {
+          results.errors.push({
+            row: i + 2,
+            error: 'Missing required field: City Name is required'
+          });
+          continue;
+        }
+        
+        // Check if city already exists
+        const cityExists = await cityService.checkNameExists(cityData.name);
+        
+        if (cityExists) {
+          results.errors.push({
+            row: i + 2,
+            error: `City already exists with name: ${cityData.name}`
+          });
+          continue;
+        }
+        
+        // Create city
+        await cityService.createCity({
+          name: cityData.name.toString().trim(),
+          state: cityData.state.toString().trim(),
+          country: cityData.country.toString().trim(),
+          description: cityData.description.toString().trim(),
+          isActive: cityData.isActive
+        }, req.user?.id || req.user?._id);
+        
+        results.success++;
+        
+      } catch (error) {
+        results.errors.push({
+          row: i + 2,
+          error: error.message
+        });
+      }
+    }
+    
+    // Clean up uploaded file
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Import completed',
+      results: results
+    });
+    
+  } catch (error) {
+    console.error('City Excel import error:', error);
+    res.status(500).json({ success: false, message: 'Import failed', error: error.message });
+  }
+});
+
+// @route   POST /api/cities/export/excel
+// @desc    Export cities to Excel
+// @access  Private (requires 'view_reports' permission)
+router.post('/export/excel', [auth, requirePermission('view_reports')], async (req, res) => {
+  try {
+    const { filters = {} } = req.body;
+    
+    // Get all cities for export (no pagination)
+    const result = await cityService.getCities({ ...filters, limit: 10000 });
+    const cities = result.cities;
+    
+    // Prepare Excel data
+    const excelData = cities.map(city => ({
+      'Name': city.name,
+      'State': city.state || '',
+      'Country': city.country || '',
+      'Description': city.description || '',
+      'Status': city.isActive ? 'active' : 'inactive'
+    }));
+    
+    // Create Excel workbook
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    
+    // Set column widths
+    const columnWidths = [
+      { wch: 25 }, // Name
+      { wch: 20 }, // State
+      { wch: 15 }, // Country
+      { wch: 40 }, // Description
+      { wch: 12 }  // Status
+    ];
+    worksheet['!cols'] = columnWidths;
+    
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Cities');
+    
+    // Ensure exports directory exists
+    if (!fs.existsSync('exports')) {
+      fs.mkdirSync('exports');
+    }
+    
+    const filename = `cities_${Date.now()}.xlsx`;
+    const filepath = path.join('exports', filename);
+    XLSX.writeFile(workbook, filepath);
+    
+    res.json({
+      success: true,
+      message: 'Cities exported successfully',
+      filename: filename,
+      recordCount: excelData.length,
+      downloadUrl: `/api/cities/download/${filename}`
+    });
+    
+  } catch (error) {
+    console.error('City Excel export error:', error);
+    res.status(500).json({ success: false, message: 'Export failed', error: error.message });
+  }
+});
+
+// @route   GET /api/cities/download/:filename
+// @desc    Download exported file
+// @access  Private (requires 'view_reports' permission)
+router.get('/download/:filename', [auth, requirePermission('view_reports')], (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const filepath = path.join('exports', filename);
+    
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+    
+    res.download(filepath, filename, (err) => {
+      if (err) {
+        console.error('File download error:', err);
+      }
+    });
+  } catch (error) {
+    console.error('Download error:', error);
+    res.status(500).json({ message: 'Download failed' });
+  }
+});
+
+// @route   GET /api/cities/template/excel
+// @desc    Download Excel template for city import
+// @access  Private (requires 'manage_users' permission)
+router.get('/template/excel', [auth, requirePermission('manage_users')], (req, res) => {
+  try {
+    const templateData = [
+      {
+        'Name': 'New York',
+        'State': 'NY',
+        'Country': 'USA',
+        'Description': 'The Big Apple',
+        'Status': 'active'
+      },
+      {
+        'Name': 'London',
+        'State': 'Greater London',
+        'Country': 'UK',
+        'Description': 'Capital of UK',
+        'Status': 'active'
+      }
+    ];
+    
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    
+    const columnWidths = [
+      { wch: 25 },
+      { wch: 20 },
+      { wch: 15 },
+      { wch: 40 },
+      { wch: 12 }
+    ];
+    worksheet['!cols'] = columnWidths;
+    
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Template');
+    
+    if (!fs.existsSync('exports')) {
+      fs.mkdirSync('exports');
+    }
+    
+    const filename = 'city_import_template.xlsx';
+    const filepath = path.join('exports', filename);
+    XLSX.writeFile(workbook, filepath);
+    
+    res.download(filepath, filename);
+  } catch (error) {
+    console.error('Template generation error:', error);
+    res.status(500).json({ message: 'Failed to generate template' });
+  }
+});
 
 // @route   GET /api/cities
 // @desc    Get all cities with filtering and pagination
@@ -107,7 +347,7 @@ router.post('/', [
     }
 
     // Call service to create city
-    const result = await cityService.createCity(req.body, req.user._id);
+    const result = await cityService.createCity(req.body, req.user.id || req.user._id);
     
     res.status(201).json({
       success: true,
@@ -149,7 +389,7 @@ router.put('/:id', [
     }
 
     // Call service to update city
-    const result = await cityService.updateCity(req.params.id, req.body, req.user._id);
+    const result = await cityService.updateCity(req.params.id, req.body, req.user.id || req.user._id);
     
     res.json({
       success: true,
@@ -216,4 +456,3 @@ router.delete('/:id', [
 });
 
 module.exports = router;
-

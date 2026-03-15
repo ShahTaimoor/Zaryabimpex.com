@@ -16,7 +16,12 @@ class ProfitDistributionService {
    */
   async distributeProfitForOrder(order, user) {
     try {
-      if (!order || order.status !== 'confirmed' && order.payment?.status !== 'paid') {
+      if (!order) throw new Error('Order must be confirmed and paid to distribute profit');
+      const status = order.status ?? order.Status;
+      const paymentStatus = order.payment_status ?? order.paymentStatus ?? order.payment?.status;
+      const isPaid = paymentStatus === 'paid';
+      const isConfirmed = status === 'confirmed' || status === 'completed';
+      if (!isConfirmed || !isPaid) {
         throw new Error('Order must be confirmed and paid to distribute profit');
       }
 
@@ -31,17 +36,18 @@ class ProfitDistributionService {
         errors: []
       };
 
-      // Process each item in the order
-      for (const item of order.items) {
+      // Process each item in the order (support both product/product_id, unitPrice/unit_price)
+      const items = Array.isArray(order?.items) ? order.items : [];
+      for (const item of items) {
+        const productId = item.product ?? item.product_id;
+        if (!productId) continue;
         try {
-          // Get product with investors
-          const product = await ProductRepository.findById(item.product, {
-            populate: [{ path: 'investors.investor' }]
-          });
+          // Get product (investors from product_investors if available; Postgres may not have investors)
+          const product = await ProductRepository.findById(productId);
           
           if (!product) {
             distributionResults.errors.push({
-              item: item.product,
+              item: productId,
               error: 'Product not found'
             });
             continue;
@@ -53,8 +59,11 @@ class ProfitDistributionService {
           }
 
           // Calculate profit for this item
-          const saleAmount = item.total || (item.unitPrice * item.quantity);
-          const totalCost = product.pricing.cost * item.quantity;
+          const unitPrice = item?.unitPrice ?? item?.unit_price ?? 0;
+          const qty = item?.quantity ?? 0;
+          const saleAmount = item?.total ?? (unitPrice * qty) ?? 0;
+          const costPerUnit = product?.pricing?.cost ?? product?.cost_price ?? product?.costPrice ?? item?.unitCost ?? item?.cost_price ?? 0;
+          const totalCost = costPerUnit * qty;
           const totalProfit = saleAmount - totalCost;
 
           // Skip if no profit or negative profit
@@ -102,13 +111,16 @@ class ProfitDistributionService {
             
             let profitShare;
             try {
+              const orderId = order._id ?? order.id;
+              const orderNum = order.orderNumber ?? order.order_number;
+              const orderDt = order.createdAt ?? order.created_at ?? order.order_date ?? new Date();
               profitShare = await ProfitShareRepository.create({
-                order: order._id,
-                orderNumber: order.orderNumber,
-                orderDate: order.createdAt || new Date(),
-                product: product._id,
-                productName: product.name,
-                quantity: item.quantity,
+                order: orderId,
+                orderNumber: orderNum,
+                orderDate: orderDt,
+                product: product.id ?? product._id ?? productId,
+                productName: product.name ?? product.displayName ?? 'Product',
+                quantity: qty,
                 saleAmount: Math.round(saleAmount * 100) / 100,
                 totalCost: Math.round(totalCost * 100) / 100,
                 totalProfit: Math.round(totalProfit * 100) / 100,
@@ -120,7 +132,7 @@ class ProfitDistributionService {
                 companySharePercentage: companySharePercentage,
                 status: 'calculated',
                 calculatedAt: new Date(),
-                calculatedBy: user?._id || null
+                calculatedBy: user?.id ?? user?._id ?? null
               });
             } catch (err) {
               if (err.code === 11000) {
@@ -137,11 +149,11 @@ class ProfitDistributionService {
 
             // Update investor earnings immediately after creating the record
             try {
+              await InvestorRepository.addProfit(invDetail.investor, invDetail.shareAmount);
               const investor = await InvestorRepository.findById(invDetail.investor);
               if (investor) {
-                await investor.addProfit(invDetail.shareAmount);
                 distributionResults.investorsUpdated.push({
-                  investorId: investor._id,
+                  investorId: investor.id,
                   investorName: investor.name,
                   amount: invDetail.shareAmount,
                   productName: product.name,
@@ -183,6 +195,56 @@ class ProfitDistributionService {
     } catch (error) {
       console.error('Error distributing profit for order:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Redistribute profit when a sale is edited (reverse old shares, create new ones)
+   * @param {Object} updatedOrder - The updated order from DB
+   * @param {Object} user - The user who performed the edit
+   */
+  async redistributeProfitForOrder(updatedOrder, user) {
+    try {
+      const orderId = updatedOrder?.id ?? updatedOrder?._id;
+      if (!orderId) return;
+
+      const status = updatedOrder?.status ?? updatedOrder?.Status;
+      const paymentStatus = updatedOrder?.payment_status ?? updatedOrder?.paymentStatus ?? updatedOrder?.payment?.status;
+      const isPaid = paymentStatus === 'paid';
+      const isConfirmed = status === 'confirmed' || status === 'completed';
+      if (!isConfirmed || !isPaid) return;
+
+      const oldShares = await ProfitShareRepository.findByOrderId(orderId);
+      if (oldShares && oldShares.length > 0) {
+        for (const share of oldShares) {
+          const invId = share.investor_id || share.investorId;
+          const amount = parseFloat(share.investor_share ?? share.investorShare ?? 0) || 0;
+          if (invId && amount > 0) {
+            try {
+              await InvestorRepository.subtractProfit(invId, amount);
+            } catch (err) {
+              console.error('Error reversing investor profit on edit:', err);
+            }
+          }
+        }
+        await ProfitShareRepository.deleteByOrderId(orderId);
+      }
+
+      const orderPayload = {
+        _id: updatedOrder.id,
+        id: updatedOrder.id,
+        items: Array.isArray(updatedOrder.items) ? updatedOrder.items : (typeof updatedOrder.items === 'string' ? JSON.parse(updatedOrder.items || '[]') : []),
+        status: updatedOrder.status,
+        payment_status: paymentStatus,
+        paymentStatus,
+        orderNumber: updatedOrder.order_number ?? updatedOrder.orderNumber,
+        createdAt: updatedOrder.created_at ?? updatedOrder.createdAt,
+        payment: { status: paymentStatus }
+      };
+
+      await this.distributeProfitForOrder(orderPayload, user);
+    } catch (error) {
+      console.error('Error redistributing profit on sale edit:', error);
     }
   }
 

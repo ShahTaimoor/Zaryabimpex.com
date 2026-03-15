@@ -40,9 +40,14 @@ export const cashReceiptsApi = api.injectEndpoints({
           { type: 'Accounting', id: 'LEDGER_SUMMARY' },
           { type: 'Accounting', id: 'LEDGER_ENTRIES' },
           { type: 'Accounting', id: 'ALL_ENTRIES' },
+          { type: 'Accounting', id: 'TRIAL_BALANCE' },
           { type: 'ChartOfAccounts', id: 'LIST' },
           { type: 'ChartOfAccounts', id: 'STATS' },
           { type: 'ChartOfAccounts', id: 'HIERARCHY' },
+          { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+          { type: 'Reports', id: 'PARTY_BALANCE' },
+          { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+          { type: 'Reports', id: 'FINANCIAL_REPORT' },
         ];
         // Invalidate specific customer/supplier cache if involved
         if (data?.customer) tags.push({ type: 'Customers', id: data.customer });
@@ -65,9 +70,14 @@ export const cashReceiptsApi = api.injectEndpoints({
           { type: 'Accounting', id: 'LEDGER_SUMMARY' },
           { type: 'Accounting', id: 'LEDGER_ENTRIES' },
           { type: 'Accounting', id: 'ALL_ENTRIES' },
+          { type: 'Accounting', id: 'TRIAL_BALANCE' },
           { type: 'ChartOfAccounts', id: 'LIST' },
           { type: 'ChartOfAccounts', id: 'STATS' },
           { type: 'ChartOfAccounts', id: 'HIERARCHY' },
+          { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+          { type: 'Reports', id: 'PARTY_BALANCE' },
+          { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+          { type: 'Reports', id: 'FINANCIAL_REPORT' },
         ];
         // Invalidate specific customer/supplier cache if involved
         if (data?.customer) tags.push({ type: 'Customers', id: data.customer });
@@ -88,9 +98,14 @@ export const cashReceiptsApi = api.injectEndpoints({
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
         { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
         { type: 'ChartOfAccounts', id: 'LIST' },
         { type: 'ChartOfAccounts', id: 'STATS' },
         { type: 'ChartOfAccounts', id: 'HIERARCHY' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     createBatchCashReceipts: builder.mutation({
@@ -102,12 +117,18 @@ export const cashReceiptsApi = api.injectEndpoints({
       invalidatesTags: [
         { type: 'CashReceipts', id: 'LIST' },
         { type: 'Customers', id: 'LIST' },
+        { type: 'Suppliers', id: 'LIST' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
         { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
         { type: 'ChartOfAccounts', id: 'LIST' },
         { type: 'ChartOfAccounts', id: 'STATS' },
         { type: 'ChartOfAccounts', id: 'HIERARCHY' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     exportExcel: builder.mutation({

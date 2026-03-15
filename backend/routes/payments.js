@@ -13,7 +13,7 @@ router.post('/process', [
   sanitizeRequest,
   auth,
   requirePermission('process_payments'),
-  body('orderId').isMongoId().withMessage('Valid order ID is required'),
+  body('orderId').isUUID(4).withMessage('Valid order ID is required'),
   body('paymentMethod').isIn(['cash', 'credit_card', 'debit_card', 'digital_wallet', 'bank_transfer', 'check', 'gift_card', 'store_credit']).withMessage('Valid payment method is required'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0'),
   body('currency').optional().isLength({ min: 3, max: 3 }).withMessage('Currency must be 3 characters'),
@@ -55,7 +55,7 @@ router.post('/:paymentId/refund', [
   sanitizeRequest,
   auth,
   requirePermission('process_refunds'),
-  param('paymentId').isMongoId().withMessage('Valid payment ID is required'),
+  param('paymentId').isUUID(4).withMessage('Valid payment ID is required'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Refund amount must be greater than 0'),
   body('reason').optional().isLength({ max: 500 }).withMessage('Reason must be less than 500 characters')
 ], async (req, res) => {
@@ -134,8 +134,8 @@ router.get('/', [
   sanitizeRequest,
   auth,
   requirePermission('view_payments'),
-  query('orderId').optional().isMongoId().withMessage('Valid order ID is required'),
-  query('paymentId').optional().isMongoId().withMessage('Valid payment ID is required'),
+  query('orderId').optional().isUUID(4).withMessage('Valid order ID is required'),
+  query('paymentId').optional().isUUID(4).withMessage('Valid payment ID is required'),
   query('status').optional().isIn(['pending', 'processing', 'completed', 'failed', 'cancelled', 'refunded', 'partially_refunded']).withMessage('Valid status is required'),
   query('paymentMethod').optional().isIn(['cash', 'credit_card', 'debit_card', 'digital_wallet', 'bank_transfer', 'check', 'gift_card', 'store_credit']).withMessage('Valid payment method is required'),
   query('startDate').optional().isISO8601().withMessage('Valid start date is required'),
@@ -308,7 +308,7 @@ router.get('/:paymentId', [
   sanitizeRequest,
   auth,
   requirePermission('view_payments'),
-  param('paymentId').isMongoId().withMessage('Valid payment ID is required')
+  param('paymentId').isUUID(4).withMessage('Valid payment ID is required')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);

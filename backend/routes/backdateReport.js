@@ -1,13 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const Sales = require('../models/Sales'); // Still needed for model reference
-const PurchaseInvoice = require('../models/PurchaseInvoice'); // Still needed for model reference
-const SalesOrder = require('../models/SalesOrder'); // Still needed for model reference
-const PurchaseOrder = require('../models/PurchaseOrder'); // Still needed for model reference
-const CashReceipt = require('../models/CashReceipt'); // Still needed for model reference
-const CashPayment = require('../models/CashPayment'); // Still needed for model reference
-const BankReceipt = require('../models/BankReceipt'); // Still needed for model reference
-const BankPayment = require('../models/BankPayment'); // Still needed for model reference
 const { auth } = require('../middleware/auth');
 const salesOrderRepository = require('../repositories/SalesOrderRepository');
 const purchaseOrderRepository = require('../repositories/PurchaseOrderRepository');
@@ -37,241 +29,139 @@ router.get('/', auth, async (req, res) => {
     const thirtyDaysFutureStr = formatDatePakistan(thirtyDaysFutureDate);
     const thirtyDaysFuture = getEndOfDayPakistan(thirtyDaysFutureStr);
 
-    // Helper function to format entry for report
-    const formatEntry = (entry, type, dateField, amountField, referenceField) => ({
-      type,
-      id: entry._id,
-      reference: entry[referenceField],
-      date: entry[dateField],
-      amount: entry[amountField] || 0,
-      status: entry.status || 'N/A',
-      createdBy: entry.createdBy,
-      createdAt: entry.createdAt
-    });
+    const formatEntry = (entry, type, dateField, amountField, referenceField) => {
+      const refMap = { soNumber: 'so_number', poNumber: 'po_number', orderNumber: 'order_number', invoiceNumber: 'invoice_number', voucherCode: 'voucher_code' };
+      const refKey = refMap[referenceField] || referenceField;
+      const dateVal = entry[dateField] || entry[dateField === 'orderDate' ? 'order_date' : dateField];
+      const amountFieldNorm = amountField === 'pricing.total' ? 'total' : amountField;
+      return {
+        type,
+        id: entry.id || entry._id,
+        reference: entry[refKey] || entry[referenceField],
+        date: dateVal,
+        amount: (entry[amountFieldNorm] ?? entry[amountField]) || 0,
+        status: entry.status || 'N/A',
+        createdBy: entry.created_by || entry.createdBy,
+        createdAt: entry.created_at || entry.createdAt
+      };
+    };
 
-    // Query all transaction types for backdated/future entries
-    const [
-      salesOrders,
-      purchaseOrders,
-      cashReceipts,
-      cashPayments,
-      bankReceipts,
-      bankPayments,
-      sales,
-      purchases
-    ] = await Promise.all([
-      // Sales Orders - check orderDate vs createdAt
-      salesOrderRepository.findAll({
-        $or: [
-          { orderDate: { $lt: thirtyDaysAgo } },
-          { orderDate: { $gt: thirtyDaysFuture } }
-        ]
-      }, {
-        populate: [
-          { path: 'customer', select: 'name' },
-          { path: 'createdBy', select: 'name' }
-        ]
-      }),
-
-      // Purchase Orders - check orderDate vs createdAt  
-      purchaseOrderRepository.findAll({
-        $or: [
-          { orderDate: { $lt: thirtyDaysAgo } },
-          { orderDate: { $gt: thirtyDaysFuture } }
-        ]
-      }, {
-        populate: [
-          { path: 'supplier', select: 'name' },
-          { path: 'createdBy', select: 'name' }
-        ]
-      }),
-
-      // Cash Receipts - check date vs createdAt
-      cashReceiptRepository.findAll({
-        $or: [
-          { date: { $lt: thirtyDaysAgo } },
-          { date: { $gt: thirtyDaysFuture } }
-        ]
-      }, {
-        populate: [
-          { path: 'customer', select: 'name' },
-          { path: 'createdBy', select: 'name' }
-        ]
-      }),
-
-      // Cash Payments - check date vs createdAt
-      cashPaymentRepository.findAll({
-        $or: [
-          { date: { $lt: thirtyDaysAgo } },
-          { date: { $gt: thirtyDaysFuture } }
-        ]
-      }, {
-        populate: [
-          { path: 'supplier', select: 'name' },
-          { path: 'createdBy', select: 'name' }
-        ]
-      }),
-
-      // Bank Receipts - check date vs createdAt
-      bankReceiptRepository.findAll({
-        $or: [
-          { date: { $lt: thirtyDaysAgo } },
-          { date: { $gt: thirtyDaysFuture } }
-        ]
-      }, {
-        populate: [
-          { path: 'customer', select: 'name' },
-          { path: 'createdBy', select: 'name' }
-        ]
-      }),
-
-      // Bank Payments - check date vs createdAt
-      bankPaymentRepository.findAll({
-        $or: [
-          { date: { $lt: thirtyDaysAgo } },
-          { date: { $gt: thirtyDaysFuture } }
-        ]
-      }, {
-        populate: [
-          { path: 'supplier', select: 'name' },
-          { path: 'createdBy', select: 'name' }
-        ]
-      }),
-
-      // Sales (Orders) - get recent entries created in the last 30 days
-      // Note: Sales model doesn't have a separate transaction date field,
-      // so we can only detect entries created recently (potential backdated entries)
-      salesRepository.findAll({
-        createdAt: { $gte: thirtyDaysAgo }
-      }, {
-        populate: [
-          { path: 'customer', select: 'name' },
-          { path: 'createdBy', select: 'name' }
-        ]
-      }),
-
-      // Purchases (Purchase Invoices) - get recent entries created in the last 30 days
-      // Note: PurchaseInvoice model doesn't have a separate invoice date field,
-      // so we can only detect entries created recently (potential backdated entries)
-      purchaseInvoiceRepository.findAll({
-        createdAt: { $gte: thirtyDaysAgo }
-      }, {
-        populate: [
-          { path: 'supplier', select: 'name' },
-          { path: 'createdBy', select: 'name' }
-        ]
-      })
+    const [salesOrdersRaw, purchaseOrdersRaw, cashReceiptsRaw, cashPaymentsRaw, bankReceiptsRaw, bankPaymentsRaw, salesRaw, purchasesRaw] = await Promise.all([
+      salesOrderRepository.findAll({}, { limit: 2000 }),
+      purchaseOrderRepository.findAll({}, { limit: 2000 }),
+      cashReceiptRepository.findAll({}, { limit: 2000 }),
+      cashPaymentRepository.findAll({}, { limit: 2000 }),
+      bankReceiptRepository.findAll({}, { limit: 2000 }),
+      bankPaymentRepository.findAll({}, { limit: 2000 }),
+      salesRepository.findAll({ dateFrom: thirtyDaysAgo }, { limit: 2000 }),
+      purchaseInvoiceRepository.findAll({}, { limit: 2000 })
     ]);
+
+    const salesOrders = (salesOrdersRaw || []).filter(o => {
+      const d = o.order_date || o.orderDate;
+      return d && (new Date(d) < thirtyDaysAgo || new Date(d) > thirtyDaysFuture);
+    });
+    const purchaseOrders = (purchaseOrdersRaw || []).filter(o => {
+      const d = o.order_date || o.orderDate;
+      return d && (new Date(d) < thirtyDaysAgo || new Date(d) > thirtyDaysFuture);
+    });
+    const cashReceipts = (cashReceiptsRaw || []).filter(r => {
+      const d = r.date;
+      return d && (new Date(d) < thirtyDaysAgo || new Date(d) > thirtyDaysFuture);
+    });
+    const cashPayments = (cashPaymentsRaw || []).filter(p => {
+      const d = p.date;
+      return d && (new Date(d) < thirtyDaysAgo || new Date(d) > thirtyDaysFuture);
+    });
+    const bankReceipts = (bankReceiptsRaw || []).filter(r => {
+      const d = r.date;
+      return d && (new Date(d) < thirtyDaysAgo || new Date(d) > thirtyDaysFuture);
+    });
+    const bankPayments = (bankPaymentsRaw || []).filter(p => {
+      const d = p.date;
+      return d && (new Date(d) < thirtyDaysAgo || new Date(d) > thirtyDaysFuture);
+    });
+    const sales = salesRaw || [];
+    const purchases = (purchasesRaw || []).filter(p => p.created_at || p.createdAt);
 
     // Format entries for the report
     const reportEntries = [];
 
-    // Add Sales Orders
     salesOrders.forEach(order => {
-      const isBackdate = order.orderDate < thirtyDaysAgo;
-      const isFuture = order.orderDate > thirtyDaysFuture;
-      
-      if (isBackdate || isFuture) {
-        reportEntries.push({
-          ...formatEntry(order, 'Sales Order', 'orderDate', 'total', 'soNumber'),
-          dateType: isBackdate ? 'Backdate' : 'Future Date',
-          daysDifference: Math.floor((order.orderDate - today) / (1000 * 60 * 60 * 24)),
-          customer: order.customer?.name || 'N/A'
-        });
-      }
-    });
-
-    // Add Purchase Orders
-    purchaseOrders.forEach(order => {
-      const isBackdate = order.orderDate < thirtyDaysAgo;
-      const isFuture = order.orderDate > thirtyDaysFuture;
-      
-      if (isBackdate || isFuture) {
-        reportEntries.push({
-          ...formatEntry(order, 'Purchase Order', 'orderDate', 'total', 'poNumber'),
-          dateType: isBackdate ? 'Backdate' : 'Future Date',
-          daysDifference: Math.floor((order.orderDate - today) / (1000 * 60 * 60 * 24)),
-          supplier: order.supplier?.name || 'N/A'
-        });
-      }
-    });
-
-    // Add Cash Receipts
-    cashReceipts.forEach(receipt => {
-      const isBackdate = receipt.date < thirtyDaysAgo;
-      const isFuture = receipt.date > thirtyDaysFuture;
-      
-      if (isBackdate || isFuture) {
-        reportEntries.push({
-          ...formatEntry(receipt, 'Cash Receipt', 'date', 'amount', 'voucherCode'),
-          dateType: isBackdate ? 'Backdate' : 'Future Date',
-          daysDifference: Math.floor((receipt.date - today) / (1000 * 60 * 60 * 24)),
-          customer: receipt.customer?.name || 'N/A'
-        });
-      }
-    });
-
-    // Add Cash Payments
-    cashPayments.forEach(payment => {
-      const isBackdate = payment.date < thirtyDaysAgo;
-      const isFuture = payment.date > thirtyDaysFuture;
-      
-      if (isBackdate || isFuture) {
-        reportEntries.push({
-          ...formatEntry(payment, 'Cash Payment', 'date', 'amount', 'voucherCode'),
-          dateType: isBackdate ? 'Backdate' : 'Future Date',
-          daysDifference: Math.floor((payment.date - today) / (1000 * 60 * 60 * 24)),
-          supplier: payment.supplier?.name || 'N/A'
-        });
-      }
-    });
-
-    // Add Bank Receipts
-    bankReceipts.forEach(receipt => {
-      const isBackdate = receipt.date < thirtyDaysAgo;
-      const isFuture = receipt.date > thirtyDaysFuture;
-      
-      if (isBackdate || isFuture) {
-        reportEntries.push({
-          ...formatEntry(receipt, 'Bank Receipt', 'date', 'amount', 'voucherCode'),
-          dateType: isBackdate ? 'Backdate' : 'Future Date',
-          daysDifference: Math.floor((receipt.date - today) / (1000 * 60 * 60 * 24)),
-          customer: receipt.customer?.name || 'N/A'
-        });
-      }
-    });
-
-    // Add Bank Payments
-    bankPayments.forEach(payment => {
-      const isBackdate = payment.date < thirtyDaysAgo;
-      const isFuture = payment.date > thirtyDaysFuture;
-      
-      if (isBackdate || isFuture) {
-        reportEntries.push({
-          ...formatEntry(payment, 'Bank Payment', 'date', 'amount', 'voucherCode'),
-          dateType: isBackdate ? 'Backdate' : 'Future Date',
-          daysDifference: Math.floor((payment.date - today) / (1000 * 60 * 60 * 24)),
-          supplier: payment.supplier?.name || 'N/A'
-        });
-      }
-    });
-
-    // Add Sales (Orders) - these are created recently but might have backdated dates
-    sales.forEach(order => {
+      const orderDate = order.order_date || order.orderDate;
+      const isBackdate = new Date(orderDate) < thirtyDaysAgo;
+      const isFuture = new Date(orderDate) > thirtyDaysFuture;
       reportEntries.push({
-        ...formatEntry(order, 'Sales', 'createdAt', 'pricing.total', 'orderNumber'),
-        dateType: 'Recent Entry',
-        daysDifference: Math.floor((today - order.createdAt) / (1000 * 60 * 60 * 24)),
-        customer: order.customer?.name || order.customerInfo?.name || 'N/A'
+        ...formatEntry(order, 'Sales Order', 'orderDate', 'total', 'soNumber'),
+        dateType: isBackdate ? 'Backdate' : 'Future Date',
+        daysDifference: Math.floor((new Date(orderDate) - today) / (1000 * 60 * 60 * 24)),
+        customer: order.customer?.name || 'N/A'
       });
     });
 
-    // Add Purchases (Purchase Invoices)
+    purchaseOrders.forEach(order => {
+      const orderDate = order.order_date || order.orderDate;
+      const isBackdate = new Date(orderDate) < thirtyDaysAgo;
+      const isFuture = new Date(orderDate) > thirtyDaysFuture;
+      reportEntries.push({
+        ...formatEntry(order, 'Purchase Order', 'orderDate', 'total', 'poNumber'),
+        dateType: isBackdate ? 'Backdate' : 'Future Date',
+        daysDifference: Math.floor((new Date(orderDate) - today) / (1000 * 60 * 60 * 24)),
+        supplier: order.supplier?.name || 'N/A'
+      });
+    });
+
+    cashReceipts.forEach(receipt => {
+      const d = receipt.date;
+      reportEntries.push({
+        ...formatEntry(receipt, 'Cash Receipt', 'date', 'amount', 'voucherCode'),
+        dateType: new Date(d) < thirtyDaysAgo ? 'Backdate' : 'Future Date',
+        daysDifference: Math.floor((new Date(d) - today) / (1000 * 60 * 60 * 24)),
+        customer: receipt.customer?.name || 'N/A'
+      });
+    });
+    cashPayments.forEach(payment => {
+      const d = payment.date;
+      reportEntries.push({
+        ...formatEntry(payment, 'Cash Payment', 'date', 'amount', 'voucherCode'),
+        dateType: new Date(d) < thirtyDaysAgo ? 'Backdate' : 'Future Date',
+        daysDifference: Math.floor((new Date(d) - today) / (1000 * 60 * 60 * 24)),
+        supplier: payment.supplier?.name || 'N/A'
+      });
+    });
+    bankReceipts.forEach(receipt => {
+      const d = receipt.date;
+      reportEntries.push({
+        ...formatEntry(receipt, 'Bank Receipt', 'date', 'amount', 'voucherCode'),
+        dateType: new Date(d) < thirtyDaysAgo ? 'Backdate' : 'Future Date',
+        daysDifference: Math.floor((new Date(d) - today) / (1000 * 60 * 60 * 24)),
+        customer: receipt.customer?.name || 'N/A'
+      });
+    });
+    bankPayments.forEach(payment => {
+      const d = payment.date;
+      reportEntries.push({
+        ...formatEntry(payment, 'Bank Payment', 'date', 'amount', 'voucherCode'),
+        dateType: new Date(d) < thirtyDaysAgo ? 'Backdate' : 'Future Date',
+        daysDifference: Math.floor((new Date(d) - today) / (1000 * 60 * 60 * 24)),
+        supplier: payment.supplier?.name || 'N/A'
+      });
+    });
+    sales.forEach(order => {
+      const created = order.created_at || order.createdAt;
+      reportEntries.push({
+        ...formatEntry(order, 'Sales', 'createdAt', 'pricing.total', 'orderNumber'),
+        dateType: 'Recent Entry',
+        daysDifference: Math.floor((today - new Date(created)) / (1000 * 60 * 60 * 24)),
+        customer: order.customer?.name || order.customerInfo?.name || 'N/A'
+      });
+    });
     purchases.forEach(invoice => {
+      const created = invoice.created_at || invoice.createdAt;
       reportEntries.push({
         ...formatEntry(invoice, 'Purchase', 'createdAt', 'pricing.total', 'invoiceNumber'),
         dateType: 'Recent Entry',
-        daysDifference: Math.floor((today - invoice.createdAt) / (1000 * 60 * 60 * 24)),
+        daysDifference: Math.floor((today - new Date(created)) / (1000 * 60 * 60 * 24)),
         supplier: invoice.supplier?.name || invoice.supplierInfo?.name || 'N/A'
       });
     });

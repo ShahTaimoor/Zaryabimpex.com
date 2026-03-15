@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Printer } from 'lucide-react';
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import { useGetPurchaseBySupplierReportQuery } from '../store/services/reportsApi';
 import { useLazySearchSuppliersQuery, useGetSuppliersQuery, useGetSupplierQuery } from '../store/services/suppliersApi';
@@ -19,6 +19,7 @@ export default function PurchaseBySupplierReport() {
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [supplierSearchTerm, setSupplierSearchTerm] = useState('');
+  const [includeCustomersSold, setIncludeCustomersSold] = useState(false);
   const [searchSuppliers, { data: suppliersSearchData }] = useLazySearchSuppliersQuery();
   const { data: suppliersListData } = useGetSuppliersQuery({ limit: 500 }, { skip: supplierSearchTerm.length > 0 });
 
@@ -48,6 +49,7 @@ export default function PurchaseBySupplierReport() {
     dateFrom: dateRange.from,
     dateTo: dateRange.to,
     supplier: selectedSupplierId || undefined,
+    includeCustomersSold: includeCustomersSold ? 'true' : undefined,
   });
 
   const rows = reportData?.data || [];
@@ -62,8 +64,11 @@ export default function PurchaseBySupplierReport() {
     return <LoadingPage message="Loading purchase report..." />;
   }
 
+  const handlePrint = () => window.print();
+
   return (
     <div className="space-y-6 p-4 md:p-6 bg-gray-50 min-h-screen">
+      <div>
       <div className="flex flex-col gap-4">
         <h1 className="text-2xl font-bold text-gray-900">Products Purchased by Supplier</h1>
         <p className="text-gray-600 text-sm">
@@ -122,6 +127,26 @@ export default function PurchaseBySupplierReport() {
         >
           <RefreshCw className="h-5 w-5 text-gray-600" />
         </button>
+        {/* Print options - visible in filter row */}
+        <div className="flex items-end gap-2 flex-wrap print:hidden border-l border-gray-200 pl-4 ml-2">
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={includeCustomersSold}
+              onChange={(e) => setIncludeCustomersSold(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            <span>Customers sold to</span>
+          </label>
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 text-sm font-medium"
+          >
+            <Printer className="h-4 w-4" />
+            Print
+          </button>
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -149,7 +174,7 @@ export default function PurchaseBySupplierReport() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border print:rounded">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -159,12 +184,15 @@ export default function PurchaseBySupplierReport() {
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cost Price</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Quantity Purchased</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Amount</th>
+                {includeCustomersSold && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customers sold to</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={includeCustomersSold ? 6 : 5} className="px-4 py-8 text-center text-gray-500">
                     No purchase data found for the selected period.
                   </td>
                 </tr>
@@ -184,12 +212,28 @@ export default function PurchaseBySupplierReport() {
                     <td className="px-4 py-3 text-sm text-gray-900 text-right">
                       {Math.round(row.totalAmount || 0).toLocaleString()}
                     </td>
+                    {includeCustomersSold && (
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {row.customersSold?.length ? (
+                          <span className="block max-w-xs">
+                            {row.customersSold.map((c, i) => (
+                              <span key={i}>
+                                {c.customerName} ({Number(c.quantity || 0).toLocaleString()}){i < row.customersSold.length - 1 ? ', ' : ''}
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
+      </div>
       </div>
     </div>
   );

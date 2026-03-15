@@ -14,11 +14,11 @@ const componentLoader = {
   '/inventory': () => import('../pages/Inventory').then(module => module.Inventory),
   '/inventory-alerts': () => import('../pages/InventoryAlerts').then(module => module.default || module.InventoryAlerts),
   '/anomaly-detection': () => import('../pages/AnomalyDetection').then(module => module.default || module.AnomalyDetection),
-  '/returns': () => import('../pages/Returns').then(module => module.default),
   '/sale-returns': () => import('../pages/SaleReturns').then(module => module.default),
   '/sales-orders': () => import('../pages/SalesOrders').then(module => module.SalesOrders),
   '/purchase-orders': () => import('../pages/PurchaseOrders').then(module => module.PurchaseOrders),
   '/purchase-invoices': () => import('../pages/PurchaseInvoices').then(module => module.default || module.PurchaseInvoices),
+  '/purchase-by-supplier': () => import('../pages/PurchaseBySupplierReport').then(module => module.default),
   '/reports': () => import('../pages/Reports').then(module => module.Reports),
   '/pl-statements': () => import('../pages/PLStatements').then(module => module.PLStatements),
   '/balance-sheets': () => import('../pages/BalanceSheets').then(module => module.default),
@@ -97,13 +97,10 @@ export const componentRegistry = {
     title: 'Anomaly Detection',
     icon: 'AlertTriangle'
   },
-  '/returns': {
-    title: 'Returns',
-    icon: 'RotateCcw'
-  },
   '/sale-returns': {
     title: 'Sale Returns',
-    icon: 'RotateCcw'
+    icon: 'RotateCcw',
+    allowMultiple: true
   },
   '/sales-orders': {
     title: 'Sales Orders',
@@ -119,6 +116,10 @@ export const componentRegistry = {
     title: 'Purchase Invoices',
     icon: 'Search',
     allowMultiple: true
+  },
+  '/purchase-by-supplier': {
+    title: 'Products by Supplier',
+    icon: 'BarChart3'
   },
   '/reports': {
     title: 'Reports',

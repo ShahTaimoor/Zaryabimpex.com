@@ -8,6 +8,7 @@ export const recommendationsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
+      invalidatesTags: [{ type: 'Reports', id: 'RECOMMENDATIONS_PERFORMANCE' }],
     }),
     getRecommendation: builder.query({
       query: (id) => ({
@@ -22,6 +23,11 @@ export const recommendationsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
+      invalidatesTags: (_r, _e, { recommendationId }) => {
+        const tags = [{ type: 'Reports', id: 'RECOMMENDATIONS_PERFORMANCE' }];
+        if (recommendationId) tags.push({ type: 'Settings', id: `RECOMMENDATION_${recommendationId}` });
+        return tags;
+      },
     }),
     trackBehavior: builder.mutation({
       query: (data) => ({
@@ -29,6 +35,7 @@ export const recommendationsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
+      invalidatesTags: [{ type: 'Reports', id: 'RECOMMENDATIONS_PERFORMANCE' }],
     }),
     getPerformance: builder.query({
       query: (params) => ({

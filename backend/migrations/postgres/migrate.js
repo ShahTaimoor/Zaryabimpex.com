@@ -51,7 +51,9 @@ const MIGRATIONS = [
   '030_purchases_allow_draft_status.sql',
   '031_customer_balances_ar_only.sql',
   '032_add_purchase_returns_account.sql',
-  '033_chart_of_accounts_metadata.sql'
+  '033_chart_of_accounts_metadata.sql',
+  '034_reverse_ledger_for_deleted_receipts_payments.sql',
+  '035_reverse_ledger_for_deleted_purchase_invoices.sql'
 ];
 
 async function ensureMigrationsTable() {

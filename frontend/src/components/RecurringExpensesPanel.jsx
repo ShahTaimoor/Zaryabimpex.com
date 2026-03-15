@@ -20,6 +20,9 @@ import {
 } from '../store/services/expensesApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { formatCurrency, formatDate } from '../utils/formatters';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 
 const defaultFormState = {
@@ -250,19 +253,23 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
               <option value={30}>30 days</option>
             </select>
           </div>
-          <button
+          <Button
             type="button"
             onClick={() => refetchUpcoming()}
-            className="btn btn-outline btn-sm sm:btn-md flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap h-[36px] sm:h-[38px] flex-shrink-0 px-2 sm:px-3 text-xs sm:text-sm"
+            variant="outline"
+            size="sm"
+            className="flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap h-[36px] sm:h-[38px] flex-shrink-0 px-2 sm:px-3 text-xs sm:text-sm"
             disabled={upcomingFetching}
           >
             <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 ${upcomingFetching ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh</span>
             <span className="sm:hidden">Ref</span>
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn btn-primary btn-sm sm:btn-md flex items-center justify-center gap-1.5 whitespace-nowrap h-[36px] sm:h-[38px] flex-shrink-0 px-2.5 sm:px-3 md:px-3.5 text-xs sm:text-sm"
+            variant="default"
+            size="sm"
+            className="flex items-center justify-center gap-1.5 whitespace-nowrap h-[36px] sm:h-[38px] flex-shrink-0 px-2.5 sm:px-3 md:px-3.5 text-xs sm:text-sm"
             onClick={() => setShowCreateForm((prev) => !prev)}
           >
             <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
@@ -270,7 +277,7 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
             <span className="hidden md:inline lg:hidden">{showCreateForm ? 'Close' : 'Add Expense'}</span>
             <span className="hidden sm:inline md:hidden">{showCreateForm ? 'Close' : 'Add'}</span>
             <span className="sm:hidden">{showCreateForm ? 'Close' : '+'}</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -303,11 +310,10 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
               </div>
               <div>
                 <label className="form-label">Amount*</label>
-                <input
+                <Input
                   type="number"
-                  min="0"
-                  step="0.01"
-                  className="input"
+                  min={0}
+                  step={0.01}
                   value={formData.amount}
                   onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
                   required
@@ -315,11 +321,10 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
               </div>
               <div>
                 <label className="form-label">Due Day of Month*</label>
-                <input
+                <Input
                   type="number"
-                  min="1"
-                  max="31"
-                  className="input"
+                  min={1}
+                  max={31}
                   value={formData.dayOfMonth}
                   onChange={(e) => setFormData((prev) => ({
                     ...prev,
@@ -330,11 +335,10 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
               </div>
               <div>
                 <label className="form-label">Reminder (days before)</label>
-                <input
+                <Input
                   type="number"
-                  min="0"
-                  max="31"
-                  className="input"
+                  min={0}
+                  max={31}
                   value={formData.reminderDaysBefore}
                   onChange={(e) => setFormData((prev) => ({
                     ...prev,
@@ -361,9 +365,8 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
               </div>
               <div>
                 <label className="form-label">Start From</label>
-                <input
+                <Input
                   type="date"
-                  className="input"
                   value={formData.startFromDate}
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, startFromDate: e.target.value }))
@@ -392,17 +395,18 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
               )}
               <div className="md:col-span-2">
                 <label className="form-label">Notes</label>
-                <textarea
-                  className="input"
+                <Textarea
                   rows={2}
                   value={formData.notes}
                   onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
                 />
               </div>
               <div className="md:col-span-2 flex flex-col-reverse sm:flex-row justify-end gap-3">
-                <button
+                <Button
                   type="button"
-                  className="btn btn-outline btn-md w-full sm:w-auto"
+                  variant="outline"
+                  size="default"
+                  className="w-full sm:w-auto"
                   onClick={() => {
                     setShowCreateForm(false);
                     resetForm();
@@ -410,14 +414,16 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
                   disabled={false}
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="btn btn-primary btn-md w-full sm:w-auto"
+                  variant="default"
+                  size="default"
+                  className="w-full sm:w-auto"
                   disabled={!formData.amount || !formData.expenseAccount}
                 >
                   Save Recurring Expense
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -485,24 +491,28 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
                             )}
                           </div>
                           <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                            <button
+                            <Button
                               type="button"
-                              className="btn btn-outline btn-md flex items-center justify-center gap-2 text-sm md:text-base"
+                              variant="outline"
+                              size="default"
+                              className="flex items-center justify-center gap-2 text-sm md:text-base"
                               onClick={() => handleSnoozeClick(expense, 3)}
                               disabled={false}
                             >
                               <Clock className="h-4 w-4 flex-shrink-0" />
                               <span>Snooze 3d</span>
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                               type="button"
-                              className="btn btn-primary btn-md flex items-center justify-center gap-2 text-sm md:text-base"
+                              variant="default"
+                              size="default"
+                              className="flex items-center justify-center gap-2 text-sm md:text-base"
                               onClick={() => handleRecordPaymentClick(expense)}
                               disabled={false}
                             >
                               <Banknote className="h-4 w-4 flex-shrink-0" />
                               <span>Record Payment</span>
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -540,22 +550,26 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
                       </p>
                     </div>
                     <div className="flex items-center gap-2 w-full md:w-auto">
-                      <button
+                      <Button
                         type="button"
-                        className="btn btn-outline btn-md flex items-center justify-center gap-2 flex-1 md:flex-none text-sm md:text-base"
+                        variant="outline"
+                        size="default"
+                        className="flex items-center justify-center gap-2 flex-1 md:flex-none text-sm md:text-base"
                         onClick={() => handleSnoozeClick(expense, 30)}
                         disabled={isSubmitting}
                       >
                         Skip Month
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="btn btn-danger btn-md flex items-center justify-center gap-2 flex-1 md:flex-none text-sm md:text-base"
+                        variant="destructive"
+                        size="default"
+                        className="flex items-center justify-center gap-2 flex-1 md:flex-none text-sm md:text-base"
                         onClick={() => handleDeactivateClick(expense._id)}
                         disabled={isSubmitting}
                       >
                         Deactivate
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ))}

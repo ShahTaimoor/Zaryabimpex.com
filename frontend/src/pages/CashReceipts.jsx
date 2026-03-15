@@ -15,6 +15,9 @@ import {
   Save
 } from 'lucide-react';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import { useLazyGetCustomerQuery } from '../store/services/customersApi';
 import {
@@ -33,7 +36,10 @@ import { useGetCustomersQuery } from '../store/services/customersApi';
 import { useAppDispatch } from '../store/hooks';
 import { api } from '../store/api';
 import ReceiptPaymentPrintModal from '../components/ReceiptPaymentPrintModal';
+import { useGetBalanceSummaryQuery } from '../store/services/customerBalancesApi';
+import { useGetBalanceSummaryQuery as useGetSupplierBalanceSummaryQuery } from '../store/services/supplierBalancesApi';
 import DateFilter from '../components/DateFilter';
+import PaginationControls from '../components/PaginationControls';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
 
 const CashReceipts = () => {
@@ -94,7 +100,7 @@ const CashReceipts = () => {
 
   // Fetch customers for dropdown
   const { data: customersData, isLoading: customersLoading, error: customersError, refetch: refetchCustomers } = useGetCustomersQuery(
-    { search: '', limit: 100 },
+    { search: '', limit: 999999 },
     { refetchOnMountOrArgChange: true }
   );
   const customers = React.useMemo(() => {
@@ -110,24 +116,45 @@ const CashReceipts = () => {
     return suppliersData?.data?.suppliers || suppliersData?.suppliers || (Array.isArray(suppliersData) ? suppliersData : []);
   }, [suppliersData]);
 
+  const viewModalCustomerId = showViewModal && selectedReceipt?.customer ? (selectedReceipt.customer.id || selectedReceipt.customer._id) : null;
+  const viewModalSupplierId = showViewModal && selectedReceipt?.supplier ? (selectedReceipt.supplier.id || selectedReceipt.supplier._id) : null;
+  const { data: viewCustomerBalanceData } = useGetBalanceSummaryQuery(viewModalCustomerId, { skip: !viewModalCustomerId || !!viewModalSupplierId });
+  const { data: viewSupplierBalanceData } = useGetSupplierBalanceSummaryQuery(viewModalSupplierId, { skip: !viewModalSupplierId });
+  const viewLedgerBalance = viewModalCustomerId
+    ? (viewCustomerBalanceData?.data?.balances?.currentBalance ?? viewCustomerBalanceData?.balances?.currentBalance ?? null)
+    : viewModalSupplierId
+      ? (viewSupplierBalanceData?.data?.balances?.currentBalance ?? viewSupplierBalanceData?.balances?.currentBalance ?? null)
+      : null;
+
   // Sync selectedCustomer with updated customersData when it changes (optimized - only update when balance changes)
   useEffect(() => {
-    if (selectedCustomer?._id && customers && customers.length > 0) {
-      const updatedCustomer = customers.find(c => c._id === selectedCustomer._id);
+    const selectedId = selectedCustomer?.id || selectedCustomer?._id;
+    if (selectedId && customers && customers.length > 0) {
+      const updatedCustomer = customers.find(c => (c.id || c._id) === selectedId);
       if (updatedCustomer) {
         // Check if any balance-related fields have changed
-        const currentPending = selectedCustomer.pendingBalance || 0;
-        const currentAdvance = selectedCustomer.advanceBalance || 0;
-        const newPending = updatedCustomer.pendingBalance || 0;
-        const newAdvance = updatedCustomer.advanceBalance || 0;
+        const currentPending = parseFloat(selectedCustomer.pendingBalance || 0);
+        const currentAdvance = parseFloat(selectedCustomer.advanceBalance || 0);
+        const currentBalance = parseFloat(selectedCustomer.currentBalance || 0);
+
+        const newPending = parseFloat(updatedCustomer.pendingBalance || updatedCustomer.pending_balance || 0);
+        const newAdvance = parseFloat(updatedCustomer.advanceBalance || updatedCustomer.advance_balance || 0);
+        const newBalance = parseFloat(updatedCustomer.currentBalance || updatedCustomer.current_balance || 0);
 
         // Only update if balances have actually changed to avoid unnecessary re-renders
-        if (currentPending !== newPending || currentAdvance !== newAdvance) {
-          setSelectedCustomer(updatedCustomer);
+        if (Math.abs(currentPending - newPending) > 0.001 ||
+          Math.abs(currentAdvance - newAdvance) > 0.001 ||
+          Math.abs(currentBalance - newBalance) > 0.001) {
+          setSelectedCustomer({
+            ...updatedCustomer,
+            pendingBalance: newPending,
+            advanceBalance: newAdvance,
+            currentBalance: newBalance
+          });
         }
       }
     }
-  }, [customersData, selectedCustomer?._id]);
+  }, [customersData, selectedCustomer?.id, selectedCustomer?._id]);
 
   // Mutations
   const [createCashReceipt, { isLoading: creating }] = useCreateCashReceiptMutation();
@@ -163,9 +190,17 @@ const CashReceipts = () => {
 
   const handleCustomerSelect = (customerId) => {
     // First set from cache for immediate UI update
-    const customer = customers?.find(c => c._id === customerId);
+    const customer = customers?.find(c => (c.id || c._id) === customerId);
     if (customer) {
-      setSelectedCustomer(customer);
+      // Ensure balance fields are present in the cached object too
+      const formattedCustomer = {
+        ...customer,
+        currentBalance: customer.currentBalance ?? customer.current_balance ?? 0,
+        pendingBalance: customer.pendingBalance ?? customer.pending_balance ?? 0,
+        advanceBalance: customer.advanceBalance ?? customer.advance_balance ?? 0
+      };
+      setSelectedCustomer(formattedCustomer);
+      setCustomerSearchTerm(customer.businessName || customer.business_name || customer.displayName || customer.name || '');
     }
     setFormData(prev => ({ ...prev, customer: customerId }));
 
@@ -177,25 +212,41 @@ const CashReceipts = () => {
     // Fetch fresh customer data with debounce to avoid rapid API calls
     customerFetchTimerRef.current = setTimeout(async () => {
       try {
+        console.log('Fetching fresh data for customer ID:', customerId);
         const { data: response } = await getCustomer(customerId);
-        const freshCustomer = response?.data?.customer || response?.customer || response?.data || response;
+        console.log('Fresh customer response:', response);
+        const freshCustomer = response?.customer || response?.data?.customer || response?.data || response;
+
         if (freshCustomer) {
+          console.log('Formatting fresh customer data:', freshCustomer);
+          // Ensure balance fields are present even if 0
+          const formattedFreshCustomer = {
+            ...freshCustomer,
+            currentBalance: freshCustomer.currentBalance ?? freshCustomer.current_balance ?? 0,
+            pendingBalance: freshCustomer.pendingBalance ?? freshCustomer.pending_balance ?? 0,
+            advanceBalance: freshCustomer.advanceBalance ?? freshCustomer.advance_balance ?? 0
+          };
+          console.log('Formatted fresh customer:', formattedFreshCustomer);
+
           // Only update if this customer is still selected
           setSelectedCustomer(prev => {
-            if (prev?._id === customerId) {
-              return freshCustomer;
+            const prevId = prev?.id || prev?._id;
+            if (prevId === customerId) {
+              console.log('Updating selectedCustomer with fresh data');
+              return formattedFreshCustomer;
             }
+            console.log('Customer selection changed, skipping update');
             return prev;
           });
 
           // Update the customersData cache for this specific customer
           if (api.util?.setQueryData) {
             try {
-              dispatch(api.util.setQueryData(['getCustomers', { search: '', limit: 100 }], (oldData) => {
+              dispatch(api.util.setQueryData(['getCustomers', { search: '', limit: 999999 }], (oldData) => {
                 if (!oldData) return oldData;
                 const customers = oldData?.data?.customers || oldData?.customers || oldData?.data || [];
                 const updatedCustomers = customers.map(c =>
-                  c._id === customerId ? freshCustomer : c
+                  (c.id || c._id) === customerId ? freshCustomer : c
                 );
                 return {
                   ...oldData,
@@ -219,7 +270,7 @@ const CashReceipts = () => {
 
   const handleCustomerSearch = (searchTerm) => {
     setCustomerSearchTerm(searchTerm);
-    setCustomerDropdownIndex(-1); // Reset index when searching
+    setCustomerDropdownIndex(0); // Default to first result
     if (searchTerm === '') {
       setSelectedCustomer(null);
       setFormData(prev => ({ ...prev, customer: '' }));
@@ -228,7 +279,7 @@ const CashReceipts = () => {
 
   const handleCustomerKeyDown = (e) => {
     const filteredCustomers = (customers || []).filter(customer =>
-      (customer.businessName || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+      (customer.businessName || customer.business_name || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
       (customer.phone || '').includes(customerSearchTerm)
     );
 
@@ -255,8 +306,8 @@ const CashReceipts = () => {
         e.preventDefault();
         if (customerDropdownIndex >= 0 && customerDropdownIndex < filteredCustomers.length) {
           const customer = filteredCustomers[customerDropdownIndex];
-          handleCustomerSelect(customer._id);
-          setCustomerSearchTerm(customer.businessName || customer.name || '');
+          handleCustomerSelect(customer.id || customer._id);
+          setCustomerSearchTerm(customer.businessName || customer.business_name || customer.displayName || customer.name || '');
           setCustomerDropdownIndex(-1);
         }
         break;
@@ -270,8 +321,11 @@ const CashReceipts = () => {
   };
 
   const handleSupplierSelect = (supplierId) => {
-    const supplier = suppliers?.find(s => s._id === supplierId);
-    setSelectedSupplier(supplier);
+    const supplier = suppliers?.find(s => (s.id || s._id) === supplierId);
+    if (supplier) {
+      setSelectedSupplier(supplier);
+      setSupplierSearchTerm(supplier.companyName || supplier.name || '');
+    }
     setFormData(prev => ({ ...prev, supplier: supplierId, customer: '' }));
     setSelectedCustomer(null);
     setCustomerSearchTerm('');
@@ -279,7 +333,7 @@ const CashReceipts = () => {
 
   const handleSupplierSearch = (searchTerm) => {
     setSupplierSearchTerm(searchTerm);
-    setSupplierDropdownIndex(-1); // Reset index when searching
+    setSupplierDropdownIndex(0); // Default to first result
     if (searchTerm === '') {
       setSelectedSupplier(null);
       setFormData(prev => ({ ...prev, supplier: '' }));
@@ -315,7 +369,7 @@ const CashReceipts = () => {
         e.preventDefault();
         if (supplierDropdownIndex >= 0 && supplierDropdownIndex < filteredSuppliers.length) {
           const supplier = filteredSuppliers[supplierDropdownIndex];
-          handleSupplierSelect(supplier._id);
+          handleSupplierSelect(supplier.id || supplier._id);
           setSupplierSearchTerm(supplier.companyName || supplier.name || '');
           setSupplierDropdownIndex(-1);
         }
@@ -372,19 +426,21 @@ const CashReceipts = () => {
           setSelectedCustomer(prev => {
             if (!prev) return prev;
             const newAdvanceBalance = (prev.advanceBalance || 0) + receiptAmount;
-            return { ...prev, advanceBalance: newAdvanceBalance };
+            const newCurrentBalance = (prev.currentBalance || 0) - receiptAmount;
+            return { ...prev, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
           });
 
           // Update customer in cache immediately
           if (api.util?.setQueryData) {
             try {
-              dispatch(api.util.setQueryData(['getCustomers', { search: '', limit: 100 }], (oldData) => {
+              dispatch(api.util.setQueryData(['getCustomers', { search: '', limit: 999999 }], (oldData) => {
                 if (!oldData) return oldData;
                 const customers = oldData?.data?.customers || oldData?.customers || oldData?.data || [];
                 const updatedCustomers = customers.map(c => {
-                  if (c._id === formData.customer) {
+                  if ((c.id || c._id) === formData.customer) {
                     const newAdvanceBalance = (c.advanceBalance || 0) + receiptAmount;
-                    return { ...c, advanceBalance: newAdvanceBalance };
+                    const newCurrentBalance = (c.currentBalance || 0) - receiptAmount;
+                    return { ...c, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
                   }
                   return c;
                 });
@@ -403,13 +459,14 @@ const CashReceipts = () => {
                 if (!oldData) return oldData;
                 const customer = oldData?.data?.customer || oldData?.customer || oldData?.data || oldData;
                 const newAdvanceBalance = (customer.advanceBalance || 0) + receiptAmount;
+                const newCurrentBalance = (customer.currentBalance || 0) - receiptAmount;
                 return {
                   ...oldData,
                   data: {
                     ...oldData.data,
-                    customer: { ...customer, advanceBalance: newAdvanceBalance }
+                    customer: { ...customer, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance }
                   },
-                  customer: { ...customer, advanceBalance: newAdvanceBalance }
+                  customer: { ...customer, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance }
                 };
               }));
             } catch (error) {
@@ -425,7 +482,8 @@ const CashReceipts = () => {
           setSelectedSupplier(prev => {
             if (!prev) return prev;
             const newAdvanceBalance = (prev.advanceBalance || 0) + receiptAmount;
-            return { ...prev, advanceBalance: newAdvanceBalance };
+            const newCurrentBalance = (prev.currentBalance || 0) + receiptAmount;
+            return { ...prev, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
           });
 
           // Update supplier in cache immediately
@@ -435,9 +493,10 @@ const CashReceipts = () => {
                 if (!oldData) return oldData;
                 const suppliers = oldData?.data?.suppliers || oldData?.suppliers || oldData?.data || [];
                 const updatedSuppliers = suppliers.map(s => {
-                  if (s._id === formData.supplier) {
+                  if ((s.id || s._id) === formData.supplier) {
                     const newAdvanceBalance = (s.advanceBalance || 0) + receiptAmount;
-                    return { ...s, advanceBalance: newAdvanceBalance };
+                    const newCurrentBalance = (s.currentBalance || 0) + receiptAmount;
+                    return { ...s, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
                   }
                   return s;
                 });
@@ -484,7 +543,7 @@ const CashReceipts = () => {
     const newAmount = parseFloat(cleanedData.amount) || 0;
     const amountDifference = newAmount - oldAmount;
 
-    updateCashReceipt({ id: selectedReceipt._id, ...cleanedData })
+    updateCashReceipt({ id: (selectedReceipt.id || selectedReceipt._id), ...cleanedData })
       .unwrap()
       .then(() => {
         setShowEditModal(false);
@@ -499,19 +558,21 @@ const CashReceipts = () => {
           setSelectedCustomer(prev => {
             if (!prev) return prev;
             const newAdvanceBalance = (prev.advanceBalance || 0) + amountDifference;
-            return { ...prev, advanceBalance: newAdvanceBalance };
+            const newCurrentBalance = (prev.currentBalance || 0) - amountDifference;
+            return { ...prev, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
           });
 
           // Update customer in cache immediately
           if (api.util?.setQueryData) {
             try {
-              dispatch(api.util.setQueryData(['getCustomers', { search: '', limit: 100 }], (oldData) => {
+              dispatch(api.util.setQueryData(['getCustomers', { search: '', limit: 999999 }], (oldData) => {
                 if (!oldData) return oldData;
                 const customers = oldData?.data?.customers || oldData?.customers || oldData?.data || [];
                 const updatedCustomers = customers.map(c => {
-                  if (c._id === formData.customer) {
+                  if ((c.id || c._id) === formData.customer) {
                     const newAdvanceBalance = (c.advanceBalance || 0) + amountDifference;
-                    return { ...c, advanceBalance: newAdvanceBalance };
+                    const newCurrentBalance = (c.currentBalance || 0) - amountDifference;
+                    return { ...c, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
                   }
                   return c;
                 });
@@ -530,13 +591,14 @@ const CashReceipts = () => {
                 if (!oldData) return oldData;
                 const customer = oldData?.data?.customer || oldData?.customer || oldData?.data || oldData;
                 const newAdvanceBalance = (customer.advanceBalance || 0) + amountDifference;
+                const newCurrentBalance = (customer.currentBalance || 0) - amountDifference;
                 return {
                   ...oldData,
                   data: {
                     ...oldData.data,
-                    customer: { ...customer, advanceBalance: newAdvanceBalance }
+                    customer: { ...customer, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance }
                   },
-                  customer: { ...customer, advanceBalance: newAdvanceBalance }
+                  customer: { ...customer, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance }
                 };
               }));
             } catch (error) {
@@ -551,7 +613,8 @@ const CashReceipts = () => {
           setSelectedSupplier(prev => {
             if (!prev) return prev;
             const newAdvanceBalance = (prev.advanceBalance || 0) + amountDifference;
-            return { ...prev, advanceBalance: newAdvanceBalance };
+            const newCurrentBalance = (prev.currentBalance || 0) + amountDifference;
+            return { ...prev, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
           });
 
           // Update supplier in cache immediately
@@ -561,9 +624,10 @@ const CashReceipts = () => {
                 if (!oldData) return oldData;
                 const suppliers = oldData?.data?.suppliers || oldData?.suppliers || oldData?.data || [];
                 const updatedSuppliers = suppliers.map(s => {
-                  if (s._id === formData.supplier) {
+                  if ((s.id || s._id) === formData.supplier) {
                     const newAdvanceBalance = (s.advanceBalance || 0) + amountDifference;
-                    return { ...s, advanceBalance: newAdvanceBalance };
+                    const newCurrentBalance = (s.currentBalance || 0) + amountDifference;
+                    return { ...s, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
                   }
                   return s;
                 });
@@ -592,11 +656,11 @@ const CashReceipts = () => {
 
   const handleDelete = (receiptOrId) => {
     // Handle both receipt object and id string
-    const receiptId = typeof receiptOrId === 'string' ? receiptOrId : receiptOrId._id;
+    const receiptId = typeof receiptOrId === 'string' ? receiptOrId : (receiptOrId.id || receiptOrId._id);
     const receipt = typeof receiptOrId === 'object' ? receiptOrId : null;
     const receiptAmount = receipt ? (parseFloat(receipt.amount) || 0) : 0;
-    const receiptCustomer = receipt?.customer?._id || receipt?.customer || null;
-    const receiptSupplier = receipt?.supplier?._id || receipt?.supplier || null;
+    const receiptCustomer = receipt?.customer?.id || receipt?.customer?._id || receipt?.customer || null;
+    const receiptSupplier = receipt?.supplier?.id || receipt?.supplier?._id || receipt?.supplier || null;
 
     if (window.confirm('Are you sure you want to delete this cash receipt?')) {
       deleteCashReceipt(receiptId)
@@ -609,9 +673,11 @@ const CashReceipts = () => {
           if (receiptCustomer && receiptAmount > 0) {
             // Subtract the amount from customer balance
             setSelectedCustomer(prev => {
-              if (prev && prev._id === receiptCustomer) {
+              const prevId = prev?.id || prev?._id;
+              if (prev && prevId === receiptCustomer) {
                 const newAdvanceBalance = Math.max(0, (prev.advanceBalance || 0) - receiptAmount);
-                return { ...prev, advanceBalance: newAdvanceBalance };
+                const newCurrentBalance = (prev.currentBalance || 0) + receiptAmount;
+                return { ...prev, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
               }
               return prev;
             });
@@ -619,13 +685,14 @@ const CashReceipts = () => {
             // Update customer in cache immediately
             if (api.util?.setQueryData) {
               try {
-                dispatch(api.util.setQueryData(['getCustomers', { search: '', limit: 100 }], (oldData) => {
+                dispatch(api.util.setQueryData(['getCustomers', { search: '', limit: 999999 }], (oldData) => {
                   if (!oldData) return oldData;
                   const customers = oldData?.data?.customers || oldData?.customers || oldData?.data || [];
                   const updatedCustomers = customers.map(c => {
-                    if (c._id === receiptCustomer) {
+                    if ((c.id || c._id) === receiptCustomer) {
                       const newAdvanceBalance = Math.max(0, (c.advanceBalance || 0) - receiptAmount);
-                      return { ...c, advanceBalance: newAdvanceBalance };
+                      const newCurrentBalance = (c.currentBalance || 0) + receiptAmount;
+                      return { ...c, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
                     }
                     return c;
                   });
@@ -644,13 +711,14 @@ const CashReceipts = () => {
                   if (!oldData) return oldData;
                   const customer = oldData?.data?.customer || oldData?.customer || oldData?.data || oldData;
                   const newAdvanceBalance = Math.max(0, (customer.advanceBalance || 0) - receiptAmount);
+                  const newCurrentBalance = (customer.currentBalance || 0) + receiptAmount;
                   return {
                     ...oldData,
                     data: {
                       ...oldData.data,
-                      customer: { ...customer, advanceBalance: newAdvanceBalance }
+                      customer: { ...customer, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance }
                     },
-                    customer: { ...customer, advanceBalance: newAdvanceBalance }
+                    customer: { ...customer, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance }
                   };
                 }));
               } catch (error) {
@@ -663,9 +731,11 @@ const CashReceipts = () => {
           } else if (receiptSupplier && receiptAmount > 0) {
             // Subtract the amount from supplier balance
             setSelectedSupplier(prev => {
-              if (prev && prev._id === receiptSupplier) {
+              const prevId = prev?.id || prev?._id;
+              if (prev && prevId === receiptSupplier) {
                 const newAdvanceBalance = Math.max(0, (prev.advanceBalance || 0) - receiptAmount);
-                return { ...prev, advanceBalance: newAdvanceBalance };
+                const newCurrentBalance = (prev.currentBalance || 0) - receiptAmount;
+                return { ...prev, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
               }
               return prev;
             });
@@ -677,9 +747,10 @@ const CashReceipts = () => {
                   if (!oldData) return oldData;
                   const suppliers = oldData?.data?.suppliers || oldData?.suppliers || oldData?.data || [];
                   const updatedSuppliers = suppliers.map(s => {
-                    if (s._id === receiptSupplier) {
+                    if ((s.id || s._id) === receiptSupplier) {
                       const newAdvanceBalance = Math.max(0, (s.advanceBalance || 0) - receiptAmount);
-                      return { ...s, advanceBalance: newAdvanceBalance };
+                      const newCurrentBalance = (s.currentBalance || 0) - receiptAmount;
+                      return { ...s, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
                     }
                     return s;
                   });
@@ -709,25 +780,29 @@ const CashReceipts = () => {
 
   const handleEdit = (receipt) => {
     setSelectedReceipt(receipt);
+    const receiptId = receipt.id || receipt._id;
     setFormData({
       date: receipt.date ? receipt.date.split('T')[0] : '',
       amount: receipt.amount || '',
       particular: receipt.particular || '',
-      customer: receipt.customer?._id || '',
-      supplier: receipt.supplier?._id || '',
+      customer: receipt.customer?.id || receipt.customer?._id || '',
+      supplier: receipt.supplier?.id || receipt.supplier?._id || '',
       notes: receipt.notes || ''
     });
     // Set payment type based on which entity is present
-    if (receipt.supplier?._id) {
+    const supplierId = receipt.supplier?.id || receipt.supplier?._id;
+    const customerId = receipt.customer?.id || receipt.customer?._id;
+
+    if (supplierId) {
       setPaymentType('supplier');
       setSelectedSupplier(receipt.supplier);
-      setSupplierSearchTerm(receipt.supplier.companyName || receipt.supplier.name || '');
+      setSupplierSearchTerm(receipt.supplier.companyName || receipt.supplier.businessName || receipt.supplier.displayName || receipt.supplier.name || '');
       setSelectedCustomer(null);
       setCustomerSearchTerm('');
-    } else if (receipt.customer?._id) {
+    } else if (customerId) {
       setPaymentType('customer');
       setSelectedCustomer(receipt.customer);
-      setCustomerSearchTerm(receipt.customer.businessName || receipt.customer.name || '');
+      setCustomerSearchTerm(receipt.customer.businessName || receipt.customer.business_name || receipt.customer.displayName || receipt.customer.name || '');
       setSelectedSupplier(null);
       setSupplierSearchTerm('');
     }
@@ -817,20 +892,24 @@ const CashReceipts = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage and view all cash receipt transactions</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-          <button
+          <Button
             onClick={handleExport}
-            className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+            variant="outline"
+            size="default"
+            className="flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <Download className="h-4 w-4" />
             <span>Export</span>
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={resetForm}
-            className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+            variant="default"
+            size="default"
+            className="flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             <span>New Receipt</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -889,44 +968,52 @@ const CashReceipts = () => {
                     Customer
                   </label>
                   <div className="relative">
-                    <input
+                    <Input
                       type="text"
                       value={customerSearchTerm}
                       onChange={(e) => handleCustomerSearch(e.target.value)}
                       onKeyDown={handleCustomerKeyDown}
-                      className="input w-full pr-10"
+                      className="w-full pr-10"
                       placeholder="Search or select customer..."
                     />
                     <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   </div>
                   {customerSearchTerm && (
-                    <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
+                    <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
                       {(customers || []).filter(customer =>
-                        (customer.businessName || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+                        (customer.businessName || customer.business_name || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
                         (customer.phone || '').includes(customerSearchTerm)
                       ).map((customer, index) => {
-                        const receivables = customer.pendingBalance || 0;
-                        const advance = customer.advanceBalance || 0;
-                        const netBalance = receivables - advance;
-                        const isPayable = netBalance < 0;
-                        const isReceivable = netBalance > 0;
-                        const hasBalance = receivables > 0 || advance > 0;
+                        const customerId = customer.id || customer._id;
+                        const currentBalance = customer.currentBalance !== undefined
+                          ? parseFloat(customer.currentBalance)
+                          : (parseFloat(customer.pendingBalance || 0) - parseFloat(customer.advanceBalance || 0));
+                        const isPayable = currentBalance < -0.001;
+                        const isReceivable = currentBalance > 0.001;
+                        const hasBalance = Math.abs(currentBalance) > 0.001;
 
                         return (
                           <div
-                            key={customer._id}
+                            key={customerId}
                             onClick={() => {
-                              handleCustomerSelect(customer._id);
-                              setCustomerSearchTerm(customer.businessName || customer.name || '');
+                              handleCustomerSelect(customerId);
+                              setCustomerSearchTerm(customer.businessName || customer.business_name || customer.displayName || customer.name || '');
                               setCustomerDropdownIndex(-1);
                             }}
                             className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${customerDropdownIndex === index ? 'bg-blue-50' : ''
                               }`}
                           >
-                            <div className="font-medium text-gray-900">{customer.businessName || customer.name || 'Unknown'}</div>
+                            <div className="flex justify-between items-center">
+                              <div className="font-medium text-gray-900">
+                                {customer.businessName || customer.business_name || customer.name || 'Unknown'}
+                              </div>
+                            </div>
+                            {(customer.businessName || customer.business_name) && customer.name && (
+                              <div className="text-xs text-gray-500">Contact: {customer.name}</div>
+                            )}
                             {hasBalance && (
                               <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
-                                {isPayable ? 'Payables:' : 'Receivables:'} ${Math.abs(netBalance).toFixed(2)}
+                                {isPayable ? 'Payables:' : 'Receivables:'} {Math.abs(currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </div>
                             )}
                           </div>
@@ -945,12 +1032,18 @@ const CashReceipts = () => {
                   </label>
                   <div className="space-y-1">
                     {(() => {
-                      const receivables = selectedCustomer.pendingBalance || 0;
-                      const advance = selectedCustomer.advanceBalance || 0;
-                      const netBalance = receivables - advance;
-                      const isPayable = netBalance < 0;
-                      const isReceivable = netBalance > 0;
-                      const hasBalance = receivables > 0 || advance > 0;
+                      const pending = parseFloat(selectedCustomer.pendingBalance || selectedCustomer.pending_balance || 0);
+                      const advance = parseFloat(selectedCustomer.advanceBalance || selectedCustomer.advance_balance || 0);
+                      const currentBalance = selectedCustomer.currentBalance !== undefined || selectedCustomer.current_balance !== undefined
+                        ? parseFloat(selectedCustomer.currentBalance ?? selectedCustomer.current_balance)
+                        : (pending - advance);
+
+                      // For customers: 
+                      // Positive balance = Receivables (they owe us)
+                      // Negative balance = Payables (we owe them / advance)
+                      const isPayable = currentBalance < -0.001;
+                      const isReceivable = currentBalance > 0.001;
+                      const hasBalance = Math.abs(currentBalance) > 0.001;
 
                       return hasBalance ? (
                         <div className={`flex items-center justify-between px-3 py-2 rounded ${isPayable ? 'bg-red-50 border border-red-200' : isReceivable ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
@@ -958,12 +1051,17 @@ const CashReceipts = () => {
                             {isPayable ? 'Payables:' : isReceivable ? 'Receivables:' : 'Balance:'}
                           </span>
                           <span className={`text-sm font-bold ${isPayable ? 'text-red-700' : isReceivable ? 'text-green-700' : 'text-gray-700'}`}>
-                            {Math.abs(netBalance).toFixed(2)}
+                            {Math.abs(currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
                       ) : (
-                        <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 text-center">
-                          No balance
+                        <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 text-center flex flex-col">
+                          <span>No balance</span>
+                          <span className="text-[10px] text-gray-400">
+                            (P: {pending.toFixed(2)},
+                            A: {advance.toFixed(2)},
+                            C: {currentBalance.toFixed(2)})
+                          </span>
                         </div>
                       );
                     })()}
@@ -978,12 +1076,12 @@ const CashReceipts = () => {
                     Supplier
                   </label>
                   <div className="relative">
-                    <input
+                    <Input
                       type="text"
                       value={supplierSearchTerm}
                       onChange={(e) => handleSupplierSearch(e.target.value)}
                       onKeyDown={handleSupplierKeyDown}
-                      className="input w-full pr-10"
+                      className="w-full pr-10"
                       placeholder="Search or select supplier..."
                     />
                     <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -993,23 +1091,26 @@ const CashReceipts = () => {
                       {(suppliers || []).filter(supplier =>
                         (supplier.companyName || supplier.name || '').toLowerCase().includes(supplierSearchTerm.toLowerCase()) ||
                         (supplier.phone || '').includes(supplierSearchTerm)
-                      ).map((supplier, index) => (
-                        <div
-                          key={supplier._id}
-                          onClick={() => {
-                            handleSupplierSelect(supplier._id);
-                            setSupplierSearchTerm(supplier.companyName || supplier.name || '');
-                            setSupplierDropdownIndex(-1);
-                          }}
-                          className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${supplierDropdownIndex === index ? 'bg-blue-50' : ''
-                            }`}
-                        >
-                          <div className="font-medium text-gray-900">{supplier.companyName || supplier.name || 'Unknown'}</div>
-                          {supplier.phone && (
-                            <div className="text-sm text-gray-500">Phone: {supplier.phone}</div>
-                          )}
-                        </div>
-                      ))}
+                      ).map((supplier, index) => {
+                        const supplierId = supplier.id || supplier._id;
+                        return (
+                          <div
+                            key={supplierId}
+                            onClick={() => {
+                              handleSupplierSelect(supplierId);
+                              setSupplierSearchTerm(supplier.companyName || supplier.name || '');
+                              setSupplierDropdownIndex(-1);
+                            }}
+                            className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${supplierDropdownIndex === index ? 'bg-blue-50' : ''
+                              }`}
+                          >
+                            <div className="font-medium text-gray-900">{supplier.companyName || supplier.name || 'Unknown'}</div>
+                            {supplier.phone && (
+                              <div className="text-sm text-gray-500">Phone: {supplier.phone}</div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1022,31 +1123,29 @@ const CashReceipts = () => {
                     Balance
                   </label>
                   <div className="space-y-1">
-                    {selectedSupplier.pendingBalance > 0 && (
-                      <div className="flex items-center justify-between px-3 py-2 bg-red-50 border border-red-200 rounded">
-                        <span className="text-sm font-medium text-red-700">Payables:</span>
-                        <span className="text-sm font-bold text-red-700">{selectedSupplier.pendingBalance.toFixed(2)}</span>
-                      </div>
-                    )}
-                    {selectedSupplier.advanceBalance > 0 && (
-                      <div className="flex items-center justify-between px-3 py-2 bg-green-50 border border-green-200 rounded">
-                        <span className="text-sm font-medium text-green-700">Advance:</span>
-                        <span className="text-sm font-bold text-green-700">{selectedSupplier.advanceBalance.toFixed(2)}</span>
-                      </div>
-                    )}
-                    {selectedSupplier.pendingBalance === 0 && selectedSupplier.advanceBalance === 0 && (
-                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 text-center">
-                        No balance
-                      </div>
-                    )}
-                    {selectedSupplier.pendingBalance > 0 && selectedSupplier.advanceBalance > 0 && (
-                      <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border-2 border-blue-300 rounded">
-                        <span className="text-sm font-bold text-blue-700">Net Balance:</span>
-                        <span className={`text-sm font-bold ${(selectedSupplier.pendingBalance - selectedSupplier.advanceBalance) > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                          {(selectedSupplier.pendingBalance - selectedSupplier.advanceBalance).toFixed(2)}
-                        </span>
-                      </div>
-                    )}
+                    {(() => {
+                      const currentBalance = selectedSupplier.currentBalance !== undefined
+                        ? selectedSupplier.currentBalance
+                        : ((selectedSupplier.advanceBalance || 0) - (selectedSupplier.pendingBalance || 0));
+                      const isPayable = currentBalance < 0;
+                      const isReceivable = currentBalance > 0;
+                      const hasBalance = Math.abs(currentBalance) > 0.01;
+
+                      return hasBalance ? (
+                        <div className={`flex items-center justify-between px-3 py-2 rounded ${isPayable ? 'bg-red-50 border border-red-200' : isReceivable ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
+                          <span className={`text-sm font-medium ${isPayable ? 'text-red-700' : isReceivable ? 'text-green-700' : 'text-gray-700'}`}>
+                            {isPayable ? 'Payables:' : isReceivable ? 'Receivables:' : 'Balance:'}
+                          </span>
+                          <span className={`text-sm font-bold ${isPayable ? 'text-red-700' : isReceivable ? 'text-green-700' : 'text-gray-700'}`}>
+                            {Math.abs(currentBalance).toFixed(2)}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 text-center">
+                          No balance
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
@@ -1056,8 +1155,9 @@ const CashReceipts = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Amount *
                 </label>
-                <input
+                <Input
                   type="number"
+                  autoComplete="off"
                   step="0.01"
                   min="0"
                   value={formData.amount}
@@ -1065,7 +1165,6 @@ const CashReceipts = () => {
                     const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
                     setFormData(prev => ({ ...prev, amount: value }));
                   }}
-                  className="input w-full"
                   placeholder="0.00"
                   required
                 />
@@ -1080,11 +1179,12 @@ const CashReceipts = () => {
                   Receipt Date
                 </label>
                 <div className="relative">
-                  <input
+                  <Input
                     type="date"
+                    autoComplete="off"
                     value={formData.date}
                     onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                    className="input w-full pr-10"
+                    className="w-full pr-10"
                   />
                   <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 </div>
@@ -1095,11 +1195,12 @@ const CashReceipts = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Description (Optional)
                 </label>
-                <input
+                <Input
                   type="text"
+                  autoComplete="off"
                   value={formData.particular}
                   onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
-                  className="input w-full"
+                  className="w-full"
                   placeholder="Enter receipt description..."
                 />
               </div>
@@ -1109,10 +1210,10 @@ const CashReceipts = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Notes (Optional)
                 </label>
-                <textarea
+                <Textarea
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="input w-full h-20 resize-none"
+                  className="w-full h-20 resize-none"
                   placeholder="Additional notes..."
                 />
               </div>
@@ -1121,21 +1222,25 @@ const CashReceipts = () => {
 
           {/* Action Buttons */}
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
-            <button
+            <Button
               onClick={resetForm}
-              className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+              variant="outline"
+              size="default"
+              className="flex items-center justify-center gap-2 w-full sm:w-auto"
             >
               <RotateCcw className="h-4 w-4" />
               <span>Reset</span>
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleCreate}
               disabled={creating}
-              className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+              variant="default"
+              size="default"
+              className="flex items-center justify-center gap-2 w-full sm:w-auto"
             >
               <Save className="h-4 w-4" />
               <span>{creating ? 'Saving...' : 'Save Receipt'}</span>
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -1150,8 +1255,10 @@ const CashReceipts = () => {
         </div>
         <div className="card-content">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-            {/* Date Range */}
             <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Date Range
+              </label>
               <DateFilter
                 startDate={filters.fromDate}
                 endDate={filters.toDate}
@@ -1169,12 +1276,12 @@ const CashReceipts = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Voucher Code
               </label>
-              <input
+              <Input
                 type="text"
+                autoComplete="off"
                 placeholder="Contains..."
                 value={filters.voucherCode}
                 onChange={(e) => handleFilterChange('voucherCode', e.target.value)}
-                className="input"
               />
             </div>
 
@@ -1183,12 +1290,12 @@ const CashReceipts = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Amount
               </label>
-              <input
+              <Input
                 type="number"
+                autoComplete="off"
                 placeholder="Equals..."
                 value={filters.amount}
                 onChange={(e) => handleFilterChange('amount', e.target.value)}
-                className="input"
               />
             </div>
 
@@ -1197,24 +1304,26 @@ const CashReceipts = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Particular
               </label>
-              <input
+              <Input
                 type="text"
+                autoComplete="off"
                 placeholder="Contains..."
                 value={filters.particular}
                 onChange={(e) => handleFilterChange('particular', e.target.value)}
-                className="input"
               />
             </div>
 
             {/* Search Button */}
             <div className="flex items-end">
-              <button
+              <Button
                 onClick={() => refetch()}
-                className="btn btn-primary btn-md w-full flex items-center justify-center gap-2"
+                variant="default"
+                size="default"
+                className="w-full flex items-center justify-center gap-2"
               >
                 <Search className="h-4 w-4" />
                 <span>Search</span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1290,7 +1399,7 @@ const CashReceipts = () => {
                         </div>
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Customer
+                        Customer/Supplier
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Particular
@@ -1301,139 +1410,83 @@ const CashReceipts = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {cashReceipts.map((receipt, index) => (
-                      <tr
-                        key={receipt._id}
-                        className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDate(receipt.date)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {receipt.voucherCode}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {Math.round(receipt.amount)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {receipt.customer ? ((receipt.customer.businessName || receipt.customer.name)?.toUpperCase() || 'N/A') : 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
-                          {receipt.particular}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handlePrint(receipt)}
-                              className="text-green-600 hover:text-green-900"
-                              title="Print"
-                            >
-                              <Printer className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleView(receipt)}
-                              className="text-blue-600 hover:text-blue-900"
-                              title="View"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
-                            {formatDateForInput(receipt.date) === today && (
-                              <>
-                                <button
-                                  onClick={() => handleEdit(receipt)}
-                                  className="text-indigo-600 hover:text-indigo-900"
-                                  title="Edit"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(receipt)}
-                                  className="text-red-600 hover:text-red-900"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {cashReceipts.map((receipt, index) => {
+                      const receiptId = receipt.id || receipt._id;
+                      return (
+                        <tr
+                          key={receiptId}
+                          className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatDate(receipt.date)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {receipt.voucherCode}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {Math.round(receipt.amount)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {receipt.customer
+                              ? (receipt.customer.businessName || receipt.customer.business_name || receipt.customer.displayName || receipt.customer.name || `${(receipt.customer.firstName || '')} ${(receipt.customer.lastName || '')}`.trim() || 'N/A')
+                              : receipt.supplier
+                                ? (receipt.supplier.companyName || receipt.supplier.businessName || receipt.supplier.displayName || receipt.supplier.name || 'N/A')
+                                : 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                            {receipt.particular}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => handlePrint(receipt)}
+                                className="text-green-600 hover:text-green-900"
+                                title="Print"
+                              >
+                                <Printer className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleView(receipt)}
+                                className="text-blue-600 hover:text-blue-900"
+                                title="View"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
+                              {(
+                                <>
+                                  <button
+                                    onClick={() => handleEdit(receipt)}
+                                    className="text-indigo-600 hover:text-indigo-900"
+                                    title="Edit"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(receipt)}
+                                    className="text-red-600 hover:text-red-900"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
 
               {/* Pagination */}
-              {paginationInfo.totalPages > 1 && (
-                <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                  <div className="flex-1 flex justify-between sm:hidden">
-                    <button
-                      onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-                      disabled={pagination.page === 1}
-                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                      disabled={pagination.page === paginationInfo.totalPages}
-                      className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                  </div>
-                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm text-gray-700">
-                        Showing{' '}
-                        <span className="font-medium">
-                          {(pagination.page - 1) * pagination.limit + 1}
-                        </span>{' '}
-                        to{' '}
-                        <span className="font-medium">
-                          {Math.min(pagination.page * pagination.limit, paginationInfo.totalItems)}
-                        </span>{' '}
-                        of{' '}
-                        <span className="font-medium">{paginationInfo.totalItems}</span>{' '}
-                        results
-                      </p>
-                    </div>
-                    <div>
-                      <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                        <button
-                          onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-                          disabled={pagination.page === 1}
-                          className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Previous
-                        </button>
-                        {Array.from({ length: Math.min(5, paginationInfo.totalPages) }, (_, i) => {
-                          const pageNum = i + 1;
-                          return (
-                            <button
-                              key={pageNum}
-                              onClick={() => setPagination(prev => ({ ...prev, page: pageNum }))}
-                              className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${pagination.page === pageNum
-                                ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
-                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                                }`}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        })}
-                        <button
-                          onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                          disabled={pagination.page === paginationInfo.totalPages}
-                          className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Next
-                        </button>
-                      </nav>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <PaginationControls
+                page={pagination.page}
+                totalPages={paginationInfo.totalPages}
+                totalItems={paginationInfo.totalItems}
+                limit={pagination.limit}
+                onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+              />
             </>
           )}
         </div>
@@ -1465,17 +1518,17 @@ const CashReceipts = () => {
                     Customer
                   </label>
                   <div className="relative">
-                    <input
+                    <Input
                       type="text"
                       value={customerSearchTerm}
                       onChange={(e) => handleCustomerSearch(e.target.value)}
-                      className="input w-full pr-10"
+                      className="w-full pr-10"
                       placeholder="Search or select customer..."
                     />
                     <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   </div>
                   {customerSearchTerm && (
-                    <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
+                    <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
                       {(customers || []).filter(customer =>
                         (customer.businessName || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
                         customer.phone?.includes(customerSearchTerm)
@@ -1489,6 +1542,9 @@ const CashReceipts = () => {
                           className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
                         >
                           <div className="font-medium text-gray-900">{customer.businessName || customer.name || 'Unknown'}</div>
+                          {customer.businessName && customer.name && (
+                            <div className="text-xs text-gray-500">Contact: {customer.name}</div>
+                          )}
                           {customer.phone && (
                             <div className="text-sm text-gray-500">{customer.phone}</div>
                           )}
@@ -1502,10 +1558,10 @@ const CashReceipts = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Receivables
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={selectedCustomer?.pendingBalance ? `${selectedCustomer.pendingBalance}` : 'No pending balance'}
-                    className="input w-full bg-gray-50"
+                    className="w-full bg-gray-50"
                     readOnly
                   />
                 </div>
@@ -1514,10 +1570,10 @@ const CashReceipts = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Description
                   </label>
-                  <textarea
+                  <Textarea
                     value={formData.particular}
                     onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
-                    className="input w-full resize-none"
+                    className="w-full resize-none"
                     rows="4"
                     placeholder="Enter receipt description or notes..."
                     required
@@ -1532,11 +1588,11 @@ const CashReceipts = () => {
                     Receipt Date
                   </label>
                   <div className="relative">
-                    <input
+                    <Input
                       type="date"
                       value={formData.date}
                       onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                      className="input w-full pr-10"
+                      className="w-full pr-10"
                     />
                     <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   </div>
@@ -1546,7 +1602,7 @@ const CashReceipts = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Amount <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <Input
                     type="number"
                     step="0.01"
                     min="0"
@@ -1555,7 +1611,7 @@ const CashReceipts = () => {
                       const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
                       setFormData(prev => ({ ...prev, amount: value }));
                     }}
-                    className="input w-full"
+                    className="w-full"
                     placeholder="0.00"
                     required
                   />
@@ -1565,10 +1621,10 @@ const CashReceipts = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Notes (Optional)
                   </label>
-                  <textarea
+                  <Textarea
                     value={formData.notes}
                     onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    className="input w-full resize-none"
+                    className="w-full resize-none"
                     rows="3"
                     placeholder="Additional notes..."
                   />
@@ -1578,29 +1634,35 @@ const CashReceipts = () => {
 
             {/* Action Buttons */}
             <div className="flex flex-col-reverse sm:flex-row justify-between items-stretch sm:items-center gap-3 mt-8 pt-6 border-t border-gray-200">
-              <button
+              <Button
                 onClick={resetForm}
-                className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+                variant="outline"
+                size="default"
+                className="flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <RotateCcw className="h-4 w-4" />
                 <span>Reset</span>
-              </button>
+              </Button>
 
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-                <button
-                  className="btn btn-outline btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+                <Button
+                  variant="outline"
+                  size="default"
+                  className="flex items-center justify-center gap-2 w-full sm:w-auto"
                 >
                   <Printer className="h-4 w-4" />
                   <span>Print Preview</span>
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleCreate}
                   disabled={creating}
-                  className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+                  variant="default"
+                  size="default"
+                  className="flex items-center justify-center gap-2 w-full sm:w-auto"
                 >
                   <Save className="h-4 w-4" />
                   <span>{creating ? 'Saving...' : 'Save Receipt'}</span>
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -1632,18 +1694,18 @@ const CashReceipts = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Date
                   </label>
-                  <input
+                  <Input
                     type="date"
                     value={formData.date}
                     onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                    className="input w-full"
+                    className="w-full"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Amount
                   </label>
-                  <input
+                  <Input
                     type="number"
                     step="0.01"
                     min="0"
@@ -1652,7 +1714,7 @@ const CashReceipts = () => {
                       const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
                       setFormData(prev => ({ ...prev, amount: value }));
                     }}
-                    className="input w-full"
+                    className="w-full"
                     placeholder="0.00"
                     required
                   />
@@ -1661,10 +1723,10 @@ const CashReceipts = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Particular
                   </label>
-                  <textarea
+                  <Textarea
                     value={formData.particular}
                     onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
-                    className="input w-full"
+                    className="w-full"
                     rows="3"
                     placeholder="Enter transaction details..."
                     required
@@ -1683,44 +1745,47 @@ const CashReceipts = () => {
                     <option value="">
                       {customersLoading ? 'Loading customers...' : 'Select Customer'}
                     </option>
-                    {customers?.map((customer) => (
-                      <option key={customer._id} value={customer._id}>
-                        {customer.businessName || customer.name} {customer.phone ? `(${customer.phone})` : ''}
-                      </option>
-                    ))}
+                    {customers?.map((customer) => {
+                      const customerId = customer.id || customer._id;
+                      return (
+                        <option key={customerId} value={customerId}>
+                          {customer.businessName || customer.business_name || customer.displayName || customer.name} {customer.phone ? `(${customer.phone})` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Notes (Optional)
                   </label>
-                  <textarea
+                  <Textarea
                     value={formData.notes}
                     onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    className="input w-full"
+                    className="w-full"
                     rows="2"
                     placeholder="Additional notes..."
                   />
                 </div>
               </div>
               <div className="flex justify-end space-x-3 mt-6">
-                <button
+                <Button
                   onClick={() => {
                     setShowEditModal(false);
                     setSelectedReceipt(null);
                     resetForm();
                   }}
-                  className="btn btn-secondary"
+                  variant="secondary"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleUpdate}
                   disabled={updating}
-                  className="btn btn-primary"
+                  variant="default"
                 >
                   {updating ? 'Updating...' : 'Update'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -1763,19 +1828,39 @@ const CashReceipts = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Amount
                   </label>
-                  <p className="text-sm text-gray-900">{Math.round(selectedReceipt.amount)}</p>
+                  <p className="text-sm text-gray-900">{formatCurrency(selectedReceipt.amount)}</p>
                 </div>
+                {(selectedReceipt.customer || selectedReceipt.supplier) && viewLedgerBalance != null && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Ledger Balance
+                    </label>
+                    <p className="text-sm text-gray-900">{formatCurrency(viewLedgerBalance)}</p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Particular
                   </label>
                   <p className="text-sm text-gray-900">{selectedReceipt.particular}</p>
                 </div>
+                {(selectedReceipt.customer || selectedReceipt.supplier) && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {selectedReceipt.customer ? 'Customer' : 'Supplier'}
+                    </label>
+                    <p className="text-sm text-gray-900">
+                      {selectedReceipt.customer
+                        ? (selectedReceipt.customer.businessName || selectedReceipt.customer.business_name || selectedReceipt.customer.displayName || selectedReceipt.customer.name || 'N/A')
+                        : (selectedReceipt.supplier.companyName || selectedReceipt.supplier.businessName || selectedReceipt.supplier.displayName || selectedReceipt.supplier.name || 'N/A')}
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Payment Method
                   </label>
-                  <p className="text-sm text-gray-900 capitalize">{selectedReceipt.paymentMethod.replace('_', ' ')}</p>
+                  <p className="text-sm text-gray-900 capitalize">{(selectedReceipt.paymentMethod ?? '').replace(/_/g, ' ')}</p>
                 </div>
                 {selectedReceipt.notes && (
                   <div>
@@ -1795,15 +1880,15 @@ const CashReceipts = () => {
                 </div>
               </div>
               <div className="flex justify-end mt-6">
-                <button
+                <Button
                   onClick={() => {
                     setShowViewModal(false);
                     setSelectedReceipt(null);
                   }}
-                  className="btn btn-secondary"
+                  variant="secondary"
                 >
                   Close
-                </button>
+                </Button>
               </div>
             </div>
           </div>

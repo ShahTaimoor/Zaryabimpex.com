@@ -20,10 +20,14 @@ import {
   useDeleteBankMutation,
 } from '../store/services/banksApi';
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
+import BaseModal from '../components/BaseModal';
 
 const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
   const { register, handleSubmit, formState: { errors }, reset } = useForm({
@@ -101,22 +105,15 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">
-              {bank ? 'Edit Bank Account' : 'Add New Bank Account'}
-            </h2>
-            <button
-              onClick={onCancel}
-              className="p-2 text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <BaseModal
+      isOpen={true}
+      onClose={onCancel}
+      title={bank ? 'Edit Bank Account' : 'Add New Bank Account'}
+      maxWidth="lg"
+      variant="scrollable"
+      contentClassName="p-6"
+    >
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* Bank Information */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -124,9 +121,9 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
               </label>
               <div className="relative">
                 <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
+                <Input
                   {...register('bankName', { required: 'Bank name is required' })}
-                  className="input pl-10"
+                  className="pl-10"
                   placeholder="Enter bank name"
                 />
               </div>
@@ -141,9 +138,8 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Account Name *
                 </label>
-                <input
+                <Input
                   {...register('accountName', { required: 'Account name is required' })}
-                  className="input"
                   placeholder="e.g., Main Operating Account"
                 />
                 {errors.accountName && (
@@ -155,9 +151,8 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Account Number *
                 </label>
-                <input
+                <Input
                   {...register('accountNumber', { required: 'Account number is required' })}
-                  className="input"
                   placeholder="Enter account number"
                 />
                 {errors.accountNumber && (
@@ -172,9 +167,8 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Branch Name
                 </label>
-                <input
+                <Input
                   {...register('branchName')}
-                  className="input"
                   placeholder="Enter branch name"
                 />
               </div>
@@ -206,14 +200,14 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
                 </label>
                 <div className="relative">
                   <TrendingUp className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
+                  <Input
                     type="number"
                     step="0.01"
                     {...register('openingBalance', {
                       valueAsNumber: true,
                       min: { value: 0, message: 'Balance must be positive' }
                     })}
-                    className="input pl-10"
+                    className="pl-10"
                     placeholder="0.00"
                   />
                 </div>
@@ -226,9 +220,8 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Routing Number
                 </label>
-                <input
+                <Input
                   {...register('routingNumber')}
-                  className="input"
                   placeholder="Enter routing number"
                 />
               </div>
@@ -240,9 +233,8 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   SWIFT Code
                 </label>
-                <input
+                <Input
                   {...register('swiftCode')}
-                  className="input"
                   placeholder="Enter SWIFT code"
                 />
               </div>
@@ -251,9 +243,8 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   IBAN
                 </label>
-                <input
+                <Input
                   {...register('iban')}
-                  className="input"
                   placeholder="Enter IBAN"
                 />
               </div>
@@ -265,31 +256,26 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
                 Branch Address
               </label>
               <div className="space-y-3">
-                <input
+                <Input
                   {...register('branchAddress.street')}
-                  className="input"
                   placeholder="Street Address"
                 />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <input
+                  <Input
                     {...register('branchAddress.city')}
-                    className="input"
                     placeholder="City"
                   />
-                  <input
+                  <Input
                     {...register('branchAddress.state')}
-                    className="input"
                     placeholder="State"
                   />
-                  <input
+                  <Input
                     {...register('branchAddress.zipCode')}
-                    className="input"
                     placeholder="Zip Code"
                   />
                 </div>
-                <input
+                <Input
                   {...register('branchAddress.country')}
-                  className="input"
                   placeholder="Country"
                 />
               </div>
@@ -300,9 +286,8 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Notes
               </label>
-              <textarea
+              <Textarea
                 {...register('notes')}
-                className="input"
                 rows={3}
                 placeholder="Additional notes about this bank account..."
               />
@@ -327,18 +312,22 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
 
             {/* Actions */}
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t">
-              <button
+              <Button
                 type="button"
                 onClick={onCancel}
-                className="btn btn-secondary btn-md w-full sm:w-auto"
+                variant="secondary"
+                size="default"
+                className="w-full sm:w-auto"
                 disabled={isSubmitting}
               >
                 Cancel
-              </button>
+              </Button>
               <LoadingButton
                 type="submit"
                 isLoading={isSubmitting}
-                className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+                variant="default"
+                size="default"
+                className="flex items-center justify-center gap-2 w-full sm:w-auto"
                 disabled={isSubmitting}
               >
                 <Plus className="h-4 w-4" />
@@ -346,9 +335,7 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
               </LoadingButton>
             </div>
           </form>
-        </div>
-      </div>
-    </div>
+    </BaseModal>
   );
 };
 
@@ -384,7 +371,7 @@ const Banks = () => {
 
     try {
       if (editingBank) {
-        await updateBank({ id: editingBank._id, ...payload }).unwrap();
+        await updateBank({ id: editingBank.id || editingBank._id, ...payload }).unwrap();
         toast.success('Bank account updated successfully');
       } else {
         await createBank(payload).unwrap();
@@ -403,7 +390,7 @@ const Banks = () => {
     const bankName = `${bank.bankName} - ${bank.accountNumber}`;
     confirmDelete(bankName, 'Bank Account', async () => {
       try {
-        await deleteBank(bank._id).unwrap();
+        await deleteBank(bank.id || bank._id).unwrap();
         toast.success('Bank account deleted successfully');
         refetch();
       } catch (error) {
@@ -453,9 +440,9 @@ const Banks = () => {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <p className="text-red-600 mb-4">Error loading banks</p>
-          <button onClick={() => queryClient.invalidateQueries('banks')} className="btn btn-primary btn-md">
+          <Button onClick={() => refetch()} variant="default" size="default">
             Retry
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -469,25 +456,27 @@ const Banks = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Bank Accounts</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your bank accounts</p>
         </div>
-        <button
+        <Button
           onClick={handleAddNew}
-          className="btn btn-primary btn-md flex items-center justify-center gap-2 w-full sm:w-auto"
+          variant="default"
+          size="default"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto"
         >
           <Plus className="h-4 w-4" />
           Add Bank Account
-        </button>
+        </Button>
       </div>
 
       {/* Search */}
       <div className="flex items-center space-x-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
+          <Input
             type="text"
             placeholder="Search banks..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10"
+            className="pl-10"
           />
         </div>
       </div>
@@ -501,10 +490,10 @@ const Banks = () => {
             {searchTerm ? 'Try adjusting your search terms' : 'Get started by adding your first bank account'}
           </p>
           {!searchTerm && (
-            <button onClick={handleAddNew} className="btn btn-primary btn-md flex items-center justify-center gap-2 mt-4">
+            <Button onClick={handleAddNew} variant="default" size="default" className="flex items-center justify-center gap-2 mt-4">
               <Plus className="h-4 w-4" />
               Add Bank Account
-            </button>
+            </Button>
           )}
         </div>
       ) : (
@@ -544,7 +533,7 @@ const Banks = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredBanks.map((bank) => (
-                  <tr key={bank._id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={bank.id || bank._id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       {bank.isActive !== false ? (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">

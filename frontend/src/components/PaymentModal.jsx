@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
 import { 
-  X, 
   CreditCard, 
   Smartphone, 
   Banknote, 
@@ -11,6 +11,7 @@ import {
   Loader
 } from 'lucide-react';
 import { LoadingButton } from './LoadingSpinner';
+import BaseModal from './BaseModal';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { useProcessPaymentMutation } from '../store/services/paymentApi';
 
@@ -224,21 +225,33 @@ const PaymentModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold text-gray-900">Process Payment</h2>
-          <button
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Process Payment"
+      maxWidth="lg"
+      variant="scrollable"
+      contentClassName="p-6"
+      footer={
+        <div className="flex items-center justify-end space-x-3 w-full">
+          <Button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            variant="secondary"
+            disabled={isProcessing}
           >
-            <X className="h-6 w-6" />
-          </button>
+            Cancel
+          </Button>
+          <LoadingButton
+            onClick={handlePayment}
+            loading={isProcessing}
+            variant="default"
+          >
+            {isProcessing ? 'Processing...' : 'Process Payment'}
+          </LoadingButton>
         </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-6">
+      }
+    >
+      <div className="space-y-6">
           {/* Order Summary */}
           {orderData && (
             <div className="bg-gray-50 rounded-lg p-4">
@@ -441,27 +454,8 @@ const PaymentModal = ({
               </div>
             </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end space-x-3 p-6 border-t bg-gray-50">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            disabled={isProcessing}
-          >
-            Cancel
-          </button>
-          <LoadingButton
-            onClick={handlePayment}
-            loading={isProcessing}
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-          >
-            {isProcessing ? 'Processing...' : 'Process Payment'}
-          </LoadingButton>
-        </div>
       </div>
-    </div>
+    </BaseModal>
   );
 };
 

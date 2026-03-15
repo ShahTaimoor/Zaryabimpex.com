@@ -1,5 +1,3 @@
-const mongoose = require('mongoose');
-
 /**
  * Performance Monitoring Service
  * Tracks system performance and alerts on issues
@@ -59,24 +57,8 @@ class PerformanceMonitoringService {
    * Monitor database performance
    */
   async monitorDatabasePerformance() {
-    try {
-      const db = mongoose.connection.db;
-      const stats = await db.stats();
-      
-      return {
-        collections: stats.collections,
-        dataSize: stats.dataSize,
-        storageSize: stats.storageSize,
-        indexes: stats.indexes,
-        indexSize: stats.indexSize,
-        objects: stats.objects,
-        avgObjSize: stats.avgObjSize,
-        timestamp: new Date()
-      };
-    } catch (error) {
-      console.error('Error monitoring database performance:', error);
-      return null;
-    }
+    // MongoDB removed; use Postgres monitoring tools for DB stats
+    return null;
   }
   
   /**
@@ -128,17 +110,6 @@ class PerformanceMonitoringService {
           });
         }
       }
-    }
-    
-    // Check connection pool
-    const connectionState = mongoose.connection.readyState;
-    if (connectionState !== 1) { // 1 = connected
-      alerts.push({
-        type: 'database_connection_issue',
-        severity: 'critical',
-        message: `Database connection state: ${connectionState}`,
-        connectionState
-      });
     }
     
     return alerts;

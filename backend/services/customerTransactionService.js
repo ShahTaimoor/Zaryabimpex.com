@@ -1,14 +1,32 @@
-const CustomerTransaction = require('../models/CustomerTransaction');
-const Customer = require('../models/Customer');
-const PaymentApplication = require('../models/PaymentApplication');
-// const accountingService = require('./accountingService'); // TODO: Implement accounting service integration
+const CustomerRepository = require('../repositories/postgres/CustomerRepository');
+const CustomerTransactionRepository = require('../repositories/postgres/CustomerTransactionRepository');
+const PaymentApplicationRepository = require('../repositories/postgres/PaymentApplicationRepository');
+
+function computeAging(dueDate) {
+  if (!dueDate) return { ageInDays: 0, agingBucket: 'current', isOverdue: false, daysOverdue: 0 };
+  const today = new Date();
+  const due = dueDate instanceof Date ? dueDate : new Date(dueDate);
+  const ageInDays = Math.floor((today - due) / (1000 * 60 * 60 * 24));
+  let agingBucket = 'current';
+  let isOverdue = false;
+  let daysOverdue = 0;
+  if (ageInDays > 0) {
+    isOverdue = true;
+    daysOverdue = ageInDays;
+    if (ageInDays <= 30) agingBucket = '1-30';
+    else if (ageInDays <= 60) agingBucket = '31-60';
+    else if (ageInDays <= 90) agingBucket = '61-90';
+    else agingBucket = '90+';
+  }
+  return { ageInDays, agingBucket, isOverdue, daysOverdue };
+}
 
 class CustomerTransactionService {
   /**
-   * Create customer transaction
+   * Create customer transaction (Postgres)
    * @param {Object} transactionData - Transaction data
    * @param {Object} user - User creating transaction
-   * @returns {Promise<CustomerTransaction>}
+   * @returns {Promise<Object>} Created transaction row
    */
   async createTransaction(transactionData, user) {
     const {
@@ -29,17 +47,13 @@ class CustomerTransactionService {
       requiresApproval = false
     } = transactionData;
 
-    // Get customer
-    const customer = await Customer.findById(customerId);
-    if (!customer) {
-      throw new Error('Customer not found');
-    }
+    const customer = await CustomerRepository.findById(customerId);
+    if (!customer) throw new Error('Customer not found');
 
-    // Get current balances
     const balanceBefore = {
-      pendingBalance: customer.pendingBalance || 0,
-      advanceBalance: customer.advanceBalance || 0,
-      currentBalance: customer.currentBalance || 0
+      pendingBalance: customer.pending_balance ?? customer.pendingBalance ?? 0,
+      advanceBalance: customer.advance_balance ?? customer.advanceBalance ?? 0,
+      currentBalance: customer.current_balance ?? customer.currentBalance ?? 0
     };
 
     // Calculate balance impact
@@ -82,19 +96,18 @@ class CustomerTransactionService {
         break;
     }
 
-    // Calculate new balances
     const balanceAfter = this.calculateNewBalances(balanceBefore, balanceImpact, transactionType);
 
-    // Generate transaction number
-    const transactionNumber = await CustomerTransaction.generateTransactionNumber(transactionType, customerId);
+    const transactionNumber = await CustomerTransactionRepository.generateTransactionNumber(transactionType, customerId);
+    const resolvedDueDate = dueDate || this.calculateDueDate(customer.payment_terms || customer.paymentTerms);
+    const aging = computeAging(resolvedDueDate);
 
-    // Create transaction
-    const transaction = new CustomerTransaction({
-      customer: customerId,
+    const transaction = await CustomerTransactionRepository.create({
+      customerId,
       transactionNumber,
       transactionType,
       transactionDate: new Date(),
-      dueDate: dueDate || this.calculateDueDate(customer.paymentTerms),
+      dueDate: resolvedDueDate,
       referenceType,
       referenceId,
       referenceNumber,
@@ -109,32 +122,16 @@ class CustomerTransactionService {
       balanceAfter,
       lineItems,
       paymentDetails,
-      reason,
-      notes,
-      requiresApproval,
       status: requiresApproval ? 'draft' : 'posted',
       remainingAmount: transactionType === 'invoice' ? netAmount : 0,
-      createdBy: user._id,
-      postedBy: requiresApproval ? null : user._id,
+      ageInDays: aging.ageInDays,
+      agingBucket: aging.agingBucket,
+      isOverdue: aging.isOverdue,
+      daysOverdue: aging.daysOverdue,
+      createdBy: user.id || user._id,
+      postedBy: requiresApproval ? null : (user.id || user._id),
       postedAt: requiresApproval ? null : new Date()
     });
-
-    // Calculate aging
-    const aging = transaction.calculateAging();
-    transaction.ageInDays = aging.ageInDays;
-    transaction.agingBucket = aging.agingBucket;
-    transaction.isOverdue = aging.isOverdue;
-    transaction.daysOverdue = aging.daysOverdue;
-
-    await transaction.save();
-
-    // Note: Manual customer balance updates removed. 
-    // Reliance now exclusively on AccountingService for dynamic balances.
-
-    // Create accounting entries if posted
-    if (!requiresApproval) {
-      await this.createAccountingEntries(transaction, user);
-    }
 
     return transaction;
   }
@@ -249,29 +246,16 @@ class CustomerTransactionService {
    * @returns {Promise<Customer>}
    */
   async updateCustomerBalance(customerId, newBalances) {
-    // Use atomic update with version check
-    const customer = await Customer.findById(customerId);
-    if (!customer) {
-      throw new Error('Customer not found');
-    }
+    const customer = await CustomerRepository.findById(customerId);
+    if (!customer) throw new Error('Customer not found');
 
-    const updated = await Customer.findOneAndUpdate(
-      { _id: customerId, __v: customer.__v },
-      {
-        $set: {
-          pendingBalance: newBalances.pendingBalance,
-          advanceBalance: newBalances.advanceBalance,
-          currentBalance: newBalances.currentBalance
-        },
-        $inc: { __v: 1 }
-      },
-      { new: true }
-    );
+    const updated = await CustomerRepository.update(customerId, {
+      pendingBalance: newBalances.pendingBalance,
+      advanceBalance: newBalances.advanceBalance,
+      currentBalance: newBalances.currentBalance
+    });
 
-    if (!updated) {
-      throw new Error('Concurrent balance update conflict. Please retry.');
-    }
-
+    if (!updated) throw new Error('Concurrent balance update conflict. Please retry.');
     return updated;
   }
 
@@ -283,27 +267,30 @@ class CustomerTransactionService {
    */
   async createAccountingEntries(transaction, user) {
     const entries = [];
+    const transactionType = transaction.transaction_type ?? transaction.transactionType;
+    const transactionNumber = transaction.transaction_number ?? transaction.transactionNumber;
+    const netAmount = transaction.net_amount ?? transaction.netAmount;
+    const paymentDetails = (transaction.payment_details ?? transaction.paymentDetails) || {};
 
-    switch (transaction.transactionType) {
+    switch (transactionType) {
       case 'invoice':
         // Debit: AR, Credit: Revenue
         entries.push({
-          accountCode: 'AR', // Accounts Receivable
-          debitAmount: transaction.netAmount,
+          accountCode: 'AR',
+          debitAmount: netAmount,
           creditAmount: 0,
-          description: `Invoice ${transaction.transactionNumber}`
+          description: `Invoice ${transactionNumber}`
         });
         entries.push({
-          accountCode: 'REV', // Sales Revenue
+          accountCode: 'REV',
           debitAmount: 0,
-          creditAmount: transaction.netAmount,
-          description: `Invoice ${transaction.transactionNumber}`
+          creditAmount: netAmount,
+          description: `Invoice ${transactionNumber}`
         });
         break;
 
-      case 'payment':
-        // Debit: Cash/Bank, Credit: AR
-        const paymentAccount = transaction.paymentDetails.paymentMethod === 'bank_transfer'
+      case 'payment': {
+        const paymentAccount = paymentDetails.paymentMethod === 'bank_transfer'
           ? 'BANK'
           : 'CASH';
         entries.push({
@@ -315,25 +302,26 @@ class CustomerTransactionService {
         entries.push({
           accountCode: 'AR',
           debitAmount: 0,
-          creditAmount: transaction.netAmount,
-          description: `Payment ${transaction.transactionNumber}`
+          creditAmount: netAmount,
+          description: `Payment ${transactionNumber}`
         });
         break;
+      }
 
       case 'refund':
       case 'credit_note':
         // Debit: Sales Returns, Credit: AR
         entries.push({
-          accountCode: 'SALES_RET', // Sales Returns
-          debitAmount: transaction.netAmount,
+          accountCode: 'SALES_RET',
+          debitAmount: netAmount,
           creditAmount: 0,
           description: `Refund ${transaction.transactionNumber}`
         });
         entries.push({
           accountCode: 'AR',
           debitAmount: 0,
-          creditAmount: transaction.netAmount,
-          description: `Refund ${transaction.transactionNumber}`
+          creditAmount: netAmount,
+          description: `Refund ${transactionNumber}`
         });
         break;
 
@@ -341,25 +329,18 @@ class CustomerTransactionService {
         // Debit: Bad Debt Expense, Credit: AR
         entries.push({
           accountCode: 'BAD_DEBT',
-          debitAmount: transaction.netAmount,
+          debitAmount: netAmount,
           creditAmount: 0,
           description: `Bad debt write-off ${transaction.transactionNumber}`
         });
         entries.push({
           accountCode: 'AR',
           debitAmount: 0,
-          creditAmount: transaction.netAmount,
-          description: `Bad debt write-off ${transaction.transactionNumber}`
+          creditAmount: netAmount,
+          description: `Bad debt write-off ${transactionNumber}`
         });
         break;
     }
-
-    // Save accounting entries to transaction
-    transaction.accountingEntries = entries;
-    await transaction.save();
-
-    // Create actual accounting transactions (if accountingService supports it)
-    // This would integrate with your existing accounting system
 
     return entries;
   }
@@ -373,82 +354,68 @@ class CustomerTransactionService {
    * @returns {Promise<PaymentApplication>}
    */
   async applyPayment(customerId, paymentAmount, applications, user) {
-    const customer = await Customer.findById(customerId);
-    if (!customer) {
-      throw new Error('Customer not found');
-    }
+    const customer = await CustomerRepository.findById(customerId);
+    if (!customer) throw new Error('Customer not found');
 
-    // Create payment transaction first
     const paymentTransaction = await this.createTransaction({
       customerId,
       transactionType: 'payment',
       netAmount: paymentAmount,
       referenceType: 'payment',
-      paymentDetails: {
-        paymentMethod: 'account',
-        paymentDate: new Date()
-      }
+      paymentDetails: { paymentMethod: 'account', paymentDate: new Date() }
     }, user);
 
-    // Validate applications
     let totalApplied = 0;
     const validApplications = [];
 
     for (const app of applications) {
-      const invoice = await CustomerTransaction.findById(app.invoiceId);
-      if (!invoice || invoice.customer.toString() !== customerId) {
+      const invoice = await CustomerTransactionRepository.findById(app.invoiceId);
+      if (!invoice || (invoice.customer_id || invoice.customer) !== customerId) {
         throw new Error(`Invoice ${app.invoiceId} not found or does not belong to customer`);
       }
-
-      if (invoice.transactionType !== 'invoice') {
+      const invType = invoice.transaction_type ?? invoice.transactionType;
+      if (invType !== 'invoice') {
         throw new Error(`Transaction ${app.invoiceId} is not an invoice`);
       }
-
-      if (invoice.status === 'paid' || invoice.status === 'cancelled') {
+      const status = invoice.status;
+      if (status === 'paid' || status === 'cancelled') {
         throw new Error(`Invoice ${app.invoiceId} is already paid or cancelled`);
       }
 
-      const amountToApply = Math.min(app.amount, invoice.remainingAmount);
+      const remaining = parseFloat(invoice.remaining_amount ?? invoice.remainingAmount ?? 0) || 0;
+      const paid = parseFloat(invoice.paid_amount ?? invoice.paidAmount ?? 0) || 0;
+      const amountToApply = Math.min(app.amount, remaining);
       totalApplied += amountToApply;
 
       validApplications.push({
-        invoice: invoice._id,
-        invoiceNumber: invoice.transactionNumber,
+        invoice: invoice.id ?? invoice._id,
+        invoiceNumber: invoice.transaction_number ?? invoice.transactionNumber,
         amountApplied: amountToApply,
-        discountTaken: 0, // Can be calculated if needed
+        discountTaken: 0,
         appliedDate: new Date(),
-        appliedBy: user._id
+        appliedBy: user.id || user._id
       });
 
-      // Update invoice
-      invoice.paidAmount += amountToApply;
-      invoice.remainingAmount -= amountToApply;
-      if (invoice.remainingAmount === 0) {
-        invoice.status = 'paid';
-      } else {
-        invoice.status = 'partially_paid';
-      }
-      await invoice.save();
+      const newPaid = paid + amountToApply;
+      const newRemaining = remaining - amountToApply;
+      await CustomerTransactionRepository.updateById(invoice.id ?? invoice._id, {
+        paidAmount: newPaid,
+        remainingAmount: newRemaining,
+        status: newRemaining === 0 ? 'paid' : 'partially_paid'
+      });
     }
 
     const unappliedAmount = paymentAmount - totalApplied;
-
-    // Create payment application record
-    const paymentApplication = new PaymentApplication({
-      payment: paymentTransaction._id,
-      customer: customerId,
+    const paymentApplication = await PaymentApplicationRepository.create({
+      payment: paymentTransaction.id ?? paymentTransaction._id,
+      customerId,
       applications: validApplications,
       unappliedAmount,
       totalPaymentAmount: paymentAmount,
       status: 'applied',
-      createdBy: user._id,
-      appliedBy: user._id
+      createdBy: user.id || user._id,
+      appliedBy: user.id || user._id
     });
-
-    await paymentApplication.save();
-
-    // Note: Manual balance updates removed.
-    // Applications are recorded, but customer balances are derived from the ledger.
 
     return paymentApplication;
   }
@@ -461,48 +428,31 @@ class CustomerTransactionService {
    * @returns {Promise<CustomerTransaction>}
    */
   async reverseTransaction(transactionId, reason, user) {
-    const originalTransaction = await CustomerTransaction.findById(transactionId);
-    if (!originalTransaction) {
-      throw new Error('Transaction not found');
-    }
+    const originalTransaction = await CustomerTransactionRepository.findById(transactionId);
+    if (!originalTransaction) throw new Error('Transaction not found');
 
-    if (!originalTransaction.canBeReversed()) {
-      throw new Error('Transaction cannot be reversed');
-    }
+    const status = originalTransaction.status;
+    if (status === 'reversed') throw new Error('Transaction cannot be reversed');
 
-    // Get customer current balances
-    const customer = await Customer.findById(originalTransaction.customer);
-    const balanceBefore = {
-      pendingBalance: customer.pendingBalance,
-      advanceBalance: customer.advanceBalance,
-      currentBalance: customer.currentBalance
-    };
+    const customerId = originalTransaction.customer_id ?? originalTransaction.customer;
+    const netAmount = parseFloat(originalTransaction.net_amount ?? originalTransaction.netAmount ?? 0) || 0;
+    const transactionNumber = originalTransaction.transaction_number ?? originalTransaction.transactionNumber;
 
-    // Create reversal transaction (opposite impact)
     const reversalTransaction = await this.createTransaction({
-      customerId: originalTransaction.customer.toString(),
+      customerId: typeof customerId === 'string' ? customerId : String(customerId),
       transactionType: 'reversal',
-      netAmount: -originalTransaction.netAmount, // Opposite amount
+      netAmount: -netAmount,
       referenceType: 'reversal',
-      referenceId: originalTransaction._id,
-      referenceNumber: `REV-${originalTransaction.transactionNumber}`,
-      reason: `Reversal of ${originalTransaction.transactionNumber}: ${reason}`,
+      referenceId: originalTransaction.id ?? originalTransaction._id,
+      referenceNumber: `REV-${transactionNumber}`,
       notes: reason
     }, user);
 
-    // Link reversal
-    reversalTransaction.isReversal = true;
-    reversalTransaction.reversesTransaction = originalTransaction._id;
-    reversalTransaction.reversedAt = new Date();
-    await reversalTransaction.save();
-
-    // Mark original as reversed
-    originalTransaction.status = 'reversed';
-    originalTransaction.reversedBy = reversalTransaction._id;
-    originalTransaction.reversedAt = new Date();
-    await originalTransaction.save();
-
-    // Note: Reversal balances are now dynamically derived from ledger.
+    await CustomerTransactionRepository.updateById(transactionId, {
+      status: 'reversed',
+      reversedBy: reversalTransaction.id ?? reversalTransaction._id,
+      reversedAt: new Date()
+    });
 
     return reversalTransaction;
   }
@@ -516,63 +466,40 @@ class CustomerTransactionService {
    * @returns {Promise<CustomerTransaction>}
    */
   async partialReverseTransaction(transactionId, amount, reason, user) {
-    const originalTransaction = await CustomerTransaction.findById(transactionId);
-    if (!originalTransaction) {
-      throw new Error('Transaction not found');
+    const originalTransaction = await CustomerTransactionRepository.findById(transactionId);
+    if (!originalTransaction) throw new Error('Transaction not found');
+
+    const status = originalTransaction.status;
+    if (status === 'reversed') throw new Error('Transaction cannot be reversed');
+
+    if (amount <= 0) throw new Error('Reversal amount must be positive');
+
+    const remaining = parseFloat(originalTransaction.remaining_amount ?? originalTransaction.remainingAmount ?? 0) || 0;
+    if (amount > remaining) {
+      throw new Error(`Reversal amount (${amount}) exceeds remaining amount (${remaining})`);
     }
 
-    if (!originalTransaction.canBeReversed()) {
-      throw new Error('Transaction cannot be reversed');
-    }
+    const customerId = originalTransaction.customer_id ?? originalTransaction.customer;
+    const netAmount = parseFloat(originalTransaction.net_amount ?? originalTransaction.netAmount ?? 0) || 0;
+    const transactionNumber = originalTransaction.transaction_number ?? originalTransaction.transactionNumber;
 
-    if (amount <= 0) {
-      throw new Error('Reversal amount must be positive');
-    }
-
-    if (amount > originalTransaction.remainingAmount) {
-      throw new Error(`Reversal amount (${amount}) exceeds remaining amount (${originalTransaction.remainingAmount})`);
-    }
-
-    // Get customer current balances
-    const customer = await Customer.findById(originalTransaction.customer);
-    const balanceBefore = {
-      pendingBalance: customer.pendingBalance,
-      advanceBalance: customer.advanceBalance,
-      currentBalance: customer.currentBalance
-    };
-
-    // Create partial reversal transaction
     const reversalTransaction = await this.createTransaction({
-      customerId: originalTransaction.customer.toString(),
+      customerId: typeof customerId === 'string' ? customerId : String(customerId),
       transactionType: 'reversal',
-      netAmount: -amount, // Negative for reversal
+      netAmount: -amount,
       referenceType: 'reversal',
-      referenceId: originalTransaction._id,
-      referenceNumber: `REV-PARTIAL-${originalTransaction.transactionNumber}`,
-      reason: `Partial reversal of ${originalTransaction.transactionNumber}: ${reason}`,
-      notes: `Partial reversal: ${amount} of ${originalTransaction.netAmount}. ${reason}`
+      referenceId: originalTransaction.id ?? originalTransaction._id,
+      referenceNumber: `REV-PARTIAL-${transactionNumber}`,
+      notes: `Partial reversal: ${amount} of ${netAmount}. ${reason}`
     }, user);
 
-    // Link reversal
-    reversalTransaction.isReversal = true;
-    reversalTransaction.reversesTransaction = originalTransaction._id;
-    reversalTransaction.reversedAt = new Date();
-    await reversalTransaction.save();
-
-    // Update original transaction
-    originalTransaction.remainingAmount -= amount;
-    originalTransaction.paidAmount -= amount;
-
-    if (originalTransaction.remainingAmount <= 0.01) {
-      originalTransaction.status = 'paid';
-      originalTransaction.remainingAmount = 0;
-    } else {
-      originalTransaction.status = 'partially_paid';
-    }
-
-    await originalTransaction.save();
-
-    // Note: Reversal balances are now dynamically derived from ledger.
+    const newRemaining = remaining - amount;
+    const paid = parseFloat(originalTransaction.paid_amount ?? originalTransaction.paidAmount ?? 0) || 0;
+    await CustomerTransactionRepository.updateById(transactionId, {
+      remainingAmount: newRemaining <= 0.01 ? 0 : newRemaining,
+      paidAmount: paid - amount,
+      status: newRemaining <= 0.01 ? 'paid' : 'partially_paid'
+    });
 
     return reversalTransaction;
   }
@@ -584,47 +511,21 @@ class CustomerTransactionService {
    * @returns {Promise<Object>}
    */
   async getCustomerTransactions(customerId, options = {}) {
-    const {
-      limit = 50,
-      skip = 0,
-      transactionType,
-      status,
-      startDate,
-      endDate,
-      includeReversed = false
-    } = options;
+    const { limit = 50, skip = 0, transactionType, status, startDate, endDate, includeReversed = false } = options;
 
-    const filter = { customer: customerId };
+    const filter = { customerId };
+    if (transactionType) filter.transactionType = transactionType;
+    if (status) filter.status = status;
+    if (!includeReversed) filter.statusNe = 'reversed';
+    if (startDate) filter.transactionDateFrom = new Date(startDate);
+    if (endDate) filter.transactionDateTo = new Date(endDate);
 
-    if (transactionType) {
-      filter.transactionType = transactionType;
-    }
-
-    if (status) {
-      filter.status = status;
-    }
-
-    if (!includeReversed) {
-      filter.status = { $ne: 'reversed' };
-    }
-
-    if (startDate || endDate) {
-      filter.transactionDate = {};
-      if (startDate) filter.transactionDate.$gte = new Date(startDate);
-      if (endDate) filter.transactionDate.$lte = new Date(endDate);
-    }
-
-    const transactions = await CustomerTransaction.find(filter)
-      .populate('createdBy', 'firstName lastName')
-      .populate('lineItems.product', 'name sku')
-      .sort({ transactionDate: -1 })
-      .limit(limit)
-      .skip(skip);
-
-    const total = await CustomerTransaction.countDocuments(filter);
-
+    const [all, total] = await Promise.all([
+      CustomerTransactionRepository.findAll(filter, { limit, offset: skip }),
+      CustomerTransactionRepository.count(filter)
+    ]);
     return {
-      transactions,
+      transactions: all,
       total,
       limit,
       skip
@@ -637,15 +538,17 @@ class CustomerTransactionService {
    * @returns {Promise<Array>}
    */
   async getOverdueInvoices(customerId) {
-    return await CustomerTransaction.find({
-      customer: customerId,
-      transactionType: 'invoice',
-      status: { $in: ['posted', 'partially_paid'] },
-      dueDate: { $lt: new Date() },
-      remainingAmount: { $gt: 0 }
-    })
-      .sort({ dueDate: 1 })
-      .populate('lineItems.product', 'name');
+    const rows = await CustomerTransactionRepository.findAll(
+      { customerId, transactionType: 'invoice' },
+      { limit: 500 }
+    );
+    const now = new Date();
+    return rows.filter(
+      (r) =>
+        ['posted', 'partially_paid'].includes(r.status) &&
+        r.due_date && new Date(r.due_date) < now &&
+        (parseFloat(r.remaining_amount) || 0) > 0
+    ).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
   }
 
   /**
@@ -654,12 +557,15 @@ class CustomerTransactionService {
    * @returns {Promise<Object>}
    */
   async getCustomerAging(customerId) {
-    const invoices = await CustomerTransaction.find({
-      customer: customerId,
-      transactionType: 'invoice',
-      status: { $in: ['posted', 'partially_paid'] },
-      remainingAmount: { $gt: 0 }
-    });
+    const rows = await CustomerTransactionRepository.findAll(
+      { customerId, transactionType: 'invoice' },
+      { limit: 1000 }
+    );
+    const invoices = rows.filter(
+      (r) =>
+        ['posted', 'partially_paid'].includes(r.status) &&
+        (parseFloat(r.remaining_amount) || 0) > 0
+    );
 
     const aging = {
       current: 0,
@@ -670,9 +576,19 @@ class CustomerTransactionService {
       total: 0
     };
 
-    invoices.forEach(invoice => {
-      const amount = invoice.remainingAmount;
-      aging[invoice.agingBucket] = (aging[invoice.agingBucket] || 0) + amount;
+    const today = new Date();
+    invoices.forEach((invoice) => {
+      const amount = parseFloat(invoice.remaining_amount ?? invoice.remainingAmount) || 0;
+      const due = invoice.due_date ? new Date(invoice.due_date) : today;
+      const ageInDays = Math.floor((today - due) / (1000 * 60 * 60 * 24));
+      let bucket = 'current';
+      if (ageInDays > 0) {
+        if (ageInDays <= 30) bucket = '1-30';
+        else if (ageInDays <= 60) bucket = '31-60';
+        else if (ageInDays <= 90) bucket = '61-90';
+        else bucket = '90+';
+      }
+      aging[bucket] = (aging[bucket] || 0) + amount;
       aging.total += amount;
     });
 

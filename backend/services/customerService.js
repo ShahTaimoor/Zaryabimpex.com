@@ -1,9 +1,7 @@
-const customerRepository = require('../repositories/CustomerRepository');
-const ledgerAccountService = require('./ledgerAccountService');
-const mongoose = require('mongoose');
-const { retryMongoTransaction, isDuplicateKeyError } = require('../utils/retry');
-const Customer = require('../models/Customer');
+const customerRepository = require('../repositories/postgres/CustomerRepository');
+const CustomerBalanceService = require('./customerBalanceService');
 const AccountingService = require('./accountingService');
+const SalesRepository = require('../repositories/postgres/SalesRepository');
 const customerAuditLogService = require('./customerAuditLogService');
 
 // Helper function to parse opening balance
@@ -20,128 +18,18 @@ const parseOpeningBalance = (value) => {
 const applyOpeningBalance = (customer, openingBalance) => {
   if (openingBalance === null) return;
   customer.openingBalance = openingBalance;
-  // Note: pendingBalance, advanceBalance, and currentBalance are deprecated in favour of ledger aggregation
-};
-
-// Helper function to check if transaction is not supported
-const isTransactionNotSupportedError = (error) => {
-  if (!error) return false;
-  const message = error.message || '';
-  return error.code === 20 ||
-    error.codeName === 'IllegalOperation' ||
-    message.includes('Transaction numbers are only allowed on a replica set member or mongos') ||
-    message.includes('transactions are not supported');
-};
-
-// Helper function to run operation with optional transaction
-const runWithOptionalTransaction = async (operation, context = 'operation') => {
-  let session = null;
-  let transactionStarted = false;
-
-  try {
-    session = await mongoose.startSession();
-    session.startTransaction();
-    transactionStarted = true;
-
-    const result = await operation(session);
-    await session.commitTransaction();
-    return result;
-  } catch (error) {
-    if (transactionStarted && session) {
-      try {
-        await session.abortTransaction();
-      } catch (abortError) {
-        console.error(`Failed to abort transaction for ${context}:`, abortError);
-      }
-    }
-
-    if (!transactionStarted && isTransactionNotSupportedError(error)) {
-      console.warn(`Transactions not supported for MongoDB deployment. Retrying ${context} without session.`);
-      return await operation(null);
-    }
-
-    throw error;
-  } finally {
-    if (session) {
-      session.endSession();
-    }
-  }
 };
 
 class CustomerService {
   /**
-   * Build filter query from request parameters
+   * Build filter for Postgres repository
    * @param {object} queryParams - Request query parameters
-   * @returns {object} - MongoDB filter object
+   * @returns {object} - Repository filter (search, isActive)
    */
   buildFilter(queryParams) {
     const filter = {};
-
-    // Search filter
-    if (queryParams.search) {
-      filter.$or = [
-        { name: { $regex: queryParams.search, $options: 'i' } },
-        { email: { $regex: queryParams.search, $options: 'i' } },
-        { businessName: { $regex: queryParams.search, $options: 'i' } },
-        { phone: { $regex: queryParams.search, $options: 'i' } }
-      ];
-    }
-
-    // Business type filter
-    if (queryParams.businessType) {
-      filter.businessType = queryParams.businessType;
-    }
-
-    // Status filter
-    if (queryParams.status) {
-      filter.status = queryParams.status;
-    }
-
-    // Customer tier filter
-    if (queryParams.customerTier) {
-      filter.customerTier = queryParams.customerTier;
-    }
-
-    // Email status filter
-    if (queryParams.emailStatus) {
-      switch (queryParams.emailStatus) {
-        case 'verified':
-          filter.emailVerified = true;
-          break;
-        case 'unverified':
-          filter.emailVerified = false;
-          filter.email = { $exists: true, $ne: '' };
-          break;
-        case 'no-email':
-          filter.$or = [
-            { email: { $exists: false } },
-            { email: '' },
-            { email: null }
-          ];
-          break;
-      }
-    }
-
-    // Phone status filter
-    if (queryParams.phoneStatus) {
-      switch (queryParams.phoneStatus) {
-        case 'verified':
-          filter.phoneVerified = true;
-          break;
-        case 'unverified':
-          filter.phoneVerified = false;
-          filter.phone = { $exists: true, $ne: '' };
-          break;
-        case 'no-phone':
-          filter.$or = [
-            { phone: { $exists: false } },
-            { phone: '' },
-            { phone: null }
-          ];
-          break;
-      }
-    }
-
+    if (queryParams.search) filter.search = queryParams.search;
+    if (queryParams.isActive !== undefined) filter.isActive = queryParams.isActive === 'true';
     return filter;
   }
 
@@ -152,12 +40,12 @@ class CustomerService {
    */
   transformCustomerToUppercase(customer) {
     if (!customer) return customer;
-    if (customer.toObject) customer = customer.toObject();
-    if (customer.name) customer.name = customer.name.toUpperCase();
-    if (customer.businessName) customer.businessName = customer.businessName.toUpperCase();
-    if (customer.firstName) customer.firstName = customer.firstName.toUpperCase();
-    if (customer.lastName) customer.lastName = customer.lastName.toUpperCase();
-    return customer;
+    const c = customer.toObject ? customer.toObject() : { ...customer };
+    if (c.name) c.name = c.name.toUpperCase();
+    if (c.businessName) c.businessName = c.businessName.toUpperCase();
+    if (c.firstName) c.firstName = c.firstName.toUpperCase();
+    if (c.lastName) c.lastName = c.lastName.toUpperCase();
+    return c;
   }
 
   /**
@@ -172,30 +60,30 @@ class CustomerService {
     const page = getAllCustomers ? 1 : (parseInt(queryParams.page) || 1);
     const limit = getAllCustomers ? 999999 : (parseInt(queryParams.limit) || 20);
 
-    const filter = this.buildFilter(queryParams);
+    const filter = {};
+    if (queryParams.isActive !== undefined) filter.isActive = queryParams.isActive === 'true';
+    if (queryParams.search) filter.search = queryParams.search;
 
     const result = await customerRepository.findWithPagination(filter, {
       page,
       limit,
-      getAll: getAllCustomers,
-      sort: { createdAt: -1 }
+      sort: 'created_at DESC'
     });
 
-    // Fetch dynamic balances from ledger for all customers in this page
-    const customerIds = result.customers.map(c => c._id.toString());
+    // Fetch balances from AccountingService for all customers (use string id for Map lookup)
+    const customerIds = result.customers.map(c => c.id);
     const balanceMap = await AccountingService.getBulkCustomerBalances(customerIds);
 
-    // Transform customer names to uppercase and attach dynamic balances
+    // Transform customer names to uppercase and attach balances
     result.customers = result.customers.map(c => {
       const transformed = this.transformCustomerToUppercase(c);
-      const ledgerBalance = balanceMap.get(c._id.toString()) || 0;
-      const netBalance = (c.openingBalance || 0) + ledgerBalance;
+      const balance = balanceMap.get(String(c.id)) ?? balanceMap.get(c.id) ?? 0;
 
       return {
         ...transformed,
-        currentBalance: netBalance,
-        pendingBalance: netBalance > 0 ? netBalance : 0,
-        advanceBalance: netBalance < 0 ? Math.abs(netBalance) : 0
+        currentBalance: balance,
+        pendingBalance: balance > 0 ? balance : 0,
+        advanceBalance: balance < 0 ? Math.abs(balance) : 0
       };
     });
 
@@ -233,17 +121,16 @@ class CustomerService {
   async searchCustomers(searchTerm, limit = 10) {
     const customers = await customerRepository.search(searchTerm, {
       limit,
-      sort: { businessName: 1 },
-      lean: true
+      sort: 'business_name ASC'
     });
 
-    const customerIds = customers.map(c => c._id.toString());
+    const customerIds = customers.map(c => c.id);
     const balanceMap = await AccountingService.getBulkCustomerBalances(customerIds);
 
     return customers.map(customer => {
       const transformed = this.transformCustomerToUppercase(customer);
-      const ledgerBalance = balanceMap.get(customer._id.toString()) || 0;
-      const netBalance = (customer.openingBalance || 0) + ledgerBalance;
+      const balance = balanceMap.get(customer.id) || 0;
+      const netBalance = (customer.opening_balance ?? customer.openingBalance ?? 0) + balance;
 
       return {
         ...transformed,
@@ -328,31 +215,12 @@ class CustomerService {
       dataWithUser.businessName = dataWithUser.businessName.trim();
     }
 
-    const customerId = await retryMongoTransaction(async () => {
-      return await runWithOptionalTransaction(async (session) => {
-        let newCustomer = new Customer(dataWithUser);
-        applyOpeningBalance(newCustomer, parsedOpeningBalance);
+    if (parsedOpeningBalance != null) {
+      dataWithUser.openingBalance = parsedOpeningBalance;
+    }
 
-        await ledgerAccountService.syncCustomerLedgerAccount(newCustomer, session ? {
-          session,
-          userId: userId
-        } : {
-          userId: userId
-        });
-
-        if (newCustomer.isNew) {
-          await newCustomer.save(session ? { session } : undefined);
-        }
-
-        return newCustomer._id;
-      }, 'create customer');
-    }, {
-      maxRetries: 5,
-      initialDelay: 100,
-      maxDelay: 3000
-    });
-
-    const customer = await this.getCustomerById(customerId);
+    const created = await customerRepository.create(dataWithUser);
+    const customer = await this.getCustomerById(created.id);
 
     return {
       customer,
@@ -368,7 +236,7 @@ class CustomerService {
    * @returns {Promise<{customer: Customer, message: string}>}
    */
   async updateCustomer(id, updateData, userId, options = {}) {
-    const { openingBalance, useTransaction = true } = options;
+    const { openingBalance } = options;
 
     if (updateData.email && updateData.email.trim()) {
       const emailExists = await customerRepository.emailExists(updateData.email, id);
@@ -391,61 +259,41 @@ class CustomerService {
       }
     }
 
+    const existing = await customerRepository.findById(id);
+    if (!existing) {
+      throw new Error('Customer not found');
+    }
+
     const parsedOpeningBalance = parseOpeningBalance(openingBalance);
+    const payload = {
+      ...updateData,
+      updatedBy: userId
+    };
 
-    const updatedCustomer = await retryMongoTransaction(async () => {
-      return await runWithOptionalTransaction(async (session) => {
-        const customer = await customerRepository.findById(id, { session });
+    if (payload.email === '' || (typeof payload.email === 'string' && !payload.email.trim())) {
+      payload.email = undefined;
+    } else if (payload.email) {
+      payload.email = payload.email.trim().toLowerCase();
+    }
 
-        if (!customer) {
-          return null;
-        }
+    if (payload.phone === '' || (typeof payload.phone === 'string' && !payload.phone.trim())) {
+      payload.phone = undefined;
+    } else if (payload.phone) {
+      payload.phone = payload.phone.trim();
+    }
 
-        const oldCustomerData = customer.toObject();
+    if (parsedOpeningBalance != null) {
+      payload.openingBalance = parsedOpeningBalance;
+    }
 
-        Object.assign(customer, {
-          ...updateData,
-          lastModifiedBy: userId
-        });
-
-        if (customer.email === '' || (typeof customer.email === 'string' && !customer.email.trim())) {
-          customer.email = undefined;
-        } else if (customer.email) {
-          customer.email = customer.email.trim().toLowerCase();
-        }
-
-        if (customer.phone === '' || (typeof customer.phone === 'string' && !customer.phone.trim())) {
-          customer.phone = undefined;
-        } else if (customer.phone) {
-          customer.phone = customer.phone.trim();
-        }
-
-        applyOpeningBalance(customer, parsedOpeningBalance);
-
-        await customer.save(session ? { session } : undefined);
-        await ledgerAccountService.syncCustomerLedgerAccount(customer, session ? {
-          session,
-          userId: userId
-        } : {
-          userId: userId
-        });
-
-        return { customer, oldCustomerData };
-      }, 'update customer');
-    }, {
-      maxRetries: 5,
-      initialDelay: 100,
-      maxDelay: 3000
-    });
-
-    if (!updatedCustomer) {
+    const updated = await customerRepository.update(id, payload);
+    if (!updated) {
       throw new Error('Customer not found');
     }
 
     const finalCustomer = await this.getCustomerById(id);
 
-    // Log audit trail
-    customerAuditLogService.logCustomerUpdate(updatedCustomer.oldCustomerData, finalCustomer, { _id: userId }, null)
+    customerAuditLogService.logCustomerUpdate(existing, finalCustomer, { _id: userId }, null)
       .catch(err => console.error('Audit log error:', err));
 
     return {
@@ -462,54 +310,27 @@ class CustomerService {
    * @returns {Promise<{message: string}>}
    */
   async deleteCustomer(id, userId, reason = 'Customer deleted') {
-    const deletionResult = await runWithOptionalTransaction(async (session) => {
-      const customer = await customerRepository.findById(id, { session });
-
-      if (!customer) {
-        return null;
-      }
-
-      const balance = await AccountingService.getCustomerBalance(id);
-      if (Math.abs(balance) > 0.01) {
-        throw new Error('Cannot delete customer with outstanding balance. Please settle all balances first.');
-      }
-
-      const Sales = require('../models/Sales');
-      const pendingOrders = await Sales.countDocuments({
-        customer: id,
-        status: { $in: ['pending', 'confirmed', 'processing'] }
-      });
-
-      if (pendingOrders > 0) {
-        throw new Error('Cannot delete customer with pending orders. Please cancel or complete orders first.');
-      }
-
-      const customerData = customer.toObject();
-
-      customer.isDeleted = true;
-      customer.deletedAt = new Date();
-      customer.deletedBy = userId;
-      customer.deletionReason = reason;
-      customer.status = 'inactive';
-
-      await customer.save(session ? { session } : undefined);
-
-      if (customer.ledgerAccount) {
-        await ledgerAccountService.deactivateLedgerAccount(customer.ledgerAccount, session ? {
-          session,
-          userId: userId
-        } : { userId: userId });
-      }
-
-      customerAuditLogService.logCustomerDeletion(customerData, { _id: userId }, null, reason)
-        .catch(err => console.error('Audit log error:', err));
-
-      return true;
-    }, 'delete customer');
-
-    if (!deletionResult) {
+    const customer = await customerRepository.findById(id);
+    if (!customer) {
       throw new Error('Customer not found');
     }
+
+    const summary = await CustomerBalanceService.getBalanceSummary(id);
+    const balance = summary.currentBalance || 0;
+    if (Math.abs(balance) > 0.01) {
+      throw new Error('Cannot delete customer with outstanding balance. Please settle all balances first.');
+    }
+
+    const sales = await SalesRepository.findByCustomer(id, { limit: 1000 });
+    const pending = sales.filter(s => ['pending', 'confirmed', 'processing'].includes(s.status || s.payment_status));
+    if (pending.length > 0) {
+      throw new Error('Cannot delete customer with pending orders. Please cancel or complete orders first.');
+    }
+
+    await customerRepository.delete(id);
+
+    customerAuditLogService.logCustomerDeletion(customer, { _id: userId }, null, reason)
+      .catch(err => console.error('Audit log error:', err));
 
     return {
       message: 'Customer deleted successfully'
@@ -523,31 +344,10 @@ class CustomerService {
    * @returns {Promise<{customer: Customer, message: string}>}
    */
   async restoreCustomer(id, userId) {
-    const customer = await customerRepository.Model.findOneAndUpdate(
-      { _id: id, isDeleted: true },
-      {
-        $set: {
-          isDeleted: false,
-          status: 'active',
-          lastModifiedBy: userId
-        },
-        $unset: {
-          deletedAt: '',
-          deletedBy: '',
-          deletionReason: ''
-        }
-      },
-      { new: true }
-    );
-
+    const customer = await customerRepository.restore(id);
     if (!customer) {
       throw new Error('Deleted customer not found');
     }
-
-    if (customer.ledgerAccount) {
-      await ledgerAccountService.activateLedgerAccount(customer.ledgerAccount, { userId });
-    }
-
     return {
       customer: await this.getCustomerById(id),
       message: 'Customer restored successfully'
@@ -560,41 +360,35 @@ class CustomerService {
    * @returns {Promise<object>}
    */
   async getDeletedCustomers(queryParams = {}) {
-    const filter = { isDeleted: true };
-
-    if (queryParams.search) {
-      filter.$or = [
-        { name: { $regex: queryParams.search, $options: 'i' } },
-        { businessName: { $regex: queryParams.search, $options: 'i' } }
-      ];
-    }
-
     const page = parseInt(queryParams.page) || 1;
     const limit = parseInt(queryParams.limit) || 20;
+    const offset = (page - 1) * limit;
 
-    const result = await customerRepository.findWithPagination(filter, {
-      page,
-      limit,
-      sort: { deletedAt: -1 }
-    });
+    const total = await customerRepository.findDeletedCount();
+    const customers = await customerRepository.findDeleted({}, { limit, offset });
 
-    const customerIds = result.customers.map(c => c._id.toString());
+    const customerIds = customers.map(c => c.id);
     const balanceMap = await AccountingService.getBulkCustomerBalances(customerIds);
 
-    result.customers = result.customers.map(c => {
-      const transformed = this.transformCustomerToUppercase(c);
-      const ledgerBalance = balanceMap.get(c._id.toString()) || 0;
-      const netBalance = (c.openingBalance || 0) + ledgerBalance;
-
-      return {
-        ...transformed,
-        currentBalance: netBalance,
-        pendingBalance: netBalance > 0 ? netBalance : 0,
-        advanceBalance: netBalance < 0 ? Math.abs(netBalance) : 0
-      };
-    });
-
-    return result;
+    return {
+      customers: customers.map(c => {
+        const transformed = this.transformCustomerToUppercase(c);
+        const ledgerBalance = balanceMap.get(c.id) || 0;
+        const netBalance = (c.opening_balance ?? c.openingBalance ?? 0) + ledgerBalance;
+        return {
+          ...transformed,
+          currentBalance: netBalance,
+          pendingBalance: netBalance > 0 ? netBalance : 0,
+          advanceBalance: netBalance < 0 ? Math.abs(netBalance) : 0
+        };
+      }),
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit) || 1
+      }
+    };
   }
 
   /**
@@ -628,40 +422,40 @@ class CustomerService {
    * @returns {Promise<Array>}
    */
   async getCustomersByCities(cities = [], showZeroBalance = true) {
-    const filter = {};
-    if (cities.length > 0) {
-      filter['addresses.city'] = { $in: cities };
-    }
+    const customers = await customerRepository.findAll({}, { sort: 'business_name ASC' });
+    const byCity = cities.length > 0 ? new Set(cities.map(c => String(c).trim().toLowerCase())) : null;
 
-    const customers = await customerRepository.findAll(filter, {
-      select: 'name businessName addresses currentBalance pendingBalance advanceBalance openingBalance',
-      sort: { businessName: 1 },
-      lean: true
-    });
+    const filtered = byCity
+      ? customers.filter(c => {
+          const raw = c.address ?? c.addresses;
+          const addresses = Array.isArray(raw) ? raw : (typeof raw === 'string' ? (JSON.parse(raw || '[]') || []) : []);
+          return addresses.some(addr => byCity.has(String(addr?.city || addr?.City || '').trim().toLowerCase()));
+        })
+      : customers;
 
-    const customerIds = customers.map(c => c._id.toString());
+    const customerIds = filtered.map(c => c.id);
     const balanceMap = await AccountingService.getBulkCustomerBalances(customerIds);
 
-    return customers.map(customer => {
-      const defaultAddress = customer.addresses && customer.addresses.length > 0
-        ? customer.addresses.find(addr => addr.isDefault) || customer.addresses[0]
-        : null;
-
-      const ledgerBalance = balanceMap.get(customer._id.toString()) || 0;
-      const netBalance = (customer.openingBalance || 0) + ledgerBalance;
-
+    return filtered.map(customer => {
+      const raw = customer.address ?? customer.addresses;
+      const addresses = Array.isArray(raw) ? raw : (typeof raw === 'string' ? (JSON.parse(raw || '[]') || []) : []);
+      const defaultAddress = addresses.length > 0 ? (addresses.find(addr => addr.isDefault) || addresses[0]) : null;
+      const ledgerBalance = balanceMap.get(customer.id) || 0;
+      const netBalance = (customer.opening_balance ?? customer.openingBalance ?? 0) + ledgerBalance;
+      if (!showZeroBalance && Math.abs(netBalance) < 0.01) return null;
       return {
-        _id: customer._id,
-        accountName: customer.businessName || customer.name,
+        id: customer.id,
+        _id: customer.id,
+        accountName: customer.business_name || customer.businessName || customer.name,
         name: customer.name,
-        businessName: customer.businessName,
-        city: defaultAddress?.city || '',
+        businessName: customer.business_name || customer.businessName,
+        city: defaultAddress?.city || defaultAddress?.City || '',
         balance: netBalance,
         currentBalance: netBalance,
         pendingBalance: netBalance > 0 ? netBalance : 0,
         advanceBalance: netBalance < 0 ? Math.abs(netBalance) : 0
       };
-    });
+    }).filter(Boolean);
   }
 
   /**
@@ -669,9 +463,9 @@ class CustomerService {
    */
   async updateCustomerBalance(id, balanceData) {
     console.warn('updateCustomerBalance is deprecated. Use ledger transactions.');
-    const customer = await customerRepository.updateBalance(id, balanceData);
+    const customer = await customerRepository.update(id, balanceData);
     return {
-      customer,
+      customer: customer || (await customerRepository.findById(id)),
       message: 'Customer balance updated (Legacy/Cached)'
     };
   }
@@ -699,41 +493,49 @@ class CustomerService {
   }
 
   async customerExists(query) {
-    const customer = await customerRepository.findOne(query);
-    return !!customer;
+    if (!query) return false;
+    if (query.id || query._id) {
+      const c = await customerRepository.findById(query.id || query._id);
+      return !!c;
+    }
+    if (query.email) return customerRepository.emailExists(query.email);
+    if (query.businessName) return customerRepository.businessNameExists(query.businessName);
+    if (query.phone) return customerRepository.phoneExists(query.phone);
+    return false;
   }
 
   async addCustomerAddress(customerId, addressData) {
     const customer = await customerRepository.findById(customerId);
     if (!customer) throw new Error('Customer not found');
+    const raw = customer.address ?? customer.addresses;
+    const addresses = Array.isArray(raw) ? [...raw] : (typeof raw === 'string' ? (JSON.parse(raw || '[]') || []) : []);
     if (addressData.isDefault) {
-      customer.addresses.forEach(addr => {
+      addresses.forEach(addr => {
         if (addr.type === addressData.type || addr.type === 'both') {
           addr.isDefault = false;
         }
       });
     }
-    customer.addresses.push(addressData);
-    await customer.save();
-    return customer;
+    addresses.push(addressData);
+    const updated = await customerRepository.update(customerId, { addresses });
+    return updated || (await customerRepository.findById(customerId));
   }
 
   async updateCustomerCreditLimit(customerId, creditLimit, userId) {
     const customer = await customerRepository.update(customerId, {
       creditLimit,
-      lastModifiedBy: userId
+      updatedBy: userId
     });
     if (!customer) throw new Error('Customer not found');
     return customer;
   }
 
   async getCustomerByIdWithLedger(customerId) {
-    const customer = await customerRepository.findById(customerId, {
-      populate: [{ path: 'ledgerAccount', select: 'accountCode accountName' }]
-    });
+    const customer = await customerRepository.findById(customerId);
     if (!customer) throw new Error('Customer not found');
 
-    const balance = await AccountingService.getCustomerBalance(customerId);
+    const summary = await CustomerBalanceService.getBalanceSummary(customerId);
+    const balance = summary.currentBalance || 0;
     const transformed = this.transformCustomerToUppercase(customer);
 
     return {

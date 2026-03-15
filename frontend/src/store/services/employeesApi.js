@@ -42,7 +42,12 @@ export const employeesApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Users', id: 'EMPLOYEES_LIST' }],
+      invalidatesTags: [
+        { type: 'Users', id: 'LIST' },
+        { type: 'Users', id: 'EMPLOYEES_LIST' },
+        { type: 'Settings', id: 'DEPARTMENTS' },
+        { type: 'Settings', id: 'POSITIONS' },
+      ],
     }),
     updateEmployee: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -52,7 +57,11 @@ export const employeesApi = api.injectEndpoints({
       }),
       invalidatesTags: (_res, _err, { id }) => [
         { type: 'Users', id },
+        { type: 'Users', id: `ACTIVITY_${id}` },
+        { type: 'Users', id: 'LIST' },
         { type: 'Users', id: 'EMPLOYEES_LIST' },
+        { type: 'Settings', id: 'DEPARTMENTS' },
+        { type: 'Settings', id: 'POSITIONS' },
       ],
     }),
     deleteEmployee: builder.mutation({
@@ -62,7 +71,10 @@ export const employeesApi = api.injectEndpoints({
       }),
       invalidatesTags: (_res, _err, id) => [
         { type: 'Users', id },
+        { type: 'Users', id: 'LIST' },
         { type: 'Users', id: 'EMPLOYEES_LIST' },
+        { type: 'Settings', id: 'DEPARTMENTS' },
+        { type: 'Settings', id: 'POSITIONS' },
       ],
     }),
     getDepartments: builder.query({

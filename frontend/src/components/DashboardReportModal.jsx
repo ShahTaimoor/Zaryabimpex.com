@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Search, RefreshCw, Calendar, ArrowUpDown } from 'lucide-react';
+import { Search, ArrowUpDown, RefreshCw } from 'lucide-react';
+import BaseModal from './BaseModal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import DateFilter from './DateFilter';
 
@@ -14,7 +17,8 @@ const DashboardReportModal = ({
   dateTo,
   onDateChange,
   filters = {},
-  onFilterChange
+  onFilterChange,
+  summary = null
 }) => {
   const [localFilters, setLocalFilters] = useState(() => filters || {});
   const [localDateFrom, setLocalDateFrom] = useState(() => dateFrom);
@@ -54,6 +58,8 @@ const DashboardReportModal = ({
 
   if (!isOpen) return null;
 
+  const subtitle = `From: ${formatDate(localDateFrom)} To: ${formatDate(localDateTo)}`;
+
   const handleSearch = () => {
     if (onDateChange) {
       onDateChange(localDateFrom, localDateTo);
@@ -70,31 +76,31 @@ const DashboardReportModal = ({
   const getFilterInput = (column) => {
     if (column.filterType === 'date') {
       return (
-        <input
+        <Input
           type="date"
           value={localFilters[column.key] || ''}
           onChange={(e) => handleFilterChange(column.key, e.target.value)}
-          className="input text-xs w-full"
+          className="text-xs w-full"
           placeholder="Equals:"
         />
       );
     } else if (column.filterType === 'number') {
       return (
-        <input
+        <Input
           type="number"
           value={localFilters[column.key] || ''}
           onChange={(e) => handleFilterChange(column.key, e.target.value)}
-          className="input text-xs w-full"
+          className="text-xs w-full"
           placeholder="Equals:"
         />
       );
     } else {
       return (
-        <input
+        <Input
           type="text"
           value={localFilters[column.key] || ''}
           onChange={(e) => handleFilterChange(column.key, e.target.value)}
-          className="input text-xs w-full"
+          className="text-xs w-full"
           placeholder="Contains:"
         />
       );
@@ -102,25 +108,15 @@ const DashboardReportModal = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-2 sm:top-4 md:top-10 mx-auto p-3 sm:p-4 md:p-6 border w-[98%] sm:w-[95%] max-w-7xl shadow-lg rounded-lg bg-white my-2 sm:my-4 md:my-10">
-        {/* Header */}
-        <div className="mb-4 sm:mb-5 md:mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
-          <div className="flex-1 min-w-0">
-            <h3 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-900 break-words">{title}</h3>
-            <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
-              From: {formatDate(localDateFrom)} To: {formatDate(localDateTo)}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1"
-            title="Close"
-          >
-            <X className="h-5 w-5 sm:h-6 sm:w-6" />
-          </button>
-        </div>
-
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      subtitle={subtitle}
+      maxWidth="2xl"
+      variant="scrollable"
+      contentClassName="p-3 sm:p-4 md:p-6"
+    >
         {/* Date Range and Filters */}
         <div className="mb-3 sm:mb-4 space-y-3 sm:space-y-4">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4">
@@ -137,16 +133,33 @@ const DashboardReportModal = ({
                 className="w-full"
               />
             </div>
-            <button
+            <Button
               onClick={handleSearch}
-              className="btn btn-primary flex items-center justify-center gap-x-1 sm:gap-x-2 px-3 sm:px-4 py-1.5 sm:py-2 w-full sm:w-auto whitespace-nowrap"
+              variant="default"
+              className="flex items-center justify-center gap-x-1 sm:gap-x-2 px-3 sm:px-4 py-1.5 sm:py-2 w-full sm:w-auto whitespace-nowrap"
             >
               <Search className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
               <span className="text-xs sm:text-sm">Search</span>
-            </button>
+            </Button>
           </div>
 
         </div>
+
+        {/* Summary Section (e.g. Sales, Returns, Total) */}
+        {summary && summary.length > 0 && (
+          <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+              {summary.map((item, idx) => (
+                <div key={idx} className="text-center sm:text-left">
+                  <p className="text-xs text-gray-500">{item.label}</p>
+                  <p className={`text-sm sm:text-base font-semibold ${item.highlight ? 'text-primary-600' : 'text-gray-900'}`}>
+                    {typeof item.value === 'number' ? formatCurrency(item.value) : item.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Grouping Hint */}
         <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded text-xs sm:text-sm text-gray-600 break-words">
@@ -221,15 +234,15 @@ const DashboardReportModal = ({
           <p className="text-xs sm:text-sm text-gray-600 break-words text-center sm:text-left">
             Showing {data.length} record{data.length !== 1 ? 's' : ''}
           </p>
-          <button
+          <Button
             onClick={onClose}
-            className="btn btn-secondary w-full sm:w-auto px-4 py-2 text-xs sm:text-sm"
+            variant="secondary"
+            className="w-full sm:w-auto px-4 py-2 text-xs sm:text-sm"
           >
             Close
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+    </BaseModal>
   );
 };
 

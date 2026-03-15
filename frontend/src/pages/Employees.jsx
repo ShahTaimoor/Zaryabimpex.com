@@ -26,7 +26,7 @@ import {
   useGetPositionsQuery,
 } from '../store/services/employeesApi';
 import { useGetUsersQuery } from '../store/services/usersApi';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
 import { handleApiError, showSuccessToast } from '../utils/errorHandler';
 import { formatDate } from '../utils/formatters';

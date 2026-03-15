@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Input } from '@/components/ui/input';
 import { 
   Filter, 
   X, 
@@ -42,10 +43,10 @@ const SupplierFilters = ({ filters, onFiltersChange, onClearFilters }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 min-w-0">
       {/* Filter Header */}
       <div 
-        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
+        className="flex items-center justify-between p-3 sm:p-4 cursor-pointer hover:bg-gray-50"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center space-x-3">
@@ -79,8 +80,8 @@ const SupplierFilters = ({ filters, onFiltersChange, onClearFilters }) => {
 
       {/* Filter Content */}
       {isExpanded && (
-        <div className="border-t border-gray-200 p-4 space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="border-t border-gray-200 p-3 sm:p-4 space-y-4 xl:space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 xl:gap-4">
             
             {/* Search Filter */}
             <div>
@@ -88,12 +89,12 @@ const SupplierFilters = ({ filters, onFiltersChange, onClearFilters }) => {
                 <Search className="h-4 w-4 inline mr-1" />
                 Search Suppliers
               </label>
-              <input
+              <Input
                 type="text"
                 placeholder="Company name, contact..."
                 value={filters.search || ''}
                 onChange={(e) => handleFilterChange('search', e.target.value)}
-                className="input text-sm"
+                className="text-sm"
               />
             </div>
 

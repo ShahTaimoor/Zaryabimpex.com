@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import BaseModal from './BaseModal';
 import {
-  X,
   TrendingUp,
   TrendingDown,
   FileText,
@@ -41,6 +42,7 @@ const BalanceSheetDetailModal = ({
     balanceSheet?._id,
     {
       skip: !isOpen || !balanceSheet?._id,
+      refetchOnMountOrArgChange: true,
     }
   );
 
@@ -118,18 +120,7 @@ const BalanceSheetDetailModal = ({
     return 'text-gray-600';
   };
 
-  if (!isOpen || !fullBalanceSheet) {
-    if (balanceSheetLoading) {
-      return (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-6xl shadow-lg rounded-md bg-white">
-            <LoadingSpinner message="Loading balance sheet details..." />
-          </div>
-        </div>
-      );
-    }
-    return null;
-  }
+  if (!isOpen) return null;
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -139,38 +130,39 @@ const BalanceSheetDetailModal = ({
     { id: 'ratios', label: 'Ratios', icon: FileText }
   ];
 
+  const subtitle = fullBalanceSheet ? (
+    `${fullBalanceSheet.statementDate ? new Date(fullBalanceSheet.statementDate).toLocaleDateString() : 'Invalid Date'} • ${fullBalanceSheet.periodType || 'N/A'}`
+  ) : '';
+
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-6xl shadow-lg rounded-md bg-white">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-blue-50 rounded-lg mr-4">
-              <FileText className="h-6 w-6 text-blue-600" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-gray-900">{fullBalanceSheet.statementNumber || 'Invalid Date'}</h3>
-              <p className="text-sm text-gray-500">
-                {fullBalanceSheet.statementDate
-                  ? new Date(fullBalanceSheet.statementDate).toLocaleDateString()
-                  : 'Invalid Date'} •
-                <span className="capitalize ml-1">{fullBalanceSheet.periodType || 'N/A'}</span>
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-3">
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={
+        fullBalanceSheet ? (
+          <span className="flex items-center gap-3">
+            <span className="p-2 bg-blue-50 rounded-lg">
+              <FileText className="h-5 w-5 text-blue-600" />
+            </span>
+            {fullBalanceSheet.statementNumber || 'Invalid Date'}
+          </span>
+        ) : 'Loading...'
+      }
+      subtitle={subtitle}
+      maxWidth="2xl"
+      variant="scrollable"
+      contentClassName="p-5"
+    >
+      {balanceSheetLoading || !fullBalanceSheet ? (
+        <LoadingSpinner message="Loading balance sheet details..." />
+      ) : (
+        <>
+          <div className="flex items-center space-x-3 mb-6">
             <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(fullBalanceSheet.status)}`}>
               {getStatusIcon(fullBalanceSheet.status)}
               <span className="ml-2 capitalize">{fullBalanceSheet.status || 'draft'}</span>
             </span>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-6 w-6" />
-            </button>
           </div>
-        </div>
 
         {/* Tabs */}
         <div className="border-b border-gray-200 mb-6">
@@ -578,24 +570,24 @@ const BalanceSheetDetailModal = ({
         {/* Footer Actions */}
         <div className="flex items-center justify-between pt-6 border-t border-gray-200">
           <div className="flex items-center space-x-4">
-            <button
+            <Button
               onClick={() => setShowStatusUpdate(true)}
-              className="btn btn-secondary"
+              variant="secondary"
               disabled={isLoading}
             >
               Update Status
-            </button>
-            <button className="btn btn-secondary">
+            </Button>
+            <Button variant="secondary">
               <Download className="h-4 w-4 mr-2" />
               Export PDF
-            </button>
+            </Button>
           </div>
-          <button
+          <Button
             onClick={onClose}
-            className="btn btn-secondary"
+            variant="secondary"
           >
             Close
-          </button>
+          </Button>
         </div>
 
         {/* Status Update Modal */}
@@ -633,27 +625,30 @@ const BalanceSheetDetailModal = ({
                   />
                 </div>
                 <div className="flex space-x-3">
-                  <button
+                  <Button
                     type="button"
                     onClick={() => setShowStatusUpdate(false)}
-                    className="flex-1 btn btn-secondary"
+                    variant="secondary"
+                    className="flex-1"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="submit"
-                    className="flex-1 btn btn-primary"
+                    variant="default"
+                    className="flex-1"
                     disabled={isLoading}
                   >
                     {isLoading ? 'Updating...' : 'Update Status'}
-                  </button>
+                  </Button>
                 </div>
               </form>
             </div>
           </div>
         )}
-      </div>
-    </div>
+        </>
+      )}
+    </BaseModal>
   );
 };
 

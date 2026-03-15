@@ -15,7 +15,10 @@ export const companyApi = api.injectEndpoints({
         method: 'put',
         data: body,
       }),
-      invalidatesTags: [{ type: 'Company', id: 'SETTINGS' }],
+      invalidatesTags: [
+        { type: 'Company', id: 'SETTINGS' },
+        { type: 'Settings', id: 'COMPANY' },
+      ],
     }),
     uploadCompanyLogo: builder.mutation({
       query: (formData) => ({
@@ -23,7 +26,10 @@ export const companyApi = api.injectEndpoints({
         method: 'post',
         data: formData,
       }),
-      invalidatesTags: [{ type: 'Company', id: 'SETTINGS' }],
+      invalidatesTags: [
+        { type: 'Company', id: 'SETTINGS' },
+        { type: 'Settings', id: 'COMPANY' },
+      ],
     }),
   }),
   overrideExisting: false,

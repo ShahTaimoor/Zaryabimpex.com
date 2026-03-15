@@ -4,19 +4,23 @@ const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
-const Sales = require('../models/Sales'); // Still needed for new Sales() and static methods
-const Product = require('../models/Product'); // Still needed for validation
-const ProductVariant = require('../models/ProductVariant'); // For variant support
-const Customer = require('../models/Customer'); // Still needed for validation
-const CashReceipt = require('../models/CashReceipt');
-const BankReceipt = require('../models/BankReceipt');
-const Inventory = require('../models/Inventory');
 const StockMovementService = require('../services/stockMovementService');
 const salesService = require('../services/salesService');
+const AccountingService = require('../services/accountingService');
+const profitDistributionService = require('../services/profitDistributionService');
 const salesRepository = require('../repositories/SalesRepository');
 const productRepository = require('../repositories/ProductRepository');
+const inventoryRepository = require('../repositories/postgres/InventoryRepository');
 const productVariantRepository = require('../repositories/ProductVariantRepository');
 const customerRepository = require('../repositories/CustomerRepository');
+const cashReceiptRepository = require('../repositories/postgres/CashReceiptRepository');
+const bankReceiptRepository = require('../repositories/postgres/BankReceiptRepository');
+
+/** Check if order can be cancelled (works with plain order object from repo). */
+function canBeCancelled(order) {
+  const status = order?.status;
+  return status === 'pending' || status === 'confirmed';
+}
 const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 const { preventPOSDuplicates } = require('../middleware/duplicatePrevention');
@@ -128,7 +132,7 @@ router.get('/cctv-orders', [
   query('dateFrom').optional().isISO8601(),
   query('dateTo').optional().isISO8601(),
   query('orderNumber').optional().trim(),
-  query('customerId').optional().isMongoId()
+  query('customerId').optional().isUUID(4)
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -140,49 +144,33 @@ router.get('/cctv-orders', [
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
 
-    // Build query - only orders with CCTV timestamps
-    const query = {
-      billStartTime: { $exists: true, $ne: null },
-      billEndTime: { $exists: true, $ne: null },
-      isDeleted: { $ne: true }
-    };
+    // Build Postgres filter (CCTV columns not in sales table; filter by date/customer)
+    const filters = {};
+    if (req.query.dateFrom) {
+      filters.dateFrom = new Date(req.query.dateFrom);
+      filters.dateFrom.setHours(0, 0, 0, 0);
+    }
+    if (req.query.dateTo) {
+      filters.dateTo = new Date(req.query.dateTo);
+      filters.dateTo.setHours(23, 59, 59, 999);
+    }
+    if (req.query.orderNumber) filters.orderNumber = req.query.orderNumber;
+    if (req.query.customerId) filters.customerId = req.query.customerId;
 
-    // Add date filters
-    if (req.query.dateFrom || req.query.dateTo) {
-      query.createdAt = {};
-      if (req.query.dateFrom) {
-        const dateFrom = new Date(req.query.dateFrom);
-        dateFrom.setHours(0, 0, 0, 0);
-        query.createdAt.$gte = dateFrom;
+    const result = await salesRepository.findWithPagination(filters, {
+      page,
+      limit,
+      sort: 'created_at DESC'
+    });
+    const orders = result.sales || [];
+    const total = result.pagination?.total ?? orders.length;
+
+    // Attach customer for each order
+    for (const order of orders) {
+      if (order.customer_id) {
+        order.customer = await customerRepository.findById(order.customer_id);
       }
-      if (req.query.dateTo) {
-        const dateTo = new Date(req.query.dateTo);
-        dateTo.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = dateTo;
-      }
     }
-
-    // Add order number filter
-    if (req.query.orderNumber) {
-      query.orderNumber = { $regex: req.query.orderNumber, $options: 'i' };
-    }
-
-    // Add customer filter
-    if (req.query.customerId) {
-      query.customer = req.query.customerId;
-    }
-
-    // Get orders with CCTV timestamps
-    const orders = await Sales.find(query)
-      .populate('customer', 'displayName firstName lastName email phone addresses currentBalance pendingBalance advanceBalance')
-      .populate('createdBy', 'firstName lastName')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    // Get total count
-    const total = await Sales.countDocuments(query);
 
     res.json({
       success: true,
@@ -220,28 +208,19 @@ router.get('/period-summary', [
     dateTo.setDate(dateTo.getDate() + 1);
     dateTo.setHours(0, 0, 0, 0);
 
-    const orders = await Sales.find({
-      createdAt: { $gte: dateFrom, $lt: dateTo }
-    });
-
-    const totalRevenue = orders.reduce((sum, order) => sum + (order.pricing?.total || 0), 0);
+    const raw = await salesRepository.findByDateRange(dateFrom, dateTo);
+    const orders = Array.isArray(raw) ? raw : [];
+    const totalRevenue = orders.reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0);
     const totalOrders = orders.length;
+    const itemsArr = (o) => (o && Array.isArray(o.items) ? o.items : []);
     const totalItems = orders.reduce((sum, order) =>
-      sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0);
+      sum + itemsArr(order).reduce((itemSum, item) => itemSum + (item.quantity || 0), 0), 0);
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-    // Calculate discounts
-    const totalDiscounts = orders.reduce((sum, order) =>
-      sum + (order.pricing?.discountAmount || 0), 0);
-
-    // Calculate by order type
+    const totalDiscounts = orders.reduce((sum, order) => sum + (parseFloat(order?.discount) || 0), 0);
     const revenueByType = {
-      retail: orders.filter(o => o.orderType === 'retail')
-        .reduce((sum, order) => sum + (order.pricing?.total || 0), 0),
-      wholesale: orders.filter(o => o.orderType === 'wholesale')
-        .reduce((sum, order) => sum + (order.pricing?.total || 0), 0)
+      retail: orders.filter(o => o && o.order_type === 'retail').reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0),
+      wholesale: orders.filter(o => o && o.order_type === 'wholesale').reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0)
     };
-
     const summary = {
       total: totalRevenue,
       totalRevenue,
@@ -251,12 +230,8 @@ router.get('/period-summary', [
       totalDiscounts,
       netRevenue: totalRevenue - totalDiscounts,
       revenueByType,
-      period: {
-        start: req.query.dateFrom,
-        end: req.query.dateTo
-      }
+      period: { start: req.query.dateFrom, end: req.query.dateTo }
     };
-
     res.json({ data: summary });
   } catch (error) {
     console.error('Get period summary error:', error);
@@ -350,9 +325,9 @@ router.post('/', [
   requirePermission('create_orders'),
   preventPOSDuplicates, // Backend safety net for duplicate prevention
   body('orderType').isIn(['retail', 'wholesale', 'return', 'exchange']).withMessage('Invalid order type'),
-  body('customer').optional().isMongoId().withMessage('Invalid customer ID'),
+  body('customer').optional().isUUID(4).withMessage('Invalid customer ID'),
   body('items').isArray({ min: 1 }).withMessage('Order must have at least one item'),
-  body('items.*.product').isMongoId().withMessage('Invalid product ID'),
+  body('items.*.product').isUUID(4).withMessage('Invalid product ID'),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('payment.method').isIn(['cash', 'credit_card', 'debit_card', 'check', 'account', 'split', 'bank']).withMessage('Invalid payment method'),
   body('payment.amount').optional().isFloat({ min: 0 }).withMessage('Payment amount must be a positive number'),
@@ -379,9 +354,9 @@ router.post('/', [
       });
     }
 
-    const { customer, items, orderType, payment, notes, isTaxExempt, billDate } = req.body;
+    const { customer, items, orderType, payment, notes, isTaxExempt, billDate, appliedDiscounts, discountAmount, subtotal, total, tax } = req.body;
 
-    // Use SalesService to create the sale (invoice)
+    // Use SalesService to create the sale (invoice); appliedDiscounts/discountAmount from POS discount codes
     const savedOrder = await salesService.createSale(
       {
         customer,
@@ -391,7 +366,12 @@ router.post('/', [
         notes,
         isTaxExempt,
         billDate,
-        billStartTime
+        billStartTime,
+        appliedDiscounts,
+        discountAmount,
+        subtotal,
+        total,
+        tax
       },
       req.user
     );
@@ -413,6 +393,44 @@ router.post('/', [
   }
 });
 
+// @route   POST /api/sales/post-missing-to-ledger
+// @desc    Backfill account ledger: post any sales/invoices that were never recorded to the ledger (e.g. created before the fix).
+// @access  Private
+router.post('/post-missing-to-ledger', auth, requirePermission('view_reports'), async (req, res) => {
+  try {
+    const dateFrom = req.query.dateFrom || req.body?.dateFrom;
+    const dateTo = req.query.dateTo || req.body?.dateTo;
+    const result = await salesService.postMissingSalesToLedger({ dateFrom, dateTo });
+    return res.json({
+      success: true,
+      message: `Posted ${result.posted} sale(s) to the ledger.${result.errors.length ? ` ${result.errors.length} failed.` : ''}`,
+      ...result
+    });
+  } catch (error) {
+    console.error('Post missing sales to ledger error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Failed to post missing sales to ledger.' });
+  }
+});
+
+// @route   POST /api/sales/sync-ledger
+// @desc    Sync sales to ledger: update existing sale entries + post missing (fixes old edits not reflected).
+// @access  Private
+router.post('/sync-ledger', auth, requirePermission('view_reports'), async (req, res) => {
+  try {
+    const dateFrom = req.query.dateFrom || req.body?.dateFrom;
+    const dateTo = req.query.dateTo || req.body?.dateTo;
+    const result = await salesService.syncSalesLedger({ dateFrom, dateTo });
+    return res.json({
+      success: true,
+      message: `Synced sales ledger. Updated ${result.updated}, posted ${result.posted}.` + (result.errors.length ? ` ${result.errors.length} failed.` : ''),
+      ...result
+    });
+  } catch (error) {
+    console.error('Sync sales ledger error:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Failed to sync sales ledger.' });
+  }
+});
+
 // @route   PUT /api/orders/:id/status
 // @desc    Update order status
 // @access  Private
@@ -427,42 +445,39 @@ router.put('/:id/status', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const order = await Sales.findById(req.params.id);
+    const order = await salesRepository.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    // Check if status change is allowed
-    if (req.body.status === 'cancelled' && !order.canBeCancelled()) {
+    if (req.body.status === 'cancelled' && !canBeCancelled(order)) {
       return res.status(400).json({
         message: 'Order cannot be cancelled in its current status'
       });
     }
 
-    const oldStatus = order.status;
-    order.status = req.body.status;
-    order.processedBy = req.user._id;
-
-    // Note: Customer balance updates removed from route.
-    // Balances are now dynamically derived from the Account Ledger.
-
-    // If cancelling, restore inventory
-    if (req.body.status === 'cancelled') {
+    // If cancelling, restore inventory (Postgres: update product stock_quantity)
+    if (req.body.status === 'cancelled' && Array.isArray(order.items)) {
       for (const item of order.items) {
-        await Product.findByIdAndUpdate(
-          item.product,
-          { $inc: { 'inventory.currentStock': item.quantity } }
-        );
+        const productId = item.product_id || item.product;
+        if (!productId) continue;
+        const product = await productRepository.findById(productId);
+        if (product) {
+          const newStock = (parseFloat(product.stock_quantity) || 0) + (item.quantity || 0);
+          await productRepository.update(productId, { stockQuantity: newStock });
+        }
       }
-
-      // Note: Reversing customer balance is now handled by the ledger.
     }
 
-    await order.save();
+    await salesRepository.update(req.params.id, {
+      status: req.body.status,
+      updatedBy: req.user?.id || req.user?._id
+    });
+    const updatedOrder = await salesRepository.findById(req.params.id);
 
     res.json({
       message: 'Order status updated successfully',
-      order
+      order: updatedOrder
     });
   } catch (error) {
     console.error('Update order status error:', error);
@@ -477,14 +492,16 @@ router.put('/:id', [
   auth,
   requirePermission('edit_orders'),
   preventPOSDuplicates, // Backend safety net for duplicate prevention
-  body('customer').optional().isMongoId().withMessage('Valid customer is required'),
+  body('customer').optional().isUUID(4).withMessage('Valid customer is required'),
   body('orderType').optional().isIn(['retail', 'wholesale', 'return', 'exchange']).withMessage('Invalid order type'),
   body('notes').optional().trim().isLength({ max: 1000 }).withMessage('Notes too long'),
   body('items').optional().isArray({ min: 1 }).withMessage('At least one item is required'),
-  body('items.*.product').optional().isMongoId().withMessage('Valid product is required'),
+  body('items.*.product').optional().isUUID(4).withMessage('Valid product is required'),
   body('items.*.quantity').optional().isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('items.*.unitPrice').optional().isFloat({ min: 0 }).withMessage('Unit price must be positive'),
-  body('billDate').optional().isISO8601().withMessage('Valid bill date required (ISO 8601 format)')
+  body('billDate').optional().isISO8601().withMessage('Valid bill date required (ISO 8601 format)'),
+  body('discount').optional().isFloat({ min: 0 }).withMessage('Discount must be a non-negative number'),
+  body('amountReceived').optional().isFloat({ min: 0 }).withMessage('Amount received must be a non-negative number')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -492,24 +509,47 @@ router.put('/:id', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const order = await Sales.findById(req.params.id);
+    const order = await salesRepository.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    // Get customer data if customer is being updated
+    // Only allow editing invoices from the last 1 week
+    const saleDate = order.sale_date || order.saleDate || order.created_at || order.createdAt;
+    if (saleDate) {
+      const invoiceDate = new Date(saleDate);
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      oneWeekAgo.setHours(0, 0, 0, 0);
+      invoiceDate.setHours(0, 0, 0, 0);
+      if (invoiceDate < oneWeekAgo) {
+        return res.status(403).json({
+          message: 'Cannot edit sales invoice older than 1 week. Only invoices from the last 7 days can be edited.',
+          code: 'EDIT_WINDOW_EXPIRED'
+        });
+      }
+    }
+
     let customerData = null;
     if (req.body.customer) {
-      customerData = await Customer.findById(req.body.customer);
+      customerData = await customerRepository.findById(req.body.customer);
       if (!customerData) {
         return res.status(400).json({ message: 'Customer not found' });
       }
     }
 
-    // Store old items and old total for comparison
-    const oldItems = JSON.parse(JSON.stringify(order.items));
-    const oldTotal = order.pricing.total;
-    const oldCustomer = order.customer;
+    // Normalize for Postgres: order has total, subtotal, discount, tax; items array
+    const orderTotal = () => parseFloat(order.total) || 0;
+    const orderPricing = { total: orderTotal(), subtotal: parseFloat(order.subtotal) || 0, discountAmount: parseFloat(order.discount) || 0, taxAmount: parseFloat(order.tax) || 0, isTaxExempt: false };
+    if (!order.pricing) order.pricing = orderPricing;
+    if (!order.payment) order.payment = { method: order.payment_method || 'cash', status: order.payment_status || 'pending', amountPaid: 0, remainingBalance: orderTotal(), isPartialPayment: false };
+
+    const oldItems = JSON.parse(JSON.stringify(Array.isArray(order.items) ? order.items : []));
+    const oldTotal = orderTotal();
+    const oldCustomer = order.customer_id || order.customer;
+    const oldSaleDate = order.sale_date || order.saleDate || order.created_at || order.createdAt;
+    const incomingCustomer = req.body.customer !== undefined ? (req.body.customer || null) : oldCustomer;
+    const customerChanged = String(oldCustomer || '') !== String(incomingCustomer || '');
 
     // Update order fields
     if (req.body.customer !== undefined) {
@@ -537,6 +577,20 @@ router.put('/:id', [
     // Update billDate if provided (for backdating/postdating)
     if (req.body.billDate !== undefined) {
       order.billDate = parseLocalDate(req.body.billDate);
+    }
+
+    // Invoice-level discount: if provided, set pricing discount and recalc total
+    if (req.body.discount !== undefined) {
+      const discountAmount = parseFloat(req.body.discount) || 0;
+      order.pricing.discountAmount = discountAmount;
+      order.pricing.total = (order.pricing.subtotal || 0) - discountAmount + (order.pricing.taxAmount || 0);
+    }
+
+    // Amount received (for edit invoice)
+    if (req.body.amountReceived !== undefined) {
+      const amt = parseFloat(req.body.amountReceived) || 0;
+      order.payment.amountPaid = amt;
+      order.payment.status = amt >= (parseFloat(order.pricing?.total ?? order.total) || 0) ? 'paid' : (amt > 0 ? 'partial' : 'pending');
     }
 
     // Update items if provided and recalculate pricing
@@ -574,7 +628,7 @@ router.put('/:id', [
             ? (product.displayName || product.variantName || `${product.baseProduct?.name || 'Product'} - ${product.variantValue || ''}`)
             : product.name;
 
-          const currentStock = product.inventory?.currentStock || 0;
+          const currentStock = parseFloat(product.stock_quantity) || product.inventory?.currentStock || 0;
           if (currentStock < quantityChange) {
             return res.status(400).json({
               message: `Insufficient stock for ${productName}. Available: ${currentStock}, Additional needed: ${quantityChange}`
@@ -590,7 +644,7 @@ router.put('/:id', [
       const newOrderItems = [];
 
       for (const item of req.body.items) {
-        // Try to find as product first, then as variant (for tax rate)
+        // Try to find as product first, then as variant (for tax rate and cost)
         let productForTax = await productRepository.findById(item.product);
         let isVariantForTax = false;
         if (!productForTax) {
@@ -611,10 +665,24 @@ router.put('/:id', [
             : (productForTax?.taxSettings?.taxRate || 0));
         const itemTax = order.pricing.isTaxExempt ? 0 : itemTaxable * taxRate;
 
+        // Get unit cost for P&L (COGS) - same logic as createSale
+        let unitCost = 0;
+        const productId = productForTax?.id || productForTax?._id;
+        if (productId) {
+          const inv = await inventoryRepository.findByProduct(productId);
+          if (inv && inv.cost) {
+            const costObj = typeof inv.cost === 'string' ? JSON.parse(inv.cost) : inv.cost;
+            unitCost = costObj.average ?? costObj.lastPurchase ?? 0;
+          }
+          if (unitCost === 0) unitCost = productForTax?.pricing?.cost ?? productForTax?.cost_price ?? 0;
+        }
+
         newOrderItems.push({
           product: item.product,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
+          unitCost,
+          cost_price: unitCost,
           discountPercent: item.discountPercent || 0,
           taxRate: item.taxRate || 0,
           subtotal: itemSubtotal,
@@ -631,12 +699,12 @@ router.put('/:id', [
       // Update order items and pricing
       order.items = newOrderItems;
       order.pricing.subtotal = newSubtotal;
-      order.pricing.discountAmount = newTotalDiscount;
+      order.pricing.discountAmount = req.body.discount !== undefined ? (parseFloat(req.body.discount) || 0) : newTotalDiscount;
       order.pricing.taxAmount = newTotalTax;
-      order.pricing.total = newSubtotal - newTotalDiscount + newTotalTax;
+      order.pricing.total = newSubtotal - order.pricing.discountAmount + newTotalTax;
 
       // Check credit limit for credit sales when order total increases
-      const finalCustomer = customerData || (order.customer ? await Customer.findById(order.customer) : null);
+      const finalCustomer = customerData || (order.customer_id || order.customer ? await customerRepository.findById(order.customer_id || order.customer) : null);
       if (finalCustomer && finalCustomer.creditLimit > 0) {
         const newTotal = order.pricing.total;
         const paymentMethod = order.payment?.method || 'cash';
@@ -665,9 +733,9 @@ router.put('/:id', [
           const effectiveOutstanding = currentBalance - oldUnpaidAmount;
           const newBalanceAfterUpdate = effectiveOutstanding + unpaidAmount;
 
-          if (newBalanceAfterUpdate > finalCustomer.creditLimit) {
+          if (newBalanceAfterUpdate > (finalCustomer.credit_limit || finalCustomer.creditLimit || 0)) {
             return res.status(400).json({
-              message: `Credit limit exceeded for customer ${finalCustomer.displayName || finalCustomer.name}`,
+              message: `Credit limit exceeded for customer ${finalCustomer.business_name || finalCustomer.displayName || finalCustomer.name}`,
               error: 'CREDIT_LIMIT_EXCEEDED',
               details: {
                 currentBalance: currentBalance,
@@ -675,9 +743,9 @@ router.put('/:id', [
                 oldOrderUnpaid: oldUnpaidAmount,
                 newOrderTotal: newTotal,
                 unpaidAmount: unpaidAmount,
-                creditLimit: finalCustomer.creditLimit,
+                creditLimit: finalCustomer.credit_limit || finalCustomer.creditLimit,
                 newBalance: newBalanceAfterUpdate,
-                availableCredit: finalCustomer.creditLimit - currentBalance
+                availableCredit: (finalCustomer.credit_limit || finalCustomer.creditLimit) - currentBalance
               }
             });
           }
@@ -685,7 +753,91 @@ router.put('/:id', [
       }
     }
 
-    await order.save();
+    // Persist to Postgres
+    const updateData = {
+      customerId: order.customer || order.customer_id || null,
+      saleDate: order.billDate || order.sale_date,
+      notes: order.notes,
+      updatedBy: req.user?.id || req.user?._id
+    };
+    if (order.items && order.items.length) {
+      updateData.items = order.items.map(it => ({
+        product_id: it.product_id || it.product,
+        product: it.product_id || it.product,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        unitCost: it.unitCost ?? it.cost_price ?? 0,
+        cost_price: it.cost_price ?? it.unitCost ?? 0,
+        subtotal: it.subtotal,
+        total: it.total
+      }));
+      updateData.subtotal = order.pricing?.subtotal ?? order.subtotal;
+      updateData.discount = order.pricing?.discountAmount ?? order.discount;
+      updateData.tax = order.pricing?.taxAmount ?? order.tax;
+      updateData.total = order.pricing?.total ?? order.total;
+    } else if (req.body.discount !== undefined) {
+      updateData.discount = order.pricing?.discountAmount ?? order.discount;
+      updateData.total = order.pricing?.total ?? order.total;
+    }
+    if (req.body.amountReceived !== undefined) {
+      updateData.amountPaid = parseFloat(req.body.amountReceived) || 0;
+      updateData.paymentStatus = order.payment?.status ?? (updateData.amountPaid >= (parseFloat(order.pricing?.total ?? order.total) || 0) ? 'paid' : (updateData.amountPaid > 0 ? 'partial' : 'pending'));
+    }
+    if (req.body.orderType !== undefined) {
+      updateData.orderType = req.body.orderType;
+    }
+    await salesRepository.update(req.params.id, updateData);
+
+    // Refresh order from DB for ledger updates (ensures latest totals/dates)
+    let updatedOrder = await salesRepository.findById(req.params.id);
+
+    const newTotal = parseFloat(updatedOrder?.total) || 0;
+    const newSaleDate = updatedOrder?.sale_date || updatedOrder?.saleDate || updatedOrder?.created_at || updatedOrder?.createdAt;
+    const refNum = updatedOrder?.order_number || updatedOrder?.orderNumber || (updatedOrder?.id || updatedOrder?._id);
+    const totalChanged = Math.abs(newTotal - oldTotal) >= 0.01;
+    const billDateChanged = req.body.billDate !== undefined && String(newSaleDate || '') !== String(oldSaleDate || '');
+    const customerIdForLedger = updatedOrder?.customer_id || updatedOrder?.customer || null;
+
+    // Ensure sale ledger entries exist, and update key fields when edited
+    try {
+      if (updatedOrder) {
+        const hasSaleLedger = await AccountingService.hasSaleLedgerEntries(req.params.id);
+        if (!hasSaleLedger && newTotal > 0) {
+          await AccountingService.recordSale(updatedOrder);
+        } else if (hasSaleLedger && (totalChanged || billDateChanged || customerChanged)) {
+          await AccountingService.updateSaleLedgerEntries({
+            saleId: req.params.id,
+            total: newTotal,
+            transactionDate: billDateChanged ? newSaleDate : undefined,
+            customerId: customerChanged ? customerIdForLedger : undefined,
+            referenceNumber: refNum
+          });
+        }
+      }
+    } catch (ledgerErr) {
+      console.error('Failed to ensure/update sale ledger on edit:', ledgerErr);
+    }
+
+    // Post amount received change to account ledger so balance reflects the update
+    if (!customerChanged && req.body.amountReceived !== undefined) {
+      const oldAmountPaid = parseFloat(order.amount_paid) || 0;
+      const newAmountPaid = parseFloat(req.body.amountReceived) || 0;
+      if (Math.abs(newAmountPaid - oldAmountPaid) >= 0.01) {
+        try {
+          await AccountingService.recordSalePaymentAdjustment({
+            saleId: order.id || order._id,
+            orderNumber: order.order_number || order.orderNumber,
+            customerId: order.customer_id,
+            oldAmountPaid,
+            newAmountPaid,
+            paymentMethod: order.payment_method || order.payment?.method || 'cash',
+            createdBy: req.user?.id || req.user?._id
+          });
+        } catch (ledgerErr) {
+          console.error('Failed to post sale payment adjustment to ledger:', ledgerErr);
+        }
+      }
+    }
 
     // Adjust inventory based on item changes
     if (req.body.items && req.body.items.length > 0) {
@@ -710,9 +862,9 @@ router.put('/:id', [
                 quantity: quantityChange,
                 reason: 'Order Update - Quantity Increased',
                 reference: 'Sales Order',
-                referenceId: order._id,
+                referenceId: order.id || order._id,
                 referenceModel: 'SalesOrder',
-                performedBy: req.user._id,
+                performedBy: req.user?.id || req.user?._id,
                 notes: `Inventory reduced due to order ${order.orderNumber} update - quantity increased by ${quantityChange}`
               });
             } else {
@@ -723,9 +875,9 @@ router.put('/:id', [
                 quantity: Math.abs(quantityChange),
                 reason: 'Order Update - Quantity Decreased',
                 reference: 'Sales Order',
-                referenceId: order._id,
+                referenceId: order.id || order._id,
                 referenceModel: 'SalesOrder',
-                performedBy: req.user._id,
+                performedBy: req.user?.id || req.user?._id,
                 notes: `Inventory restored due to order ${order.orderNumber} update - quantity decreased by ${Math.abs(quantityChange)}`
               });
             }
@@ -747,9 +899,9 @@ router.put('/:id', [
               quantity: oldItem.quantity,
               reason: 'Order Update - Item Removed',
               reference: 'Sales Order',
-              referenceId: order._id,
+              referenceId: order.id || order._id,
               referenceModel: 'SalesOrder',
-              performedBy: req.user._id,
+              performedBy: req.user?.id || req.user?._id,
               notes: `Inventory restored due to order ${order.orderNumber} update - item removed`
             });
           }
@@ -760,92 +912,33 @@ router.put('/:id', [
       }
     }
 
-    // Adjust customer balance if total changed or customer changed
-    if (order.customer && (order.pricing.total !== oldTotal || oldCustomer !== order.customer)) {
+    // Customer balance: now derived from Account Ledger (AccountingService), no direct Customer update.
+
+    // If customer changed, move ledger entries to the new customer
+    if (customerChanged) {
       try {
-        const customer = await Customer.findById(order.customer);
-        if (customer) {
-          // Check if order was confirmed - balance may be in currentBalance instead of pendingBalance
-          const wasConfirmed = order.status === 'confirmed' || order.status === 'processing' || order.status === 'shipped' || order.status === 'delivered';
-
-          // Calculate old balance that was added
-          let oldBalanceAdded = 0;
-          if (order.payment.isPartialPayment && order.payment.remainingBalance > 0) {
-            oldBalanceAdded = order.payment.remainingBalance;
-          } else if (order.payment.method === 'account' || order.payment.status === 'pending') {
-            oldBalanceAdded = oldTotal;
-          } else if (order.payment.status === 'partial') {
-            oldBalanceAdded = oldTotal - order.payment.amountPaid;
-          }
-
-          // Calculate new balance that should be added
-          let newBalanceToAdd = 0;
-          if (order.payment.isPartialPayment && order.payment.remainingBalance > 0) {
-            newBalanceToAdd = order.payment.remainingBalance;
-          } else if (order.payment.method === 'account' || order.payment.status === 'pending') {
-            newBalanceToAdd = order.pricing.total;
-          } else if (order.payment.status === 'partial') {
-            newBalanceToAdd = order.pricing.total - order.payment.amountPaid;
-          }
-
-          // Calculate difference
-          const balanceDifference = newBalanceToAdd - oldBalanceAdded;
-
-          if (balanceDifference !== 0) {
-            let balanceUpdate = {};
-
-            if (wasConfirmed) {
-              // Order was confirmed - balance is in currentBalance
-              balanceUpdate = { currentBalance: balanceDifference };
-            } else {
-              // Order not confirmed - balance is in pendingBalance
-              balanceUpdate = { pendingBalance: balanceDifference };
-            }
-
-            const updateResult = await Customer.findByIdAndUpdate(
-              order.customer,
-              { $inc: balanceUpdate },
-              { new: true }
-            );
-          }
-
-          // If customer changed, remove balance from old customer
-          if (oldCustomer && oldCustomer.toString() !== order.customer.toString()) {
-            if (oldBalanceAdded > 0) {
-              // Need to check if old order was confirmed to know which balance field to adjust
-              // For simplicity, we'll check current order status (assuming status wasn't changed)
-              const oldWasConfirmed = wasConfirmed; // Same status assumption
-              let oldBalanceUpdate = {};
-              if (oldWasConfirmed) {
-                oldBalanceUpdate = { currentBalance: -oldBalanceAdded };
-              } else {
-                oldBalanceUpdate = { pendingBalance: -oldBalanceAdded };
-              }
-
-              await Customer.findByIdAndUpdate(
-                oldCustomer,
-                { $inc: oldBalanceUpdate },
-                { new: true }
-              );
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error adjusting customer balance on order update:', error);
-        // Don't fail update if balance adjustment fails
+        await AccountingService.updateLedgerCustomerForSale(req.params.id, incomingCustomer);
+      } catch (ledgerErr) {
+        console.error('Failed to update sale ledger customer on edit:', ledgerErr);
       }
     }
 
-    // Populate order for response (include addresses for print)
-    await order.populate([
-      { path: 'customer', select: 'firstName lastName businessName email phone addresses currentBalance pendingBalance advanceBalance' },
-      { path: 'items.product', select: 'name description pricing' },
-      { path: 'createdBy', select: 'firstName lastName' }
-    ]);
+    if (updatedOrder && updatedOrder.customer_id) {
+      updatedOrder.customer = await customerRepository.findById(updatedOrder.customer_id);
+    }
+
+    // Redistribute profit shares when total or items changed (so investor P&L stays correct)
+    if (updatedOrder && (totalChanged || (req.body.items && req.body.items.length > 0))) {
+      try {
+        await profitDistributionService.redistributeProfitForOrder(updatedOrder, req.user);
+      } catch (profitErr) {
+        console.error('Failed to redistribute profit on sale edit:', profitErr);
+      }
+    }
 
     res.json({
       message: 'Order updated successfully',
-      order
+      order: updatedOrder || order
     });
   } catch (error) {
     console.error('Update order error:', error);
@@ -869,59 +962,39 @@ router.post('/:id/payment', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const order = await Sales.findById(req.params.id);
+    const order = await salesRepository.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
+    const orderTotal = parseFloat(order.total) || 0;
+    const amountPaidSoFar = parseFloat(order.amount_paid) || 0;
     const { method, amount, reference } = req.body;
-    const remainingBalance = order.pricing.total - order.payment.amountPaid;
+    const newAmountPaid = amountPaidSoFar + amount;
+    const newPaymentStatus = newAmountPaid >= orderTotal ? 'paid' : 'partial';
 
-    // Allow overpayments - excess will be tracked in advanceBalance
-    // Removed the check that prevented overpayments
-
-    // Add transaction
-    order.payment.transactions.push({
-      method,
-      amount,
-      reference,
-      timestamp: new Date()
+    await salesRepository.update(req.params.id, {
+      paymentStatus: newPaymentStatus,
+      updatedBy: req.user?.id || req.user?._id
     });
 
-    // Update payment status
-    const previousPaidAmount = order.payment.amountPaid;
-    order.payment.amountPaid += amount;
-    const newRemainingBalance = order.pricing.total - order.payment.amountPaid;
-
-    if (order.payment.amountPaid >= order.pricing.total) {
-      order.payment.status = 'paid';
-    } else {
-      order.payment.status = 'partial';
-    }
-
-    await order.save();
-
-    // Update customer balance: record payment using CustomerBalanceService
-    // This properly handles overpayments by adding excess to advanceBalance
-    if (order.customer && amount > 0) {
+    if (order.customer_id && amount > 0) {
       try {
         const CustomerBalanceService = require('../services/customerBalanceService');
-        await CustomerBalanceService.recordPayment(order.customer, amount, order._id);
-
-        const Customer = require('../models/Customer');
-        const updatedCustomer = await Customer.findById(order.customer);
+        await CustomerBalanceService.recordPayment(order.customer_id, amount, order.id || order._id);
       } catch (error) {
         console.error('Error updating customer balance on payment:', error);
-        // Don't fail the payment if customer update fails
       }
     }
 
+    const updatedOrder = await salesRepository.findById(req.params.id);
     res.json({
       message: 'Payment processed successfully',
       order: {
-        id: order._id,
-        orderNumber: order.orderNumber,
-        payment: order.payment
+        id: updatedOrder?.id || updatedOrder?._id,
+        order_number: updatedOrder?.order_number,
+        orderNumber: updatedOrder?.order_number,
+        payment: { status: newPaymentStatus, amountPaid: newAmountPaid }
       }
     });
   } catch (error) {
@@ -938,7 +1011,7 @@ router.delete('/:id', [
   requirePermission('delete_orders')
 ], async (req, res) => {
   try {
-    const order = await Sales.findById(req.params.id);
+    const order = await salesRepository.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
@@ -952,75 +1025,38 @@ router.delete('/:id', [
       });
     }
 
-    // Update customer balance - reverse invoice total and payment
-    // This matches the new logic in sales order creation
-    if (order.customer && order.pricing && order.pricing.total > 0) {
+    // Customer balance: now derived from Account Ledger; no direct Customer update on delete.
+
+    const orderTotal = parseFloat(order.total) || 0;
+    const orderItems = Array.isArray(order.items) ? order.items : [];
+    if (orderTotal > 0 || orderItems.length > 0) {
       try {
-        const CustomerBalanceService = require('../services/customerBalanceService');
-        const Customer = require('../models/Customer');
-        const customerExists = await Customer.findById(order.customer);
-
-        if (customerExists) {
-          const amountPaid = order.payment?.amountPaid || 0;
-
-          // Reverse payment first: restore pendingBalance, remove from advanceBalance
-          if (amountPaid > 0) {
-            const pendingRestored = Math.min(amountPaid, order.pricing.total);
-            const advanceToRemove = Math.max(0, amountPaid - order.pricing.total);
-
-            await Customer.findByIdAndUpdate(
-              order.customer,
-              {
-                $inc: {
-                  pendingBalance: pendingRestored,
-                  advanceBalance: -advanceToRemove
-                }
-              },
-              { new: true }
-            );
+        const inventoryService = require('../services/inventoryService');
+        for (const item of orderItems) {
+          const productId = item.product_id || item.product;
+          if (!productId) continue;
+          try {
+            await inventoryService.updateStock({
+              productId,
+              type: 'in',
+              quantity: item.quantity || 0,
+              reason: 'Order Deletion',
+              reference: 'Sales Order',
+              referenceId: order.id || order._id,
+              referenceModel: 'SalesOrder',
+              performedBy: req.user?.id || req.user?._id,
+              notes: `Inventory restored due to deletion of order ${order.order_number || order.orderNumber}`
+            });
+          } catch (err) {
+            console.error(`Failed to restore inventory for product ${productId}:`, err);
           }
-
-          // Remove invoice total from pendingBalance
-          const updateResult = await Customer.findByIdAndUpdate(
-            order.customer,
-            { $inc: { pendingBalance: -order.pricing.total } },
-            { new: true }
-          );
-        } else {
         }
       } catch (error) {
-        console.error('Error rolling back customer balance:', error);
-        // Continue with deletion even if customer update fails
+        console.error('Error restoring inventory on order deletion:', error);
       }
     }
 
-    // Restore inventory for items in the order using inventoryService for audit trail
-    try {
-      const inventoryService = require('../services/inventoryService');
-      for (const item of order.items) {
-        try {
-          await inventoryService.updateStock({
-            productId: item.product,
-            type: 'in',
-            quantity: item.quantity,
-            reason: 'Order Deletion',
-            reference: 'Sales Order',
-            referenceId: order._id,
-            referenceModel: 'SalesOrder',
-            performedBy: req.user._id,
-            notes: `Inventory restored due to deletion of order ${order.orderNumber}`
-          });
-        } catch (error) {
-          console.error(`Failed to restore inventory for product ${item.product}:`, error);
-          // Continue with other items
-        }
-      }
-    } catch (error) {
-      console.error('Error restoring inventory on order deletion:', error);
-      // Don't fail deletion if inventory update fails
-    }
-
-    await Sales.findByIdAndDelete(req.params.id);
+    await salesRepository.delete(req.params.id);
 
     res.json({ message: 'Order deleted successfully' });
   } catch (error) {
@@ -1040,23 +1076,27 @@ router.get('/today/summary', [
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
 
-    const orders = await salesRepository.findByDateRange(startOfDay, endOfDay, { lean: true });
+    const raw = await salesRepository.findByDateRange(startOfDay, endOfDay);
+    const orders = Array.isArray(raw) ? raw : [];
 
+    const totalRev = orders.reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0);
+    const itemsArr = (o) => (o && Array.isArray(o.items) ? o.items : []);
+    const totalItems = orders.reduce((sum, order) =>
+      sum + itemsArr(order).reduce((itemSum, item) => itemSum + (item.quantity || 0), 0), 0);
     const summary = {
       totalOrders: orders.length,
-      totalRevenue: orders.reduce((sum, order) => sum + order.pricing.total, 0),
-      totalItems: orders.reduce((sum, order) =>
-        sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0),
-      averageOrderValue: orders.length > 0 ?
-        orders.reduce((sum, order) => sum + order.pricing.total, 0) / orders.length : 0,
+      totalRevenue: totalRev,
+      totalItems: totalItems,
+      averageOrderValue: orders.length > 0 ? totalRev / orders.length : 0,
       orderTypes: {
-        retail: orders.filter(o => o.orderType === 'retail').length,
-        wholesale: orders.filter(o => o.orderType === 'wholesale').length,
-        return: orders.filter(o => o.orderType === 'return').length,
-        exchange: orders.filter(o => o.orderType === 'exchange').length
+        retail: orders.filter(o => o && o.order_type === 'retail').length,
+        wholesale: orders.filter(o => o && o.order_type === 'wholesale').length,
+        return: orders.filter(o => o && o.order_type === 'return').length,
+        exchange: orders.filter(o => o && o.order_type === 'exchange').length
       },
       paymentMethods: orders.reduce((acc, order) => {
-        acc[order.payment.method] = (acc[order.payment.method] || 0) + 1;
+        const m = order?.payment_method || 'cash';
+        acc[m] = (acc[m] || 0) + 1;
         return acc;
       }, {})
     };
@@ -1088,28 +1128,19 @@ router.get('/period/summary', [
     dateTo.setDate(dateTo.getDate() + 1);
     dateTo.setHours(0, 0, 0, 0);
 
-    const orders = await Sales.find({
-      createdAt: { $gte: dateFrom, $lt: dateTo }
-    });
-
-    const totalRevenue = orders.reduce((sum, order) => sum + (order.pricing?.total || 0), 0);
+    const raw = await salesRepository.findByDateRange(dateFrom, dateTo);
+    const orders = Array.isArray(raw) ? raw : [];
+    const totalRevenue = orders.reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0);
     const totalOrders = orders.length;
+    const itemsArr = (o) => (o && Array.isArray(o.items) ? o.items : []);
     const totalItems = orders.reduce((sum, order) =>
-      sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0);
+      sum + itemsArr(order).reduce((itemSum, item) => itemSum + (item.quantity || 0), 0), 0);
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-    // Calculate discounts
-    const totalDiscounts = orders.reduce((sum, order) =>
-      sum + (order.pricing?.discountAmount || 0), 0);
-
-    // Calculate by order type
+    const totalDiscounts = orders.reduce((sum, order) => sum + (parseFloat(order?.discount) || 0), 0);
     const revenueByType = {
-      retail: orders.filter(o => o.orderType === 'retail')
-        .reduce((sum, order) => sum + (order.pricing?.total || 0), 0),
-      wholesale: orders.filter(o => o.orderType === 'wholesale')
-        .reduce((sum, order) => sum + (order.pricing?.total || 0), 0)
+      retail: orders.filter(o => o && o.order_type === 'retail').reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0),
+      wholesale: orders.filter(o => o && o.order_type === 'wholesale').reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0)
     };
-
     const summary = {
       total: totalRevenue,
       totalRevenue,
@@ -1119,12 +1150,8 @@ router.get('/period/summary', [
       totalDiscounts,
       netRevenue: totalRevenue - totalDiscounts,
       revenueByType,
-      period: {
-        start: req.query.dateFrom,
-        end: req.query.dateTo
-      }
+      period: { start: req.query.dateFrom, end: req.query.dateTo }
     };
-
     res.json({ data: summary });
   } catch (error) {
     console.error('Get period summary error:', error);
@@ -1139,88 +1166,61 @@ router.post('/export/excel', [auth, requirePermission('view_orders')], async (re
   try {
     const { filters = {} } = req.body;
 
-    // Build query based on filters
     const filter = {};
-
-    if (filters.search) {
-      filter.$or = [
-        { orderNumber: { $regex: filters.search, $options: 'i' } }
-      ];
+    if (filters.search) filter.orderNumber = filters.search;
+    if (filters.status) filter.status = filters.status;
+    if (filters.paymentStatus) filter.paymentStatus = filters.paymentStatus;
+    if (filters.customer) filter.customerId = filters.customer;
+    if (filters.dateFrom) {
+      filter.dateFrom = new Date(filters.dateFrom);
+      filter.dateFrom.setHours(0, 0, 0, 0);
+    }
+    if (filters.dateTo) {
+      filter.dateTo = new Date(filters.dateTo);
+      filter.dateTo.setDate(filter.dateTo.getDate() + 1);
+      filter.dateTo.setHours(0, 0, 0, 0);
     }
 
-    if (filters.status) {
-      filter.status = filters.status;
-    }
+    const orders = await salesRepository.findAll(filter, { limit: 10000, sort: 'created_at DESC' });
 
-    if (filters.paymentStatus) {
-      filter['payment.status'] = filters.paymentStatus;
-    }
-
-    if (filters.orderType) {
-      filter.orderType = filters.orderType;
-    }
-
-    if (filters.customer) {
-      filter.customer = filters.customer;
-    }
-
-    if (filters.dateFrom || filters.dateTo) {
-      filter.createdAt = {};
-      if (filters.dateFrom) {
-        const dateFrom = new Date(filters.dateFrom);
-        dateFrom.setHours(0, 0, 0, 0);
-        filter.createdAt.$gte = dateFrom;
+    const excelData = await Promise.all(orders.map(async (order) => {
+      let customerName = 'Walk-in Customer';
+      let customerEmail = '';
+      let customerPhone = '';
+      if (order.customer_id) {
+        const cust = await customerRepository.findById(order.customer_id);
+        if (cust) {
+          customerName = cust.business_name || cust.name || `${(cust.first_name || '')} ${(cust.last_name || '')}`.trim() || customerName;
+          customerEmail = cust.email || '';
+          customerPhone = cust.phone || '';
+        }
       }
-      if (filters.dateTo) {
-        const dateTo = new Date(filters.dateTo);
-        dateTo.setDate(dateTo.getDate() + 1);
-        dateTo.setHours(0, 0, 0, 0);
-        filter.createdAt.$lt = dateTo;
-      }
-    }
-
-    const orders = await Sales.find(filter)
-      .populate('customer', 'businessName name firstName lastName email phone addresses')
-      .populate('items.product', 'name')
-      .populate('createdBy', 'firstName lastName email')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    // Prepare Excel data
-    const excelData = orders.map(order => {
-      const customerName = order.customer?.businessName ||
-        order.customer?.name ||
-        `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim() ||
-        'Walk-in Customer';
-
-      const itemsSummary = order.items?.map(item =>
-        `${item.product?.name || 'Unknown'}: ${item.quantity} x $${item.unitPrice}`
-      ).join('; ') || 'No items';
-
+      const itemsArr = Array.isArray(order.items) ? order.items : [];
+      const itemsSummary = itemsArr.map(item => `${item.product_id || item.product || 'Unknown'}: ${item.quantity || 0} x $${item.unitPrice || item.unit_price || 0}`).join('; ') || 'No items';
       return {
-        'Order Number': order.orderNumber || '',
+        'Order Number': order.order_number || '',
         'Customer': customerName,
-        'Customer Email': order.customer?.email || '',
-        'Customer Phone': order.customer?.phone || '',
-        'Order Type': order.orderType || '',
+        'Customer Email': customerEmail,
+        'Customer Phone': customerPhone,
+        'Order Type': order.order_type || '',
         'Status': order.status || '',
-        'Payment Status': order.payment?.status || '',
-        'Payment Method': order.payment?.method || '',
-        'Order Date': order.createdAt ? new Date(order.createdAt).toISOString().split('T')[0] : '',
-        'Subtotal': order.pricing?.subtotal || 0,
-        'Discount': order.pricing?.discountAmount || 0,
-        'Tax': order.pricing?.taxAmount || 0,
-        'Total': order.pricing?.total || 0,
-        'Amount Paid': order.payment?.amountPaid || 0,
-        'Remaining Balance': order.payment?.remainingBalance || 0,
-        'Items Count': order.items?.length || 0,
+        'Payment Status': order.payment_status || '',
+        'Payment Method': order.payment_method || '',
+        'Order Date': order.sale_date || order.created_at ? new Date(order.sale_date || order.created_at).toISOString().split('T')[0] : '',
+        'Subtotal': order.subtotal ?? 0,
+        'Discount': order.discount ?? 0,
+        'Tax': order.tax ?? 0,
+        'Total': order.total ?? 0,
+        'Amount Paid': order.amount_paid ?? 0,
+        'Remaining Balance': (parseFloat(order.total) || 0) - (parseFloat(order.amount_paid) || 0),
+        'Items Count': itemsArr.length,
         'Items Summary': itemsSummary,
-        'Tax Exempt': order.pricing?.isTaxExempt ? 'Yes' : 'No',
+        'Tax Exempt': 'No',
         'Notes': order.notes || '',
-        'Created By': order.createdBy ? `${order.createdBy.firstName || ''} ${order.createdBy.lastName || ''}`.trim() : '',
-        'Created Date': order.createdAt ? new Date(order.createdAt).toISOString().split('T')[0] : ''
+        'Created By': '',
+        'Created Date': order.created_at ? new Date(order.created_at).toISOString().split('T')[0] : ''
       };
-    });
+    }));
 
     // Create Excel workbook
     const workbook = XLSX.utils.book_new();
@@ -1292,88 +1292,60 @@ router.post('/export/csv', [auth, requirePermission('view_orders')], async (req,
   try {
     const { filters = {} } = req.body;
 
-    // Build query based on filters (same as Excel export)
-    const filter = {};
-
-    if (filters.search) {
-      filter.$or = [
-        { orderNumber: { $regex: filters.search, $options: 'i' } }
-      ];
+    const pgFilter = {};
+    if (filters.search) pgFilter.orderNumber = filters.search;
+    if (filters.status) pgFilter.status = filters.status;
+    if (filters.paymentStatus) pgFilter.paymentStatus = filters.paymentStatus;
+    if (filters.customer) pgFilter.customerId = filters.customer;
+    if (filters.dateFrom) {
+      pgFilter.dateFrom = new Date(filters.dateFrom);
+      pgFilter.dateFrom.setHours(0, 0, 0, 0);
     }
-
-    if (filters.status) {
-      filter.status = filters.status;
+    if (filters.dateTo) {
+      pgFilter.dateTo = new Date(filters.dateTo);
+      pgFilter.dateTo.setDate(pgFilter.dateTo.getDate() + 1);
+      pgFilter.dateTo.setHours(0, 0, 0, 0);
     }
+    const orders = await salesRepository.findAll(pgFilter, { limit: 10000, sort: 'created_at DESC' });
 
-    if (filters.paymentStatus) {
-      filter['payment.status'] = filters.paymentStatus;
-    }
-
-    if (filters.orderType) {
-      filter.orderType = filters.orderType;
-    }
-
-    if (filters.customer) {
-      filter.customer = filters.customer;
-    }
-
-    if (filters.dateFrom || filters.dateTo) {
-      filter.createdAt = {};
-      if (filters.dateFrom) {
-        const dateFrom = new Date(filters.dateFrom);
-        dateFrom.setHours(0, 0, 0, 0);
-        filter.createdAt.$gte = dateFrom;
+    const csvData = await Promise.all(orders.map(async (order) => {
+      let customerName = 'Walk-in Customer';
+      let customerEmail = '';
+      let customerPhone = '';
+      if (order.customer_id) {
+        const cust = await customerRepository.findById(order.customer_id);
+        if (cust) {
+          customerName = cust.business_name || cust.name || `${(cust.first_name || '')} ${(cust.last_name || '')}`.trim() || customerName;
+          customerEmail = cust.email || '';
+          customerPhone = cust.phone || '';
+        }
       }
-      if (filters.dateTo) {
-        const dateTo = new Date(filters.dateTo);
-        dateTo.setDate(dateTo.getDate() + 1);
-        dateTo.setHours(0, 0, 0, 0);
-        filter.createdAt.$lt = dateTo;
-      }
-    }
-
-    const orders = await Sales.find(filter)
-      .populate('customer', 'businessName name firstName lastName email phone addresses')
-      .populate('items.product', 'name')
-      .populate('createdBy', 'firstName lastName email')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    // Prepare CSV data
-    const csvData = orders.map(order => {
-      const customerName = order.customer?.businessName ||
-        order.customer?.name ||
-        `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim() ||
-        'Walk-in Customer';
-
-      const itemsSummary = order.items?.map(item =>
-        `${item.product?.name || 'Unknown'}: ${item.quantity} x $${item.unitPrice}`
-      ).join('; ') || 'No items';
-
+      const itemsArr = Array.isArray(order.items) ? order.items : [];
+      const itemsSummary = itemsArr.map(item => `${item.product_id || item.product || 'Unknown'}: ${item.quantity || 0} x $${item.unitPrice || item.unit_price || 0}`).join('; ') || 'No items';
       return {
-        'Order Number': order.orderNumber || '',
+        'Order Number': order.order_number || '',
         'Customer': customerName,
-        'Customer Email': order.customer?.email || '',
-        'Customer Phone': order.customer?.phone || '',
-        'Order Type': order.orderType || '',
+        'Customer Email': customerEmail,
+        'Customer Phone': customerPhone,
+        'Order Type': order.order_type || '',
         'Status': order.status || '',
-        'Payment Status': order.payment?.status || '',
-        'Payment Method': order.payment?.method || '',
-        'Order Date': order.createdAt ? new Date(order.createdAt).toISOString().split('T')[0] : '',
-        'Subtotal': order.pricing?.subtotal || 0,
-        'Discount': order.pricing?.discountAmount || 0,
-        'Tax': order.pricing?.taxAmount || 0,
-        'Total': order.pricing?.total || 0,
-        'Amount Paid': order.payment?.amountPaid || 0,
-        'Remaining Balance': order.payment?.remainingBalance || 0,
-        'Items Count': order.items?.length || 0,
+        'Payment Status': order.payment_status || '',
+        'Payment Method': order.payment_method || '',
+        'Order Date': order.sale_date || order.created_at ? new Date(order.sale_date || order.created_at).toISOString().split('T')[0] : '',
+        'Subtotal': order.subtotal ?? 0,
+        'Discount': order.discount ?? 0,
+        'Tax': order.tax ?? 0,
+        'Total': order.total ?? 0,
+        'Amount Paid': order.amount_paid ?? 0,
+        'Remaining Balance': (parseFloat(order.total) || 0) - (parseFloat(order.amount_paid) || 0),
+        'Items Count': itemsArr.length,
         'Items Summary': itemsSummary,
-        'Tax Exempt': order.pricing?.isTaxExempt ? 'Yes' : 'No',
+        'Tax Exempt': 'No',
         'Notes': order.notes || '',
-        'Created By': order.createdBy ? `${order.createdBy.firstName || ''} ${order.createdBy.lastName || ''}`.trim() : '',
-        'Created Date': order.createdAt ? new Date(order.createdAt).toISOString().split('T')[0] : ''
+        'Created By': '',
+        'Created Date': order.created_at ? new Date(order.created_at).toISOString().split('T')[0] : ''
       };
-    });
+    }));
 
     // Create CSV workbook
     const workbook = XLSX.utils.book_new();
@@ -1457,98 +1429,103 @@ router.post('/export/pdf', [auth, requirePermission('view_orders')], async (req,
     // Fetch customer name if customer filter is applied
     let customerName = null;
     if (filters.customer) {
-      const customer = await Customer.findById(filters.customer).lean();
+      const customer = await customerRepository.findById(filters.customer);
       if (customer) {
-        customerName = customer.businessName ||
-          customer.name ||
-          `${customer.firstName || ''} ${customer.lastName || ''}`.trim() ||
-          'Unknown Customer';
+        customerName = customer.business_name || customer.name ||
+          `${(customer.first_name || '')} ${(customer.last_name || '')}`.trim() || 'Unknown Customer';
       }
     }
 
-    const orders = await Sales.find(filter)
-      .populate('customer', 'businessName name firstName lastName email phone pendingBalance currentBalance addresses')
-      .populate('items.product', 'name')
-      .populate('createdBy', 'firstName lastName email')
-      .sort({ createdAt: -1 })
-      .lean();
+    const pgFilter = {};
+    if (filters.customer) pgFilter.customerId = filters.customer;
+    if (filters.dateFrom) {
+      pgFilter.dateFrom = new Date(filters.dateFrom);
+      pgFilter.dateFrom.setHours(0, 0, 0, 0);
+    }
+    if (filters.dateTo) {
+      pgFilter.dateTo = new Date(filters.dateTo);
+      pgFilter.dateTo.setDate(pgFilter.dateTo.getDate() + 1);
+      pgFilter.dateTo.setHours(0, 0, 0, 0);
+    }
+    const orders = await salesRepository.findAll(pgFilter, { limit: 5000, sort: 'created_at DESC' });
 
-    // Get all customer IDs and order IDs for receipt lookup
-    const customerIds = [...new Set(orders.map(o => o.customer?._id).filter(Boolean))];
-    const orderIds = orders.map(o => o._id);
+    const customerIds = [...new Set(orders.map(o => o.customer_id).filter(Boolean))];
+    const customerMap = {};
+    for (const cid of customerIds) {
+      const c = await customerRepository.findById(cid);
+      if (c) customerMap[cid] = c;
+    }
+    orders.forEach(o => {
+      o.customer = o.customer_id ? customerMap[o.customer_id] : null;
+      if (o.customer) {
+        o.customer._id = o.customer.id;
+        o.customer.pendingBalance = o.customer.pending_balance ?? o.customer.pendingBalance;
+        o.customer.currentBalance = o.customer.current_balance ?? o.customer.currentBalance;
+        o.customer.businessName = o.customer.business_name ?? o.customer.businessName;
+        o.customer.firstName = o.customer.first_name ?? o.customer.firstName;
+        o.customer.lastName = o.customer.last_name ?? o.customer.lastName;
+        o.customerInfo = {
+          name: o.customer.business_name ?? o.customer.businessName ?? o.customer.name,
+          businessName: o.customer.business_name ?? o.customer.businessName,
+          email: o.customer.email,
+          phone: o.customer.phone
+        };
+      } else {
+        o.customerInfo = null;
+      }
+      o._id = o.id;
+      o.orderNumber = o.order_number;
+      o.payment = { amountPaid: parseFloat(o.amount_paid) || 0, method: o.payment_method || 'N/A' };
+      o.createdAt = o.created_at || o.sale_date;
+      o.pricing = { total: parseFloat(o.total) || 0 };
+    });
+    const orderIds = orders.map(o => o.id);
 
-    // Build date filter for receipts (use same date range as orders if provided)
-    const receiptDateFilter = {};
+    let receiptStartDate = null;
+    let receiptEndDate = null;
     if (filters.dateFrom || filters.dateTo) {
-      receiptDateFilter.date = {};
       if (filters.dateFrom) {
-        const dateFrom = new Date(filters.dateFrom);
-        dateFrom.setHours(0, 0, 0, 0);
-        receiptDateFilter.date.$gte = dateFrom;
+        receiptStartDate = new Date(filters.dateFrom);
+        receiptStartDate.setHours(0, 0, 0, 0);
       }
       if (filters.dateTo) {
-        const dateTo = new Date(filters.dateTo);
-        dateTo.setDate(dateTo.getDate() + 1);
-        dateTo.setHours(0, 0, 0, 0);
-        receiptDateFilter.date.$lt = dateTo;
+        receiptEndDate = new Date(filters.dateTo);
+        receiptEndDate.setDate(receiptEndDate.getDate() + 1);
+        receiptEndDate.setHours(0, 0, 0, 0);
       }
     }
-
-    // Fetch cash receipts linked to orders or customers in the date range
-    const cashReceiptFilter = {
-      ...receiptDateFilter,
-      status: 'confirmed',
-      $or: [
-        { order: { $in: orderIds } },
-        ...(customerIds.length > 0 ? [{ customer: { $in: customerIds } }] : [])
-      ]
-    };
-    const cashReceipts = await CashReceipt.find(cashReceiptFilter)
-      .select('order customer voucherCode amount date paymentMethod')
-      .lean();
-
-    // Fetch bank receipts linked to orders or customers in the date range
-    const bankReceiptFilter = {
-      ...receiptDateFilter,
-      status: 'confirmed',
-      $or: [
-        { order: { $in: orderIds } },
-        ...(customerIds.length > 0 ? [{ customer: { $in: customerIds } }] : [])
-      ]
-    };
-    const bankReceipts = await BankReceipt.find(bankReceiptFilter)
-      .select('order customer voucherCode amount date transactionReference')
-      .lean();
-
-    // Create maps for quick lookup: orderId -> receipts, customerId -> receipts
     const receiptsByOrder = {};
     const receiptsByCustomer = {};
-
-    [...cashReceipts, ...bankReceipts].forEach(receipt => {
-      const receiptInfo = {
-        type: receipt.voucherCode?.startsWith('CR-') ? 'Cash' : 'Bank',
-        voucherCode: receipt.voucherCode || 'N/A',
-        amount: receipt.amount || 0,
-        date: receipt.date,
-        method: receipt.paymentMethod || (receipt.transactionReference ? 'Bank Transfer' : 'N/A')
-      };
-
-      if (receipt.order) {
-        const orderId = receipt.order.toString();
-        if (!receiptsByOrder[orderId]) {
-          receiptsByOrder[orderId] = [];
+    if (customerIds.length > 0 || true) {
+      const cashReceipts = await cashReceiptRepository.findAll(
+        { startDate: receiptStartDate, endDate: receiptEndDate },
+        { limit: 5000 }
+      );
+      const bankReceipts = await bankReceiptRepository.findAll(
+        { startDate: receiptStartDate, endDate: receiptEndDate },
+        { limit: 5000 }
+      );
+      const cashFiltered = receiptStartDate && receiptEndDate && customerIds.length
+        ? cashReceipts.filter(r => r.customer_id && customerIds.includes(r.customer_id))
+        : cashReceipts;
+      const bankFiltered = receiptStartDate && receiptEndDate && customerIds.length
+        ? bankReceipts.filter(r => r.customer_id && customerIds.includes(r.customer_id))
+        : bankReceipts;
+      [...cashFiltered, ...bankFiltered].forEach(receipt => {
+        const receiptInfo = {
+          type: (receipt.receipt_number || '').startsWith('CR-') ? 'Cash' : 'Bank',
+          voucherCode: receipt.receipt_number || 'N/A',
+          amount: receipt.amount || 0,
+          date: receipt.date,
+          method: receipt.payment_method || (receipt.transaction_reference ? 'Bank Transfer' : 'N/A')
+        };
+        if (receipt.customer_id) {
+          const cid = receipt.customer_id.toString ? receipt.customer_id.toString() : receipt.customer_id;
+          if (!receiptsByCustomer[cid]) receiptsByCustomer[cid] = [];
+          receiptsByCustomer[cid].push(receiptInfo);
         }
-        receiptsByOrder[orderId].push(receiptInfo);
-      }
-
-      if (receipt.customer) {
-        const customerId = receipt.customer.toString();
-        if (!receiptsByCustomer[customerId]) {
-          receiptsByCustomer[customerId] = [];
-        }
-        receiptsByCustomer[customerId].push(receiptInfo);
-      }
-    });
+      });
+    }
 
     // Ensure exports directory exists
     const exportsDir = path.join(__dirname, '../exports');
@@ -2015,60 +1992,26 @@ router.post('/export/json', [auth, requirePermission('view_orders')], async (req
   try {
     const { filters = {} } = req.body;
 
-    // Build query based on filters (same as Excel export)
-    const filter = {};
-
-    if (filters.search) {
-      filter.$or = [
-        { orderNumber: { $regex: filters.search, $options: 'i' } }
-      ];
+    const pgFilter = {};
+    if (filters.search) pgFilter.orderNumber = filters.search;
+    if (filters.status) pgFilter.status = filters.status;
+    if (filters.paymentStatus) pgFilter.paymentStatus = filters.paymentStatus;
+    if (filters.customer) pgFilter.customerId = filters.customer;
+    if (filters.dateFrom) {
+      pgFilter.dateFrom = new Date(filters.dateFrom);
+      pgFilter.dateFrom.setHours(0, 0, 0, 0);
     }
-
-    if (filters.status) {
-      filter.status = filters.status;
+    if (filters.dateTo) {
+      pgFilter.dateTo = new Date(filters.dateTo);
+      pgFilter.dateTo.setDate(pgFilter.dateTo.getDate() + 1);
+      pgFilter.dateTo.setHours(0, 0, 0, 0);
     }
+    const orders = await salesRepository.findAll(pgFilter, { limit: 10000, sort: 'created_at DESC' });
 
-    if (filters.paymentStatus) {
-      filter['payment.status'] = filters.paymentStatus;
-    }
-
-    if (filters.orderType) {
-      filter.orderType = filters.orderType;
-    }
-
-    if (filters.customer) {
-      filter.customer = filters.customer;
-    }
-
-    if (filters.dateFrom || filters.dateTo) {
-      filter.createdAt = {};
-      if (filters.dateFrom) {
-        const dateFrom = new Date(filters.dateFrom);
-        dateFrom.setHours(0, 0, 0, 0);
-        filter.createdAt.$gte = dateFrom;
-      }
-      if (filters.dateTo) {
-        const dateTo = new Date(filters.dateTo);
-        dateTo.setDate(dateTo.getDate() + 1);
-        dateTo.setHours(0, 0, 0, 0);
-        filter.createdAt.$lt = dateTo;
-      }
-    }
-
-    const orders = await Sales.find(filter)
-      .populate('customer', 'businessName name firstName lastName email phone addresses')
-      .populate('items.product', 'name')
-      .populate('createdBy', 'firstName lastName email')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    // Ensure exports directory exists
     const exportsDir = path.join(__dirname, '../exports');
     if (!fs.existsSync(exportsDir)) {
       fs.mkdirSync(exportsDir, { recursive: true });
     }
-
-    // Generate unique filename with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
     const filename = `sales_${timestamp}.json`;
     const filepath = path.join(exportsDir, filename);

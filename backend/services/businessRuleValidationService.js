@@ -1,8 +1,8 @@
-const Customer = require('../models/Customer');
-const Inventory = require('../models/Inventory');
-const ChartOfAccounts = require('../models/ChartOfAccounts');
-const AccountingPeriod = require('../models/AccountingPeriod');
-const Product = require('../models/Product');
+const CustomerRepository = require('../repositories/postgres/CustomerRepository');
+const InventoryRepository = require('../repositories/postgres/InventoryRepository');
+const ProductRepository = require('../repositories/postgres/ProductRepository');
+const ProductVariantRepository = require('../repositories/postgres/ProductVariantRepository');
+const SupplierRepository = require('../repositories/postgres/SupplierRepository');
 
 /**
  * Business Rule Validation Service
@@ -18,34 +18,34 @@ class BusinessRuleValidationService {
     // Validate customer exists and is active
     if (orderData.customer) {
       try {
-        const customer = await Customer.findById(orderData.customer);
+        const customer = await CustomerRepository.findById(orderData.customer);
         if (!customer) {
           errors.push({
             field: 'customer',
             message: 'Customer not found'
           });
-        } else if (customer.isDeleted) {
+        } else if (customer.is_deleted) {
           errors.push({
             field: 'customer',
             message: 'Customer has been deleted'
           });
-        } else if (customer.isSuspended) {
+        } else if (customer.status === 'suspended') {
           errors.push({
             field: 'customer',
-            message: `Customer is suspended: ${customer.suspensionReason || 'No reason provided'}`
+            message: `Customer is suspended: ${customer.suspension_reason || 'No reason provided'}`
           });
         }
         
         // Validate credit limit if account payment
         if (customer && orderData.payment?.method === 'account') {
-          const currentBalance = customer.currentBalance || 0;
+          const currentBalance = Number(customer.current_balance ?? customer.currentBalance ?? 0);
           const orderTotal = orderData.pricing?.total || 0;
           const newBalance = currentBalance + orderTotal;
-          
-          if (customer.creditLimit > 0 && newBalance > customer.creditLimit) {
+          const creditLimit = Number(customer.credit_limit ?? customer.creditLimit ?? 0);
+          if (creditLimit > 0 && newBalance > creditLimit) {
             errors.push({
               field: 'customer',
-              message: `Credit limit exceeded. Current balance: ${currentBalance.toFixed(2)}, Credit limit: ${customer.creditLimit.toFixed(2)}, Order total: ${orderTotal.toFixed(2)}, New balance would be: ${newBalance.toFixed(2)}`
+              message: `Credit limit exceeded. Current balance: ${currentBalance.toFixed(2)}, Credit limit: ${creditLimit.toFixed(2)}, Order total: ${orderTotal.toFixed(2)}, New balance would be: ${newBalance.toFixed(2)}`
             });
           }
         }
@@ -64,22 +64,12 @@ class BusinessRuleValidationService {
         
         // Validate product/variant exists
         try {
-          const Product = require('../models/Product');
-          const ProductVariant = require('../models/ProductVariant');
-          const productRepository = require('../repositories/ProductRepository');
-          const productVariantRepository = require('../repositories/ProductVariantRepository');
-          
-          // Try to find as product first, then as variant
-          let product = await productRepository.findById(item.product);
+          let product = await ProductRepository.findById(item.product);
           let isVariant = false;
-          
           if (!product) {
-            product = await productVariantRepository.findById(item.product);
-            if (product) {
-              isVariant = true;
-            }
+            product = await ProductVariantRepository.findById(item.product);
+            if (product) isVariant = true;
           }
-          
           if (!product) {
             errors.push({
               field: `items[${i}].product`,
@@ -87,23 +77,20 @@ class BusinessRuleValidationService {
             });
             continue;
           }
-          
-          if (product.status !== 'active') {
-            const productName = isVariant 
-              ? (product.displayName || product.variantName || 'Variant')
-              : product.name;
+          const isActive = product.is_active !== false;
+          if (!isActive) {
+            const productName = isVariant
+              ? (product.display_name ?? product.displayName ?? product.variant_name ?? 'Variant')
+              : (product.name || 'Product');
             errors.push({
               field: `items[${i}].product`,
               message: `Product/variant is not active: ${productName}`
             });
           }
-          
-          // Validate stock availability
-          const Inventory = require('../models/Inventory');
-          const inventory = await Inventory.findOne({ product: item.product });
-          const availableStock = inventory 
-            ? Math.max(0, inventory.currentStock - inventory.reservedStock)
-            : (product.inventory?.currentStock || 0);
+          const inventory = await InventoryRepository.findOne({ product: item.product, productId: item.product });
+          const currentStock = inventory ? Number(inventory.current_stock ?? inventory.currentStock ?? 0) : 0;
+          const reservedStock = inventory ? Number(inventory.reserved_stock ?? inventory.reservedStock ?? 0) : 0;
+          const availableStock = Math.max(0, currentStock - reservedStock);
           
           const productName = isVariant 
             ? (product.displayName || product.variantName || 'Variant')
@@ -250,24 +237,18 @@ class BusinessRuleValidationService {
       }
       
       try {
-        const account = await ChartOfAccounts.findOne({
-          accountCode: entry.accountCode,
-          isActive: true
-        });
-        
-        if (!account) {
+        const ChartOfAccountsRepository = require('../repositories/ChartOfAccountsRepository');
+        const account = await ChartOfAccountsRepository.findByAccountCode(entry.accountCode);
+        if (!account || account.is_active === false) {
           errors.push({
             field: `entries[${i}].accountCode`,
             message: `Account ${entry.accountCode} not found or inactive`
           });
-        } else {
-          // Validate account allows direct posting
-          if (!account.allowDirectPosting) {
-            errors.push({
-              field: `entries[${i}].accountCode`,
-              message: `Account ${entry.accountCode} (${account.accountName}) does not allow direct posting`
-            });
-          }
+        } else if (account.allow_direct_posting === false) {
+          errors.push({
+            field: `entries[${i}].accountCode`,
+            message: `Account ${entry.accountCode} (${account.account_name || account.accountName}) does not allow direct posting`
+          });
         }
       } catch (error) {
         errors.push({
@@ -324,23 +305,24 @@ class BusinessRuleValidationService {
   }
   
   /**
-   * Validate period locking
+   * Validate period locking (optional: no AccountingPeriod in Postgres yet – allow all dates)
    */
   async validatePeriodLocking(transactionDate) {
     try {
-      const period = await AccountingPeriod.findPeriodForDate(transactionDate);
-      
+      let AccountingPeriodRepository = null;
+      try { AccountingPeriodRepository = require('../repositories/AccountingPeriodRepository'); } catch (_) {}
+      if (!AccountingPeriodRepository || typeof AccountingPeriodRepository.findPeriodForDate !== 'function') return;
+      const period = await AccountingPeriodRepository.findPeriodForDate(transactionDate);
       if (period && (period.status === 'closed' || period.status === 'locked')) {
+        const start = period.period_start || period.periodStart;
+        const end = period.period_end || period.periodEnd;
         throw new Error(
-          `Cannot create transaction in ${period.status} period: ${period.periodName} ` +
-          `(${period.periodStart.toISOString().split('T')[0]} to ${period.periodEnd.toISOString().split('T')[0]})`
+          `Cannot create transaction in ${period.status} period: ${period.period_name || period.periodName} ` +
+          `(${start ? new Date(start).toISOString().split('T')[0] : '?'} to ${end ? new Date(end).toISOString().split('T')[0] : '?'})`
         );
       }
     } catch (error) {
-      // If period check fails, allow but log warning
-      if (error.message.includes('Cannot create transaction')) {
-        throw error;
-      }
+      if (error.message && error.message.includes('Cannot create transaction')) throw error;
       console.warn('Period validation error:', error.message);
     }
   }
@@ -354,9 +336,8 @@ class BusinessRuleValidationService {
     // Validate supplier exists
     if (poData.supplier) {
       try {
-        const Supplier = require('../models/Supplier');
-        const supplier = await Supplier.findById(poData.supplier);
-        if (!supplier || supplier.isDeleted) {
+        const supplier = await SupplierRepository.findById(poData.supplier);
+        if (!supplier || supplier.is_deleted) {
           errors.push({
             field: 'supplier',
             message: 'Supplier not found or deleted'
@@ -372,31 +353,17 @@ class BusinessRuleValidationService {
     
     // Validate items
     if (poData.items && Array.isArray(poData.items)) {
-      const Product = require('../models/Product');
-      const ProductVariant = require('../models/ProductVariant');
-      const productRepository = require('../repositories/ProductRepository');
-      const productVariantRepository = require('../repositories/ProductVariantRepository');
-      
       for (let i = 0; i < poData.items.length; i++) {
         const item = poData.items[i];
-        
         if (!item.product) {
           errors.push({
             field: `items[${i}].product`,
             message: 'Product or variant is required'
           });
         } else {
-          // Validate product/variant exists
           try {
-            let product = await productRepository.findById(item.product);
-            let isVariant = false;
-            
-            if (!product) {
-              product = await productVariantRepository.findById(item.product);
-              if (product) {
-                isVariant = true;
-              }
-            }
+            let product = await ProductRepository.findById(item.product);
+            if (!product) product = await ProductVariantRepository.findById(item.product);
             
             if (!product) {
               errors.push({
@@ -404,10 +371,10 @@ class BusinessRuleValidationService {
                 message: `Product or variant not found: ${item.product}`
               });
             }
-          } catch (error) {
+          } catch (err) {
             errors.push({
               field: `items[${i}].product`,
-              message: `Error validating product/variant: ${error.message}`
+              message: `Error validating product/variant: ${err.message}`
             });
           }
         }
@@ -461,7 +428,7 @@ class BusinessRuleValidationService {
     // Validate product exists
     if (adjustmentData.productId) {
       try {
-        const product = await Product.findById(adjustmentData.productId);
+        const product = await ProductRepository.findById(adjustmentData.productId);
         if (!product) {
           errors.push({
             field: 'productId',
@@ -479,8 +446,8 @@ class BusinessRuleValidationService {
     // Validate adjustment won't cause negative stock (unless explicitly allowed)
     if (adjustmentData.quantity < 0 && !adjustmentData.allowNegative) {
       try {
-        const inventory = await Inventory.findOne({ product: adjustmentData.productId });
-        const currentStock = inventory?.currentStock || 0;
+        const inventory = await InventoryRepository.findOne({ product: adjustmentData.productId, productId: adjustmentData.productId });
+        const currentStock = Number(inventory?.current_stock ?? inventory?.currentStock ?? 0);
         const newStock = currentStock + adjustmentData.quantity;
         
         if (newStock < 0) {

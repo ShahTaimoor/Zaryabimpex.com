@@ -2,7 +2,7 @@ const productRepository = require('../repositories/ProductRepository');
 const investorRepository = require('../repositories/InvestorRepository');
 const purchaseInvoiceRepository = require('../repositories/PurchaseInvoiceRepository');
 const salesRepository = require('../repositories/SalesRepository');
-const Inventory = require('../models/Inventory');
+const inventoryRepository = require('../repositories/InventoryRepository');
 const auditLogService = require('./auditLogService');
 const costingService = require('./costingService');
 
@@ -198,40 +198,32 @@ class ProductService {
     // Transform product names to uppercase
     result.products = result.products.map(p => this.transformProductToUppercase(p));
 
-    // Merge inventory data from Inventory model (source of truth) into products
-    const Inventory = require('../models/Inventory');
-    const productIds = result.products.map(p => p._id || p.id);
-    
+    // Merge inventory data from Inventory repository (source of truth) into products
+    const productIds = result.products.map(p => p._id || p.id).filter(Boolean);
     if (productIds.length > 0) {
-      const inventoryRecords = await Inventory.find({ 
-        product: { $in: productIds },
-        productModel: 'Product'
-      }).lean();
-      
-      // Create a map of inventory by product ID
+      const inventoryRecords = await inventoryRepository.findByProductIds(productIds);
       const inventoryMap = new Map();
       inventoryRecords.forEach(inv => {
-        inventoryMap.set(inv.product.toString(), inv);
+        const pid = (inv.product_id || inv.productId || inv.product)?.toString?.() || inv.product_id;
+        if (pid) inventoryMap.set(pid, inv);
       });
-      
-      // Merge inventory data into products
+
       result.products = result.products.map(product => {
-        const productId = (product._id || product.id).toString();
-        const inventoryRecord = inventoryMap.get(productId);
-        
+        const productId = (product._id || product.id)?.toString?.();
+        const inventoryRecord = productId ? inventoryMap.get(productId) : null;
         if (inventoryRecord) {
-          // Use Inventory model as source of truth for currentStock
+          const cur = inventoryRecord.current_stock ?? inventoryRecord.currentStock ?? 0;
+          const reorder = inventoryRecord.reorder_point ?? inventoryRecord.reorderPoint ?? 0;
           product.inventory = {
             ...product.inventory,
-            currentStock: inventoryRecord.currentStock,
-            reorderPoint: inventoryRecord.reorderPoint || product.inventory?.reorderPoint || 0,
-            minStock: inventoryRecord.reorderPoint || product.inventory?.minStock || 0,
-            maxStock: inventoryRecord.maxStock || product.inventory?.maxStock,
-            availableStock: inventoryRecord.availableStock || inventoryRecord.currentStock,
-            reservedStock: inventoryRecord.reservedStock || 0
+            currentStock: cur,
+            reorderPoint: reorder,
+            minStock: reorder,
+            maxStock: inventoryRecord.max_stock ?? inventoryRecord.maxStock ?? product.inventory?.maxStock,
+            availableStock: inventoryRecord.available_stock ?? inventoryRecord.availableStock ?? cur,
+            reservedStock: inventoryRecord.reserved_stock ?? inventoryRecord.reservedStock ?? 0
           };
         }
-        
         return product;
       });
     }
@@ -258,23 +250,19 @@ class ProductService {
 
     const transformedProduct = this.transformProductToUppercase(product);
 
-    // Merge inventory data from Inventory model (source of truth)
-    const Inventory = require('../models/Inventory');
-    const inventoryRecord = await Inventory.findOne({ 
-      product: id,
-      productModel: 'Product'
-    }).lean();
-    
+    // Merge inventory data from Inventory repository (source of truth)
+    const inventoryRecord = await inventoryRepository.findOne({ product: id, productId: id });
     if (inventoryRecord) {
-      // Use Inventory model as source of truth for currentStock
+      const cur = inventoryRecord.current_stock ?? inventoryRecord.currentStock ?? 0;
+      const reorder = inventoryRecord.reorder_point ?? inventoryRecord.reorderPoint ?? 0;
       transformedProduct.inventory = {
         ...transformedProduct.inventory,
-        currentStock: inventoryRecord.currentStock,
-        reorderPoint: inventoryRecord.reorderPoint || transformedProduct.inventory?.reorderPoint || 0,
-        minStock: inventoryRecord.reorderPoint || transformedProduct.inventory?.minStock || 0,
-        maxStock: inventoryRecord.maxStock || transformedProduct.inventory?.maxStock,
-        availableStock: inventoryRecord.availableStock || inventoryRecord.currentStock,
-        reservedStock: inventoryRecord.reservedStock || 0
+        currentStock: cur,
+        reorderPoint: reorder,
+        minStock: reorder,
+        maxStock: inventoryRecord.max_stock ?? inventoryRecord.maxStock ?? transformedProduct.inventory?.maxStock,
+        availableStock: inventoryRecord.available_stock ?? inventoryRecord.availableStock ?? cur,
+        reservedStock: inventoryRecord.reserved_stock ?? inventoryRecord.reservedStock ?? 0
       };
     }
 
@@ -357,26 +345,17 @@ class ProductService {
 
     // Automatically create inventory record for the new product
     try {
-      const inventoryRecord = new Inventory({
-        product: product._id,
-        currentStock: product.inventory?.currentStock || 0,
-        reorderPoint: product.inventory?.reorderPoint || 10,
-        reorderQuantity: product.inventory?.reorderQuantity || 50,
+      const productId = product.id ?? product._id;
+      await inventoryRepository.create({
+        productId,
+        product: productId,
+        productModel: 'Product',
+        currentStock: product.inventory?.currentStock ?? 0,
+        reorderPoint: product.inventory?.reorderPoint ?? 10,
+        reorderQuantity: product.inventory?.reorderQuantity ?? 50,
         status: 'active',
-        location: {
-          warehouse: 'Main Warehouse',
-          aisle: 'A1',
-          shelf: 'S1'
-        },
-        movements: [],
-        cost: {
-          average: product.pricing?.cost || 0,
-          lastPurchase: product.pricing?.cost || 0,
-          fifo: []
-        },
-        createdBy: userId
+        location: { warehouse: 'Main Warehouse', aisle: 'A1', shelf: 'S1' }
       });
-      await inventoryRecord.save();
     } catch (inventoryError) {
       // Don't fail the product creation if inventory creation fails
       // Log error but continue
@@ -506,26 +485,25 @@ class ProductService {
       }
       if (Object.keys(inventoryUpdate).length > 0) {
         try {
-          const invFilter = { product: id, productModel: 'Product' };
-          const existingInv = await Inventory.findOne(invFilter).lean();
+          const existingInv = await inventoryRepository.findOne({ product: id, productId: id });
+          const payload = {};
+          if (typeof inventoryUpdate.currentStock === 'number') payload.currentStock = inventoryUpdate.currentStock;
+          if (typeof inventoryUpdate.reorderPoint === 'number') payload.reorderPoint = inventoryUpdate.reorderPoint;
+          if (typeof inventoryUpdate.maxStock === 'number') payload.maxStock = inventoryUpdate.maxStock;
           if (existingInv) {
-            await Inventory.updateOne(invFilter, { $set: inventoryUpdate });
+            await inventoryRepository.updateByProductId(id, payload);
           } else {
-            // Create Inventory record so reorder point is persisted (used when listing products)
             const currentStock = inventoryUpdate.currentStock ?? updatedProduct.inventory?.currentStock ?? 0;
             const reorderPoint = inventoryUpdate.reorderPoint ?? updatedProduct.inventory?.reorderPoint ?? 10;
-            await Inventory.create({
+            await inventoryRepository.create({
+              productId: id,
               product: id,
               productModel: 'Product',
               currentStock,
               reorderPoint,
               reorderQuantity: 50,
-              maxStock: inventoryUpdate.maxStock,
-              status: 'active',
-              reservedStock: 0,
-              availableStock: currentStock,
-              movements: [],
-              cost: { average: updatedProduct.pricing?.cost ?? 0, lastPurchase: updatedProduct.pricing?.cost ?? 0, fifo: [] }
+              maxStock: inventoryUpdate.maxStock ?? null,
+              status: 'active'
             });
           }
         } catch (invErr) {
@@ -809,64 +787,10 @@ class ProductService {
   async getProductsForExport(filters = {}) {
     const filter = this.buildFilter(filters);
     
-    const products = await productRepository.findAll(filter, {
+    return await productRepository.findAll(filter, {
       populate: { path: 'category', select: 'name' },
       lean: true
     });
-
-    // Merge inventory data from Inventory model (source of truth)
-    const Inventory = require('../models/Inventory');
-    const productIds = products.map(p => p._id || p.id);
-    
-    if (productIds.length > 0) {
-      const inventoryRecords = await Inventory.find({ 
-        product: { $in: productIds },
-        productModel: 'Product'
-      }).lean();
-      
-      const inventoryMap = new Map();
-      inventoryRecords.forEach(inv => {
-        inventoryMap.set(inv.product.toString(), inv);
-      });
-      
-      return products.map(product => {
-        const productId = (product._id || product.id).toString();
-        const inventoryRecord = inventoryMap.get(productId);
-        
-        const mergedProduct = { ...product };
-        
-        // Ensure inventory object exists
-        if (!mergedProduct.inventory) {
-          mergedProduct.inventory = {};
-        }
-
-        if (inventoryRecord) {
-          mergedProduct.inventory = {
-            ...mergedProduct.inventory,
-            currentStock: inventoryRecord.currentStock,
-            reorderPoint: inventoryRecord.reorderPoint !== undefined ? inventoryRecord.reorderPoint : (mergedProduct.inventory.reorderPoint || 0),
-            minStock: inventoryRecord.reorderPoint !== undefined ? inventoryRecord.reorderPoint : (mergedProduct.inventory.minStock || 0),
-            maxStock: inventoryRecord.maxStock !== undefined ? inventoryRecord.maxStock : mergedProduct.inventory.maxStock,
-            availableStock: inventoryRecord.availableStock !== undefined ? inventoryRecord.availableStock : inventoryRecord.currentStock,
-            reservedStock: inventoryRecord.reservedStock || 0
-          };
-        } else {
-          // If no inventory record found, ensure defaults
-          mergedProduct.inventory = {
-            currentStock: mergedProduct.inventory.currentStock || 0,
-            reorderPoint: mergedProduct.inventory.reorderPoint || 0,
-            minStock: mergedProduct.inventory.minStock || 0,
-            maxStock: mergedProduct.inventory.maxStock || 0,
-            availableStock: mergedProduct.inventory.currentStock || 0,
-            reservedStock: 0
-          };
-        }
-        
-        return mergedProduct;
-      });
-    }
-
-    return products;
   }
 
   /**
@@ -917,21 +841,12 @@ class ProductService {
   }
 
   /**
-   * Get product by name
-   * @param {string} name - Product name
-   * @returns {Promise<Product|null>}
-   */
-  async getProductByName(name) {
-    return await productRepository.findOne({ name: name.trim() });
-  }
-
-  /**
    * Check if product exists by name
    * @param {string} name - Product name
    * @returns {Promise<boolean>}
    */
   async productExistsByName(name) {
-    const product = await this.getProductByName(name);
+    const product = await productRepository.findOne({ name: name.trim() });
     return !!product;
   }
 

@@ -10,6 +10,9 @@ import { useGetProductsQuery } from '../store/services/productsApi';
 import { useCreateStockAdjustmentMutation } from '../store/services/inventoryApi';
 import { SearchableDropdown } from './SearchableDropdown';
 import { formatCurrency } from '../utils/formatters';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
   const [adjustmentType, setAdjustmentType] = useState('physical_count');
@@ -304,13 +307,12 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Warehouse
                       </label>
-                      <input
+                      <Input
                         type="text"
                         name="warehouse"
                         value={values.warehouse}
                         onChange={handleChange}
                         onBlur={handleBlur}
-                        className="input"
                         placeholder="Warehouse location"
                       />
                     </div>
@@ -320,13 +322,13 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Reason <span className="text-red-500">*</span>
                     </label>
-                    <input
+                    <Input
                       type="text"
                       name="reason"
                       value={values.reason}
                       onChange={handleChange}
                       onBlur={handleBlur}
-                      className={`input ${errors.reason ? 'input-error' : ''}`}
+                      className={errors.reason ? 'input-error' : ''}
                       placeholder="Enter reason for adjustment"
                     />
                     {errors.reason && <p className="text-red-600 text-sm mt-1">{errors.reason}</p>}
@@ -370,10 +372,10 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             Current Stock
                           </label>
-                          <input
+                          <Input
                             type="number"
                             value={selectedProduct.inventory?.currentStock || 0}
-                            className="input bg-gray-100"
+                            className="bg-gray-100"
                             readOnly
                           />
                         </div>
@@ -381,10 +383,9 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             Adjusted Stock
                           </label>
-                          <input
+                          <Input
                             type="number"
                             min="0"
-                            className="input"
                             placeholder="Enter new stock level"
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
@@ -402,7 +403,7 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                       </div>
                       
                       <div className="mt-3 flex space-x-2">
-                        <button
+                        <Button
                           type="button"
                           onClick={() => {
                             const adjustedStock = document.querySelector('input[placeholder="Enter new stock level"]').value;
@@ -411,20 +412,21 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                               parseFloat(adjustedStock) || 0
                             );
                           }}
-                          className="btn btn-primary flex-1"
+                          variant="default"
+                          className="flex-1"
                         >
                           Add to Adjustment
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
                           onClick={() => {
                             setSelectedProduct(null);
                             setIsAddingProduct(false);
                           }}
-                          className="btn btn-secondary"
+                          variant="secondary"
                         >
                           Cancel
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -468,10 +470,10 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                   Current Stock
                                 </label>
-                                <input
+                                <Input
                                   type="number"
                                   value={adjustment.currentStock}
-                                  className="input bg-gray-100"
+                                  className="bg-gray-100"
                                   readOnly
                                 />
                               </div>
@@ -479,12 +481,11 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                   Adjusted Stock
                                 </label>
-                                <input
+                                <Input
                                   type="number"
                                   min="0"
                                   value={adjustment.adjustedStock}
                                   onChange={(e) => updateAdjustment(adjustment.product._id, 'adjustedStock', parseFloat(e.target.value) || 0)}
-                                  className="input"
                                 />
                               </div>
                               <div>
@@ -540,30 +541,29 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Notes
                     </label>
-                    <textarea
+                    <Textarea
                       name="notes"
                       value={values.notes}
                       onChange={handleChange}
                       onBlur={handleBlur}
                       rows={3}
-                      className="input"
                       placeholder="Additional notes (optional)"
                     />
                   </div>
 
                   {/* Actions */}
                   <div className="flex justify-end space-x-3 pt-6 border-t">
-                    <button
+                    <Button
                       type="button"
                       onClick={handleClose}
-                      className="btn btn-secondary"
+                      variant="secondary"
                     >
                       Cancel
-                    </button>
+                    </Button>
                     <LoadingButton
                       type="submit"
                       isLoading={creating}
-                      className="btn btn-primary"
+                      variant="default"
                     >
                       Create Adjustment Request
                     </LoadingButton>

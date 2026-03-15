@@ -6,23 +6,21 @@ const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
-const mongoose = require('mongoose');
 const { auth, requirePermission } = require('../middleware/auth');
-const ledgerAccountService = require('../services/ledgerAccountService');
-const customerService = require('../services/customerService');
-const customerRepository = require('../repositories/CustomerRepository');
-const { retryMongoTransaction, isDuplicateKeyError } = require('../utils/retry');
+const { validateUuidParam, handleValidationErrors } = require('../middleware/validation');
+const customerService = require('../services/customerServicePostgres');
+const customerRepository = require('../repositories/postgres/CustomerRepository');
 const { preventDuplicates } = require('../middleware/duplicatePrevention');
 const customerAuditLogService = require('../services/customerAuditLogService');
 const customerTransactionService = require('../services/customerTransactionService');
 const customerCreditPolicyService = require('../services/customerCreditPolicyService');
 
-// Helper function to transform customer names to uppercase
 const transformCustomerToUppercase = (customer) => {
   if (!customer) return customer;
   if (customer.toObject) customer = customer.toObject();
   if (customer.name) customer.name = customer.name.toUpperCase();
   if (customer.businessName) customer.businessName = customer.businessName.toUpperCase();
+  if (customer.business_name) customer.business_name = customer.business_name.toUpperCase();
   if (customer.firstName) customer.firstName = customer.firstName.toUpperCase();
   if (customer.lastName) customer.lastName = customer.lastName.toUpperCase();
   return customer;
@@ -30,57 +28,7 @@ const transformCustomerToUppercase = (customer) => {
 
 const router = express.Router();
 
-const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
-
-const validateCustomerIdParam = (req, res, next) => {
-  if (!isValidObjectId(req.params.id)) {
-    return res.status(400).json({ message: 'Invalid customer ID' });
-  }
-  next();
-};
-
-const isTransactionNotSupportedError = (error) => {
-  if (!error) return false;
-  const message = error.message || '';
-  return error.code === 20 ||
-    error.codeName === 'IllegalOperation' ||
-    message.includes('Transaction numbers are only allowed on a replica set member or mongos') ||
-    message.includes('transactions are not supported');
-};
-
-const runWithOptionalTransaction = async (operation, context = 'operation') => {
-  let session = null;
-  let transactionStarted = false;
-
-  try {
-    session = await mongoose.startSession();
-    session.startTransaction();
-    transactionStarted = true;
-
-    const result = await operation(session);
-    await session.commitTransaction();
-    return result;
-  } catch (error) {
-    if (transactionStarted && session) {
-      try {
-        await session.abortTransaction();
-      } catch (abortError) {
-        console.error(`Failed to abort transaction for ${context}:`, abortError);
-      }
-    }
-
-    if (!transactionStarted && isTransactionNotSupportedError(error)) {
-      console.warn(`Transactions not supported for MongoDB deployment. Retrying ${context} without session.`);
-      return await operation(null);
-    }
-
-    throw error;
-  } finally {
-    if (session) {
-      session.endSession();
-    }
-  }
-};
+const isDuplicateKeyError = (error) => error && error.code === '23505';
 
 const parseOpeningBalance = (value) => {
   if (value === undefined || value === null || value === '') return null;
@@ -225,7 +173,7 @@ router.get('/by-cities', [
 // @route   GET /api/customers/:id
 // @desc    Get single customer
 // @access  Private
-router.get('/:id', [auth, validateCustomerIdParam], async (req, res) => {
+router.get('/:id', [auth, validateUuidParam('id'), handleValidationErrors], async (req, res) => {
   try {
     const customer = await customerService.getCustomerById(req.params.id);
     res.json({ customer });
@@ -302,7 +250,7 @@ router.get('/check-business-name/:businessName', auth, async (req, res) => {
 // @access  Private
 router.post('/:id/address', [
   auth,
-  validateCustomerIdParam,
+  validateUuidParam('id'), handleValidationErrors,
   requirePermission('edit_customers'),
   body('type').isIn(['billing', 'shipping', 'both']).withMessage('Invalid address type'),
   body('street').trim().isLength({ min: 1 }).withMessage('Street is required'),
@@ -333,7 +281,7 @@ router.post('/:id/address', [
 // @access  Private
 router.put('/:id/credit-limit', [
   auth,
-  validateCustomerIdParam,
+  validateUuidParam('id'), handleValidationErrors,
   requirePermission('edit_customers'),
   body('creditLimit').isFloat({ min: 0 }).withMessage('Credit limit must be a positive number')
 ], async (req, res) => {
@@ -346,7 +294,7 @@ router.put('/:id/credit-limit', [
     const customer = await customerService.updateCustomerCreditLimit(
       req.params.id,
       req.body.creditLimit,
-      req.user._id
+      req.user?.id || req.user?._id
     );
     
     res.json({
@@ -382,7 +330,7 @@ router.post('/', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const result = await customerService.createCustomer(req.body, req.user._id, {
+    const result = await customerService.createCustomer(req.body, req.user?.id || req.user?._id, {
       openingBalance: req.body.openingBalance
     });
 
@@ -467,7 +415,7 @@ router.post('/', [
       });
     }
 
-    // Handle other MongoDB errors
+    // Handle other database errors
     if (error.name === 'MongoError' || error.name === 'MongoServerError') {
       return res.status(500).json({
         success: false,
@@ -496,7 +444,7 @@ router.post('/', [
 // @access  Private
 router.put('/:id', [
   auth,
-  validateCustomerIdParam,
+  validateUuidParam('id'), handleValidationErrors,
   requirePermission('edit_customers'),
   preventDuplicates({ windowMs: 10000 }), // Prevent duplicate submissions within 10 seconds
   body('name').optional().trim().isLength({ min: 1 }).withMessage('Name cannot be empty'),
@@ -521,18 +469,12 @@ router.put('/:id', [
       version: req.body.version !== undefined ? req.body.version : undefined
     };
 
-    const result = await retryMongoTransaction(async () => {
-      return await customerService.updateCustomer(
-        req.params.id,
-        updateData,
-        req.user._id,
-        { openingBalance: req.body.openingBalance }
-      );
-    }, {
-      maxRetries: 5,
-      initialDelay: 100,
-      maxDelay: 3000
-    });
+    const result = await customerService.updateCustomer(
+      req.params.id,
+      updateData,
+      req.user?.id || req.user?._id,
+      { openingBalance: req.body.openingBalance }
+    );
 
     res.json({
       success: true,
@@ -591,7 +533,7 @@ router.put('/:id', [
       });
     }
 
-    // Handle other MongoDB errors
+    // Handle other database errors
     if (error.name === 'MongoError' || error.name === 'MongoServerError') {
       return res.status(500).json({
         success: false,
@@ -620,12 +562,12 @@ router.put('/:id', [
 // @access  Private
 router.delete('/:id', [
   auth,
-  validateCustomerIdParam,
+  validateUuidParam('id'), handleValidationErrors,
   requirePermission('delete_customers')
 ], async (req, res) => {
   try {
     const reason = req.body.reason || 'Customer deleted';
-    const result = await customerService.deleteCustomer(req.params.id, req.user._id, reason);
+    const result = await customerService.deleteCustomer(req.params.id, req.user?.id || req.user?._id, reason);
 
     res.json({ message: result.message });
   } catch (error) {
@@ -642,11 +584,11 @@ router.delete('/:id', [
 // @access  Private
 router.post('/:id/restore', [
   auth,
-  validateCustomerIdParam,
+  validateUuidParam('id'), handleValidationErrors,
   requirePermission('delete_customers')
 ], async (req, res) => {
   try {
-    const result = await customerService.restoreCustomer(req.params.id, req.user._id);
+    const result = await customerService.restoreCustomer(req.params.id, req.user?.id || req.user?._id);
     res.json({ success: true, message: result.message, customer: result.customer });
   } catch (error) {
     console.error('Restore customer error:', error);
@@ -675,7 +617,7 @@ router.get('/deleted', [
 // @access  Private
 router.put('/:id/balance', [
   auth,
-  validateCustomerIdParam,
+  validateUuidParam('id'), handleValidationErrors,
   requirePermission('edit_customers'),
   body('pendingBalance').optional().isFloat({ min: 0 }).withMessage('Pending balance must be a positive number'),
   body('currentBalance').optional().isFloat().withMessage('Current balance must be a number'),
@@ -728,23 +670,36 @@ router.post('/import/excel', [
     const worksheet = workbook.Sheets[sheetName];
     const customers = XLSX.utils.sheet_to_json(worksheet);
     
+    console.log('Importing customers, first row sample:', customers[0]);
+    
     results.total = customers.length;
     
     for (let i = 0; i < customers.length; i++) {
       try {
-        const row = customers[i];
+        const rawRow = customers[i];
+        // Normalize keys to handle spaces and case sensitivity
+        const row = {};
+        Object.keys(rawRow).forEach(key => {
+          row[key.trim()] = rawRow[key];
+        });
         
         // Map Excel columns to our format
         const customerData = {
-          name: row['Name'] || row['name'] || row.name,
+          name: row['Name'] || row['name'] || row['Customer Name'] || row['customer name'] || row.name,
           email: row['Email'] || row['email'] || row.email || undefined,
           phone: row['Phone'] || row['phone'] || row.phone || '',
-          businessName: row['Business Name'] || row['businessName'] || row.businessName,
+          businessName: row['Business Name'] || row['businessName'] || row['BusinessName'] || row.businessName,
           businessType: row['Business Type'] || row['businessType'] || row.businessType || 'wholesale',
           taxId: row['Tax ID'] || row['taxId'] || row.taxId || '',
           customerTier: row['Customer Tier'] || row['customerTier'] || row.customerTier || 'bronze',
           creditLimit: row['Credit Limit'] || row['creditLimit'] || row.creditLimit || 0,
+          openingBalance: row['Opening Balance'] || row['openingBalance'] || row.openingBalance || 0,
           paymentTerms: row['Payment Terms'] || row['paymentTerms'] || row.paymentTerms || 'cash',
+          street: row['Street'] || row['street'] || row['Address'] || row.street || '',
+          city: row['City'] || row['city'] || row.city || '',
+          state: row['State'] || row['state'] || row.state || '',
+          zipCode: row['Zip Code'] || row['zipCode'] || row.zipCode || '',
+          country: row['Country'] || row['country'] || row.country || '',
           status: row['Status'] || row['status'] || row.status || 'active',
           notes: row['Notes'] || row['notes'] || row.notes || ''
         };
@@ -766,35 +721,67 @@ router.post('/import/excel', [
           continue;
         }
         
-        // Check if customer already exists
-        const customerExists = await customerService.customerExists({ 
-          businessName: customerData.businessName.toString().trim()
-        });
-        
-        if (customerExists) {
-          results.errors.push({
-            row: i + 2,
-            error: `Customer already exists with business name: ${customerData.businessName}`
-          });
+        // Check if customer already exists (by business name, case-insensitive)
+        const normalizedBusinessName = customerData.businessName.toString().trim();
+        const existingCustomer = await customerRepository.findByBusinessName(normalizedBusinessName);
+
+        // If customer exists, treat this row as an update (useful when fixing missing business type, tier, etc.)
+        if (existingCustomer) {
+          const updatePayload = {};
+          if (customerData.businessType) {
+            updatePayload.businessType = customerData.businessType.toString().toLowerCase();
+          }
+          if (customerData.customerTier) {
+            updatePayload.customerTier = customerData.customerTier.toString().toLowerCase();
+          }
+          if (customerData.status) {
+            updatePayload.status = customerData.status.toString().toLowerCase();
+          }
+
+          // Only attempt update if we actually have something to change
+          if (Object.keys(updatePayload).length > 0) {
+            await customerService.updateCustomer(
+              existingCustomer.id,
+              updatePayload,
+              req.user?.id || req.user?._id
+            );
+            results.success++;
+          } else {
+            results.errors.push({
+              row: i + 2,
+              error: `Customer already exists with business name: ${customerData.businessName} (no updatable fields provided)`
+            });
+          }
           continue;
         }
-        
-        // Create customer using service
+
+        // Create customer using service when it does not already exist
         const customerPayload = {
           name: customerData.name.toString().trim(),
           email: customerData.email ? customerData.email.toString().trim() : undefined,
           phone: customerData.phone.toString().trim() || '',
-          businessName: customerData.businessName.toString().trim(),
+          businessName: normalizedBusinessName,
           businessType: customerData.businessType.toString().toLowerCase(),
           taxId: customerData.taxId.toString().trim() || '',
           customerTier: customerData.customerTier.toString().toLowerCase(),
           creditLimit: parseFloat(customerData.creditLimit) || 0,
           paymentTerms: customerData.paymentTerms.toString().toLowerCase(),
           status: customerData.status.toString().toLowerCase(),
-          notes: customerData.notes.toString().trim() || ''
+          notes: customerData.notes.toString().trim() || '',
+          addresses: [{
+            street: customerData.street.toString().trim(),
+            city: customerData.city.toString().trim(),
+            state: customerData.state.toString().trim(),
+            zipCode: customerData.zipCode.toString().trim(),
+            country: customerData.country.toString().trim(),
+            isDefault: true,
+            type: 'both'
+          }]
         };
         
-        await customerService.createCustomer(customerPayload, req.user._id);
+        await customerService.createCustomer(customerPayload, req.user?.id || req.user?._id, {
+          openingBalance: parseFloat(customerData.openingBalance) || 0
+        });
         results.success++;
         
       } catch (error) {
@@ -830,21 +817,34 @@ router.post('/export/excel', [auth, requirePermission('view_customers')], async 
     const customers = await customerService.getCustomersForExport(filters);
     
     // Prepare Excel data
-    const excelData = customers.map(customer => ({
-      'Name': customer.name,
-      'Email': customer.email || '',
-      'Phone': customer.phone || '',
-      'Business Name': customer.businessName,
-      'Business Type': customer.businessType || '',
-      'Tax ID': customer.taxId || '',
-      'Customer Tier': customer.customerTier || '',
-      'Credit Limit': customer.creditLimit || 0,
-      'Current Balance': customer.currentBalance || 0,
-      'Payment Terms': customer.paymentTerms || '',
-      'Status': customer.status || 'active',
-      'Notes': customer.notes || '',
-      'Created Date': customer.createdAt?.toISOString().split('T')[0] || ''
-    }));
+    const excelData = customers.map(customer => {
+      // Parse address if it's a string (Postgres JSONB)
+      const raw = customer.address ?? customer.addresses;
+      const addresses = Array.isArray(raw) ? raw : (typeof raw === 'string' ? (JSON.parse(raw || '[]') || []) : []);
+      const defaultAddress = addresses.length > 0 ? (addresses.find(addr => addr.isDefault) || addresses[0]) : null;
+
+      return {
+        'Name': customer.name,
+        'Email': customer.email || '',
+        'Phone': customer.phone || '',
+        'Business Name': customer.businessName || customer.business_name || '',
+        'Business Type': customer.businessType || '',
+        'Tax ID': customer.taxId || '',
+        'Customer Tier': customer.customerTier || '',
+        'Credit Limit': customer.creditLimit || 0,
+        'Opening Balance': customer.openingBalance || customer.opening_balance || 0,
+        'Current Balance': customer.currentBalance || 0,
+        'Payment Terms': customer.paymentTerms || '',
+        'Street': defaultAddress?.street || defaultAddress?.addressLine1 || defaultAddress?.address || '',
+        'City': defaultAddress?.city || '',
+        'State': defaultAddress?.state || '',
+        'Zip Code': defaultAddress?.zipCode || '',
+        'Country': defaultAddress?.country || '',
+        'Status': customer.status || 'active',
+        'Notes': customer.notes || '',
+        'Created Date': customer.createdAt ? new Date(customer.createdAt).toISOString().split('T')[0] : ''
+      };
+    });
     
     // Create Excel workbook
     const workbook = XLSX.utils.book_new();
@@ -860,8 +860,14 @@ router.post('/export/excel', [auth, requirePermission('view_customers')], async 
       { wch: 15 }, // Tax ID
       { wch: 15 }, // Customer Tier
       { wch: 12 }, // Credit Limit
+      { wch: 15 }, // Opening Balance
       { wch: 15 }, // Current Balance
       { wch: 15 }, // Payment Terms
+      { wch: 30 }, // Address
+      { wch: 15 }, // City
+      { wch: 15 }, // State
+      { wch: 10 }, // Zip Code
+      { wch: 15 }, // Country
       { wch: 10 }, // Status
       { wch: 30 }, // Notes
       { wch: 12 }  // Created Date
@@ -932,7 +938,13 @@ router.get('/template/excel', [auth, requirePermission('create_customers')], (re
         'Tax ID': '12-3456789',
         'Customer Tier': 'bronze',
         'Credit Limit': '5000',
-        'Payment Terms': 'net30',
+        'Opening Balance': '0',
+        'Payment Terms': 'cash',
+        'Street': '123 Main St',
+        'City': 'New York',
+        'State': 'NY',
+        'Zip Code': '10001',
+        'Country': 'USA',
         'Status': 'active',
         'Notes': 'Sample customer for template'
       }
@@ -952,7 +964,13 @@ router.get('/template/excel', [auth, requirePermission('create_customers')], (re
       { wch: 15 }, // Tax ID
       { wch: 15 }, // Customer Tier
       { wch: 12 }, // Credit Limit
+      { wch: 15 }, // Opening Balance
       { wch: 15 }, // Payment Terms
+      { wch: 30 }, // Street
+      { wch: 15 }, // City
+      { wch: 15 }, // State
+      { wch: 10 }, // Zip Code
+      { wch: 15 }, // Country
       { wch: 10 }, // Status
       { wch: 30 }  // Notes
     ];
@@ -987,7 +1005,7 @@ router.get('/template/excel', [auth, requirePermission('create_customers')], (re
 // @access  Private
 router.get('/:id/audit-logs', [
   auth,
-  validateCustomerIdParam,
+  validateUuidParam('id'), handleValidationErrors,
   requirePermission('view_audit_logs')
 ], async (req, res) => {
   try {
@@ -1012,7 +1030,7 @@ router.get('/:id/audit-logs', [
 // @access  Private
 router.get('/:id/transactions', [
   auth,
-  validateCustomerIdParam,
+  validateUuidParam('id'), handleValidationErrors,
   requirePermission('view_customer_transactions')
 ], async (req, res) => {
   try {
@@ -1039,7 +1057,7 @@ router.get('/:id/transactions', [
 // @access  Private
 router.get('/:id/overdue', [
   auth,
-  validateCustomerIdParam,
+  validateUuidParam('id'), handleValidationErrors,
   requirePermission('view_customer_transactions')
 ], async (req, res) => {
   try {
@@ -1056,7 +1074,7 @@ router.get('/:id/overdue', [
 // @access  Private
 router.get('/:id/aging', [
   auth,
-  validateCustomerIdParam,
+  validateUuidParam('id'), handleValidationErrors,
   requirePermission('view_customer_reports')
 ], async (req, res) => {
   try {
@@ -1073,11 +1091,11 @@ router.get('/:id/aging', [
 // @access  Private
 router.post('/:id/apply-payment', [
   auth,
-  validateCustomerIdParam,
+  validateUuidParam('id'), handleValidationErrors,
   requirePermission('create_customer_transactions'),
   body('paymentAmount').isFloat({ min: 0.01 }).withMessage('Payment amount must be positive'),
   body('applications').isArray().withMessage('Applications must be an array'),
-  body('applications.*.invoiceId').isMongoId().withMessage('Valid invoice ID is required'),
+  body('applications.*.invoiceId').isUUID(4).withMessage('Valid invoice ID is required'),
   body('applications.*.amount').isFloat({ min: 0.01 }).withMessage('Application amount must be positive')
 ], async (req, res) => {
   try {
@@ -1142,7 +1160,7 @@ router.post('/credit-policy/check-suspensions', [
 // @access  Private
 router.get('/:id/credit-score', [
   auth,
-  validateCustomerIdParam,
+  validateUuidParam('id'), handleValidationErrors,
   requirePermission('view_customer_reports')
 ], async (req, res) => {
   try {

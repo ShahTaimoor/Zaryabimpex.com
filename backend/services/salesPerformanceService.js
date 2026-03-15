@@ -1,9 +1,57 @@
-const SalesPerformance = require('../models/SalesPerformance');
-const Sales = require('../models/Sales');
-const Product = require('../models/Product');
-const Customer = require('../models/Customer');
-const User = require('../models/User');
-const Category = require('../models/Category');
+const SalesPerformanceRepository = require('../repositories/postgres/SalesPerformanceRepository');
+const SalesRepository = require('../repositories/SalesRepository');
+const ProductRepository = require('../repositories/postgres/ProductRepository');
+const CustomerRepository = require('../repositories/postgres/CustomerRepository');
+const UserRepository = require('../repositories/postgres/UserRepository');
+const CategoryRepository = require('../repositories/postgres/CategoryRepository');
+
+async function getSalesProductPerformance(dateFrom, dateTo, limit = 10) {
+  const sales = await SalesRepository.findAll({ dateFrom, dateTo, status: 'completed' }, { limit: 5000 });
+  const byProduct = {};
+  for (const sale of sales) {
+    const items = typeof sale.items === 'string' ? JSON.parse(sale.items) : (sale.items || []);
+    for (const it of items) {
+      const pid = it.product?.id ?? it.product?._id ?? it.product ?? it.product_id;
+      if (!pid) continue;
+      const key = String(pid);
+      if (!byProduct[key]) {
+        byProduct[key] = { _id: pid, totalRevenue: 0, totalQuantity: 0, totalOrders: 0, costOfGoodsSold: 0 };
+      }
+      const rev = (Number(it.unit_price ?? it.unitPrice ?? 0) * Number(it.quantity ?? 0));
+      const cost = Number(it.unitCost ?? it.cost ?? it.unit_cost ?? it.cost_price ?? it.costPrice ?? 0) * Number(it.quantity ?? 0);
+      byProduct[key].totalRevenue += rev;
+      byProduct[key].totalQuantity += Number(it.quantity ?? 0);
+      byProduct[key].totalOrders += 1;
+      byProduct[key].costOfGoodsSold += cost;
+    }
+  }
+  let list = Object.values(byProduct).map(p => ({
+    ...p,
+    profit: p.totalRevenue - p.costOfGoodsSold,
+    margin: p.totalRevenue ? ((p.totalRevenue - p.costOfGoodsSold) / p.totalRevenue) * 100 : 0,
+    averageOrderValue: p.totalOrders ? p.totalRevenue / p.totalOrders : 0
+  }));
+  list.sort((a, b) => b.totalRevenue - a.totalRevenue);
+  return list.slice(0, limit);
+}
+
+async function getSalesSummaryForPeriod(startDate, endDate) {
+  const sales = await SalesRepository.findAll({ dateFrom: startDate, dateTo: endDate, status: 'completed' }, { limit: 10000 });
+  let totalRevenue = 0;
+  const customerSet = new Set();
+  for (const s of sales) {
+    totalRevenue += Number(s?.total ?? 0);
+    const cid = s.customer_id || s.customer;
+    if (cid) customerSet.add(String(cid));
+  }
+  const totalOrders = sales.length;
+  return {
+    totalRevenue,
+    totalOrders,
+    totalCustomers: customerSet.size,
+    averageOrderValue: totalOrders ? totalRevenue / totalOrders : 0
+  };
+}
 
 class SalesPerformanceService {
   constructor() {
@@ -42,32 +90,30 @@ class SalesPerformanceService {
       // Validate and set date range
       const dateRange = this.getDateRange(periodType, startDate, endDate);
       
-      // Generate report ID
       const reportId = await this.generateReportId();
-
-      // Create report document
-      const report = new SalesPerformance({
+      const reportName = this.generateReportName(reportType, periodType, dateRange);
+      const created = await SalesPerformanceRepository.create({
         reportId,
-        reportName: this.generateReportName(reportType, periodType, dateRange),
+        reportName,
         reportType,
         periodType,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
-        config: {
-          limit,
-          includeMetrics,
-          filters,
-          groupBy,
-          rankBy
-        },
-        status: 'generating',
-        generatedBy
+        config: { limit, includeMetrics, filters, groupBy, rankBy, status: 'generating', generatedBy }
       });
-
-      await report.save();
+      const report = {
+        id: created.id,
+        reportId,
+        reportName,
+        reportType,
+        periodType,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        config: { limit, includeMetrics, filters, groupBy, rankBy, status: 'generating', generatedBy },
+        status: 'generating'
+      };
 
       try {
-        // Generate report data based on type
         switch (reportType) {
           case 'top_products':
             await this.generateTopProductsData(report);
@@ -84,21 +130,20 @@ class SalesPerformanceService {
           default:
             throw new Error('Invalid report type');
         }
-
-        // Generate summary and comparison data
         await this.generateSummaryData(report);
         await this.generateComparisonData(report);
         await this.generateTimeSeriesData(report);
         await this.generateInsights(report);
-
-        // Mark as completed
         report.status = 'completed';
-        await report.save();
-
-        return report;
+        report.config = report.config || {};
+        report.config.status = 'completed';
+        await SalesPerformanceRepository.updateById(report.id, { config: report.config });
+        return { ...created, ...report };
       } catch (error) {
         report.status = 'failed';
-        await report.save();
+        report.config = report.config || {};
+        report.config.status = 'failed';
+        try { await SalesPerformanceRepository.updateById(report.id, { config: report.config }); } catch (_) {}
         throw error;
       }
     } catch (error) {
@@ -124,62 +169,9 @@ class SalesPerformanceService {
         matchCriteria.orderType = { $in: filters.orderTypes };
       }
 
-      // Aggregate product performance
-      const productPerformance = await Sales.aggregate([
-        { $match: matchCriteria },
-        { $unwind: '$items' },
-        {
-          $lookup: {
-            from: 'products',
-            localField: 'items.product',
-            foreignField: '_id',
-            as: 'productInfo'
-          }
-        },
-        { $unwind: '$productInfo' },
-        {
-          $group: {
-            _id: '$items.product',
-            product: { $first: '$productInfo' },
-            totalRevenue: {
-              $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] }
-            },
-            totalQuantity: { $sum: '$items.quantity' },
-            totalOrders: { $sum: 1 },
-            costOfGoodsSold: {
-              $sum: { $multiply: ['$productInfo.cost', '$items.quantity'] }
-            }
-          }
-        },
-        {
-          $addFields: {
-            profit: { $subtract: ['$totalRevenue', '$costOfGoodsSold'] },
-            margin: {
-              $cond: [
-                { $eq: ['$totalRevenue', 0] },
-                0,
-                {
-                  $multiply: [
-                    { $divide: [{ $subtract: ['$totalRevenue', '$costOfGoodsSold'] }, '$totalRevenue'] },
-                    100
-                  ]
-                }
-              ]
-            },
-            averageOrderValue: { $divide: ['$totalRevenue', '$totalOrders'] }
-          }
-        },
-        { $sort: { totalRevenue: -1 } },
-        { $limit: limit }
-      ]);
-
-      // Get previous period data for comparison
+      const productPerformance = await getSalesProductPerformance(startDate, endDate, limit);
       const previousPeriod = this.getPreviousPeriod(startDate, endDate, report.periodType);
-      const previousProductPerformance = await this.getProductPerformanceForPeriod(
-        previousPeriod.startDate,
-        previousPeriod.endDate,
-        productPerformance.map(p => p._id)
-      );
+      const previousProductPerformance = await getSalesProductPerformance(previousPeriod.startDate, previousPeriod.endDate, limit);
 
       // Format and rank products
       const topProducts = productPerformance.map((product, index) => {
@@ -214,7 +206,6 @@ class SalesPerformanceService {
       });
 
       report.topProducts = topProducts;
-      await report.save();
     } catch (error) {
       console.error('Error generating top products data:', error);
       throw error;
@@ -240,110 +231,18 @@ class SalesPerformanceService {
         matchCriteria.orderType = { $in: filters.orderTypes };
       }
 
-      // Aggregate customer performance
-      const customerPerformance = await Sales.aggregate([
-        { $match: matchCriteria },
-        {
-          $lookup: {
-            from: 'customers',
-            localField: 'customer',
-            foreignField: '_id',
-            as: 'customerInfo'
-          }
-        },
-        { $unwind: '$customerInfo' },
-        ...(filters.customerTiers && filters.customerTiers.length > 0
-          ? [{ $match: { 'customerInfo.customerTier': { $in: filters.customerTiers } } }]
-          : []),
-        ...(filters.businessTypes && filters.businessTypes.length > 0
-          ? [{ $match: { 'customerInfo.businessType': { $in: filters.businessTypes } } }]
-          : []),
-        {
-          $addFields: {
-            orderRevenue: {
-              $sum: {
-                $map: {
-                  input: { $ifNull: ['$items', []] },
-                  as: 'item',
-                  in: {
-                    $multiply: ['$$item.unitPrice', '$$item.quantity']
-                  }
-                }
-              }
-            },
-            orderCost: {
-              $sum: {
-                $map: {
-                  input: { $ifNull: ['$items', []] },
-                  as: 'item',
-                  in: {
-                    $multiply: [
-                      { $ifNull: ['$$item.unitCost', 0] },
-                      '$$item.quantity'
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
-          $group: {
-            _id: '$customer',
-            customer: { $first: '$customerInfo' },
-            totalRevenue: { $sum: '$orderRevenue' },
-            totalCost: { $sum: '$orderCost' },
-            totalOrders: { $sum: 1 },
-            lastOrderDate: { $max: '$createdAt' },
-            firstOrderDate: { $min: '$createdAt' }
-          }
-        },
-        {
-          $addFields: {
-            averageOrderValue: { $divide: ['$totalRevenue', '$totalOrders'] },
-            averageOrderFrequency: {
-              $divide: [
-                { $cond: [{ $lte: ['$totalOrders', 1] }, null, { $subtract: ['$lastOrderDate', '$firstOrderDate'] }] },
-                {
-                  $cond: [
-                    { $lte: ['$totalOrders', 1] },
-                    1,
-                    { $multiply: [MS_PER_DAY, { $subtract: ['$totalOrders', 1] }] }
-                  ]
-                }
-              ]
-            },
-            totalProfit: { $subtract: ['$totalRevenue', '$totalCost'] },
-            margin: {
-              $cond: [
-                { $eq: ['$totalRevenue', 0] },
-                0,
-                {
-                  $multiply: [
-                    { $divide: [{ $subtract: ['$totalRevenue', '$totalCost'] }, '$totalRevenue'] },
-                    100
-                  ]
-                }
-              ]
-            }
-          }
-        },
-        {
-          $sort: {
-            [rankBy === 'profit' ? 'totalProfit' : 'totalRevenue']: -1,
-            totalRevenue: -1
-          }
-        },
-        { $limit: limit }
-      ]);
+      const customerPerformanceRaw = await this.getCustomerPerformanceForPeriod(startDate, endDate, null);
+      const customerPerformance = customerPerformanceRaw
+        .map(c => ({
+          ...c,
+          averageOrderValue: c.totalOrders ? c.totalRevenue / c.totalOrders : 0,
+          margin: c.totalRevenue ? ((c.totalProfit || 0) / c.totalRevenue) * 100 : 0
+        }))
+        .sort((a, b) => (rankBy === 'profit' ? (b.totalProfit || 0) - (a.totalProfit || 0) : b.totalRevenue - a.totalRevenue))
+        .slice(0, limit);
 
-      // Get previous period data for comparison
       const previousPeriod = this.getPreviousPeriod(startDate, endDate, report.periodType);
-      const previousCustomerPerformance = await this.getCustomerPerformanceForPeriod(
-        previousPeriod.startDate,
-        previousPeriod.endDate,
-        customerPerformance.map(c => c._id)
-      );
+      const previousCustomerPerformance = await this.getCustomerPerformanceForPeriod(previousPeriod.startDate, previousPeriod.endDate, null);
 
       // Format and rank customers
       const topCustomers = customerPerformance.map((customer, index) => {
@@ -385,7 +284,6 @@ class SalesPerformanceService {
       });
 
       report.topCustomers = topCustomers;
-      await report.save();
     } catch (error) {
       console.error('Error generating top customers data:', error);
       throw error;
@@ -410,46 +308,13 @@ class SalesPerformanceService {
         matchCriteria.orderType = { $in: filters.orderTypes };
       }
 
-      // Aggregate sales rep performance
-      const salesRepPerformance = await Sales.aggregate([
-        { $match: matchCriteria },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'salesRep',
-            foreignField: '_id',
-            as: 'salesRepInfo'
-          }
-        },
-        { $unwind: '$salesRepInfo' },
-        {
-          $group: {
-            _id: '$salesRep',
-            salesRep: { $first: '$salesRepInfo' },
-            totalRevenue: { $sum: '$total' },
-            totalOrders: { $sum: 1 },
-            totalCustomers: { $addToSet: '$customer' },
-            totalUniqueCustomers: { $sum: 1 }
-          }
-        },
-        {
-          $addFields: {
-            totalCustomers: { $size: '$totalCustomers' },
-            averageOrderValue: { $divide: ['$totalRevenue', '$totalOrders'] },
-            conversionRate: { $divide: ['$totalOrders', '$totalUniqueCustomers'] }
-          }
-        },
-        { $sort: { totalRevenue: -1 } },
-        { $limit: limit }
-      ]);
-
-      // Get previous period data for comparison
+      const salesRepPerformanceRaw = await this.getSalesRepPerformanceForPeriod(startDate, endDate, null);
+      const salesRepPerformance = salesRepPerformanceRaw
+        .map(s => ({ ...s, averageOrderValue: s.totalOrders ? s.totalRevenue / s.totalOrders : 0, totalCustomers: s.totalOrders, conversionRate: 1 }))
+        .sort((a, b) => b.totalRevenue - a.totalRevenue)
+        .slice(0, limit);
       const previousPeriod = this.getPreviousPeriod(startDate, endDate, report.periodType);
-      const previousSalesRepPerformance = await this.getSalesRepPerformanceForPeriod(
-        previousPeriod.startDate,
-        previousPeriod.endDate,
-        salesRepPerformance.map(s => s._id)
-      );
+      const previousSalesRepPerformance = await this.getSalesRepPerformanceForPeriod(previousPeriod.startDate, previousPeriod.endDate, salesRepPerformance.map(s => s._id));
 
       // Format and rank sales reps
       const topSalesReps = salesRepPerformance.map((salesRep, index) => {
@@ -483,7 +348,6 @@ class SalesPerformanceService {
       });
 
       report.topSalesReps = topSalesReps;
-      await report.save();
     } catch (error) {
       console.error('Error generating top sales reps data:', error);
       throw error;
@@ -506,105 +370,13 @@ class SalesPerformanceService {
       const { startDate, endDate, config } = report;
       const { limit } = config;
 
-      // Aggregate category performance
-      const categoryPerformance = await Sales.aggregate([
-        {
-          $match: {
-            createdAt: { $gte: startDate, $lte: endDate },
-            status: 'completed'
-          }
-        },
-        { $unwind: '$items' },
-        {
-          $lookup: {
-            from: 'products',
-            localField: 'items.product',
-            foreignField: '_id',
-            as: 'productInfo'
-          }
-        },
-        { $unwind: '$productInfo' },
-        {
-          $lookup: {
-            from: 'categories',
-            localField: 'productInfo.category',
-            foreignField: '_id',
-            as: 'categoryInfo'
-          }
-        },
-        { $unwind: '$categoryInfo' },
-        {
-          $group: {
-            _id: '$productInfo.category',
-            category: { $first: '$categoryInfo' },
-            totalRevenue: {
-              $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] }
-            },
-            totalQuantity: { $sum: '$items.quantity' },
-            totalOrders: { $sum: 1 },
-            costOfGoodsSold: {
-              $sum: { $multiply: ['$productInfo.cost', '$items.quantity'] }
-            }
-          }
-        },
-        {
-          $addFields: {
-            profit: { $subtract: ['$totalRevenue', '$costOfGoodsSold'] },
-            margin: {
-              $cond: [
-                { $eq: ['$totalRevenue', 0] },
-                0,
-                {
-                  $multiply: [
-                    { $divide: [{ $subtract: ['$totalRevenue', '$costOfGoodsSold'] }, '$totalRevenue'] },
-                    100
-                  ]
-                }
-              ]
-            },
-            averageOrderValue: { $divide: ['$totalRevenue', '$totalOrders'] }
-          }
-        },
-        { $sort: { totalRevenue: -1 } },
-        { $limit: limit }
-      ]);
-
-      // Get previous period data for comparison
-      const previousPeriod = this.getPreviousPeriod(startDate, endDate, report.periodType);
-      const previousCategoryPerformance = await this.getCategoryPerformanceForPeriod(
-        previousPeriod.startDate,
-        previousPeriod.endDate,
-        categoryPerformance.map(c => c._id)
-      );
-
-      // Format and rank categories
-      const categoryPerformanceData = categoryPerformance.map((category, index) => {
-        const previousData = previousCategoryPerformance.find(c => c._id.toString() === category._id.toString());
-        
-        return {
-          category: category._id,
-          metrics: {
-            totalRevenue: category.totalRevenue,
-            totalQuantity: category.totalQuantity,
-            totalOrders: category.totalOrders,
-            averageOrderValue: category.averageOrderValue,
-            profit: category.profit,
-            margin: category.margin
-          },
-          trend: {
-            previousPeriodRevenue: previousData?.totalRevenue || 0,
-            revenueChange: category.totalRevenue - (previousData?.totalRevenue || 0),
-            revenueChangePercentage: this.calculatePercentageChange(
-              category.totalRevenue,
-              previousData?.totalRevenue || 0
-            )
-          },
-          rank: index + 1
-        };
-      });
-
-      report.categoryPerformance = categoryPerformanceData;
-      await report.save();
+      const categoryPerformance = await this.getCategoryPerformanceForPeriod(startDate, endDate, null);
+      report.categoryPerformance = (categoryPerformance || []).map((cat, index) => ({
+        category: cat._id,
+        metrics: { totalRevenue: cat.totalRevenue || 0 },
+        trend: {},
+        rank: index + 1
+      }));
     } catch (error) {
       console.error('Error generating category performance data:', error);
       throw error;
@@ -616,32 +388,8 @@ class SalesPerformanceService {
     try {
       const { startDate, endDate } = report;
 
-      // Get overall summary
-      const summary = await Sales.aggregate([
-        {
-          $match: {
-            createdAt: { $gte: startDate, $lte: endDate },
-            status: 'completed'
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalRevenue: { $sum: '$total' },
-            totalOrders: { $sum: 1 },
-            totalCustomers: { $addToSet: '$customer' },
-            newCustomers: { $addToSet: '$customer' }
-          }
-        },
-        {
-          $addFields: {
-            totalCustomers: { $size: '$totalCustomers' },
-            averageOrderValue: { $divide: ['$totalRevenue', '$totalOrders'] }
-          }
-        }
-      ]);
-
-      const summaryData = summary[0] || {
+      const summaryData = await getSalesSummaryForPeriod(startDate, endDate);
+      const _summaryData = summaryData || {
         totalRevenue: 0,
         totalOrders: 0,
         totalCustomers: 0,
@@ -666,14 +414,13 @@ class SalesPerformanceService {
         averageMargin: profitData.averageMargin,
         totalCustomers: summaryData.totalCustomers,
         newCustomers: await this.getNewCustomersCount(startDate, endDate),
-        returningCustomers: summaryData.totalCustomers - await this.getNewCustomersCount(startDate, endDate),
+        returningCustomers: Math.max(0, summaryData.totalCustomers - await this.getNewCustomersCount(startDate, endDate)),
         topProductRevenue,
         topCustomerRevenue,
         topCustomerProfit,
         topSalesRepRevenue
       };
 
-      await report.save();
     } catch (error) {
       console.error('Error generating summary data:', error);
       throw error;
@@ -686,31 +433,7 @@ class SalesPerformanceService {
       const { startDate, endDate, periodType } = report;
       const previousPeriod = this.getPreviousPeriod(startDate, endDate, periodType);
 
-      // Get previous period summary
-      const previousSummary = await Sales.aggregate([
-        {
-          $match: {
-            createdAt: { $gte: previousPeriod.startDate, $lte: previousPeriod.endDate },
-            status: 'completed'
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalRevenue: { $sum: '$total' },
-            totalOrders: { $sum: 1 },
-            totalCustomers: { $addToSet: '$customer' }
-          }
-        },
-        {
-          $addFields: {
-            totalCustomers: { $size: '$totalCustomers' },
-            averageOrderValue: { $divide: ['$totalRevenue', '$totalOrders'] }
-          }
-        }
-      ]);
-
-      const previousData = previousSummary[0] || {
+      const previousData = await getSalesSummaryForPeriod(previousPeriod.startDate, previousPeriod.endDate) || {
         totalRevenue: 0,
         totalOrders: 0,
         totalCustomers: 0,
@@ -749,7 +472,6 @@ class SalesPerformanceService {
         }
       };
 
-      await report.save();
     } catch (error) {
       console.error('Error generating comparison data:', error);
       throw error;
@@ -761,54 +483,30 @@ class SalesPerformanceService {
     try {
       const { startDate, endDate, periodType } = report;
       
-      // Determine grouping interval based on period type
-      let groupInterval;
-      switch (periodType) {
-        case 'daily':
-          groupInterval = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
-          break;
-        case 'weekly':
-          groupInterval = { $dateToString: { format: '%Y-W%U', date: '$createdAt' } };
-          break;
-        case 'monthly':
-          groupInterval = { $dateToString: { format: '%Y-%m', date: '$createdAt' } };
-          break;
-        case 'quarterly':
-          groupInterval = { $dateToString: { format: '%Y-Q%q', date: '$createdAt' } };
-          break;
-        case 'yearly':
-          groupInterval = { $dateToString: { format: '%Y', date: '$createdAt' } };
-          break;
-        default:
-          groupInterval = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
+      const sales = await SalesRepository.findAll({ dateFrom: startDate, dateTo: endDate, status: 'completed' }, { limit: 5000 });
+      const byDate = {};
+      for (const s of sales) {
+        const d = new Date(s.sale_date || s.created_at || s.createdAt);
+        let key;
+        if (periodType === 'monthly') key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        else if (periodType === 'yearly') key = `${d.getFullYear()}`;
+        else key = d.toISOString().split('T')[0];
+        if (!byDate[key]) byDate[key] = { date: d, totalRevenue: 0, totalOrders: 0, totalQuantity: 0, totalCustomers: new Set() };
+        byDate[key].totalRevenue += Number(s.total ?? 0);
+        byDate[key].totalOrders += 1;
+        const items = typeof s.items === 'string' ? JSON.parse(s.items) : (s.items || []);
+        for (const it of items) byDate[key].totalQuantity += Number(it.quantity ?? 0);
+        if (s.customer_id || s.customer) byDate[key].totalCustomers.add(String(s.customer_id || s.customer));
       }
-
-      const timeSeriesData = await Sales.aggregate([
-        {
-          $match: {
-            createdAt: { $gte: startDate, $lte: endDate },
-            status: 'completed'
-          }
-        },
-        {
-          $group: {
-            _id: groupInterval,
-            date: { $first: '$createdAt' },
-            totalRevenue: { $sum: '$total' },
-            totalOrders: { $sum: 1 },
-            totalQuantity: { $sum: { $sum: '$items.quantity' } },
-            totalCustomers: { $addToSet: '$customer' }
-          }
-        },
-        {
-          $addFields: {
-            averageOrderValue: { $divide: ['$totalRevenue', '$totalOrders'] },
-            newCustomers: { $size: '$totalCustomers' },
-            returningCustomers: { $size: '$totalCustomers' } // This would need more complex logic
-          }
-        },
-        { $sort: { date: 1 } }
-      ]);
+      const timeSeriesData = Object.entries(byDate).map(([_, v]) => ({
+        date: v.date,
+        totalRevenue: v.totalRevenue,
+        totalOrders: v.totalOrders,
+        totalQuantity: v.totalQuantity,
+        averageOrderValue: v.totalOrders ? v.totalRevenue / v.totalOrders : 0,
+        newCustomers: v.totalCustomers.size,
+        returningCustomers: v.totalCustomers.size
+      })).sort((a, b) => new Date(a.date) - new Date(b.date));
 
       report.timeSeriesData = timeSeriesData.map(item => ({
         date: item.date,
@@ -822,19 +520,15 @@ class SalesPerformanceService {
         }
       }));
 
-      await report.save();
     } catch (error) {
       console.error('Error generating time series data:', error);
       throw error;
     }
   }
 
-  // Generate insights and recommendations
   async generateInsights(report) {
     try {
-      const insights = report.generateInsights();
-      report.insights = insights;
-      await report.save();
+      report.insights = report.insights || [];
     } catch (error) {
       console.error('Error generating insights:', error);
       throw error;
@@ -921,213 +615,94 @@ class SalesPerformanceService {
     return `${typeNames[reportType]} Report - ${periodNames[periodType]} (${dateRange.startDate.toLocaleDateString()} - ${dateRange.endDate.toLocaleDateString()})`;
   }
 
-  // Additional helper methods for data retrieval
   async getProductPerformanceForPeriod(startDate, endDate, productIds) {
-    return await Sales.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate },
-          status: 'completed',
-          'items.product': { $in: productIds }
-        }
-      },
-      { $unwind: '$items' },
-      {
-        $match: {
-          'items.product': { $in: productIds }
-        }
-      },
-      {
-        $group: {
-          _id: '$items.product',
-          totalRevenue: {
-            $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] }
-          },
-          totalQuantity: { $sum: '$items.quantity' }
-        }
-      }
-    ]);
+    const list = await getSalesProductPerformance(startDate, endDate, 10000);
+    if (!productIds || productIds.length === 0) return list;
+    const set = new Set(productIds.map(id => String(id)));
+    return list.filter(p => set.has(String(p._id)));
   }
 
   async getCustomerPerformanceForPeriod(startDate, endDate, customerIds) {
-    return await Sales.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate },
-          status: 'completed',
-          customer: { $in: customerIds }
-        }
-      },
-      {
-        $addFields: {
-          orderRevenue: {
-            $sum: {
-              $map: {
-                input: { $ifNull: ['$items', []] },
-                as: 'item',
-                in: {
-                  $multiply: ['$$item.unitPrice', '$$item.quantity']
-                }
-              }
-            }
-          },
-          orderCost: {
-            $sum: {
-              $map: {
-                input: { $ifNull: ['$items', []] },
-                as: 'item',
-                in: {
-                  $multiply: [
-                    { $ifNull: ['$$item.unitCost', 0] },
-                    '$$item.quantity'
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      {
-        $group: {
-          _id: '$customer',
-          totalRevenue: { $sum: '$orderRevenue' },
-          totalOrders: { $sum: 1 },
-          totalProfit: { $sum: { $subtract: ['$orderRevenue', '$orderCost'] } }
-        }
+    const sales = await SalesRepository.findAll({ dateFrom: startDate, dateTo: endDate, status: 'completed' }, { limit: 5000 });
+    const byCustomer = {};
+    for (const sale of sales) {
+      const cid = (sale.customer_id || sale.customer)?.toString?.();
+      if (!cid || (customerIds && customerIds.length && !customerIds.map(String).includes(cid))) continue;
+      if (!byCustomer[cid]) byCustomer[cid] = { _id: cid, totalRevenue: 0, totalOrders: 0, totalProfit: 0 };
+      const items = typeof sale.items === 'string' ? JSON.parse(sale.items) : (sale.items || []);
+      let orderRev = 0, orderCost = 0;
+      for (const it of items) {
+        orderRev += Number(it.unit_price ?? it.unitPrice ?? 0) * Number(it.quantity ?? 0);
+        orderCost += Number(it.unit_cost ?? it.cost ?? 0) * Number(it.quantity ?? 0);
       }
-    ]);
+      byCustomer[cid].totalRevenue += orderRev;
+      byCustomer[cid].totalOrders += 1;
+      byCustomer[cid].totalProfit += orderRev - orderCost;
+    }
+    return Object.values(byCustomer);
   }
 
   async getSalesRepPerformanceForPeriod(startDate, endDate, salesRepIds) {
-    return await Sales.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate },
-          status: 'completed',
-          salesRep: { $in: salesRepIds }
-        }
-      },
-      {
-        $group: {
-          _id: '$salesRep',
-          totalRevenue: { $sum: '$total' },
-          totalOrders: { $sum: 1 }
-        }
-      }
-    ]);
+    const sales = await SalesRepository.findAll({ dateFrom: startDate, dateTo: endDate, status: 'completed' }, { limit: 5000 });
+    const byRep = {};
+    for (const sale of sales) {
+      const rid = (sale.created_by || sale.sales_rep || sale.salesRep)?.toString?.();
+      if (!rid || (salesRepIds && salesRepIds.length && !salesRepIds.map(String).includes(rid))) continue;
+      if (!byRep[rid]) byRep[rid] = { _id: rid, totalRevenue: 0, totalOrders: 0 };
+      byRep[rid].totalRevenue += Number(sale?.total ?? 0);
+      byRep[rid].totalOrders += 1;
+    }
+    return Object.values(byRep);
   }
 
   async getCategoryPerformanceForPeriod(startDate, endDate, categoryIds) {
-    return await Sales.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate },
-          status: 'completed'
-        }
-      },
-      { $unwind: '$items' },
-      {
-        $lookup: {
-          from: 'products',
-          localField: 'items.product',
-          foreignField: '_id',
-          as: 'productInfo'
-        }
-      },
-      { $unwind: '$productInfo' },
-      {
-        $match: {
-          'productInfo.category': { $in: categoryIds }
-        }
-      },
-      {
-        $group: {
-          _id: '$productInfo.category',
-          totalRevenue: {
-            $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] }
-          }
-        }
-      }
-    ]);
+    const list = await getSalesProductPerformance(startDate, endDate, 10000);
+    const products = await ProductRepository.findAll({}, { limit: 5000 });
+    const productToCategory = {};
+    for (const p of products) productToCategory[String(p.id || p._id)] = p.category_id || p.category;
+    const byCategory = {};
+    for (const row of list) {
+      const catId = productToCategory[String(row._id)]?.toString?.();
+      if (!catId || (categoryIds && categoryIds.length && !categoryIds.map(String).includes(catId))) continue;
+      if (!byCategory[catId]) byCategory[catId] = { _id: catId, totalRevenue: 0 };
+      byCategory[catId].totalRevenue += row.totalRevenue || 0;
+    }
+    return Object.values(byCategory);
   }
 
   async calculateTotalProfit(startDate, endDate) {
-    const profitData = await Sales.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate },
-          status: 'completed'
-        }
-      },
-      { $unwind: '$items' },
-      {
-        $lookup: {
-          from: 'products',
-          localField: 'items.product',
-          foreignField: '_id',
-          as: 'productInfo'
-        }
-      },
-      { $unwind: '$productInfo' },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: {
-            $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] }
-          },
-          totalCost: {
-            $sum: { $multiply: ['$productInfo.cost', '$items.quantity'] }
-          }
-        }
-      },
-      {
-        $addFields: {
-          totalProfit: { $subtract: ['$totalRevenue', '$totalCost'] },
-          averageMargin: {
-            $cond: [
-              { $eq: ['$totalRevenue', 0] },
-              0,
-              {
-                $multiply: [
-                  { $divide: [{ $subtract: ['$totalRevenue', '$totalCost'] }, '$totalRevenue'] },
-                  100
-                ]
-              }
-            ]
-          }
-        }
+    const sales = await SalesRepository.findAll({ dateFrom: startDate, dateTo: endDate, status: 'completed' }, { limit: 5000 });
+    let totalRevenue = 0, totalCost = 0;
+    for (const sale of sales) {
+      const items = typeof sale.items === 'string' ? JSON.parse(sale.items) : (sale.items || []);
+      for (const it of items) {
+        totalRevenue += Number(it.unit_price ?? it.unitPrice ?? 0) * Number(it.quantity ?? 0);
+        totalCost += Number(it.unitCost ?? it.cost ?? it.unit_cost ?? it.cost_price ?? it.costPrice ?? 0) * Number(it.quantity ?? 0);
       }
-    ]);
-
-    return profitData[0] || { totalProfit: 0, averageMargin: 0 };
+    }
+    return { totalProfit: totalRevenue - totalCost, averageMargin: totalRevenue ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0 };
   }
 
   async getTotalQuantity(startDate, endDate) {
-    const quantityData = await Sales.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate },
-          status: 'completed'
-        }
-      },
-      { $unwind: '$items' },
-      {
-        $group: {
-          _id: null,
-          totalQuantity: { $sum: '$items.quantity' }
-        }
-      }
-    ]);
-
-    return quantityData[0]?.totalQuantity || 0;
+    const sales = await SalesRepository.findAll({ dateFrom: startDate, dateTo: endDate, status: 'completed' }, { limit: 5000 });
+    let total = 0;
+    for (const sale of sales) {
+      const items = typeof sale.items === 'string' ? JSON.parse(sale.items) : (sale.items || []);
+      for (const it of items) total += Number(it.quantity ?? 0);
+    }
+    return total;
   }
 
   async getNewCustomersCount(startDate, endDate) {
-    const newCustomers = await Customer.countDocuments({
-      createdAt: { $gte: startDate, $lte: endDate }
-    });
-
-    return newCustomers;
+    const customers = await CustomerRepository.findAll({}, { limit: 10000 });
+    let count = 0;
+    const start = new Date(startDate).getTime();
+    const end = new Date(endDate).getTime();
+    for (const c of customers) {
+      const t = new Date(c.created_at || c.createdAt || 0).getTime();
+      if (t >= start && t <= end) count++;
+    }
+    return count;
   }
 
   // Get all sales performance reports
@@ -1146,41 +721,12 @@ class SalesPerformanceService {
       } = filters;
 
       const skip = (page - 1) * limit;
-      const query = {};
-
-      // Apply filters
-      if (reportType) query.reportType = reportType;
-      if (status) query.status = status;
-      if (generatedBy) query.generatedBy = generatedBy;
-
-      // Date range filter - use Pakistan timezone if dates are strings
-      if (startDate || endDate) {
-        const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
-        query.generatedAt = {};
-        if (startDate) {
-          query.generatedAt.$gte = typeof startDate === 'string' 
-            ? getStartOfDayPakistan(startDate) 
-            : startDate;
-        }
-        if (endDate) {
-          query.generatedAt.$lte = typeof endDate === 'string'
-            ? getEndOfDayPakistan(endDate)
-            : endDate;
-        }
-      }
-
-      const reports = await SalesPerformance.find(query)
-        .populate([
-          { path: 'generatedBy', select: 'firstName lastName email' },
-          { path: 'topProducts.product', select: 'name description price' },
-          { path: 'topCustomers.customer', select: 'displayName email businessType' },
-          { path: 'topSalesReps.salesRep', select: 'firstName lastName email' }
-        ])
-        .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
-        .skip(skip)
-        .limit(limit);
-
-      const total = await SalesPerformance.countDocuments(query);
+      const repoFilters = {};
+      if (reportType) repoFilters.reportType = reportType;
+      if (startDate) repoFilters.dateFrom = startDate;
+      if (endDate) repoFilters.dateTo = endDate;
+      const total = await SalesPerformanceRepository.count(repoFilters);
+      const reports = await SalesPerformanceRepository.findAll(repoFilters, { limit, offset: skip });
 
       return {
         reports,
@@ -1201,19 +747,8 @@ class SalesPerformanceService {
   // Get sales performance report by ID
   async getSalesPerformanceReportById(reportId) {
     try {
-      const report = await SalesPerformance.findOne({ reportId })
-        .populate([
-          { path: 'generatedBy', select: 'firstName lastName email' },
-          { path: 'topProducts.product', select: 'name description price cost category' },
-          { path: 'topCustomers.customer', select: 'displayName email businessType customerTier' },
-          { path: 'topSalesReps.salesRep', select: 'firstName lastName email role' },
-          { path: 'categoryPerformance.category', select: 'name description' }
-        ]);
-
-      if (!report) {
-        throw new Error('Sales performance report not found');
-      }
-
+      const report = await SalesPerformanceRepository.findOne({ reportId });
+      if (!report) throw new Error('Sales performance report not found');
       return report;
     } catch (error) {
       console.error('Error fetching sales performance report:', error);
@@ -1224,12 +759,9 @@ class SalesPerformanceService {
   // Delete sales performance report
   async deleteSalesPerformanceReport(reportId, deletedBy) {
     try {
-      const report = await SalesPerformance.findOne({ reportId });
-      if (!report) {
-        throw new Error('Sales performance report not found');
-      }
-
-      await SalesPerformance.findOneAndDelete({ reportId });
+      const report = await SalesPerformanceRepository.findOne({ reportId });
+      if (!report) throw new Error('Sales performance report not found');
+      await SalesPerformanceRepository.deleteByReportId(reportId);
       return { message: 'Sales performance report deleted successfully' };
     } catch (error) {
       console.error('Error deleting sales performance report:', error);

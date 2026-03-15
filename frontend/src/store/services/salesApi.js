@@ -27,12 +27,28 @@ export const salesApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         { type: 'Sales', id: 'LIST' },
-        { type: 'Products', id: 'LIST' }, // Invalidate products to refresh stock levels
-        { type: 'Inventory', id: 'LIST' }, // Invalidate inventory cache
-        { type: 'Customers', id: 'LIST' }, // Invalidate customers to refresh credit information
+        { type: 'Sales', id: 'TODAY_SUMMARY' },
+        { type: 'Sales', id: 'PERIOD_SUMMARY' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Customers', id: 'LIST' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
         { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'SALES_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'CUSTOMER_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     getOrders: builder.query({
@@ -80,10 +96,29 @@ export const salesApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Sales', id },
         { type: 'Sales', id: 'LIST' },
-        { type: 'Sales', id: 'CCTV_LIST' }, // Invalidate CCTV orders list too
-        { type: 'Products', id: 'LIST' }, // Invalidate products to refresh stock levels
-        { type: 'Inventory', id: 'LIST' }, // Invalidate inventory cache
-        { type: 'Customers', id: 'LIST' }, // Invalidate customers to refresh credit information
+        { type: 'Sales', id: 'TODAY_SUMMARY' },
+        { type: 'Sales', id: 'PERIOD_SUMMARY' },
+        { type: 'Sales', id: 'CCTV_LIST' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Customers', id: 'LIST' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'SALES_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'CUSTOMER_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     deleteOrder: builder.mutation({
@@ -94,6 +129,27 @@ export const salesApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'Sales', id },
         { type: 'Sales', id: 'LIST' },
+        { type: 'Sales', id: 'TODAY_SUMMARY' },
+        { type: 'Sales', id: 'PERIOD_SUMMARY' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Customers', id: 'LIST' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'SALES_REPORT' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'CUSTOMER_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
     getLastPrices: builder.query({
@@ -116,6 +172,85 @@ export const salesApi = api.injectEndpoints({
           ]
           : [{ type: 'Sales', id: 'CCTV_LIST' }],
     }),
+    postMissingSalesToLedger: builder.mutation({
+      query: (params = {}) => ({
+        url: 'sales/post-missing-to-ledger',
+        method: 'post',
+        params: params?.dateFrom || params?.dateTo ? { dateFrom: params.dateFrom, dateTo: params.dateTo } : undefined,
+      }),
+      invalidatesTags: [
+        { type: 'Sales', id: 'LIST' },
+        { type: 'Sales', id: 'TODAY_SUMMARY' },
+        { type: 'Sales', id: 'PERIOD_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
+      ],
+    }),
+    syncSalesLedger: builder.mutation({
+      query: (params = {}) => ({
+        url: 'sales/sync-ledger',
+        method: 'post',
+        params: params?.dateFrom || params?.dateTo ? { dateFrom: params.dateFrom, dateTo: params.dateTo } : undefined,
+      }),
+      invalidatesTags: [
+        { type: 'Sales', id: 'LIST' },
+        { type: 'Sales', id: 'TODAY_SUMMARY' },
+        { type: 'Sales', id: 'PERIOD_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
+      ],
+    }),
+    exportExcel: builder.mutation({
+      query: (filters) => ({
+        url: 'sales/export/excel',
+        method: 'post',
+        data: { filters: filters || {} },
+      }),
+    }),
+    exportCSV: builder.mutation({
+      query: (filters) => ({
+        url: 'sales/export/csv',
+        method: 'post',
+        data: { filters: filters || {} },
+      }),
+    }),
+    exportPDF: builder.mutation({
+      query: (filters) => ({
+        url: 'sales/export/pdf',
+        method: 'post',
+        data: { filters: filters || {} },
+      }),
+    }),
+    exportJSON: builder.mutation({
+      query: (filters) => ({
+        url: 'sales/export/json',
+        method: 'post',
+        data: { filters: filters || {} },
+      }),
+    }),
+    downloadExportFile: builder.query({
+      query: (filename) => ({
+        url: `sales/download/${filename}`,
+        method: 'get',
+        responseHandler: (response) => response.blob(),
+      }),
+    }),
   }),
   overrideExisting: false,
 });
@@ -134,5 +269,12 @@ export const {
   useGetLastPricesQuery,
   useLazyGetLastPricesQuery,
   useGetCCTVOrdersQuery,
+  usePostMissingSalesToLedgerMutation,
+  useSyncSalesLedgerMutation,
+  useExportExcelMutation,
+  useExportCSVMutation,
+  useExportPDFMutation,
+  useExportJSONMutation,
+  useLazyDownloadExportFileQuery,
 } = salesApi;
 

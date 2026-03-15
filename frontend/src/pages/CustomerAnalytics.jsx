@@ -20,6 +20,8 @@ import {
 import { useGetSummaryQuery, useGetAnalyticsQuery } from '../store/services/customerAnalyticsApi';
 import { formatCurrency } from '../utils/formatters';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { showErrorToast, handleApiError } from '../utils/errorHandler';
 
 const CustomerAnalytics = () => {
@@ -203,20 +205,21 @@ const CustomerAnalytics = () => {
             <option value="high">High</option>
             <option value="very_high">Very High</option>
           </select>
-          <input
+          <Input
             type="number"
             placeholder="Min Orders"
             value={filters.minOrders}
             onChange={(e) => setFilters({ ...filters, minOrders: parseInt(e.target.value) || 0 })}
-            className="input"
-            min="0"
+            min={0}
           />
-          <button
+          <Button
             onClick={() => setFilters({ segment: '', churnRisk: '', minOrders: 0 })}
-            className="btn btn-secondary btn-md w-full sm:w-auto"
+            variant="secondary"
+            size="default"
+            className="w-full sm:w-auto"
           >
             Clear Filters
-          </button>
+          </Button>
         </div>
       </div>
 

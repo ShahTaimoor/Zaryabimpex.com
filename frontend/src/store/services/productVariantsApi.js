@@ -31,7 +31,17 @@ export const productVariantsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Products', id: 'VARIANTS_LIST' }],
+      invalidatesTags: [
+        { type: 'Products', id: 'VARIANTS_LIST' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'LOW_STOCK' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     updateVariant: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -42,6 +52,14 @@ export const productVariantsApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { id }) => [
         { type: 'Products', id },
         { type: 'Products', id: 'VARIANTS_LIST' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'LOW_STOCK' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
     deleteVariant: builder.mutation({
@@ -52,6 +70,14 @@ export const productVariantsApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, id) => [
         { type: 'Products', id },
         { type: 'Products', id: 'VARIANTS_LIST' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'LOW_STOCK' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
     getVariantsByBaseProduct: builder.query({

@@ -10,8 +10,8 @@ const { body, param, query } = require('express-validator');
 router.post('/', [
   auth,
   requirePermission('merge_customers'),
-  body('sourceCustomerId').isMongoId().withMessage('Valid source customer ID is required'),
-  body('targetCustomerId').isMongoId().withMessage('Valid target customer ID is required'),
+  body('sourceCustomerId').isUUID(4).withMessage('Valid source customer ID is required'),
+  body('targetCustomerId').isUUID(4).withMessage('Valid target customer ID is required'),
   body('mergeAddresses').optional().isBoolean().withMessage('mergeAddresses must be boolean'),
   body('mergeNotes').optional().isBoolean().withMessage('mergeNotes must be boolean')
 ], async (req, res) => {

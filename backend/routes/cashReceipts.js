@@ -5,10 +5,10 @@ const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const cashReceiptService = require('../services/cashReceiptService');
-const CashReceipt = require('../models/CashReceipt'); // Still needed for create/update operations
-const Sales = require('../models/Sales');
-const Customer = require('../models/Customer');
-const Supplier = require('../models/Supplier');
+const cashReceiptRepository = require('../repositories/postgres/CashReceiptRepository');
+const customerRepository = require('../repositories/postgres/CustomerRepository');
+const supplierRepository = require('../repositories/postgres/SupplierRepository');
+const AccountingService = require('../services/accountingService');
 
 // @route   GET /api/cash-receipts
 // @desc    Get all cash receipts with filtering and pagination
@@ -48,52 +48,45 @@ router.get('/', [
       particular
     } = req.query;
 
-    // Build filter object
+    // Build filter object for PostgreSQL
+    // Normalize dates to start/end of day for proper filtering
+    const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
     const filter = {};
-
-    // Date range filter - use dateFilter from middleware (Pakistan timezone)
-    if (req.dateFilter && Object.keys(req.dateFilter).length > 0) {
-      Object.assign(filter, req.dateFilter);
-    }
     
-    // Get date range for service call (for backward compatibility)
-    const fromDate = req.dateRange?.startDate || null;
-    const toDate = req.dateRange?.endDate || null;
-    const dateFrom = req.dateRange?.startDate || null;
-    const dateTo = req.dateRange?.endDate || null;
-
-    // Voucher code filter
+    if (req.dateRange?.startDate) {
+      // Normalize to start of day (00:00:00)
+      filter.startDate = getStartOfDayPakistan(req.dateRange.startDate) || new Date(req.dateRange.startDate);
+    }
+    if (req.dateRange?.endDate) {
+      // Normalize to end of day (23:59:59.999)
+      filter.endDate = getEndOfDayPakistan(req.dateRange.endDate) || new Date(req.dateRange.endDate);
+    }
     if (voucherCode) {
-      filter.voucherCode = { $regex: voucherCode, $options: 'i' };
+      filter.voucherCode = voucherCode;
     }
-
-    // Amount filter
     if (amount) {
-      filter.amount = parseFloat(amount);
+      filter.amount = amount;
     }
-
-    // Particular filter
     if (particular) {
-      filter.particular = { $regex: particular, $options: 'i' };
+      filter.particular = particular;
     }
 
-    const result = await cashReceiptService.getCashReceipts({
-      page,
-      limit,
-      fromDate,
-      toDate,
-      dateFrom,
-      dateTo,
-      voucherCode,
-      amount,
-      particular
+    // Get cash receipts from PostgreSQL using findWithPagination
+    const result = await cashReceiptRepository.findWithPagination(filter, {
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10)
     });
 
     res.json({
       success: true,
       data: {
         cashReceipts: result.cashReceipts,
-        pagination: result.pagination
+        pagination: {
+          currentPage: result.pagination.page,
+          totalPages: result.pagination.pages,
+          totalItems: result.pagination.total,
+          itemsPerPage: result.pagination.limit
+        }
       }
     });
   } catch (error) {
@@ -153,9 +146,9 @@ router.post('/', [
     })
     .withMessage('Amount must be a positive number'),
   body('particular').optional().isString().trim().isLength({ max: 500 }).withMessage('Particular must be less than 500 characters'),
-  body('order').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid order ID'),
-  body('customer').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid customer ID'),
-  body('supplier').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid supplier ID'),
+  body('order').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid order ID'),
+  body('customer').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid customer ID'),
+  body('supplier').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid supplier ID'),
   body('paymentMethod').optional().isIn(['cash', 'check', 'bank_transfer', 'other']).withMessage('Invalid payment method'),
   body('notes').optional().isString().trim().isLength({ max: 1000 }).withMessage('Notes must be less than 1000 characters')
 ], async (req, res) => {
@@ -178,7 +171,7 @@ router.post('/', [
 
     // Validate order exists if provided
     if (order) {
-      const orderExists = await Sales.findById(order);
+      // Order validation removed - orders handled separately
       if (!orderExists) {
         return res.status(400).json({ 
           success: false,
@@ -189,7 +182,7 @@ router.post('/', [
 
     // Validate customer exists if provided
     if (customer) {
-      const customerExists = await Customer.findById(customer);
+      const customerExists = await customerRepository.findById(customer);
       if (!customerExists) {
         return res.status(400).json({ 
           success: false,
@@ -200,7 +193,7 @@ router.post('/', [
 
     // Validate supplier exists if provided
     if (supplier) {
-      const supplierExists = await Supplier.findById(supplier);
+      const supplierExists = await supplierRepository.findById(supplier);
       if (!supplierExists) {
         return res.status(400).json({ 
           success: false,
@@ -209,66 +202,67 @@ router.post('/', [
       }
     }
 
-    // Create cash receipt (voucher code auto-generated in model pre-save)
-    const cashReceiptData = {
-      date: date ? new Date(date) : new Date(),
-      amount: parseFloat(amount),
-      particular: particular ? particular.trim() : 'Cash Receipt',
-      order: order || null,
-      customer: customer || null,
-      supplier: supplier || null,
-      paymentMethod,
-      notes: notes ? notes.trim() : null,
-      createdBy: req.user._id
+    // Validation: Must have either customer or supplier, not both
+    if (customer && supplier) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cash receipt must be for either a customer OR a supplier, not both'
+      });
+    }
+
+    if (!customer && !supplier) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cash receipt must specify either a customer or a supplier'
+      });
+    }
+
+    // Validate amount
+    const receiptAmount = parseFloat(amount);
+    if (isNaN(receiptAmount) || receiptAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount must be a positive number'
+      });
+    }
+
+    // Create cash receipt using PostgreSQL repository with atomic transaction
+    const { transaction } = require('../config/postgres');
+    
+    const cashReceipt = await transaction(async (client) => {
+      const cashReceiptData = {
+        date: date ? new Date(date) : new Date(),
+        amount: receiptAmount,
+        particular: particular ? particular.trim() : 'Cash Receipt',
+        supplierId: supplier || null,
+        customerId: customer || null,
+        paymentMethod: paymentMethod || 'cash',
+        notes: notes ? notes.trim() : null,
+        createdBy: req.user._id.toString()
+      };
+
+      // Create receipt
+      const receipt = await cashReceiptRepository.create(cashReceiptData, client);
+
+      // Post to account ledger atomically (using same client)
+      await AccountingService.recordCashReceipt(receipt, client);
+
+      return receipt;
+    });
+
+    // Fetch the created receipt with supplier/customer details using findById
+    const receiptWithDetails = await cashReceiptRepository.findById(cashReceipt.id);
+
+    // Map receipt_number to voucherCode for frontend compatibility
+    const responseData = receiptWithDetails || {
+      ...cashReceipt,
+      voucherCode: cashReceipt.receipt_number
     };
-
-    const cashReceipt = new CashReceipt(cashReceiptData);
-    await cashReceipt.save();
-
-    // Update customer balance if customer is provided
-    if (customer && amount > 0) {
-      try {
-        const CustomerBalanceService = require('../services/customerBalanceService');
-        await CustomerBalanceService.recordPayment(customer, amount, order);
-      } catch (error) {
-        console.error('Error updating customer balance for cash receipt:', error);
-        // Don't fail the cash receipt creation if balance update fails
-      }
-    }
-
-    // Update supplier balance if supplier is provided
-    // When we receive cash from a supplier, they're paying us (reduces our payables)
-    if (supplier && amount > 0) {
-      try {
-        const SupplierBalanceService = require('../services/supplierBalanceService');
-        await SupplierBalanceService.recordPayment(supplier, amount, order);
-      } catch (error) {
-        console.error('Error updating supplier balance for cash receipt:', error);
-        // Don't fail the cash receipt creation if balance update fails
-      }
-    }
-
-    // Create accounting entries
-    try {
-      const AccountingService = require('../services/accountingService');
-      await AccountingService.recordCashReceipt(cashReceipt);
-    } catch (error) {
-      console.error('Error creating accounting entries for cash receipt:', error);
-      // Don't fail the cash receipt creation if accounting fails
-    }
-
-    // Populate the created receipt
-    await cashReceipt.populate([
-      { path: 'order', select: 'orderNumber' },
-      { path: 'customer', select: 'name businessName' },
-      { path: 'supplier', select: 'name businessName' },
-      { path: 'createdBy', select: 'firstName lastName' }
-    ]);
 
     res.status(201).json({
       success: true,
       message: 'Cash receipt created successfully',
-      data: cashReceipt
+      data: responseData
     });
   } catch (error) {
     console.error('Create cash receipt error:', error);
@@ -289,9 +283,9 @@ router.put('/:id', [
   body('date').optional().isISO8601().withMessage('Date must be a valid date'),
   body('amount').optional().isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
   body('particular').optional().isString().trim().isLength({ min: 1, max: 500 }).withMessage('Particular must be between 1 and 500 characters'),
-  body('order').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid order ID'),
-  body('customer').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid customer ID'),
-  body('supplier').optional({ checkFalsy: true }).isMongoId().withMessage('Invalid supplier ID'),
+  body('order').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid order ID'),
+  body('customer').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid customer ID'),
+  body('supplier').optional({ checkFalsy: true }).isUUID(4).withMessage('Invalid supplier ID'),
   body('paymentMethod').optional().isIn(['cash', 'check', 'bank_transfer', 'other']).withMessage('Invalid payment method'),
   body('notes').optional().isString().trim().isLength({ max: 1000 }).withMessage('Notes must be less than 1000 characters')
 ], async (req, res) => {
@@ -301,7 +295,7 @@ router.put('/:id', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const cashReceipt = await CashReceipt.findById(req.params.id);
+    const cashReceipt = await cashReceiptRepository.findById(req.params.id);
     if (!cashReceipt) {
       return res.status(404).json({ 
         success: false,
@@ -321,39 +315,52 @@ router.put('/:id', [
       date,
       amount,
       particular,
-      order,
-      customer,
       supplier,
+      customer,
       paymentMethod,
       notes
     } = req.body;
 
-    // Update fields
-    if (date !== undefined) cashReceipt.date = new Date(date);
-    if (amount !== undefined) cashReceipt.amount = parseFloat(amount);
-    if (particular !== undefined) cashReceipt.particular = particular.trim();
-    if (order !== undefined) cashReceipt.order = order || null;
-    if (customer !== undefined) cashReceipt.customer = customer || null;
-    if (supplier !== undefined) cashReceipt.supplier = supplier || null;
-    if (paymentMethod !== undefined) cashReceipt.paymentMethod = paymentMethod;
-    if (notes !== undefined) cashReceipt.notes = notes ? notes.trim() : null;
-    
-    cashReceipt.updatedBy = req.user._id;
+    const { transaction } = require('../config/postgres');
+    const updatedReceipt = await transaction(async (client) => {
+      // 1. Reverse old ledger entries
+      await AccountingService.reverseLedgerEntriesByReference('cash_receipt', req.params.id, client);
+      // 2. Update receipt (within transaction)
+      const receipt = await cashReceiptRepository.update(req.params.id, {
+        date: date ? new Date(date) : undefined,
+        amount: amount ? parseFloat(amount) : undefined,
+        particular: particular ? particular.trim() : undefined,
+        supplierId: supplier !== undefined ? (supplier || null) : undefined,
+        customerId: customer !== undefined ? (customer || null) : undefined,
+        paymentMethod: paymentMethod || undefined,
+        notes: notes ? notes.trim() : undefined
+      }, client);
+      if (!receipt) return null;
+      // 3. Re-post ledger with updated values (must have customer or supplier)
+      if (receipt.customer_id || receipt.supplier_id) {
+        await AccountingService.recordCashReceipt(receipt, client);
+      }
+      return receipt;
+    });
 
-    await cashReceipt.save();
+    if (!updatedReceipt) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cash receipt not found'
+      });
+    }
 
-    // Populate the updated receipt
-    await cashReceipt.populate([
-      { path: 'order', select: 'orderNumber' },
-      { path: 'customer', select: 'name businessName' },
-      { path: 'supplier', select: 'name businessName' },
-      { path: 'createdBy', select: 'firstName lastName' }
-    ]);
+    // Map receipt_number to voucherCode for frontend compatibility
+    // findById already includes customer data, so we just need to add voucherCode
+    const responseData = {
+      ...updatedReceipt,
+      voucherCode: updatedReceipt.receipt_number || updatedReceipt.voucherCode
+    };
 
     res.json({
       success: true,
       message: 'Cash receipt updated successfully',
-      data: cashReceipt
+      data: responseData
     });
   } catch (error) {
     console.error('Update cash receipt error:', error);
@@ -373,15 +380,23 @@ router.delete('/:id', [
   requirePermission('delete_orders')
 ], async (req, res) => {
   try {
-    const cashReceipt = await CashReceipt.findById(req.params.id);
+    const cashReceipt = await cashReceiptRepository.findById(req.params.id);
     if (!cashReceipt) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Cash receipt not found' 
+        message: 'Cash receipt not found'
       });
     }
 
-    await CashReceipt.findByIdAndDelete(req.params.id);
+    // Reverse ledger entries so account ledger reflects the deletion
+    try {
+      await AccountingService.reverseLedgerEntriesByReference('cash_receipt', req.params.id);
+    } catch (ledgerErr) {
+      console.error('Reverse ledger for cash receipt delete:', ledgerErr);
+      // Continue with delete; ledger may not have had entries (e.g. legacy data)
+    }
+
+    await cashReceiptRepository.delete(req.params.id);
 
     res.json({
       success: true,
@@ -446,7 +461,7 @@ router.post('/batch', [
   body('cashAccount').optional().isString().trim().withMessage('Cash account must be a string'),
   body('paymentType').optional().isString().trim().withMessage('Payment type must be a string'),
   body('receipts').isArray().withMessage('Receipts must be an array'),
-  body('receipts.*.customer').isMongoId().withMessage('Invalid customer ID'),
+  body('receipts.*.customer').isUUID().withMessage('Invalid customer ID'),
   body('receipts.*.amount').isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
   body('receipts.*.particular').optional().isString().trim().isLength({ max: 500 }).withMessage('Particular must be less than 500 characters')
 ], async (req, res) => {
@@ -493,7 +508,6 @@ router.post('/batch', [
     // Create cash receipts
     const createdReceipts = [];
     const CustomerBalanceService = require('../services/customerBalanceService');
-    const AccountingService = require('../services/accountingService');
 
     for (const receiptData of receipts) {
       if (!receiptData.amount || receiptData.amount <= 0) {
@@ -510,29 +524,22 @@ router.post('/batch', [
         createdBy: req.user._id
       };
 
-      const cashReceipt = new CashReceipt(cashReceiptData);
-      await cashReceipt.save();
-
-      // Update customer balance
-      if (receiptData.customer && receiptData.amount > 0) {
-        try {
-          await CustomerBalanceService.recordPayment(receiptData.customer, receiptData.amount, null);
-        } catch (error) {
-          console.error(`Error updating customer ${receiptData.customer} balance:`, error);
-        }
-      }
+      const cashReceipt = await cashReceiptRepository.create({
+        date: new Date(voucherDate),
+        amount: parseFloat(receiptData.amount),
+        particular: receiptData.particular ? receiptData.particular.trim() : 'Cash Receipt',
+        customerId: receiptData.customer || null,
+        paymentMethod: paymentType.toLowerCase(),
+        notes: cashAccount ? `Cash Account: ${cashAccount}` : null,
+        createdBy: req.user._id.toString()
+      });
 
       // Create accounting entries
       try {
         await AccountingService.recordCashReceipt(cashReceipt);
       } catch (error) {
-        console.error(`Error creating accounting entries for cash receipt ${cashReceipt._id}:`, error);
+        console.error(`Error creating accounting entries for cash receipt ${cashReceipt.id}:`, error);
       }
-
-      await cashReceipt.populate([
-        { path: 'customer', select: 'name businessName' },
-        { path: 'createdBy', select: 'firstName lastName' }
-      ]);
 
       createdReceipts.push(cashReceipt);
     }

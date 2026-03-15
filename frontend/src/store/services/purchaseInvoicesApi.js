@@ -35,13 +35,26 @@ export const purchaseInvoicesApi = api.injectEndpoints({
       invalidatesTags: (result, error, arg) => {
         const tags = [
           { type: 'Orders', id: 'PI_LIST' },
-          { type: 'Products', id: 'LIST' }, // Invalidate products to refresh stock and prices
-          { type: 'Suppliers', id: 'LIST' }, // Invalidate suppliers to refresh outstanding balance
+          { type: 'Products', id: 'LIST' },
+          { type: 'Suppliers', id: 'LIST' },
+          { type: 'Inventory', id: 'LIST' },
+          { type: 'Inventory', id: 'SUMMARY' },
+          { type: 'Inventory', id: 'LOW_STOCK' },
           { type: 'Accounting', id: 'LEDGER_SUMMARY' },
           { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+          { type: 'Accounting', id: 'ALL_ENTRIES' },
+          { type: 'Accounting', id: 'TRIAL_BALANCE' },
           { type: 'ChartOfAccounts', id: 'LIST' },
+          { type: 'ChartOfAccounts', id: 'STATS' },
+          { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+          { type: 'Reports', id: 'PARTY_BALANCE' },
+          { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+          { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+          { type: 'Reports', id: 'PRODUCT_REPORT' },
+          { type: 'Reports', id: 'INVENTORY_REPORT' },
+          { type: 'Reports', id: 'SUMMARY_CARDS' },
+          { type: 'Reports', id: 'FINANCIAL_REPORT' },
         ];
-        // Invalidate specific supplier if we have the supplier ID
         if (arg?.supplier) {
           tags.push({ type: 'Suppliers', id: arg.supplier });
         }
@@ -58,13 +71,26 @@ export const purchaseInvoicesApi = api.injectEndpoints({
         const tags = [
           { type: 'Orders', id },
           { type: 'Orders', id: 'PI_LIST' },
-          { type: 'Products', id: 'LIST' }, // Invalidate products to refresh stock and prices
-          { type: 'Suppliers', id: 'LIST' }, // Invalidate suppliers to refresh outstanding balance
+          { type: 'Products', id: 'LIST' },
+          { type: 'Suppliers', id: 'LIST' },
+          { type: 'Inventory', id: 'LIST' },
+          { type: 'Inventory', id: 'SUMMARY' },
+          { type: 'Inventory', id: 'LOW_STOCK' },
           { type: 'Accounting', id: 'LEDGER_SUMMARY' },
           { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+          { type: 'Accounting', id: 'ALL_ENTRIES' },
+          { type: 'Accounting', id: 'TRIAL_BALANCE' },
           { type: 'ChartOfAccounts', id: 'LIST' },
+          { type: 'ChartOfAccounts', id: 'STATS' },
+          { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+          { type: 'Reports', id: 'PARTY_BALANCE' },
+          { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+          { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+          { type: 'Reports', id: 'PRODUCT_REPORT' },
+          { type: 'Reports', id: 'INVENTORY_REPORT' },
+          { type: 'Reports', id: 'SUMMARY_CARDS' },
+          { type: 'Reports', id: 'FINANCIAL_REPORT' },
         ];
-        // Invalidate specific supplier if we have the supplier ID
         if (supplier) {
           tags.push({ type: 'Suppliers', id: supplier });
         }
@@ -79,6 +105,25 @@ export const purchaseInvoicesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, id) => [
         { type: 'Orders', id },
         { type: 'Orders', id: 'PI_LIST' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'Suppliers', id: 'LIST' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     confirmPurchaseInvoice: builder.mutation({
@@ -89,11 +134,25 @@ export const purchaseInvoicesApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'Orders', id },
         { type: 'Orders', id: 'PI_LIST' },
-        { type: 'Products', id: 'LIST' }, // Invalidate products to refresh stock and prices
-        { type: 'Suppliers', id: 'LIST' }, // Invalidate suppliers to refresh outstanding balance
+        { type: 'Products', id: 'LIST' },
+        { type: 'Suppliers', id: 'LIST' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
         { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     cancelPurchaseInvoice: builder.mutation({
@@ -104,6 +163,25 @@ export const purchaseInvoicesApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'Orders', id },
         { type: 'Orders', id: 'PI_LIST' },
+        { type: 'Products', id: 'LIST' },
+        { type: 'Suppliers', id: 'LIST' },
+        { type: 'Inventory', id: 'LIST' },
+        { type: 'Inventory', id: 'SUMMARY' },
+        { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     exportExcel: builder.mutation({
@@ -141,6 +219,31 @@ export const purchaseInvoicesApi = api.injectEndpoints({
         responseType: 'blob',
       }),
     }),
+    syncPurchaseInvoicesLedger: builder.mutation({
+      query: (params = {}) => ({
+        url: 'purchase-invoices/sync-ledger',
+        method: 'post',
+        params: params?.dateFrom || params?.dateTo ? { dateFrom: params.dateFrom, dateTo: params.dateTo } : undefined,
+      }),
+      invalidatesTags: [
+        { type: 'Orders', id: 'PI_LIST' },
+        { type: 'Suppliers', id: 'LIST' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+        { type: 'Reports', id: 'PRODUCT_REPORT' },
+        { type: 'Reports', id: 'INVENTORY_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
+      ],
+    }),
   }),
   overrideExisting: false,
 });
@@ -159,5 +262,6 @@ export const {
   useExportPDFMutation,
   useExportJSONMutation,
   useDownloadFileMutation,
+  useSyncPurchaseInvoicesLedgerMutation,
 } = purchaseInvoicesApi;
 

@@ -11,7 +11,19 @@ export const accountingApi = api.injectEndpoints({
           ? { 'Idempotency-Key': idempotencyKey }
           : undefined,
       }),
-      invalidatesTags: [{ type: 'Accounting', id: 'JOURNAL' }],
+      invalidatesTags: [
+        { type: 'Accounting', id: 'JOURNAL' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Accounting', id: 'ALL_ENTRIES' },
+        { type: 'Accounting', id: 'TRIAL_BALANCE' },
+        { type: 'ChartOfAccounts', id: 'LIST' },
+        { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
+      ],
     }),
     getTrialBalance: builder.query({
       query: (params) => ({

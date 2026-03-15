@@ -1,15 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
-const DropShipping = require('../models/DropShipping'); // Still needed for new DropShipping()
-const Supplier = require('../models/Supplier'); // Still needed for model reference
-const Customer = require('../models/Customer'); // Still needed for model reference
-const Product = require('../models/Product'); // Still needed for model reference
 const { auth, requirePermission } = require('../middleware/auth');
-const dropShippingRepository = require('../repositories/DropShippingRepository');
-const supplierRepository = require('../repositories/SupplierRepository');
-const customerRepository = require('../repositories/CustomerRepository');
-const productRepository = require('../repositories/ProductRepository');
+const dropShippingRepository = require('../repositories/postgres/DropShippingRepository');
+const supplierRepository = require('../repositories/postgres/SupplierRepository');
+const customerRepository = require('../repositories/postgres/CustomerRepository');
+const productRepository = require('../repositories/postgres/ProductRepository');
 
 // Helper function to handle validation errors
 const handleValidationErrors = (req, res, next) => {
@@ -65,32 +61,17 @@ router.get('/', auth, async (req, res) => {
       search
     } = req.query;
 
-    // Build filter object
     const filter = {};
-    
     if (status) filter.status = status;
-    if (supplier) filter.supplier = supplier;
-    if (customer) filter.customer = customer;
-    
-    if (startDate || endDate) {
-      filter.transactionDate = {};
-      if (startDate) filter.transactionDate.$gte = new Date(startDate);
-      if (endDate) filter.transactionDate.$lte = new Date(endDate);
-    }
-    
-    if (search) {
-      filter.$or = [
-        { transactionNumber: { $regex: search, $options: 'i' } },
-        { 'supplierInfo.companyName': { $regex: search, $options: 'i' } },
-        { 'customerInfo.displayName': { $regex: search, $options: 'i' } },
-        { trackingNumber: { $regex: search, $options: 'i' } }
-      ];
-    }
+    if (supplier) filter.supplierId = supplier;
+    if (customer) filter.customerId = customer;
+    if (startDate) filter.transactionDateFrom = new Date(startDate);
+    if (endDate) filter.transactionDateTo = new Date(endDate);
+    if (search) filter.searchIlike = search;
 
     const result = await dropShippingRepository.findWithPagination(filter, {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sort: { transactionDate: -1 }
+      page: parseInt(page, 10) || 1,
+      limit: parseInt(limit, 10) || 50
     });
 
     const { transactions, total, pagination } = result;
@@ -112,46 +93,21 @@ router.get('/stats', auth, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const filter = {};
-    
-    if (startDate || endDate) {
-      filter.transactionDate = {};
-      if (startDate) filter.transactionDate.$gte = new Date(startDate);
-      if (endDate) filter.transactionDate.$lte = new Date(endDate);
-    }
+    if (startDate) filter.transactionDateFrom = new Date(startDate);
+    if (endDate) filter.transactionDateTo = new Date(endDate);
 
-    const stats = await dropShippingRepository.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: null,
-          totalTransactions: { $sum: 1 },
-          totalSupplierAmount: { $sum: '$supplierTotal' },
-          totalCustomerAmount: { $sum: '$customerTotal' },
-          totalProfit: { $sum: '$totalProfit' },
-          avgMargin: { $avg: '$averageMargin' }
-        }
-      }
-    ]);
-
-    const statusBreakdown = await dropShippingRepository.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+    const [overall] = await dropShippingRepository.getStats(filter);
+    const statusBreakdown = await dropShippingRepository.getStatusBreakdown(filter);
 
     res.json({
-      overall: stats[0] || {
+      overall: overall || {
         totalTransactions: 0,
         totalSupplierAmount: 0,
         totalCustomerAmount: 0,
         totalProfit: 0,
         avgMargin: 0
       },
-      statusBreakdown
+      statusBreakdown: statusBreakdown.map(r => ({ _id: r.status, count: r.count }))
     });
   } catch (error) {
     console.error('Get drop shipping stats error:', error);
@@ -164,15 +120,7 @@ router.get('/stats', auth, async (req, res) => {
 // @access  Private
 router.get('/:id', auth, async (req, res) => {
   try {
-    const transaction = await dropShippingRepository.findById(req.params.id, {
-      populate: [
-        { path: 'supplier', select: 'companyName contactPerson email phone businessType currentBalance pendingBalance' },
-        { path: 'customer', select: 'displayName firstName lastName email phone businessType currentBalance pendingBalance creditLimit' },
-        { path: 'items.product', select: 'name description pricing inventory' },
-        { path: 'createdBy', select: 'firstName lastName email' },
-        { path: 'lastModifiedBy', select: 'firstName lastName email' }
-      ]
-    });
+    const transaction = await dropShippingRepository.findById(req.params.id);
 
     if (!transaction) {
       return res.status(404).json({ message: 'Drop shipping transaction not found' });
@@ -191,10 +139,10 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/', [
   auth,
   requirePermission('create_drop_shipping'),
-  body('supplier').isMongoId().withMessage('Valid supplier is required'),
-  body('customer').isMongoId().withMessage('Valid customer is required'),
+  body('supplier').isUUID(4).withMessage('Valid supplier is required'),
+  body('customer').isUUID(4).withMessage('Valid customer is required'),
   body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
-  body('items.*.product').isMongoId().withMessage('Valid product is required'),
+  body('items.*.product').isUUID(4).withMessage('Valid product is required'),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('items.*.supplierRate').isFloat({ min: 0 }).withMessage('Supplier rate must be positive'),
   body('items.*.customerRate').isFloat({ min: 0 }).withMessage('Customer rate must be positive'),
@@ -236,51 +184,45 @@ router.post('/', [
         phone: customer.phone || '',
         businessType: customer.businessType || ''
       },
-      createdBy: req.user._id,
-      lastModifiedBy: req.user._id
+      createdBy: req.user.id || req.user._id,
+      lastModifiedBy: req.user.id || req.user._id
     };
 
-    // Create transaction
-    const transaction = new DropShipping(transactionData);
-    await transaction.save();
-
-    // Update balances for suppliers and customers
-    await supplierRepository.update(supplier._id, {
-      $inc: { pendingBalance: transaction.supplierTotal }
+    const transaction = await dropShippingRepository.create({
+      ...transactionData,
+      supplier: supplier.id || supplier._id,
+      customer: customer.id || customer._id,
+      supplierTotal: transactionData.supplierTotal ?? transactionData.subtotal,
+      total: transactionData.total ?? transactionData.subtotal,
+      orderDate: transactionData.orderDate || new Date()
     });
 
-    if (transaction.customerPayment.method === 'account') {
-      await customerRepository.update(customer._id, {
-        $inc: { pendingBalance: transaction.customerTotal }
-      });
+    const supplierId = supplier.id || supplier._id;
+    const supplierTotal = transaction.supplier_total ?? transaction.supplierTotal ?? transactionData.supplierTotal ?? 0;
+    const sup = await supplierRepository.findById(supplierId);
+    if (sup) {
+      const currentPending = parseFloat(sup.pending_balance ?? sup.pendingBalance ?? 0) || 0;
+      await supplierRepository.update(supplierId, { pendingBalance: currentPending + supplierTotal });
     }
 
-    // Populate and return
-    await transaction.populate([
-      { path: 'supplier', select: 'companyName contactPerson email phone businessType' },
-      { path: 'customer', select: 'displayName firstName lastName email phone businessType' },
-      { path: 'items.product', select: 'name description pricing inventory' },
-      { path: 'createdBy', select: 'firstName lastName email' }
-    ]);
+    const customerPaymentMethod = transactionData.customerPayment?.method;
+    if (customerPaymentMethod === 'account') {
+      const customerId = customer.id || customer._id;
+      const customerTotal = transaction.total ?? transactionData.total ?? 0;
+      const cust = await customerRepository.findById(customerId);
+      if (cust) {
+        const currentPending = parseFloat(cust.pending_balance ?? cust.pendingBalance ?? 0) || 0;
+        await customerRepository.update(customerId, { pendingBalance: currentPending + customerTotal });
+      }
+    }
 
-    // Transform names to uppercase
-    if (transaction.supplier) {
-      transaction.supplier = transformSupplierToUppercase(transaction.supplier);
-    }
-    if (transaction.customer) {
-      transaction.customer = transformCustomerToUppercase(transaction.customer);
-    }
-    if (transaction.items && Array.isArray(transaction.items)) {
-      transaction.items.forEach(item => {
-        if (item.product) {
-          item.product = transformProductToUppercase(item.product);
-        }
-      });
-    }
+    const out = { ...transaction };
+    if (supplier) out.supplier = transformSupplierToUppercase(supplier);
+    if (customer) out.customer = transformCustomerToUppercase(customer);
 
     res.status(201).json({
       message: 'Drop shipping transaction created successfully',
-      transaction
+      transaction: out
     });
   } catch (error) {
     console.error('Create drop shipping transaction error:', error);
@@ -294,8 +236,8 @@ router.post('/', [
 router.put('/:id', [
   auth,
   requirePermission('update_drop_shipping'),
-  body('supplier').optional().isMongoId().withMessage('Valid supplier is required'),
-  body('customer').optional().isMongoId().withMessage('Valid customer is required'),
+  body('supplier').optional().isUUID(4).withMessage('Valid supplier is required'),
+  body('customer').optional().isUUID(4).withMessage('Valid customer is required'),
   body('items').optional().isArray({ min: 1 }).withMessage('At least one item is required'),
   handleValidationErrors
 ], async (req, res) => {
@@ -306,75 +248,67 @@ router.put('/:id', [
       return res.status(404).json({ message: 'Drop shipping transaction not found' });
     }
 
-    // Store old values for balance adjustments
-    const oldSupplierTotal = transaction.supplierTotal;
-    const oldCustomerTotal = transaction.customerTotal;
+    const oldSupplierTotal = parseFloat(transaction.supplier_total ?? transaction.supplierTotal ?? 0) || 0;
+    const oldCustomerTotal = parseFloat(transaction.total ?? transaction.customerTotal ?? 0) || 0;
+    const supplierId = transaction.supplier_id || transaction.supplier;
+    const customerId = transaction.customer_id || transaction.customer;
 
-    // Update transaction
-    const updateData = {
-      ...req.body,
-      lastModifiedBy: req.user._id
-    };
+    const updatePayload = { status: req.body.status, notes: req.body.notes, items: req.body.items };
+    if (req.body.items) updatePayload.items = req.body.items;
+    if (req.body.total !== undefined) updatePayload.total = req.body.total;
 
-    // If supplier info changed, update it
-    if (req.body.supplier && req.body.supplier !== transaction.supplier.toString()) {
+    if (req.body.supplier && req.body.supplier !== supplierId) {
       const supplier = await supplierRepository.findById(req.body.supplier);
       if (supplier) {
-        updateData.supplierInfo = {
-          companyName: supplier.companyName,
-          contactPerson: supplier.contactPerson?.name || '',
+        updatePayload.supplierInfo = {
+          companyName: supplier.company_name || supplier.companyName,
+          contactPerson: supplier.contact_person || supplier.contactPerson?.name || '',
           email: supplier.email || '',
           phone: supplier.phone || ''
         };
+        updatePayload.supplierId = req.body.supplier;
       }
     }
-
-    // If customer info changed, update it
-    if (req.body.customer && req.body.customer !== transaction.customer.toString()) {
+    if (req.body.customer && req.body.customer !== customerId) {
       const customer = await customerRepository.findById(req.body.customer);
       if (customer) {
-        updateData.customerInfo = {
-          displayName: customer.displayName || customer.name,
-          businessName: customer.businessName || '',
+        updatePayload.customerInfo = {
+          displayName: customer.business_name || customer.name,
+          businessName: customer.business_name || '',
           email: customer.email || '',
           phone: customer.phone || '',
-          businessType: customer.businessType || ''
+          businessType: customer.business_type || ''
         };
+        updatePayload.customerId = req.body.customer;
       }
     }
 
-    Object.assign(transaction, updateData);
-    await transaction.save();
-
-    // Update balances
-    if (transaction.supplierTotal !== oldSupplierTotal) {
-      const balanceDiff = transaction.supplierTotal - oldSupplierTotal;
-      await supplierRepository.update(
-        transaction.supplier,
-        { $inc: { pendingBalance: balanceDiff } }
-      );
+    const updated = await dropShippingRepository.updateById(req.params.id, updatePayload);
+    if (!updated) {
+      return res.status(500).json({ message: 'Failed to update transaction' });
     }
 
-    if (transaction.customerTotal !== oldCustomerTotal && transaction.customerPayment.method === 'account') {
-      const balanceDiff = transaction.customerTotal - oldCustomerTotal;
-      await customerRepository.update(
-        transaction.customer,
-        { $inc: { pendingBalance: balanceDiff } }
-      );
-    }
+    const newSupplierTotal = parseFloat(updated.supplier_total ?? updated.supplierTotal ?? 0) || 0;
+    const newCustomerTotal = parseFloat(updated.total ?? updated.customerTotal ?? 0) || 0;
 
-    // Populate and return
-    await transaction.populate([
-      { path: 'supplier', select: 'companyName contactPerson email phone businessType' },
-      { path: 'customer', select: 'displayName firstName lastName email phone businessType' },
-      { path: 'items.product', select: 'name description pricing inventory' },
-      { path: 'createdBy', select: 'firstName lastName email' },
-      { path: 'lastModifiedBy', select: 'firstName lastName email' }
-    ]);
+    if (newSupplierTotal !== oldSupplierTotal && supplierId) {
+      const sup = await supplierRepository.findById(supplierId);
+      if (sup) {
+        const current = parseFloat(sup.pending_balance ?? sup.pendingBalance ?? 0) || 0;
+        await supplierRepository.update(supplierId, { pendingBalance: current - oldSupplierTotal + newSupplierTotal });
+      }
+    }
+    if (newCustomerTotal !== oldCustomerTotal && customerId) {
+      const cust = await customerRepository.findById(customerId);
+      if (cust) {
+        const current = parseFloat(cust.pending_balance ?? cust.pendingBalance ?? 0) || 0;
+        await customerRepository.update(customerId, { pendingBalance: current - oldCustomerTotal + newCustomerTotal });
+      }
+    }
 
     res.json({
       message: 'Drop shipping transaction updated successfully',
-      transaction
+      transaction: updated
     });
   } catch (error) {
     console.error('Update drop shipping transaction error:', error);
@@ -396,20 +330,26 @@ router.delete('/:id', [
       return res.status(404).json({ message: 'Drop shipping transaction not found' });
     }
 
-    // Reverse balance adjustments
-    await supplierRepository.update(
-      transaction.supplier,
-      { $inc: { pendingBalance: -transaction.supplierTotal } }
-    );
-
-    if (transaction.customerPayment.method === 'account') {
-      await customerRepository.update(
-        transaction.customer,
-        { $inc: { pendingBalance: -transaction.customerTotal } }
-      );
+    const supplierId = transaction.supplier_id || transaction.supplier;
+    const supplierTotal = parseFloat(transaction.supplier_total ?? transaction.supplierTotal ?? 0) || 0;
+    if (supplierId && supplierTotal) {
+      const sup = await supplierRepository.findById(supplierId);
+      if (sup) {
+        const current = parseFloat(sup.pending_balance ?? sup.pendingBalance ?? 0) || 0;
+        await supplierRepository.update(supplierId, { pendingBalance: Math.max(0, current - supplierTotal) });
+      }
+    }
+    const customerId = transaction.customer_id || transaction.customer;
+    const customerTotal = parseFloat(transaction.total ?? transaction.customerTotal ?? 0) || 0;
+    if (customerId && customerTotal) {
+      const cust = await customerRepository.findById(customerId);
+      if (cust) {
+        const current = parseFloat(cust.pending_balance ?? cust.pendingBalance ?? 0) || 0;
+        await customerRepository.update(customerId, { pendingBalance: Math.max(0, current - customerTotal) });
+      }
     }
 
-    await dropShippingRepository.delete(transaction._id);
+    await dropShippingRepository.softDelete(transaction.id || transaction._id);
 
     res.json({ message: 'Drop shipping transaction deleted successfully' });
   } catch (error) {
@@ -433,23 +373,9 @@ router.put('/:id/status', [
       return res.status(404).json({ message: 'Drop shipping transaction not found' });
     }
 
-    const updateData = {
-      status: req.body.status,
-      lastModifiedBy: req.user._id
-    };
-
-    // Set delivery date if marked as delivered or completed
-    if (req.body.status === 'delivered' || req.body.status === 'completed') {
-      updateData.actualDelivery = new Date();
-    }
-
-    const updatedTransaction = await dropShippingRepository.update(transaction._id, updateData);
-
-    await updatedTransaction.populate([
-      { path: 'supplier', select: 'companyName contactPerson email phone' },
-      { path: 'customer', select: 'displayName firstName lastName email phone' },
-      { path: 'items.product', select: 'name description' }
-    ]);
+    const updatedTransaction = await dropShippingRepository.updateById(transaction.id || transaction._id, {
+      status: req.body.status
+    });
 
     res.json({
       message: 'Transaction status updated successfully',

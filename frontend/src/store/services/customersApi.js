@@ -46,7 +46,13 @@ export const customersApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Customers', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Customers', id: 'LIST' },
+        { type: 'Reports', id: 'CUSTOMER_REPORT' },
+        { type: 'Reports', id: 'CUSTOMER_ANALYTICS' },
+        { type: 'Reports', id: 'CUSTOMER_ANALYTICS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+      ],
     }),
     updateCustomer: builder.mutation({
       query: ({ id, ...data }) => ({
@@ -57,6 +63,13 @@ export const customersApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { id }) => [
         { type: 'Customers', id },
         { type: 'Customers', id: 'LIST' },
+        { type: 'Sales', id: 'LIST' },
+        { type: 'Orders', id: 'LIST' },
+        { type: 'Reports', id: 'CUSTOMER_REPORT' },
+        { type: 'Reports', id: 'CUSTOMER_ANALYTICS' },
+        { type: 'Reports', id: 'CUSTOMER_ANALYTICS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'SALES_REPORT' },
       ],
     }),
     deleteCustomer: builder.mutation({
@@ -67,6 +80,13 @@ export const customersApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, id) => [
         { type: 'Customers', id },
         { type: 'Customers', id: 'LIST' },
+        { type: 'Sales', id: 'LIST' },
+        { type: 'Orders', id: 'LIST' },
+        { type: 'Reports', id: 'CUSTOMER_REPORT' },
+        { type: 'Reports', id: 'CUSTOMER_ANALYTICS' },
+        { type: 'Reports', id: 'CUSTOMER_ANALYTICS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'SALES_REPORT' },
       ],
     }),
     searchCustomers: builder.query({
@@ -96,6 +116,13 @@ export const customersApi = api.injectEndpoints({
       }),
       providesTags: [{ type: 'Customers', id: 'CITIES' }],
     }),
+    getCustomersByCities: builder.query({
+      query: (params) => ({
+        url: 'customers/by-cities',
+        method: 'get',
+        params,
+      }),
+    }),
     exportExcel: builder.mutation({
       query: (params) => ({
         url: 'customers/export/excel',
@@ -120,7 +147,13 @@ export const customersApi = api.injectEndpoints({
           data: formData,
         };
       },
-      invalidatesTags: [{ type: 'Customers', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Customers', id: 'LIST' },
+        { type: 'Reports', id: 'CUSTOMER_REPORT' },
+        { type: 'Reports', id: 'CUSTOMER_ANALYTICS' },
+        { type: 'Reports', id: 'CUSTOMER_ANALYTICS_SUMMARY' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+      ],
     }),
     downloadTemplate: builder.query({
       query: () => ({
@@ -146,6 +179,8 @@ export const {
   useLazyCheckEmailQuery,
   useLazyCheckBusinessNameQuery,
   useCitiesQuery,
+  useGetCustomersByCitiesQuery,
+  useLazyGetCustomersByCitiesQuery,
   useExportExcelMutation,
   useImportExcelMutation,
   useDownloadTemplateQuery,

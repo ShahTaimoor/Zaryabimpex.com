@@ -54,7 +54,7 @@ const MobileProductCard = ({
             {product.name}
           </h3>
           <p className="text-xs text-gray-500 truncate">
-            Category: {product.category || 'N/A'}
+            Category: {typeof product.category === 'object' ? (product.category?.name ?? 'N/A') : (product.category || 'N/A')}
           </p>
           <p className="text-xs text-gray-500">
             ${product.unitPrice?.toFixed(2) || '0.00'} each

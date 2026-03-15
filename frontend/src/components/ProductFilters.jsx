@@ -9,6 +9,8 @@ import {
   Tag,
   AlertTriangle
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const ProductFilters = ({ filters, onFiltersChange, categories = [], onClearFilters }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -59,15 +61,17 @@ const ProductFilters = ({ filters, onFiltersChange, categories = [], onClearFilt
         </div>
         <div className="flex items-center space-x-2 w-full sm:w-auto">
           {hasActiveFilters && (
-            <button
+            <Button
+              variant="ghost"
+              size="default"
               onClick={(e) => {
                 e.stopPropagation();
                 handleClearAll();
               }}
-              className="text-xs sm:text-sm text-red-600 hover:text-red-800 font-medium btn-md"
+              className="text-xs sm:text-sm text-red-600 hover:text-red-800 hover:bg-red-50 font-medium"
             >
               Clear All
-            </button>
+            </Button>
           )}
           {isExpanded ? (
             <ChevronUp className="h-4 w-4 text-gray-400 flex-shrink-0" />
@@ -89,12 +93,12 @@ const ProductFilters = ({ filters, onFiltersChange, categories = [], onClearFilt
                 Search Products
               </label>
               <div className="relative">
-                <input
+                <Input
                   type="text"
                   placeholder="Product name or description..."
                   value={filters.search || ''}
                   onChange={(e) => handleFilterChange('search', e.target.value)}
-                  className="input pl-8"
+                  className="pl-8"
                 />
                 <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 {filters.search && (

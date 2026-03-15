@@ -1,8 +1,49 @@
-const InventoryReport = require('../models/InventoryReport');
-const Product = require('../models/Product');
-const Sales = require('../models/Sales');
-const Category = require('../models/Category');
-const Supplier = require('../models/Supplier');
+const InventoryReportRepository = require('../repositories/postgres/InventoryReportRepository');
+const ProductRepository = require('../repositories/postgres/ProductRepository');
+const SalesRepository = require('../repositories/SalesRepository');
+const CategoryRepository = require('../repositories/postgres/CategoryRepository');
+const SupplierRepository = require('../repositories/postgres/SupplierRepository');
+const PurchaseOrderRepository = require('../repositories/PurchaseOrderRepository');
+const PurchaseInvoiceRepository = require('../repositories/PurchaseInvoiceRepository');
+
+async function getSalesGroupedByProduct(dateFrom, dateTo, status = 'completed') {
+  const sales = await SalesRepository.findAll(
+    { dateFrom, dateTo, status },
+    { limit: 5000 }
+  );
+  const byProduct = {};
+  for (const sale of sales) {
+    const items = typeof sale.items === 'string' ? JSON.parse(sale.items) : (sale.items || []);
+    for (const it of items) {
+      const pid = it.product || it.product_id;
+      if (pid == null) continue;
+      const id = typeof pid === 'object' ? (pid.id || pid._id) : pid;
+      const key = String(id);
+      if (!byProduct[key]) byProduct[key] = { _id: id, totalSold: 0 };
+      byProduct[key].totalSold += Number(it.quantity) || 0;
+    }
+  }
+  return Object.values(byProduct);
+}
+
+async function getProductsForReport(filters = {}) {
+  const { categories } = filters;
+  if (categories && categories.length > 0) {
+    const all = [];
+    for (const catId of categories) {
+      const rows = await ProductRepository.findAll({ categoryId: catId }, { limit: 2000 });
+      all.push(...rows);
+    }
+    const seen = new Set();
+    return all.filter((p) => {
+      const id = String(p.id || p._id);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }
+  return ProductRepository.findAll({ isActive: true }, { limit: 2000 });
+}
 
 class InventoryReportService {
   constructor() {
@@ -39,30 +80,32 @@ class InventoryReportService {
       // Validate and set date range
       const dateRange = this.getDateRange(periodType, startDate, endDate);
       
-      // Generate report ID
       const reportId = await this.generateReportId();
-
-      // Create report document
-      const report = new InventoryReport({
+      const reportName = this.generateReportName(reportType, periodType, dateRange);
+      const created = await InventoryReportRepository.create({
         reportId,
-        reportName: this.generateReportName(reportType, periodType, dateRange),
+        reportName,
         reportType,
         periodType,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
-        config: {
-          includeMetrics,
-          filters,
-          thresholds
-        },
-        status: 'generating',
-        generatedBy
+        config: { includeMetrics, filters, thresholds, status: 'generating', generatedBy },
+        stockLevels: []
       });
-
-      await report.save();
+      const report = {
+        id: created.id,
+        reportId,
+        reportName,
+        reportType,
+        periodType,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        config: { includeMetrics, filters, thresholds, status: 'generating', generatedBy },
+        stockLevels: [],
+        status: 'generating'
+      };
 
       try {
-        // Generate report data based on type
         switch (reportType) {
           case 'stock_levels':
             await this.generateStockLevelsData(report);
@@ -79,20 +122,19 @@ class InventoryReportService {
           default:
             throw new Error('Invalid report type');
         }
-
-        // Generate summary and comparison data
         await this.generateSummaryData(report);
         await this.generateComparisonData(report);
         await this.generateInsights(report);
-
-        // Mark as completed
         report.status = 'completed';
-        await report.save();
-
-        return report;
+        report.config = report.config || {};
+        report.config.status = 'completed';
+        await InventoryReportRepository.updateById(report.id, { config: report.config, stockLevels: report.stockLevels || report.stock_levels });
+        return { ...created, ...report };
       } catch (error) {
         report.status = 'failed';
-        await report.save();
+        report.config = report.config || {};
+        report.config.status = 'failed';
+        try { await InventoryReportRepository.updateById(report.id, { config: report.config }); } catch (_) {}
         throw error;
       }
     } catch (error) {
@@ -135,23 +177,21 @@ class InventoryReportService {
         }
       }
 
-      // Get all products with current stock levels
-      const products = await Product.find(matchCriteria)
-        .populate('category', 'name')
-        .sort({ 'inventory.currentStock': -1 });
+      const products = await getProductsForReport(report.config?.filters || {});
+      products.sort((a, b) => (Number(b.stock_quantity ?? b.stockQuantity ?? 0) - Number(a.stock_quantity ?? a.stockQuantity ?? 0)));
 
-      // Get previous period stock levels for comparison
       const previousPeriod = this.getPreviousPeriod(startDate, endDate, report.periodType);
-      const previousStockLevels = await this.getPreviousStockLevels(previousPeriod.startDate, previousPeriod.endDate, products.map(p => p._id));
+      const previousStockLevels = await this.getPreviousStockLevels(previousPeriod.startDate, previousPeriod.endDate, products.map(p => p.id || p._id));
 
-      // Calculate stock levels and categorize
       const stockLevels = await Promise.all(products.map(async (product, index) => {
-        const previousStock = previousStockLevels.find(p => p._id.toString() === product._id.toString());
-        const currentStock = product.inventory.currentStock;
-        const reorderPoint = product.inventory.reorderPoint;
-        const minStock = product.inventory.minStock;
-        const maxStock = product.inventory.maxStock;
-        const stockValue = currentStock * product.pricing.cost;
+        const pid = product.id || product._id;
+        const previousStock = previousStockLevels.find(p => String(p._id || p.id) === String(pid));
+        const currentStock = Number(product.stock_quantity ?? product.stockQuantity ?? product.inventory?.currentStock ?? 0);
+        const reorderPoint = Number(product.min_stock_level ?? product.minStockLevel ?? product.inventory?.reorderPoint ?? 0);
+        const minStock = reorderPoint;
+        const maxStock = Number(product.inventory?.maxStock ?? reorderPoint * 3);
+        const cost = Number(product.cost_price ?? product.costPrice ?? product.pricing?.cost ?? 0);
+        const stockValue = currentStock * cost;
 
         // Determine stock status
         let stockStatus = 'in_stock';
@@ -164,13 +204,13 @@ class InventoryReportService {
         }
 
         return {
-          product: product._id,
+          product: pid,
           metrics: {
             currentStock,
             minStock,
             maxStock,
             reorderPoint,
-            reorderQuantity: product.inventory.reorderPoint * 2, // Default reorder quantity
+            reorderQuantity: reorderPoint * 2,
             stockValue,
             stockStatus
           },
@@ -178,7 +218,7 @@ class InventoryReportService {
             previousStock: previousStock?.currentStock || 0,
             stockChange: currentStock - (previousStock?.currentStock || 0),
             stockChangePercentage: this.calculatePercentageChange(currentStock, previousStock?.currentStock || 0),
-            daysInStock: await this.getDaysInStock(product._id, endDate)
+            daysInStock: await this.getDaysInStock(pid, endDate)
           },
           rank: index + 1
         };
@@ -207,42 +247,10 @@ class InventoryReportService {
         productMatchCriteria.supplier = { $in: filters.suppliers };
       }
 
-      const products = await Product.find(productMatchCriteria);
-
-      // Get sales data for the period
-      const salesData = await Sales.aggregate([
-        {
-          $match: {
-            createdAt: { $gte: startDate, $lte: endDate },
-            status: 'delivered'
-          }
-        },
-        { $unwind: '$items' },
-        {
-          $group: {
-            _id: '$items.product',
-            totalSold: { $sum: '$items.quantity' }
-          }
-        }
-      ]);
-
-      // Get previous period sales data for comparison
+      const products = await getProductsForReport(filters);
+      const salesData = await getSalesGroupedByProduct(startDate, endDate, 'completed');
       const previousPeriod = this.getPreviousPeriod(startDate, endDate, report.periodType);
-      const previousSalesData = await Sales.aggregate([
-        {
-          $match: {
-            createdAt: { $gte: previousPeriod.startDate, $lte: previousPeriod.endDate },
-            status: 'delivered'
-          }
-        },
-        { $unwind: '$items' },
-        {
-          $group: {
-            _id: '$items.product',
-            totalSold: { $sum: '$items.quantity' }
-          }
-        }
-      ]);
+      const previousSalesData = await getSalesGroupedByProduct(previousPeriod.startDate, previousPeriod.endDate, 'completed');
 
       // Calculate turnover rates
       const turnoverRates = [];
@@ -250,11 +258,11 @@ class InventoryReportService {
       const periodYears = periodDays / 365;
 
       for (const product of products) {
-        const salesDataForProduct = salesData.find(s => s._id.toString() === product._id.toString());
-        const previousSalesDataForProduct = previousSalesData.find(s => s._id.toString() === product._id.toString());
-        
+        const pid = product.id || product._id;
+        const salesDataForProduct = salesData.find(s => String(s._id) === String(pid));
+        const previousSalesDataForProduct = previousSalesData.find(s => String(s._id) === String(pid));
         const totalSold = salesDataForProduct?.totalSold || 0;
-        const averageStock = product.inventory.currentStock; // Simplified - could be calculated more accurately
+        const averageStock = Number(product.stock_quantity ?? product.stockQuantity ?? product.inventory?.currentStock ?? 0);
         const turnoverRate = averageStock > 0 ? (totalSold / periodYears) / averageStock : 0;
         const daysToSell = turnoverRate > 0 ? 365 / turnoverRate : 999;
 
@@ -272,7 +280,7 @@ class InventoryReportService {
           (previousSalesDataForProduct.totalSold / periodYears) / averageStock : 0;
 
         turnoverRates.push({
-          product: product._id,
+          product: pid,
           metrics: {
             turnoverRate,
             totalSold,
@@ -323,34 +331,34 @@ class InventoryReportService {
         );
       }
 
-      const products = await Product.find(matchCriteria);
+      const products = await getProductsForReport(filters);
 
-      // Get last sold dates for products
-      const lastSoldDates = await Sales.aggregate([
-        {
-          $match: {
-            status: 'delivered',
-            'items.product': { $in: products.map(p => p._id) }
-          }
-        },
-        { $unwind: '$items' },
-        {
-          $group: {
-            _id: '$items.product',
-            lastSoldDate: { $max: '$createdAt' }
+      const productIds = products.map(p => p.id || p._id);
+      const lastSoldDatesRaw = await SalesRepository.findAll({ status: 'completed' }, { limit: 5000 });
+      const lastSoldMap = {};
+      for (const sale of lastSoldDatesRaw) {
+        const items = typeof sale.items === 'string' ? JSON.parse(sale.items) : (sale.items || []);
+        const saleDate = sale.sale_date || sale.saleDate || sale.created_at || sale.createdAt;
+        for (const it of items) {
+          const pid = it.product?.id ?? it.product?._id ?? it.product ?? it.product_id;
+          if (!pid || !productIds.includes(pid)) continue;
+          const key = String(pid);
+          if (!lastSoldMap[key] || new Date(saleDate) > new Date(lastSoldMap[key].lastSold)) {
+            lastSoldMap[key] = { _id: pid, lastSold: saleDate };
           }
         }
-      ]);
+      }
+      const lastSoldDates = Object.values(lastSoldMap);
 
-      // Calculate aging analysis
       const agingAnalysis = [];
       const currentDate = new Date();
 
       for (const product of products) {
-        const lastSoldData = lastSoldDates.find(l => l._id.toString() === product._id.toString());
-        const lastSoldDate = lastSoldData?.lastSoldDate || product.createdAt;
+        const pid = product.id || product._id;
+        const lastSoldData = lastSoldDates.find(l => String(l._id) === String(pid));
+        const lastSoldDate = lastSoldData?.lastSold ? new Date(lastSoldData.lastSold) : (product.created_at ? new Date(product.created_at) : currentDate);
         const daysInStock = Math.ceil((currentDate - lastSoldDate) / (1000 * 60 * 60 * 24));
-        const stockValue = product.inventory.currentStock * product.pricing.cost;
+        const stockValue = Number(product.stock_quantity ?? product.stockQuantity ?? 0) * Number(product.cost_price ?? product.costPrice ?? 0);
         
         // Calculate potential loss (simplified - could be more sophisticated)
         let potentialLoss = 0;
@@ -371,7 +379,7 @@ class InventoryReportService {
         }
 
         agingAnalysis.push({
-          product: product._id,
+          product: pid,
           metrics: {
             daysInStock,
             lastSoldDate,
@@ -416,61 +424,25 @@ class InventoryReportService {
   async generateCategoryPerformanceData(report) {
     try {
       const { startDate, endDate } = report;
+      const products = await ProductRepository.findAll({ isActive: true }, { limit: 5000 });
+      const byCategory = {};
+      for (const p of products) {
+        const cid = (p.category_id || p.category || p._id)?.toString?.() ?? 'none';
+        if (!byCategory[cid]) {
+          byCategory[cid] = { _id: cid, totalProducts: 0, totalStockValue: 0, lowStockProducts: 0, outOfStockProducts: 0, overstockedProducts: 0, averageTurnoverRate: 0 };
+        }
+        const row = byCategory[cid];
+        row.totalProducts++;
+        const stock = Number(p.stock_quantity ?? p.stockQuantity ?? 0);
+        const cost = Number(p.cost_price ?? p.costPrice ?? 0);
+        row.totalStockValue += stock * cost;
+        const reorder = Number(p.min_stock_level ?? p.minStockLevel ?? 0);
+        if (stock <= reorder) row.lowStockProducts++;
+        if (stock === 0) row.outOfStockProducts++;
+        if (reorder > 0 && stock > reorder * 3) row.overstockedProducts++;
+      }
+      const categoryPerformance = Object.values(byCategory).sort((a, b) => b.totalStockValue - a.totalStockValue);
 
-      // Get category performance
-      const categoryPerformance = await Product.aggregate([
-        {
-          $group: {
-            _id: '$category',
-            totalProducts: { $sum: 1 },
-            totalStockValue: { $sum: { $multiply: ['$inventory.currentStock', '$pricing.cost'] } },
-            lowStockProducts: {
-              $sum: {
-                $cond: [
-                  { $lte: ['$inventory.currentStock', '$inventory.reorderPoint'] },
-                  1,
-                  0
-                ]
-              }
-            },
-            outOfStockProducts: {
-              $sum: {
-                $cond: [
-                  { $eq: ['$inventory.currentStock', 0] },
-                  1,
-                  0
-                ]
-              }
-            },
-            overstockedProducts: {
-              $sum: {
-                $cond: [
-                  { $gt: ['$inventory.currentStock', { $multiply: ['$inventory.reorderPoint', 3] }] },
-                  1,
-                  0
-                ]
-              }
-            }
-          }
-        },
-        {
-          $lookup: {
-            from: 'categories',
-            localField: '_id',
-            foreignField: '_id',
-            as: 'categoryInfo'
-          }
-        },
-        { $unwind: '$categoryInfo' },
-        {
-          $addFields: {
-            averageTurnoverRate: 0 // Would need to calculate from sales data
-          }
-        },
-        { $sort: { totalStockValue: -1 } }
-      ]);
-
-      // Get previous period data for comparison
       const previousPeriod = this.getPreviousPeriod(startDate, endDate, report.periodType);
       const previousCategoryPerformance = await this.getPreviousCategoryPerformance(previousPeriod.startDate, previousPeriod.endDate, categoryPerformance.map(c => c._id));
 
@@ -509,57 +481,26 @@ class InventoryReportService {
   async generateSupplierPerformanceData(report) {
     try {
       const { startDate, endDate } = report;
-      const PurchaseOrder = require('../models/PurchaseOrder');
-      const PurchaseInvoice = require('../models/PurchaseInvoice');
-      const Product = require('../models/Product');
 
-      // Get all products with suppliers
-      const productsWithSuppliers = await Product.find({
-        $or: [
-          { suppliers: { $exists: true, $ne: [] } },
-          { primarySupplier: { $exists: true } }
-        ]
-      }).select('_id suppliers primarySupplier').lean();
-
-      // Create a map of supplier to products
-      const supplierProductMap = new Map();
-      productsWithSuppliers.forEach(product => {
-        const suppliers = product.suppliers || [];
-        if (product.primarySupplier) {
-          suppliers.push(product.primarySupplier);
-        }
-        const uniqueSuppliers = [...new Set(suppliers.map(s => s.toString()))];
-        uniqueSuppliers.forEach(supplierId => {
-          if (!supplierProductMap.has(supplierId)) {
-            supplierProductMap.set(supplierId, []);
-          }
-          supplierProductMap.get(supplierId).push(product._id);
-        });
-      });
-
-      // Get purchase orders and invoices for the period
-      const purchaseOrders = await PurchaseOrder.find({
-        orderDate: { $gte: startDate, $lte: endDate },
-        status: { $in: ['confirmed', 'partially_received', 'fully_received'] }
-      }).populate('supplier', 'companyName').lean();
-
-      const purchaseInvoices = await PurchaseInvoice.find({
-        createdAt: { $gte: startDate, $lte: endDate },
-        invoiceType: 'purchase',
-        status: { $in: ['confirmed', 'received', 'paid'] }
-      }).populate('supplier', 'companyName').lean();
+      const poStatuses = ['confirmed', 'partially_received', 'fully_received'];
+      const piStatuses = ['confirmed', 'received', 'paid'];
+      let purchaseOrders = await PurchaseOrderRepository.findAll({ dateFrom: startDate, dateTo: endDate }, { limit: 2000 });
+      let purchaseInvoices = await PurchaseInvoiceRepository.findAll({ dateFrom: startDate, dateTo: endDate }, { limit: 2000 });
+      purchaseOrders = purchaseOrders.filter(po => poStatuses.includes(po.status));
+      purchaseInvoices = purchaseInvoices.filter(inv => piStatuses.includes(inv.status));
 
       // Calculate performance metrics per supplier
       const supplierPerformance = new Map();
       
-      // Process purchase orders
+      const supplierIds = new Set();
       purchaseOrders.forEach(po => {
-        if (!po.supplier) return;
-        const supplierId = po.supplier._id.toString();
+        const supplierId = (po.supplier_id || po.supplier?.id || po.supplier?._id)?.toString?.();
+        if (!supplierId) return;
+        supplierIds.add(supplierId);
         if (!supplierPerformance.has(supplierId)) {
           supplierPerformance.set(supplierId, {
-            supplierId: supplierId,
-            supplierName: po.supplier.companyName || 'Unknown',
+            supplierId,
+            supplierName: 'Unknown',
             totalOrders: 0,
             totalInvoices: 0,
             totalValue: 0,
@@ -570,17 +511,16 @@ class InventoryReportService {
         }
         const perf = supplierPerformance.get(supplierId);
         perf.totalOrders++;
-        perf.totalValue += po.total || 0;
+        perf.totalValue += Number(po?.total ?? po?.grand_total ?? 0);
       });
-
-      // Process purchase invoices
       purchaseInvoices.forEach(inv => {
-        if (!inv.supplier) return;
-        const supplierId = inv.supplier._id.toString();
+        const supplierId = (inv.supplier_id || inv.supplier?.id || inv.supplier?._id)?.toString?.();
+        if (!supplierId) return;
+        supplierIds.add(supplierId);
         if (!supplierPerformance.has(supplierId)) {
           supplierPerformance.set(supplierId, {
-            supplierId: supplierId,
-            supplierName: inv.supplier.companyName || 'Unknown',
+            supplierId,
+            supplierName: 'Unknown',
             totalOrders: 0,
             totalInvoices: 0,
             totalValue: 0,
@@ -591,14 +531,18 @@ class InventoryReportService {
         }
         const perf = supplierPerformance.get(supplierId);
         perf.totalInvoices++;
-        perf.totalValue += inv.pricing?.total || 0;
-        if (inv.actualDelivery && inv.expectedDelivery) {
+        perf.totalValue += Number(inv?.total ?? inv?.pricing?.total ?? 0);
+        if (inv.actual_delivery && inv.expected_delivery) {
           perf.totalDeliveries++;
-          if (inv.actualDelivery <= inv.expectedDelivery) {
-            perf.onTimeDelivery++;
-          }
+          if (new Date(inv.actual_delivery) <= new Date(inv.expected_delivery)) perf.onTimeDelivery++;
         }
       });
+      for (const sid of supplierIds) {
+        try {
+          const sup = await SupplierRepository.findById(sid);
+          if (sup && supplierPerformance.has(sid)) supplierPerformance.get(sid).supplierName = sup.company_name || sup.name || 'Unknown';
+        } catch (_) {}
+      }
 
       // Calculate averages and convert to array
       const performanceArray = Array.from(supplierPerformance.values()).map(perf => {
@@ -623,51 +567,21 @@ class InventoryReportService {
       const { startDate, endDate, config } = report;
       const { thresholds } = config;
 
-      // Get overall summary
-      const summary = await Product.aggregate([
-        {
-          $group: {
-            _id: null,
-            totalProducts: { $sum: 1 },
-            totalStockValue: { $sum: { $multiply: ['$inventory.currentStock', '$pricing.cost'] } },
-            lowStockProducts: {
-              $sum: {
-                $cond: [
-                  { $lte: ['$inventory.currentStock', '$inventory.reorderPoint'] },
-                  1,
-                  0
-                ]
-              }
-            },
-            outOfStockProducts: {
-              $sum: {
-                $cond: [
-                  { $eq: ['$inventory.currentStock', 0] },
-                  1,
-                  0
-                ]
-              }
-            },
-            overstockedProducts: {
-              $sum: {
-                $cond: [
-                  { $gt: ['$inventory.currentStock', { $multiply: ['$inventory.reorderPoint', 3] }] },
-                  1,
-                  0
-                ]
-              }
-            }
-          }
-        }
-      ]);
-
-      const summaryData = summary[0] || {
-        totalProducts: 0,
-        totalStockValue: 0,
-        lowStockProducts: 0,
-        outOfStockProducts: 0,
-        overstockedProducts: 0
-      };
+      const products = await ProductRepository.findAll({ isActive: true }, { limit: 10000 });
+      const summaryData = products.reduce(
+        (acc, p) => {
+          acc.totalProducts++;
+          const stock = Number(p.stock_quantity ?? p.stockQuantity ?? 0);
+          const cost = Number(p.cost_price ?? p.costPrice ?? 0);
+          acc.totalStockValue += stock * cost;
+          const reorder = Number(p.min_stock_level ?? p.minStockLevel ?? 0);
+          if (stock <= reorder) acc.lowStockProducts++;
+          if (stock === 0) acc.outOfStockProducts++;
+          if (reorder > 0 && stock > reorder * 3) acc.overstockedProducts++;
+          return acc;
+        },
+        { totalProducts: 0, totalStockValue: 0, lowStockProducts: 0, outOfStockProducts: 0, overstockedProducts: 0 }
+      );
 
       // Calculate turnover categories
       const fastMovingProducts = report.turnoverRates?.filter(p => p.metrics.turnoverCategory === 'fast').length || 0;
@@ -715,36 +629,20 @@ class InventoryReportService {
       const { startDate, endDate, periodType } = report;
       const previousPeriod = this.getPreviousPeriod(startDate, endDate, periodType);
 
-      // Get previous period summary
-      const previousSummary = await Product.aggregate([
-        {
-          $group: {
-            _id: null,
-            totalProducts: { $sum: 1 },
-            totalStockValue: { $sum: { $multiply: ['$inventory.currentStock', '$pricing.cost'] } },
-            lowStockProducts: {
-              $sum: {
-                $cond: [
-                  { $lte: ['$inventory.currentStock', '$inventory.reorderPoint'] },
-                  1,
-                  0
-                ]
-              }
-            },
-            outOfStockProducts: {
-              $sum: {
-                $cond: [
-                  { $eq: ['$inventory.currentStock', 0] },
-                  1,
-                  0
-                ]
-              }
-            }
-          }
-        }
-      ]);
-
-      const previousData = previousSummary[0] || {
+      const prevProducts = await ProductRepository.findAll({ isActive: true }, { limit: 10000 });
+      const previousData = prevProducts.reduce(
+        (acc, p) => {
+          acc.totalProducts++;
+          const stock = Number(p.stock_quantity ?? p.stockQuantity ?? 0);
+          const cost = Number(p.cost_price ?? p.costPrice ?? 0);
+          acc.totalStockValue += stock * cost;
+          const reorder = Number(p.min_stock_level ?? p.minStockLevel ?? 0);
+          if (stock <= reorder) acc.lowStockProducts++;
+          if (stock === 0) acc.outOfStockProducts++;
+          return acc;
+        },
+        { totalProducts: 0, totalStockValue: 0, lowStockProducts: 0, outOfStockProducts: 0 }
+      ) || {
         totalProducts: 0,
         totalStockValue: 0,
         lowStockProducts: 0,
@@ -782,10 +680,10 @@ class InventoryReportService {
     }
   }
 
-  // Generate insights and recommendations
+  // Generate insights and recommendations (report is plain object; no Mongoose doc method)
   async generateInsights(report) {
     try {
-      const insights = report.generateInsights();
+      const insights = report.insights || [];
       report.insights = insights;
       // Don't save here - will be saved at the end
     } catch (error) {
@@ -938,19 +836,19 @@ class InventoryReportService {
         }
       }
 
-      const reports = await InventoryReport.find(query)
-        .populate([
-          { path: 'generatedBy', select: 'firstName lastName email' },
-          { path: 'stockLevels.product', select: 'name description pricing inventory' },
-          { path: 'turnoverRates.product', select: 'name description pricing inventory' },
-          { path: 'agingAnalysis.product', select: 'name description pricing inventory' }
-        ])
-        .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
-        .skip(skip)
-        .limit(limit);
-
-      const total = await InventoryReport.countDocuments(query);
-
+      const dbFilters = {};
+      if (reportType) dbFilters.reportType = reportType;
+      if (startDate) dbFilters.dateFrom = startDate;
+      if (endDate) dbFilters.dateTo = endDate;
+      const total = await InventoryReportRepository.count(dbFilters);
+      const reports = await InventoryReportRepository.findAll(dbFilters, { limit, offset: skip });
+      const sortMult = sortOrder === 'desc' ? -1 : 1;
+      const key = sortBy === 'generatedAt' ? 'created_at' : sortBy;
+      reports.sort((a, b) => {
+        const va = a[key] != null ? a[key] : '';
+        const vb = b[key] != null ? b[key] : '';
+        return (va < vb ? -1 : va > vb ? 1 : 0) * sortMult;
+      });
       return {
         reports,
         pagination: {
@@ -970,20 +868,8 @@ class InventoryReportService {
   // Get inventory report by ID
   async getInventoryReportById(reportId) {
     try {
-      const report = await InventoryReport.findOne({ reportId })
-        .populate([
-          { path: 'generatedBy', select: 'firstName lastName email' },
-          { path: 'stockLevels.product', select: 'name description pricing inventory category supplier' },
-          { path: 'turnoverRates.product', select: 'name description pricing inventory category supplier' },
-          { path: 'agingAnalysis.product', select: 'name description pricing inventory category supplier' },
-          { path: 'categoryPerformance.category', select: 'name description' },
-          { path: 'supplierPerformance.supplier', select: 'name contactInfo' }
-        ]);
-
-      if (!report) {
-        throw new Error('Inventory report not found');
-      }
-
+      const report = await InventoryReportRepository.findOne({ reportId });
+      if (!report) throw new Error('Inventory report not found');
       return report;
     } catch (error) {
       console.error('Error fetching inventory report:', error);
@@ -994,12 +880,9 @@ class InventoryReportService {
   // Delete inventory report
   async deleteInventoryReport(reportId, deletedBy) {
     try {
-      const report = await InventoryReport.findOne({ reportId });
-      if (!report) {
-        throw new Error('Inventory report not found');
-      }
-
-      await InventoryReport.findOneAndDelete({ reportId });
+      const report = await InventoryReportRepository.findOne({ reportId });
+      if (!report) throw new Error('Inventory report not found');
+      await InventoryReportRepository.deleteByReportId(reportId);
       return { message: 'Inventory report deleted successfully' };
     } catch (error) {
       console.error('Error deleting inventory report:', error);

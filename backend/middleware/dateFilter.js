@@ -65,7 +65,7 @@ const validateDateParams = [
 
 /**
  * Middleware to process date filters and add to request
- * @param {string|Array<string>} fieldName - MongoDB field name(s) to filter on
+ * @param {string|Array<string>} fieldName - Field name(s) to filter on
  * @param {Object} options - Options object
  * @param {boolean} options.required - Whether date params are required (default: false)
  * @returns {Function} Express middleware function
@@ -118,8 +118,8 @@ const processDateFilter = (fieldName = 'createdAt', options = {}) => {
 
 /**
  * Middleware to merge date filter with existing query filter
- * @param {Object} existingFilter - Existing MongoDB filter object
- * @param {string|Array<string>} fieldName - MongoDB field name(s) to filter on
+ * @param {Object} existingFilter - Existing filter object
+ * @param {string|Array<string>} fieldName - Field name(s) to filter on
  * @returns {Function} Express middleware function
  */
 const mergeDateFilter = (existingFilter = {}, fieldName = 'createdAt') => {

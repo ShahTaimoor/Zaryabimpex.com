@@ -16,7 +16,11 @@ export const shopsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: ['Shops'],
+      invalidatesTags: [
+        'Shops',
+        { type: 'Reports', id: 'SALES_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     updateShop: builder.mutation({
       query: ({ shopId, ...data }) => ({
@@ -24,7 +28,11 @@ export const shopsApi = api.injectEndpoints({
         method: 'put',
         data,
       }),
-      invalidatesTags: ['Shops'],
+      invalidatesTags: [
+        'Shops',
+        { type: 'Reports', id: 'SALES_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     updateShopStatus: builder.mutation({
       query: ({ shopId, status }) => ({
@@ -32,7 +40,11 @@ export const shopsApi = api.injectEndpoints({
         method: 'patch',
         data: { status },
       }),
-      invalidatesTags: ['Shops'],
+      invalidatesTags: [
+        'Shops',
+        { type: 'Reports', id: 'SALES_REPORT' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+      ],
     }),
     getAllAdmins: builder.query({
       query: () => ({ url: 'shops/admins/all', method: 'get' }),
@@ -44,7 +56,7 @@ export const shopsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: ['Admins'],
+      invalidatesTags: ['Admins', 'Shops'],
     }),
     getShopSuppliers: builder.query({
       query: (shopId) => ({
