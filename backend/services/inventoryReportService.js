@@ -64,6 +64,49 @@ class InventoryReportService {
     };
   }
 
+  // Normalize Postgres (snake_case) rows to the camelCase shape the frontend expects.
+  // This fixes UI showing "UNKNOWN" / "Invalid Date" when fields like reportType/generatedAt are missing.
+  toApiInventoryReport(dbRow) {
+    if (!dbRow) return null;
+
+    let config = dbRow.config;
+    if (typeof config === 'string') {
+      try {
+        config = JSON.parse(config);
+      } catch (_) {
+        // Keep as-is if JSON parsing fails
+      }
+    }
+
+    const status = dbRow.status || config?.status || config?.config?.status || 'generating';
+
+    return {
+      // Frontend uses `_id` as React key
+      _id: dbRow.id || dbRow._id,
+      id: dbRow.id,
+
+      reportId: dbRow.report_id || dbRow.reportId,
+      reportName: dbRow.report_name || dbRow.reportName,
+      reportType: dbRow.report_type || dbRow.reportType,
+      periodType: dbRow.period_type || dbRow.periodType,
+
+      startDate: dbRow.start_date || dbRow.startDate,
+      endDate: dbRow.end_date || dbRow.endDate,
+
+      generatedAt: dbRow.generatedAt || dbRow.created_at || dbRow.createdAt,
+      updatedAt: dbRow.updatedAt || dbRow.updated_at || dbRow.updatedAt || null,
+
+      status,
+      config,
+      // Some code uses `stockLevels`, some uses `stock_levels`
+      stockLevels: dbRow.stockLevels ?? dbRow.stock_levels ?? [],
+
+      // Optional fields (might not exist in current schema)
+      isFavorite: dbRow.is_favorite ?? dbRow.isFavorite ?? false,
+      viewCount: dbRow.view_count ?? dbRow.viewCount ?? 0
+    };
+  }
+
   // Generate comprehensive inventory report
   async generateInventoryReport(config, generatedBy) {
     try {
@@ -129,7 +172,7 @@ class InventoryReportService {
         report.config = report.config || {};
         report.config.status = 'completed';
         await InventoryReportRepository.updateById(report.id, { config: report.config, stockLevels: report.stockLevels || report.stock_levels });
-        return { ...created, ...report };
+        return this.toApiInventoryReport({ ...created, ...report });
       } catch (error) {
         report.status = 'failed';
         report.config = report.config || {};
@@ -850,7 +893,7 @@ class InventoryReportService {
         return (va < vb ? -1 : va > vb ? 1 : 0) * sortMult;
       });
       return {
-        reports,
+        reports: reports.map(r => this.toApiInventoryReport(r)),
         pagination: {
           current: page,
           pages: Math.ceil(total / limit),
@@ -870,7 +913,7 @@ class InventoryReportService {
     try {
       const report = await InventoryReportRepository.findOne({ reportId });
       if (!report) throw new Error('Inventory report not found');
-      return report;
+      return this.toApiInventoryReport(report);
     } catch (error) {
       console.error('Error fetching inventory report:', error);
       throw error;

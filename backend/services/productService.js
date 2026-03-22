@@ -313,14 +313,6 @@ class ProductService {
       }
     }
 
-    // Check if SKU already exists
-    if (productData.sku) {
-      const skuExists = await productRepository.skuExists(productData.sku);
-      if (skuExists) {
-        throw new Error('A product with this SKU already exists.');
-      }
-    }
-
     // Check if barcode already exists
     if (productData.barcode) {
       const barcodeExists = await productRepository.barcodeExists(productData.barcode);
@@ -433,14 +425,6 @@ class ProductService {
       const nameExists = await productRepository.nameExists(updateData.name, id);
       if (nameExists) {
         throw new Error('A product with this name already exists. Please choose a different name.');
-      }
-    }
-
-    // Check if SKU already exists (excluding current product)
-    if (updateData.sku) {
-      const skuExists = await productRepository.skuExists(updateData.sku, id);
-      if (skuExists) {
-        throw new Error('A product with this SKU already exists.');
       }
     }
 

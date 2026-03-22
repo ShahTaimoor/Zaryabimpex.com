@@ -240,9 +240,6 @@ export const Reports = () => {
             { header: 'Closing Qty', render: (row) => (row.closingQty || 0).toLocaleString(), align: 'right', bold: true },
             { header: 'Closing Amt', render: (row) => (row.closingAmount || 0).toLocaleString(), align: 'right', bold: true },
             { header: 'Sale Price1', render: (row) => (row.salePrice1 || 0).toLocaleString(), align: 'right' },
-            { header: 'Zakat Amt', render: (row) => (row.zakatAmount || 0).toLocaleString(), align: 'right' },
-            { header: 'Avg Pur.Price', render: (row) => (row.avgPurchasePrice || 0).toLocaleString(), align: 'right' },
-            { header: 'Zakat Avg Amt', render: (row) => (row.zakatAvgAmount || 0).toLocaleString(), align: 'right' },
           ];
         }
         const baseCols = [
@@ -369,8 +366,7 @@ export const Reports = () => {
       if (inventoryType === 'stock-summary') {
         return {
           ...base,
-          'Wholesale Valuation': inventoryReportData?.summary?.totalWholesaleValuation ?? 0,
-          'Retail Valuation': inventoryReportData?.summary?.totalRetailValuation ?? 0
+          'Wholesale Valuation': inventoryReportData?.summary?.totalWholesaleValuation ?? 0
         };
       }
       return base;
@@ -786,9 +782,7 @@ export const Reports = () => {
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.closingQty || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.closingAmount || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">—</td>
-                            <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.zakatAmount || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">—</td>
-                            <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.zakatAvgAmount || 0).toLocaleString()}</td>
                           </tr>
                         )}
                       </>

@@ -45,6 +45,7 @@ import {
   useLazyGetStockStatusQuery,
   useCreateSalesOrderMutation,
   useUpdateSalesOrderMutation,
+  useUpdateSalesOrderItemsConfirmationMutation,
   useDeleteSalesOrderMutation,
   useConfirmSalesOrderMutation,
   useCancelSalesOrderMutation,
@@ -55,8 +56,16 @@ import {
   useExportJSONMutation,
   useDownloadFileMutation,
 } from '../store/services/salesOrdersApi';
+import {
+  OrderConfirmationStatusBadge,
+  OrderItemConfirmationCell,
+  OrderConfirmSelectedActions,
+  getItemConfirmationStatus,
+} from '../components/OrderItemConfirmationCell';
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { SearchableDropdown } from '../components/SearchableDropdown';
+import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
+import { hasDualUnit, piecesToBoxesAndPieces, getPiecesPerBox, formatStockDualLabel } from '../utils/dualUnitUtils';
 import { useTab } from '../contexts/TabContext';
 import { useAuth } from '../contexts/AuthContext';
 import PrintModal from '../components/PrintModal';
@@ -98,6 +107,10 @@ const SalesOrders = ({ tabId }) => {
   const { updateTabTitle, tabs, activeTabId } = useTab();
   const { companyInfo: companySettings } = useCompanyInfo();
   const resolvedCompanyName = companySettings.companyName || 'Company Name';
+  const itemWiseConfirmationEnabled = companySettings.orderSettings?.salesOrderItemWiseConfirmation !== false;
+  const showRemainingStockAfterSaleEnabled = companySettings.orderSettings?.showRemainingStockAfterSale !== false;
+  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
+  const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const resolvedCompanyAddress = companySettings.address || companySettings.billingAddress || '';
   const resolvedCompanyPhone = companySettings.contactNumber || '';
 
@@ -138,6 +151,7 @@ const SalesOrders = ({ tabId }) => {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printOrderData, setPrintOrderData] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selectedItemIndices, setSelectedItemIndices] = useState([]);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
@@ -443,6 +457,7 @@ const SalesOrders = ({ tabId }) => {
   const [updateSalesOrderMutation, { isLoading: updating }] = useUpdateSalesOrderMutation();
   const [deleteSalesOrderMutation, { isLoading: deleting }] = useDeleteSalesOrderMutation();
   const [confirmSalesOrderMutation, { isLoading: confirming }] = useConfirmSalesOrderMutation();
+  const [updateItemsConfirmationMutation, { isLoading: updatingItemsConfirmation }] = useUpdateSalesOrderItemsConfirmationMutation();
   const [cancelSalesOrderMutation, { isLoading: cancelling }] = useCancelSalesOrderMutation();
   const [closeSalesOrderMutation, { isLoading: closing }] = useCloseSalesOrderMutation();
   const [exportExcelMutation] = useExportExcelMutation();
@@ -794,6 +809,8 @@ const SalesOrders = ({ tabId }) => {
         // Product already in cart - increase quantity instead of adding a new row
         const existingItem = formData.items[existingIndex];
         const newQuantity = (existingItem.quantity || 0) + quantity;
+        const ppb = getPiecesPerBox(selectedProduct);
+        const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {};
         const newSubtotal = newQuantity * unitPrice;
         const newTaxAmount = formData.isTaxExempt ? 0 : (newSubtotal * (existingItem.taxRate || 0) / 100);
         const newTotal = newSubtotal - (existingItem.discountAmount || 0) + newTaxAmount;
@@ -805,6 +822,7 @@ const SalesOrders = ({ tabId }) => {
               ? {
                   ...item,
                   quantity: newQuantity,
+                  ...(ppb && { boxes, pieces }),
                   unitPrice: unitPrice,
                   subtotal: newSubtotal,
                   taxAmount: newTaxAmount,
@@ -814,11 +832,14 @@ const SalesOrders = ({ tabId }) => {
           )
         }));
       } else {
-        // New product - add as new row
+        // New product - add as new row (store boxes/pieces for dual-unit display)
+        const ppb = getPiecesPerBox(selectedProduct);
+        const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(quantity, ppb) : {};
         const newItem = {
           product: selectedProduct._id,
           productData: selectedProduct,
           quantity,
+          ...(ppb && { boxes, pieces }),
           unitPrice: unitPrice,
           discountPercent: 0,
           taxRate: taxRate,
@@ -895,10 +916,13 @@ const SalesOrders = ({ tabId }) => {
       : (modalSelectedProduct.taxSettings?.taxRate || 0);
     const subtotal = unitPrice * quantity;
     const taxAmount = formData.isTaxExempt ? 0 : (subtotal * taxRate / 100);
+    const ppb = getPiecesPerBox(modalSelectedProduct);
+    const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(quantity, ppb) : {};
     const newItem = {
       product: modalSelectedProduct._id,
       productData: modalSelectedProduct,
       quantity,
+      ...(ppb && { boxes, pieces }),
       unitPrice,
       discountPercent: 0,
       taxRate,
@@ -1184,15 +1208,23 @@ const SalesOrders = ({ tabId }) => {
     // Remove payment field as sales orders don't have payment information
     const { payment, ...orderDataWithoutPayment } = formData;
 
-    // Transform items to match backend expectations
-    const transformedItems = formData.items.map(item => ({
-      product: item.product,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      totalPrice: item.total,
-      invoicedQuantity: 0, // Default to 0 for new sales orders
-      remainingQuantity: item.quantity // Initially all quantity is remaining
-    }));
+    // Transform items to match backend expectations (quantity in pieces for stock)
+    const transformedItems = formData.items.map(item => {
+      const qty = Math.round(Number(item.quantity) || 1);
+      const base = {
+        product: item.product,
+        quantity: qty,
+        unitPrice: item.unitPrice,
+        totalPrice: item.total,
+        invoicedQuantity: 0,
+        remainingQuantity: qty
+      };
+      if (item.boxes != null || item.pieces != null) {
+        base.boxes = item.boxes;
+        base.pieces = item.pieces;
+      }
+      return base;
+    });
 
     const orderData = {
       ...orderDataWithoutPayment,
@@ -1233,14 +1265,22 @@ const SalesOrders = ({ tabId }) => {
     const cleanedData = {
       ...formData,
       customer: customerId || undefined,
-      items: formData.items.map(item => ({
-        product: getProductId(item),
-        quantity: Math.max(1, parseInt(item.quantity, 10) || 1),
-        unitPrice: parseFloat(item.unitPrice) || 0,
-        totalPrice: parseFloat(item.total) || parseFloat(item.unitPrice) * (parseInt(item.quantity, 10) || 1),
-        invoicedQuantity: parseInt(item.invoicedQuantity, 10) || 0,
-        remainingQuantity: parseInt(item.remainingQuantity, 10) ?? (parseInt(item.quantity, 10) || 1)
-      })).filter(item => item.product)
+      items: formData.items.map(item => {
+        const qty = Math.max(1, Math.round(Number(item.quantity) || 1));
+        const base = {
+          product: getProductId(item),
+          quantity: qty,
+          unitPrice: parseFloat(item.unitPrice) || 0,
+          totalPrice: parseFloat(item.total) || parseFloat(item.unitPrice) * qty,
+          invoicedQuantity: parseInt(item.invoicedQuantity, 10) || 0,
+          remainingQuantity: parseInt(item.remainingQuantity, 10) ?? qty
+        };
+        if (item.boxes != null || item.pieces != null) {
+          base.boxes = item.boxes;
+          base.pieces = item.pieces;
+        }
+        return base;
+      }).filter(item => item.product)
     };
 
     updateSalesOrderMutation({ id: selectedOrder._id || selectedOrder.id, ...cleanedData })
@@ -1340,6 +1380,38 @@ const SalesOrders = ({ tabId }) => {
           showErrorToast(handleApiError(error));
         });
     }
+  };
+
+  const handleUpdateItemsConfirmation = (itemUpdates, confirmAll, cancelAll) => {
+    const id = selectedOrder?._id ?? selectedOrder?.id;
+    if (!id) return;
+    updateItemsConfirmationMutation({ id, itemUpdates, confirmAll, cancelAll })
+      .unwrap()
+      .then((response) => {
+        const msg = response?.sale
+          ? 'Items confirmed and invoice created successfully'
+          : response?.invoiceError
+            ? 'Items confirmed but invoice creation failed'
+            : 'Items confirmation updated';
+        showSuccessToast(msg);
+        if (response?.salesOrder) {
+          setSelectedOrder(response.salesOrder);
+        }
+        setSelectedItemIndices([]);
+        refetch();
+        if (refetchProducts && typeof refetchProducts === 'function') {
+          refetchProducts();
+        }
+      })
+      .catch((error) => {
+        showErrorToast(handleApiError(error));
+      });
+  };
+
+  const toggleItemSelection = (index) => {
+    setSelectedItemIndices((prev) =>
+      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
+    );
   };
 
   const handleExportConfirm = async () => {
@@ -1603,6 +1675,7 @@ const SalesOrders = ({ tabId }) => {
 
   const handleView = (order) => {
     setSelectedOrder(order);
+    setSelectedItemIndices([]);
     setShowViewModal(true);
   };
 
@@ -2045,7 +2118,11 @@ const SalesOrders = ({ tabId }) => {
           {/* Product Search */}
           <div className="mb-6">
             {(() => {
-              const productSearchMdClass = canViewCostPrice && showCostPrice ? 'md:col-span-6' : 'md:col-span-7';
+              const dualSel = hasDualUnit(selectedProduct);
+              const productSearchMdClass = dualSel
+                ? (canViewCostPrice && showCostPrice ? 'md:col-span-4' : 'md:col-span-5')
+                : (canViewCostPrice && showCostPrice ? 'md:col-span-6' : 'md:col-span-7');
+              const qtyMdClass = dualSel ? 'col-span-6 md:col-span-3' : 'col-span-6 md:col-span-1';
               const previewAmount = isAddingProduct
                 ? Math.round(quantity * parseFloat(customRate || 0))
                 : 0;
@@ -2075,27 +2152,41 @@ const SalesOrders = ({ tabId }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Stock
                     </label>
-                    <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
-                      {selectedProduct ? selectedProduct.inventory?.currentStock || 0 : '0'}
+                    <span
+                      className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center min-h-[2.5rem] flex flex-col items-center justify-center gap-0.5 leading-tight"
+                      title="Available stock"
+                    >
+                      {selectedProduct ? (
+                        hasDualUnit(selectedProduct) ? (
+                          <>
+                            <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock || 0, selectedProduct)}</span>
+                            <span className="text-[10px] font-normal text-gray-500">available</span>
+                          </>
+                        ) : (
+                          <span>{selectedProduct.inventory?.currentStock || 0} pcs</span>
+                        )
+                      ) : (
+                        '0'
+                      )}
                     </span>
                   </div>
 
-                  <div className="col-span-6 md:col-span-1">
+                  <div className={qtyMdClass}>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Quantity
                     </label>
-                    <input
-                      type="number"
-                      min="1"
-                      autoComplete="off"
+                    <DualUnitQuantityInput
+                      product={selectedProduct}
+                      quantity={quantity}
+                      onChange={(q, dual) => setQuantity(q)}
                       max={selectedProduct?.inventory?.currentStock > 0 ? selectedProduct.inventory.currentStock : undefined}
-                      value={quantity}
-                      onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                      stockPiecesForRemaining={selectedProduct?.inventory?.currentStock ?? 0}
+                      showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
+                      showBoxInput={dualUnitShowBoxInputEnabled}
+                      showPiecesInput={dualUnitShowPiecesInputEnabled}
                       onKeyDown={handleInputKeyDown}
-                      onFocus={(e) => e.target.select()}
-                      className="input text-center"
-                      placeholder="1 (Enter to add & focus search)"
-                      autoFocus={isAddingProduct}
+                      inputClassName="input text-center h-10"
+                      compact={!dualSel}
                     />
                   </div>
 
@@ -2259,27 +2350,38 @@ const SalesOrders = ({ tabId }) => {
                         </span>
                       </div>
 
-                      {/* Quantity - 1 column */}
-                      <div className="col-span-1">
-                        <input
-                          type="number"
-                          autoComplete="off"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const newQuantity = parseInt(e.target.value) || 1;
+                      {/* Quantity — dual unit uses compact 3-cell row inside col-span-2 */}
+                      <div className={hasDualUnit(product) ? 'col-span-2' : 'col-span-1'}>
+                        <DualUnitQuantityInput
+                          product={product}
+                          quantity={item.quantity}
+                          onChange={(newQuantity, dual) => {
                             if (newQuantity <= 0) {
                               handleRemoveItem(index);
                               return;
                             }
+                            const ppb = getPiecesPerBox(product);
+                            const { boxes, pieces } = ppb && dual ? dual : (ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {});
                             setFormData(prev => ({
                               ...prev,
                               items: prev.items.map((itm, i) =>
-                                i === index ? { ...itm, quantity: newQuantity, total: newQuantity * itm.unitPrice } : itm
+                                i === index ? {
+                                  ...itm,
+                                  quantity: newQuantity,
+                                  ...(ppb && { boxes, pieces }),
+                                  total: newQuantity * itm.unitPrice
+                                } : itm
                               )
                             }));
                           }}
-                          className="input text-center h-8"
-                          min="1"
+                          min={1}
+                          max={product?.inventory?.currentStock}
+                          stockPiecesForRemaining={product?.inventory?.currentStock ?? 0}
+                          showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
+                          showBoxInput={dualUnitShowBoxInputEnabled}
+                          showPiecesInput={dualUnitShowPiecesInputEnabled}
+                          inputClassName="input text-center h-8"
+                          compact={hasDualUnit(product)}
                         />
                       </div>
 
@@ -2402,24 +2504,35 @@ const SalesOrders = ({ tabId }) => {
                         </div>
                         <div>
                           <p className="text-xs text-gray-500 mb-1">Quantity</p>
-                          <input
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const newQuantity = parseInt(e.target.value) || 1;
+                          <DualUnitQuantityInput
+                            product={product}
+                            quantity={item.quantity}
+                            onChange={(newQuantity, dual) => {
                               if (newQuantity <= 0) {
                                 handleRemoveItem(index);
                                 return;
                               }
+                              const ppb = getPiecesPerBox(product);
+                              const { boxes, pieces } = ppb && dual ? dual : (ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {});
                               setFormData(prev => ({
                                 ...prev,
                                 items: prev.items.map((itm, i) =>
-                                  i === index ? { ...itm, quantity: newQuantity, total: newQuantity * itm.unitPrice } : itm
+                                  i === index ? {
+                                    ...itm,
+                                    quantity: newQuantity,
+                                    ...(ppb && { boxes, pieces }),
+                                    total: newQuantity * itm.unitPrice
+                                  } : itm
                                 )
                               }));
                             }}
-                            className="input text-center h-8 text-sm w-full"
-                            min="1"
+                            min={1}
+                            max={product?.inventory?.currentStock}
+                            stockPiecesForRemaining={product?.inventory?.currentStock ?? 0}
+                            showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
+                            showBoxInput={dualUnitShowBoxInputEnabled}
+                            showPiecesInput={dualUnitShowPiecesInputEnabled}
+                            inputClassName="input text-center h-8 text-sm w-full"
                           />
                         </div>
                         <div>
@@ -3036,6 +3149,7 @@ const SalesOrders = ({ tabId }) => {
                   onClick={() => {
                     setShowViewModal(false);
                     setSelectedOrder(null);
+                    setSelectedItemIndices([]);
                   }}
                   className="text-gray-400 hover:text-gray-600 transition-colors"
                 >
@@ -3075,6 +3189,11 @@ const SalesOrders = ({ tabId }) => {
                         {selectedOrder.status === 'draft' ? 'Pending' : selectedOrder.status.replace('_', ' ')}
                       </span>
                     </p>
+                    {itemWiseConfirmationEnabled && (
+                      <p><span className="font-medium">Confirmation:</span>
+                        <OrderConfirmationStatusBadge order={selectedOrder} />
+                      </p>
+                    )}
                     {selectedOrder.expectedDelivery && (
                       <p><span className="font-medium">Expected Delivery:</span> {formatDate(selectedOrder.expectedDelivery)}</p>
                     )}
@@ -3123,6 +3242,25 @@ const SalesOrders = ({ tabId }) => {
               {/* Items Table */}
               <div className="mb-6">
                 <h5 className="font-semibold text-gray-900 mb-3">Items Ordered</h5>
+                {itemWiseConfirmationEnabled && (
+                  <OrderConfirmSelectedActions
+                    items={selectedOrder.items}
+                    canEdit={selectedOrder.status !== 'cancelled'}
+                    selectedIndices={selectedItemIndices}
+                    onSelectAll={(indices) => setSelectedItemIndices(indices)}
+                    onSelectNone={() => setSelectedItemIndices([])}
+                    onConfirmSelected={(indices) => {
+                      if (indices.length) {
+                        handleUpdateItemsConfirmation(
+                          indices.map((i) => ({ itemIndex: i, confirmationStatus: 'confirmed' })),
+                          false,
+                          false
+                        );
+                      }
+                    }}
+                    isUpdating={updatingItemsConfirmation}
+                  />
+                )}
                 <div className="overflow-x-auto">
                   <table className="min-w-full border border-gray-200 rounded-lg">
                     <thead className="bg-gray-50">
@@ -3142,11 +3280,16 @@ const SalesOrders = ({ tabId }) => {
                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
                           Total Price
                         </th>
+                        {itemWiseConfirmationEnabled && (
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                            Confirmation
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {selectedOrder.items && selectedOrder.items.map((item, index) => (
-                        <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <tr key={index} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${(item.confirmationStatus ?? item.confirmation_status) === 'cancelled' ? 'opacity-60' : ''}`}>
                           <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
                             {index + 1}
                           </td>
@@ -3171,6 +3314,20 @@ const SalesOrders = ({ tabId }) => {
                           <td className="px-4 py-3 text-sm font-medium text-gray-900 text-right border-b border-gray-200">
                             {Math.round(item.totalPrice || (item.quantity * (item.unitPrice || item.price || 0)))}
                           </td>
+                          {itemWiseConfirmationEnabled && (
+                            <td className="px-4 py-3 text-sm border-b border-gray-200">
+                              <OrderItemConfirmationCell
+                                item={item}
+                                itemIndex={index}
+                                status={getItemConfirmationStatus(item)}
+                                canEdit={selectedOrder.status !== 'cancelled'}
+                                selected={selectedItemIndices.includes(index)}
+                                onToggleSelect={toggleItemSelection}
+                                onCancel={(idx) => handleUpdateItemsConfirmation([{ itemIndex: idx, confirmationStatus: 'cancelled' }], false, false)}
+                                isUpdating={updatingItemsConfirmation}
+                              />
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -3294,6 +3451,7 @@ const SalesOrders = ({ tabId }) => {
                     onClick={() => {
                       setShowViewModal(false);
                       setSelectedOrder(null);
+                      setSelectedItemIndices([]);
                     }}
                     variant="secondary"
                   >

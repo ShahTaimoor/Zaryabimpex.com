@@ -89,6 +89,7 @@ export const citiesApi = api.injectEndpoints({
         method: 'get',
         responseType: 'blob',
       }),
+      providesTags: [{ type: 'Cities', id: 'TEMPLATE' }],
     }),
     downloadCityExportFile: builder.query({
       query: (filename) => ({
@@ -96,6 +97,7 @@ export const citiesApi = api.injectEndpoints({
         method: 'get',
         responseType: 'blob',
       }),
+      providesTags: [{ type: 'Cities', id: 'EXPORT' }],
     }),
   }),
   overrideExisting: false,

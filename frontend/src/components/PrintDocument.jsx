@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { formatQuantityDisplay } from '../utils/dualUnitUtils';
 
 const PrintDocument = ({
     companySettings,
@@ -506,11 +507,12 @@ const PrintDocument = ({
                                 0
                             );
                             const lineTotal = toNumber(item.total ?? item.lineTotal ?? item.totalPrice ?? item.totalCost, qty * price);
+                            const qtyDisplay = formatQuantityDisplay(qty, item.product ?? item.productData, null, { boxes: item.boxes, pieces: item.pieces });
                             return (
                                 <tr key={index}>
                                     <td className="border border-black p-1 text-center">{index + 1}</td>
                                     <td className="border border-black p-1 uppercase">{item.product?.name || item.name || `Item ${index + 1}`}</td>
-                                    <td className="border border-black p-1 text-center">{formatCurrency(qty)}</td>
+                                    <td className="border border-black p-1 text-center">{qtyDisplay}</td>
                                     <td className="border border-black p-1 text-right">{formatCurrency(price)}</td>
                                     <td className="border border-black p-1 text-right">{formatCurrency(lineTotal)}</td>
                                 </tr>
@@ -714,6 +716,7 @@ const PrintDocument = ({
                             0
                         );
                         const lineTotal = toNumber(item.total ?? item.lineTotal ?? item.totalPrice ?? item.totalCost, qty * price);
+                        const qtyDisplay = formatQuantityDisplay(qty, item.product ?? item.productData, null, { boxes: item.boxes, pieces: item.pieces });
                         return (
                             <tr key={index}>
                                 <td>{item.product?.name || item.name || `Item ${index + 1}`}</td>
@@ -725,7 +728,7 @@ const PrintDocument = ({
                                             '—'}
                                     </td>
                                 )}
-                                <td>{formatCurrency(qty)}</td>
+                                <td>{qtyDisplay}</td>
                                 <td>{formatCurrency(price)}</td>
                                 <td>{formatCurrency(lineTotal)}</td>
                             </tr>

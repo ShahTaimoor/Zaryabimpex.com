@@ -45,6 +45,7 @@ import { useChangePasswordMutation } from '../store/services/authApi';
 import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
 import PrintDocument from '../components/PrintDocument';
 import { CompanySettingsForm } from '../components/CompanySettingsForm';
+import { OrderItemWiseConfirmationSettings } from '../components/OrderItemWiseConfirmationSettings';
 import { handleApiError } from '../utils/errorHandler';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -2407,6 +2408,8 @@ export const Settings2 = () => {
                     <div className="text-xs text-gray-500">Display the Return column in the Account Ledger Summary customer ledger table</div>
                   </div>
                 </label>
+
+                <OrderItemWiseConfirmationSettings />
               </div>
             </div>
           </div>

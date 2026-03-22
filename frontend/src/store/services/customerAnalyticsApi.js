@@ -33,12 +33,17 @@ export const customerAnalyticsApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      providesTags: (_r, _e, { segment }) => [
+        { type: 'Reports', id: 'CUSTOMER_ANALYTICS' },
+        { type: 'Reports', id: `CUSTOMER_ANALYTICS_SEGMENT_${segment}` },
+      ],
     }),
     getChurnRisk: builder.query({
       query: (level) => ({
         url: `customer-analytics/churn-risk/${level}`,
         method: 'get',
       }),
+      providesTags: [{ type: 'Reports', id: 'CUSTOMER_ANALYTICS' }],
     }),
   }),
   overrideExisting: false,

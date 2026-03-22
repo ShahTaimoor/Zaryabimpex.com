@@ -39,8 +39,13 @@ export const suppliersApi = api.injectEndpoints({
       invalidatesTags: [
         { type: 'Suppliers', id: 'LIST' },
         { type: 'Suppliers', id: 'ACTIVE' },
+        { type: 'Suppliers', id: 'SEARCH' },
+        { type: 'Suppliers', id: 'CHECK' },
+        { type: 'Accounting' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     updateSupplier: builder.mutation({
@@ -53,10 +58,15 @@ export const suppliersApi = api.injectEndpoints({
         { type: 'Suppliers', id },
         { type: 'Suppliers', id: 'LIST' },
         { type: 'Suppliers', id: 'ACTIVE' },
+        { type: 'Suppliers', id: 'SEARCH' },
+        { type: 'Suppliers', id: 'CHECK' },
+        { type: 'Accounting' },
         { type: 'Orders', id: 'PO_LIST' },
         { type: 'Orders', id: 'PI_LIST' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     deleteSupplier: builder.mutation({
@@ -68,6 +78,9 @@ export const suppliersApi = api.injectEndpoints({
         { type: 'Suppliers', id },
         { type: 'Suppliers', id: 'LIST' },
         { type: 'Suppliers', id: 'ACTIVE' },
+        { type: 'Suppliers', id: 'SEARCH' },
+        { type: 'Suppliers', id: 'CHECK' },
+        { type: 'Accounting' },
         { type: 'Orders', id: 'PO_LIST' },
         { type: 'Orders', id: 'PI_LIST' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
@@ -80,6 +93,7 @@ export const suppliersApi = api.injectEndpoints({
         method: 'get',
         params: excludeId ? { excludeId } : undefined,
       }),
+      providesTags: [{ type: 'Suppliers', id: 'CHECK' }],
     }),
     checkCompanyName: builder.query({
       query: ({ companyName, excludeId }) => ({
@@ -87,6 +101,7 @@ export const suppliersApi = api.injectEndpoints({
         method: 'get',
         params: excludeId ? { excludeId } : undefined,
       }),
+      providesTags: [{ type: 'Suppliers', id: 'CHECK' }],
     }),
     checkContactName: builder.query({
       query: ({ contactName, excludeId }) => ({
@@ -94,6 +109,7 @@ export const suppliersApi = api.injectEndpoints({
         method: 'get',
         params: excludeId ? { excludeId } : undefined,
       }),
+      providesTags: [{ type: 'Suppliers', id: 'CHECK' }],
     }),
     getActiveSuppliers: builder.query({
       query: () => ({
@@ -136,8 +152,13 @@ export const suppliersApi = api.injectEndpoints({
       invalidatesTags: [
         { type: 'Suppliers', id: 'LIST' },
         { type: 'Suppliers', id: 'ACTIVE' },
+        { type: 'Suppliers', id: 'SEARCH' },
+        { type: 'Suppliers', id: 'CHECK' },
+        { type: 'Accounting' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     downloadTemplate: builder.query({
@@ -146,6 +167,7 @@ export const suppliersApi = api.injectEndpoints({
         method: 'get',
         responseType: 'blob',
       }),
+      providesTags: [{ type: 'Suppliers', id: 'TEMPLATE' }],
     }),
     downloadExportFile: builder.query({
       query: (filename) => ({
@@ -153,6 +175,7 @@ export const suppliersApi = api.injectEndpoints({
         method: 'get',
         responseType: 'blob',
       }),
+      providesTags: [{ type: 'Suppliers', id: 'EXPORT' }],
     }),
   }),
   overrideExisting: false,

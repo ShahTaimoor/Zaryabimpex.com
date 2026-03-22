@@ -66,6 +66,7 @@ export const backupsApi = api.injectEndpoints({
         { type: 'Inventory', id: 'LOW_STOCK' },
         { type: 'Customers', id: 'LIST' },
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
         { type: 'Accounting', id: 'ALL_ENTRIES' },

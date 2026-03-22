@@ -4,11 +4,19 @@ export const shopsApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getShops: builder.query({
       query: () => ({ url: 'shops', method: 'get' }),
-      providesTags: ['Shops'],
+      providesTags: (result) => {
+        const shops = result?.data?.shops ?? result?.shops ?? [];
+        return shops.length
+          ? [
+              ...shops.map((s) => ({ type: 'Shops', id: s.shopId || s.id || s._id })),
+              { type: 'Shops', id: 'LIST' },
+            ]
+          : [{ type: 'Shops', id: 'LIST' }];
+      },
     }),
     getShopById: builder.query({
       query: (shopId) => ({ url: `shops/${shopId}`, method: 'get' }),
-      providesTags: ['Shops'],
+      providesTags: (_res, _err, shopId) => [{ type: 'Shops', id: shopId }],
     }),
     createShop: builder.mutation({
       query: (data) => ({
@@ -18,6 +26,7 @@ export const shopsApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         'Shops',
+        { type: 'Shops', id: 'LIST' },
         { type: 'Reports', id: 'SALES_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
@@ -28,8 +37,11 @@ export const shopsApi = api.injectEndpoints({
         method: 'put',
         data,
       }),
-      invalidatesTags: [
+      invalidatesTags: (_res, _err, { shopId }) => [
         'Shops',
+        { type: 'Shops', id: shopId },
+        { type: 'Shops', id: `SUPPLIERS_${shopId}` },
+        { type: 'Shops', id: `PRODUCTS_${shopId}` },
         { type: 'Reports', id: 'SALES_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
@@ -40,8 +52,10 @@ export const shopsApi = api.injectEndpoints({
         method: 'patch',
         data: { status },
       }),
-      invalidatesTags: [
+      invalidatesTags: (_res, _err, { shopId }) => [
         'Shops',
+        { type: 'Shops', id: 'LIST' },
+        { type: 'Shops', id: shopId },
         { type: 'Reports', id: 'SALES_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
@@ -56,19 +70,28 @@ export const shopsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: ['Admins', 'Shops'],
+      invalidatesTags: (_res, _err, { shopId }) => [
+        'Admins',
+        'Shops',
+        { type: 'Shops', id: 'LIST' },
+        { type: 'Shops', id: shopId },
+        { type: 'Shops', id: `SUPPLIERS_${shopId}` },
+        { type: 'Shops', id: `PRODUCTS_${shopId}` },
+      ],
     }),
     getShopSuppliers: builder.query({
       query: (shopId) => ({
         url: `shops/${shopId}/suppliers`,
         method: 'get',
       }),
+      providesTags: (_res, _err, shopId) => [{ type: 'Shops', id: shopId }, { type: 'Shops', id: `SUPPLIERS_${shopId}` }],
     }),
     getShopProducts: builder.query({
       query: (shopId) => ({
         url: `shops/${shopId}/products`,
         method: 'get',
       }),
+      providesTags: (_res, _err, shopId) => [{ type: 'Shops', id: shopId }, { type: 'Shops', id: `PRODUCTS_${shopId}` }],
     }),
   }),
   overrideExisting: false,

@@ -34,6 +34,7 @@ export const banksApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         { type: 'Banks', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
@@ -47,6 +48,7 @@ export const banksApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Banks', id },
         { type: 'Banks', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
@@ -59,6 +61,7 @@ export const banksApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: 'Banks', id },
         { type: 'Banks', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],

@@ -1056,6 +1056,16 @@ router.delete('/:id', [
       }
     }
 
+    // Reverse account ledger entries so ledger summary reflects the deletion
+    try {
+      const orderId = req.params.id;
+      await AccountingService.reverseLedgerEntriesByReference('sale', orderId);
+      await AccountingService.reverseLedgerEntriesByReference('sale_payment', orderId);
+    } catch (ledgerErr) {
+      console.error('Reverse ledger for sale delete:', ledgerErr);
+      // Continue with deletion; ledger may not have had entries (e.g. draft)
+    }
+
     await salesRepository.delete(req.params.id);
 
     res.json({ message: 'Order deleted successfully' });

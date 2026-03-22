@@ -1,5 +1,14 @@
 import { api } from '../api';
 
+/** Normalize supplier id for cache tags (string or populated object) */
+function supplierTagId(supplier) {
+  if (supplier == null) return null;
+  if (typeof supplier === 'object') {
+    return supplier._id || supplier.id || null;
+  }
+  return supplier;
+}
+
 export const purchaseInvoicesApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getPurchaseInvoices: builder.query({
@@ -37,9 +46,12 @@ export const purchaseInvoicesApi = api.injectEndpoints({
           { type: 'Orders', id: 'PI_LIST' },
           { type: 'Products', id: 'LIST' },
           { type: 'Suppliers', id: 'LIST' },
+          { type: 'Suppliers', id: 'SEARCH' },
+          { type: 'Suppliers', id: 'ACTIVE' },
           { type: 'Inventory', id: 'LIST' },
           { type: 'Inventory', id: 'SUMMARY' },
           { type: 'Inventory', id: 'LOW_STOCK' },
+          { type: 'Accounting' },
           { type: 'Accounting', id: 'LEDGER_SUMMARY' },
           { type: 'Accounting', id: 'LEDGER_ENTRIES' },
           { type: 'Accounting', id: 'ALL_ENTRIES' },
@@ -55,8 +67,12 @@ export const purchaseInvoicesApi = api.injectEndpoints({
           { type: 'Reports', id: 'SUMMARY_CARDS' },
           { type: 'Reports', id: 'FINANCIAL_REPORT' },
         ];
-        if (arg?.supplier) {
-          tags.push({ type: 'Suppliers', id: arg.supplier });
+        const sid =
+          supplierTagId(arg?.supplier) ||
+          supplierTagId(result?.data?.invoice?.supplier) ||
+          supplierTagId(result?.invoice?.supplier);
+        if (sid) {
+          tags.push({ type: 'Suppliers', id: sid });
         }
         return tags;
       },
@@ -67,15 +83,19 @@ export const purchaseInvoicesApi = api.injectEndpoints({
         method: 'put',
         data,
       }),
-      invalidatesTags: (_res, _err, { id, supplier }) => {
+      invalidatesTags: (result, error, arg) => {
+        const { id, supplier } = arg || {};
         const tags = [
           { type: 'Orders', id },
           { type: 'Orders', id: 'PI_LIST' },
           { type: 'Products', id: 'LIST' },
           { type: 'Suppliers', id: 'LIST' },
+          { type: 'Suppliers', id: 'SEARCH' },
+          { type: 'Suppliers', id: 'ACTIVE' },
           { type: 'Inventory', id: 'LIST' },
           { type: 'Inventory', id: 'SUMMARY' },
           { type: 'Inventory', id: 'LOW_STOCK' },
+          { type: 'Accounting' },
           { type: 'Accounting', id: 'LEDGER_SUMMARY' },
           { type: 'Accounting', id: 'LEDGER_ENTRIES' },
           { type: 'Accounting', id: 'ALL_ENTRIES' },
@@ -91,8 +111,12 @@ export const purchaseInvoicesApi = api.injectEndpoints({
           { type: 'Reports', id: 'SUMMARY_CARDS' },
           { type: 'Reports', id: 'FINANCIAL_REPORT' },
         ];
-        if (supplier) {
-          tags.push({ type: 'Suppliers', id: supplier });
+        const sid =
+          supplierTagId(supplier) ||
+          supplierTagId(result?.data?.invoice?.supplier) ||
+          supplierTagId(result?.invoice?.supplier);
+        if (sid) {
+          tags.push({ type: 'Suppliers', id: sid });
         }
         return tags;
       },
@@ -107,9 +131,12 @@ export const purchaseInvoicesApi = api.injectEndpoints({
         { type: 'Orders', id: 'PI_LIST' },
         { type: 'Products', id: 'LIST' },
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Suppliers', id: 'SEARCH' },
+        { type: 'Suppliers', id: 'ACTIVE' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
         { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
         { type: 'Accounting', id: 'ALL_ENTRIES' },
@@ -136,9 +163,12 @@ export const purchaseInvoicesApi = api.injectEndpoints({
         { type: 'Orders', id: 'PI_LIST' },
         { type: 'Products', id: 'LIST' },
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Suppliers', id: 'SEARCH' },
+        { type: 'Suppliers', id: 'ACTIVE' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
         { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
         { type: 'Accounting', id: 'ALL_ENTRIES' },
@@ -165,9 +195,12 @@ export const purchaseInvoicesApi = api.injectEndpoints({
         { type: 'Orders', id: 'PI_LIST' },
         { type: 'Products', id: 'LIST' },
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Suppliers', id: 'SEARCH' },
+        { type: 'Suppliers', id: 'ACTIVE' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
         { type: 'Inventory', id: 'LOW_STOCK' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
         { type: 'Accounting', id: 'ALL_ENTRIES' },
@@ -228,6 +261,7 @@ export const purchaseInvoicesApi = api.injectEndpoints({
       invalidatesTags: [
         { type: 'Orders', id: 'PI_LIST' },
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
         { type: 'Accounting', id: 'ALL_ENTRIES' },

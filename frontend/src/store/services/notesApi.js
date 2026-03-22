@@ -70,6 +70,7 @@ export const notesApi = api.injectEndpoints({
         url: `notes/${id}/history`,
         method: 'get',
       }),
+      providesTags: (_res, _err, id) => [{ type: 'Settings', id }],
     }),
     searchUsers: builder.query({
       query: (query) => ({
@@ -77,6 +78,7 @@ export const notesApi = api.injectEndpoints({
         method: 'get',
         params: { q: query },
       }),
+      providesTags: [{ type: 'Settings', id: 'NOTES_SEARCH' }],
     }),
   }),
   overrideExisting: false,

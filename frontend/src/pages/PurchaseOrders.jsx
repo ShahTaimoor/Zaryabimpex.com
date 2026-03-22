@@ -34,13 +34,22 @@ import {
   useGetPurchaseOrderQuery,
   useCreatePurchaseOrderMutation,
   useUpdatePurchaseOrderMutation,
+  useUpdatePurchaseOrderItemsConfirmationMutation,
   useDeletePurchaseOrderMutation,
   useConfirmPurchaseOrderMutation,
   useCancelPurchaseOrderMutation,
   useClosePurchaseOrderMutation,
 } from '../store/services/purchaseOrdersApi';
+import {
+  OrderConfirmationStatusBadge,
+  OrderItemConfirmationCell,
+  OrderConfirmSelectedActions,
+  getItemConfirmationStatus,
+} from '../components/OrderItemConfirmationCell';
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { SearchableDropdown } from '../components/SearchableDropdown';
+import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
+import { hasDualUnit, getPiecesPerBox, piecesToBoxesAndPieces, formatStockDualLabel } from '../utils/dualUnitUtils';
 import { toast } from 'sonner';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
@@ -267,6 +276,9 @@ export const PurchaseOrders = ({ tabId }) => {
   const { updateTabTitle, getActiveTab, openTab } = useTab();
   const { companyInfo: companySettings } = useCompanyInfo();
   const resolvedCompanyName = companySettings.companyName || 'Company Name';
+  const itemWiseConfirmationEnabled = companySettings.orderSettings?.purchaseOrderItemWiseConfirmation !== false;
+  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
+  const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const resolvedCompanyAddress = companySettings.address || companySettings.billingAddress || '';
   const resolvedCompanyPhone = companySettings.contactNumber || '';
 
@@ -300,6 +312,8 @@ export const PurchaseOrders = ({ tabId }) => {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printOrderData, setPrintOrderData] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [viewOrderFresh, setViewOrderFresh] = useState(null);
+  const [selectedItemIndices, setSelectedItemIndices] = useState([]);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [supplierSearchTerm, setSupplierSearchTerm] = useState('');
   const [editProductQuantity, setEditProductQuantity] = useState(1);
@@ -446,7 +460,7 @@ export const PurchaseOrders = ({ tabId }) => {
   // Fetch full order (with populated products) when view modal is open
   const viewOrderId = showViewModal && selectedOrder ? (selectedOrder.id || selectedOrder._id) : null;
   const { data: viewOrderData } = useGetPurchaseOrderQuery(viewOrderId, { skip: !viewOrderId });
-  const viewOrder = viewOrderData?.data?.purchaseOrder || viewOrderData?.purchaseOrder || selectedOrder;
+  const viewOrder = viewOrderFresh || viewOrderData?.data?.purchaseOrder || viewOrderData?.purchaseOrder || selectedOrder;
 
   // Fetch all active products for client-side fuzzy search
   const { data: allProductsData, isLoading: productsLoading } = useGetProductsQuery(
@@ -571,6 +585,7 @@ export const PurchaseOrders = ({ tabId }) => {
   const [updatePurchaseOrderMutation, { isLoading: updating }] = useUpdatePurchaseOrderMutation();
   const [deletePurchaseOrderMutation, { isLoading: deleting }] = useDeletePurchaseOrderMutation();
   const [confirmPurchaseOrderMutation, { isLoading: confirming }] = useConfirmPurchaseOrderMutation();
+  const [updateItemsConfirmationMutation, { isLoading: updatingItemsConfirmation }] = useUpdatePurchaseOrderItemsConfirmationMutation();
   const [cancelPurchaseOrderMutation, { isLoading: cancelling }] = useCancelPurchaseOrderMutation();
   const [closePurchaseOrderMutation, { isLoading: closing }] = useClosePurchaseOrderMutation();
 
@@ -678,7 +693,10 @@ export const PurchaseOrders = ({ tabId }) => {
         </div>
         <div className="flex items-center space-x-4">
           <div className={`text-sm ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-orange-600' : 'text-gray-600'}`}>
-            Stock: {inventory.currentStock || 0}
+            Stock:{' '}
+            {hasDualUnit(product)
+              ? formatStockDualLabel(inventory.currentStock || 0, product)
+              : `${inventory.currentStock || 0} pcs`}
           </div>
           <div className="text-sm text-gray-600">Cost: {Math.round(cost)}</div>
         </div>
@@ -730,11 +748,14 @@ export const PurchaseOrders = ({ tabId }) => {
 
     const costPerUnit = parseFloat(customCost) || selectedProduct.pricing?.cost || 0;
     const totalCost = costPerUnit * quantity;
+    const ppb = getPiecesPerBox(selectedProduct);
+    const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(quantity, ppb) : {};
 
     const newItem = {
       product: selectedProduct._id,
-      productData: selectedProduct, // Store full product data for display
+      productData: selectedProduct,
       quantity,
+      ...(ppb && { boxes, pieces }),
       costPerUnit,
       totalCost
     };
@@ -882,14 +903,21 @@ export const PurchaseOrders = ({ tabId }) => {
     // Clean the form data before sending to backend
     const cleanedData = {
       ...formData,
-      items: formData.items.map(item => ({
-        product: item.product,
-        quantity: item.quantity,
-        costPerUnit: item.costPerUnit,
-        totalCost: item.totalCost,
-        receivedQuantity: item.receivedQuantity || 0,
-        remainingQuantity: item.remainingQuantity || item.quantity
-      }))
+      items: formData.items.map(item => {
+        const base = {
+          product: item.product,
+          quantity: Math.round(Number(item.quantity) || 1),
+          costPerUnit: item.costPerUnit,
+          totalCost: item.totalCost,
+          receivedQuantity: item.receivedQuantity || 0,
+          remainingQuantity: item.remainingQuantity || item.quantity
+        };
+        if (item.boxes != null || item.pieces != null) {
+          base.boxes = item.boxes;
+          base.pieces = item.pieces;
+        }
+        return base;
+      })
     };
 
     updatePurchaseOrderMutation({ id: selectedOrder.id || selectedOrder._id, ...cleanedData })
@@ -988,6 +1016,26 @@ export const PurchaseOrders = ({ tabId }) => {
     }
   };
 
+  const handleUpdateItemsConfirmation = (itemUpdates, confirmAll, cancelAll) => {
+    const order = viewOrder || selectedOrder;
+    const id = order?.id ?? order?._id;
+    if (!id) return;
+    updateItemsConfirmationMutation({ id, itemUpdates, confirmAll, cancelAll })
+      .unwrap()
+      .then((response) => {
+        toast.success('Items confirmation updated');
+        if (response?.purchaseOrder) {
+          setViewOrderFresh(response.purchaseOrder);
+          setSelectedOrder(response.purchaseOrder);
+        }
+        setSelectedItemIndices([]);
+        refetch();
+      })
+      .catch((error) => {
+        toast.error(error?.data?.message || 'Failed to update items confirmation');
+      });
+  };
+
   const handleEdit = (order) => {
     setSelectedOrder(order);
 
@@ -1051,6 +1099,8 @@ export const PurchaseOrders = ({ tabId }) => {
 
   const handleView = (order) => {
     setSelectedOrder(order);
+    setViewOrderFresh(null);
+    setSelectedItemIndices([]);
     setShowViewModal(true);
   };
 
@@ -1346,8 +1396,19 @@ export const PurchaseOrders = ({ tabId }) => {
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       Stock
                     </label>
-                    <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
-                      {selectedProduct ? selectedProduct.inventory?.currentStock || 0 : '0'}
+                    <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center min-h-[2.5rem] flex flex-col items-center justify-center gap-0.5 leading-tight">
+                      {selectedProduct ? (
+                        hasDualUnit(selectedProduct) ? (
+                          <>
+                            <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock || 0, selectedProduct)}</span>
+                            <span className="text-[10px] font-normal text-gray-500">available</span>
+                          </>
+                        ) : (
+                          <span>{selectedProduct.inventory?.currentStock || 0} pcs</span>
+                        )
+                      ) : (
+                        '0'
+                      )}
                     </span>
                   </div>
 
@@ -1361,19 +1422,20 @@ export const PurchaseOrders = ({ tabId }) => {
                     </span>
                   </div>
 
-                  {/* Quantity */}
-                  <div>
+                  {/* Quantity — full width on mobile when dual (box + pcs + total) */}
+                  <div className={hasDualUnit(selectedProduct) ? 'col-span-2' : ''}>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       Quantity
                     </label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={quantity}
-                      onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                    <DualUnitQuantityInput
+                      product={selectedProduct}
+                      quantity={quantity}
+                      onChange={(q) => setQuantity(q)}
+                      showBoxInput={dualUnitShowBoxInputEnabled}
+                      showPiecesInput={dualUnitShowPiecesInputEnabled}
                       onKeyDown={handleInputKeyDown}
-                      className="text-center h-10 w-full"
-                      placeholder="1"
+                      inputClassName="text-center h-10 w-full border border-gray-300 rounded px-2"
+                      compact={hasDualUnit(selectedProduct)}
                     />
                   </div>
 
@@ -1411,10 +1473,10 @@ export const PurchaseOrders = ({ tabId }) => {
                 </div>
               </div>
 
-              {/* Desktop Layout */}
-              <div className="hidden md:grid grid-cols-12 gap-4 items-end">
-                {/* Product Search - 7 columns */}
-                <div className="col-span-7">
+              {/* Desktop Layout — column spans sum to 12; wider qty when dual (box + pcs + total) */}
+              <div className="hidden md:grid grid-cols-12 gap-x-3 gap-y-3 items-start">
+                {/* Product Search */}
+                <div className={hasDualUnit(selectedProduct) ? 'col-span-5 min-w-0' : 'col-span-7 min-w-0'}>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Product Search
                   </label>
@@ -1434,28 +1496,40 @@ export const PurchaseOrders = ({ tabId }) => {
                 </div>
 
                 {/* Stock - 1 column */}
-                <div className="col-span-1">
+                <div className="col-span-1 min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Stock
                   </label>
-                  <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1.5 rounded border border-gray-200 block text-center h-12 flex items-center justify-center">
-                    {selectedProduct ? selectedProduct.inventory?.currentStock || 0 : '0'}
+                  <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1.5 rounded border border-gray-200 block text-center min-h-[3rem] flex flex-col items-center justify-center gap-0.5 leading-snug">
+                    {selectedProduct ? (
+                      hasDualUnit(selectedProduct) ? (
+                        <>
+                          <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock || 0, selectedProduct)}</span>
+                          <span className="text-[10px] font-normal text-gray-500">available</span>
+                        </>
+                      ) : (
+                        <span>{selectedProduct.inventory?.currentStock || 0} pcs</span>
+                      )
+                    ) : (
+                      '0'
+                    )}
                   </span>
                 </div>
 
-                {/* Quantity - 1 column */}
-                <div className="col-span-1">
+                {/* Quantity — col-span-3 when dual so Box + Pcs + Total fit (matches compact dual UI) */}
+                <div className={hasDualUnit(selectedProduct) ? 'col-span-3 min-w-0' : 'col-span-1 min-w-0'}>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Quantity
                   </label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={quantity}
-                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                  <DualUnitQuantityInput
+                    product={selectedProduct}
+                    quantity={quantity}
+                    onChange={(q) => setQuantity(q)}
+                    showBoxInput={dualUnitShowBoxInputEnabled}
+                    showPiecesInput={dualUnitShowPiecesInputEnabled}
                     onKeyDown={handleInputKeyDown}
-                    className="text-center h-12"
-                    placeholder="1 (Enter to add & focus search)"
+                    inputClassName="text-center h-10 border border-gray-300 rounded px-2"
+                    compact={hasDualUnit(selectedProduct)}
                   />
                 </div>
 
@@ -1470,7 +1544,7 @@ export const PurchaseOrders = ({ tabId }) => {
                     value={customCost}
                     onChange={(e) => setCustomCost(e.target.value)}
                     onKeyDown={handleInputKeyDown}
-                    className="text-center h-12"
+                    className="text-center h-10"
                     placeholder="0 (Enter to add & focus search)"
                     required
                   />
@@ -1481,21 +1555,21 @@ export const PurchaseOrders = ({ tabId }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Amount
                   </label>
-                  <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1.5 rounded border border-gray-200 block text-center h-12 flex items-center justify-center">
+                  <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1.5 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
                     {selectedProduct ? Math.round(quantity * parseFloat(customCost || 0)) : 0}
                   </span>
                 </div>
 
                 {/* Add Button - 1 column */}
                 <div className="col-span-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    &nbsp;
+                  <label className="block text-sm font-medium text-gray-700 mb-2 invisible select-none" aria-hidden="true">
+                    Add
                   </label>
                   <Button
                     type="button"
                     onClick={handleAddItem}
                     variant="default"
-                    className="w-full flex items-center justify-center px-3 h-12"
+                    className="w-full flex items-center justify-center px-3 h-10"
                     disabled={!selectedProduct}
                     title="Add to cart (or press Enter in Quantity/Cost fields - focus returns to search)"
                   >
@@ -1531,18 +1605,18 @@ export const PurchaseOrders = ({ tabId }) => {
                 </Button>
               </div>
 
-              {/* Desktop Table Header */}
+              {/* Desktop Table Header — 1+4+1+3+1+1+1 = 12 (wide Qty for box + pcs + total) */}
               <div className="hidden md:grid grid-cols-12 gap-4 items-center pb-2 border-b border-gray-300 mb-2">
                 <div className="col-span-1">
                   <span className="text-xs font-semibold text-gray-600 uppercase">#</span>
                 </div>
-                <div className="col-span-6">
+                <div className="col-span-4">
                   <span className="text-xs font-semibold text-gray-600 uppercase">Product</span>
                 </div>
                 <div className="col-span-1">
                   <span className="text-xs font-semibold text-gray-600 uppercase">Stock</span>
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-3">
                   <span className="text-xs font-semibold text-gray-600 uppercase">Qty</span>
                 </div>
                 <div className="col-span-1">
@@ -1600,8 +1674,10 @@ export const PurchaseOrders = ({ tabId }) => {
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-xs font-medium text-gray-500 mb-1">Stock</label>
-                          <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center">
-                            {product?.inventory?.currentStock || 0}
+                          <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center leading-tight">
+                            {hasDualUnit(product)
+                              ? formatStockDualLabel(product?.inventory?.currentStock || 0, product)
+                              : (product?.inventory?.currentStock || 0)}
                           </span>
                         </div>
                         <div>
@@ -1610,27 +1686,58 @@ export const PurchaseOrders = ({ tabId }) => {
                             {Math.round(totalPrice)}
                           </span>
                         </div>
-                        <div>
+                        <div className={hasDualUnit(product) ? 'col-span-2' : ''}>
                           <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
-                          <Input
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const newQuantity = parseInt(e.target.value) || 1;
-                              if (newQuantity <= 0) {
-                                handleRemoveItem(index);
-                                return;
-                              }
-                              setFormData(prev => ({
-                                ...prev,
-                                items: prev.items.map((itm, i) =>
-                                  i === index ? { ...itm, quantity: newQuantity, totalCost: newQuantity * itm.costPerUnit } : itm
-                                )
-                              }));
-                            }}
-                            className="text-center h-8 w-full"
-                            min="1"
-                          />
+                          {hasDualUnit(product) ? (
+                            <DualUnitQuantityInput
+                              product={product}
+                              quantity={item.quantity}
+                              showBoxInput={dualUnitShowBoxInputEnabled}
+                              showPiecesInput={dualUnitShowPiecesInputEnabled}
+                              onChange={(newQuantity, dual) => {
+                                if (newQuantity <= 0) {
+                                  handleRemoveItem(index);
+                                  return;
+                                }
+                                const ppb = getPiecesPerBox(product);
+                                const { boxes, pieces } = ppb && dual ? dual : (ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {});
+                                setFormData(prev => ({
+                                  ...prev,
+                                  items: prev.items.map((itm, i) =>
+                                    i === index ? {
+                                      ...itm,
+                                      quantity: newQuantity,
+                                      ...(ppb && { boxes, pieces }),
+                                      totalCost: newQuantity * itm.costPerUnit
+                                    } : itm
+                                  )
+                                }));
+                              }}
+                              min={1}
+                              inputClassName="text-center h-8 w-full border border-gray-300 rounded px-2"
+                              compact={hasDualUnit(product)}
+                            />
+                          ) : (
+                            <Input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const newQuantity = parseInt(e.target.value) || 1;
+                                if (newQuantity <= 0) {
+                                  handleRemoveItem(index);
+                                  return;
+                                }
+                                setFormData(prev => ({
+                                  ...prev,
+                                  items: prev.items.map((itm, i) =>
+                                    i === index ? { ...itm, quantity: newQuantity, totalCost: newQuantity * itm.costPerUnit } : itm
+                                  )
+                                }));
+                              }}
+                              className="text-center h-8 w-full"
+                              min="1"
+                            />
+                          )}
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-500 mb-1">Cost</label>
@@ -1664,8 +1771,8 @@ export const PurchaseOrders = ({ tabId }) => {
                           </span>
                         </div>
 
-                        {/* Product Name - 6 columns (adjusted to align with Product Search 7 columns) */}
-                        <div className="col-span-6 flex items-center h-8">
+                        {/* Product Name — col-span-4 so Qty can use 3 cols for dual units */}
+                        <div className="col-span-4 flex items-center min-h-8 min-w-0">
                           <div className="flex flex-col">
                             <span className="font-medium text-sm truncate">
                               {product?.isVariant
@@ -1682,32 +1789,43 @@ export const PurchaseOrders = ({ tabId }) => {
                         </div>
 
                         {/* Stock - 1 column (matches Product Selection Stock) */}
-                        <div className="col-span-1">
-                          <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
-                            {product?.inventory?.currentStock || 0}
+                        <div className="col-span-1 min-w-0">
+                          <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center min-h-8 flex items-center justify-center leading-tight text-xs">
+                            {hasDualUnit(product)
+                              ? formatStockDualLabel(product?.inventory?.currentStock || 0, product)
+                              : (product?.inventory?.currentStock || 0)}
                           </span>
                         </div>
 
-                        {/* Quantity - 1 column (matches Product Selection Quantity) */}
-                        <div className="col-span-1">
-                          <Input
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const newQuantity = parseInt(e.target.value) || 1;
+                        {/* Quantity — 3 cols so Box + Pcs + Total fit */}
+                        <div className="col-span-3 min-w-0">
+                          <DualUnitQuantityInput
+                            product={product}
+                            quantity={item.quantity}
+                            showBoxInput={dualUnitShowBoxInputEnabled}
+                            showPiecesInput={dualUnitShowPiecesInputEnabled}
+                            onChange={(newQuantity, dual) => {
                               if (newQuantity <= 0) {
                                 handleRemoveItem(index);
                                 return;
                               }
+                              const ppb = getPiecesPerBox(product);
+                              const { boxes, pieces } = ppb && dual ? dual : (ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {});
                               setFormData(prev => ({
                                 ...prev,
                                 items: prev.items.map((itm, i) =>
-                                  i === index ? { ...itm, quantity: newQuantity, totalCost: newQuantity * itm.costPerUnit } : itm
+                                  i === index ? {
+                                    ...itm,
+                                    quantity: newQuantity,
+                                    ...(ppb && { boxes, pieces }),
+                                    totalCost: newQuantity * itm.costPerUnit
+                                  } : itm
                                 )
                               }));
                             }}
-                            className="text-center h-8"
-                            min="1"
+                            min={1}
+                            inputClassName="text-center h-8 border border-gray-300 rounded px-2"
+                            compact={hasDualUnit(product)}
                           />
                         </div>
 
@@ -2304,8 +2422,11 @@ export const PurchaseOrders = ({ tabId }) => {
                                     )}
                                   </div>
                                   <div className="text-sm text-gray-600">
-                                    Stock: {product.inventory?.currentStock || 0} |
-                                    Cost: {product.pricing?.costPrice || 0}
+                                    Stock:{' '}
+                                    {hasDualUnit(product)
+                                      ? formatStockDualLabel(product.inventory?.currentStock || 0, product)
+                                      : `${product.inventory?.currentStock || 0} pcs`}{' '}
+                                    | Cost: {product.pricing?.cost ?? product.pricing?.costPrice ?? 0}
                                   </div>
                                 </div>
                               ))}
@@ -2399,19 +2520,23 @@ export const PurchaseOrders = ({ tabId }) => {
                             {/* Quantity Field */}
                             <div className="flex items-center space-x-1">
                               <label className="text-xs text-gray-600">Qty:</label>
-                              <input
-                                type="number"
-                                min="1"
-                                autoComplete="off"
-                                value={item.quantity}
-                                onChange={(e) => {
+                              <DualUnitQuantityInput
+                                product={item.productData}
+                                quantity={item.quantity}
+                                showBoxInput={dualUnitShowBoxInputEnabled}
+                                showPiecesInput={dualUnitShowPiecesInputEnabled}
+                                onChange={(newQuantity) => {
                                   const newItems = [...formData.items];
-                                  const newQuantity = Math.max(1, parseInt(e.target.value) || 1);
+                                  const ppb = getPiecesPerBox(item.productData);
+                                  const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {};
                                   newItems[index].quantity = newQuantity;
+                                  if (ppb) { newItems[index].boxes = boxes; newItems[index].pieces = pieces; }
                                   newItems[index].totalCost = newQuantity * newItems[index].costPerUnit;
                                   setFormData(prev => ({ ...prev, items: newItems }));
                                 }}
-                                className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                min={1}
+                                inputClassName="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                compact={true}
                               />
                             </div>
 
@@ -2798,6 +2923,8 @@ export const PurchaseOrders = ({ tabId }) => {
                   onClick={() => {
                     setShowViewModal(false);
                     setSelectedOrder(null);
+                    setViewOrderFresh(null);
+                    setSelectedItemIndices([]);
                   }}
                   className="text-gray-400 hover:text-gray-600 transition-colors"
                 >
@@ -2836,6 +2963,11 @@ export const PurchaseOrders = ({ tabId }) => {
                         {viewOrder.status === 'draft' ? 'Pending' : (viewOrder.status || '').replace('_', ' ')}
                       </span>
                     </p>
+                    {itemWiseConfirmationEnabled && (
+                      <p><span className="font-medium">Confirmation:</span>
+                        <OrderConfirmationStatusBadge order={viewOrder} />
+                      </p>
+                    )}
                     {viewOrder.expectedDelivery && (
                       <p><span className="font-medium">Expected Delivery:</span> {formatDate(viewOrder.expectedDelivery)}</p>
                     )}
@@ -2870,6 +3002,25 @@ export const PurchaseOrders = ({ tabId }) => {
               {/* Items Table */}
               <div className="mb-6">
                 <h5 className="font-semibold text-gray-900 mb-3">Items Ordered</h5>
+                {itemWiseConfirmationEnabled && (
+                  <OrderConfirmSelectedActions
+                    items={viewOrder.items}
+                    canEdit={viewOrder.status !== 'cancelled'}
+                    selectedIndices={selectedItemIndices}
+                    onSelectAll={(indices) => setSelectedItemIndices(indices)}
+                    onSelectNone={() => setSelectedItemIndices([])}
+                    onConfirmSelected={(indices) => {
+                      if (indices.length) {
+                        handleUpdateItemsConfirmation(
+                          indices.map((i) => ({ itemIndex: i, confirmationStatus: 'confirmed' })),
+                          false,
+                          false
+                        );
+                      }
+                    }}
+                    isUpdating={updatingItemsConfirmation}
+                  />
+                )}
                 <div className="overflow-x-auto">
                   <table className="min-w-full border border-gray-200 rounded-lg">
                     <thead className="bg-gray-50">
@@ -2889,11 +3040,16 @@ export const PurchaseOrders = ({ tabId }) => {
                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
                           Total Cost
                         </th>
+                        {itemWiseConfirmationEnabled && (
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                            Confirmation
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {viewOrder.items && viewOrder.items.map((item, index) => (
-                        <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <tr key={index} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${(item.confirmationStatus ?? item.confirmation_status) === 'cancelled' ? 'opacity-60' : ''}`}>
                           <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
                             {index + 1}
                           </td>
@@ -2918,6 +3074,20 @@ export const PurchaseOrders = ({ tabId }) => {
                           <td className="px-4 py-3 text-sm font-medium text-gray-900 text-right border-b border-gray-200">
                             {Math.round(item.totalCost || 0)}
                           </td>
+                          {itemWiseConfirmationEnabled && (
+                            <td className="px-4 py-3 text-sm border-b border-gray-200">
+                              <OrderItemConfirmationCell
+                                item={item}
+                                itemIndex={index}
+                                status={getItemConfirmationStatus(item)}
+                                canEdit={viewOrder.status !== 'cancelled'}
+                                selected={selectedItemIndices.includes(index)}
+                                onToggleSelect={(idx) => setSelectedItemIndices((prev) => prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx])}
+                                onCancel={(idx) => handleUpdateItemsConfirmation([{ itemIndex: idx, confirmationStatus: 'cancelled' }], false, false)}
+                                isUpdating={updatingItemsConfirmation}
+                              />
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -2993,6 +3163,8 @@ export const PurchaseOrders = ({ tabId }) => {
                     onClick={() => {
                       setShowViewModal(false);
                       setSelectedOrder(null);
+                      setViewOrderFresh(null);
+                      setSelectedItemIndices([]);
                     }}
                     variant="secondary"
                   >

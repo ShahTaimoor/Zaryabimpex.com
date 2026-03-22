@@ -40,6 +40,8 @@ import { useCheckApplicableDiscountsMutation } from '../store/services/discounts
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { SearchableDropdown } from '../components/SearchableDropdown';
+import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
+import { hasDualUnit, getPiecesPerBox, piecesToBoxesAndPieces, formatStockDualLabel } from '../utils/dualUnitUtils';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -62,6 +64,7 @@ import useBehaviorTracking from '../hooks/useBehaviorTracking';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
 import { useAuth } from '../contexts/AuthContext';
+import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import BarcodeScanner from '../components/BarcodeScanner';
 import { Camera } from 'lucide-react';
 
@@ -74,7 +77,18 @@ const getLocalDateString = (date = new Date()) => {
 };
 
 // ProductSearch Component
-const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPurchasePriceFetched, hasCostPricePermission, priceType, onRefetchReady }) => {
+const ProductSearch = ({
+  onAddProduct,
+  selectedCustomer,
+  showCostPrice,
+  onLastPurchasePriceFetched,
+  hasCostPricePermission,
+  priceType,
+  onRefetchReady,
+  showRemainingStockAfterSale = true,
+  dualUnitShowBoxInput = true,
+  dualUnitShowPiecesInput = true,
+}) => {
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
@@ -298,9 +312,12 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
         );
       }
 
+      const ppb = getPiecesPerBox(selectedProduct);
+      const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(quantity, ppb) : {};
       onAddProduct({
         product: selectedProduct,
         quantity: quantity,
+        ...(ppb && { boxes, pieces }),
         unitPrice: unitPrice
       });
 
@@ -396,7 +413,18 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
     );
   };
 
-  const searchColClass = showCostPrice && hasCostPricePermission ? 'col-span-6' : 'col-span-7';
+  // Fit dual-unit quantity (boxes + pieces + total) in one row: 12 cols total
+  const dualUnit = hasDualUnit(selectedProduct);
+  const searchColClass =
+    dualUnit && showCostPrice && hasCostPricePermission
+      ? 'col-span-3'
+      : dualUnit
+        ? 'col-span-4'
+        : showCostPrice && hasCostPricePermission
+          ? 'col-span-6'
+          : 'col-span-7';
+  /** Wider column so Box + Pcs + Total + “After sale” don’t feel cramped */
+  const quantityColClass = dualUnit ? 'col-span-4' : 'col-span-1';
 
   return (
     <div className="space-y-4">
@@ -443,8 +471,22 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Stock
               </label>
-              <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
-                {selectedProduct ? selectedProduct.inventory.currentStock : '0'}
+              <span
+                className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center min-h-[2.5rem] flex flex-col items-center justify-center gap-0.5 leading-tight"
+                title={selectedProduct ? `Available stock (pieces)` : ''}
+              >
+                {selectedProduct ? (
+                  hasDualUnit(selectedProduct) ? (
+                    <>
+                      <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
+                      <span className="text-[10px] font-normal text-gray-500">available</span>
+                    </>
+                  ) : (
+                    <span>{selectedProduct.inventory?.currentStock ?? 0} pcs</span>
+                  )
+                ) : (
+                  '0'
+                )}
               </span>
             </div>
 
@@ -458,23 +500,22 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
               </span>
             </div>
 
-            {/* Quantity */}
-            <div>
+            {/* Quantity — full width on mobile when dual unit */}
+            <div className={dualUnit ? 'col-span-2' : ''}>
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Quantity
               </label>
-              <Input
-                type="number"
-                min="1"
-                autoComplete="off"
-                max={selectedProduct?.inventory.currentStock}
-                value={quantity}
-                onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+              <DualUnitQuantityInput
+                product={selectedProduct}
+                quantity={quantity}
+                onChange={(q) => setQuantity(q)}
+                max={selectedProduct?.inventory?.currentStock}
+                showRemainingAfterSale={showRemainingStockAfterSale}
+                showBoxInput={dualUnitShowBoxInput}
+                showPiecesInput={dualUnitShowPiecesInput}
                 onKeyDown={handleKeyDown}
-                onFocus={(e) => e.target.select()}
-                className="text-center h-10"
-                placeholder="1"
-                autoFocus={isAddingProduct}
+                inputClassName="text-center h-10 border border-gray-300 rounded px-2 w-full"
+                compact
               />
             </div>
 
@@ -531,8 +572,8 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
           </div>
         </div>
 
-        {/* Desktop Layout */}
-        <div className="hidden md:grid grid-cols-12 gap-4 items-end">
+        {/* Desktop Layout — items-start so “After sale” line doesn’t throw off alignment */}
+        <div className="hidden md:grid grid-cols-12 gap-x-3 gap-y-3 items-start">
           {/* Product Search - 7 columns */}
           <div className={searchColClass}>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -566,32 +607,45 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
           </div>
 
           {/* Stock - 1 column */}
-          <div className="col-span-1">
+          <div className="col-span-1 min-w-0">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Stock
             </label>
-            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
-              {selectedProduct ? selectedProduct.inventory.currentStock : '0'}
+            <span
+              className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center min-h-[2.75rem] flex flex-col items-center justify-center gap-0.5 leading-snug"
+              title={selectedProduct ? 'Available stock (pieces)' : ''}
+            >
+              {selectedProduct ? (
+                dualUnit ? (
+                  <>
+                    <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
+                    <span className="text-[10px] font-normal text-gray-500">available</span>
+                  </>
+                ) : (
+                  <span>{selectedProduct.inventory?.currentStock ?? 0} pcs</span>
+                )
+              ) : (
+                '0'
+              )}
             </span>
           </div>
 
-          {/* Quantity - 1 column */}
-          <div className="col-span-1">
+          {/* Quantity — wider when dual unit (boxes + pieces + total) */}
+          <div className={`${quantityColClass} min-w-0`}>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Quantity
             </label>
-            <Input
-              type="number"
-              min="1"
-              autoComplete="off"
-              max={selectedProduct?.inventory.currentStock}
-              value={quantity}
-              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+            <DualUnitQuantityInput
+              product={selectedProduct}
+              quantity={quantity}
+              onChange={(q) => setQuantity(q)}
+              max={selectedProduct?.inventory?.currentStock}
+              showRemainingAfterSale={showRemainingStockAfterSale}
+              showBoxInput={dualUnitShowBoxInput}
+              showPiecesInput={dualUnitShowPiecesInput}
               onKeyDown={handleKeyDown}
-              onFocus={(e) => e.target.select()}
-              className="text-center"
-              placeholder="1 (Enter to add & focus search)"
-              autoFocus={isAddingProduct}
+              inputClassName="text-center border border-gray-300 rounded px-2 h-10"
+              compact
             />
           </div>
 
@@ -624,7 +678,7 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
               onChange={(e) => setCustomRate(e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={(e) => e.target.select()}
-              className="text-center"
+              className="text-center h-10"
               placeholder="0 (Enter to add & focus search)"
               required
             />
@@ -640,14 +694,17 @@ const ProductSearch = ({ onAddProduct, selectedCustomer, showCostPrice, onLastPu
             </span>
           </div>
 
-          {/* Add Button - 1 column */}
-          <div className="col-span-1 flex items-end">
+          {/* Add Button - 1 column (spacer label aligns row with fields that have labels) */}
+          <div className="col-span-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2 invisible select-none" aria-hidden="true">
+              Add
+            </label>
             <LoadingButton
               type="button"
               onClick={handleAddToCart}
               isLoading={isAddingToCart}
               variant="default"
-              className="w-full flex items-center justify-center px-3 py-2"
+              className="w-full flex items-center justify-center px-3 py-2 h-10"
               disabled={!selectedProduct || isAddingToCart}
               title="Add to cart (or press Enter in Quantity/Rate fields - focus returns to search)"
             >
@@ -747,6 +804,10 @@ export const Sales = ({ tabId, editData }) => {
   const { trackAddToCart, trackProductView, trackPageView } = useBehaviorTracking();
   const { updateTabTitle, getActiveTab, openTab } = useTab();
   const { hasPermission, user } = useAuth();
+  const { companyInfo: companySettings } = useCompanyInfo();
+  const showRemainingStockAfterSaleEnabled = companySettings.orderSettings?.showRemainingStockAfterSale !== false;
+  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
+  const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const [showProfit, setShowProfit] = useState(false);
   const totalProfit = useMemo(() => {
     if (!Array.isArray(cart) || cart.length === 0) return 0;
@@ -1095,11 +1156,12 @@ export const Sales = ({ tabId, editData }) => {
           return prevCart; // Return unchanged cart
         }
 
-        // If this is an existing item and we have original price stored, keep it
-        // Otherwise, if last prices were applied and original price exists, preserve it
+        const newQty = existingItem.quantity + item.quantity;
+        const ppb = getPiecesPerBox(product);
+        const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(newQty, ppb) : {};
         const updatedCart = prevCart.map(c =>
           (c.product?._id ?? c.product?.id) === itemId
-            ? { ...c, quantity: c.quantity + item.quantity, unitPrice: item.unitPrice }
+            ? { ...c, quantity: newQty, ...(ppb && { boxes, pieces }), unitPrice: item.unitPrice }
             : c
         );
 
@@ -1134,7 +1196,7 @@ export const Sales = ({ tabId, editData }) => {
     });
   };
 
-  const updateQuantity = async (productId, newQuantity) => {
+  const updateQuantity = async (productId, newQuantity, dual = null) => {
     if (newQuantity <= 0) {
       removeFromCart(productId);
       return;
@@ -1144,17 +1206,17 @@ export const Sales = ({ tabId, editData }) => {
       const cartItem = prevCart.find(item => item.product._id === productId);
       if (!cartItem) return prevCart;
 
-      // Check if new quantity exceeds available stock
       const availableStock = cartItem.product.inventory?.currentStock || 0;
-
       if (newQuantity > availableStock) {
         toast.error(`Cannot set quantity to ${newQuantity}. Only ${availableStock} units available in stock.`);
-        return prevCart; // Return unchanged cart
+        return prevCart;
       }
 
+      const ppb = getPiecesPerBox(cartItem.product);
+      const { boxes, pieces } = ppb && dual ? dual : (ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {});
       return prevCart.map(item =>
         item.product._id === productId
-          ? { ...item, quantity: newQuantity }
+          ? { ...item, quantity: newQuantity, ...(ppb && { boxes, pieces }) }
           : item
       );
     });
@@ -1917,11 +1979,14 @@ export const Sales = ({ tabId, editData }) => {
     const orderData = {
       orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
       customer: selectedCustomer?._id,
-      items: cart.map(item => ({
-        product: item.product._id,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice
-      })),
+      items: cart.map(item => {
+        const base = { product: item.product._id, quantity: Math.round(item.quantity), unitPrice: item.unitPrice };
+        if (item.boxes != null || item.pieces != null) {
+          base.boxes = item.boxes;
+          base.pieces = item.pieces;
+        }
+        return base;
+      }),
       appliedDiscounts: appliedDiscounts,
       directDiscount: directDiscount,
       subtotal: subtotal,
@@ -1956,9 +2021,9 @@ export const Sales = ({ tabId, editData }) => {
           const itemTaxAmount = 0; // Can be calculated if needed
           const itemTotal = itemSubtotal - itemDiscountAmount + itemTaxAmount;
 
-          return {
+          const base = {
             product: item.product._id,
-            quantity: item.quantity,
+            quantity: Math.round(item.quantity),
             unitPrice: item.unitPrice,
             discountPercent: 0,
             taxRate: 0,
@@ -1967,6 +2032,11 @@ export const Sales = ({ tabId, editData }) => {
             taxAmount: itemTaxAmount,
             total: itemTotal
           };
+          if (item.boxes != null || item.pieces != null) {
+            base.boxes = item.boxes;
+            base.pieces = item.pieces;
+          }
+          return base;
         }),
         notes: notes || '',
         amountReceived: amountPaid ?? 0,
@@ -2299,6 +2369,9 @@ export const Sales = ({ tabId, editData }) => {
                 showCostPrice={showCostPrice}
                 hasCostPricePermission={hasPermission('view_cost_prices')}
                 priceType={priceType}
+                showRemainingStockAfterSale={showRemainingStockAfterSaleEnabled}
+                dualUnitShowBoxInput={dualUnitShowBoxInputEnabled}
+                dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
                 onRefetchReady={setRefetchProducts}
                 onLastPurchasePriceFetched={(productId, price) => {
                   setLastPurchasePrices(prev => ({
@@ -2459,14 +2532,18 @@ export const Sales = ({ tabId, editData }) => {
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
-                            <Input
-                              type="number"
-                              autoComplete="off"
-                              value={item.quantity}
-                              onChange={(e) => updateQuantity(item.product._id, parseInt(e.target.value) || 1)}
-                              className="text-center h-8 w-full"
-                              min="1"
+                            <DualUnitQuantityInput
+                              product={item.product}
+                              quantity={item.quantity}
+                              onChange={(q, dual) => updateQuantity(item.product._id, q, dual)}
+                              min={1}
                               max={item.product.inventory?.currentStock || 999999}
+                              stockPiecesForRemaining={item.product.inventory?.currentStock ?? 0}
+                              showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
+                              showBoxInput={dualUnitShowBoxInputEnabled}
+                              showPiecesInput={dualUnitShowPiecesInputEnabled}
+                              inputClassName="text-center h-8 w-full border border-gray-300 rounded px-2"
+                              compact={hasDualUnit(item.product)}
                             />
                           </div>
                           <div>
@@ -2558,17 +2635,20 @@ export const Sales = ({ tabId, editData }) => {
                             </span>
                           </div>
 
-                          {/* Quantity - 1 column */}
-                          <div className="col-span-1">
-                            <Input
-                              type="number"
-                              autoComplete="off"
-                              value={item.quantity}
-                              onChange={(e) => updateQuantity(item.product._id, parseInt(e.target.value) || 1)}
-                              className="text-center h-8"
-                              min="1"
+                          {/* Quantity - 1 or 2 columns for dual unit */}
+                          <div className={hasDualUnit(item.product) ? 'col-span-2' : 'col-span-1'}>
+                            <DualUnitQuantityInput
+                              product={item.product}
+                              quantity={item.quantity}
+                              onChange={(q, dual) => updateQuantity(item.product._id, q, dual)}
+                              min={1}
                               max={item.product.inventory?.currentStock || 999999}
-                              title={`Maximum available: ${item.product.inventory?.currentStock || 0}`}
+                              stockPiecesForRemaining={item.product.inventory?.currentStock ?? 0}
+                              showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
+                              showBoxInput={dualUnitShowBoxInputEnabled}
+                              showPiecesInput={dualUnitShowPiecesInputEnabled}
+                              inputClassName="text-center h-8 border border-gray-300 rounded px-2"
+                              compact={hasDualUnit(item.product)}
                             />
                           </div>
 

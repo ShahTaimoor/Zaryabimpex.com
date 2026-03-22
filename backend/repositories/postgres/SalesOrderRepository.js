@@ -1,4 +1,10 @@
 const { query } = require('../../config/postgres');
+const {
+  ensureItemConfirmationStatus,
+  computeOrderConfirmationStatus,
+  recalculateTotalsFromItems,
+  getSalesOrderLineTotal
+} = require('../../utils/orderConfirmationUtils');
 
 class SalesOrderRepository {
   async findById(id) {
@@ -168,27 +174,32 @@ class SalesOrderRepository {
   }
 
   async create(data) {
-    const items = data.items || [];
-    const subtotal = data.subtotal ?? items.reduce((s, i) => s + (i.quantity * (i.unitPrice || i.unit_price || 0)), 0);
+    const rawItems = data.items || [];
+    const items = ensureItemConfirmationStatus(rawItems);
     const tax = data.tax ?? 0;
-    const total = data.total ?? subtotal + tax;
+    const { subtotal, total } = recalculateTotalsFromItems(items, getSalesOrderLineTotal, tax);
+    const computedSubtotal = data.subtotal ?? subtotal;
+    const computedTotal = data.total ?? total;
+    const confirmationStatus = computeOrderConfirmationStatus(items);
+
     const result = await query(
       `INSERT INTO sales_orders (
-        so_number, customer_id, items, subtotal, tax, is_tax_exempt, total, status,
+        so_number, customer_id, items, subtotal, tax, is_tax_exempt, total, status, confirmation_status,
         order_date, expected_delivery, confirmed_date, last_invoiced_date, notes, terms,
         conversions, ledger_posted, auto_posted, posted_at, ledger_reference_id, invoice_id, auto_converted,
         created_by, last_modified_by, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *`,
       [
         (data.soNumber || data.so_number || '').toUpperCase(),
         data.customer || data.customerId,
         JSON.stringify(items),
-        subtotal,
+        computedSubtotal,
         tax,
         data.isTaxExempt !== false,
-        total,
+        computedTotal,
         data.status || 'draft',
+        confirmationStatus,
         data.orderDate || data.order_date || new Date(),
         data.expectedDelivery || data.expected_delivery || null,
         data.confirmedDate || data.confirmed_date || null,
@@ -220,7 +231,8 @@ class SalesOrderRepository {
     const map = {
       customer: 'customer_id', customerId: 'customer_id',
       items: 'items', subtotal: 'subtotal', tax: 'tax', isTaxExempt: 'is_tax_exempt', total: 'total',
-      status: 'status', orderDate: 'order_date', expectedDelivery: 'expected_delivery',
+      status: 'status', confirmationStatus: 'confirmation_status',
+      orderDate: 'order_date', expectedDelivery: 'expected_delivery',
       confirmedDate: 'confirmed_date', lastInvoicedDate: 'last_invoiced_date', notes: 'notes', terms: 'terms',
       conversions: 'conversions', ledgerPosted: 'ledger_posted', autoPosted: 'auto_posted',
       postedAt: 'posted_at', ledgerReferenceId: 'ledger_reference_id', invoiceId: 'invoice_id',

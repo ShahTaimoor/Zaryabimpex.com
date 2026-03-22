@@ -695,6 +695,40 @@ class SalesService {
   }
 
   /**
+   * Create a partial sale (invoice) from selected confirmed items of a sales order.
+   * @param {object} salesOrder - Sales order with items
+   * @param {number[]} itemIndices - Indices of items to invoice (must be confirmed)
+   * @param {object} user - User
+   * @returns {Promise<object>} Created sale
+   */
+  async createPartialSaleFromSalesOrder(salesOrder, itemIndices, user) {
+    const items = Array.isArray(salesOrder.items) ? salesOrder.items : (typeof salesOrder.items === 'string' ? JSON.parse(salesOrder.items || '[]') : []);
+    const itemsToInvoice = itemIndices
+      .filter(idx => idx >= 0 && idx < items.length)
+      .map(idx => items[idx])
+      .filter(i => (i.confirmationStatus ?? i.confirmation_status) === 'confirmed');
+    if (itemsToInvoice.length === 0) return null;
+    const soRef = (salesOrder.so_number || salesOrder.soNumber || salesOrder.id || '').toString().replace(/^SO-/, '');
+    const saleData = {
+      customer: salesOrder.customer_id || salesOrder.customer,
+      items: itemsToInvoice.map(i => ({
+        product: i.product || i.product_id,
+        quantity: i.quantity || 0,
+        unitPrice: i.unitPrice ?? i.unit_price ?? 0,
+        discountPercent: i.discountPercent ?? i.discount_percent ?? 0
+      })),
+      orderType: 'retail',
+      payment: { method: 'account', amount: 0, isPartialPayment: false },
+      notes: `From Sales Order ${salesOrder.so_number || salesOrder.soNumber || salesOrder.id} (partial)`,
+      isTaxExempt: salesOrder.is_tax_exempt ?? salesOrder.isTaxExempt ?? false,
+      billDate: salesOrder.order_date || salesOrder.orderDate || new Date(),
+      salesOrderId: salesOrder.id || salesOrder._id,
+      orderNumber: `INV-${soRef}-${Date.now().toString(36)}`
+    };
+    return await this.createSale(saleData, user, { skipInventoryUpdate: true });
+  }
+
+  /**
    * Update order status
    * @param {string} id - Order ID
    * @param {string} status - New status

@@ -84,7 +84,8 @@ class PurchaseInvoiceService {
    */
   async getPurchaseInvoices(queryParams) {
     const page = parseInt(queryParams.page) || 1;
-    const limit = parseInt(queryParams.limit) || 20;
+    const useAll = queryParams.all === true || queryParams.all === 'true';
+    const limit = useAll ? 999999 : (parseInt(queryParams.limit) || 20);
     const filter = await this.buildFilter(queryParams);
     const result = await purchaseInvoiceRepository.findWithPagination(filter, { page, limit });
 

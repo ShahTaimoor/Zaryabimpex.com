@@ -34,6 +34,7 @@ export const productTransformationsApi = api.injectEndpoints({
       invalidatesTags: [
         { type: 'Products', id: 'TRANSFORMATIONS_LIST' },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
         { type: 'Inventory', id: 'LOW_STOCK' },
@@ -56,6 +57,7 @@ export const productTransformationsApi = api.injectEndpoints({
         { type: 'Products', id },
         { type: 'Products', id: 'TRANSFORMATIONS_LIST' },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
         { type: 'Inventory', id: 'LOW_STOCK' },

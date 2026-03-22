@@ -52,7 +52,11 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
   };
 
   const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-US', {
+    const raw = date ?? null;
+    if (!raw) return 'N/A';
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -165,8 +169,12 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
     <BaseModal
       isOpen={true}
       onClose={onClose}
-      title={isLoading ? 'Loading...' : reportData.reportName}
-      subtitle={!isLoading && reportData.generatedAt ? `Generated ${formatDate(reportData.generatedAt)}` : ''}
+      title={isLoading ? 'Loading...' : (reportData.reportName ?? reportData.report_name ?? 'N/A')}
+      subtitle={
+        !isLoading && (reportData.generatedAt || reportData.created_at || reportData.createdAt)
+          ? `Generated ${formatDate(reportData.generatedAt ?? reportData.created_at ?? reportData.createdAt)}`
+          : ''
+      }
       headerExtra={headerExtra}
       maxWidth="2xl"
       variant="scrollable"
@@ -182,7 +190,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
         <div className="flex items-center space-x-4 mb-6">
           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(reportData.status)}`}>
             {getStatusIcon(reportData.status)}
-            <span className="ml-1">{reportData.status.toUpperCase()}</span>
+            <span className="ml-1">{String(reportData.status || '').toUpperCase()}</span>
           </span>
           <span className="text-sm text-gray-500">
             {reportData.viewCount} views
@@ -314,25 +322,28 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                   <div>
                     <p className="text-sm text-gray-500">Report Type</p>
                     <p className="text-sm font-medium text-gray-900">
-                      {reportData.reportType.replace('_', ' ').toUpperCase()}
+                      {(() => {
+                        const type = reportData.reportType ?? reportData.report_type;
+                        return type ? String(type).replace('_', ' ').toUpperCase() : 'N/A';
+                      })()}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Period Type</p>
                     <p className="text-sm font-medium text-gray-900">
-                      {reportData.periodType.toUpperCase()}
+                      {String(reportData.periodType ?? reportData.period_type ?? '').toUpperCase() || 'N/A'}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Start Date</p>
                     <p className="text-sm font-medium text-gray-900">
-                      {formatDate(reportData.startDate)}
+                      {formatDate(reportData.startDate ?? reportData.start_date)}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">End Date</p>
                     <p className="text-sm font-medium text-gray-900">
-                      {formatDate(reportData.endDate)}
+                      {formatDate(reportData.endDate ?? reportData.end_date)}
                     </p>
                   </div>
                   <div>
@@ -400,7 +411,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                               item.metrics.stockStatus === 'overstocked' ? 'bg-yellow-100 text-yellow-800' :
                               'bg-green-100 text-green-800'
                             }`}>
-                              {item.metrics.stockStatus.replace('_', ' ').toUpperCase()}
+                              {String(item.metrics.stockStatus || '').replace('_', ' ').toUpperCase()}
                             </span>
                           </td>
                         </tr>
@@ -462,7 +473,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                               item.metrics.turnoverCategory === 'dead' ? 'bg-red-100 text-red-800' :
                               'bg-blue-100 text-blue-800'
                             }`}>
-                              {item.metrics.turnoverCategory.toUpperCase()}
+                              {String(item.metrics.turnoverCategory || '').toUpperCase()}
                             </span>
                           </td>
                         </tr>
@@ -530,7 +541,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                               item.metrics.agingCategory === 'aging' ? 'bg-yellow-100 text-yellow-800' :
                               'bg-green-100 text-green-800'
                             }`}>
-                              {item.metrics.agingCategory.replace('_', ' ').toUpperCase()}
+                              {String(item.metrics.agingCategory || '').replace('_', ' ').toUpperCase()}
                             </span>
                           </td>
                         </tr>
@@ -576,7 +587,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                             insight.impact === 'medium' ? 'bg-yellow-100 text-yellow-800' :
                             'bg-green-100 text-green-800'
                           }`}>
-                            {insight.impact.toUpperCase()} IMPACT
+                            {String(insight.impact || '').toUpperCase()} IMPACT
                           </span>
                         </div>
                       </div>

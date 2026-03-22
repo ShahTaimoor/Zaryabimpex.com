@@ -1,4 +1,10 @@
 const { query } = require('../../config/postgres');
+const {
+  ensureItemConfirmationStatus,
+  computeOrderConfirmationStatus,
+  recalculateTotalsFromItems,
+  getPurchaseOrderLineTotal
+} = require('../../utils/orderConfirmationUtils');
 
 function generatePONumber() {
   const now = new Date();
@@ -130,27 +136,32 @@ class PurchaseOrderRepository {
   }
 
   async create(data) {
-    const items = data.items || [];
-    const subtotal = data.subtotal ?? items.reduce((s, i) => s + (i.quantity * (i.costPerUnit || i.cost_per_unit || 0)), 0);
+    const rawItems = data.items || [];
+    const items = ensureItemConfirmationStatus(rawItems);
     const tax = data.tax ?? 0;
-    const total = data.total ?? subtotal + tax;
+    const { subtotal, total } = recalculateTotalsFromItems(items, getPurchaseOrderLineTotal, tax);
+    const computedSubtotal = data.subtotal ?? subtotal;
+    const computedTotal = data.total ?? total;
+    const confirmationStatus = computeOrderConfirmationStatus(items);
+
     const result = await query(
       `INSERT INTO purchase_orders (
-        po_number, supplier_id, items, subtotal, tax, is_tax_exempt, total, status,
+        po_number, supplier_id, items, subtotal, tax, is_tax_exempt, total, status, confirmation_status,
         order_date, expected_delivery, confirmed_date, last_received_date, notes, terms,
         conversions, ledger_posted, auto_posted, posted_at, ledger_reference_id, auto_converted,
         created_by, last_modified_by, is_auto_generated, auto_generated_at, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *`,
       [
         (data.poNumber || data.po_number || '').toUpperCase(),
         data.supplier || data.supplierId,
         JSON.stringify(items),
-        subtotal,
+        computedSubtotal,
         tax,
         data.isTaxExempt !== false,
-        total,
+        computedTotal,
         data.status || 'draft',
+        confirmationStatus,
         data.orderDate || data.order_date || new Date(),
         data.expectedDelivery || data.expected_delivery || null,
         data.confirmedDate || data.confirmed_date || null,
@@ -178,7 +189,8 @@ class PurchaseOrderRepository {
     let paramCount = 1;
     const map = {
       items: 'items', subtotal: 'subtotal', tax: 'tax', isTaxExempt: 'is_tax_exempt', total: 'total',
-      status: 'status', orderDate: 'order_date', expectedDelivery: 'expected_delivery',
+      status: 'status', confirmationStatus: 'confirmation_status',
+      orderDate: 'order_date', expectedDelivery: 'expected_delivery',
       confirmedDate: 'confirmed_date', lastReceivedDate: 'last_received_date', notes: 'notes', terms: 'terms',
       conversions: 'conversions', ledgerPosted: 'ledger_posted', autoPosted: 'auto_posted',
       postedAt: 'posted_at', ledgerReferenceId: 'ledger_reference_id', lastModifiedBy: 'last_modified_by'

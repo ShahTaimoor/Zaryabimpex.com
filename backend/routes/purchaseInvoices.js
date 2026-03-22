@@ -63,7 +63,8 @@ const transformProductToUppercase = (product) => {
 router.get('/', [
   auth,
   query('page').optional().isInt({ min: 1 }),
-  query('limit').optional().isInt({ min: 1, max: 100 }),
+  query('limit').optional().isInt({ min: 1, max: 999999 }),
+  query('all').optional({ checkFalsy: true }).isBoolean(),
   query('search').optional().trim(),
   query('status').optional().isIn(['draft', 'confirmed', 'received', 'paid', 'cancelled', 'closed']),
   query('paymentStatus').optional().isIn(['pending', 'paid', 'partial', 'overdue']),

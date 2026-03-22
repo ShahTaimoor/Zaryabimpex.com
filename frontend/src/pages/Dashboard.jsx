@@ -210,33 +210,33 @@ export const Dashboard = () => {
     { skip: !startDate || !endDate }
   );
 
-  // Purchase Invoices (from Purchase page) - actual purchases
+  // Purchase Invoices (from Purchase page) - use all: true for accurate totals in date range
   const { data: purchaseInvoicesData, isLoading: purchaseInvoicesLoading } = useGetPurchaseInvoicesQuery(
-    { dateFrom: startDate, dateTo: endDate },
+    { dateFrom: startDate, dateTo: endDate, all: true },
     { skip: !startDate || !endDate }
   );
 
-  // Cash Receipts data
+  // Cash Receipts data - use all: true to fetch all records in date range for accurate totals
   const { data: cashReceiptsData, isLoading: cashReceiptsLoading } = useGetCashReceiptsQuery(
-    { dateFrom: startDate, dateTo: endDate },
+    { dateFrom: startDate, dateTo: endDate, all: true },
     { skip: !startDate || !endDate }
   );
 
-  // Cash Payments data
+  // Cash Payments data - use all: true to fetch all records in date range for accurate totals
   const { data: cashPaymentsData, isLoading: cashPaymentsLoading } = useGetCashPaymentsQuery(
-    { dateFrom: startDate, dateTo: endDate },
+    { dateFrom: startDate, dateTo: endDate, all: true },
     { skip: !startDate || !endDate }
   );
 
-  // Bank Receipts data
+  // Bank Receipts data - use all: true to fetch all records in date range for accurate totals
   const { data: bankReceiptsData, isLoading: bankReceiptsLoading } = useGetBankReceiptsQuery(
-    { dateFrom: startDate, dateTo: endDate },
+    { dateFrom: startDate, dateTo: endDate, all: true },
     { skip: !startDate || !endDate }
   );
 
-  // Bank Payments data
+  // Bank Payments data - use all: true to fetch all records in date range for accurate totals
   const { data: bankPaymentsData, isLoading: bankPaymentsLoading } = useGetBankPaymentsQuery(
-    { dateFrom: startDate, dateTo: endDate },
+    { dateFrom: startDate, dateTo: endDate, all: true },
     { skip: !startDate || !endDate }
   );
 

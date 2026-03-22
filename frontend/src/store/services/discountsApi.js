@@ -33,6 +33,7 @@ export const discountsApi = api.injectEndpoints({
         data,
       }),
       invalidatesTags: [
+        { type: 'Discounts' },
         { type: 'Discounts', id: 'LIST' },
         { type: 'Discounts', id: 'STATS' },
         { type: 'Discounts', id: 'ACTIVE' },
@@ -45,6 +46,7 @@ export const discountsApi = api.injectEndpoints({
         data,
       }),
       invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Discounts' },
         { type: 'Discounts', id },
         { type: 'Discounts', id: 'LIST' },
         { type: 'Discounts', id: 'STATS' },
@@ -69,6 +71,7 @@ export const discountsApi = api.injectEndpoints({
         method: 'put',
       }),
       invalidatesTags: (_r, _e, id) => [
+        { type: 'Discounts' },
         { type: 'Discounts', id },
         { type: 'Discounts', id: 'LIST' },
         { type: 'Discounts', id: 'STATS' },
@@ -90,12 +93,15 @@ export const discountsApi = api.injectEndpoints({
         { type: 'Sales', id: 'PERIOD_SUMMARY' },
         { type: 'Orders', id: 'LIST' },
         { type: 'Customers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'SALES_REPORT' },
         { type: 'Reports', id: 'CUSTOMER_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     removeDiscount: builder.mutation({
@@ -113,12 +119,15 @@ export const discountsApi = api.injectEndpoints({
         { type: 'Sales', id: 'PERIOD_SUMMARY' },
         { type: 'Orders', id: 'LIST' },
         { type: 'Customers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'SALES_REPORT' },
         { type: 'Reports', id: 'CUSTOMER_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
     checkApplicableDiscounts: builder.mutation({
@@ -140,6 +149,7 @@ export const discountsApi = api.injectEndpoints({
         url: `discounts/code/${code}/availability`,
         method: 'get',
       }),
+      providesTags: (_r, _e, code) => [{ type: 'Discounts', id: `CODE_${code}` }],
     }),
     generateCodeSuggestions: builder.mutation({
       query: (data) => ({

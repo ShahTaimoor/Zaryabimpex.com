@@ -44,6 +44,7 @@ export const inventoryAlertsApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         { type: 'Orders', id: 'PO_LIST' },
+        { type: 'Accounting' },
         { type: 'Inventory', id: 'ALERTS' },
         { type: 'Inventory', id: 'ALERTS_SUMMARY' },
         { type: 'Inventory', id: 'LIST' },
@@ -56,6 +57,7 @@ export const inventoryAlertsApi = api.injectEndpoints({
         { type: 'Inventory', id: 'MOVEMENTS_LIST' },
         { type: 'Inventory', id: 'MOVEMENTS_STATS' },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'StockLedger', id: 'LIST' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },

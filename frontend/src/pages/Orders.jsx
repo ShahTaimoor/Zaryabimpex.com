@@ -58,6 +58,20 @@ const canEditInvoice = (order) => {
   return invoiceDate >= oneWeekAgo && invoiceDate <= now;
 };
 
+// Check if order/invoice is within last 2 weeks (delete allowed only for invoices from past 14 days)
+const canDeleteInvoice = (order) => {
+  const raw = order?.sale_date ?? order?.billDate ?? order?.order_date ?? order?.created_at ?? order?.createdAt;
+  if (raw == null) return false;
+  const invoiceDate = new Date(raw);
+  if (Number.isNaN(invoiceDate.getTime())) return false;
+  const now = new Date();
+  const twoWeeksAgo = new Date(now);
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+  twoWeeksAgo.setHours(0, 0, 0, 0);
+  invoiceDate.setHours(0, 0, 0, 0);
+  return invoiceDate >= twoWeeksAgo && invoiceDate <= now;
+};
+
 const OrderCard = ({ order, onView, onEdit, onPrint }) => {
   const getStatusColor = (status) => {
     switch (status) {
@@ -563,6 +577,15 @@ export const Orders = () => {
                             <Edit className="h-4 w-4" />
                           </button>
                         )}
+                        {canDeleteInvoice(order) && (
+                          <button
+                            onClick={() => handleDelete(order)}
+                            className="shrink-0 text-red-600 hover:text-red-800 p-1"
+                            title="Delete Invoice"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -665,6 +688,15 @@ export const Orders = () => {
                             <Edit className="h-5 w-5" />
                           </button>
                         )}
+                        {canDeleteInvoice(order) && (
+                          <button
+                            onClick={() => handleDelete(order)}
+                            className="shrink-0 text-red-600 hover:text-red-800 p-2 rounded hover:bg-red-50 transition-colors"
+                            title="Delete Invoice"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -691,6 +723,20 @@ export const Orders = () => {
                     <Printer className="h-4 w-4" />
                     <span>Print</span>
                   </button>
+                  {canDeleteInvoice(selectedOrder) && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to delete invoice ${selectedOrder.order_number ?? selectedOrder.orderNumber ?? 'this'}?`)) {
+                          handleDeleteOrder(selectedOrder._id);
+                          setShowViewModal(false);
+                        }
+                      }}
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center space-x-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span>Delete</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => setShowViewModal(false)}
                     className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"

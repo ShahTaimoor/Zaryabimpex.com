@@ -12,6 +12,7 @@ export const migrationApi = api.injectEndpoints({
         { type: 'Orders', id: 'LIST' },
         { type: 'Orders', id: 'PO_LIST' },
         { type: 'Orders', id: 'PI_LIST' },
+        { type: 'Accounting' },
         { type: 'Settings', id: 'COMPANY' },
       ],
     }),

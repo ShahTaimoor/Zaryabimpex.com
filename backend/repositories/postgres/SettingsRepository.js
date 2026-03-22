@@ -43,6 +43,7 @@ class SettingsRepository {
       fiscalYearStart: row.fiscal_year_start,
       defaultTaxRate: row.default_tax_rate,
       printSettings: typeof row.print_settings === 'string' ? JSON.parse(row.print_settings) : (row.print_settings || {}),
+      orderSettings: typeof row.order_settings === 'string' ? JSON.parse(row.order_settings || '{}') : (row.order_settings || {}),
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
@@ -66,7 +67,8 @@ class SettingsRepository {
       timeFormat: 'time_format',
       fiscalYearStart: 'fiscal_year_start',
       defaultTaxRate: 'default_tax_rate',
-      printSettings: 'print_settings'
+      printSettings: 'print_settings',
+      orderSettings: 'order_settings'
     };
     const setClauses = [];
     const params = [];

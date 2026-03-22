@@ -48,6 +48,10 @@ export const customersApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         { type: 'Customers', id: 'LIST' },
+        { type: 'Customers', id: 'BY_CITIES' },
+        { type: 'Customers', id: 'SEARCH' },
+        { type: 'Customers', id: 'CHECK' },
+        { type: 'Accounting' },
         { type: 'Reports', id: 'CUSTOMER_REPORT' },
         { type: 'Reports', id: 'CUSTOMER_ANALYTICS' },
         { type: 'Reports', id: 'CUSTOMER_ANALYTICS_SUMMARY' },
@@ -63,6 +67,10 @@ export const customersApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { id }) => [
         { type: 'Customers', id },
         { type: 'Customers', id: 'LIST' },
+        { type: 'Customers', id: 'BY_CITIES' },
+        { type: 'Customers', id: 'SEARCH' },
+        { type: 'Customers', id: 'CHECK' },
+        { type: 'Accounting' },
         { type: 'Sales', id: 'LIST' },
         { type: 'Orders', id: 'LIST' },
         { type: 'Reports', id: 'CUSTOMER_REPORT' },
@@ -80,6 +88,10 @@ export const customersApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, id) => [
         { type: 'Customers', id },
         { type: 'Customers', id: 'LIST' },
+        { type: 'Customers', id: 'BY_CITIES' },
+        { type: 'Customers', id: 'SEARCH' },
+        { type: 'Customers', id: 'CHECK' },
+        { type: 'Accounting' },
         { type: 'Sales', id: 'LIST' },
         { type: 'Orders', id: 'LIST' },
         { type: 'Reports', id: 'CUSTOMER_REPORT' },
@@ -94,6 +106,7 @@ export const customersApi = api.injectEndpoints({
         url: `customers/search/${encodeURIComponent(query)}`,
         method: 'get',
       }),
+      providesTags: [{ type: 'Customers', id: 'SEARCH' }],
     }),
     checkEmail: builder.query({
       query: ({ email, excludeId }) => ({
@@ -101,6 +114,7 @@ export const customersApi = api.injectEndpoints({
         method: 'get',
         params: excludeId ? { excludeId } : undefined,
       }),
+      providesTags: [{ type: 'Customers', id: 'CHECK' }],
     }),
     checkBusinessName: builder.query({
       query: ({ businessName, excludeId }) => ({
@@ -108,6 +122,7 @@ export const customersApi = api.injectEndpoints({
         method: 'get',
         params: excludeId ? { excludeId } : undefined,
       }),
+      providesTags: [{ type: 'Customers', id: 'CHECK' }],
     }),
     cities: builder.query({
       query: () => ({
@@ -122,6 +137,7 @@ export const customersApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      providesTags: [{ type: 'Customers', id: 'BY_CITIES' }],
     }),
     exportExcel: builder.mutation({
       query: (params) => ({
@@ -136,6 +152,7 @@ export const customersApi = api.injectEndpoints({
         method: 'get',
         responseType: 'blob',
       }),
+      providesTags: [{ type: 'Customers', id: 'EXPORT' }],
     }),
     importExcel: builder.mutation({
       query: (file) => {
@@ -149,6 +166,10 @@ export const customersApi = api.injectEndpoints({
       },
       invalidatesTags: [
         { type: 'Customers', id: 'LIST' },
+        { type: 'Customers', id: 'BY_CITIES' },
+        { type: 'Customers', id: 'SEARCH' },
+        { type: 'Customers', id: 'CHECK' },
+        { type: 'Accounting' },
         { type: 'Reports', id: 'CUSTOMER_REPORT' },
         { type: 'Reports', id: 'CUSTOMER_ANALYTICS' },
         { type: 'Reports', id: 'CUSTOMER_ANALYTICS_SUMMARY' },
@@ -161,6 +182,7 @@ export const customersApi = api.injectEndpoints({
         method: 'get',
         responseType: 'blob',
       }),
+      providesTags: [{ type: 'Customers', id: 'TEMPLATE' }],
     }),
   }),
   overrideExisting: false,

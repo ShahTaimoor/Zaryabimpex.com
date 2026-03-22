@@ -5,6 +5,17 @@ const inventoryRepository = require('../repositories/postgres/InventoryRepositor
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function isValidUuid(v) {
+  if (v == null || v === '') return false;
+  return UUID_REGEX.test(String(v).trim());
+}
+
+function safePiecesPerBox(row) {
+  if (!row || row.pieces_per_box == null || row.pieces_per_box === '') return null;
+  const n = parseFloat(row.pieces_per_box);
+  return Number.isFinite(n) ? n : null;
+}
+
 async function resolveCategoryId(categoryOrName) {
   if (categoryOrName == null || categoryOrName === '') return null;
   const s = String(categoryOrName).trim();
@@ -39,6 +50,8 @@ function toApiProduct(row, categoryMap = null) {
     status: row.is_active ? 'active' : 'inactive',
     isActive: row.is_active,
     unit: row.unit,
+    piecesPerBox: safePiecesPerBox(row),
+    pieces_per_box: safePiecesPerBox(row),
     created_at: row.created_at,
     updated_at: row.updated_at,
     createdAt: row.created_at,
@@ -47,11 +60,16 @@ function toApiProduct(row, categoryMap = null) {
 }
 
 async function getCategoryMap(categoryIds) {
-  const uniq = [...new Set(categoryIds.filter(Boolean))];
+  // Only query valid UUIDs — invalid category_id on legacy rows would make Postgres throw (500)
+  const uniq = [...new Set(categoryIds.filter(Boolean).filter((id) => isValidUuid(id)))];
   const map = new Map();
   for (const id of uniq) {
-    const cat = await categoryRepository.findById(id);
-    if (cat) map.set(id, cat);
+    try {
+      const cat = await categoryRepository.findById(id);
+      if (cat) map.set(id, cat);
+    } catch (e) {
+      console.warn('getCategoryMap: skip category lookup for', id, e.message);
+    }
   }
   return map;
 }
@@ -127,9 +145,23 @@ class ProductServicePostgres {
   }
 
   async getProductById(id) {
-    const row = await productRepository.findById(id);
+    if (!isValidUuid(id)) {
+      throw new Error('Invalid product id');
+    }
+    let row;
+    try {
+      row = await productRepository.findById(id);
+    } catch (e) {
+      // Postgres: invalid input syntax for type uuid (22P02)
+      if (e && e.code === '22P02') {
+        throw new Error('Invalid product id');
+      }
+      console.error('getProductById query error:', e);
+      throw e;
+    }
     if (!row) throw new Error('Product not found');
-    const categoryMap = row.category_id ? await getCategoryMap([row.category_id]) : null;
+    const categoryMap =
+      row.category_id && isValidUuid(row.category_id) ? await getCategoryMap([row.category_id]) : null;
     let product = toApiProduct(row, categoryMap);
     // Use inventory table as source of truth for stock (sale returns update inventory.current_stock)
     const inv = await inventoryRepository.findOne({ productId: id, product: id });
@@ -169,10 +201,6 @@ class ProductServicePostgres {
       const nameExists = await productRepository.nameExists(productData.name);
       if (nameExists) throw new Error('A product with this name already exists. Please choose a different name.');
     }
-    if (productData.sku) {
-      const skuExists = await productRepository.skuExists(productData.sku);
-      if (skuExists) throw new Error('A product with this SKU already exists.');
-    }
     if (productData.barcode) {
       const barcodeExists = await productRepository.barcodeExists(productData.barcode);
       if (barcodeExists) throw new Error('A product with this barcode already exists.');
@@ -188,6 +216,7 @@ class ProductServicePostgres {
       categoryId = await resolveCategoryId(categoryInput);
     }
 
+    const piecesPerBox = productData.piecesPerBox ?? productData.pieces_per_box;
     const product = await productRepository.create({
       name: productData.name,
       sku: productData.sku,
@@ -200,6 +229,7 @@ class ProductServicePostgres {
       stockQuantity: inv.currentStock ?? inv.stockQuantity ?? 0,
       minStockLevel: inv.reorderPoint ?? inv.minStock ?? inv.minStockLevel ?? 0,
       unit: productData.unit,
+      piecesPerBox: piecesPerBox != null && piecesPerBox !== '' ? parseFloat(piecesPerBox) : null,
       isActive: productData.status !== 'inactive' && productData.isActive !== false,
       createdBy: userId
     });
@@ -218,10 +248,6 @@ class ProductServicePostgres {
     if (updateData.name) {
       const nameExists = await productRepository.nameExists(updateData.name, id);
       if (nameExists) throw new Error('A product with this name already exists. Please choose a different name.');
-    }
-    if (updateData.sku) {
-      const skuExists = await productRepository.skuExists(updateData.sku, id);
-      if (skuExists) throw new Error('A product with this SKU already exists.');
     }
     if (updateData.barcode) {
       const barcodeExists = await productRepository.barcodeExists(updateData.barcode, id);
@@ -246,6 +272,10 @@ class ProductServicePostgres {
       }
     }
     if (updateData.unit !== undefined) data.unit = updateData.unit;
+    if (updateData.piecesPerBox !== undefined || updateData.pieces_per_box !== undefined) {
+      const ppb = updateData.piecesPerBox ?? updateData.pieces_per_box;
+      data.piecesPerBox = ppb != null && ppb !== '' ? parseFloat(ppb) : null;
+    }
     if (updateData.status !== undefined) data.isActive = updateData.status !== 'inactive';
     if (updateData.isActive !== undefined) data.isActive = updateData.isActive;
 

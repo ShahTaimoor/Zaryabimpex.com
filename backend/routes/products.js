@@ -170,8 +170,14 @@ router.get('/:id', auth, async (req, res) => {
     if (error.message === 'Product not found') {
       return res.status(404).json({ message: 'Product not found' });
     }
+    if (error.message === 'Invalid product id') {
+      return res.status(400).json({ message: 'Invalid product id' });
+    }
     console.error('Get product error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({
+      message: 'Server error',
+      ...(process.env.NODE_ENV === 'development' && { details: error.message })
+    });
   }
 });
 
@@ -216,6 +222,30 @@ router.post('/', [
         attemptedName: req.body.name
       });
     }
+
+    // Postgres unique violation (e.g. duplicate SKU)
+    if (error.code === '23505') {
+      const msg = String(error.message || '');
+      if (msg.includes('products_sku_key') || msg.toLowerCase().includes('sku')) {
+        return res.status(400).json({
+          message: 'A product with this SKU already exists.',
+          code: 'DUPLICATE_PRODUCT_SKU',
+          attemptedSku: req.body?.sku
+        });
+      }
+      if (msg.includes('products_name_key') || msg.toLowerCase().includes('name')) {
+        return res.status(400).json({
+          message: 'A product with this name already exists. Please choose a different name.',
+          code: 'DUPLICATE_PRODUCT_NAME',
+          attemptedName: req.body?.name
+        });
+      }
+
+      return res.status(400).json({
+        message: 'Duplicate unique field value.',
+        code: 'DUPLICATE_PRODUCT_KEY'
+      });
+    }
     
     res.status(500).json({ 
       message: 'Server error creating product',
@@ -252,6 +282,28 @@ router.put('/:id', [
       return res.status(400).json({ 
         message: 'A product with this name already exists. Please choose a different name.',
         code: 'DUPLICATE_PRODUCT_NAME' 
+      });
+    }
+
+    if (error.code === '23505') {
+      const msg = String(error.message || '');
+      if (msg.includes('products_sku_key') || msg.toLowerCase().includes('sku')) {
+        return res.status(400).json({
+          message: 'A product with this SKU already exists.',
+          code: 'DUPLICATE_PRODUCT_SKU',
+          attemptedSku: req.body?.sku
+        });
+      }
+      if (msg.includes('products_name_key') || msg.toLowerCase().includes('name')) {
+        return res.status(400).json({
+          message: 'A product with this name already exists. Please choose a different name.',
+          code: 'DUPLICATE_PRODUCT_NAME'
+        });
+      }
+
+      return res.status(400).json({
+        message: 'Duplicate unique field value.',
+        code: 'DUPLICATE_PRODUCT_KEY'
       });
     }
     res.status(500).json({ message: 'Server error' });

@@ -10,6 +10,12 @@ const { validateDateParams, processDateFilter } = require('../middleware/dateFil
 const inventoryService = require('../services/inventoryService');
 const salesService = require('../services/salesService');
 const salesOrderRepository = require('../repositories/postgres/SalesOrderRepository');
+const {
+  ensureItemConfirmationStatus,
+  computeOrderConfirmationStatus,
+  recalculateTotalsFromItems,
+  getSalesOrderLineTotal
+} = require('../utils/orderConfirmationUtils');
 const customerRepository = require('../repositories/postgres/CustomerRepository');
 const productRepository = require('../repositories/postgres/ProductRepository');
 const productVariantRepository = require('../repositories/postgres/ProductVariantRepository');
@@ -338,6 +344,14 @@ router.put('/:id', [
       ...req.body,
       lastModifiedBy: req.user?.id || req.user?._id
     };
+    if (Array.isArray(req.body.items)) {
+      updateData.items = ensureItemConfirmationStatus(req.body.items);
+      const tax = Number(salesOrder.tax) || 0;
+      const { subtotal, total } = recalculateTotalsFromItems(updateData.items, getSalesOrderLineTotal, tax);
+      updateData.subtotal = subtotal;
+      updateData.total = total;
+      updateData.confirmationStatus = computeOrderConfirmationStatus(updateData.items);
+    }
 
     const updatedSO = await salesOrderRepository.update(req.params.id, updateData);
     if (updatedSO && updatedSO.customer_id) {
@@ -351,6 +365,161 @@ router.put('/:id', [
     });
   } catch (error) {
     console.error('Update sales order error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PATCH /api/sales-orders/:id/items-confirmation
+// @desc    Update item-wise confirmation status (partial confirmation)
+// @access  Private
+router.patch('/:id/items-confirmation', [
+  auth,
+  requirePermission('confirm_sales_orders'),
+  body('itemUpdates').optional().isArray().withMessage('itemUpdates must be an array'),
+  body('itemUpdates.*.itemIndex').isInt({ min: 0 }).withMessage('Valid itemIndex required'),
+  body('itemUpdates.*.confirmationStatus').isIn(['pending', 'confirmed', 'cancelled']).withMessage('Invalid confirmationStatus'),
+  body('confirmAll').optional().isBoolean().withMessage('confirmAll must be boolean'),
+  body('cancelAll').optional().isBoolean().withMessage('cancelAll must be boolean')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const salesOrder = await salesOrderRepository.findById(req.params.id);
+    if (!salesOrder) {
+      return res.status(404).json({ message: 'Sales order not found' });
+    }
+    if (['fully_invoiced', 'cancelled', 'closed'].includes(salesOrder.status)) {
+      return res.status(400).json({ message: 'Cannot update confirmation for order in current status' });
+    }
+
+    const userId = req.user?.id || req.user?._id;
+    let items = Array.isArray(salesOrder.items) ? salesOrder.items : (typeof salesOrder.items === 'string' ? JSON.parse(salesOrder.items || '[]') : []);
+
+    if (req.body.confirmAll === true) {
+      items = items.map((i) => ({ ...i, confirmationStatus: 'confirmed', confirmation_status: 'confirmed' }));
+    } else if (req.body.cancelAll === true) {
+      items = items.map((i) => ({ ...i, confirmationStatus: 'cancelled', confirmation_status: 'cancelled' }));
+    } else if (Array.isArray(req.body.itemUpdates) && req.body.itemUpdates.length > 0) {
+      items = ensureItemConfirmationStatus(items);
+      for (const { itemIndex, confirmationStatus } of req.body.itemUpdates) {
+        if (itemIndex >= 0 && itemIndex < items.length) {
+          const prevStatus = items[itemIndex].confirmationStatus ?? items[itemIndex].confirmation_status ?? 'pending';
+          items[itemIndex] = { ...items[itemIndex], confirmationStatus, confirmation_status: confirmationStatus };
+
+          const productId = items[itemIndex].product || items[itemIndex].product_id;
+          const qty = Number(items[itemIndex].quantity) || 0;
+          if (!productId || qty <= 0) continue;
+
+          if (confirmationStatus === 'confirmed' && prevStatus !== 'confirmed') {
+            try {
+              await inventoryService.updateStock({
+                productId: typeof productId === 'object' ? productId.id || productId._id : productId,
+                type: 'out',
+                quantity: qty,
+                reason: 'Sales Order Item Confirmation',
+                reference: 'Sales Order',
+                referenceId: salesOrder.id,
+                referenceModel: 'SalesOrder',
+                performedBy: userId,
+                notes: `Stock reduced - SO item confirmed: ${salesOrder.so_number || salesOrder.soNumber}`
+              });
+            } catch (invErr) {
+              return res.status(400).json({
+                message: `Insufficient stock for item at index ${itemIndex}. Cannot confirm.`,
+                details: invErr.message
+              });
+            }
+          } else if ((confirmationStatus === 'pending' || confirmationStatus === 'cancelled') && prevStatus === 'confirmed') {
+            try {
+              await inventoryService.updateStock({
+                productId: typeof productId === 'object' ? productId.id || productId._id : productId,
+                type: 'return',
+                quantity: qty,
+                reason: 'Sales Order Item Un-confirm',
+                reference: 'Sales Order',
+                referenceId: salesOrder.id,
+                referenceModel: 'SalesOrder',
+                performedBy: userId,
+                notes: `Stock restored - SO item unconfirmed: ${salesOrder.so_number || salesOrder.soNumber}`
+              });
+            } catch (invErr) {
+              return res.status(400).json({
+                message: `Failed to restore stock for item at index ${itemIndex}.`,
+                details: invErr.message
+              });
+            }
+          }
+        }
+      }
+    } else {
+      return res.status(400).json({ message: 'Provide itemUpdates, confirmAll, or cancelAll' });
+    }
+
+    const confirmationStatus = computeOrderConfirmationStatus(items);
+    const tax = Number(salesOrder.tax) || 0;
+    const { subtotal, total } = recalculateTotalsFromItems(items, getSalesOrderLineTotal, tax);
+
+    // Create invoice for newly confirmed items
+    const newlyConfirmedIndices = Array.isArray(req.body.itemUpdates)
+      ? req.body.itemUpdates
+          .filter((u) => u.confirmationStatus === 'confirmed')
+          .map((u) => u.itemIndex)
+      : req.body.confirmAll === true
+        ? items.map((_, i) => i)
+        : [];
+
+    let automaticSale = null;
+    let updatePayload = { items, subtotal, total, confirmationStatus, lastModifiedBy: userId };
+
+    if (newlyConfirmedIndices.length > 0) {
+      try {
+        const soForSale = { ...salesOrder, items, subtotal, total, confirmationStatus };
+        automaticSale = await salesService.createPartialSaleFromSalesOrder(soForSale, newlyConfirmedIndices, req.user);
+        const updatedItems = items.map((item) => {
+          const isConfirmed = (item.confirmationStatus ?? item.confirmation_status) === 'confirmed';
+          return isConfirmed
+            ? { ...item, invoicedQuantity: item.quantity ?? 0, remainingQuantity: 0 }
+            : item;
+        });
+        const allNonCancelledConfirmed = updatedItems
+          .filter((i) => (i.confirmationStatus ?? i.confirmation_status) !== 'cancelled')
+          .every((i) => (i.confirmationStatus ?? i.confirmation_status) === 'confirmed');
+        updatePayload = {
+          items: updatedItems,
+          subtotal,
+          total,
+          confirmationStatus,
+          status: allNonCancelledConfirmed ? 'fully_invoiced' : 'partially_invoiced',
+          lastModifiedBy: userId
+        };
+      } catch (createSaleError) {
+        console.error('Failed to create invoice for confirmed items:', createSaleError);
+      }
+    }
+
+    const updatedSO = await salesOrderRepository.updateById(req.params.id, updatePayload);
+    if (updatedSO && updatedSO.customer_id) {
+      const customer = await customerRepository.findById(updatedSO.customer_id);
+      if (customer) updatedSO.customer = transformCustomerToUppercase(customer);
+    }
+    if (updatedSO && Array.isArray(updatedSO.items)) {
+      updatedSO.items.forEach((item) => {
+        if (item.product) item.product = transformProductToUppercase(item.product);
+      });
+    }
+
+    const saleMessage = automaticSale ? ' Item(s) confirmed and invoice created.' : newlyConfirmedIndices.length > 0 ? ' Item(s) confirmed but invoice creation failed.' : '';
+    res.json({
+      message: `Item confirmation updated successfully.${saleMessage}`,
+      salesOrder: updatedSO,
+      sale: automaticSale,
+      invoiceError: automaticSale ? null : (newlyConfirmedIndices.length > 0 ? 'Invoice creation failed' : null)
+    });
+  } catch (error) {
+    console.error('Items confirmation update error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -475,9 +644,17 @@ router.put('/:id/confirm', [
       }
     }
 
+    const itemsWithConfirmed = items.map((i) => ({
+      ...i,
+      confirmationStatus: 'confirmed',
+      confirmation_status: 'confirmed'
+    }));
+
     await salesOrderRepository.update(req.params.id, {
       status: 'confirmed',
+      confirmationStatus: 'completed',
       confirmedDate: new Date(),
+      items: itemsWithConfirmed,
       lastModifiedBy: userId
     });
 
@@ -487,7 +664,7 @@ router.put('/:id/confirm', [
       const soForSale = await salesOrderRepository.findById(req.params.id);
       automaticSale = await salesService.createSaleFromSalesOrder(soForSale, req.user);
 
-      const updatedItems = items.map(item => ({
+      const updatedItems = itemsWithConfirmed.map((item) => ({
         ...item,
         invoicedQuantity: item.quantity,
         remainingQuantity: 0
@@ -496,6 +673,7 @@ router.put('/:id/confirm', [
       await salesOrderRepository.update(req.params.id, {
         status: 'fully_invoiced',
         items: updatedItems,
+        confirmationStatus: 'completed',
         lastModifiedBy: userId
       });
     } catch (createSaleError) {

@@ -83,13 +83,14 @@ class PLCalculationService {
    */
   async calculateCOGS(startDate, endDate) {
     const result = await query(
-      `SELECT COALESCE(SUM(debit_amount - credit_amount), 0) AS cogs
-       FROM account_ledger
-       WHERE account_code = '5000'
-         AND transaction_date >= $1
-         AND transaction_date <= $2
-         AND status = 'completed'
-         AND reversed_at IS NULL`,
+      `SELECT COALESCE(SUM(al.debit_amount - al.credit_amount), 0) AS cogs
+       FROM account_ledger al
+       WHERE al.account_code = '5000'
+         AND al.transaction_date >= $1
+         AND al.transaction_date <= $2
+         AND al.status = 'completed'
+         AND al.reversed_at IS NULL
+         AND NOT (al.reference_type = 'sale' AND al.reference_id::text IN (SELECT id::text FROM sales WHERE deleted_at IS NOT NULL))`,
       [startDate, endDate]
     );
     return parseFloat(result.rows[0]?.cogs || 0);

@@ -21,6 +21,7 @@ export const supplierBalancesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { supplierId }) => [
         { type: 'Suppliers', id: supplierId },
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'SUPPLIER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -45,6 +46,7 @@ export const supplierBalancesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { supplierId }) => [
         { type: 'Suppliers', id: supplierId },
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'SUPPLIER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -66,6 +68,7 @@ export const supplierBalancesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, supplierId) => [
         { type: 'Suppliers', id: supplierId },
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'SUPPLIER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -85,6 +88,10 @@ export const supplierBalancesApi = api.injectEndpoints({
         method: 'get',
         params: { amount },
       }),
+      providesTags: (_res, _err, { supplierId }) => [
+        { type: 'Suppliers', id: supplierId },
+        { type: 'Accounting', id: 'SUPPLIER_BALANCE' },
+      ],
     }),
     getBalanceIssues: builder.query({
       query: () => ({
@@ -100,6 +107,7 @@ export const supplierBalancesApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'SUPPLIER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },

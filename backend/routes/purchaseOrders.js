@@ -7,6 +7,12 @@ const inventoryService = require('../services/inventoryService');
 const purchaseOrderService = require('../services/purchaseOrderService');
 const supplierRepository = require('../repositories/SupplierRepository');
 const purchaseOrderRepository = require('../repositories/postgres/PurchaseRepository');
+const {
+  ensureItemConfirmationStatus,
+  computeOrderConfirmationStatus,
+  recalculateTotalsFromItems,
+  getPurchaseOrderLineTotal
+} = require('../utils/orderConfirmationUtils');
 
 const router = express.Router();
 
@@ -167,14 +173,25 @@ router.put('/:id', [
       return res.status(400).json({ errors: errors.array() });
     }
 
+    const currentPO = await purchaseOrderService.getPurchaseOrderById(req.params.id);
+    const oldItems = JSON.parse(JSON.stringify(currentPO.items || []));
+
+    const updatePayload = { ...req.body };
+    if (Array.isArray(req.body.items)) {
+      updatePayload.items = ensureItemConfirmationStatus(req.body.items);
+      const tax = Number(currentPO.tax) || 0;
+      const discount = Number(currentPO.discount) || 0;
+      const { subtotal, total: subtotalWithTax } = recalculateTotalsFromItems(updatePayload.items, getPurchaseOrderLineTotal, tax);
+      updatePayload.subtotal = subtotal;
+      updatePayload.total = subtotalWithTax - discount;
+      updatePayload.confirmationStatus = computeOrderConfirmationStatus(updatePayload.items);
+    }
+
     const updatedPO = await purchaseOrderService.updatePurchaseOrder(
       req.params.id,
-      req.body,
+      updatePayload,
       req.user?.id || req.user?._id
     );
-
-    // Store old items for comparison (for inventory updates)
-    const oldItems = JSON.parse(JSON.stringify(updatedPO.items));
 
     // Adjust inventory if order was confirmed and items changed
     if (updatedPO.status === 'confirmed' && req.body.items && req.body.items.length > 0) {
@@ -263,6 +280,135 @@ router.put('/:id', [
   }
 });
 
+// @route   PATCH /api/purchase-orders/:id/items-confirmation
+// @desc    Update item-wise confirmation status (partial confirmation)
+// @access  Private
+router.patch('/:id/items-confirmation', [
+  auth,
+  requirePermission('confirm_purchase_orders'),
+  body('itemUpdates').optional().isArray().withMessage('itemUpdates must be an array'),
+  body('itemUpdates.*.itemIndex').isInt({ min: 0 }).withMessage('Valid itemIndex required'),
+  body('itemUpdates.*.confirmationStatus').isIn(['pending', 'confirmed', 'cancelled']).withMessage('Invalid confirmationStatus'),
+  body('confirmAll').optional().isBoolean().withMessage('confirmAll must be boolean'),
+  body('cancelAll').optional().isBoolean().withMessage('cancelAll must be boolean')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const purchaseOrder = await purchaseOrderRepository.findById(req.params.id);
+    if (!purchaseOrder) {
+      return res.status(404).json({ message: 'Purchase order not found' });
+    }
+    if (['received', 'cancelled', 'closed', 'completed'].includes(purchaseOrder.status)) {
+      return res.status(400).json({ message: 'Cannot update confirmation for order in current status' });
+    }
+
+    const userId = req.user?.id || req.user?._id;
+    let items = Array.isArray(purchaseOrder.items) ? purchaseOrder.items : (typeof purchaseOrder.items === 'string' ? JSON.parse(purchaseOrder.items || '[]') : []);
+    const poNumber = purchaseOrder.purchase_order_number || purchaseOrder.poNumber || purchaseOrder.id;
+
+    if (req.body.confirmAll === true) {
+      items = items.map((i) => ({ ...i, confirmationStatus: 'confirmed', confirmation_status: 'confirmed' }));
+    } else if (req.body.cancelAll === true) {
+      items = items.map((i) => ({ ...i, confirmationStatus: 'cancelled', confirmation_status: 'cancelled' }));
+    } else if (Array.isArray(req.body.itemUpdates) && req.body.itemUpdates.length > 0) {
+      items = ensureItemConfirmationStatus(items);
+      for (const { itemIndex, confirmationStatus } of req.body.itemUpdates) {
+        if (itemIndex >= 0 && itemIndex < items.length) {
+          const prevStatus = items[itemIndex].confirmationStatus ?? items[itemIndex].confirmation_status ?? 'pending';
+          items[itemIndex] = { ...items[itemIndex], confirmationStatus, confirmation_status: confirmationStatus };
+
+          const productId = items[itemIndex].product_id || items[itemIndex].product;
+          const qty = Number(items[itemIndex].quantity) || 0;
+          const cost = items[itemIndex].costPerUnit ?? items[itemIndex].cost_per_unit ?? items[itemIndex].unitCost;
+          const pid = typeof productId === 'object' ? productId?.id || productId?._id : productId;
+          if (!pid || qty <= 0) continue;
+
+          if (confirmationStatus === 'confirmed' && prevStatus !== 'confirmed') {
+            try {
+              await inventoryService.updateStock({
+                productId: pid,
+                type: 'in',
+                quantity: qty,
+                cost,
+                reason: 'Purchase Order Item Confirmation',
+                reference: 'Purchase Order',
+                referenceId: purchaseOrder.id,
+                referenceModel: 'PurchaseOrder',
+                performedBy: userId,
+                notes: `Stock increased - PO item confirmed: ${poNumber}`
+              });
+            } catch (invErr) {
+              return res.status(400).json({
+                message: `Failed to update inventory for item at index ${itemIndex}.`,
+                details: invErr.message
+              });
+            }
+          } else if ((confirmationStatus === 'pending' || confirmationStatus === 'cancelled') && prevStatus === 'confirmed') {
+            try {
+              await inventoryService.updateStock({
+                productId: pid,
+                type: 'out',
+                quantity: qty,
+                reason: 'Purchase Order Item Un-confirm',
+                reference: 'Purchase Order',
+                referenceId: purchaseOrder.id,
+                referenceModel: 'PurchaseOrder',
+                performedBy: userId,
+                notes: `Stock reduced - PO item unconfirmed: ${poNumber}`
+              });
+            } catch (invErr) {
+              return res.status(400).json({
+                message: `Insufficient stock to un-confirm item at index ${itemIndex}.`,
+                details: invErr.message
+              });
+            }
+          }
+        }
+      }
+    } else {
+      return res.status(400).json({ message: 'Provide itemUpdates, confirmAll, or cancelAll' });
+    }
+
+    const confirmationStatus = computeOrderConfirmationStatus(items);
+    const tax = Number(purchaseOrder.tax) || 0;
+    const discount = Number(purchaseOrder.discount) || 0;
+    const { subtotal, total: subtotalWithTax } = recalculateTotalsFromItems(items, getPurchaseOrderLineTotal, tax);
+    const total = subtotalWithTax - discount;
+
+    const updatedPO = await purchaseOrderRepository.update(purchaseOrder.id, {
+      items,
+      subtotal,
+      total,
+      confirmationStatus,
+      updatedBy: userId
+    });
+
+    if (updatedPO.supplier_id) {
+      updatedPO.supplier = await supplierRepository.findById(updatedPO.supplier_id);
+      if (updatedPO.supplier) {
+        updatedPO.supplier = transformSupplierToUppercase(updatedPO.supplier);
+      }
+    }
+    if (updatedPO.items && Array.isArray(updatedPO.items)) {
+      updatedPO.items.forEach((item) => {
+        if (item.product) item.product = transformProductToUppercase(item.product);
+      });
+    }
+
+    res.json({
+      message: 'Item confirmation updated successfully',
+      purchaseOrder: updatedPO
+    });
+  } catch (error) {
+    console.error('Items confirmation update error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   PUT /api/purchase-orders/:id/confirm
 // @desc    Confirm purchase order and update inventory
 // @access  Private
@@ -274,11 +420,22 @@ router.put('/:id/confirm', [
     const purchaseOrder = await purchaseOrderService.confirmPurchaseOrder(req.params.id);
     const poId = purchaseOrder.id || purchaseOrder._id;
     const poNumber = purchaseOrder.purchase_order_number || purchaseOrder.poNumber || poId;
+    const items = Array.isArray(purchaseOrder.items) ? purchaseOrder.items : [];
+    const itemsWithConfirmed = items.map((i) => ({
+      ...i,
+      confirmationStatus: 'confirmed',
+      confirmation_status: 'confirmed'
+    }));
+
+    await purchaseOrderRepository.update(poId, {
+      items: itemsWithConfirmed,
+      confirmationStatus: 'completed',
+      updatedBy: req.user?.id || req.user?._id
+    });
 
     // Update inventory for each item in the purchase order
     const inventoryUpdates = [];
-    const items = Array.isArray(purchaseOrder.items) ? purchaseOrder.items : [];
-    for (const item of items) {
+    for (const item of itemsWithConfirmed) {
       const productId = item.product_id || item.product;
       if (!productId) continue;
       try {

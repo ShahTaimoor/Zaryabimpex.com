@@ -55,6 +55,7 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Inventory', id: 'MOVEMENTS_LIST' },
         { type: 'Inventory', id: 'MOVEMENTS_STATS' },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'StockLedger', id: 'LIST' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
@@ -76,6 +77,7 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Inventory', id: 'MOVEMENTS_LIST' },
         { type: 'Inventory', id: 'MOVEMENTS_STATS' },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'StockLedger', id: 'LIST' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
@@ -125,6 +127,7 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Inventory', id: 'SUMMARY' },
         { type: 'Inventory', id: 'LOW_STOCK' },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Orders', id: 'PO_LIST' },
         { type: 'StockLedger', id: 'LIST' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
@@ -207,6 +210,7 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Inventory', id: 'SUMMARY' },
         { type: 'Inventory', id: 'LOW_STOCK' },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'StockLedger', id: 'LIST' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
@@ -228,6 +232,7 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Inventory', id: 'SUMMARY' },
         { type: 'Inventory', id: 'LOW_STOCK' },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'StockLedger', id: 'LIST' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
@@ -249,6 +254,7 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Inventory', id: 'SUMMARY' },
         { type: 'Inventory', id: 'LOW_STOCK' },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'StockLedger', id: 'LIST' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
@@ -349,7 +355,7 @@ export const inventoryApi = api.injectEndpoints({
     }),
     createReport: builder.mutation({
       query: (data) => ({
-        url: 'inventory-reports',
+        url: 'inventory-reports/generate',
         method: 'post',
         data,
       }),
@@ -369,11 +375,22 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Inventory', id: `REPORT_${id}` },
       ],
     }),
+    toggleFavoriteReport: builder.mutation({
+      query: ({ reportId, isFavorite }) => ({
+        url: `inventory-reports/${reportId}/favorite`,
+        method: 'put',
+        data: { isFavorite },
+      }),
+      invalidatesTags: (_r, _e, { reportId }) => [
+        { type: 'Inventory', id: 'REPORTS' },
+        { type: 'Inventory', id: `REPORT_${reportId}` },
+      ],
+    }),
     exportReport: builder.mutation({
       query: ({ id, format }) => ({
-        url: `inventory-reports/${id}/export/${format}`,
-        method: 'get',
-        responseType: 'blob',
+        url: `inventory-reports/${id}/export`,
+        method: 'post',
+        data: { format },
       }),
     }),
   }),
@@ -403,6 +420,7 @@ export const {
   useGetQuickAgingAnalysisQuery,
   useCreateReportMutation,
   useDeleteReportMutation,
+  useToggleFavoriteReportMutation,
   useExportReportMutation,
 } = inventoryApi;
 

@@ -75,6 +75,71 @@ router.post('/generate', [
   }
 });
 
+// Backward-compatible alias:
+// Some clients call POST /api/inventory-reports (without "/generate").
+// Keep this route so generation doesn't break with "Route not found".
+router.post('/', [
+  auth,
+  requirePermission('view_reports'),
+  sanitizeRequest,
+  body('reportType')
+    .optional()
+    .isIn(['stock_levels', 'turnover_rates', 'aging_analysis', 'comprehensive'])
+    .withMessage('Invalid report type. Must be one of: stock_levels, turnover_rates, aging_analysis, comprehensive'),
+  body('periodType')
+    .optional()
+    .isIn(['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'custom'])
+    .withMessage('Invalid period type. Must be one of: daily, weekly, monthly, quarterly, yearly, custom'),
+  body('startDate')
+    .optional()
+    .isISO8601()
+    .withMessage('Start date must be a valid ISO 8601 date'),
+  body('endDate')
+    .optional()
+    .isISO8601()
+    .withMessage('End date must be a valid ISO 8601 date'),
+  body('includeMetrics')
+    .optional()
+    .isObject()
+    .withMessage('includeMetrics must be an object'),
+  body('filters')
+    .optional()
+    .isObject()
+    .withMessage('filters must be an object'),
+  body('thresholds')
+    .optional()
+    .isObject()
+    .withMessage('thresholds must be an object'),
+  handleValidationErrors,
+], async (req, res) => {
+  try {
+    const report = await inventoryReportService.generateInventoryReport(
+      req.body,
+      req.user._id
+    );
+
+    res.status(201).json({
+      message: 'Inventory report generated successfully',
+      report: {
+        reportId: report.reportId,
+        reportName: report.reportName,
+        reportType: report.reportType,
+        periodType: report.periodType,
+        startDate: report.startDate,
+        endDate: report.endDate,
+        status: report.status,
+        generatedAt: report.generatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error generating inventory report (alias route):', error);
+    res.status(500).json({
+      message: 'Server error generating inventory report',
+      error: error.message
+    });
+  }
+});
+
 // @route   GET /api/inventory-reports
 // @desc    Get list of inventory reports
 // @access  Private (requires 'view_reports' permission)
@@ -505,7 +570,31 @@ router.get('/quick/summary', [
     const products = await productRepository.findAll({ isActive: true });
     const summaryData = {
       totalProducts: products.length,
-      totalStockValue: products.reduce((sum, p) => sum + (parseFloat(p.stock_quantity) || 0) * (parseFloat(p.cost_price) || 0), 0),
+      totalStockValue: products.reduce(
+        (sum, p) =>
+          sum +
+          (parseFloat(p.stock_quantity) || 0) *
+            (parseFloat(p.cost_price) || 0),
+        0
+      ),
+      totalWholesaleValue: products.reduce(
+        (sum, p) =>
+          sum +
+          (parseFloat(p.stock_quantity) || 0) *
+            (parseFloat(p.wholesale_price) ||
+              parseFloat(p.selling_price) ||
+              0),
+        0
+      ),
+      totalRetailValue: products.reduce(
+        (sum, p) =>
+          sum +
+          (parseFloat(p.stock_quantity) || 0) *
+            (parseFloat(p.selling_price) ||
+              parseFloat(p.wholesale_price) ||
+              0),
+        0
+      ),
       lowStockProducts: products.filter(p => (parseFloat(p.stock_quantity) || 0) <= (parseFloat(p.min_stock_level) || 0)).length,
       outOfStockProducts: products.filter(p => (parseFloat(p.stock_quantity) || 0) === 0).length,
       overstockedProducts: products.filter(p => (parseFloat(p.stock_quantity) || 0) > (parseFloat(p.min_stock_level) || 0) * 3).length

@@ -34,6 +34,7 @@ export const productVariantsApi = api.injectEndpoints({
       invalidatesTags: [
         { type: 'Products', id: 'VARIANTS_LIST' },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Products', id: 'LOW_STOCK' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
@@ -53,6 +54,7 @@ export const productVariantsApi = api.injectEndpoints({
         { type: 'Products', id },
         { type: 'Products', id: 'VARIANTS_LIST' },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Products', id: 'LOW_STOCK' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
@@ -71,6 +73,7 @@ export const productVariantsApi = api.injectEndpoints({
         { type: 'Products', id },
         { type: 'Products', id: 'VARIANTS_LIST' },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Products', id: 'LOW_STOCK' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },

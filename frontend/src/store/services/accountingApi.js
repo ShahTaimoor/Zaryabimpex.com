@@ -12,6 +12,7 @@ export const accountingApi = api.injectEndpoints({
           : undefined,
       }),
       invalidatesTags: [
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'JOURNAL' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },

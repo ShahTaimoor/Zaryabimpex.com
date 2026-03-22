@@ -21,6 +21,7 @@ export const customerBalancesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { customerId }) => [
         { type: 'Customers', id: customerId },
         { type: 'Customers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'CUSTOMER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -44,6 +45,7 @@ export const customerBalancesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { customerId }) => [
         { type: 'Customers', id: customerId },
         { type: 'Customers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'CUSTOMER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -65,6 +67,7 @@ export const customerBalancesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, customerId) => [
         { type: 'Customers', id: customerId },
         { type: 'Customers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'CUSTOMER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -84,6 +87,10 @@ export const customerBalancesApi = api.injectEndpoints({
         method: 'get',
         params: { amount },
       }),
+      providesTags: (_res, _err, { customerId }) => [
+        { type: 'Customers', id: customerId },
+        { type: 'Accounting', id: 'CUSTOMER_BALANCE' },
+      ],
     }),
     getBalanceIssues: builder.query({
       query: () => ({
@@ -99,6 +106,7 @@ export const customerBalancesApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         { type: 'Customers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'CUSTOMER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },

@@ -68,6 +68,7 @@ export const expensesApi = api.injectEndpoints({
         { type: 'RecurringExpenses', id: 'UPCOMING' },
         { type: 'CashPayments', id: 'LIST' },
         { type: 'BankPayments', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
         { type: 'Accounting', id: 'ALL_ENTRIES' },

@@ -384,7 +384,7 @@ class ReportsService {
   }
 
   /**
-   * Get stock summary report (Opening Balance, Purchase, Sale, Returns, Damage, Closing Balance, For Zakat)
+   * Get stock summary report (Opening Balance, Purchase, Sale, Returns, Damage, Closing Balance)
    * @param {object} filters - Query filters (category, dateFrom, dateTo)
    * @returns {Promise<object>}
    */
@@ -496,8 +496,6 @@ class ReportsService {
       const wholesalePrice = wholesalePriceRaw || sellingPriceRaw || costPrice;
       const closingAmount = closingQty * costPrice;
       const wholesaleValuation = closingQty * wholesalePrice;
-      const zakatSaleAmount = closingQty * sellingPrice;
-      const zakatAvgAmount = closingQty * avgPurchasePrice;
       const minStockLevel = parseFloat(r.min_stock_level || 0);
       return {
         id: r.id,
@@ -523,9 +521,7 @@ class ReportsService {
         closingAmount,
         salePrice1: sellingPriceRaw,
         wholesaleValuation,
-        zakatAmount: zakatSaleAmount,
-        avgPurchasePrice,
-        zakatAvgAmount
+        avgPurchasePrice
       };
     });
 
@@ -544,10 +540,8 @@ class ReportsService {
       damageAmount: acc.damageAmount + r.damageAmount,
       closingQty: acc.closingQty + r.closingQty,
       closingAmount: acc.closingAmount + r.closingAmount,
-      wholesaleValuation: acc.wholesaleValuation + (r.wholesaleValuation || 0),
-      zakatAmount: acc.zakatAmount + r.zakatAmount,
-      zakatAvgAmount: acc.zakatAvgAmount + r.zakatAvgAmount
-    }), { openingQty: 0, openingAmount: 0, purchaseQty: 0, purchaseAmount: 0, purchaseReturnQty: 0, purchaseReturnAmount: 0, saleQty: 0, saleAmount: 0, saleReturnQty: 0, saleReturnAmount: 0, damageQty: 0, damageAmount: 0, closingQty: 0, closingAmount: 0, wholesaleValuation: 0, zakatAmount: 0, zakatAvgAmount: 0 });
+      wholesaleValuation: acc.wholesaleValuation + (r.wholesaleValuation || 0)
+    }), { openingQty: 0, openingAmount: 0, purchaseQty: 0, purchaseAmount: 0, purchaseReturnQty: 0, purchaseReturnAmount: 0, saleQty: 0, saleAmount: 0, saleReturnQty: 0, saleReturnAmount: 0, damageQty: 0, damageAmount: 0, closingQty: 0, closingAmount: 0, wholesaleValuation: 0 });
 
     const outOfStockCount = rows.filter(r => (r.closingQty || 0) === 0).length;
     const lowStockCount = rows.filter(r => {
@@ -570,7 +564,6 @@ class ReportsService {
         totalItems: rows.length,
         totalValuation: totals.closingAmount,
         totalWholesaleValuation: totals.wholesaleValuation,
-        totalRetailValuation: totals.zakatAmount,
         totalStock: totals.closingQty,
         lowStockCount,
         outOfStockCount,

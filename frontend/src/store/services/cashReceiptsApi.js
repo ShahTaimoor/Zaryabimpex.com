@@ -37,6 +37,7 @@ export const cashReceiptsApi = api.injectEndpoints({
           { type: 'CashReceipts', id: 'LIST' },
           { type: 'Customers', id: 'LIST' },
           { type: 'Suppliers', id: 'LIST' },
+          { type: 'Accounting' },
           { type: 'Accounting', id: 'LEDGER_SUMMARY' },
           { type: 'Accounting', id: 'LEDGER_ENTRIES' },
           { type: 'Accounting', id: 'ALL_ENTRIES' },
@@ -47,6 +48,7 @@ export const cashReceiptsApi = api.injectEndpoints({
           { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
           { type: 'Reports', id: 'PARTY_BALANCE' },
           { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+          { type: 'Reports', id: 'SUMMARY_CARDS' },
           { type: 'Reports', id: 'FINANCIAL_REPORT' },
         ];
         // Invalidate specific customer/supplier cache if involved
@@ -67,6 +69,7 @@ export const cashReceiptsApi = api.injectEndpoints({
           { type: 'CashReceipts', id: 'LIST' },
           { type: 'Customers', id: 'LIST' },
           { type: 'Suppliers', id: 'LIST' },
+          { type: 'Accounting' },
           { type: 'Accounting', id: 'LEDGER_SUMMARY' },
           { type: 'Accounting', id: 'LEDGER_ENTRIES' },
           { type: 'Accounting', id: 'ALL_ENTRIES' },
@@ -77,6 +80,7 @@ export const cashReceiptsApi = api.injectEndpoints({
           { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
           { type: 'Reports', id: 'PARTY_BALANCE' },
           { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+          { type: 'Reports', id: 'SUMMARY_CARDS' },
           { type: 'Reports', id: 'FINANCIAL_REPORT' },
         ];
         // Invalidate specific customer/supplier cache if involved
@@ -95,6 +99,7 @@ export const cashReceiptsApi = api.injectEndpoints({
         { type: 'CashReceipts', id: 'LIST' },
         { type: 'Customers', id: 'LIST' },
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
         { type: 'Accounting', id: 'ALL_ENTRIES' },
@@ -105,6 +110,7 @@ export const cashReceiptsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
@@ -118,6 +124,7 @@ export const cashReceiptsApi = api.injectEndpoints({
         { type: 'CashReceipts', id: 'LIST' },
         { type: 'Customers', id: 'LIST' },
         { type: 'Suppliers', id: 'LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
         { type: 'Accounting', id: 'ALL_ENTRIES' },
@@ -128,6 +135,7 @@ export const cashReceiptsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),

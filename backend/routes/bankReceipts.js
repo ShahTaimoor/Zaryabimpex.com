@@ -18,7 +18,8 @@ router.get('/', [
   auth,
   requirePermission('view_reports'),
   query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
+  query('limit').optional().isInt({ min: 1, max: 999999 }).withMessage('Limit must be between 1 and 999999'),
+  query('all').optional({ checkFalsy: true }).isBoolean().withMessage('all must be boolean'),
   query('voucherCode').optional().isString().trim().withMessage('Voucher code must be a string'),
   query('amount')
     .optional()
@@ -43,11 +44,13 @@ router.get('/', [
 
     const {
       page = 1,
-      limit = 50,
+      limit: limitParam,
+      all: allParam,
       voucherCode,
       amount,
       particular
     } = req.query;
+    const limit = (allParam === true || allParam === 'true') ? 999999 : (parseInt(limitParam, 10) || 50);
 
     // Build Postgres filter
     // Normalize dates to start/end of day for proper filtering

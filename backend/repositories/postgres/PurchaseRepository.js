@@ -1,4 +1,10 @@
 const { query, transaction } = require('../../config/postgres');
+const {
+  ensureItemConfirmationStatus,
+  computeOrderConfirmationStatus,
+  recalculateTotalsFromItems,
+  getPurchaseOrderLineTotal
+} = require('../../utils/orderConfirmationUtils');
 
 /** Generate next PO number (e.g. PO-20250211-1234). */
 function generatePONumber() {
@@ -140,42 +146,35 @@ class PurchaseRepository {
    * Create a new purchase
    */
   async create(purchaseData) {
-    const {
-      purchaseOrderNumber,
-      supplierId,
-      purchaseDate,
-      items,
-      subtotal,
-      discount,
-      tax,
-      total,
-      paymentMethod,
-      paymentStatus,
-      status,
-      notes,
-      createdBy
-    } = purchaseData;
+    const rawItems = purchaseData.items || [];
+    const items = ensureItemConfirmationStatus(rawItems);
+    const tax = purchaseData.tax ?? 0;
+    const { subtotal, total } = recalculateTotalsFromItems(items, getPurchaseOrderLineTotal, tax);
+    const computedSubtotal = purchaseData.subtotal ?? subtotal;
+    const computedTotal = purchaseData.total ?? total;
+    const confirmationStatus = computeOrderConfirmationStatus(items);
 
     const result = await query(
       `INSERT INTO purchases (
         purchase_order_number, supplier_id, purchase_date, items, subtotal, discount, tax, total,
-        payment_method, payment_status, status, notes, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        payment_method, payment_status, status, confirmation_status, notes, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
-        purchaseOrderNumber,
-        supplierId || null,
-        purchaseDate || new Date(),
-        JSON.stringify(items || []),
-        subtotal || 0,
-        discount || 0,
-        tax || 0,
-        total || 0,
-        paymentMethod || null,
-        paymentStatus || 'pending',
-        status || 'pending',
-        notes || null,
-        createdBy
+        purchaseData.purchaseOrderNumber,
+        purchaseData.supplierId || null,
+        purchaseData.purchaseDate || new Date(),
+        JSON.stringify(items),
+        computedSubtotal,
+        purchaseData.discount || 0,
+        tax,
+        computedTotal,
+        purchaseData.paymentMethod || null,
+        purchaseData.paymentStatus || 'pending',
+        purchaseData.status || 'pending',
+        confirmationStatus,
+        purchaseData.notes || null,
+        purchaseData.createdBy
       ]
     );
 
@@ -243,6 +242,11 @@ class PurchaseRepository {
     if (updateData.status !== undefined) {
       fields.push(`status = $${paramCount++}`);
       values.push(updateData.status);
+    }
+
+    if (updateData.confirmationStatus !== undefined) {
+      fields.push(`confirmation_status = $${paramCount++}`);
+      values.push(updateData.confirmationStatus);
     }
 
     if (updateData.notes !== undefined) {

@@ -48,6 +48,7 @@ export const productsApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Products', id: 'LOW_STOCK' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
@@ -67,6 +68,7 @@ export const productsApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { id }) => [
         { type: 'Products', id },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Products', id: 'LOW_STOCK' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
@@ -85,6 +87,7 @@ export const productsApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, id) => [
         { type: 'Products', id },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Products', id: 'LOW_STOCK' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
@@ -103,6 +106,7 @@ export const productsApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Products', id: 'LOW_STOCK' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
@@ -121,6 +125,7 @@ export const productsApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Products', id: 'LOW_STOCK' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
@@ -136,6 +141,7 @@ export const productsApi = api.injectEndpoints({
         url: `products/search/${encodeURIComponent(query)}`,
         method: 'get',
       }),
+      providesTags: [{ type: 'Products', id: 'SEARCH' }],
     }),
     lowStock: builder.query({
       query: () => ({
@@ -149,6 +155,7 @@ export const productsApi = api.injectEndpoints({
         url: `products/${id}/last-purchase-price`,
         method: 'get',
       }),
+      providesTags: (_res, _err, id) => [{ type: 'Products', id }],
     }),
     getLastPurchasePrices: builder.mutation({
       query: (data) => ({
@@ -166,7 +173,9 @@ export const productsApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { productId }) => [
         { type: 'Products', id: productId },
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Settings', id: 'INVESTORS_LIST' },
+        { type: 'Accounting' },
         { type: 'Accounting', id: 'PROFIT_SHARES' },
         { type: 'Accounting', id: 'PROFIT_SUMMARY' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
@@ -200,6 +209,7 @@ export const productsApi = api.injectEndpoints({
       },
       invalidatesTags: [
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Products', id: 'LOW_STOCK' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
@@ -222,6 +232,7 @@ export const productsApi = api.injectEndpoints({
       },
       invalidatesTags: [
         { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
         { type: 'Products', id: 'LOW_STOCK' },
         { type: 'Inventory', id: 'LIST' },
         { type: 'Inventory', id: 'SUMMARY' },
@@ -238,6 +249,7 @@ export const productsApi = api.injectEndpoints({
         method: 'get',
         responseType: 'blob',
       }),
+      providesTags: [{ type: 'Products', id: 'EXPORT' }],
     }),
     // Download CSV template for product import
     downloadTemplate: builder.query({
@@ -247,6 +259,7 @@ export const productsApi = api.injectEndpoints({
         method: 'get',
         responseType: 'blob',
       }),
+      providesTags: [{ type: 'Products', id: 'TEMPLATE' }],
     }),
   }),
   overrideExisting: false,

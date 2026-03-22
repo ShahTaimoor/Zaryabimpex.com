@@ -42,6 +42,14 @@ import PrintModal from '../components/PrintModal';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
 import { Button } from '@/components/ui/button';
+import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
+import {
+  hasDualUnit,
+  getPiecesPerBox,
+  piecesToBoxesAndPieces,
+  formatStockDualLabel,
+} from '../utils/dualUnitUtils';
+import { useCompanyInfo } from '../hooks/useCompanyInfo';
 
 // Helper to get local date in YYYY-MM-DD format (matches Sale page Bill Date)
 const getLocalDateString = (date = new Date()) => {
@@ -54,6 +62,9 @@ const getLocalDateString = (date = new Date()) => {
 };
 
 const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove }) => {
+  const { companyInfo: companySettings } = useCompanyInfo();
+  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
+  const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const totalPrice = item.costPerUnit * item.quantity;
   const product = item.product || {};
   const inventory = product.inventory || {};
@@ -95,8 +106,10 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">Stock</label>
-            <span className="text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center">
-              {currentStock}
+            <span className="text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center leading-tight">
+              {hasDualUnit(product)
+                ? formatStockDualLabel(currentStock, product)
+                : currentStock}
             </span>
           </div>
           <div>
@@ -105,16 +118,37 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
               {totalPrice.toFixed(2)}
             </span>
           </div>
-          <div>
+          <div className={hasDualUnit(product) ? 'col-span-2' : ''}>
             <label className="block text-xs text-gray-500 mb-1">Quantity</label>
-            <input
-              type="number"
-              autoComplete="off"
-              value={item.quantity}
-              onChange={(e) => onUpdateQuantity(item.product?._id, parseInt(e.target.value) || 1)}
-              className="input text-center text-sm h-8"
-              min="1"
-            />
+            {hasDualUnit(product) ? (
+              <DualUnitQuantityInput
+                product={product}
+                quantity={item.quantity}
+                showBoxInput={dualUnitShowBoxInputEnabled}
+                showPiecesInput={dualUnitShowPiecesInputEnabled}
+                onChange={(newQuantity, dual) => {
+                  if (newQuantity <= 0) {
+                    onRemove(item.product?._id);
+                    return;
+                  }
+                  const ppb = getPiecesPerBox(product);
+                  const { boxes, pieces } = ppb && dual ? dual : (ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {});
+                  onUpdateQuantity(item.product?._id, newQuantity, ppb ? { boxes, pieces } : undefined);
+                }}
+                min={1}
+                inputClassName="input text-center text-sm h-8"
+                compact={hasDualUnit(product)}
+              />
+            ) : (
+              <input
+                type="number"
+                autoComplete="off"
+                value={item.quantity}
+                onChange={(e) => onUpdateQuantity(item.product?._id, parseInt(e.target.value) || 1)}
+                className="input text-center text-sm h-8"
+                min="1"
+              />
+            )}
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Cost</label>
@@ -131,7 +165,7 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
         </div>
       </div>
 
-      {/* Desktop Table Layout */}
+      {/* Desktop Table Layout — 1+4+1+3+1+1+1 = 12 when dual qty needs box+pcs+total */}
       <div className="hidden md:grid grid-cols-12 gap-3 sm:gap-4 items-center">
         {/* Serial Number - 1 column */}
         <div className="col-span-1">
@@ -140,8 +174,8 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
           </span>
         </div>
 
-        {/* Product Name - 6 columns */}
-        <div className="col-span-6 flex items-center h-8 min-w-0">
+        {/* Product Name */}
+        <div className={`${hasDualUnit(product) ? 'col-span-4' : 'col-span-6'} flex items-center min-h-8 min-w-0`}>
           <div className="flex flex-col min-w-0 flex-1">
             <span className="font-medium text-xs sm:text-sm truncate">
               {displayName}
@@ -156,22 +190,45 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
         </div>
 
         {/* Stock - 1 column */}
-        <div className="col-span-1">
-          <span className="text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
-            {currentStock}
+        <div className="col-span-1 min-w-0">
+          <span className="text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center min-h-8 flex items-center justify-center leading-tight">
+            {hasDualUnit(product)
+              ? formatStockDualLabel(currentStock, product)
+              : currentStock}
           </span>
         </div>
 
-        {/* Quantity - 1 column */}
-        <div className="col-span-1">
-          <input
-            type="number"
-            autoComplete="off"
-            value={item.quantity}
-            onChange={(e) => onUpdateQuantity(item.product?._id, parseInt(e.target.value) || 1)}
-            className="input text-center text-xs sm:text-sm h-8"
-            min="1"
-          />
+        {/* Quantity */}
+        <div className={`${hasDualUnit(product) ? 'col-span-3' : 'col-span-1'} min-w-0`}>
+          {hasDualUnit(product) ? (
+            <DualUnitQuantityInput
+              product={product}
+              quantity={item.quantity}
+              showBoxInput={dualUnitShowBoxInputEnabled}
+              showPiecesInput={dualUnitShowPiecesInputEnabled}
+              onChange={(newQuantity, dual) => {
+                if (newQuantity <= 0) {
+                  onRemove(item.product?._id);
+                  return;
+                }
+                const ppb = getPiecesPerBox(product);
+                const { boxes, pieces } = ppb && dual ? dual : (ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {});
+                onUpdateQuantity(item.product?._id, newQuantity, ppb ? { boxes, pieces } : undefined);
+              }}
+              min={1}
+              inputClassName="input text-center text-xs sm:text-sm h-8"
+              compact={hasDualUnit(product)}
+            />
+          ) : (
+            <input
+              type="number"
+              autoComplete="off"
+              value={item.quantity}
+              onChange={(e) => onUpdateQuantity(item.product?._id, parseInt(e.target.value) || 1)}
+              className="input text-center text-xs sm:text-sm h-8"
+              min="1"
+            />
+          )}
         </div>
 
         {/* Cost - 1 column */}
@@ -218,6 +275,9 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [costPerUnit, setCostPerUnit] = useState('0');
+  const { companyInfo: companySettings } = useCompanyInfo();
+  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
+  const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
 
   // Ref for the product search input to focus after adding to cart
   const productSearchRef = useRef(null);
@@ -326,10 +386,13 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
       return;
     }
 
+    const ppb = getPiecesPerBox(selectedProduct);
+    const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(quantity, ppb) : {};
     onAddProduct({
       product: selectedProduct,
-      quantity: quantity,
-      costPerUnit: parseFloat(costPerUnit)
+      quantity,
+      costPerUnit: parseFloat(costPerUnit),
+      ...(ppb && { boxes, pieces }),
     });
 
     // Reset form
@@ -368,7 +431,10 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
         </div>
         <div className="flex items-center space-x-4">
           <div className={`text-sm ${inventory.currentStock === 0 ? 'text-red-600' : inventory.currentStock <= (inventory.reorderPoint || inventory.minStock || 0) ? 'text-orange-600' : 'text-gray-600'}`}>
-            Stock: {inventory.currentStock || 0}
+            Stock:{' '}
+            {hasDualUnit(product)
+              ? formatStockDualLabel(inventory.currentStock || 0, product)
+              : `${inventory.currentStock || 0} pcs`}
           </div>
           <div className="text-sm text-gray-600">Cost: {Math.round(pricing.cost || 0)}</div>
         </div>
@@ -376,12 +442,14 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
     );
   };
 
+  const selDual = hasDualUnit(selectedProduct);
+
   return (
     <div className="space-y-4">
-      {/* Product Selection - Same format as Sales */}
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4 items-end">
-        {/* Product Search - 7 columns (increased from 6) */}
-        <div className="col-span-1 sm:col-span-7">
+      {/* Product Selection — wider qty when dual (box + pcs + total) */}
+      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4 items-start">
+        {/* Product Search */}
+        <div className={`col-span-1 ${selDual ? 'sm:col-span-5' : 'sm:col-span-7'} min-w-0`}>
           <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
             Product Search
           </label>
@@ -408,35 +476,64 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
         </div>
 
         {/* Stock - 1 column */}
-        <div className="col-span-1 sm:col-span-1">
+        <div className="col-span-1 sm:col-span-1 min-w-0">
           <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
             Stock
           </label>
-          <span className="text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
-            {selectedProduct ? (selectedProduct.inventory?.currentStock || 0) : '0'}
+          <span className="text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center min-h-10 flex flex-col items-center justify-center leading-tight">
+            {selectedProduct ? (
+              selDual ? (
+                <>
+                  <span className="text-[11px]">{formatStockDualLabel(selectedProduct.inventory?.currentStock || 0, selectedProduct)}</span>
+                  <span className="text-[10px] font-normal text-gray-500">available</span>
+                </>
+              ) : (
+                <span>{selectedProduct.inventory?.currentStock || 0}</span>
+              )
+            ) : (
+              '0'
+            )}
           </span>
         </div>
 
-        {/* Quantity - 1 column */}
-        <div className="col-span-1 sm:col-span-1">
+        {/* Quantity */}
+        <div className={`col-span-1 ${selDual ? 'sm:col-span-3' : 'sm:col-span-1'} min-w-0`}>
           <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
             Quantity
           </label>
-          <input
-            type="number"
-            min="1"
-            autoComplete="off"
-            value={quantity}
-            onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && selectedProduct) {
-                e.preventDefault();
-                handleAddToCart();
-              }
-            }}
-            className="input text-center text-sm sm:text-base"
-            placeholder="1 (Enter to add & focus search)"
-          />
+          {selectedProduct && selDual ? (
+            <DualUnitQuantityInput
+              product={selectedProduct}
+              quantity={quantity}
+              onChange={(q) => setQuantity(q)}
+              showBoxInput={dualUnitShowBoxInputEnabled}
+              showPiecesInput={dualUnitShowPiecesInputEnabled}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && selectedProduct) {
+                  e.preventDefault();
+                  handleAddToCart();
+                }
+              }}
+              inputClassName="input text-center text-sm sm:text-base h-10"
+              compact={selDual}
+            />
+          ) : (
+            <input
+              type="number"
+              min="1"
+              autoComplete="off"
+              value={quantity}
+              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && selectedProduct) {
+                  e.preventDefault();
+                  handleAddToCart();
+                }
+              }}
+              className="input text-center text-sm sm:text-base h-10"
+              placeholder="1 (Enter to add & focus search)"
+            />
+          )}
         </div>
 
         {/* Cost - 1 column (reduced from 2) */}
@@ -647,10 +744,14 @@ export const Purchase = ({ tabId, editData }) => {
     }
   );
 
-  // Update supplier with complete data when fetched
+  // Merge fresh GET /suppliers/:id into selection (API returns { supplier }, not { data })
   useEffect(() => {
-    if (completeSupplierData?.data) {
-      setSelectedSupplier(completeSupplierData.data);
+    const s =
+      completeSupplierData?.supplier ??
+      completeSupplierData?.data?.supplier ??
+      completeSupplierData?.data;
+    if (s && (s._id || s.id)) {
+      setSelectedSupplier(s);
     }
   }, [completeSupplierData]);
 
@@ -772,15 +873,16 @@ export const Purchase = ({ tabId, editData }) => {
       if (refetchSupplier && typeof refetchSupplier === 'function') {
         try {
           refetchSupplier().then((result) => {
-            // Update supplier state immediately with fresh data
-            if (result?.data?.data) {
-              setSelectedSupplier(result.data.data);
+            const s =
+              result?.data?.supplier ??
+              result?.data?.data?.supplier ??
+              result?.data?.data;
+            if (s && (s._id || s.id)) {
+              setSelectedSupplier(s);
             }
-          }).catch((error) => {
-            // Failed to refetch supplier - silent fail
-          });
-        } catch (error) {
-          // Failed to call refetchSupplier - silent fail
+          }).catch(() => {});
+        } catch {
+          /* ignore */
         }
       }
 
@@ -837,20 +939,21 @@ export const Purchase = ({ tabId, editData }) => {
       if (selectedSupplier?._id && refetchSupplier && typeof refetchSupplier === 'function') {
         try {
           refetchSupplier().then((result) => {
-            // Update supplier state immediately with fresh data
-            if (result?.data?.data) {
-              setSelectedSupplier(result.data.data);
+            const s =
+              result?.data?.supplier ??
+              result?.data?.data?.supplier ??
+              result?.data?.data;
+            if (s && (s._id || s.id)) {
+              setSelectedSupplier(s);
             }
           }).catch((error) => {
-            // Ignore "Cannot refetch a query that has not been started yet" errors
             if (!error?.message?.includes('has not been started')) {
-              // Failed to refetch supplier - silent fail
+              /* ignore */
             }
           });
         } catch (error) {
-          // Ignore "Cannot refetch a query that has not been started yet" errors
           if (!error?.message?.includes('has not been started')) {
-            // Failed to call refetchSupplier - silent fail
+            /* ignore */
           }
         }
       }
@@ -955,10 +1058,20 @@ export const Purchase = ({ tabId, editData }) => {
           return prevItems;
         }
 
-        // User confirmed, update existing item quantity and cost
+        // User confirmed, update existing item quantity and cost (re-split boxes/pieces when dual)
         return prevItems.map(item =>
           item.product?._id === newItem.product?._id
-            ? { ...item, quantity: item.quantity + newItem.quantity, costPerUnit: newItem.costPerUnit }
+            ? (() => {
+                const mergedQty = item.quantity + newItem.quantity;
+                const ppb = getPiecesPerBox(item.product);
+                const split = ppb ? piecesToBoxesAndPieces(mergedQty, ppb) : {};
+                return {
+                  ...item,
+                  quantity: mergedQty,
+                  costPerUnit: newItem.costPerUnit,
+                  ...(ppb ? { boxes: split.boxes, pieces: split.pieces } : {}),
+                };
+              })()
             : item
         );
       }
@@ -966,17 +1079,27 @@ export const Purchase = ({ tabId, editData }) => {
     });
   };
 
-  const updateQuantity = (productId, newQuantity) => {
+  const updateQuantity = (productId, newQuantity, dualBreakdown) => {
     if (newQuantity <= 0) {
       removeFromPurchase(productId);
       return;
     }
     setPurchaseItems(prevItems =>
-      prevItems.map(item =>
-        item.product?._id === productId
-          ? { ...item, quantity: newQuantity }
-          : item
-      )
+      prevItems.map(item => {
+        if (item.product?._id !== productId) return item;
+        const ppb = getPiecesPerBox(item.product);
+        const { boxes, pieces } =
+          ppb && dualBreakdown
+            ? dualBreakdown
+            : ppb
+              ? piecesToBoxesAndPieces(newQuantity, ppb)
+              : { boxes: undefined, pieces: undefined };
+        return {
+          ...item,
+          quantity: newQuantity,
+          ...(ppb ? { boxes, pieces } : {}),
+        };
+      })
     );
   };
 
@@ -1325,9 +1448,32 @@ export const Purchase = ({ tabId, editData }) => {
                   </button>
                 )}
                 <button
-                  onClick={() => refetchSuppliers()}
+                  type="button"
+                  onClick={async () => {
+                    if (supplierSearchTerm) {
+                      try {
+                        await refetchSuppliers?.();
+                      } catch {
+                        /* ignore */
+                      }
+                    }
+                    if (selectedSupplier?._id && refetchSupplier) {
+                      try {
+                        const result = await refetchSupplier();
+                        const s =
+                          result?.data?.supplier ??
+                          result?.data?.data?.supplier ??
+                          result?.data?.data;
+                        if (s && (s._id || s.id)) {
+                          setSelectedSupplier(s);
+                        }
+                      } catch {
+                        /* ignore */
+                      }
+                    }
+                  }}
                   className="text-xs text-blue-600 hover:text-blue-800 underline"
-                  title="Refresh supplier data"
+                  title="Refresh supplier list and outstanding balance"
                 >
                   Refresh
                 </button>

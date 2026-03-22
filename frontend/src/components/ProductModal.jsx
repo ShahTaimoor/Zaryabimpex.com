@@ -20,7 +20,8 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
     inventory: {
       currentStock: '',
       reorderPoint: ''
-    }
+    },
+    piecesPerBox: ''
   });
   
   const [showSimilarProducts, setShowSimilarProducts] = useState(false);
@@ -192,7 +193,8 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       inventory: {
         currentStock: newData.inventory?.currentStock || '',
         reorderPoint: newData.inventory?.reorderPoint || ''
-      }
+      },
+      piecesPerBox: newData.piecesPerBox ?? newData.pieces_per_box ?? ''
     });
     setErrors({});
     setPriceValidationShown(false); // Reset validation flag when form is reset
@@ -491,6 +493,23 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                       className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
                     />
                     <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Min stock for reorder</p>
+                  </div>
+                  <div>
+                    <label htmlFor="piecesPerBox" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                      Pieces per Box
+                    </label>
+                    <input
+                      id="piecesPerBox"
+                      name="piecesPerBox"
+                      type="number"
+                      min="1"
+                      step="0.01"
+                      value={formData.piecesPerBox || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. 10"
+                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                    />
+                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">1 box = X pieces. Leave empty for pieces only</p>
                   </div>
                 </div>
                 
