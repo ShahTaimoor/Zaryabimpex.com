@@ -243,6 +243,18 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                   <div className="flex items-center">
                     <TrendingUp className="h-8 w-8 text-green-600" />
                     <div className="ml-3">
+                      <p className="text-sm font-medium text-gray-500">Retail Valuation</p>
+                      <p className="text-2xl font-semibold text-gray-900">
+                        {formatCurrency(reportData.summary?.totalRetailValue || 0)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <TrendingUp className="h-8 w-8 text-blue-600" />
+                    <div className="ml-3">
                       <p className="text-sm font-medium text-gray-500">Total Stock Value</p>
                       <p className="text-2xl font-semibold text-gray-900">
                         {formatCurrency(reportData.summary?.totalStockValue || 0)}
@@ -381,8 +393,11 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Reorder Point
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider text-right">
                           Stock Value
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider text-right">
+                          Retail Val.
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Status
@@ -403,6 +418,9 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {formatCurrency(item.metrics.stockValue)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium">
+                            {formatCurrency(item.metrics.retailValue || 0)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${

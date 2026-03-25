@@ -32,20 +32,22 @@ const MobileProductCard = ({
       {/* Product Image/Icon */}
       <div className="flex items-start space-x-3">
         <div className="flex-shrink-0">
-          {product.image ? (
-            <OptimizedImage
-              src={product.image}
-              webpSrc={product.imageWebp || product.image?.replace(/\.(jpg|jpeg|png)$/i, '.webp')}
-              alt={product.name}
-              className="h-16 w-16 object-cover rounded-lg"
-              sizes={{ thumbnail: true, small: true }}
-              lazy={true}
-            />
-          ) : (
-            <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center">
-              <Package className="h-8 w-8 text-gray-400" />
-            </div>
-          )}
+          {(localStorage.getItem('showProductImagesUI') !== 'false') ? (
+            (product.imageUrl || product.image) ? (
+              <OptimizedImage
+                src={product.imageUrl || product.image}
+                webpSrc={product.imageWebp || (product.imageUrl || product.image)?.replace(/\.(jpg|jpeg|png)$/i, '.webp')}
+                alt={product.name}
+                className="h-16 w-16 object-cover rounded-lg"
+                sizes={{ thumbnail: true, small: true }}
+                lazy={true}
+              />
+            ) : (
+              <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center">
+                <Package className="h-8 w-8 text-gray-400" />
+              </div>
+            )
+          ) : null}
         </div>
 
         {/* Product Details */}

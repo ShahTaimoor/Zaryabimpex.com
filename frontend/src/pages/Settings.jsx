@@ -713,6 +713,7 @@ export const Settings2 = () => {
           showEmail: settings.printSettings.showEmail ?? true,
           showCameraTime: settings.printSettings.showCameraTime ?? false,
           showDescription: settings.printSettings.showDescription ?? true,
+          showProductImages: settings.printSettings.showProductImages ?? true,
           showPrintBusinessName: settings.printSettings.showPrintBusinessName ?? true,
           showPrintContactName: settings.printSettings.showPrintContactName ?? true,
           showPrintAddress: settings.printSettings.showPrintAddress ?? true,
@@ -1280,6 +1281,11 @@ export const Settings2 = () => {
 
   const [accountLedgerShowReturn, setAccountLedgerShowReturn] = useState(() => {
     const saved = localStorage.getItem('accountLedgerShowReturnColumn');
+    return saved === null ? true : saved === 'true';
+  });
+
+  const [showProductImagesUI, setShowProductImagesUI] = useState(() => {
+    const saved = localStorage.getItem('showProductImagesUI');
     return saved === null ? true : saved === 'true';
   });
 
@@ -2124,6 +2130,20 @@ export const Settings2 = () => {
                         <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
                           <input
                             type="checkbox"
+                            name="showProductImages"
+                            checked={printSettings.showProductImages}
+                            onChange={handlePrintSettingsChange}
+                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">Show Product Images</div>
+                            <div className="text-xs text-gray-500">Display item images in table</div>
+                          </div>
+                        </label>
+
+                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                          <input
+                            type="checkbox"
                             name="showPrintBusinessName"
                             checked={printSettings.showPrintBusinessName}
                             onChange={handlePrintSettingsChange}
@@ -2390,6 +2410,25 @@ export const Settings2 = () => {
             </div>
             <div className="card-content">
               <div className="space-y-4">
+                <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={showProductImagesUI}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setShowProductImagesUI(checked);
+                      localStorage.setItem('showProductImagesUI', String(checked));
+                      toast.success(`Product images ${checked ? 'shown' : 'hidden'} in UI tables`);
+                      window.dispatchEvent(new Event('productImagesConfigChanged'));
+                    }}
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">Show Product Images in UI Tables</div>
+                    <div className="text-xs text-gray-500">Display product image thumbnails in lists and POS</div>
+                  </div>
+                </label>
+
                 <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
                   <input
                     type="checkbox"

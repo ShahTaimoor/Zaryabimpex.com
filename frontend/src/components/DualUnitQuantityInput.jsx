@@ -198,7 +198,7 @@ export function DualUnitQuantityInput({
                 <input
                   type="number"
                   min={0}
-                  value={boxes || ''}
+                  value={quantity === 0 ? '' : (boxes !== undefined ? boxes : '')}
                   onChange={handleBoxesChange}
                   onKeyDown={onKeyDown}
                   disabled={disabled}
@@ -214,7 +214,7 @@ export function DualUnitQuantityInput({
                 <input
                   type="number"
                   min={0}
-                  value={pieces || ''}
+                  value={quantity === 0 ? '' : (pieces !== undefined ? pieces : '')}
                   onChange={handlePiecesChange}
                   onKeyDown={onKeyDown}
                   disabled={disabled}
@@ -242,50 +242,50 @@ export function DualUnitQuantityInput({
 
   return (
     <div className={`flex flex-col gap-1 ${className}`} {...props}>
-    <div className="flex flex-wrap items-end gap-2 sm:gap-3">
-      {showBoxInput && (
-      <div className="min-w-[3.5rem] flex-1">
-        <span className="mb-1 block text-xs font-medium text-gray-600">Boxes</span>
-        <input
-          type="number"
-          min={0}
-          value={boxes || ''}
-          onChange={handleBoxesChange}
-          onKeyDown={onKeyDown}
-          disabled={disabled}
-          placeholder="0"
-          className={baseInput}
-          title="Full boxes"
-        />
-      </div>
-      )}
-      {showPiecesInput && (
-      <div className="min-w-[3.5rem] flex-1">
-        <span className="mb-1 block text-xs font-medium text-gray-600">Pieces</span>
-        <input
-          type="number"
-          min={0}
-          value={pieces || ''}
-          onChange={handlePiecesChange}
-          onKeyDown={onKeyDown}
-          disabled={disabled}
-          placeholder="0"
-          className={baseInput}
-          title="Loose pieces"
-        />
-      </div>
-      )}
-      <div className="w-[5.75rem] shrink-0 sm:w-24">
-        <span className="mb-1 block text-xs font-medium text-gray-600">Total</span>
-        <div
-          className="flex h-10 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-sm font-semibold tabular-nums text-gray-900"
-          title="Total quantity in pieces (cannot exceed stock)"
-        >
-          {quantity || 0}
+      <div className="flex flex-wrap items-end gap-2 sm:gap-3">
+        {showBoxInput && (
+          <div className="min-w-[3.5rem] flex-1">
+            <span className="mb-1 block text-xs font-medium text-gray-600">Boxes</span>
+            <input
+              type="number"
+              min={0}
+              value={quantity === 0 ? '' : (boxes !== undefined ? boxes : '')}
+              onChange={handleBoxesChange}
+              onKeyDown={onKeyDown}
+              disabled={disabled}
+              placeholder="0"
+              className={baseInput}
+              title="Full boxes"
+            />
+          </div>
+        )}
+        {showPiecesInput && (
+          <div className="min-w-[3.5rem] flex-1">
+            <span className="mb-1 block text-xs font-medium text-gray-600">Pieces</span>
+            <input
+              type="number"
+              min={0}
+              value={quantity === 0 ? '' : (pieces !== undefined ? pieces : '')}
+              onChange={handlePiecesChange}
+              onKeyDown={onKeyDown}
+              disabled={disabled}
+              placeholder="0"
+              className={baseInput}
+              title="Loose pieces"
+            />
+          </div>
+        )}
+        <div className="w-[5.75rem] shrink-0 sm:w-24">
+          <span className="mb-1 block text-xs font-medium text-gray-600">Total</span>
+          <div
+            className="flex h-10 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-sm font-semibold tabular-nums text-gray-900"
+            title="Total quantity in pieces (cannot exceed stock)"
+          >
+            {quantity || 0}
+          </div>
         </div>
       </div>
-    </div>
-    {remainingLine}
+      {remainingLine}
     </div>
   );
 }

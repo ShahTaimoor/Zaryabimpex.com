@@ -104,7 +104,7 @@ const ProductRecommendationCard = ({
     >
       {/* Product Image */}
       <div className="relative aspect-square bg-gray-100 rounded-t-lg overflow-hidden">
-        {product.image ? (
+        {(localStorage.getItem('showProductImagesUI') !== 'false') && product.image ? (
           <OptimizedImage
             src={product.image}
             webpSrc={product.imageWebp || product.image?.replace(/\.(jpg|jpeg|png)$/i, '.webp')}

@@ -511,7 +511,18 @@ const PrintDocument = ({
                             return (
                                 <tr key={index}>
                                     <td className="border border-black p-1 text-center">{index + 1}</td>
-                                    <td className="border border-black p-1 uppercase">{item.product?.name || item.name || `Item ${index + 1}`}</td>
+                                    <td className="border border-black p-1 uppercase">
+                                        <div className="flex items-center gap-2">
+                                            {(printSettings?.showProductImages !== false && (item.product?.imageUrl || item.imageUrl || item.product?.image || item.image)) && (
+                                                <img 
+                                                    src={item.product?.imageUrl || item.imageUrl || item.product?.image || item.image} 
+                                                    alt="" 
+                                                    className="w-8 h-8 object-cover rounded border border-gray-200" 
+                                                />
+                                            )}
+                                            <span>{item.product?.name || item.name || `Item ${index + 1}`}</span>
+                                        </div>
+                                    </td>
                                     <td className="border border-black p-1 text-center">{qtyDisplay}</td>
                                     <td className="border border-black p-1 text-right">{formatCurrency(price)}</td>
                                     <td className="border border-black p-1 text-right">{formatCurrency(lineTotal)}</td>
@@ -719,7 +730,18 @@ const PrintDocument = ({
                         const qtyDisplay = formatQuantityDisplay(qty, item.product ?? item.productData, null, { boxes: item.boxes, pieces: item.pieces });
                         return (
                             <tr key={index}>
-                                <td>{item.product?.name || item.name || `Item ${index + 1}`}</td>
+                                <td>
+                                    <div className="flex items-center gap-2">
+                                        {(printSettings?.showProductImages !== false && (item.product?.imageUrl || item.imageUrl || item.product?.image || item.image)) && (
+                                            <img 
+                                                src={item.product?.imageUrl || item.imageUrl || item.product?.image || item.image} 
+                                                alt="" 
+                                                className="w-8 h-8 object-cover rounded border border-gray-200" 
+                                            />
+                                        )}
+                                        <span>{item.product?.name || item.name || `Item ${index + 1}`}</span>
+                                    </div>
+                                </td>
                                 {showDescription && (
                                     <td>
                                         {item.product?.description ||

@@ -14,7 +14,8 @@ function rowToProduct(row) {
     createdBy: row.created_by,
     updatedBy: row.updated_by,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    imageUrl: row.image_url
   };
 }
 
@@ -79,8 +80,8 @@ class ProductRepository {
   async create(data) {
     const result = await query(
       `INSERT INTO products (name, sku, barcode, description, category_id, cost_price, selling_price, wholesale_price,
-       stock_quantity, min_stock_level, unit, pieces_per_box, is_active, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       stock_quantity, min_stock_level, unit, pieces_per_box, is_active, created_by, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [
         data.name,
@@ -96,7 +97,8 @@ class ProductRepository {
         data.unit || null,
         data.piecesPerBox ?? data.pieces_per_box ?? null,
         data.isActive !== false,
-        data.createdBy || data.created_by || null
+        data.createdBy || data.created_by || null,
+        data.imageUrl || data.image_url || null
       ]
     );
     return result.rows[0];
@@ -121,7 +123,9 @@ class ProductRepository {
       piecesPerBox: 'pieces_per_box',
       pieces_per_box: 'pieces_per_box',
       isActive: 'is_active',
-      updatedBy: 'updated_by'
+      updatedBy: 'updated_by',
+      imageUrl: 'image_url',
+      image_url: 'image_url'
     };
     for (const [k, col] of Object.entries(map)) {
       if (data[k] !== undefined) {

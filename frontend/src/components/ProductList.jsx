@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Package, Edit, Trash2, Barcode, TrendingUp } from 'lucide-react';
 import { Checkbox } from './Checkbox';
 import { isLowStock, getExpiryStatus } from '../utils/productHelpers';
@@ -12,6 +12,15 @@ export const ProductList = ({
   onManageInvestors,
   onGenerateBarcode
 }) => {
+  const [showImages, setShowImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setShowImages(localStorage.getItem('showProductImagesUI') !== 'false');
+    };
+    window.addEventListener('productImagesConfigChanged', handleStorageChange);
+    return () => window.removeEventListener('productImagesConfigChanged', handleStorageChange);
+  }, []);
   if (products.length === 0) {
     return (
       <div className="text-center py-8 xl:py-12 px-3 xl:px-4">
@@ -91,7 +100,17 @@ export const ProductList = ({
                   </div>
                   <div className="col-span-5 xl:col-span-3 min-w-0">
                     <div className="flex items-center space-x-1.5 xl:space-x-2 2xl:space-x-3">
-                      <Package className="h-3.5 w-3.5 xl:h-4 xl:w-4 2xl:h-5 2xl:w-5 text-gray-400 flex-shrink-0" />
+                      {showImages ? (
+                        product.imageUrl ? (
+                          <img 
+                            src={product.imageUrl} 
+                            alt={product.name} 
+                            className="h-6 w-6 xl:h-8 xl:w-8 2xl:h-10 2xl:w-10 object-cover rounded-md flex-shrink-0 border border-gray-200" 
+                          />
+                        ) : (
+                          <Package className="h-4 w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-gray-400 flex-shrink-0" />
+                        )
+                      ) : null}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1 xl:gap-1.5 2xl:gap-2 flex-wrap">
                           <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-900 truncate">
@@ -204,7 +223,17 @@ export const ProductList = ({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start space-x-2 xl:space-x-3">
-                      <Package className="h-4 w-4 xl:h-5 xl:w-5 text-gray-400 flex-shrink-0 mt-0.5" />
+                      {showImages ? (
+                        product.imageUrl ? (
+                          <img 
+                            src={product.imageUrl} 
+                            alt={product.name} 
+                            className="h-8 w-8 xl:h-10 xl:w-10 object-cover rounded-md flex-shrink-0 border border-gray-200 mt-0.5" 
+                          />
+                        ) : (
+                          <Package className="h-5 w-5 xl:h-6 xl:w-6 text-gray-400 flex-shrink-0 mt-0.5" />
+                        )
+                      ) : null}
                       <div className="flex-1 min-w-0">
                         {/* Product Name and Status */}
                         <div className="flex items-start justify-between gap-1.5 xl:gap-2 mb-1.5 xl:mb-2">

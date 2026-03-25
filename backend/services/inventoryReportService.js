@@ -235,6 +235,8 @@ class InventoryReportService {
         const maxStock = Number(product.inventory?.maxStock ?? reorderPoint * 3);
         const cost = Number(product.cost_price ?? product.costPrice ?? product.pricing?.cost ?? 0);
         const stockValue = currentStock * cost;
+        const retailPrice = Number(product.selling_price ?? product.sellingPrice ?? product.pricing?.retail ?? 0);
+        const retailValue = currentStock * retailPrice;
 
         // Determine stock status
         let stockStatus = 'in_stock';
@@ -255,6 +257,7 @@ class InventoryReportService {
             reorderPoint,
             reorderQuantity: reorderPoint * 2,
             stockValue,
+            retailValue,
             stockStatus
           },
           trend: {
@@ -617,13 +620,15 @@ class InventoryReportService {
           const stock = Number(p.stock_quantity ?? p.stockQuantity ?? 0);
           const cost = Number(p.cost_price ?? p.costPrice ?? 0);
           acc.totalStockValue += stock * cost;
+          const retail = Number(p.selling_price ?? p.sellingPrice ?? 0);
+          acc.totalRetailValue += (stock * retail);
           const reorder = Number(p.min_stock_level ?? p.minStockLevel ?? 0);
           if (stock <= reorder) acc.lowStockProducts++;
           if (stock === 0) acc.outOfStockProducts++;
           if (reorder > 0 && stock > reorder * 3) acc.overstockedProducts++;
           return acc;
         },
-        { totalProducts: 0, totalStockValue: 0, lowStockProducts: 0, outOfStockProducts: 0, overstockedProducts: 0 }
+        { totalProducts: 0, totalStockValue: 0, totalRetailValue: 0, lowStockProducts: 0, outOfStockProducts: 0, overstockedProducts: 0 }
       );
 
       // Calculate turnover categories
@@ -646,6 +651,7 @@ class InventoryReportService {
       report.summary = {
         totalProducts: summaryData.totalProducts,
         totalStockValue: summaryData.totalStockValue,
+        totalRetailValue: summaryData.totalRetailValue,
         averageTurnoverRate,
         lowStockProducts: summaryData.lowStockProducts,
         outOfStockProducts: summaryData.outOfStockProducts,

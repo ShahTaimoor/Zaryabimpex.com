@@ -239,6 +239,7 @@ export const Reports = () => {
             { header: 'Damage Amt', render: (row) => (row.damageAmount || 0).toLocaleString(), align: 'right' },
             { header: 'Closing Qty', render: (row) => (row.closingQty || 0).toLocaleString(), align: 'right', bold: true },
             { header: 'Closing Amt', render: (row) => (row.closingAmount || 0).toLocaleString(), align: 'right', bold: true },
+            { header: 'Retail Val.', render: (row) => (row.retailValuation || 0).toLocaleString(), align: 'right', bold: true },
             { header: 'Sale Price1', render: (row) => (row.salePrice1 || 0).toLocaleString(), align: 'right' },
           ];
         }
@@ -253,6 +254,7 @@ export const Reports = () => {
             ...baseCols,
             { header: 'Cost Price', render: (row) => (row.costPrice || 0).toLocaleString(), align: 'right' },
             { header: 'Valuation', render: (row) => (row.valuation || 0).toLocaleString(), align: 'right', bold: true },
+            { header: 'Retail Val.', render: (row) => (row.retailValuation || 0).toLocaleString(), align: 'right', bold: true },
           ];
         }
         // Current Stock: show only stock info (no Status column). Low Stock tab is separate.
@@ -366,10 +368,14 @@ export const Reports = () => {
       if (inventoryType === 'stock-summary') {
         return {
           ...base,
-          'Wholesale Valuation': inventoryReportData?.summary?.totalWholesaleValuation ?? 0
+          'Wholesale Valuation': inventoryReportData?.summary?.totalWholesaleValuation ?? 0,
+          'Retail Valuation': inventoryReportData?.summary?.totalRetailValuation ?? 0
         };
       }
-      return base;
+      return {
+        ...base,
+        'Retail Valuation': inventoryReportData?.summary?.totalRetailValuation ?? 0
+      };
     }
     if (activeTab === 'financial') {
       if (financialType === 'trial-balance') {
@@ -484,7 +490,7 @@ export const Reports = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${activeTab === 'inventory' && inventoryType === 'stock-summary' ? 'lg:grid-cols-6' : 'lg:grid-cols-4'}`}>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${activeTab === 'inventory' ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-4'}`}>
         {Object.entries(getSummaryData() || {}).map(([title, value], idx) => {
           const getIcon = () => {
             if (title === 'Wholesale Valuation') return <DollarSign className="h-6 w-6 text-amber-600" />;
@@ -781,6 +787,7 @@ export const Reports = () => {
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.damageAmount || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.closingQty || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.closingAmount || 0).toLocaleString()}</td>
+                            <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.totalRetailValuation || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">—</td>
                             <td className="px-6 py-3 text-sm text-right">—</td>
                           </tr>

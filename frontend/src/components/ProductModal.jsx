@@ -1,17 +1,20 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import BaseModal from './BaseModal';
-import { Camera } from 'lucide-react';
+import { Camera, Image as ImageIcon, X } from 'lucide-react';
 import { LoadingButton } from './LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, allProducts = [], onEditExisting, categories = [] }) => {
+  const showImages = localStorage.getItem('showProductImagesUI') !== 'false';
+  const [imageUploading, setImageUploading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     category: '',
     status: 'active',
     expiryDate: '',
+    imageUrl: '',
     pricing: {
       cost: '',
       retail: '',
@@ -118,6 +121,37 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
     }
   }, [formData.pricing, priceValidationShown]);
 
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImageUploading(true);
+    const form = new FormData();
+    form.append('image', file);
+
+    try {
+      const response = await fetch('/api/images/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: form
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Image upload failed');
+      
+      setFormData(prev => ({
+        ...prev,
+        imageUrl: data.urls.optimized
+      }));
+      toast.success('Image uploaded successfully');
+    } catch (error) {
+      toast.error(error.message || 'Failed to upload image');
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
   const validateForm = useCallback(() => {
     const newErrors = {};
     
@@ -185,6 +219,7 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       barcode: newData.barcode || '',
       sku: newData.sku || '',
       brand: newData.brand || '',
+      imageUrl: newData.imageUrl || '',
       pricing: {
         cost: newData.pricing?.cost || '',
         retail: newData.pricing?.retail || '',
@@ -263,11 +298,48 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
     >
       <form onSubmit={onSubmit}>
         <div className="space-y-3 xl:space-y-4">
-                <div className="flex flex-col sm:flex-row gap-3 xl:gap-4">
-                  <div className="w-full sm:flex-[7] min-w-0">
-                    <label htmlFor="name" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
-                      Product Name
-                    </label>
+                 <div className="flex flex-col sm:flex-row gap-3 xl:gap-4">
+                  {showImages && (
+                    <div className="w-full sm:w-[120px] xl:w-[150px] flex-shrink-0 flex flex-col gap-2">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700">Image</label>
+                      <div className="relative border-2 border-dashed border-gray-300 rounded-md bg-gray-50 flex items-center justify-center overflow-hidden h-[120px] xl:h-[150px] group">
+                        {formData.imageUrl ? (
+                          <>
+                            <img src={formData.imageUrl} alt="Product" className="object-cover w-full h-full" />
+                            <button
+                              type="button"
+                              onClick={() => setFormData(prev => ({ ...prev, imageUrl: '' }))}
+                              className="absolute top-1 right-1 bg-white rounded-full p-1 border border-gray-200 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600" />
+                            </button>
+                          </>
+                        ) : (
+                          <div className="text-center flex flex-col items-center justify-center p-2">
+                            <ImageIcon className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400 mb-1" />
+                            <span className="text-[10px] sm:text-xs text-gray-500">
+                              {imageUploading ? 'Uploading...' : 'Upload Image'}
+                            </span>
+                          </div>
+                        )}
+                        
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handleImageUpload} 
+                          disabled={imageUploading}
+                          className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed" 
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="w-full flex-1 flex flex-col gap-3 xl:gap-4 min-w-0">
+                    <div className="flex flex-col sm:flex-row gap-3 xl:gap-4">
+                      <div className="w-full sm:flex-[7] min-w-0">
+                        <label htmlFor="name" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                          Product Name
+                        </label>
                     <input
                       id="name"
                       name="name"
@@ -389,6 +461,8 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                     </select>
                     <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Product availability</p>
                   </div>
+                </div>
+                </div>
                 </div>
                 
                 <div>

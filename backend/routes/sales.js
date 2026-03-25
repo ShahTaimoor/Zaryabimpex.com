@@ -936,9 +936,16 @@ router.put('/:id', [
       }
     }
 
+    let finalOrder = updatedOrder || order;
+    try {
+      finalOrder = await salesService.getSalesOrderById(finalOrder.id || finalOrder._id);
+    } catch(e) {
+      console.error('Failed to get fully enriched order on update:', e);
+    }
+
     res.json({
       message: 'Order updated successfully',
-      order: updatedOrder || order
+      order: finalOrder
     });
   } catch (error) {
     console.error('Update order error:', error);

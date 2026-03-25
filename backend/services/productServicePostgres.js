@@ -55,7 +55,8 @@ function toApiProduct(row, categoryMap = null) {
     created_at: row.created_at,
     updated_at: row.updated_at,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    imageUrl: row.image_url || null
   };
 }
 
@@ -231,7 +232,8 @@ class ProductServicePostgres {
       unit: productData.unit,
       piecesPerBox: piecesPerBox != null && piecesPerBox !== '' ? parseFloat(piecesPerBox) : null,
       isActive: productData.status !== 'inactive' && productData.isActive !== false,
-      createdBy: userId
+      createdBy: userId,
+      imageUrl: productData.imageUrl || null
     });
 
     const categoryMap = product.category_id ? await getCategoryMap([product.category_id]) : null;
@@ -278,6 +280,7 @@ class ProductServicePostgres {
     }
     if (updateData.status !== undefined) data.isActive = updateData.status !== 'inactive';
     if (updateData.isActive !== undefined) data.isActive = updateData.isActive;
+    if (updateData.imageUrl !== undefined) data.imageUrl = updateData.imageUrl;
 
     const pricing = updateData.pricing;
     if (pricing) {

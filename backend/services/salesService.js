@@ -83,6 +83,7 @@ class SalesService {
       productMap.set(sid, {
         _id: id,
         name: p.name || p.displayName || 'Product',
+        imageUrl: p.imageUrl || p.image_url || null,
         inventory: { currentStock, reorderPoint },
         pricing: { cost }
       });
@@ -102,6 +103,7 @@ class SalesService {
         productMap.set(id, {
           _id: v.id || v._id,
           name: v.display_name || v.variant_name || v.displayName || v.variantName || 'Variant',
+          imageUrl: v.imageUrl || v.image_url || null,
           isVariant: true,
           inventory: { currentStock, reorderPoint },
           pricing: { cost }
@@ -657,12 +659,7 @@ class SalesService {
       }
     }
 
-    const createdSale = await salesRepository.findById(order.id);
-    if (createdSale && createdSale.customer_id) {
-      const customerDetails = await customerRepository.findById(createdSale.customer_id);
-      createdSale.customer = customerDetails;
-    }
-
+    const createdSale = await this.getSalesOrderById(order.id || order._id);
     return createdSale;
   }
 
