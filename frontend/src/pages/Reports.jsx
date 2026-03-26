@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toast } from 'sonner';
 import {
   BarChart3,
   TrendingUp,
@@ -54,6 +55,116 @@ export const Reports = () => {
 
   // Print Modal State
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  const formatDateStamp = () => new Date().toISOString().slice(0, 10);
+
+  const downloadCsv = (filename, headers, rows) => {
+    const escapeCell = (value) => {
+      const str = value === null || value === undefined ? '' : String(value);
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+    const content = [
+      headers.map(escapeCell).join(','),
+      ...rows.map((row) => row.map(escapeCell).join(','))
+    ].join('\n');
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExport = () => {
+    if (activeTab !== 'inventory' || inventoryType !== 'stock-summary') {
+      toast.error('Export is currently enabled for Inventory Stock Summary only.');
+      return;
+    }
+    const rows = inventoryReportData?.data || [];
+    const summary = inventoryReportData?.summary || {};
+    if (!rows.length) {
+      toast.error('No stock summary data to export.');
+      return;
+    }
+    const headers = [
+      'S.NO',
+      'Product Name',
+      'Last Purchase Price',
+      'Opening Qty',
+      'Opening Amount',
+      'Purchase Qty',
+      'Purchase Amount',
+      'Purchase Return Qty',
+      'Purchase Return Amount',
+      'Sale Qty',
+      'Sale Amount',
+      'Sale Return Qty',
+      'Sale Return Amount',
+      'Damage Qty',
+      'Damage Amount',
+      'Closing Qty',
+      'Current Stock',
+      'Reconcile Delta',
+      'Closing Amount',
+      'Retail Valuation',
+      'Sale Price1'
+    ];
+    const bodyRows = rows.map((r, idx) => ([
+      idx + 1,
+      r.name || '',
+      r.lastPurchasePrice || 0,
+      r.openingQty || 0,
+      r.openingAmount || 0,
+      r.purchaseQty || 0,
+      r.purchaseAmount || 0,
+      r.purchaseReturnQty || 0,
+      r.purchaseReturnAmount || 0,
+      r.saleQty || 0,
+      r.saleAmount || 0,
+      r.saleReturnQty || 0,
+      r.saleReturnAmount || 0,
+      r.damageQty || 0,
+      r.damageAmount || 0,
+      r.closingQty || 0,
+      r.currentStock || 0,
+      r.reconciliationDelta || 0,
+      r.closingAmount || 0,
+      r.retailValuation || 0,
+      r.salePrice1 || 0
+    ]));
+    const totalRow = [
+      '',
+      'Grand Total',
+      '',
+      summary.openingQty || 0,
+      summary.openingAmount || 0,
+      summary.purchaseQty || 0,
+      summary.purchaseAmount || 0,
+      summary.purchaseReturnQty || 0,
+      summary.purchaseReturnAmount || 0,
+      summary.saleQty || 0,
+      summary.saleAmount || 0,
+      summary.saleReturnQty || 0,
+      summary.saleReturnAmount || 0,
+      summary.damageQty || 0,
+      summary.damageAmount || 0,
+      summary.closingQty || 0,
+      summary.totalCurrentStock || 0,
+      summary.totalReconciliationDelta || 0,
+      summary.closingAmount || 0,
+      summary.totalRetailValuation || 0,
+      ''
+    ];
+    downloadCsv(
+      `stock-summary-${dateRange.from || 'from'}-to-${dateRange.to || formatDateStamp()}.csv`,
+      headers,
+      [...bodyRows, totalRow]
+    );
+    toast.success('Stock summary CSV exported.');
+  };
 
   // Fetch Summary Cards
   const { 
@@ -238,6 +349,17 @@ export const Reports = () => {
             { header: 'Damage Qty', render: (row) => (row.damageQty || 0).toLocaleString(), align: 'right' },
             { header: 'Damage Amt', render: (row) => (row.damageAmount || 0).toLocaleString(), align: 'right' },
             { header: 'Closing Qty', render: (row) => (row.closingQty || 0).toLocaleString(), align: 'right', bold: true },
+            { header: 'Current Stock', render: (row) => (row.currentStock || 0).toLocaleString(), align: 'right', bold: true },
+            {
+              header: 'Reconcile Delta',
+              render: (row) => {
+                const delta = Number(row.reconciliationDelta || 0);
+                const cls = delta === 0 ? 'text-green-700' : delta > 0 ? 'text-red-700' : 'text-amber-700';
+                return <span className={cls}>{delta.toLocaleString()}</span>;
+              },
+              align: 'right',
+              bold: true
+            },
             { header: 'Closing Amt', render: (row) => (row.closingAmount || 0).toLocaleString(), align: 'right', bold: true },
             { header: 'Retail Val.', render: (row) => (row.retailValuation || 0).toLocaleString(), align: 'right', bold: true },
             { header: 'Sale Price1', render: (row) => (row.salePrice1 || 0).toLocaleString(), align: 'right' },
@@ -369,7 +491,8 @@ export const Reports = () => {
         return {
           ...base,
           'Wholesale Valuation': inventoryReportData?.summary?.totalWholesaleValuation ?? 0,
-          'Retail Valuation': inventoryReportData?.summary?.totalRetailValuation ?? 0
+          'Retail Valuation': inventoryReportData?.summary?.totalRetailValuation ?? 0,
+          'Reconcile Delta': inventoryReportData?.summary?.totalReconciliationDelta ?? 0
         };
       }
       return {
@@ -477,12 +600,13 @@ export const Reports = () => {
             onClick={() => setIsPrintModalOpen(true)}
             variant="secondary"
             className="flex items-center gap-2"
+            title="Open PDF/Print preview"
           >
             <Printer className="h-4 w-4" />
-            <span className="hidden sm:inline">Print</span>
+            <span className="hidden sm:inline">PDF</span>
           </Button>
-          
-          <Button variant="default" className="flex items-center gap-2">
+
+          <Button onClick={handleExport} variant="default" className="flex items-center gap-2">
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline">Export</span>
           </Button>
@@ -786,6 +910,16 @@ export const Reports = () => {
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.damageQty || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.damageAmount || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.closingQty || 0).toLocaleString()}</td>
+                            <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.totalCurrentStock || 0).toLocaleString()}</td>
+                            <td className={`px-6 py-3 text-sm text-right ${
+                              Number(inventoryReportData.summary.totalReconciliationDelta || 0) === 0
+                                ? 'text-green-700'
+                                : Number(inventoryReportData.summary.totalReconciliationDelta || 0) > 0
+                                  ? 'text-red-700'
+                                  : 'text-amber-700'
+                            }`}>
+                              {(inventoryReportData.summary.totalReconciliationDelta || 0).toLocaleString()}
+                            </td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.closingAmount || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.totalRetailValuation || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">—</td>

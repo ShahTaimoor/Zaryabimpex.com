@@ -514,17 +514,17 @@ router.put('/:id', [
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    // Only allow editing invoices from the last 1 week
+    // Only allow editing invoices from the last 1 month
     const saleDate = order.sale_date || order.saleDate || order.created_at || order.createdAt;
     if (saleDate) {
       const invoiceDate = new Date(saleDate);
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      oneWeekAgo.setHours(0, 0, 0, 0);
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+      oneMonthAgo.setHours(0, 0, 0, 0);
       invoiceDate.setHours(0, 0, 0, 0);
-      if (invoiceDate < oneWeekAgo) {
+      if (invoiceDate < oneMonthAgo) {
         return res.status(403).json({
-          message: 'Cannot edit sales invoice older than 1 week. Only invoices from the last 7 days can be edited.',
+          message: 'Cannot edit sales invoice older than 1 month. Only invoices from the last 30 days can be edited.',
           code: 'EDIT_WINDOW_EXPIRED'
         });
       }

@@ -453,6 +453,7 @@ class ReportsService {
         pb."currentStock",
         pb.min_stock_level,
         (pb."currentStock" - COALESCE(pa.net_qty, 0))::decimal as "openingQty",
+        COALESCE(pa.net_qty, 0)::decimal as "netQty",
         COALESCE(pa.purchase_qty, 0)::decimal as "purchaseQty",
         COALESCE(pa.purchase_amt, 0)::decimal as "purchaseAmount",
         COALESCE(pa.purchase_return_qty, 0)::decimal as "purchaseReturnQty",
@@ -475,6 +476,7 @@ class ReportsService {
     const result = await query(sql, params);
     const rows = result.rows.map(r => {
       const openingQty = parseFloat(r.openingQty || 0);
+      const netQty = parseFloat(r.netQty || 0);
       const purchaseQty = parseFloat(r.purchaseQty || 0);
       const purchaseAmount = parseFloat(r.purchaseAmount || 0);
       const purchaseReturnQty = parseFloat(r.purchaseReturnQty || 0);
@@ -489,7 +491,9 @@ class ReportsService {
       const avgPurchasePrice = parseFloat(r.avgPurchasePrice || 0);
       const costPrice = avgPurchasePrice || lastPurchasePrice || parseFloat(r.cost_price || 0);
       const openingAmount = openingQty * costPrice;
-      const closingQty = openingQty + purchaseQty - purchaseReturnQty - saleQty + saleReturnQty - damageQty;
+      const closingQty = openingQty + netQty;
+      const currentStock = parseFloat(r.currentStock || 0);
+      const reconciliationDelta = closingQty - currentStock;
       const sellingPriceRaw = parseFloat(r.sellingPrice || r.selling_price || 0);
       const wholesalePriceRaw = parseFloat(r.wholesalePrice || r.wholesale_price || 0);
       const sellingPrice = sellingPriceRaw || costPrice;
@@ -506,6 +510,8 @@ class ReportsService {
         categoryName: r.categoryName,
         minStockLevel,
         lastPurchasePrice,
+        currentStock,
+        reconciliationDelta,
         openingQty,
         openingAmount,
         purchaseQty,
@@ -542,11 +548,14 @@ class ReportsService {
       damageAmount: acc.damageAmount + r.damageAmount,
       closingQty: acc.closingQty + r.closingQty,
       closingAmount: acc.closingAmount + r.closingAmount,
+      currentStock: acc.currentStock + (r.currentStock || 0),
+      reconciliationDelta: acc.reconciliationDelta + (r.reconciliationDelta || 0),
       wholesaleValuation: acc.wholesaleValuation + (r.wholesaleValuation || 0),
       retailValuation: acc.retailValuation + (r.retailValuation || 0)
-    }), { openingQty: 0, openingAmount: 0, purchaseQty: 0, purchaseAmount: 0, purchaseReturnQty: 0, purchaseReturnAmount: 0, saleQty: 0, saleAmount: 0, saleReturnQty: 0, saleReturnAmount: 0, damageQty: 0, damageAmount: 0, closingQty: 0, closingAmount: 0, wholesaleValuation: 0, retailValuation: 0 });
+    }), { openingQty: 0, openingAmount: 0, purchaseQty: 0, purchaseAmount: 0, purchaseReturnQty: 0, purchaseReturnAmount: 0, saleQty: 0, saleAmount: 0, saleReturnQty: 0, saleReturnAmount: 0, damageQty: 0, damageAmount: 0, closingQty: 0, closingAmount: 0, currentStock: 0, reconciliationDelta: 0, wholesaleValuation: 0, retailValuation: 0 });
 
     const outOfStockCount = rows.filter(r => (r.closingQty || 0) === 0).length;
+    const mismatchedCount = rows.filter(r => Math.abs(r.reconciliationDelta || 0) > 0.000001).length;
     const lowStockCount = rows.filter(r => {
       const qty = r.closingQty ?? 0;
       const minLevel = r.minStockLevel ?? 0;
@@ -568,6 +577,9 @@ class ReportsService {
         totalValuation: totals.closingAmount,
         totalWholesaleValuation: totals.wholesaleValuation,
         totalRetailValuation: totals.retailValuation,
+        totalCurrentStock: totals.currentStock,
+        totalReconciliationDelta: totals.reconciliationDelta,
+        mismatchedCount,
         totalStock: totals.closingQty,
         lowStockCount,
         outOfStockCount,

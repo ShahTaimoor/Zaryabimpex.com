@@ -33,14 +33,14 @@ import { Button } from '@/components/ui/button';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
 
-// Edit allowed only within 1 week of invoice date
+// Edit allowed only within 1 month of invoice date
 const canEditByDate = (invoice) => {
   const raw = invoice?.invoiceDate ?? invoice?.invoice_date ?? invoice?.createdAt;
   if (raw == null) return false;
   const d = new Date(raw);
   if (isNaN(d.getTime())) return false;
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 7);
+  cutoff.setDate(cutoff.getDate() - 30);
   cutoff.setHours(0, 0, 0, 0);
   d.setHours(0, 0, 0, 0);
   return d >= cutoff;

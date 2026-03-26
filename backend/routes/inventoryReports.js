@@ -7,6 +7,7 @@ const inventoryReportService = require('../services/inventoryReportService');
 const inventoryReportRepository = require('../repositories/postgres/InventoryReportRepository');
 const productRepository = require('../repositories/postgres/ProductRepository');
 const salesRepository = require('../repositories/postgres/SalesRepository');
+const { query: pgQuery } = require('../config/postgres');
 
 const router = express.Router();
 
@@ -562,42 +563,46 @@ router.get('/quick/summary', [
   sanitizeRequest,
 ], async (req, res) => {
   try {
-    const totalProductsCount = await productRepository.count({});
-    
-    const activeProductsCount = await productRepository.count({ isActive: true });
+    // Use the same stock source priority as inventory reports:
+    // inventory_balance.quantity -> inventory.current_stock -> products.stock_quantity
+    const summarySql = `
+      SELECT
+        COUNT(*) as "totalProducts",
+        SUM(COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * COALESCE(p.cost_price, 0)) as "totalStockValue",
+        SUM(
+          COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) *
+          COALESCE(p.wholesale_price, p.selling_price, 0)
+        ) as "totalWholesaleValue",
+        SUM(
+          COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) *
+          COALESCE(p.selling_price, p.wholesale_price, 0)
+        ) as "totalRetailValue",
+        COUNT(*) FILTER (
+          WHERE COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) > 0
+            AND COALESCE(p.min_stock_level, 0) > 0
+            AND COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) <= COALESCE(p.min_stock_level, 0)
+        ) as "lowStockProducts",
+        COUNT(*) FILTER (WHERE COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) = 0) as "outOfStockProducts",
+        COUNT(*) FILTER (
+          WHERE COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) >
+            (COALESCE(p.min_stock_level, 0) * 3)
+        ) as "overstockedProducts"
+      FROM products p
+      LEFT JOIN inventory_balance ib ON ib.product_id = p.id
+      LEFT JOIN inventory i ON i.product_id = p.id AND i.deleted_at IS NULL
+      WHERE p.is_deleted = FALSE AND p.is_active = TRUE
+    `;
+    const summaryResult = await pgQuery(summarySql);
+    const row = summaryResult.rows[0] || {};
 
-    // Get overall inventory summary
-    const products = await productRepository.findAll({ isActive: true });
     const summaryData = {
-      totalProducts: products.length,
-      totalStockValue: products.reduce(
-        (sum, p) =>
-          sum +
-          (parseFloat(p.stock_quantity) || 0) *
-            (parseFloat(p.cost_price) || 0),
-        0
-      ),
-      totalWholesaleValue: products.reduce(
-        (sum, p) =>
-          sum +
-          (parseFloat(p.stock_quantity) || 0) *
-            (parseFloat(p.wholesale_price) ||
-              parseFloat(p.selling_price) ||
-              0),
-        0
-      ),
-      totalRetailValue: products.reduce(
-        (sum, p) =>
-          sum +
-          (parseFloat(p.stock_quantity) || 0) *
-            (parseFloat(p.selling_price) ||
-              parseFloat(p.wholesale_price) ||
-              0),
-        0
-      ),
-      lowStockProducts: products.filter(p => (parseFloat(p.stock_quantity) || 0) <= (parseFloat(p.min_stock_level) || 0)).length,
-      outOfStockProducts: products.filter(p => (parseFloat(p.stock_quantity) || 0) === 0).length,
-      overstockedProducts: products.filter(p => (parseFloat(p.stock_quantity) || 0) > (parseFloat(p.min_stock_level) || 0) * 3).length
+      totalProducts: parseInt(row.totalProducts || 0, 10),
+      totalStockValue: parseFloat(row.totalStockValue || 0),
+      totalWholesaleValue: parseFloat(row.totalWholesaleValue || 0),
+      totalRetailValue: parseFloat(row.totalRetailValue || 0),
+      lowStockProducts: parseInt(row.lowStockProducts || 0, 10),
+      outOfStockProducts: parseInt(row.outOfStockProducts || 0, 10),
+      overstockedProducts: parseInt(row.overstockedProducts || 0, 10)
     };
 
     res.json({

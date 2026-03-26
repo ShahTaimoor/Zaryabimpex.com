@@ -44,18 +44,18 @@ const formatOrderDate = (order) => {
   return d.toLocaleDateString();
 };
 
-// Check if order/invoice is within last 1 week (edit allowed only for invoices from past 7 days)
+// Check if order/invoice is within last 1 month (edit allowed only for invoices from past 30 days)
 const canEditInvoice = (order) => {
   const raw = order?.sale_date ?? order?.billDate ?? order?.order_date ?? order?.created_at ?? order?.createdAt;
   if (raw == null) return false;
   const invoiceDate = new Date(raw);
   if (Number.isNaN(invoiceDate.getTime())) return false;
   const now = new Date();
-  const oneWeekAgo = new Date(now);
-  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  oneWeekAgo.setHours(0, 0, 0, 0);
+  const oneMonthAgo = new Date(now);
+  oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+  oneMonthAgo.setHours(0, 0, 0, 0);
   invoiceDate.setHours(0, 0, 0, 0);
-  return invoiceDate >= oneWeekAgo && invoiceDate <= now;
+  return invoiceDate >= oneMonthAgo && invoiceDate <= now;
 };
 
 // Check if order/invoice is within last 2 weeks (delete allowed only for invoices from past 14 days)
