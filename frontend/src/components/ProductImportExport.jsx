@@ -30,6 +30,79 @@ import { Input } from '@/components/ui/input';
 import { validateFile, validateCSVData, sanitizeCSVData } from '../utils/validation';
 import { sanitizeCSVData as sanitizeCSVDataUtil } from '../utils/sanitization';
 
+const normalizeDownloadBlob = (response, mimeType) => {
+  const candidates = [
+    response,
+    response?.data,
+    response?.payload,
+    response?.payload?.data,
+    response?.data?.data,
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate instanceof Blob) {
+      return candidate;
+    }
+    if (typeof candidate === 'string') {
+      return new Blob([candidate], { type: mimeType });
+    }
+    if (candidate instanceof ArrayBuffer || ArrayBuffer.isView(candidate)) {
+      return new Blob([candidate], { type: mimeType });
+    }
+  }
+
+  return null;
+};
+
+const PRODUCT_TEMPLATE_HEADERS = [
+  'Product Name',
+  'Description',
+  'Category',
+  'Brand',
+  'Barcode',
+  'SKU',
+  'Cost Price',
+  'Retail Price',
+  'Wholesale Price',
+  'Distributor Price',
+  'Current Stock',
+  'Min Stock',
+  'Max Stock',
+  'Reorder Point',
+  'Weight',
+  'Status',
+  'Taxable',
+  'Tax Rate'
+];
+
+const PRODUCT_TEMPLATE_SAMPLE_ROW = [
+  'Sample Product',
+  'This is a sample product',
+  'Electronics',
+  'Sample Brand',
+  '1234567890123',
+  'SKU-001',
+  '10.00',
+  '15.00',
+  '12.00',
+  '11.00',
+  '100',
+  '5',
+  '200',
+  '10',
+  '1.5',
+  'active',
+  'true',
+  '0.08'
+];
+
+const buildProductTemplateCsv = () => {
+  const escapeCsv = (value) => `"${String(value).replace(/"/g, '""')}"`;
+  const header = PRODUCT_TEMPLATE_HEADERS.map(escapeCsv).join(',');
+  const sample = PRODUCT_TEMPLATE_SAMPLE_ROW.map(escapeCsv).join(',');
+  return `${header}\n${sample}\n`;
+};
+
 const ProductImportExport = ({ onImportComplete, filters = {} }) => {
   const dispatch = useAppDispatch();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -50,12 +123,13 @@ const ProductImportExport = ({ onImportComplete, filters = {} }) => {
   
   const downloadTemplate = async () => {
     try {
-      const result = await downloadTemplateTrigger().unwrap();
-      return result;
+      return await downloadTemplateTrigger('template/csv').unwrap();
     } catch (error) {
-      // If unwrap fails, try to get data directly
-      const result = await downloadTemplateTrigger();
-      return result.data || result;
+      if (error?.status !== 404) {
+        throw error;
+      }
+      // Backward compatibility for environments using legacy template route.
+      return downloadTemplateTrigger('export/template').unwrap();
     }
   };
   
@@ -187,13 +261,30 @@ const ProductImportExport = ({ onImportComplete, filters = {} }) => {
 
   const handleDownloadTemplate = async () => {
     try {
-      const response = await downloadTemplate();
-      const blobData = response?.data || response;
+      let blob;
+      try {
+        const response = await downloadTemplate();
+        blob = normalizeDownloadBlob(response, 'text/csv;charset=utf-8;');
+      } catch (error) {
+        if (error?.status === 404) {
+          const csv = buildProductTemplateCsv();
+          blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        } else {
+          throw error;
+        }
+      }
       
       // Create blob and download
-      const blob = new Blob([blobData], { 
-        type: 'text/csv;charset=utf-8;' 
-      });
+      if (!blob) {
+        throw new Error('Invalid template file response');
+      }
+      // Prevent downloading API error JSON as a CSV template file.
+      if (blob.type && blob.type.includes('application/json')) {
+        throw new Error('Template service returned JSON instead of file');
+      }
+      if (blob.size === 0) {
+        throw new Error('Template file is empty');
+      }
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
@@ -202,6 +293,7 @@ const ProductImportExport = ({ onImportComplete, filters = {} }) => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       
       showSuccessToast('Template downloaded successfully');
     } catch (error) {
