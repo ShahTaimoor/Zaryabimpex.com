@@ -13,11 +13,11 @@ import {
   Database
 } from 'lucide-react';
 import {
-  useExportCSVMutation,
-  useExportExcelMutation,
-  useImportExcelMutation,
-  useImportCSVMutation,
-  useLazyDownloadTemplateQuery,
+  useExportProductsCSVMutation,
+  useExportProductsExcelMutation,
+  useImportProductsExcelMutation,
+  useImportProductsCSVMutation,
+  useLazyDownloadProductsTemplateQuery,
   productsApi,
 } from '../store/services/productsApi';
 import { useAppDispatch } from '../store/hooks';
@@ -113,13 +113,13 @@ const ProductImportExport = ({ onImportComplete, filters = {} }) => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importType, setImportType] = useState('csv');
 
-  const [exportCSV] = useExportCSVMutation();
-  const [exportExcel] = useExportExcelMutation();
-  const [importExcel] = useImportExcelMutation();
-  const [importCSV] = useImportCSVMutation();
+  const [exportCSV] = useExportProductsCSVMutation();
+  const [exportExcel] = useExportProductsExcelMutation();
+  const [importExcel] = useImportProductsExcelMutation();
+  const [importCSV] = useImportProductsCSVMutation();
   
   // Use lazy query for template download
-  const [downloadTemplateTrigger] = useLazyDownloadTemplateQuery();
+  const [downloadTemplateTrigger] = useLazyDownloadProductsTemplateQuery();
   
   const downloadTemplate = async () => {
     try {
@@ -135,7 +135,7 @@ const ProductImportExport = ({ onImportComplete, filters = {} }) => {
   
   // Use dispatch with API endpoint initiate for downloadFile (since lazy hooks aren't available)
   const downloadFile = async (filename) => {
-    const result = await dispatch(productsApi.endpoints.downloadFile.initiate(filename));
+    const result = await dispatch(productsApi.endpoints.downloadProductsFile.initiate(filename));
     return result.data;
   };
 

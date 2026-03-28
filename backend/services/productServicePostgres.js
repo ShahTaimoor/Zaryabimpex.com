@@ -195,8 +195,6 @@ class ProductServicePostgres {
     if (cost < 0) throw new Error('Cost price is required and must be non-negative');
     if (retail < 0) throw new Error('Retail price is required and must be non-negative');
     if (wholesale < 0) throw new Error('Wholesale price must be non-negative');
-    if (cost > wholesale) throw new Error('Cost price cannot be greater than wholesale price');
-    if (wholesale > retail) throw new Error('Wholesale price cannot be greater than retail price');
 
     if (productData.name) {
       const nameExists = await productRepository.nameExists(productData.name);
@@ -210,9 +208,10 @@ class ProductServicePostgres {
     const inv = productData.inventory || {};
     const categoryInput = productData.category || productData.categoryId;
     let categoryId = null;
-    
-    if (categoryInput && typeof categoryInput === 'object') {
-      categoryId = categoryInput.id || categoryInput._id;
+
+    if (categoryInput != null && typeof categoryInput === 'object') {
+      const oid = categoryInput.id || categoryInput._id;
+      categoryId = isValidUuid(oid) ? String(oid).trim() : null;
     } else {
       categoryId = await resolveCategoryId(categoryInput);
     }
@@ -262,15 +261,18 @@ class ProductServicePostgres {
     if (updateData.barcode !== undefined) data.barcode = updateData.barcode === '' ? null : updateData.barcode;
     if (updateData.description !== undefined) data.description = updateData.description;
     if (updateData.category !== undefined || updateData.categoryId !== undefined) {
-      const catId = updateData.category ?? updateData.categoryId;
-      // If catId is an object (like from frontend), extract the ID
-      if (catId && typeof catId === 'object') {
-        data.categoryId = catId.id || catId._id || null;
-      } else if (catId && !UUID_REGEX.test(catId)) {
-        // If it's a name instead of a UUID, resolve it
-        data.categoryId = await resolveCategoryId(catId);
+      const catRaw = [updateData.category, updateData.categoryId].find(
+        (v) => v !== undefined && v !== null && (typeof v !== 'string' || v.trim() !== '')
+      );
+      if (catRaw === undefined) {
+        data.categoryId = null;
+      } else if (typeof catRaw === 'object') {
+        const oid = catRaw.id || catRaw._id;
+        data.categoryId = isValidUuid(oid) ? String(oid).trim() : null;
+      } else if (!isValidUuid(catRaw)) {
+        data.categoryId = await resolveCategoryId(catRaw);
       } else {
-        data.categoryId = catId;
+        data.categoryId = String(catRaw).trim();
       }
     }
     if (updateData.unit !== undefined) data.unit = updateData.unit;
@@ -288,8 +290,6 @@ class ProductServicePostgres {
       const retail = pricing.retail !== undefined && pricing.retail !== null ? Number(pricing.retail) : current.selling_price;
       const currentWholesale = current.wholesale_price ?? current.wholesalePrice ?? current.selling_price;
       const wholesale = pricing.wholesale !== undefined && pricing.wholesale !== null ? Number(pricing.wholesale) : currentWholesale;
-      if (cost > wholesale) throw new Error('Cost price cannot be greater than wholesale price');
-      if (wholesale > retail) throw new Error('Wholesale price cannot be greater than retail price');
       data.costPrice = cost;
       data.sellingPrice = retail;
       data.wholesalePrice = wholesale;

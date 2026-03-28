@@ -129,8 +129,12 @@ class ProductRepository {
     };
     for (const [k, col] of Object.entries(map)) {
       if (data[k] !== undefined) {
+        let v = data[k];
+        if (col === 'category_id' && (v === '' || v == null)) {
+          v = null;
+        }
         fields.push(`${col} = $${n++}`);
-        values.push(data[k]);
+        values.push(v);
       }
     }
     if (fields.length === 0) return this.findById(id);

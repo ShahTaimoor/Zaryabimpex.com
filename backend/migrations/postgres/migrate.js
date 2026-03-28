@@ -57,7 +57,8 @@ const MIGRATIONS = [
   '036_allow_duplicate_products_sku.sql',
   '037_item_wise_confirmation.sql',
   '038_order_settings.sql',
-  '039_products_pieces_per_box.sql'
+  '039_products_pieces_per_box.sql',
+  '040_add_image_to_products.sql'
 ];
 
 async function ensureMigrationsTable() {

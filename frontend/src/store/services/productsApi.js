@@ -183,21 +183,21 @@ export const productsApi = api.injectEndpoints({
         { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
-    exportCSV: builder.mutation({
+    exportProductsCSV: builder.mutation({
       query: (filters) => ({
         url: 'products/export/csv',
         method: 'post',
         data: { filters },
       }),
     }),
-    exportExcel: builder.mutation({
+    exportProductsExcel: builder.mutation({
       query: (filters) => ({
         url: 'products/export/excel',
         method: 'post',
         data: { filters },
       }),
     }),
-    importExcel: builder.mutation({
+    importProductsExcel: builder.mutation({
       query: (file) => {
         const formData = new FormData();
         formData.append('file', file);
@@ -220,7 +220,7 @@ export const productsApi = api.injectEndpoints({
         { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
-    importCSV: builder.mutation({
+    importProductsCSV: builder.mutation({
       query: (file) => {
         const formData = new FormData();
         formData.append('file', file);
@@ -243,7 +243,7 @@ export const productsApi = api.injectEndpoints({
         { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
-    downloadFile: builder.query({
+    downloadProductsFile: builder.query({
       query: (filename) => ({
         url: `products/download/${filename}`,
         method: 'get',
@@ -252,7 +252,7 @@ export const productsApi = api.injectEndpoints({
       providesTags: [{ type: 'Products', id: 'EXPORT' }],
     }),
     // Download CSV template for product import
-    downloadTemplate: builder.query({
+    downloadProductsTemplate: builder.query({
       query: (templatePath = 'template/csv') => ({
         url: `products/${templatePath}`,
         method: 'get',
@@ -278,12 +278,12 @@ export const {
   useLazyGetLastPurchasePriceQuery,
   useGetLastPurchasePricesMutation,
   useLinkInvestorsMutation,
-  useExportCSVMutation,
-  useExportExcelMutation,
-  useImportExcelMutation,
-  useImportCSVMutation,
-  useLazyDownloadFileQuery,
-  useDownloadTemplateQuery,
-  useLazyDownloadTemplateQuery,
+  useExportProductsCSVMutation,
+  useExportProductsExcelMutation,
+  useImportProductsExcelMutation,
+  useImportProductsCSVMutation,
+  useLazyDownloadProductsFileQuery,
+  useDownloadProductsTemplateQuery,
+  useLazyDownloadProductsTemplateQuery,
 } = productsApi;
 

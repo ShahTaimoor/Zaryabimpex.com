@@ -294,13 +294,6 @@ class ProductService {
       throw new Error('Wholesale price is required and must be non-negative');
     }
     
-    // Validate price hierarchy: cost <= wholesale <= retail
-    if (cost > wholesale) {
-      throw new Error('Cost price cannot be greater than wholesale price');
-    }
-    if (wholesale > retail) {
-      throw new Error('Wholesale price cannot be greater than retail price');
-    }
     if (cost > retail) {
       throw new Error('Cost price cannot be greater than retail price');
     }
@@ -397,13 +390,6 @@ class ProductService {
       const currentWholesale = wholesale !== undefined ? wholesale : currentProduct.pricing?.wholesale;
       const currentRetail = retail !== undefined ? retail : currentProduct.pricing?.retail;
       
-      // Validate price hierarchy: cost <= wholesale <= retail
-      if (currentCost !== undefined && currentWholesale !== undefined && currentCost > currentWholesale) {
-        throw new Error('Cost price cannot be greater than wholesale price');
-      }
-      if (currentWholesale !== undefined && currentRetail !== undefined && currentWholesale > currentRetail) {
-        throw new Error('Wholesale price cannot be greater than retail price');
-      }
       if (currentCost !== undefined && currentRetail !== undefined && currentCost > currentRetail) {
         throw new Error('Cost price cannot be greater than retail price');
       }

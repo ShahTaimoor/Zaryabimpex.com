@@ -895,8 +895,7 @@ export const Reports = () => {
                         ))}
                         {inventoryType === 'stock-summary' && inventoryReportData?.data?.length > 0 && inventoryReportData?.summary && (
                           <tr className="bg-gray-50 font-bold border-t-2 border-gray-300">
-                            <td colSpan={2} className="px-6 py-3 text-sm text-gray-900">Grand Total</td>
-                            <td className="px-6 py-3 text-sm text-right">—</td>
+                            <td colSpan={3} className="px-6 py-3 text-sm text-gray-900">Grand Total</td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.openingQty || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.openingAmount || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.purchaseQty || 0).toLocaleString()}</td>
@@ -922,7 +921,6 @@ export const Reports = () => {
                             </td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.closingAmount || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.totalRetailValuation || 0).toLocaleString()}</td>
-                            <td className="px-6 py-3 text-sm text-right">—</td>
                             <td className="px-6 py-3 text-sm text-right">—</td>
                           </tr>
                         )}

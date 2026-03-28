@@ -46,7 +46,7 @@ import { Input } from '@/components/ui/input';
 const LIMIT_OPTIONS = [50, 500, 1000, 5000];
 const DEFAULT_LIMIT = 50;
 
-const Products = () => {
+export const Products = () => {
   const dispatch = useAppDispatch();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);

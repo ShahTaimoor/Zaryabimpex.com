@@ -393,13 +393,22 @@ class ReportsService {
     const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
 
     const categoryId = filters.category && filters.category !== 'all' ? filters.category : null;
+    const searchTerm = filters.search && String(filters.search).trim() ? String(filters.search).trim() : null;
     const dateFrom = filters.dateFrom ? getStartOfDayPakistan(filters.dateFrom) : getStartOfDayPakistan(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
     const dateTo = filters.dateTo ? getEndOfDayPakistan(filters.dateTo) : getEndOfDayPakistan(new Date().toISOString().split('T')[0]);
 
     const params = [dateFrom, dateTo];
     let paramIdx = 3;
-    const prodFilter = categoryId ? ` AND p.category_id = $${paramIdx++}` : '';
-    if (categoryId) params.push(categoryId);
+    let prodFilter = '';
+    if (categoryId) {
+      prodFilter += ` AND p.category_id = $${paramIdx++}`;
+      params.push(categoryId);
+    }
+    if (searchTerm) {
+      prodFilter += ` AND (p.name ILIKE $${paramIdx} OR p.sku ILIKE $${paramIdx} OR p.barcode ILIKE $${paramIdx})`;
+      params.push(`%${searchTerm}%`);
+      paramIdx += 1;
+    }
 
     const stockInTypes = "'purchase','return_in','adjustment_in','transfer_in','production','initial_stock'";
     const stockOutTypes = "'sale','return_out','adjustment_out','transfer_out','damage','expiry','theft','consumption'";
@@ -586,7 +595,7 @@ class ReportsService {
         inStockCount
       },
       reportType: 'stock-summary',
-      filters: { categoryId, dateFrom: filters.dateFrom, dateTo: filters.dateTo }
+      filters: { categoryId, search: searchTerm || undefined, dateFrom: filters.dateFrom, dateTo: filters.dateTo }
     };
   }
 

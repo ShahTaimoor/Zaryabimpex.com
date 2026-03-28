@@ -15,6 +15,17 @@ const costingService = require('../services/costingService');
 
 const router = express.Router();
 
+// Import: parse price cells — empty / invalid / text → null; numbers clamped to >= 0
+const coerceImportPrice = (value) => {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, value);
+  const s = String(value).trim().replace(/,/g, '').replace(/^\s*(?:[$€£]|Rs\.?)\s*/i, '');
+  if (s === '' || s === '-' || /^n\/?a$/i.test(s)) return null;
+  const n = parseFloat(s);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, n);
+};
+
 // Helper function to transform product names to uppercase
 const transformProductToUppercase = (product) => {
   if (!product) return product;
@@ -816,10 +827,9 @@ router.post('/import/csv', [
             // Check if product already exists
             const existingProduct = await productService.getProductByName(mapped.name.toString().trim());
             
-            // Validate and parse pricing
-            const cost = parseFloat(mapped.cost);
-            const retail = parseFloat(mapped.retail);
-            const wholesale = parseFloat(mapped.wholesale);
+            const costCoerced = coerceImportPrice(mapped.cost);
+            const retailCoerced = coerceImportPrice(mapped.retail);
+            const wholesaleCoerced = coerceImportPrice(mapped.wholesale);
 
             if (existingProduct) {
               // Update existing product instead of skipping
@@ -830,9 +840,9 @@ router.post('/import/csv', [
                 barcode: mapped.barcode?.toString().trim() || existingProduct.barcode,
                 sku: mapped.sku?.toString().trim() || existingProduct.sku,
                 pricing: {
-                  cost: isNaN(cost) ? existingProduct.pricing?.cost || 0 : cost,
-                  retail: isNaN(retail) ? existingProduct.pricing?.retail || 0 : retail,
-                  wholesale: isNaN(wholesale) ? existingProduct.pricing?.wholesale || 0 : wholesale
+                  cost: costCoerced === null ? (existingProduct.pricing?.cost || 0) : costCoerced,
+                  retail: retailCoerced === null ? (existingProduct.pricing?.retail || 0) : retailCoerced,
+                  wholesale: wholesaleCoerced === null ? (existingProduct.pricing?.wholesale || 0) : wholesaleCoerced
                 },
                 inventory: {
                   currentStock: parseInt(mapped.currentStock) || existingProduct.inventory?.currentStock || 0,
@@ -846,44 +856,10 @@ router.post('/import/csv', [
               continue;
             }
             
-            if (isNaN(cost) || cost < 0) {
-              results.errors.push({
-                row: i + 2,
-                error: 'Invalid cost price. Must be a non-negative number.'
-              });
-              continue;
-            }
-            if (isNaN(retail) || retail < 0) {
-              results.errors.push({
-                row: i + 2,
-                error: 'Invalid retail price. Must be a non-negative number.'
-              });
-              continue;
-            }
-            if (isNaN(wholesale) || wholesale < 0) {
-              results.errors.push({
-                row: i + 2,
-                error: 'Invalid wholesale price. Must be a non-negative number.'
-              });
-              continue;
-            }
-            
-            // Validate price hierarchy: cost <= wholesale <= retail
-            if (cost > wholesale) {
-              results.errors.push({
-                row: i + 2,
-                error: 'Cost price cannot be greater than wholesale price.'
-              });
-              continue;
-            }
-            if (wholesale > retail) {
-              results.errors.push({
-                row: i + 2,
-                error: 'Wholesale price cannot be greater than retail price.'
-              });
-              continue;
-            }
-            
+            const cost = costCoerced ?? 0;
+            const retail = retailCoerced ?? 0;
+            const wholesale = wholesaleCoerced ?? 0;
+
             // Create product using service
             const productData = {
               name: mapped.name.toString().trim(),
@@ -894,9 +870,9 @@ router.post('/import/csv', [
               sku: mapped.sku?.toString().trim() || '',
               supplier: mapped.supplier?.toString().trim() || '',
               pricing: {
-                cost: cost,
-                retail: retail,
-                wholesale: wholesale
+                cost,
+                retail,
+                wholesale
               },
               inventory: {
                 currentStock: parseInt(mapped.currentStock) || 0,
@@ -995,10 +971,9 @@ router.post('/import/excel', [
         // Check if product already exists
         const existingProduct = await productService.getProductByName(productData.name.toString().trim());
         
-        // Validate and parse pricing
-        const cost = parseFloat(productData.cost);
-        const retail = parseFloat(productData.retail);
-        const wholesale = parseFloat(productData.wholesale);
+        const costCoerced = coerceImportPrice(productData.cost);
+        const retailCoerced = coerceImportPrice(productData.retail);
+        const wholesaleCoerced = coerceImportPrice(productData.wholesale);
 
         if (existingProduct) {
           // Update existing product instead of skipping
@@ -1009,9 +984,9 @@ router.post('/import/excel', [
             barcode: productData.barcode?.toString().trim() || existingProduct.barcode,
             sku: productData.sku?.toString().trim() || existingProduct.sku,
             pricing: {
-              cost: isNaN(cost) ? existingProduct.pricing?.cost || 0 : cost,
-              retail: isNaN(retail) ? existingProduct.pricing?.retail || 0 : retail,
-              wholesale: isNaN(wholesale) ? existingProduct.pricing?.wholesale || 0 : wholesale
+              cost: costCoerced === null ? (existingProduct.pricing?.cost || 0) : costCoerced,
+              retail: retailCoerced === null ? (existingProduct.pricing?.retail || 0) : retailCoerced,
+              wholesale: wholesaleCoerced === null ? (existingProduct.pricing?.wholesale || 0) : wholesaleCoerced
             },
             inventory: {
               currentStock: parseInt(productData.currentStock) || existingProduct.inventory?.currentStock || 0,
@@ -1025,44 +1000,10 @@ router.post('/import/excel', [
           continue;
         }
         
-        if (isNaN(cost) || cost < 0) {
-          results.errors.push({
-            row: i + 2,
-            error: 'Invalid cost price. Must be a non-negative number.'
-          });
-          continue;
-        }
-        if (isNaN(retail) || retail < 0) {
-          results.errors.push({
-            row: i + 2,
-            error: 'Invalid retail price. Must be a non-negative number.'
-          });
-          continue;
-        }
-        if (isNaN(wholesale) || wholesale < 0) {
-          results.errors.push({
-            row: i + 2,
-            error: 'Invalid wholesale price. Must be a non-negative number.'
-          });
-          continue;
-        }
-        
-        // Validate price hierarchy: cost <= wholesale <= retail
-        if (cost > wholesale) {
-          results.errors.push({
-            row: i + 2,
-            error: 'Cost price cannot be greater than wholesale price.'
-          });
-          continue;
-        }
-        if (wholesale > retail) {
-          results.errors.push({
-            row: i + 2,
-            error: 'Wholesale price cannot be greater than retail price.'
-          });
-          continue;
-        }
-        
+        const cost = costCoerced ?? 0;
+        const retail = retailCoerced ?? 0;
+        const wholesale = wholesaleCoerced ?? 0;
+
         // Create product using service
         const productPayload = {
           name: productData.name.toString().trim(),
@@ -1073,9 +1014,9 @@ router.post('/import/excel', [
           sku: productData.sku?.toString().trim() || '',
           supplier: productData.supplier?.toString().trim() || '',
           pricing: {
-            cost: cost,
-            retail: retail,
-            wholesale: wholesale
+            cost,
+            retail,
+            wholesale
           },
           inventory: {
             currentStock: parseInt(productData.currentStock) || 0,

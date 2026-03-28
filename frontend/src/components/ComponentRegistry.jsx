@@ -5,7 +5,7 @@ const componentLoader = {
   '/dashboard': () => import('../pages/Dashboard').then(module => module.default || module.Dashboard),
   '/sales': () => import('../pages/Sales').then(module => module.Sales),
   '/purchase': () => import('../pages/Purchase').then(module => module.Purchase),
-  '/products': () => import('../pages/Products').then(module => module.Products),
+  '/products': () => import('../pages/Products').then(module => module.default || module.Products),
   '/customers': () => import('../pages/Customers').then(module => module.Customers),
   '/customer-analytics': () => import('../pages/CustomerAnalytics').then(module => module.default || module.CustomerAnalytics),
   '/suppliers': () => import('../pages/Suppliers').then(module => module.Suppliers),
