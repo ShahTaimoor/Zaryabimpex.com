@@ -13,6 +13,9 @@ export const ProductList = ({
   onGenerateBarcode
 }) => {
   const [showImages, setShowImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
+  const [showHsCodeColumn, setShowHsCodeColumn] = useState(
+    () => localStorage.getItem('showProductHsCodeColumn') !== 'false'
+  );
 
   useEffect(() => {
     const handleStorageChange = () => {
@@ -20,6 +23,14 @@ export const ProductList = ({
     };
     window.addEventListener('productImagesConfigChanged', handleStorageChange);
     return () => window.removeEventListener('productImagesConfigChanged', handleStorageChange);
+  }, []);
+
+  useEffect(() => {
+    const handleHsCodeColumn = () => {
+      setShowHsCodeColumn(localStorage.getItem('showProductHsCodeColumn') !== 'false');
+    };
+    window.addEventListener('productHsCodeColumnConfigChanged', handleHsCodeColumn);
+    return () => window.removeEventListener('productHsCodeColumnConfigChanged', handleHsCodeColumn);
   }, []);
   if (products.length === 0) {
     return (
@@ -46,9 +57,16 @@ export const ProductList = ({
                   onChange={() => bulkOps.toggleSelectAll(products)}
                 />
               </div>
-              <div className="col-span-5 xl:col-span-3">
+              <div
+                className={`min-w-0 ${showHsCodeColumn ? 'col-span-3 xl:col-span-2' : 'col-span-4 xl:col-span-3'}`}
+              >
                 <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-700">Product Name</h3>
               </div>
+              {showHsCodeColumn && (
+                <div className="col-span-1 min-w-0">
+                  <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-700">HS Code</h3>
+                </div>
+              )}
               <div className="col-span-1">
                 <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-700">Stock</h3>
               </div>
@@ -67,7 +85,7 @@ export const ProductList = ({
               <div className="col-span-1">
                 <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-700">Status</h3>
               </div>
-              <div className="col-span-1 xl:col-span-2">
+              <div className="col-span-1">
                 <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-700">Actions</h3>
               </div>
             </div>
@@ -98,7 +116,9 @@ export const ProductList = ({
                       onChange={() => bulkOps.toggleSelection(product._id)}
                     />
                   </div>
-                  <div className="col-span-5 xl:col-span-3 min-w-0">
+                  <div
+                    className={`min-w-0 ${showHsCodeColumn ? 'col-span-3 xl:col-span-2' : 'col-span-4 xl:col-span-3'}`}
+                  >
                     <div className="flex items-center space-x-1.5 xl:space-x-2 2xl:space-x-3">
                       {showImages ? (
                         product.imageUrl ? (
@@ -139,6 +159,17 @@ export const ProductList = ({
                     </div>
                   </div>
 
+                  {showHsCodeColumn && (
+                    <div className="col-span-1 min-w-0">
+                      <p
+                        className="text-[10px] xl:text-xs 2xl:text-sm text-gray-600 truncate font-mono"
+                        title={product.hsCode ? 'Harmonized System (HS) code' : undefined}
+                      >
+                        {product.hsCode || '—'}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="col-span-1">
                     <p className={`text-[10px] xl:text-xs 2xl:text-sm font-medium ${isLowStock(product) ? 'text-danger-600' : 'text-gray-600'
                       }`}>
@@ -172,8 +203,8 @@ export const ProductList = ({
                     </span>
                   </div>
 
-                  <div className="col-span-1 xl:col-span-2">
-                    <div className="flex items-center space-x-1 xl:space-x-1.5 2xl:space-x-2">
+                  <div className="col-span-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-0.5 xl:gap-1">
                       <button
                         onClick={() => onGenerateBarcode(product)}
                         className="text-green-600 hover:text-green-800 p-0.5 xl:p-1"
@@ -254,6 +285,14 @@ export const ProductList = ({
 
                         {/* Product Details Grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 xl:gap-3 mb-2 xl:mb-3">
+                          {showHsCodeColumn && (
+                            <div className="col-span-2 sm:col-span-1">
+                              <p className="text-[10px] xl:text-xs text-gray-500 mb-0.5">HS Code</p>
+                              <p className="text-xs xl:text-sm font-semibold text-gray-900 truncate font-mono" title="HS code (customs classification)">
+                                {product.hsCode || '—'}
+                              </p>
+                            </div>
+                          )}
                           <div>
                             <p className="text-[10px] xl:text-xs text-gray-500 mb-0.5">Stock</p>
                             <p className={`text-xs xl:text-sm font-semibold ${isLowStock(product) ? 'text-danger-600' : 'text-gray-900'

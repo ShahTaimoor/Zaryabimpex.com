@@ -78,6 +78,16 @@ const PrintDocument = ({
         return Number.isFinite(num) ? num : fallback;
     };
 
+    /** Barcode preferred; SKU as fallback for label printing / purchase lines */
+    const getLineBarcodeDisplay = (item) => {
+        const p = item.product || item.productData || {};
+        const barcode = (p.barcode ?? item.barcode ?? '').toString().trim();
+        if (barcode) return { label: 'Barcode', value: barcode };
+        const sku = (p.sku ?? item.sku ?? '').toString().trim();
+        if (sku) return { label: 'SKU', value: sku };
+        return null;
+    };
+
     const formatText = (value, fallback = 'N/A') =>
         value && String(value).trim() !== '' ? value : fallback;
 
@@ -508,19 +518,27 @@ const PrintDocument = ({
                             );
                             const lineTotal = toNumber(item.total ?? item.lineTotal ?? item.totalPrice ?? item.totalCost, qty * price);
                             const qtyDisplay = formatQuantityDisplay(qty, item.product ?? item.productData, null, { boxes: item.boxes, pieces: item.pieces });
+                            const barcodeLine = getLineBarcodeDisplay(item);
                             return (
                                 <tr key={index}>
                                     <td className="border border-black p-1 text-center">{index + 1}</td>
                                     <td className="border border-black p-1 uppercase">
-                                        <div className="flex items-center gap-2">
-                                            {(printSettings?.showProductImages !== false && (item.product?.imageUrl || item.imageUrl || item.product?.image || item.image)) && (
-                                                <img 
-                                                    src={item.product?.imageUrl || item.imageUrl || item.product?.image || item.image} 
-                                                    alt="" 
-                                                    className="w-8 h-8 object-cover rounded border border-gray-200" 
-                                                />
+                                        <div className="flex flex-col gap-0.5">
+                                            <div className="flex items-center gap-2">
+                                                {(printSettings?.showProductImages !== false && (item.product?.imageUrl || item.imageUrl || item.product?.image || item.image)) && (
+                                                    <img 
+                                                        src={item.product?.imageUrl || item.imageUrl || item.product?.image || item.image} 
+                                                        alt="" 
+                                                        className="w-8 h-8 object-cover rounded border border-gray-200" 
+                                                    />
+                                                )}
+                                                <span>{item.product?.name || item.name || `Item ${index + 1}`}</span>
+                                            </div>
+                                            {barcodeLine && (
+                                                <div className="text-[10px] text-gray-700 normal-case font-mono pl-0">
+                                                    {barcodeLine.label}: {barcodeLine.value}
+                                                </div>
                                             )}
-                                            <span>{item.product?.name || item.name || `Item ${index + 1}`}</span>
                                         </div>
                                     </td>
                                     <td className="border border-black p-1 text-center">{qtyDisplay}</td>
@@ -728,18 +746,26 @@ const PrintDocument = ({
                         );
                         const lineTotal = toNumber(item.total ?? item.lineTotal ?? item.totalPrice ?? item.totalCost, qty * price);
                         const qtyDisplay = formatQuantityDisplay(qty, item.product ?? item.productData, null, { boxes: item.boxes, pieces: item.pieces });
+                        const barcodeLine = getLineBarcodeDisplay(item);
                         return (
                             <tr key={index}>
                                 <td>
-                                    <div className="flex items-center gap-2">
-                                        {(printSettings?.showProductImages !== false && (item.product?.imageUrl || item.imageUrl || item.product?.image || item.image)) && (
-                                            <img 
-                                                src={item.product?.imageUrl || item.imageUrl || item.product?.image || item.image} 
-                                                alt="" 
-                                                className="w-8 h-8 object-cover rounded border border-gray-200" 
-                                            />
+                                    <div className="flex flex-col gap-0.5">
+                                        <div className="flex items-center gap-2">
+                                            {(printSettings?.showProductImages !== false && (item.product?.imageUrl || item.imageUrl || item.product?.image || item.image)) && (
+                                                <img 
+                                                    src={item.product?.imageUrl || item.imageUrl || item.product?.image || item.image} 
+                                                    alt="" 
+                                                    className="w-8 h-8 object-cover rounded border border-gray-200" 
+                                                />
+                                            )}
+                                            <span>{item.product?.name || item.name || `Item ${index + 1}`}</span>
+                                        </div>
+                                        {barcodeLine && (
+                                            <div className="text-[11px] text-gray-600 font-mono">
+                                                {barcodeLine.label}: {barcodeLine.value}
+                                            </div>
                                         )}
-                                        <span>{item.product?.name || item.name || `Item ${index + 1}`}</span>
                                     </div>
                                 </td>
                                 {showDescription && (

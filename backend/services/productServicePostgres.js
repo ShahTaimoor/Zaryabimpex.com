@@ -2,12 +2,22 @@ const { query } = require('../config/postgres');
 const productRepository = require('../repositories/postgres/ProductRepository');
 const categoryRepository = require('../repositories/postgres/CategoryRepository');
 const inventoryRepository = require('../repositories/postgres/InventoryRepository');
+const investorRepository = require('../repositories/postgres/InvestorRepository');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isValidUuid(v) {
   if (v == null || v === '') return false;
   return UUID_REGEX.test(String(v).trim());
+}
+
+/** Accept string UUID or populated `{ _id, id }` from clients. */
+function resolveInvestorIdRef(raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'object') {
+    return raw._id || raw.id || null;
+  }
+  return raw;
 }
 
 function safePiecesPerBox(row) {
@@ -35,6 +45,7 @@ function toApiProduct(row, categoryMap = null) {
     name: row.name,
     sku: row.sku,
     barcode: row.barcode,
+    hsCode: row.hs_code || null,
     description: row.description,
     category: cat ? { _id: categoryId, id: categoryId, name: cat.name } : (categoryId ? { _id: categoryId, id: categoryId, name: null } : null),
     pricing: {
@@ -57,6 +68,27 @@ function toApiProduct(row, categoryMap = null) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     imageUrl: row.image_url || null
+  };
+}
+
+function attachInvestorsToApiProduct(apiProduct, linkRows) {
+  if (!apiProduct) return apiProduct;
+  if (!linkRows?.length) {
+    return { ...apiProduct, hasInvestors: false, investors: [] };
+  }
+  return {
+    ...apiProduct,
+    hasInvestors: true,
+    investors: linkRows.map((r) => ({
+      investor: {
+        _id: r.investor_id,
+        id: r.investor_id,
+        name: r.investor_name,
+        email: r.investor_email
+      },
+      sharePercentage: parseFloat(r.share_percentage) || 30,
+      addedAt: r.added_at
+    }))
   };
 }
 
@@ -139,6 +171,11 @@ class ProductServicePostgres {
       });
     }
 
+    if (productIds.length > 0) {
+      const invMap = await productRepository.findInvestorsByProductIds(productIds);
+      products = products.map((p) => attachInvestorsToApiProduct(p, invMap.get(String(p.id)) || []));
+    }
+
     return {
       products,
       pagination: result.pagination
@@ -183,7 +220,8 @@ class ProductServicePostgres {
         }
       };
     }
-    return product;
+    const invMap = await productRepository.findInvestorsByProductIds([id]);
+    return attachInvestorsToApiProduct(product, invMap.get(String(id)) || []);
   }
 
   async createProduct(productData, userId, req = null) {
@@ -221,6 +259,7 @@ class ProductServicePostgres {
       name: productData.name,
       sku: productData.sku,
       barcode: productData.barcode,
+      hsCode: productData.hsCode ?? productData.hs_code,
       description: productData.description,
       categoryId,
       costPrice: cost,
@@ -259,6 +298,10 @@ class ProductServicePostgres {
     if (updateData.name !== undefined) data.name = updateData.name;
     if (updateData.sku !== undefined) data.sku = updateData.sku === '' ? null : updateData.sku;
     if (updateData.barcode !== undefined) data.barcode = updateData.barcode === '' ? null : updateData.barcode;
+    if (updateData.hsCode !== undefined || updateData.hs_code !== undefined) {
+      const h = updateData.hsCode ?? updateData.hs_code;
+      data.hsCode = h === '' || h == null ? null : String(h).trim();
+    }
     if (updateData.description !== undefined) data.description = updateData.description;
     if (updateData.category !== undefined || updateData.categoryId !== undefined) {
       const catRaw = [updateData.category, updateData.categoryId].find(
@@ -307,17 +350,67 @@ class ProductServicePostgres {
     const product = await productRepository.update(id, data);
     if (!product) throw new Error('Product not found');
 
-    // Sync reorder point to inventory table (source of truth for display)
+    // Sync inventory fields to inventory table (source of truth for stock display).
+    // The UI uses `inventory.current_stock` (and `inventory.available_stock`) and not `products.stock_quantity`.
     const invData = updateData.inventory;
-    if (invData && (invData.reorderPoint !== undefined || invData.minStock !== undefined)) {
-      const reorderPoint = invData.reorderPoint ?? invData.minStock ?? product.min_stock_level ?? 10;
-      try {
-        const existingInv = await inventoryRepository.findOne({ productId: id, product: id });
-        if (existingInv) {
-          await inventoryRepository.updateByProductId(id, { reorderPoint: Number(reorderPoint) });
+    if (invData) {
+      const hasCurrent =
+        invData.currentStock !== undefined && invData.currentStock !== null;
+      const hasReorderPoint =
+        invData.reorderPoint !== undefined && invData.reorderPoint !== null;
+      const hasMinStock =
+        invData.minStock !== undefined && invData.minStock !== null;
+
+      const shouldUpdateInventory =
+        hasCurrent || hasReorderPoint || hasMinStock || invData.maxStock !== undefined;
+
+      if (shouldUpdateInventory) {
+        try {
+          const existingInv = await inventoryRepository.findOne({ productId: id, product: id });
+          const reserved = Number(existingInv?.reserved_stock ?? existingInv?.reservedStock ?? 0) || 0;
+
+          // Determine resulting current stock.
+          const existingCurrent = Number(existingInv?.current_stock ?? existingInv?.currentStock ?? 0) || 0;
+          const currentStock =
+            hasCurrent ? Number(invData.currentStock) : existingCurrent;
+
+          // Determine resulting reorder point.
+          const reorderPoint =
+            (invData.reorderPoint !== undefined ? invData.reorderPoint : invData.minStock) ??
+            existingInv?.reorder_point ??
+            existingInv?.reorderPoint ??
+            product.min_stock_level ??
+            10;
+
+          const availableStock = currentStock - reserved;
+          const payload = {
+            currentStock,
+            availableStock,
+            reorderPoint: reorderPoint !== undefined ? Number(reorderPoint) : undefined,
+          };
+
+          if (invData.maxStock !== undefined && invData.maxStock !== null) {
+            payload.maxStock = Number(invData.maxStock);
+          }
+
+          if (existingInv) {
+            await inventoryRepository.updateByProductId(id, payload);
+          } else {
+            await inventoryRepository.create({
+              productId: id,
+              product: id,
+              productModel: 'Product',
+              currentStock,
+              reservedStock: reserved,
+              reorderPoint: Number(payload.reorderPoint ?? 10),
+              reorderQuantity: 50,
+              maxStock: payload.maxStock ?? null,
+              status: 'active'
+            });
+          }
+        } catch (invErr) {
+          console.error('Inventory sync on product stock update:', invErr);
         }
-      } catch (invErr) {
-        console.error('Inventory reorder point sync on product update:', invErr);
       }
     }
 
@@ -453,13 +546,64 @@ class ProductServicePostgres {
   }
 
   async updateProductInvestors(id, investors) {
-    const product = await this.getProductById(id);
-    return product;
+    if (!isValidUuid(id)) {
+      throw new Error('Invalid product id');
+    }
+    await this.getProductById(id);
+    const list = Array.isArray(investors) ? investors : [];
+    for (const inv of list) {
+      const iid = resolveInvestorIdRef(inv.investor);
+      if (!iid || !isValidUuid(String(iid))) {
+        throw new Error('Invalid investor id');
+      }
+      const row = await investorRepository.findById(iid);
+      if (!row) {
+        throw new Error(`Investor ${iid} not found`);
+      }
+    }
+    await productRepository.replaceProductInvestors(id, list);
+    return this.getProductById(id);
   }
 
   async removeProductInvestor(id, investorId) {
-    const product = await this.getProductById(id);
-    return product;
+    if (!isValidUuid(id)) {
+      throw new Error('Invalid product id');
+    }
+    if (!investorId || !isValidUuid(String(investorId))) {
+      throw new Error('Invalid investor id');
+    }
+    await this.getProductById(id);
+    await productRepository.deleteProductInvestor(id, investorId);
+    return this.getProductById(id);
+  }
+
+  /**
+   * Products linked to an investor (for Investors page + API route).
+   * Each item includes a synthetic `investors` array so existing route mapping still works.
+   */
+  async getProductsLinkedToInvestor(investorId) {
+    if (!isValidUuid(investorId)) {
+      throw new Error('Invalid investor id');
+    }
+    const rows = await productRepository.findProductsByInvestorId(investorId);
+    const catIds = [...new Set(rows.map((r) => r.category_id).filter(Boolean))];
+    const categoryMap = await getCategoryMap(catIds);
+    return rows.map((row) => {
+      const linkShare = row.link_share_percentage;
+      const linkAdded = row.link_added_at;
+      const { link_share_percentage, link_added_at, ...raw } = row;
+      const api = toApiProduct(raw, categoryMap);
+      return {
+        ...api,
+        investors: [
+          {
+            investor: investorId,
+            sharePercentage: parseFloat(linkShare) || 30,
+            addedAt: linkAdded
+          }
+        ]
+      };
+    });
   }
 
   async restoreProduct(id) {

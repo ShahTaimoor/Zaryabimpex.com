@@ -1976,6 +1976,15 @@ export const Sales = ({ tabId, editData }) => {
       return;
     }
 
+    const totalNum = Number(total) || 0;
+    const isAccountInvoice = paymentMethod === 'account';
+    const isSplit = paymentMethod === 'split';
+    let effectivePaid = Number(amountPaid) || 0;
+    // Retail: "Amount Paid" is often left at 0; treat as full payment so backend stores `paid` and investor profit runs.
+    if (!isAccountInvoice && !isSplit && effectivePaid <= 0 && totalNum > 0) {
+      effectivePaid = Math.round(totalNum * 100) / 100;
+    }
+
     const orderData = {
       orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
       customer: selectedCustomer?._id,
@@ -2000,11 +2009,11 @@ export const Sales = ({ tabId, editData }) => {
       payment: {
         method: paymentMethod,
         bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
-        amount: amountPaid,
-        remainingBalance: total - amountPaid,
-        isPartialPayment: amountPaid < total,
+        amount: effectivePaid,
+        remainingBalance: totalNum - effectivePaid,
+        isPartialPayment: totalNum - effectivePaid > 0.01,
         isAdvancePayment: isAdvancePayment,
-        advanceAmount: isAdvancePayment ? (amountPaid - total) : 0
+        advanceAmount: isAdvancePayment ? (effectivePaid - totalNum) : 0
       }
     };
 

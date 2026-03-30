@@ -27,6 +27,9 @@ export const salesApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         { type: 'Sales', id: 'LIST' },
+        { type: 'Settings', id: 'INVESTORS_LIST' },
+        { type: 'Accounting', id: 'PROFIT_SHARES' },
+        { type: 'Accounting', id: 'PROFIT_SUMMARY' },
         { type: 'Sales', id: 'TODAY_SUMMARY' },
         { type: 'Sales', id: 'PERIOD_SUMMARY' },
         { type: 'Sales', id: 'CCTV_LIST' },

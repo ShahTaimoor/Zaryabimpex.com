@@ -166,7 +166,7 @@ export const productsApi = api.injectEndpoints({
     }),
     linkInvestors: builder.mutation({
       query: ({ productId, investors }) => ({
-        url: `products/${productId}/link-investors`,
+        url: `products/${productId}/investors`,
         method: 'post',
         data: { investors },
       }),

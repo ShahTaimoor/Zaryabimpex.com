@@ -9,7 +9,13 @@ export const investorsApi = api.injectEndpoints({
         params,
       }),
       providesTags: (result) => {
-        const list = result?.data?.investors || result?.investors || result?.items || [];
+        const raw =
+          result?.data?.investors ||
+          (Array.isArray(result?.data) ? result.data : null) ||
+          result?.investors ||
+          result?.items ||
+          [];
+        const list = Array.isArray(raw) ? raw : [];
         return list.length
           ? [
               ...list.map(({ _id, id }) => ({ type: 'Settings', id: _id || id })),
@@ -66,13 +72,18 @@ export const investorsApi = api.injectEndpoints({
       ],
     }),
     recordPayout: builder.mutation({
-      query: ({ id, amount }) => ({
+      query: ({ id, amount, paymentMethod, debitAccountCode }) => ({
         url: `investors/${id}/payout`,
         method: 'post',
-        data: { amount },
+        data: {
+          amount,
+          ...(paymentMethod ? { paymentMethod } : {}),
+          ...(debitAccountCode ? { debitAccountCode } : {}),
+        },
       }),
       invalidatesTags: (_res, _err, { id }) => [
         { type: 'Settings', id },
+        { type: 'Settings', id: `PAYOUTS_${id}` },
         { type: 'Settings', id: 'INVESTORS_LIST' },
         { type: 'Accounting' },
         { type: 'Accounting', id: 'INVESTOR_PAYOUTS' },
@@ -154,6 +165,13 @@ export const investorsApi = api.injectEndpoints({
         { type: 'Products', id: 'LIST' },
       ],
     }),
+    getInvestorPayouts: builder.query({
+      query: (id) => ({
+        url: `investors/${id}/payouts`,
+        method: 'get',
+      }),
+      providesTags: (_res, _err, id) => [{ type: 'Settings', id: `PAYOUTS_${id}` }],
+    }),
   }),
   overrideExisting: false,
 });
@@ -172,5 +190,6 @@ export const {
   useGetProfitSummaryQuery,
   useGetOrderProfitSharesQuery,
   useGetInvestorProductsQuery,
+  useGetInvestorPayoutsQuery,
 } = investorsApi;
 

@@ -196,6 +196,38 @@ export const navigation = [
   }
 ];
 
+/** Migrate legacy parent-only sidebar keys to per-child keys (see Settings → Sidebar). */
+export function migrateSidebarConfig(parsed) {
+  if (!parsed || typeof parsed !== 'object') return {};
+  const next = { ...parsed };
+  navigation.forEach((n) => {
+    if (n.children && n.children.length) {
+      if (next[n.name] === false) {
+        n.children.forEach((child) => {
+          next[child.name] = false;
+        });
+      }
+      delete next[n.name];
+    }
+  });
+  return next;
+}
+
+export function loadSidebarConfig() {
+  const saved = localStorage.getItem('sidebarConfig');
+  if (!saved) return {};
+  try {
+    const parsed = JSON.parse(saved);
+    const migrated = migrateSidebarConfig(parsed);
+    if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
+      localStorage.setItem('sidebarConfig', JSON.stringify(migrated));
+    }
+    return migrated;
+  } catch {
+    return {};
+  }
+}
+
 // Sidebar header colors per section
 const sidebarHeaderColors = {
   Sales: { bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100', border: 'border-emerald-200' },
@@ -353,18 +385,12 @@ export const MultiTabLayout = ({ children }) => {
   };
 
   // Sidebar visibility state
-  const [sidebarConfig, setSidebarConfig] = useState(() => {
-    const saved = localStorage.getItem('sidebarConfig');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [sidebarConfig, setSidebarConfig] = useState(() => loadSidebarConfig());
 
   // Listener for sidebar configuration changes
   useEffect(() => {
     const handleSidebarChange = () => {
-      const saved = localStorage.getItem('sidebarConfig');
-      if (saved) {
-        setSidebarConfig(JSON.parse(saved));
-      }
+      setSidebarConfig(loadSidebarConfig());
     };
 
     window.addEventListener('sidebarConfigChanged', handleSidebarChange);

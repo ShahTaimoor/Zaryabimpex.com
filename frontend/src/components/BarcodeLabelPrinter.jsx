@@ -10,9 +10,13 @@ import { toast } from 'sonner';
 export const BarcodeLabelPrinter = ({ 
   products = [], 
   onClose,
-  initialLabelSize = 'standard' // 'standard', 'small', 'large'
+  initialLabelSize = 'standard', // 'standard', 'small', 'large'
+  /** When true, show per-line label counts (e.g. purchase receipt qty) */
+  quantityMode = false,
+  modalTitle = 'Print Barcode Labels',
 }) => {
   const [selectedProducts, setSelectedProducts] = useState([]);
+  const [labelQuantities, setLabelQuantities] = useState({});
   const [labelSize, setLabelSize] = useState(initialLabelSize);
   const [labelFormat, setLabelFormat] = useState('CODE128');
   const [includePrice, setIncludePrice] = useState(false);
@@ -21,9 +25,15 @@ export const BarcodeLabelPrinter = ({
   const printRef = useRef(null);
 
   useEffect(() => {
-    // Select all products by default
     if (products.length > 0) {
       setSelectedProducts(products.map(p => p._id || p.id));
+      const next = {};
+      products.forEach((p) => {
+        const id = p._id || p.id;
+        const q = Math.max(1, Math.min(9999, Math.round(Number(p.labelQuantity) || 1)));
+        next[id] = q;
+      });
+      setLabelQuantities(next);
     }
   }, [products]);
 
@@ -33,6 +43,30 @@ export const BarcodeLabelPrinter = ({
         ? prev.filter(id => id !== productId)
         : [...prev, productId]
     );
+  };
+
+  const setLabelQty = (productId, raw) => {
+    const n = Math.round(Number(raw));
+    const v = Number.isFinite(n) ? Math.max(1, Math.min(9999, n)) : 1;
+    setLabelQuantities((prev) => ({ ...prev, [productId]: v }));
+  };
+
+  const getLabelCount = (product) => {
+    const id = product._id || product.id;
+    const fromState = labelQuantities[id];
+    if (fromState != null) return fromState;
+    return Math.max(1, Math.min(9999, Math.round(Number(product.labelQuantity) || 1)));
+  };
+
+  const expandSelectedForPrint = (selected) => {
+    const out = [];
+    for (const product of selected) {
+      const n = getLabelCount(product);
+      const barcodeValue = product.barcode || product.sku || product._id || product.id;
+      if (!barcodeValue) continue;
+      for (let i = 0; i < n; i++) out.push(product);
+    }
+    return out;
   };
 
   const selectAll = () => {
@@ -71,6 +105,12 @@ export const BarcodeLabelPrinter = ({
     const selected = products.filter(p => 
       selectedProducts.includes(p._id || p.id)
     );
+
+    const toPrint = expandSelectedForPrint(selected);
+    if (toPrint.length === 0) {
+      toast.error('No printable barcodes: add barcode or SKU on products, or select lines with a code.');
+      return;
+    }
 
     const printWindow = window.open('', '_blank');
     const printContent = `
@@ -129,7 +169,7 @@ export const BarcodeLabelPrinter = ({
         </head>
         <body>
           <div class="labels-container">
-            ${selected.map(product => {
+            ${toPrint.map(product => {
               const barcodeValue = product.barcode || product.sku || product._id || product.id;
               if (!barcodeValue) return '';
               
@@ -161,7 +201,7 @@ export const BarcodeLabelPrinter = ({
     
     printWindow.document.write(printContent);
     printWindow.document.close();
-    toast.success(`Printing ${selected.length} label(s)`);
+    toast.success(`Printing ${toPrint.length} label(s)`);
   };
 
   const handleDownload = () => {
@@ -173,6 +213,12 @@ export const BarcodeLabelPrinter = ({
     const selected = products.filter(p => 
       selectedProducts.includes(p._id || p.id)
     );
+
+    const toPrint = expandSelectedForPrint(selected);
+    if (toPrint.length === 0) {
+      toast.error('No printable barcodes: add barcode or SKU on products, or select lines with a code.');
+      return;
+    }
 
     const printWindow = window.open('', '_blank');
     const printContent = `
@@ -220,7 +266,7 @@ export const BarcodeLabelPrinter = ({
         </head>
         <body>
           <div class="labels-container">
-            ${selected.map(product => {
+            ${toPrint.map(product => {
               const barcodeValue = product.barcode || product.sku || product._id || product.id;
               if (!barcodeValue) return '';
               
@@ -247,7 +293,7 @@ export const BarcodeLabelPrinter = ({
     
     printWindow.document.write(printContent);
     printWindow.document.close();
-    toast.success('Labels ready for download/print');
+    toast.success(`Labels ready for download/print (${toPrint.length} labels)`);
   };
 
   return (
@@ -257,7 +303,7 @@ export const BarcodeLabelPrinter = ({
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center space-x-2">
             <Printer className="h-5 w-5 text-primary-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Print Barcode Labels</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{modalTitle}</h2>
           </div>
           {onClose && (
             <button
@@ -357,7 +403,7 @@ export const BarcodeLabelPrinter = ({
             <div className="lg:col-span-2">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-medium text-gray-900">
-                  Select Products ({selectedProducts.length} of {products.length})
+                  {quantityMode ? 'Receipt lines' : 'Select products'} ({selectedProducts.length} of {products.length})
                 </h3>
                 <div className="flex space-x-2">
                   <button
@@ -385,33 +431,49 @@ export const BarcodeLabelPrinter = ({
                 ) : (
                   <div className="divide-y">
                     {products.map(product => {
-                      const isSelected = selectedProducts.includes(product._id || product.id);
+                      const pid = product._id || product.id;
+                      const isSelected = selectedProducts.includes(pid);
                       const hasBarcode = !!(product.barcode || product.sku);
                       
                       return (
-                        <label
-                          key={product._id || product.id}
-                          className={`flex items-center p-3 cursor-pointer hover:bg-gray-50 ${
+                        <div
+                          key={pid}
+                          className={`flex items-center p-3 hover:bg-gray-50 ${
                             isSelected ? 'bg-primary-50' : ''
                           }`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleProduct(product._id || product.id)}
-                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          />
-                          <div className="ml-3 flex-1">
-                            <div className="font-medium text-gray-900">{product.name}</div>
-                            <div className="text-sm text-gray-500">
-                              {hasBarcode ? (
-                                <span className="font-mono">{product.barcode || product.sku}</span>
-                              ) : (
-                                <span className="text-yellow-600">No barcode</span>
-                              )}
+                          <label className="flex items-center flex-1 min-w-0 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleProduct(pid)}
+                              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
+                            <div className="ml-3 flex-1 min-w-0">
+                              <div className="font-medium text-gray-900 truncate">{product.name}</div>
+                              <div className="text-sm text-gray-500">
+                                {hasBarcode ? (
+                                  <span className="font-mono">{product.barcode || product.sku}</span>
+                                ) : (
+                                  <span className="text-yellow-600">No barcode/SKU — cannot print</span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </label>
+                          </label>
+                          {quantityMode && (
+                            <div className="ml-2 flex items-center gap-1 flex-shrink-0">
+                              <span className="text-xs text-gray-500 whitespace-nowrap">Labels</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={9999}
+                                value={getLabelCount(product)}
+                                onChange={(e) => setLabelQty(pid, e.target.value)}
+                                className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                              />
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>

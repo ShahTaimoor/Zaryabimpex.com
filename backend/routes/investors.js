@@ -2,6 +2,7 @@ const express = require('express');
 const { body, query, param } = require('express-validator');
 const { auth, requireAnyPermission } = require('../middleware/auth');
 const investorService = require('../services/investorService');
+const profitDistributionService = require('../services/profitDistributionService');
 
 const router = express.Router();
 
@@ -167,15 +168,57 @@ router.delete('/:id', [
   }
 });
 
+// Payout history (dates / amounts) — before generic GET /:id is not needed; path is /:id/payouts
+router.get('/:id/payouts', [
+  auth,
+  requireAnyPermission(['view_investors', 'manage_investors', 'view_reports']),
+  param('id').isUUID(4).withMessage('Invalid investor ID')
+], async (req, res) => {
+  try {
+    const payouts = await investorService.getPayoutHistory(req.params.id);
+    res.json({
+      success: true,
+      data: payouts
+    });
+  } catch (error) {
+    if (error.message === 'Investor not found') {
+      return res.status(404).json({
+        success: false,
+        message: error.message
+      });
+    }
+    console.error('Error fetching investor payouts:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Record payout for investor
 router.post('/:id/payout', [
   auth,
   requireAnyPermission(['manage_investors', 'payout_investors']),
   param('id').isUUID(4).withMessage('Invalid investor ID'),
-  body('amount').isFloat({ min: 0.01 }).withMessage('Payout amount must be greater than 0')
+  body('amount').isFloat({ min: 0.01 }).withMessage('Payout amount must be greater than 0'),
+  body('paymentMethod').optional().isIn(['cash', 'bank']).withMessage('paymentMethod must be cash or bank'),
+  body('debitAccountCode')
+    .optional()
+    .isString()
+    .trim()
+    .isLength({ min: 3, max: 20 })
+    .withMessage('debitAccountCode must be a valid chart account code')
 ], async (req, res) => {
   try {
-    const investor = await investorService.recordPayout(req.params.id, req.body.amount);
+    const paymentMethod = req.body.paymentMethod === 'bank' ? 'bank' : 'cash';
+    const debitAccountCode = req.body.debitAccountCode?.trim() || undefined;
+    const investor = await investorService.recordPayout(
+      req.params.id,
+      req.body.amount,
+      req.user?.id || req.user?._id || null,
+      { paymentMethod, debitAccountCode }
+    );
     
     res.json({
       success: true,

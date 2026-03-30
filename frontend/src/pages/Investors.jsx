@@ -14,7 +14,9 @@ import {
   Eye,
   Calendar,
   Package,
-  ExternalLink
+  ExternalLink,
+  Printer,
+  Receipt
 } from 'lucide-react';
 import { Checkbox } from '../components/Checkbox';
 import {
@@ -26,6 +28,7 @@ import {
   useRecordInvestmentMutation,
   useGetInvestorProductsQuery,
   useGetProfitSharesQuery,
+  useGetInvestorPayoutsQuery,
 } from '../store/services/investorsApi';
 import { toast } from 'sonner';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage } from '../components/LoadingSpinner';
@@ -35,6 +38,94 @@ import { Textarea } from '@/components/ui/textarea';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import { useTab } from '../contexts/TabContext';
+
+/** Amount display without a currency prefix (e.g. no leading $). */
+function formatAmount(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0.00';
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** ISO or Date string from API → locale string for payout timestamps */
+function formatPayoutDate(iso) {
+  if (iso == null || iso === '') return null;
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  } catch {
+    return null;
+  }
+}
+
+/** Shorter single-line date/time for investor table “Last paid” (avoids wrapping in narrow cells). */
+function formatLastPaidOneLine(iso) {
+  if (iso == null || iso === '') return null;
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Prefer camelCase from API; fall back to Postgres snake_case. */
+function invNum(inv, camel, snake) {
+  const v = inv?.[camel] ?? inv?.[snake];
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Opens a print dialog with a simple HTML document (includes “Printed on” date/time). */
+function openPrintDocument(title, innerHtml) {
+  const printedAt = new Date().toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
+  const w = window.open('', '_blank');
+  if (!w) {
+    toast.error('Pop-up blocked — allow pop-ups to print.');
+    return;
+  }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; padding: 24px; color: #111827; }
+    h1 { font-size: 20px; margin: 0 0 6px; }
+    .printed { color: #6b7280; font-size: 12px; margin: 0 0 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px 10px; }
+    th { background: #f9fafb; text-align: left; font-weight: 600; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .note { margin-top: 16px; font-size: 11px; color: #6b7280; }
+    @media print { body { padding: 12px; } }
+  </style></head><body>
+  <h1>${escapeHtml(title)}</h1>
+  <p class="printed">Printed on: ${escapeHtml(printedAt)}</p>
+  ${innerHtml}
+  </body></html>`);
+  w.document.close();
+  w.focus();
+  requestAnimationFrame(() => {
+    w.print();
+  });
+}
 
 const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
   const { register, handleSubmit, formState: { errors }, reset } = useForm({
@@ -211,7 +302,7 @@ const InvestorFormModal = ({ investor, onSave, onCancel, isSubmitting }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Total Investment ($)
+                    Total Investment
                   </label>
                   <div className="relative">
                     <TrendingUp className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -290,7 +381,10 @@ export const Investors = ({ tabId }) => {
   const [statusFilter, setStatusFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedInvestor, setSelectedInvestor] = useState(null);
+  /** `{ id, name }` when profit-shares modal is open */
   const [showProfitShares, setShowProfitShares] = useState(null);
+  /** `{ id, name }` when payout-history modal is open */
+  const [showPayoutHistory, setShowPayoutHistory] = useState(null);
   const [showPayoutModal, setShowPayoutModal] = useState(null);
   const [showInvestmentModal, setShowInvestmentModal] = useState(null);
   const [showProductsModal, setShowProductsModal] = useState(null);
@@ -354,7 +448,41 @@ export const Investors = ({ tabId }) => {
   };
 
   const handleViewProfitShares = (investor) => {
-    setShowProfitShares(investor._id.toString());
+    setShowProfitShares({ id: investor._id, name: investor.name });
+  };
+
+  const handleViewPayoutHistory = (investor) => {
+    setShowPayoutHistory({ id: investor._id, name: investor.name });
+  };
+
+  const handlePrintInvestorsList = () => {
+    const rows = investors
+      .map(
+        (inv) => `<tr>
+        <td>${escapeHtml(inv.name)}</td>
+        <td>${escapeHtml(inv.email || '—')}</td>
+        <td>${escapeHtml(inv.phone || '—')}</td>
+        <td class="num">${escapeHtml(formatAmount(invNum(inv, 'totalInvestment', 'total_investment')))}</td>
+        <td class="num">${escapeHtml(formatAmount(invNum(inv, 'totalEarnedProfit', 'total_earned_profit')))}</td>
+        <td class="num">${escapeHtml(formatAmount(invNum(inv, 'totalPaidOut', 'total_paid_out')))}</td>
+        <td>${escapeHtml(formatPayoutDate(inv.lastPayoutAt ?? inv.last_payout_at) || '—')}</td>
+        <td class="num">${escapeHtml(formatAmount(invNum(inv, 'currentBalance', 'current_balance')))}</td>
+        <td>${escapeHtml(inv.status || '—')}</td>
+      </tr>`
+      )
+      .join('');
+    openPrintDocument(
+      'Investors report',
+      `<table>
+        <thead><tr>
+          <th>Name</th><th>Email</th><th>Phone</th>
+          <th class="num">Total investment</th><th class="num">Earned profit</th>
+          <th class="num">Paid out</th><th>Last payout (date)</th><th class="num">Current balance</th><th>Status</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="note">Amounts are as of the print date above. Profit share line dates appear on the per-investor Profit Shares print.</p>`
+    );
   };
 
   const handleViewProducts = (investor) => {
@@ -379,18 +507,31 @@ export const Investors = ({ tabId }) => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Investors</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage investors and track profit distributions</p>
         </div>
-        <Button
-          onClick={() => {
-            setSelectedInvestor(null);
-            setIsModalOpen(true);
-          }}
-          variant="default"
-          size="default"
-          className="flex items-center justify-center gap-2 w-full sm:w-auto"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Add Investor</span>
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button
+            type="button"
+            onClick={handlePrintInvestorsList}
+            variant="outline"
+            size="default"
+            className="flex items-center justify-center gap-2"
+            disabled={investors.length === 0}
+          >
+            <Printer className="h-4 w-4" />
+            <span>Print</span>
+          </Button>
+          <Button
+            onClick={() => {
+              setSelectedInvestor(null);
+              setIsModalOpen(true);
+            }}
+            variant="default"
+            size="default"
+            className="flex items-center justify-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Add Investor</span>
+          </Button>
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -427,29 +568,29 @@ export const Investors = ({ tabId }) => {
         <div className="card w-full">
           <div className="card-content p-0 w-full">
             {/* Table Header */}
-            <div className="bg-gray-50 px-8 py-6 border-b border-gray-200">
-              <div className="grid grid-cols-12 gap-6 items-center">
-                <div className="col-span-3">
+            <div className="bg-gray-50 px-4 sm:px-8 py-4 sm:py-5 border-b border-gray-200">
+              <div className="grid w-full min-w-0 grid-cols-12 gap-x-3 sm:gap-x-4 lg:gap-x-5 gap-y-2 items-center">
+                <div className="col-span-12 lg:col-span-2 min-w-0">
                   <h3 className="text-base font-medium text-gray-700">Investor Name</h3>
                   <p className="text-sm text-gray-500">Contact Information</p>
                 </div>
-                <div className="col-span-1">
-                  <h3 className="text-base font-medium text-gray-700">Total Investment</h3>
+                <div className="col-span-6 sm:col-span-4 lg:col-span-2 lg:text-right">
+                  <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">Total Investment</h3>
                 </div>
-                <div className="col-span-1">
-                  <h3 className="text-base font-medium text-gray-700">Earned Profit</h3>
+                <div className="col-span-6 sm:col-span-4 lg:col-span-1 lg:text-right">
+                  <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">Earned Profit</h3>
                 </div>
-                <div className="col-span-1">
-                  <h3 className="text-base font-medium text-gray-700">Paid Out</h3>
+                <div className="col-span-6 sm:col-span-4 lg:col-span-2 lg:text-right">
+                  <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">Paid Out</h3>
                 </div>
-                <div className="col-span-1">
-                  <h3 className="text-base font-medium text-gray-700">Current Balance</h3>
+                <div className="col-span-6 sm:col-span-4 lg:col-span-2 lg:text-right">
+                  <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">Current Balance</h3>
                 </div>
-                <div className="col-span-1">
-                  <h3 className="text-base font-medium text-gray-700">Status</h3>
+                <div className="col-span-6 sm:col-span-4 lg:col-span-1 lg:text-center">
+                  <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">Status</h3>
                 </div>
-                <div className="col-span-4">
-                  <h3 className="text-base font-medium text-gray-700">Actions</h3>
+                <div className="col-span-12 lg:col-span-2 lg:text-right">
+                  <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">Actions</h3>
                 </div>
               </div>
             </div>
@@ -457,23 +598,23 @@ export const Investors = ({ tabId }) => {
             {/* Investor Rows */}
             <div className="divide-y divide-gray-200">
               {investors.map((investor) => (
-                <div key={investor._id} className="px-8 py-6 hover:bg-gray-50">
-                  <div className="grid grid-cols-12 gap-6 items-center">
+                <div key={investor._id} className="px-4 sm:px-8 py-6 hover:bg-gray-50">
+                  <div className="grid w-full min-w-0 grid-cols-12 gap-x-4 sm:gap-x-6 gap-y-3 items-center">
                     {/* Investor Name & Contact */}
-                    <div className="col-span-3">
+                    <div className="col-span-12 lg:col-span-2 min-w-0">
                       <div className="flex items-center space-x-4">
-                        <User className="h-6 w-6 text-gray-400" />
-                        <div className="flex-1">
-                          <h3 className="text-base font-medium text-gray-900">
+                        <User className="h-6 w-6 text-gray-400 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-base font-medium text-gray-900 truncate">
                             {investor.name}
                           </h3>
-                          <div className="flex items-center space-x-2 text-sm text-gray-600 mt-1">
-                            <Mail className="h-3 w-3" />
-                            <span>{investor.email}</span>
+                          <div className="flex items-center space-x-2 text-sm text-gray-600 mt-1 min-w-0">
+                            <Mail className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{investor.email}</span>
                           </div>
                           {investor.phone && (
                             <div className="flex items-center space-x-2 text-sm text-gray-600 mt-1">
-                              <Phone className="h-3 w-3" />
+                              <Phone className="h-3 w-3 shrink-0" />
                               <span>{investor.phone}</span>
                             </div>
                           )}
@@ -482,35 +623,41 @@ export const Investors = ({ tabId }) => {
                     </div>
 
                     {/* Total Investment */}
-                    <div className="col-span-1">
+                    <div className="col-span-6 sm:col-span-4 lg:col-span-2 text-left lg:text-right tabular-nums">
                       <p className="text-sm text-gray-600">
-                        ${(investor.totalInvestment || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatAmount(invNum(investor, 'totalInvestment', 'total_investment'))}
                       </p>
                     </div>
 
                     {/* Earned Profit */}
-                    <div className="col-span-1">
+                    <div className="col-span-6 sm:col-span-4 lg:col-span-1 text-left lg:text-right tabular-nums">
                       <p className="text-sm font-semibold text-green-600">
-                        ${(investor.totalEarnedProfit || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatAmount(invNum(investor, 'totalEarnedProfit', 'total_earned_profit'))}
                       </p>
                     </div>
 
-                    {/* Paid Out */}
-                    <div className="col-span-1">
+                    {/* Paid Out + last payout date (wider column + nowrap so date stays one line) */}
+                    <div className="col-span-6 sm:col-span-4 lg:col-span-2 text-left lg:text-right tabular-nums">
                       <p className="text-sm text-gray-600">
-                        ${(investor.totalPaidOut || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatAmount(invNum(investor, 'totalPaidOut', 'total_paid_out'))}
                       </p>
+                      {formatLastPaidOneLine(investor.lastPayoutAt ?? investor.last_payout_at) ? (
+                        <p className="text-xs text-gray-500 mt-1 flex flex-wrap lg:flex-nowrap items-center gap-1 lg:whitespace-nowrap lg:w-full lg:justify-end">
+                          <Calendar className="h-3 w-3 shrink-0" />
+                          <span>Last paid: {formatLastPaidOneLine(investor.lastPayoutAt ?? investor.last_payout_at)}</span>
+                        </p>
+                      ) : null}
                     </div>
 
                     {/* Current Balance */}
-                    <div className="col-span-1">
+                    <div className="col-span-6 sm:col-span-4 lg:col-span-2 text-left lg:text-right tabular-nums">
                       <p className="text-sm font-bold text-blue-600">
-                        ${(investor.currentBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatAmount(invNum(investor, 'currentBalance', 'current_balance'))}
                       </p>
                     </div>
 
                     {/* Status */}
-                    <div className="col-span-1">
+                    <div className="col-span-6 sm:col-span-4 lg:col-span-1 flex lg:justify-center justify-start">
                       <span className={`badge ${
                         investor.status === 'active' ? 'badge-success' :
                         investor.status === 'inactive' ? 'badge-gray' :
@@ -520,9 +667,9 @@ export const Investors = ({ tabId }) => {
                       </span>
                     </div>
 
-                    {/* Actions */}
-                    <div className="col-span-4">
-                      <div className="flex items-center space-x-3 flex-wrap">
+                    {/* Actions — use full cell width and align icons to the right (removes dead space on the right) */}
+                    <div className="col-span-12 lg:col-span-2 w-full min-w-0">
+                      <div className="flex w-full items-center justify-start lg:justify-end gap-2 sm:gap-3 flex-wrap">
                         <button
                           onClick={() => handleViewProducts(investor)}
                           className="text-blue-600 hover:text-blue-800"
@@ -538,13 +685,20 @@ export const Investors = ({ tabId }) => {
                           <Eye className="h-5 w-5" />
                         </button>
                         <button
+                          onClick={() => handleViewPayoutHistory(investor)}
+                          className="text-amber-700 hover:text-amber-900"
+                          title="Payout history (dates paid out)"
+                        >
+                          <Receipt className="h-5 w-5" />
+                        </button>
+                        <button
                           onClick={() => handleInvestment(investor)}
                           className="text-green-600 hover:text-green-800"
                           title="Record Investment (Receive Money)"
                         >
                           <TrendingUp className="h-5 w-5" />
                         </button>
-                        {investor.currentBalance > 0 && (
+                        {invNum(investor, 'currentBalance', 'current_balance') > 0 && (
                           <button
                             onClick={() => handlePayout(investor)}
                             className="text-primary-600 hover:text-primary-800"
@@ -593,8 +747,17 @@ export const Investors = ({ tabId }) => {
       {/* Profit Shares Modal */}
       {showProfitShares && (
         <ProfitSharesModal
-          investorId={showProfitShares}
+          investorId={showProfitShares.id}
+          investorName={showProfitShares.name}
           onClose={() => setShowProfitShares(null)}
+        />
+      )}
+
+      {showPayoutHistory && (
+        <PayoutHistoryModal
+          investorId={showPayoutHistory.id}
+          investorName={showPayoutHistory.name}
+          onClose={() => setShowPayoutHistory(null)}
         />
       )}
 
@@ -602,10 +765,15 @@ export const Investors = ({ tabId }) => {
       {showPayoutModal && (
         <PayoutModal
           investor={showPayoutModal}
-          onSave={async (amount) => {
+          onSave={async (amount, payoutOptions) => {
             try {
-              await recordPayout({ id: showPayoutModal._id, amount }).unwrap();
-              toast.success('Payout recorded successfully');
+              await recordPayout({
+                id: showPayoutModal._id,
+                amount,
+                paymentMethod: payoutOptions?.paymentMethod || 'cash',
+                debitAccountCode: payoutOptions?.debitAccountCode || undefined,
+              }).unwrap();
+              toast.success('Payout recorded successfully (posted to general ledger)');
               setShowPayoutModal(null);
             } catch (error) {
               toast.error(error?.data?.message || error?.message || 'Failed to record payout');
@@ -744,13 +912,13 @@ const InvestorProductsModal = ({ investor, onClose }) => {
                           <div>
                             <span className="text-gray-500">Cost:</span>
                             <span className="ml-2 font-medium text-gray-900">
-                              ${(product.pricing?.cost || 0).toFixed(2)}
+                              {formatAmount(product.pricing?.cost)}
                             </span>
                           </div>
                           <div>
                             <span className="text-gray-500">Retail:</span>
                             <span className="ml-2 font-medium text-gray-900">
-                              ${(product.pricing?.retail || 0).toFixed(2)}
+                              {formatAmount(product.pricing?.retail)}
                             </span>
                           </div>
                         </div>
@@ -791,8 +959,8 @@ const InvestorProductsModal = ({ investor, onClose }) => {
 };
 
 // Profit Shares Modal Component
-const ProfitSharesModal = ({ investorId, onClose }) => {
-  const { data, isLoading } = useGetProfitSharesQuery({ id: investorId }, {
+const ProfitSharesModal = ({ investorId, investorName, onClose }) => {
+  const { data, isLoading, isError, error } = useGetProfitSharesQuery({ id: investorId }, {
     skip: !investorId,
   });
 
@@ -801,33 +969,126 @@ const ProfitSharesModal = ({ investorId, onClose }) => {
     return Array.isArray(sharesList) ? sharesList : [];
   }, [data]);
 
+  const profitSharesErrorMessage =
+    isError && error?.data != null
+      ? String(
+          typeof error.data === 'object' && error.data?.message != null
+            ? error.data.message
+            : error.data
+        )
+      : isError
+        ? 'Could not load profit shares. Try again or check the server.'
+        : null;
+
+  const printProfitShares = () => {
+    if (profitShares.length === 0) {
+      toast.error('Nothing to print');
+      return;
+    }
+    const rows = profitShares
+      .map((share) => {
+        const shareInvestorId = share.investor_id ?? share.investor?._id ?? share.investor ?? null;
+        const isThisInvestor =
+          shareInvestorId && shareInvestorId.toString() === investorId.toString();
+        const investorShare = isThisInvestor
+          ? Number(share.investor_share ?? share.investorShare ?? 0)
+          : share.investors?.find((inv) => {
+              const invId = inv.investor?._id || inv.investor;
+              return invId && invId.toString() === investorId.toString();
+            })?.shareAmount || 0;
+        const sharePercentage = isThisInvestor
+          ? Number(share.investor_share_percentage ?? share.investorSharePercentage ?? 0)
+          : share.investors?.find((inv) => {
+              const invId = inv.investor?._id || inv.investor;
+              return invId && invId.toString() === investorId.toString();
+            })?.sharePercentage || 0;
+        const lineDate =
+          share.order_date ?? share.orderDate ?? share.created_at ?? share.createdAt;
+        const dateStr = lineDate
+          ? new Date(lineDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+          : '—';
+        const saleAmt = share.sale_amount ?? share.saleAmount;
+        const totProfit = share.total_profit ?? share.totalProfit;
+        const ordNum = share.order_number ?? share.orderNumber ?? share.order?.orderNumber;
+        const prodName = share.product_name ?? share.productName ?? share.product?.name;
+        return `<tr>
+          <td>${escapeHtml(dateStr)}</td>
+          <td>${escapeHtml(ordNum || '—')}</td>
+          <td>${escapeHtml(prodName || 'N/A')}</td>
+          <td class="num">${escapeHtml(formatAmount(saleAmt))}</td>
+          <td class="num">${escapeHtml(formatAmount(totProfit))}</td>
+          <td class="num">${escapeHtml(String(sharePercentage))}%</td>
+          <td class="num">${escapeHtml(formatAmount(investorShare))}</td>
+        </tr>`;
+      })
+      .join('');
+    const title = investorName
+      ? `Profit shares — ${investorName}`
+      : 'Profit shares';
+    openPrintDocument(
+      title,
+      `<p style="margin:0 0 16px;font-size:14px;color:#374151">Each row shows the <strong>sale / order date</strong> when profit was credited (not payout date).</p>
+      <table>
+        <thead><tr>
+          <th>Date (sale)</th><th>Order #</th><th>Product</th>
+          <th class="num">Sale amount</th><th class="num">Total profit</th>
+          <th class="num">Share %</th><th class="num">Investor share</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`
+    );
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Profit Shares</h2>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-5 w-5" />
-            </button>
+          <div className="flex items-center justify-between mb-6 gap-2 flex-wrap">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Profit Shares{investorName ? ` — ${investorName}` : ''}
+            </h2>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={printProfitShares}
+                disabled={isLoading || isError || profitShares.length === 0}
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </Button>
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
 
           {isLoading ? (
             <LoadingSpinner />
+          ) : isError ? (
+            <div className="text-center py-12 px-4">
+              <p className="text-red-600 font-medium mb-2">Failed to load profit shares</p>
+              <p className="text-gray-600 text-sm">{profitSharesErrorMessage}</p>
+            </div>
           ) : profitShares.length === 0 ? (
             <div className="text-center py-12">
               <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600">No profit shares found</p>
+              <p className="text-gray-500 text-sm mt-2 max-w-md mx-auto">
+                Rows appear after a <strong>paid</strong> sale of a product linked to this investor, when profit is distributed.
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date (sale)</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order #</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Sale Amount</th>
@@ -838,46 +1099,50 @@ const ProfitSharesModal = ({ investorId, onClose }) => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {profitShares.map((share) => {
-                    // Handle both new schema (single investor) and legacy schema (investors array)
-                    const shareInvestorId = share.investor?._id || share.investor || null;
+                    // Handle Postgres snake_case, camelCase, and legacy schema (investors array)
+                    const shareInvestorId = share.investor_id ?? share.investor?._id ?? share.investor ?? null;
                     const isThisInvestor = shareInvestorId && (
                       shareInvestorId.toString() === investorId.toString()
                     );
                     
                     const investorShare = isThisInvestor
-                      ? (share.investorShare || 0)
+                      ? Number(share.investor_share ?? share.investorShare ?? 0)
                       : share.investors?.find(inv => {
                           const invId = inv.investor?._id || inv.investor;
                           return invId && invId.toString() === investorId.toString();
                         })?.shareAmount || 0;
                         
                     const sharePercentage = isThisInvestor
-                      ? (share.investorSharePercentage || 0)
+                      ? Number(share.investor_share_percentage ?? share.investorSharePercentage ?? 0)
                       : share.investors?.find(inv => {
                           const invId = inv.investor?._id || inv.investor;
                           return invId && invId.toString() === investorId.toString();
                         })?.sharePercentage || 0;
+
+                    const lineDate = share.order_date ?? share.orderDate ?? share.created_at ?? share.createdAt;
                     
                     return (
-                      <tr key={share._id}>
+                      <tr key={share.id || share._id}>
                         <td className="px-4 py-3 text-sm text-gray-900">
-                          {new Date(share.orderDate || share.createdAt).toLocaleDateString()}
+                          {lineDate
+                            ? new Date(lineDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+                            : '—'}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">{share.orderNumber || share.order?.orderNumber}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900">{share.order_number ?? share.orderNumber ?? share.order?.orderNumber}</td>
                         <td className="px-4 py-3 text-sm text-gray-900">
-                          {share.productName || share.product?.name || 'N/A'}
+                          {share.product_name ?? share.productName ?? share.product?.name ?? 'N/A'}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                          ${(share.saleAmount || 0).toFixed(2)}
+                          {formatAmount(share.sale_amount ?? share.saleAmount)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                          ${(share.totalProfit || 0).toFixed(2)}
+                          {formatAmount(share.total_profit ?? share.totalProfit)}
                         </td>
                         <td className="px-4 py-3 text-sm text-blue-600 text-right">
                           {sharePercentage}%
                         </td>
                         <td className="px-4 py-3 text-sm font-semibold text-green-600 text-right">
-                          ${(investorShare || 0).toFixed(2)}
+                          {formatAmount(investorShare)}
                         </td>
                       </tr>
                     );
@@ -892,9 +1157,160 @@ const ProfitSharesModal = ({ investorId, onClose }) => {
   );
 };
 
+function payoutMethodLabel(pm) {
+  if (pm === 'bank') return 'Bank';
+  return 'Cash';
+}
+
+// Payout history — each cash payout with date (from investor_payouts)
+const PayoutHistoryModal = ({ investorId, investorName, onClose }) => {
+  const { data, isLoading, isError, error } = useGetInvestorPayoutsQuery(investorId, {
+    skip: !investorId,
+  });
+
+  const payouts = useMemo(() => {
+    const raw = data?.data ?? data ?? [];
+    return Array.isArray(raw) ? raw : [];
+  }, [data]);
+
+  const errMsg =
+    isError && error?.data != null
+      ? String(
+          typeof error.data === 'object' && error.data?.message != null
+            ? error.data.message
+            : error.data
+        )
+      : isError
+        ? 'Could not load payout history.'
+        : null;
+
+  const printPayouts = () => {
+    if (payouts.length === 0) {
+      toast.error('Nothing to print');
+      return;
+    }
+    const rows = payouts
+      .map((p) => {
+        const when = formatPayoutDate(p.paidAt ?? p.paid_at);
+        const amt = p.amount;
+        const method = payoutMethodLabel(p.paymentMethod ?? p.payment_method);
+        const dr = p.debitAccountCode ?? p.debit_account_code ?? '—';
+        const cr = p.creditAccountCode ?? p.credit_account_code ?? (p.paymentMethod === 'bank' || p.payment_method === 'bank' ? '1001' : '1000');
+        return `<tr>
+          <td>${escapeHtml(when || '—')}</td>
+          <td class="num">${escapeHtml(formatAmount(amt))}</td>
+          <td>${escapeHtml(method)}</td>
+          <td>${escapeHtml(String(dr))}</td>
+          <td>${escapeHtml(String(cr))}</td>
+        </tr>`;
+      })
+      .join('');
+    const title = investorName ? `Payout history — ${investorName}` : 'Payout history';
+    openPrintDocument(
+      title,
+      `<p style="margin:0 0 16px;font-size:14px;color:#374151">Each row is one payout posted to the general ledger (Dr equity/liability, Cr cash or bank).</p>
+      <table>
+        <thead><tr><th>Date paid out</th><th class="num">Amount</th><th>Method</th><th>Debit acct</th><th>Credit acct</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6 gap-2 flex-wrap">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Payout history{investorName ? ` — ${investorName}` : ''}
+            </h2>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={printPayouts}
+                disabled={isLoading || isError || payouts.length === 0}
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </Button>
+              <button type="button" onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          {isLoading ? (
+            <LoadingSpinner />
+          ) : isError ? (
+            <div className="text-center py-12 px-4">
+              <p className="text-red-600 font-medium mb-2">Failed to load payout history</p>
+              <p className="text-gray-600 text-sm">{errMsg}</p>
+            </div>
+          ) : payouts.length === 0 ? (
+            <div className="text-center py-12">
+              <Receipt className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">No payout records yet</p>
+              <p className="text-gray-500 text-sm mt-2 max-w-md mx-auto">
+                New payouts are posted to the general ledger. Older rows may show “—” for accounts if they pre-date ledger integration.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date paid out</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Paid via</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ledger</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {payouts.map((p) => (
+                    <tr key={p.id}>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {formatPayoutDate(p.paidAt ?? p.paid_at) || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">
+                        {formatAmount(p.amount)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        {payoutMethodLabel(p.paymentMethod ?? p.payment_method)}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-600">
+                        Dr {p.debitAccountCode ?? p.debit_account_code ?? '—'} / Cr{' '}
+                        {p.creditAccountCode ??
+                          p.credit_account_code ??
+                          (p.paymentMethod === 'bank' || p.payment_method === 'bank'
+                            ? '1001'
+                            : '1000')}
+                        {p.ledgerTransactionId || p.ledger_transaction_id ? (
+                          <span className="block text-gray-400 mt-0.5">
+                            {p.ledgerTransactionId ?? p.ledger_transaction_id}
+                          </span>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Payout Modal Component
 const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
   const [amount, setAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [debitAccountCode, setDebitAccountCode] = useState('');
+  const currentBalance = invNum(investor, 'currentBalance', 'current_balance');
 
   const handleFormSubmit = () => {
     const payoutAmount = parseFloat(amount);
@@ -902,11 +1318,15 @@ const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
       toast.error('Payout amount must be greater than 0');
       return;
     }
-    if (payoutAmount > investor.currentBalance) {
-      toast.error(`Payout amount cannot exceed current balance of $${investor.currentBalance.toFixed(2)}`);
+    if (payoutAmount > currentBalance) {
+      toast.error(`Payout amount cannot exceed current balance of ${formatAmount(currentBalance)}`);
       return;
     }
-    onSave(payoutAmount);
+    const trimmedDebit = debitAccountCode.trim();
+    onSave(payoutAmount, {
+      paymentMethod,
+      debitAccountCode: trimmedDebit || undefined,
+    });
   };
 
   return (
@@ -945,7 +1365,7 @@ const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
               </label>
               <Input
                 type="text"
-                value={`$${investor.currentBalance?.toFixed(2) || '0.00'}`}
+                value={formatAmount(currentBalance)}
                 disabled
                 className="bg-gray-50"
               />
@@ -953,7 +1373,54 @@ const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Payout Amount ($) *
+                Pay from *
+              </label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="invPayMethod"
+                    checked={paymentMethod === 'cash'}
+                    onChange={() => setPaymentMethod('cash')}
+                    className="rounded-full border-gray-300"
+                  />
+                  Cash (credits account 1000)
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="invPayMethod"
+                    checked={paymentMethod === 'bank'}
+                    onChange={() => setPaymentMethod('bank')}
+                    className="rounded-full border-gray-300"
+                  />
+                  Bank (credits account 1001)
+                </label>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Posted to the general ledger: Dr equity/liability, Cr cash or bank (same transaction as investor balance update).
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Debit account (optional)
+              </label>
+              <Input
+                type="text"
+                value={debitAccountCode}
+                onChange={(e) => setDebitAccountCode(e.target.value)}
+                placeholder="3100 (default: Retained Earnings) or 2350 Due to Investors"
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Leave blank to use server default (usually 3100). Must be an equity or liability code from your chart of accounts.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Payout Amount *
               </label>
               <div className="relative">
                 <TrendingUp className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -961,7 +1428,7 @@ const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                   type="number"
                   step="0.01"
                   min="0.01"
-                  max={investor.currentBalance}
+                  max={currentBalance}
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   className="pl-10"
@@ -969,7 +1436,7 @@ const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                   required
                 />
               </div>
-              {parseFloat(amount) > investor.currentBalance && (
+              {parseFloat(amount) > currentBalance && (
                 <p className="text-red-500 text-sm mt-1">
                   Amount exceeds current balance
                 </p>
@@ -992,7 +1459,7 @@ const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                 variant="default"
                 size="default"
                 className="w-full sm:w-auto"
-                disabled={isSubmitting || parseFloat(amount) <= 0 || parseFloat(amount) > investor.currentBalance}
+                disabled={isSubmitting || parseFloat(amount) <= 0 || parseFloat(amount) > currentBalance}
               >
                 {isSubmitting ? 'Recording...' : 'Record Payout'}
               </Button>
@@ -1008,6 +1475,7 @@ const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
 const InvestmentModal = ({ investor, onSave, onCancel, isSubmitting }) => {
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
+  const totalInvestmentVal = invNum(investor, 'totalInvestment', 'total_investment');
 
   const handleFormSubmit = () => {
     const investmentAmount = parseFloat(amount);
@@ -1054,7 +1522,7 @@ const InvestmentModal = ({ investor, onSave, onCancel, isSubmitting }) => {
               </label>
               <Input
                 type="text"
-                value={`$${(investor.totalInvestment || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                value={formatAmount(totalInvestmentVal)}
                 disabled
                 className="bg-gray-50"
               />
@@ -1062,7 +1530,7 @@ const InvestmentModal = ({ investor, onSave, onCancel, isSubmitting }) => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Investment Amount ($) *
+                Investment Amount *
               </label>
               <div className="relative">
                 <TrendingUp className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />

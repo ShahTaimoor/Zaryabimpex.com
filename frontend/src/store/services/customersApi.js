@@ -178,7 +178,7 @@ export const customersApi = api.injectEndpoints({
     }),
     downloadTemplate: builder.query({
       query: () => ({
-        url: 'customers/export/template',
+        url: 'customers/template/excel',
         method: 'get',
         responseType: 'blob',
       }),
@@ -206,6 +206,7 @@ export const {
   useExportExcelMutation,
   useImportExcelMutation,
   useDownloadTemplateQuery,
+  useLazyDownloadTemplateQuery,
   useLazyDownloadExportFileQuery,
 } = customersApi;
 

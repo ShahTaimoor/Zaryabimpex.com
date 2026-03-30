@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGetInvestorsQuery } from '../store/services/investorsApi';
@@ -16,20 +16,65 @@ export const ProductInvestorsModal = ({ product, isOpen, onClose, onSave }) => {
     }
   );
   const investors = useMemo(() => {
-    const list = investorsData?.data?.investors || investorsData?.investors || investorsData || [];
+    // API returns { success, data: [...] } — same shape as Investors page (data may be the array directly).
+    const list =
+      investorsData?.data?.investors ||
+      investorsData?.data ||
+      investorsData?.investors ||
+      investorsData ||
+      [];
     return Array.isArray(list) ? list : [];
   }, [investorsData]);
 
-  useEffect(() => {
-    if (product && isOpen) {
-      const existingInvestors = (product.investors || []).map(inv => ({
-        investorId: inv.investor?._id || inv.investor,
-        investorName: inv.investor?.name || 'Unknown',
-        sharePercentage: inv.sharePercentage || 30
-      }));
-      setLinkedInvestors(existingInvestors);
+  /** Stable string id for selects and comparisons (avoids ObjectId / type mismatches). */
+  const investorRowId = (inv) => {
+    const raw = inv?._id ?? inv?.id;
+    if (raw == null) return '';
+    if (typeof raw === 'object') {
+      const inner = raw._id ?? raw.id;
+      return inner != null ? String(inner).trim() : String(raw).trim();
     }
-  }, [product, isOpen]);
+    return String(raw).trim();
+  };
+
+  const idsMatch = (a, b) => {
+    const sa = a == null ? '' : String(a).trim().toLowerCase();
+    const sb = b == null ? '' : String(b).trim().toLowerCase();
+    return sa !== '' && sa === sb;
+  };
+
+  const productIdKey = product?._id ?? product?.id;
+  const lastSyncedProductIdRef = useRef(null);
+
+  // Seed from the server when the modal opens or the product changes — not on every parent
+  // `product` reference change (background refetch was resetting linkedInvestors and clearing Adds).
+  useEffect(() => {
+    if (!isOpen) {
+      lastSyncedProductIdRef.current = null;
+      return;
+    }
+    if (!productIdKey || !product) return;
+    if (lastSyncedProductIdRef.current === productIdKey) return;
+    lastSyncedProductIdRef.current = productIdKey;
+
+    const existingInvestors = (product.investors || []).map((inv) => {
+      const raw = inv.investor;
+      const id =
+        typeof raw === 'object' && raw != null
+          ? raw._id || raw.id
+          : raw;
+      const name =
+        typeof raw === 'object' && raw != null
+          ? raw.name || raw.email || 'Unknown'
+          : 'Unknown';
+      return {
+        investorId: id != null ? String(id).trim() : '',
+        investorName: name,
+        sharePercentage: inv.sharePercentage ?? inv.share_percentage ?? 30
+      };
+    });
+    setLinkedInvestors(existingInvestors);
+  }, [isOpen, productIdKey, product]);
 
   const handleAddInvestor = () => {
     if (!selectedInvestor) {
@@ -37,10 +82,14 @@ export const ProductInvestorsModal = ({ product, isOpen, onClose, onSave }) => {
       return;
     }
 
-    const investor = investors.find(inv => inv._id === selectedInvestor);
-    if (!investor) return;
+    const investor = investors.find((inv) => idsMatch(investorRowId(inv), selectedInvestor));
+    if (!investor) {
+      toast.error('Could not match the selected investor. Refresh the page and try again.');
+      return;
+    }
 
-    if (linkedInvestors.some(inv => inv.investorId === selectedInvestor)) {
+    const chosenId = investorRowId(investor);
+    if (linkedInvestors.some((inv) => idsMatch(inv.investorId, chosenId))) {
       toast.error('This investor is already linked to this product');
       return;
     }
@@ -48,8 +97,8 @@ export const ProductInvestorsModal = ({ product, isOpen, onClose, onSave }) => {
     setLinkedInvestors([
       ...linkedInvestors,
       {
-        investorId: selectedInvestor,
-        investorName: investor.name,
+        investorId: chosenId,
+        investorName: investor.name || investor.email || 'Investor',
         sharePercentage: sharePercentage
       }
     ]);
@@ -76,12 +125,20 @@ export const ProductInvestorsModal = ({ product, isOpen, onClose, onSave }) => {
       return;
     }
 
-    const investorsToSave = linkedInvestors.map(inv => ({
-      investor: inv.investorId,
-      sharePercentage: inv.sharePercentage
-    }));
+    const investorsToSave = linkedInvestors.map((inv) => {
+      const sp = parseFloat(inv.sharePercentage);
+      return {
+        investor: inv.investorId,
+        sharePercentage: Number.isFinite(sp) ? sp : 30
+      };
+    });
 
-    onSave(product._id, investorsToSave);
+    const productId = product?._id ?? product?.id;
+    if (!productId) {
+      toast.error('Missing product id');
+      return;
+    }
+    onSave(productId, investorsToSave);
   };
 
   if (!isOpen) return null;
@@ -121,9 +178,15 @@ export const ProductInvestorsModal = ({ product, isOpen, onClose, onSave }) => {
                     {!investorsLoading && investors.length === 0 ? (
                       <option value="" disabled>No investors available. Create one from the Investors page.</option>
                     ) : (
-                      investors.map(inv => (
-                        <option key={inv._id} value={inv._id}>{inv.name}</option>
-                      ))
+                      investors.map((inv) => {
+                        const id = investorRowId(inv);
+                        if (!id) return null;
+                        return (
+                          <option key={id} value={id}>
+                            {inv.name || inv.email || id}
+                          </option>
+                        );
+                      }).filter(Boolean)
                     )}
                   </select>
                 </div>

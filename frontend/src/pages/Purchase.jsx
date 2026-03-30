@@ -39,6 +39,8 @@ import { SearchableDropdown } from '../components/SearchableDropdown';
 import { toast } from 'sonner';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import PrintModal from '../components/PrintModal';
+import BarcodeLabelPrinter from '../components/BarcodeLabelPrinter';
+import { buildReceiptLabelProductsFromLineItems } from '../utils/receiptLabelUtils';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
 import { Button } from '@/components/ui/button';
@@ -93,6 +95,13 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
                 {product.variantType}: {product.variantValue}
               </p>
             )}
+            {(() => {
+              const b = (product.barcode ?? '').toString().trim();
+              if (b) return <p className="text-xs text-gray-600 font-mono mt-0.5">Barcode: {b}</p>;
+              const s = (product.sku ?? '').toString().trim();
+              if (s) return <p className="text-xs text-gray-600 font-mono mt-0.5">SKU: {s}</p>;
+              return null;
+            })()}
           </div>
           <Button
             onClick={() => onRemove(item.product?._id)}
@@ -186,6 +195,13 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
                 {product.variantType}: {product.variantValue}
               </span>
             )}
+            {(() => {
+              const b = (product.barcode ?? '').toString().trim();
+              if (b) return <span className="text-xs text-gray-600 font-mono truncate">Barcode: {b}</span>;
+              const s = (product.sku ?? '').toString().trim();
+              if (s) return <span className="text-xs text-gray-600 font-mono truncate">SKU: {s}</span>;
+              return null;
+            })()}
           </div>
         </div>
 
@@ -621,6 +637,28 @@ export const Purchase = ({ tabId, editData }) => {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
 
+  const PURCHASE_INVOICE_LABEL_KEY = 'purchaseInvoiceOfferBarcodeLabels';
+  const [printBarcodeLabelsAfterInvoice, setPrintBarcodeLabelsAfterInvoice] = useState(() => {
+    try {
+      const v = localStorage.getItem(PURCHASE_INVOICE_LABEL_KEY);
+      if (v === null) return false;
+      return v === 'true';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(PURCHASE_INVOICE_LABEL_KEY, String(printBarcodeLabelsAfterInvoice));
+    } catch {
+      /* ignore */
+    }
+  }, [printBarcodeLabelsAfterInvoice]);
+
+  const pendingReceiptLabelPayloadRef = useRef(null);
+  const [showReceiptLabelPrinter, setShowReceiptLabelPrinter] = useState(false);
+  const [receiptLabelProducts, setReceiptLabelProducts] = useState([]);
+
   // Export modal state
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFormat, setExportFormat] = useState('pdf');
@@ -820,7 +858,7 @@ export const Purchase = ({ tabId, editData }) => {
           <div className="text-xs text-gray-500">{supplier.name}</div>
         )}
         <div className="text-sm text-gray-600">
-          Outstanding Balance: {(supplier.pendingBalance || 0).toFixed(2)}
+          Outstanding Balance: {(Number(supplier.pendingBalance ?? supplier.outstandingBalance ?? 0) || 0).toFixed(2)}
         </div>
       </div>
     );
@@ -850,6 +888,8 @@ export const Purchase = ({ tabId, editData }) => {
 
   // Handler functions for purchase invoice mutations
   const handleCreatePurchaseInvoice = async (invoiceData) => {
+    const labelPayload = pendingReceiptLabelPayloadRef.current;
+    pendingReceiptLabelPayloadRef.current = null;
     try {
       const result = await createPurchaseInvoice(invoiceData).unwrap();
 
@@ -859,6 +899,14 @@ export const Purchase = ({ tabId, editData }) => {
       const successCount = inventoryUpdates.filter(update => update.success).length;
 
       toast.success(`Purchase invoice created successfully! Invoice ${invoiceNumber} created and ${successCount} products added to inventory.`);
+
+      if (labelPayload?.items?.length) {
+        const prods = buildReceiptLabelProductsFromLineItems(labelPayload.items);
+        if (prods.length) {
+          setReceiptLabelProducts(prods);
+          setShowReceiptLabelPrinter(true);
+        }
+      }
 
       // Immediately refetch products to update stock and prices
       if (refetchProducts && typeof refetchProducts === 'function') {
@@ -1035,7 +1083,8 @@ export const Purchase = ({ tabId, editData }) => {
     : directDiscount.value;
 
   const total = subtotal + tax - directDiscountAmount;
-  const supplierOutstanding = selectedSupplier?.pendingBalance || 0;
+  const supplierOutstanding =
+    Number(selectedSupplier?.pendingBalance ?? selectedSupplier?.outstandingBalance ?? 0) || 0;
   const totalPayables = total + supplierOutstanding;
 
   const addToPurchase = (newItem) => {
@@ -1366,13 +1415,18 @@ export const Purchase = ({ tabId, editData }) => {
       terms: ''
     };
 
+    pendingReceiptLabelPayloadRef.current = null;
+    if (printBarcodeLabelsAfterInvoice && !editData?.isEditMode && purchaseItems.length > 0) {
+      pendingReceiptLabelPayloadRef.current = { items: [...purchaseItems] };
+    }
+
     // Use appropriate mutation based on edit mode
     if (editData?.isEditMode) {
       handleUpdatePurchaseInvoice(editData.invoiceId, invoiceData);
     } else {
       handleCreatePurchaseInvoice(invoiceData);
     }
-  }, [purchaseItems, selectedSupplier, invoiceNumber, autoGenerateInvoice, expectedDelivery, billDate, notes, taxExempt, subtotal, tax, total, directDiscountAmount, paymentMethod, amountPaid, editData, handleCreatePurchaseInvoice, handleUpdatePurchaseInvoice]);
+  }, [purchaseItems, selectedSupplier, invoiceNumber, autoGenerateInvoice, expectedDelivery, billDate, notes, taxExempt, subtotal, tax, total, directDiscountAmount, paymentMethod, amountPaid, editData, handleCreatePurchaseInvoice, handleUpdatePurchaseInvoice, printBarcodeLabelsAfterInvoice]);
 
 
   return (
@@ -1509,8 +1563,8 @@ export const Purchase = ({ tabId, editData }) => {
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:space-x-4 mt-2">
                       <div className="flex items-center space-x-1">
                         <span className="text-xs text-gray-500">Outstanding Balance:</span>
-                        <span className={`text-xs sm:text-sm font-medium ${(selectedSupplier.pendingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {Math.round(selectedSupplier.pendingBalance || 0)}
+                        <span className={`text-xs sm:text-sm font-medium ${supplierOutstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {Math.round(supplierOutstanding)}
                         </span>
                       </div>
                       {selectedSupplier.phone && (
@@ -1821,6 +1875,20 @@ export const Purchase = ({ tabId, editData }) => {
 
             </div>
 
+            {!editData?.isEditMode && purchaseItems.length > 0 && (
+              <div className="px-4 sm:px-6 pt-2 border-t border-gray-100">
+                <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={printBarcodeLabelsAfterInvoice}
+                    onChange={(e) => setPrintBarcodeLabelsAfterInvoice(e.target.checked)}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mt-0.5"
+                  />
+                  <span>After saving purchase invoice, open barcode label printer (default copies = quantity per line; uses product barcode or SKU)</span>
+                </label>
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="flex flex-col-reverse sm:flex-row gap-3 mt-4 sm:mt-6 px-4 sm:px-6 pb-4 sm:pb-6">
               {purchaseItems.length > 0 && (
@@ -1885,7 +1953,9 @@ export const Purchase = ({ tabId, editData }) => {
                             name: displayName,
                             isVariant: product.isVariant,
                             variantType: product.variantType,
-                            variantValue: product.variantValue
+                            variantValue: product.variantValue,
+                            ...(product.barcode ? { barcode: product.barcode } : {}),
+                            ...(product.sku ? { sku: product.sku } : {})
                           },
                           quantity: item.quantity,
                           unitPrice: item.costPerUnit
@@ -1947,6 +2017,18 @@ export const Purchase = ({ tabId, editData }) => {
           documentTitle="Purchase Invoice"
           partyLabel="Supplier"
         />
+
+        {showReceiptLabelPrinter && (
+          <BarcodeLabelPrinter
+            products={receiptLabelProducts}
+            quantityMode
+            modalTitle="Print labels — purchase invoice receipt"
+            onClose={() => {
+              setShowReceiptLabelPrinter(false);
+              setReceiptLabelProducts([]);
+            }}
+          />
+        )}
 
         {/* Export Format Selection Modal */}
         {showExportModal && (

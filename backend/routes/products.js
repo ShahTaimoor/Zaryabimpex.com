@@ -1,5 +1,5 @@
 const express = require('express');
-const { body, validationResult, query } = require('express-validator');
+const { body, param, validationResult, query } = require('express-validator');
 const multer = require('multer');
 const csv = require('csv-parser');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
@@ -488,6 +488,7 @@ router.post('/export/csv', [auth, requirePermission('view_products')], async (re
       brand: String(product.brand || ''),
       barcode: String(product.barcode || ''),
       sku: String(product.sku || ''),
+      hsCode: String(product.hsCode || ''),
       cost: String(product.pricing?.cost || 0),
       retail: String(product.pricing?.retail || 0),
       wholesale: String(product.pricing?.wholesale || 0),
@@ -522,6 +523,7 @@ router.post('/export/csv', [auth, requirePermission('view_products')], async (re
         { id: 'brand', title: 'Brand' },
         { id: 'barcode', title: 'Barcode' },
         { id: 'sku', title: 'SKU' },
+        { id: 'hsCode', title: 'HS Code' },
         { id: 'cost', title: 'Cost Price' },
         { id: 'retail', title: 'Retail Price' },
         { id: 'wholesale', title: 'Wholesale Price' },
@@ -601,6 +603,7 @@ router.post('/export/excel', [auth, requirePermission('view_products')], async (
       'Brand': safeString(product.brand),
       'Barcode': safeString(product.barcode),
       'SKU': safeString(product.sku),
+      'HS Code': safeString(product.hsCode),
       'Cost Price': safeNumber(product.pricing?.cost),
       'Retail Price': safeNumber(product.pricing?.retail),
       'Wholesale Price': safeNumber(product.pricing?.wholesale),
@@ -806,6 +809,7 @@ router.post('/import/csv', [
               brand: row['Brand'] || row['brand'] || row.brand || '',
               barcode: row['Barcode'] || row['barcode'] || row.barcode || '',
               sku: row['SKU'] || row['Sku'] || row['sku'] || row.sku || '',
+              hsCode: row['HS Code'] ?? row['HSCode'] ?? row['hs_code'] ?? row.hsCode,
               supplier: row['Supplier'] || row['supplier'] || row.supplier || '',
               cost: row['Cost Price'] || row['Cost'] || row['cost'] || row.cost,
               retail: row['Retail Price'] || row['Retail'] || row['retail'] || row.retail,
@@ -839,6 +843,14 @@ router.post('/import/csv', [
                 brand: mapped.brand?.toString().trim() || existingProduct.brand,
                 barcode: mapped.barcode?.toString().trim() || existingProduct.barcode,
                 sku: mapped.sku?.toString().trim() || existingProduct.sku,
+                ...(mapped.hsCode !== undefined
+                  ? {
+                      hsCode:
+                        mapped.hsCode === null || String(mapped.hsCode).trim() === ''
+                          ? null
+                          : String(mapped.hsCode).trim()
+                    }
+                  : {}),
                 pricing: {
                   cost: costCoerced === null ? (existingProduct.pricing?.cost || 0) : costCoerced,
                   retail: retailCoerced === null ? (existingProduct.pricing?.retail || 0) : retailCoerced,
@@ -868,6 +880,9 @@ router.post('/import/csv', [
               brand: mapped.brand?.toString().trim() || '',
               barcode: mapped.barcode?.toString().trim() || '',
               sku: mapped.sku?.toString().trim() || '',
+              ...(mapped.hsCode !== undefined && mapped.hsCode !== null && String(mapped.hsCode).trim() !== ''
+                ? { hsCode: String(mapped.hsCode).trim() }
+                : {}),
               supplier: mapped.supplier?.toString().trim() || '',
               pricing: {
                 cost,
@@ -950,6 +965,7 @@ router.post('/import/excel', [
           brand: row['Brand'] || row['brand'] || row.brand || '',
           barcode: row['Barcode'] || row['barcode'] || row.barcode || '',
           sku: row['SKU'] || row['Sku'] || row['sku'] || row.sku || '',
+          hsCode: row['HS Code'] ?? row['HSCode'] ?? row['hs_code'] ?? row.hsCode,
           supplier: row['Supplier'] || row['supplier'] || row.supplier || '',
           cost: row['Cost Price'] || row['Cost'] || row['cost'] || row.cost || 0,
           retail: row['Retail Price'] || row['Retail'] || row['retail'] || row.retail || 0,
@@ -983,6 +999,14 @@ router.post('/import/excel', [
             brand: productData.brand?.toString().trim() || existingProduct.brand,
             barcode: productData.barcode?.toString().trim() || existingProduct.barcode,
             sku: productData.sku?.toString().trim() || existingProduct.sku,
+            ...(productData.hsCode !== undefined
+              ? {
+                  hsCode:
+                    productData.hsCode === null || String(productData.hsCode).trim() === ''
+                      ? null
+                      : String(productData.hsCode).trim()
+                }
+              : {}),
             pricing: {
               cost: costCoerced === null ? (existingProduct.pricing?.cost || 0) : costCoerced,
               retail: retailCoerced === null ? (existingProduct.pricing?.retail || 0) : retailCoerced,
@@ -1012,6 +1036,11 @@ router.post('/import/excel', [
           brand: productData.brand?.toString().trim() || '',
           barcode: productData.barcode?.toString().trim() || '',
           sku: productData.sku?.toString().trim() || '',
+          ...(productData.hsCode !== undefined &&
+          productData.hsCode !== null &&
+          String(productData.hsCode).trim() !== ''
+            ? { hsCode: String(productData.hsCode).trim() }
+            : {}),
           supplier: productData.supplier?.toString().trim() || '',
           pricing: {
             cost,
@@ -1063,6 +1092,7 @@ router.get('/template/csv', [auth, requirePermission('create_products')], async 
         brand: 'Sample Brand',
         barcode: '1234567890123',
         sku: 'SKU-001',
+        hsCode: '8517.12',
         cost: '10.00',
         retail: '15.00',
         wholesale: '12.00',
@@ -1087,6 +1117,7 @@ router.get('/template/csv', [auth, requirePermission('create_products')], async 
         { id: 'brand', title: 'Brand' },
         { id: 'barcode', title: 'Barcode' },
         { id: 'sku', title: 'SKU' },
+        { id: 'hsCode', title: 'HS Code' },
         { id: 'cost', title: 'Cost Price' },
         { id: 'retail', title: 'Retail Price' },
         { id: 'wholesale', title: 'Wholesale Price' },
@@ -1120,9 +1151,11 @@ router.get('/template/csv', [auth, requirePermission('create_products')], async 
 router.post('/:id/investors', [
   auth,
   requirePermission('edit_products'),
+  param('id').isUUID(4).withMessage('Invalid product ID'),
   body('investors').isArray().withMessage('Investors must be an array'),
   body('investors.*.investor').isUUID(4).withMessage('Invalid investor ID'),
-  body('investors.*.sharePercentage').optional().isFloat({ min: 0, max: 100 })
+  body('investors.*.sharePercentage').optional().isFloat({ min: 0, max: 100 }),
+  handleValidationErrors
 ], async (req, res) => {
   try {
     const product = await productService.updateProductInvestors(req.params.id, req.body.investors);

@@ -668,7 +668,8 @@ router.post('/import/excel', [
     const workbook = XLSX.readFile(req.file.path);
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    const customers = XLSX.utils.sheet_to_json(worksheet);
+    // defval ensures empty cells become '' (so row fields are always strings).
+    const customers = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
     
     console.log('Importing customers, first row sample:', customers[0]);
     
@@ -677,52 +678,59 @@ router.post('/import/excel', [
     for (let i = 0; i < customers.length; i++) {
       try {
         const rawRow = customers[i];
-        // Normalize keys to handle spaces and case sensitivity
+        // Normalize keys to handle spaces/case sensitivity.
+        // Also create a lowercased lookup for robust mapping.
         const row = {};
-        Object.keys(rawRow).forEach(key => {
-          row[key.trim()] = rawRow[key];
+        const rowLower = {};
+        Object.keys(rawRow || {}).forEach((key) => {
+          const trimmedKey = String(key || '').trim();
+          const v = rawRow[key];
+          row[trimmedKey] = v;
+          rowLower[String(trimmedKey).toLowerCase()] = v;
         });
         
         // Map Excel columns to our format
         const customerData = {
-          name: row['Name'] || row['name'] || row['Customer Name'] || row['customer name'] || row.name,
-          email: row['Email'] || row['email'] || row.email || undefined,
-          phone: row['Phone'] || row['phone'] || row.phone || '',
-          businessName: row['Business Name'] || row['businessName'] || row['BusinessName'] || row.businessName,
-          businessType: row['Business Type'] || row['businessType'] || row.businessType || 'wholesale',
-          taxId: row['Tax ID'] || row['taxId'] || row.taxId || '',
-          customerTier: row['Customer Tier'] || row['customerTier'] || row.customerTier || 'bronze',
-          creditLimit: row['Credit Limit'] || row['creditLimit'] || row.creditLimit || 0,
-          openingBalance: row['Opening Balance'] || row['openingBalance'] || row.openingBalance || 0,
-          paymentTerms: row['Payment Terms'] || row['paymentTerms'] || row.paymentTerms || 'cash',
-          street: row['Street'] || row['street'] || row['Address'] || row.street || '',
-          city: row['City'] || row['city'] || row.city || '',
-          state: row['State'] || row['state'] || row.state || '',
-          zipCode: row['Zip Code'] || row['zipCode'] || row.zipCode || '',
-          country: row['Country'] || row['country'] || row.country || '',
-          status: row['Status'] || row['status'] || row.status || 'active',
-          notes: row['Notes'] || row['notes'] || row.notes || ''
+          name:
+            rowLower['name'] ||
+            rowLower['customer name'] ||
+            rowLower['customername'] ||
+            rowLower['customer_name'] ||
+            rowLower['customer'] ||
+            '',
+          email: rowLower['email'] || rowLower['e-mail'] || rowLower['email address'] || rowLower['emailaddress'] || undefined,
+          phone: rowLower['phone'] || '',
+          businessName:
+            rowLower['business name'] ||
+            rowLower['businessname'] ||
+            rowLower['business_name'] ||
+            rowLower['company name'] ||
+            '',
+          businessType: rowLower['business type'] || rowLower['businesstype'] || rowLower['business_type'] || 'wholesale',
+          taxId: rowLower['tax id'] || rowLower['taxid'] || rowLower['tax_id'] || '',
+          customerTier: rowLower['customer tier'] || rowLower['customertier'] || rowLower['customer_tier'] || 'bronze',
+          creditLimit: rowLower['credit limit'] || rowLower['creditlimit'] || rowLower['credit_limit'] || 0,
+          openingBalance: rowLower['opening balance'] || rowLower['openingbalance'] || rowLower['opening_balance'] || 0,
+          paymentTerms: rowLower['payment terms'] || rowLower['paymentterms'] || rowLower['payment_terms'] || 'cash',
+          street: rowLower['street'] || rowLower['address'] || rowLower['address line1'] || rowLower['addressline1'] || '',
+          city: rowLower['city'] || '',
+          state: rowLower['state'] || rowLower['province'] || '',
+          zipCode: rowLower['zip code'] || rowLower['zipcode'] || rowLower['zip_code'] || '',
+          country: rowLower['country'] || '',
+          status: rowLower['status'] || rowLower['active'] || 'active',
+          notes: rowLower['notes'] || ''
         };
-        
-        // Validate required fields
-        if (!customerData.name) {
-          results.errors.push({
-            row: i + 2,
-            error: 'Missing required field: Name is required'
-          });
-          continue;
-        }
-        
-        if (!customerData.businessName) {
-          results.errors.push({
-            row: i + 2,
-            error: 'Missing required field: Business Name is required'
-          });
-          continue;
-        }
+
+        // Import validation policy:
+        // - You asked to remove required import fields: `name`, `city`, `address`.
+        // - We still need something to identify the record; fall back in this order:
+        //   name -> businessName -> UNKNOWN
+        const resolvedName = String(customerData.name || customerData.businessName || 'UNKNOWN').trim();
+        // Do NOT force a default business name; if it's missing we want duplicate-check to be skipped.
+        const resolvedBusinessName = String(customerData.businessName || customerData.name || '').trim();
         
         // Check if customer already exists (by business name, case-insensitive)
-        const normalizedBusinessName = customerData.businessName.toString().trim();
+        const normalizedBusinessName = resolvedBusinessName;
         const existingCustomer = await customerRepository.findByBusinessName(normalizedBusinessName);
 
         // If customer exists, treat this row as an update (useful when fixing missing business type, tier, etc.)
@@ -757,26 +765,31 @@ router.post('/import/excel', [
 
         // Create customer using service when it does not already exist
         const customerPayload = {
-          name: customerData.name.toString().trim(),
-          email: customerData.email ? customerData.email.toString().trim() : undefined,
-          phone: customerData.phone.toString().trim() || '',
+          name: resolvedName,
+          email: customerData.email ? String(customerData.email).trim() : undefined,
+          phone: customerData.phone ? String(customerData.phone).trim() : '',
           businessName: normalizedBusinessName,
-          businessType: customerData.businessType.toString().toLowerCase(),
-          taxId: customerData.taxId.toString().trim() || '',
-          customerTier: customerData.customerTier.toString().toLowerCase(),
+          businessType: (customerData.businessType ? String(customerData.businessType) : 'wholesale').toLowerCase(),
+          taxId: customerData.taxId ? String(customerData.taxId).trim() : '',
+          customerTier: (customerData.customerTier ? String(customerData.customerTier) : 'bronze').toLowerCase(),
           creditLimit: parseFloat(customerData.creditLimit) || 0,
-          paymentTerms: customerData.paymentTerms.toString().toLowerCase(),
-          status: customerData.status.toString().toLowerCase(),
-          notes: customerData.notes.toString().trim() || '',
-          addresses: [{
-            street: customerData.street.toString().trim(),
-            city: customerData.city.toString().trim(),
-            state: customerData.state.toString().trim(),
-            zipCode: customerData.zipCode.toString().trim(),
-            country: customerData.country.toString().trim(),
-            isDefault: true,
-            type: 'both'
-          }]
+          paymentTerms: (customerData.paymentTerms ? String(customerData.paymentTerms) : 'cash').toLowerCase(),
+          status: (customerData.status ? String(customerData.status) : 'active').toLowerCase(),
+          notes: customerData.notes ? String(customerData.notes).trim() : '',
+          // Address is optional on import. Only create address record if any address field is present.
+          ...(customerData.street || customerData.city || customerData.state || customerData.zipCode || customerData.country
+            ? {
+                addresses: [{
+                  street: customerData.street ? String(customerData.street).trim() : '',
+                  city: customerData.city ? String(customerData.city).trim() : '',
+                  state: customerData.state ? String(customerData.state).trim() : '',
+                  zipCode: customerData.zipCode ? String(customerData.zipCode).trim() : '',
+                  country: customerData.country ? String(customerData.country).trim() : '',
+                  isDefault: true,
+                  type: 'both',
+                }],
+              }
+            : {})
         };
         
         await customerService.createCustomer(customerPayload, req.user?.id || req.user?._id, {

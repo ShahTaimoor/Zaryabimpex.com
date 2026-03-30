@@ -32,6 +32,7 @@ import { useGetVariantsQuery } from '../store/services/productVariantsApi';
 import {
   useGetPurchaseOrdersQuery,
   useGetPurchaseOrderQuery,
+  useLazyGetPurchaseOrderQuery,
   useCreatePurchaseOrderMutation,
   useUpdatePurchaseOrderMutation,
   useUpdatePurchaseOrderItemsConfirmationMutation,
@@ -62,6 +63,8 @@ import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 import PrintModal from '../components/PrintModal';
+import BarcodeLabelPrinter from '../components/BarcodeLabelPrinter';
+import { buildReceiptLabelProductsFromLineItems } from '../utils/receiptLabelUtils';
 
 // Helper to get product display name (handles object with name/displayName or UUID string)
 const getProductDisplayName = (product) => {
@@ -311,6 +314,27 @@ export const PurchaseOrders = ({ tabId }) => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printOrderData, setPrintOrderData] = useState(null);
+
+  const PO_LABEL_PRINT_KEY = 'purchaseOrderOfferBarcodeLabelsAfterConfirm';
+  const [printBarcodeLabelsAfterPoConfirm, setPrintBarcodeLabelsAfterPoConfirm] = useState(() => {
+    try {
+      const v = localStorage.getItem(PO_LABEL_PRINT_KEY);
+      if (v === null) return false;
+      return v === 'true';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(PO_LABEL_PRINT_KEY, String(printBarcodeLabelsAfterPoConfirm));
+    } catch {
+      /* ignore */
+    }
+  }, [printBarcodeLabelsAfterPoConfirm]);
+
+  const [showReceiptLabelPrinter, setShowReceiptLabelPrinter] = useState(false);
+  const [receiptLabelProducts, setReceiptLabelProducts] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [viewOrderFresh, setViewOrderFresh] = useState(null);
   const [selectedItemIndices, setSelectedItemIndices] = useState([]);
@@ -585,6 +609,7 @@ export const PurchaseOrders = ({ tabId }) => {
   const [updatePurchaseOrderMutation, { isLoading: updating }] = useUpdatePurchaseOrderMutation();
   const [deletePurchaseOrderMutation, { isLoading: deleting }] = useDeletePurchaseOrderMutation();
   const [confirmPurchaseOrderMutation, { isLoading: confirming }] = useConfirmPurchaseOrderMutation();
+  const [triggerGetPurchaseOrder] = useLazyGetPurchaseOrderQuery();
   const [updateItemsConfirmationMutation, { isLoading: updatingItemsConfirmation }] = useUpdatePurchaseOrderItemsConfirmationMutation();
   const [cancelPurchaseOrderMutation, { isLoading: cancelling }] = useCancelPurchaseOrderMutation();
   const [closePurchaseOrderMutation, { isLoading: closing }] = useClosePurchaseOrderMutation();
@@ -625,7 +650,7 @@ export const PurchaseOrders = ({ tabId }) => {
           <div className="text-xs text-gray-500">{supplier.name}</div>
         )}
         <div className="text-sm text-gray-600">
-          Outstanding Balance: {(supplier.pendingBalance || 0).toFixed(2)}
+          Outstanding Balance: {(Number(supplier.pendingBalance ?? supplier.outstandingBalance ?? 0) || 0).toFixed(2)}
         </div>
       </div>
     );
@@ -833,7 +858,8 @@ export const PurchaseOrders = ({ tabId }) => {
     const subtotal = formData.items.reduce((sum, item) => sum + item.totalCost, 0);
     const tax = formData.isTaxExempt ? 0 : subtotal * 0.08; // 8% tax if not exempt
     const total = subtotal + tax;
-    const supplierOutstanding = selectedSupplier?.pendingBalance || 0;
+    const supplierOutstanding =
+      Number(selectedSupplier?.pendingBalance ?? selectedSupplier?.outstandingBalance ?? 0) || 0;
     const totalPayables = total + supplierOutstanding;
 
     return { subtotal, tax, total, supplierOutstanding, totalPayables };
@@ -988,17 +1014,37 @@ export const PurchaseOrders = ({ tabId }) => {
     }
   };
 
-  const handleConfirm = (id) => {
-    if (window.confirm('Are you sure you want to confirm this pending purchase order? This will change its status to confirmed and make it ready for receiving.')) {
-      confirmPurchaseOrderMutation(id)
-        .unwrap()
-        .then(() => {
-          toast.success('Purchase order confirmed successfully');
-          refetch();
-        })
-        .catch((error) => {
-          toast.error(error?.data?.message || 'Failed to confirm purchase order');
-        });
+  const handleConfirm = async (order) => {
+    const id = order?.id || order?._id;
+    if (!id) return;
+    if (
+      !window.confirm(
+        'Are you sure you want to confirm this purchase order? Inventory will be updated and a purchase invoice may be created.'
+      )
+    ) {
+      return;
+    }
+    try {
+      await confirmPurchaseOrderMutation(id).unwrap();
+      toast.success('Purchase order confirmed successfully');
+      refetch();
+
+      if (!printBarcodeLabelsAfterPoConfirm) return;
+
+      try {
+        const res = await triggerGetPurchaseOrder(id).unwrap();
+        const po = res?.data?.purchaseOrder || res?.purchaseOrder;
+        const items = po?.items || [];
+        const prods = buildReceiptLabelProductsFromLineItems(items);
+        if (prods.length) {
+          setReceiptLabelProducts(prods);
+          setShowReceiptLabelPrinter(true);
+        }
+      } catch (labelErr) {
+        console.warn('Could not load PO for barcode labels:', labelErr);
+      }
+    } catch (error) {
+      toast.error(error?.data?.message || error?.message || 'Failed to confirm purchase order');
     }
   };
 
@@ -1122,13 +1168,21 @@ export const PurchaseOrders = ({ tabId }) => {
       const qty = Number(item.quantity) || 0;
       const unitCost = Number(item.costPerUnit ?? item.unitCost ?? item.cost ?? 0) || 0;
       const totalCost = Number(item.totalCost) || qty * unitCost;
+      const barcode =
+        typeof product === 'object' && product !== null
+          ? (product.barcode || product.barcodeNumber || '').toString().trim()
+          : '';
+      const sku =
+        typeof product === 'object' && product !== null
+          ? (product.sku || product.skuCode || '').toString().trim()
+          : '';
       return {
         quantity: qty,
         unitPrice: unitCost,
         unitCost,
         costPerUnit: unitCost,
         total: totalCost,
-        product: { name },
+        product: { name, ...(barcode ? { barcode } : {}), ...(sku ? { sku } : {}) },
         name
       };
     });
@@ -1336,8 +1390,8 @@ export const PurchaseOrders = ({ tabId }) => {
                   <div className="flex items-center space-x-4 mt-2">
                     <div className="flex items-center space-x-1">
                       <span className="text-xs text-gray-500">Outstanding Balance:</span>
-                      <span className={`text-sm font-medium ${(selectedSupplier.pendingBalance || selectedSupplier.outstandingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {(selectedSupplier.pendingBalance || selectedSupplier.outstandingBalance || 0).toFixed(2)}
+                      <span className={`text-sm font-medium ${(Number(selectedSupplier.pendingBalance ?? selectedSupplier.outstandingBalance ?? 0) || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {(Number(selectedSupplier.pendingBalance ?? selectedSupplier.outstandingBalance ?? 0) || 0).toFixed(2)}
                       </span>
                     </div>
                     {selectedSupplier.phone && (
@@ -1657,6 +1711,13 @@ export const PurchaseOrders = ({ tabId }) => {
                               {product.variantType}: {product.variantValue}
                             </span>
                           )}
+                          {(() => {
+                            const b = (product?.barcode ?? '').toString().trim();
+                            if (b) return <span className="text-xs text-gray-600 font-mono block mt-0.5">Barcode: {b}</span>;
+                            const s = (product?.sku ?? '').toString().trim();
+                            if (s) return <span className="text-xs text-gray-600 font-mono block mt-0.5">SKU: {s}</span>;
+                            return null;
+                          })()}
                           <div className="flex flex-wrap items-center gap-2 mt-1">
                             {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low</span>}
                           </div>
@@ -2737,6 +2798,19 @@ export const PurchaseOrders = ({ tabId }) => {
               </select>
             </div>
 
+            <div className="sm:col-span-2 lg:col-span-12 flex items-start gap-2 pt-2 border-t border-gray-100 mt-1">
+              <input
+                type="checkbox"
+                id="po-offer-barcode-labels"
+                checked={printBarcodeLabelsAfterPoConfirm}
+                onChange={(e) => setPrintBarcodeLabelsAfterPoConfirm(e.target.checked)}
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mt-1"
+              />
+              <label htmlFor="po-offer-barcode-labels" className="text-sm text-gray-700 cursor-pointer">
+                After confirming a draft PO (receipt), open barcode label printer — copies default to line quantity (barcode or SKU per product)
+              </label>
+            </div>
+
             {/* Payment Status Filter */}
             <div className="sm:col-span-2 lg:col-span-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2876,7 +2950,7 @@ export const PurchaseOrders = ({ tabId }) => {
                           {order.status === 'draft' && (
                             <>
                               <button
-                                onClick={() => handleConfirm(order.id || order._id)}
+                                onClick={() => handleConfirm(order)}
                                 className="text-green-600 hover:text-green-900"
                                 title="Confirm Order"
                               >
@@ -3063,6 +3137,17 @@ export const PurchaseOrders = ({ tabId }) => {
                               {item.product?.description && typeof item.product === 'object' && (
                                 <div className="text-gray-500 text-xs">{safeRender(item.product.description)}</div>
                               )}
+                              {(() => {
+                                const p =
+                                  typeof item.product === 'object' && item.product !== null
+                                    ? item.product
+                                    : item.productData || {};
+                                const b = (p.barcode ?? '').toString().trim();
+                                if (b) return <div className="text-gray-600 text-xs font-mono mt-0.5">Barcode: {b}</div>;
+                                const s = (p.sku ?? '').toString().trim();
+                                if (s) return <div className="text-gray-600 text-xs font-mono mt-0.5">SKU: {s}</div>;
+                                return null;
+                              })()}
                             </div>
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-900 text-right border-b border-gray-200">
@@ -3187,6 +3272,18 @@ export const PurchaseOrders = ({ tabId }) => {
         documentTitle="Purchase Order"
         partyLabel="Supplier"
       />
+
+      {showReceiptLabelPrinter && (
+        <BarcodeLabelPrinter
+          products={receiptLabelProducts}
+          quantityMode
+          modalTitle="Print labels — purchase order receipt"
+          onClose={() => {
+            setShowReceiptLabelPrinter(false);
+            setReceiptLabelProducts([]);
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { useResponsive } from './ResponsiveContainer';
 import { useAuth } from '../contexts/AuthContext';
+import { loadSidebarConfig } from './MultiTabLayout';
 
 const MobileNavigation = ({ user, onLogout }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -110,18 +111,12 @@ const MobileNavigation = ({ user, onLogout }) => {
   ];
 
   // Sidebar visibility state
-  const [sidebarConfig, setSidebarConfig] = useState(() => {
-    const saved = localStorage.getItem('sidebarConfig');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [sidebarConfig, setSidebarConfig] = useState(() => loadSidebarConfig());
 
   // Listener for sidebar configuration changes
   useEffect(() => {
     const handleSidebarChange = () => {
-      const saved = localStorage.getItem('sidebarConfig');
-      if (saved) {
-        setSidebarConfig(JSON.parse(saved));
-      }
+      setSidebarConfig(loadSidebarConfig());
     };
 
     window.addEventListener('sidebarConfigChanged', handleSidebarChange);

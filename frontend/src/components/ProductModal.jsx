@@ -7,6 +7,9 @@ import { toast } from 'sonner';
 
 export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, allProducts = [], onEditExisting, categories = [] }) => {
   const showImages = localStorage.getItem('showProductImagesUI') !== 'false';
+  const [showHsCodeField, setShowHsCodeField] = useState(
+    () => localStorage.getItem('showProductHsCodeColumn') !== 'false'
+  );
   const [imageUploading, setImageUploading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -24,7 +27,8 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       currentStock: '',
       reorderPoint: ''
     },
-    piecesPerBox: ''
+    piecesPerBox: '',
+    hsCode: ''
   });
   
   const [showSimilarProducts, setShowSimilarProducts] = useState(false);
@@ -218,6 +222,7 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       expiryDate: expiryDateValue,
       barcode: newData.barcode || '',
       sku: newData.sku || '',
+      hsCode: newData.hsCode ?? newData.hs_code ?? '',
       brand: newData.brand || '',
       imageUrl: newData.imageUrl || '',
       pricing: {
@@ -251,6 +256,20 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
           firstInput.focus();
         }
       }, 100);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const syncHsCodeVisibility = () => {
+      setShowHsCodeField(localStorage.getItem('showProductHsCodeColumn') !== 'false');
+    };
+    window.addEventListener('productHsCodeColumnConfigChanged', syncHsCodeVisibility);
+    return () => window.removeEventListener('productHsCodeColumnConfigChanged', syncHsCodeVisibility);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShowHsCodeField(localStorage.getItem('showProductHsCodeColumn') !== 'false');
     }
   }, [isOpen]);
 
@@ -619,7 +638,7 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 xl:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 xl:gap-4">
                   <div>
                     <label htmlFor="barcode" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                       Barcode
@@ -666,6 +685,26 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                     />
                     <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Stock Keeping Unit</p>
                   </div>
+                  {showHsCodeField && (
+                    <div className="sm:col-span-2 lg:col-span-1">
+                      <label htmlFor="hsCode" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                        HS code
+                      </label>
+                      <input
+                        id="hsCode"
+                        name="hsCode"
+                        type="text"
+                        autoComplete="off"
+                        value={formData.hsCode || ''}
+                        onChange={handleChange}
+                        placeholder="e.g. 8517.12"
+                        className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                      />
+                      <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">
+                        Harmonized System code (customs / import classification). Optional.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
               

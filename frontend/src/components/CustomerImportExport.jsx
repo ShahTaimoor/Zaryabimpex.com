@@ -11,7 +11,7 @@ import {
 import {
   useExportExcelMutation,
   useImportExcelMutation,
-  useDownloadTemplateQuery,
+  useLazyDownloadTemplateQuery,
   useLazyDownloadExportFileQuery,
 } from '../store/services/customersApi';
 import { LoadingButton } from './LoadingSpinner';
@@ -27,7 +27,7 @@ const CustomerImportExport = ({ onImportComplete, filters = {} }) => {
   
   const [exportExcel, { isLoading: isExporting }] = useExportExcelMutation();
   const [importExcel, { isLoading: isImporting }] = useImportExcelMutation();
-  const { refetch: downloadTemplate } = useDownloadTemplateQuery(undefined, { skip: true });
+  const [downloadTemplateTrigger] = useLazyDownloadTemplateQuery();
   const [downloadExportFile] = useLazyDownloadExportFileQuery();
 
   const handleExportExcel = async () => {
@@ -113,12 +113,17 @@ const CustomerImportExport = ({ onImportComplete, filters = {} }) => {
 
   const handleDownloadTemplate = async () => {
     try {
-      const response = await downloadTemplate();
+      const response = await downloadTemplateTrigger().unwrap();
       
       // Create blob and download
-      const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { 
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-      });
+      const blob =
+        response instanceof Blob
+          ? response
+          : response?.data instanceof Blob
+            ? response.data
+            : new Blob([response?.data ?? response], { 
+              type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+            });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);

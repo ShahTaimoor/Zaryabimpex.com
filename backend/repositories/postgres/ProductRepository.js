@@ -15,7 +15,8 @@ function rowToProduct(row) {
     updatedBy: row.updated_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    imageUrl: row.image_url
+    imageUrl: row.image_url,
+    hsCode: row.hs_code ?? null
   };
 }
 
@@ -49,7 +50,7 @@ class ProductRepository {
       params.push(filters.categoryId);
     }
     if (filters.search) {
-      sql += ` AND (name ILIKE $${paramCount} OR sku ILIKE $${paramCount} OR barcode ILIKE $${paramCount})`;
+      sql += ` AND (name ILIKE $${paramCount} OR sku ILIKE $${paramCount} OR barcode ILIKE $${paramCount} OR hs_code ILIKE $${paramCount})`;
       params.push(`%${filters.search}%`);
       paramCount++;
     }
@@ -79,14 +80,19 @@ class ProductRepository {
 
   async create(data) {
     const result = await query(
-      `INSERT INTO products (name, sku, barcode, description, category_id, cost_price, selling_price, wholesale_price,
+      `INSERT INTO products (name, sku, barcode, hs_code, description, category_id, cost_price, selling_price, wholesale_price,
        stock_quantity, min_stock_level, unit, pieces_per_box, is_active, created_by, image_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING *`,
       [
         data.name,
         data.sku || null,
         data.barcode || null,
+        (() => {
+          const h = data.hsCode ?? data.hs_code;
+          if (h === undefined || h === null || String(h).trim() === '') return null;
+          return String(h).trim();
+        })(),
         data.description || null,
         data.categoryId || data.category_id || null,
         data.costPrice ?? data.cost_price ?? 0,
@@ -125,12 +131,14 @@ class ProductRepository {
       isActive: 'is_active',
       updatedBy: 'updated_by',
       imageUrl: 'image_url',
-      image_url: 'image_url'
+      image_url: 'image_url',
+      hsCode: 'hs_code',
+      hs_code: 'hs_code'
     };
     for (const [k, col] of Object.entries(map)) {
       if (data[k] !== undefined) {
         let v = data[k];
-        if (col === 'category_id' && (v === '' || v == null)) {
+        if ((col === 'category_id' || col === 'hs_code') && (v === '' || v == null)) {
           v = null;
         }
         fields.push(`${col} = $${n++}`);
@@ -208,7 +216,7 @@ class ProductRepository {
       countParams.push(filters.categoryId);
     }
     if (filters.search) {
-      countSql += ` AND (name ILIKE $${cn} OR sku ILIKE $${cn} OR barcode ILIKE $${cn})`;
+      countSql += ` AND (name ILIKE $${cn} OR sku ILIKE $${cn} OR barcode ILIKE $${cn} OR hs_code ILIKE $${cn})`;
       countParams.push(`%${filters.search}%`);
     }
     if (filters.lowStock) {
@@ -297,6 +305,127 @@ class ProductRepository {
       [categoryId]
     );
     return parseInt(result.rows[0].count, 10);
+  }
+
+  /**
+   * @returns {Map<string, Array>} product id -> rows with investor_name, investor_email, share_percentage, added_at
+   */
+  async findInvestorsByProductIds(productIds) {
+    if (!productIds?.length) return new Map();
+    const result = await query(
+      `SELECT pi.product_id, pi.investor_id, pi.share_percentage, pi.added_at,
+              i.name AS investor_name, i.email AS investor_email
+       FROM product_investors pi
+       INNER JOIN investors i ON i.id = pi.investor_id AND i.deleted_at IS NULL
+       WHERE pi.product_id = ANY($1::uuid[])`,
+      [productIds]
+    );
+    const map = new Map();
+    for (const row of result.rows) {
+      const pid = String(row.product_id);
+      if (!map.has(pid)) map.set(pid, []);
+      map.get(pid).push(row);
+    }
+    return map;
+  }
+
+  mergeInvestorsIntoProductRow(p, rows) {
+    if (!p) return null;
+    if (!rows?.length) {
+      return { ...p, hasInvestors: false, investors: [] };
+    }
+    return {
+      ...p,
+      hasInvestors: true,
+      investors: rows.map((r) => ({
+        investor: {
+          _id: r.investor_id,
+          id: r.investor_id,
+          name: r.investor_name,
+          email: r.investor_email
+        },
+        sharePercentage: parseFloat(r.share_percentage) || 30,
+        addedAt: r.added_at
+      }))
+    };
+  }
+
+  async findByIdWithInvestors(id) {
+    const p = await this.findById(id);
+    if (!p) return null;
+    const map = await this.findInvestorsByProductIds([p.id]);
+    const rows = map.get(String(p.id)) || [];
+    return this.mergeInvestorsIntoProductRow(p, rows);
+  }
+
+  async replaceProductInvestors(productId, investorLinks) {
+    const { transaction } = require('../../config/postgres');
+    const resolveInvestorId = (raw) => {
+      if (raw == null) return null;
+      if (typeof raw === 'object') return raw._id || raw.id || null;
+      return raw;
+    };
+    return transaction(async (client) => {
+      await client.query('DELETE FROM product_investors WHERE product_id = $1', [productId]);
+      for (const link of investorLinks || []) {
+        const investorId = resolveInvestorId(link.investor);
+        if (!investorId) continue;
+        const share = Math.min(
+          100,
+          Math.max(0, parseFloat(link.sharePercentage ?? link.share_percentage ?? 30))
+        );
+        await client.query(
+          `INSERT INTO product_investors (product_id, investor_id, share_percentage, added_at)
+           VALUES ($1, $2, $3, CURRENT_TIMESTAMP)`,
+          [productId, investorId, share]
+        );
+      }
+    });
+  }
+
+  async deleteProductInvestor(productId, investorId) {
+    await query('DELETE FROM product_investors WHERE product_id = $1 AND investor_id = $2', [
+      productId,
+      investorId
+    ]);
+  }
+
+  async countProductsByInvestor(investorId) {
+    const result = await query('SELECT COUNT(*)::int AS c FROM product_investors WHERE investor_id = $1', [
+      investorId
+    ]);
+    return result.rows[0]?.c || 0;
+  }
+
+  async findProductsByInvestorId(investorId) {
+    const result = await query(
+      `SELECT p.*, pi.share_percentage AS link_share_percentage, pi.added_at AS link_added_at
+       FROM product_investors pi
+       INNER JOIN products p ON p.id = pi.product_id AND (p.is_deleted = FALSE OR p.is_deleted IS NULL)
+       WHERE pi.investor_id = $1
+       ORDER BY p.name ASC`,
+      [investorId]
+    );
+    return result.rows;
+  }
+
+  /**
+   * Permanently removes every product and dependent rows (movements, variants, balances, etc.).
+   * Used by seed scripts / dev reset; not a soft delete.
+   */
+  async deleteAllPermanently() {
+    const { transaction } = require('../../config/postgres');
+    return transaction(async (client) => {
+      await client.query('DELETE FROM product_transformations');
+      await client.query('DELETE FROM inventory_balance');
+      await client.query('TRUNCATE TABLE stock_movements');
+      await client.query('DELETE FROM batches');
+      await client.query('DELETE FROM profit_shares');
+      await client.query('DELETE FROM inventory');
+      await client.query('DELETE FROM product_investors');
+      const r = await client.query('DELETE FROM products');
+      return r.rowCount;
+    });
   }
 }
 

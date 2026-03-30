@@ -23,6 +23,33 @@ const parseLocalDate = (dateString) => {
   return new Date(year, month - 1, day, 0, 0, 0, 0);
 };
 
+/**
+ * Maps POS payment to DB payment_status. Investor profit only runs when status is `paid`.
+ *
+ * Do NOT trust `isPartialPayment` alone: the POS sets `amountPaid < total` whenever Amount Paid is 0,
+ * so full retail sales were stored as `partial` and skipped profit distribution entirely.
+ */
+function resolveInvoicePaymentStatus(payment, orderTotal) {
+  const amountPaid = parseFloat(payment?.amount ?? 0) || 0;
+  const total = Number(orderTotal) || 0;
+  const method = String(payment?.method || '').toLowerCase();
+  const eps = 0.01;
+
+  if (total <= eps) return 'paid';
+
+  // Settled by amount (any method)
+  if (amountPaid + eps >= total) return 'paid';
+
+  // Cash: Amount Paid is often left at 0; still a full sale
+  if (method === 'cash') return 'paid';
+
+  // Genuine partial: customer paid something but not the full invoice
+  if (amountPaid > 0 && amountPaid + eps < total) return 'partial';
+
+  // Unpaid: account / card / bank with amount 0 (until payment is recorded)
+  return 'pending';
+}
+
 // Helper to format customer address
 const formatCustomerAddress = (customerData) => {
   if (!customerData) return '';
@@ -546,7 +573,7 @@ class SalesService {
       total: orderTotal,
       amountPaid: amountPaidAtCreate,
       paymentMethod: payment.method,
-      paymentStatus: payment.isPartialPayment ? 'partial' : (String(payment.method || '').toLowerCase() === 'cash' ? 'paid' : 'pending'),
+      paymentStatus: resolveInvoicePaymentStatus(payment, orderTotal),
       status: 'confirmed',
       notes,
       createdBy: user.id || user._id?.toString(),
@@ -589,7 +616,11 @@ class SalesService {
     await StockMovementService.trackSalesOrder(orderPayload, user, {});
 
     if (orderStatus === 'confirmed' && paymentStatus === 'paid') {
-      await profitDistributionService.distributeProfitForOrder(orderPayload, user, {});
+      try {
+        await profitDistributionService.distributeProfitForOrder(orderPayload, user, {});
+      } catch (profitErr) {
+        console.error('Profit distribution failed (sale still saved):', profitErr?.message || profitErr);
+      }
     }
 
     if (customer && orderTotal > 0) {

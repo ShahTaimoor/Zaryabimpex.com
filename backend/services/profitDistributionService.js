@@ -2,6 +2,12 @@ const ProductRepository = require('../repositories/ProductRepository');
 const InvestorRepository = require('../repositories/InvestorRepository');
 const ProfitShareRepository = require('../repositories/ProfitShareRepository');
 
+function investorIdFromPopulatedLink(inv) {
+  if (inv == null) return null;
+  if (typeof inv === 'object') return inv._id || inv.id || null;
+  return inv;
+}
+
 class ProfitDistributionService {
   constructor() {
     this.INVESTOR_SHARE_PERCENTAGE = 30;
@@ -43,7 +49,7 @@ class ProfitDistributionService {
         if (!productId) continue;
         try {
           // Get product (investors from product_investors if available; Postgres may not have investors)
-          const product = await ProductRepository.findById(productId);
+          const product = await ProductRepository.findByIdWithInvestors(productId);
           
           if (!product) {
             distributionResults.errors.push({
@@ -58,11 +64,21 @@ class ProfitDistributionService {
             continue;
           }
 
-          // Calculate profit for this item
-          const unitPrice = item?.unitPrice ?? item?.unit_price ?? 0;
-          const qty = item?.quantity ?? 0;
-          const saleAmount = item?.total ?? (unitPrice * qty) ?? 0;
-          const costPerUnit = product?.pricing?.cost ?? product?.cost_price ?? product?.costPrice ?? item?.unitCost ?? item?.cost_price ?? 0;
+          // Line revenue (matches invoice line); COGS prefer line unitCost (same as createSale + ledger)
+          const qty = parseFloat(item?.quantity ?? 0) || 0;
+          const unitPrice = parseFloat(item?.unitPrice ?? item?.unit_price ?? 0) || 0;
+          const lineTotal = parseFloat(item?.total ?? 0);
+          const saleAmount = lineTotal > 0 ? lineTotal : unitPrice * qty;
+
+          const lineUnitCost = parseFloat(item?.unitCost ?? item?.unit_cost ?? 0);
+          const costFromProduct = parseFloat(
+            product?.cost_price ?? product?.costPrice ?? product?.pricing?.cost ?? 0
+          );
+          // Avoid using DB cost 0 when sale line has real inventory cost (?? keeps 0)
+          const costPerUnit =
+            Number.isFinite(lineUnitCost) && lineUnitCost > 0
+              ? lineUnitCost
+              : (Number.isFinite(costFromProduct) && costFromProduct > 0 ? costFromProduct : 0);
           const totalCost = costPerUnit * qty;
           const totalProfit = saleAmount - totalCost;
 
@@ -94,14 +110,19 @@ class ProfitDistributionService {
           const investorDetails = product.investors.map(invLink => {
             // Equal split of investor share among all investors on this product
             const shareAmount = investorShare / product.investors.length;
+            const inv = invLink.investor;
+            const invName =
+              typeof inv === 'object' && inv != null
+                ? inv.name || inv.email || 'Unknown'
+                : 'Unknown';
 
             return {
-              investor: invLink.investor._id || invLink.investor,
-              investorName: invLink.investor.name || 'Unknown',
+              investor: investorIdFromPopulatedLink(inv),
+              investorName: invName,
               shareAmount: Math.round(shareAmount * 100) / 100,
               sharePercentage: invLink.sharePercentage || investorSharePercentage // Store each investor's specific percentage for this product
             };
-          });
+          }).filter((d) => d.investor != null);
 
           // Create profit share record for each investor separately
           // This allows tracking individual investor shares with their specific percentages
@@ -135,7 +156,7 @@ class ProfitDistributionService {
                 calculatedBy: user?.id ?? user?._id ?? null
               });
             } catch (err) {
-              if (err.code === 11000) {
+              if (err.code === 11000 || err.code === '23505') {
                 console.log('Duplicate profit share record, skipping:', {
                   order: order.orderNumber,
                   investor: invDetail.investorName
@@ -145,7 +166,7 @@ class ProfitDistributionService {
               throw err;
             }
 
-            distributionResults.profitSharesCreated.push(profitShare._id);
+            distributionResults.profitSharesCreated.push(profitShare.id || profitShare._id);
 
             // Update investor earnings immediately after creating the record
             try {
@@ -167,10 +188,6 @@ class ProfitDistributionService {
                 error: `Failed to update investor: ${invError.message}`
               });
             }
-
-            // Mark profit share as distributed
-            profitShare.status = 'distributed';
-            await profitShare.save();
           }
 
           // Track totals for this item

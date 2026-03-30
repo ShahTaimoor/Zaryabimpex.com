@@ -872,6 +872,91 @@ class AccountingService {
   }
 
   /**
+   * Investor payout: reduce equity or liability (debit), reduce cash or bank (credit).
+   * Default debit is Retained Earnings (3100); optional 2350 Due to Investors if you accrue payables on the ledger.
+   * @param {object} ctx
+   * @param {string} ctx.investorPayoutId - UUID of investor_payouts row (ledger reference_id)
+   * @param {string} ctx.investorId
+   * @param {string} ctx.investorName
+   * @param {number} ctx.amount
+   * @param {'cash'|'bank'} ctx.paymentMethod
+   * @param {string} ctx.debitAccountCode - equity or liability account
+   * @param {Date} [ctx.transactionDate]
+   * @param {string} [ctx.createdBy]
+   * @param {object} client - pg client when part of outer transaction
+   */
+  static async recordInvestorPayout(ctx, client = null) {
+    const {
+      investorPayoutId,
+      investorId,
+      investorName,
+      amount,
+      paymentMethod,
+      debitAccountCode,
+      transactionDate,
+      createdBy
+    } = ctx;
+
+    if (!investorPayoutId) {
+      throw new Error('investorPayoutId is required for investor payout ledger posting');
+    }
+
+    const amt = parseFloat(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      throw new Error('Invalid amount for investor payout ledger posting');
+    }
+
+    const method = paymentMethod === 'bank' ? 'bank' : 'cash';
+    const creditAccount = method === 'bank' ? '1001' : '1000';
+    const debit = String(debitAccountCode || '3100').toUpperCase();
+
+    const qf = client ? client.query.bind(client) : query;
+    const typeRes = await qf(
+      `SELECT account_type FROM chart_of_accounts
+       WHERE UPPER(account_code) = UPPER($1) AND deleted_at IS NULL AND is_active = TRUE`,
+      [debit]
+    );
+    if (!typeRes.rows[0]) {
+      throw new Error(`Debit account ${debit} not found or inactive`);
+    }
+    const accType = typeRes.rows[0].account_type;
+    if (accType !== 'equity' && accType !== 'liability') {
+      throw new Error(
+        `Investor payout debit account must be equity or liability (e.g. 3100 Retained Earnings or 2350 Due to Investors), not ${accType}`
+      );
+    }
+
+    const label = investorName || investorId || 'Investor';
+    const entry1 = {
+      accountCode: debit,
+      debitAmount: amt,
+      creditAmount: 0,
+      description: `Investor payout — ${label}`
+    };
+    const entry2 = {
+      accountCode: creditAccount,
+      debitAmount: 0,
+      creditAmount: amt,
+      description: `Investor payout (${method}) — ${label}`
+    };
+
+    return await this.createTransaction(
+      entry1,
+      entry2,
+      {
+        referenceType: 'investor_payout',
+        referenceId: investorPayoutId,
+        referenceNumber: `INV-PAY-${String(investorPayoutId).replace(/-/g, '').slice(0, 12)}`,
+        transactionDate: transactionDate || new Date(),
+        currency: 'PKR',
+        createdBy,
+        status: 'completed'
+      },
+      client
+    );
+  }
+
+  /**
    * Record cash payment transaction (Unified: Customer or Supplier)
    * Business Meaning: Money paid OUT of the business
    * 
