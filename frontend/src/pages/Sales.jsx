@@ -897,7 +897,9 @@ export const Sales = ({ tabId, editData }) => {
       // Set payment method and amount paid if available
       if (editData.payment) {
         setPaymentMethod(editData.payment.method || 'cash');
-        setAmountPaid(editData.payment.amountPaid ?? editData.payment.amount ?? 0);
+        // Hard rule for edit screen: never auto-fill paid amount from existing invoice payload.
+        // User must enter payment manually to avoid incorrect forced totals.
+        setAmountPaid(0);
         if (editData.payment.method === 'bank') {
           setSelectedBankAccount(editData.payment.bankAccount || '');
         } else {
@@ -1979,11 +1981,7 @@ export const Sales = ({ tabId, editData }) => {
     const totalNum = Number(total) || 0;
     const isAccountInvoice = paymentMethod === 'account';
     const isSplit = paymentMethod === 'split';
-    let effectivePaid = Number(amountPaid) || 0;
-    // Retail: "Amount Paid" is often left at 0; treat as full payment so backend stores `paid` and investor profit runs.
-    if (!isAccountInvoice && !isSplit && effectivePaid <= 0 && totalNum > 0) {
-      effectivePaid = Math.round(totalNum * 100) / 100;
-    }
+    const effectivePaid = Number(amountPaid) || 0;
 
     const orderData = {
       orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
@@ -2010,6 +2008,8 @@ export const Sales = ({ tabId, editData }) => {
         method: paymentMethod,
         bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
         amount: effectivePaid,
+        amountPaid: effectivePaid,
+        amountReceived: effectivePaid,
         remainingBalance: totalNum - effectivePaid,
         isPartialPayment: totalNum - effectivePaid > 0.01,
         isAdvancePayment: isAdvancePayment,

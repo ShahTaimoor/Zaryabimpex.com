@@ -1,9 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { Users, Building2, Calendar, Download, FileText, ChevronDown, Printer } from 'lucide-react';
-import { useGetLedgerSummaryQuery, useGetCustomerDetailedTransactionsQuery, useGetSupplierDetailedTransactionsQuery } from '../store/services/accountLedgerApi';
+import { useGetLedgerSummaryQuery, useGetCustomerDetailedTransactionsQuery, useGetSupplierDetailedTransactionsQuery, useGetAllEntriesQuery } from '../store/services/accountLedgerApi';
 import { useGetCustomersQuery } from '../store/services/customersApi';
 import { useGetSuppliersQuery } from '../store/services/suppliersApi';
+import { useGetBanksQuery } from '../store/services/banksApi';
+import { useGetBankReceiptsQuery } from '../store/services/bankReceiptsApi';
+import { useGetBankPaymentsQuery } from '../store/services/bankPaymentsApi';
 import { useLazyGetOrderByIdQuery, usePostMissingSalesToLedgerMutation, useSyncSalesLedgerMutation } from '../store/services/salesApi';
 import { useSyncPurchaseInvoicesLedgerMutation } from '../store/services/purchaseInvoicesApi';
 import { useLazyGetCashReceiptByIdQuery } from '../store/services/cashReceiptsApi';
@@ -24,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 const AccountLedgerSummary = () => {
+  const ALL_BANKS_VALUE = '__all_banks__';
 
   // Function to get default date range (today for both)
   const getDefaultDateRange = () => {
@@ -49,6 +53,7 @@ const AccountLedgerSummary = () => {
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
   const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
+  const [selectedBankId, setSelectedBankId] = useState('');
   const supplierDropdownRef = useRef(null);
   const printRef = useRef(null);
 
@@ -135,6 +140,31 @@ const AccountLedgerSummary = () => {
     return suppliersData?.data?.suppliers || suppliersData?.suppliers || suppliersData?.data || suppliersData || [];
   }, [suppliersData]);
 
+  const { data: banksData } = useGetBanksQuery({ isActive: true }, { skip: false });
+  const banks = useMemo(() => {
+    return banksData?.data?.banks || banksData?.banks || [];
+  }, [banksData]);
+
+  const { data: bankReceiptsData } = useGetBankReceiptsQuery(
+    {
+      fromDate: filters.startDate,
+      toDate: filters.endDate,
+      page: 1,
+      limit: 1000
+    },
+    { refetchOnMountOrArgChange: true }
+  );
+
+  const { data: bankPaymentsData } = useGetBankPaymentsQuery(
+    {
+      fromDate: filters.startDate,
+      toDate: filters.endDate,
+      page: 1,
+      limit: 1000
+    },
+    { refetchOnMountOrArgChange: true }
+  );
+
   // Build query params with customerId and supplierId
   const queryParams = useMemo(() => {
     const params = { ...filters };
@@ -186,6 +216,12 @@ const AccountLedgerSummary = () => {
       skip: !selectedSupplierId,
       onError: (error) => handleApiError(error, 'Error fetching detailed supplier transactions')
     }
+  );
+
+  // Fetch all ledger entries so Bank filter works even without customer/supplier selection
+  const { data: allEntriesData } = useGetAllEntriesQuery(
+    { startDate: filters.startDate, endDate: filters.endDate },
+    { refetchOnMountOrArgChange: true }
   );
 
   // Derive single-customer view: backend may return data.openingBalance/data.customer/data.entries when customerId is set, or only data.customers.summary
@@ -294,6 +330,125 @@ const AccountLedgerSummary = () => {
     setFilters({ ...filters, [field]: value });
   };
 
+  const allEntries = allEntriesData?.data?.entries || [];
+  const currentEntries = selectedCustomerId
+    ? (customerDetail?.entries ?? detailedTransactionsData?.data?.entries ?? [])
+    : (selectedSupplierId ? (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries ?? []) : allEntries);
+
+  const resolveBankName = (entry) => {
+    if (entry?.bankName) return entry.bankName;
+    if (entry?.bank_name) return entry.bank_name;
+    if (entry?.bankAccount) return entry.bankAccount;
+    if (entry?.bank_account) return entry.bank_account;
+    if (entry?.bank?.bankName) return entry.bank.bankName;
+    if (entry?.bank?.name) return entry.bank.name;
+    if (entry?.bank?.accountName) return entry.bank.accountName;
+    const bankId = entry?.bank?._id || entry?.bank?.id || entry?.bankId || entry?.bank_id || entry?.bank;
+    if (bankId) {
+      const bank = (banks || []).find(b => String(b._id || b.id) === String(bankId));
+      if (bank?.bankName) return bank.bankName;
+    }
+    return '-';
+  };
+
+  const resolveBankId = (entry) => {
+    const directId = entry?.bank?._id || entry?.bank?.id || entry?.bankId || entry?.bank_id || entry?.bank || '';
+    if (directId) return directId;
+
+    const explicitName = String(entry?.bankName || entry?.bank?.bankName || '').trim().toLowerCase();
+    if (explicitName) {
+      const byName = (banks || []).find((b) => String(b?.bankName || '').trim().toLowerCase() === explicitName);
+      if (byName) return byName._id || byName.id || '';
+    }
+
+    const particularText = String(entry?.particular || '').toLowerCase();
+    if (particularText) {
+      const fromParticular = (banks || []).find((b) =>
+        particularText.includes(String(b?.bankName || '').trim().toLowerCase())
+      );
+      if (fromParticular) return fromParticular._id || fromParticular.id || '';
+    }
+
+    return '';
+  };
+
+  const selectedBank = useMemo(
+    () => (banks || []).find((b) => String(b._id || b.id) === String(selectedBankId)),
+    [banks, selectedBankId]
+  );
+
+  const bankLedgerRows = useMemo(() => {
+    const selectedBankName = String(selectedBank?.bankName || '').trim().toLowerCase();
+    const receipts =
+      bankReceiptsData?.data?.bankReceipts ||
+      bankReceiptsData?.bankReceipts ||
+      bankReceiptsData?.data?.receipts ||
+      bankReceiptsData?.receipts ||
+      [];
+
+    const payments =
+      bankPaymentsData?.data?.bankPayments ||
+      bankPaymentsData?.bankPayments ||
+      bankPaymentsData?.data?.payments ||
+      bankPaymentsData?.payments ||
+      [];
+
+    const receiptRows = receipts.map((entry) => ({
+      date: entry?.date,
+      voucherNo: entry?.voucherCode || entry?.voucherNo || '-',
+      bankId: entry?.bank?._id || entry?.bank?.id || entry?.bankId || entry?.bank || '',
+      bankName: entry?.bank?.bankName || entry?.bankName || resolveBankName(entry),
+      particular: entry?.particular || '-',
+      debitAmount: Number(entry?.amount) || Number(entry?.debitAmount) || 0,
+      creditAmount: 0,
+    }));
+
+    const paymentRows = payments.map((entry) => ({
+      date: entry?.date,
+      voucherNo: entry?.voucherCode || entry?.voucherNo || '-',
+      bankId: entry?.bank?._id || entry?.bank?.id || entry?.bankId || entry?.bank_id || entry?.bank || '',
+      bankName: entry?.bank?.bankName || entry?.bankName || entry?.bank_name || entry?.bankAccount || entry?.bank_account || resolveBankName(entry),
+      particular: entry?.particular || '-',
+      debitAmount: 0,
+      creditAmount: Number(entry?.amount) || Number(entry?.creditAmount) || 0,
+    }));
+
+    const fallbackRows = (allEntries || [])
+      .filter((entry) => String(entry?.source || '').toLowerCase().includes('bank'))
+      .map((entry) => ({
+        date: entry?.date,
+        voucherNo: entry?.voucherNo || '-',
+        bankId: resolveBankId(entry),
+        bankName: resolveBankName(entry),
+        particular: entry?.particular || '-',
+        debitAmount: Number(entry?.debitAmount) || 0,
+        creditAmount: Number(entry?.creditAmount) || 0,
+      }));
+
+    const mergedRows = [...receiptRows, ...paymentRows, ...fallbackRows];
+
+    return mergedRows
+      .filter(entry => {
+        if (!selectedBankId) return false; // "Select Bank" should not auto-show data
+        if (selectedBankId === ALL_BANKS_VALUE) return true;
+        if (String(entry.bankId) === String(selectedBankId)) return true;
+
+        const rowBankName = String(entry.bankName || '').trim().toLowerCase();
+        if (selectedBankName && rowBankName && rowBankName === selectedBankName) return true;
+
+        const rowParticular = String(entry.particular || '').toLowerCase();
+        if (selectedBankName && rowParticular.includes(selectedBankName)) return true;
+
+        return false;
+      })
+      .sort((a, b) => {
+        const aTime = new Date(a.date || 0).getTime();
+        const bTime = new Date(b.date || 0).getTime();
+        if (aTime !== bTime) return aTime - bTime;
+        return String(a.voucherNo).localeCompare(String(b.voucherNo));
+      });
+  }, [allEntries, banks, selectedBankId, selectedBank, bankReceiptsData, bankPaymentsData, ALL_BANKS_VALUE]);
+
   const handleClearFilters = () => {
     setFilters({
       startDate: defaultDates.startDate,
@@ -304,6 +459,7 @@ const AccountLedgerSummary = () => {
     setCustomerSearchQuery('');
     setSelectedSupplierId('');
     setSupplierSearchQuery('');
+    setSelectedBankId('');
   };
 
   const handleCustomerSelect = (customer) => {
@@ -447,7 +603,79 @@ const AccountLedgerSummary = () => {
   };
 
   const handleExport = () => {
-    toast.info('Export functionality coming soon');
+    try {
+      const escapeCsv = (value) => {
+        const stringValue = String(value ?? '');
+        if (stringValue.includes('"') || stringValue.includes(',') || stringValue.includes('\n')) {
+          return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+        return stringValue;
+      };
+
+      let headers = [];
+      let rows = [];
+      let fileLabel = 'bank-ledger';
+
+      if (selectedCustomerId && (customerDetail?.entries ?? detailedTransactionsData?.data?.entries)?.length) {
+        headers = ['Date', 'Voucher No', 'Particular', 'Debits', 'Credits', 'Balance'];
+        rows = (customerDetail?.entries ?? detailedTransactionsData?.data?.entries).map((entry) => ([
+          formatDate(entry?.date),
+          entry?.voucherNo || '-',
+          entry?.particular || '-',
+          Number(entry?.debitAmount) || 0,
+          Number(entry?.creditAmount) || 0,
+          Number(entry?.balance) || 0,
+        ]));
+        fileLabel = 'customer-ledger';
+      } else if (selectedSupplierId && (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries)?.length) {
+        headers = ['Date', 'Voucher No', 'Particular', 'Debits', 'Credits', 'Balance'];
+        rows = (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries).map((entry) => ([
+          formatDate(entry?.date),
+          entry?.voucherNo || '-',
+          entry?.particular || '-',
+          Number(entry?.debitAmount) || 0,
+          Number(entry?.creditAmount) || 0,
+          Number(entry?.balance) || 0,
+        ]));
+        fileLabel = 'supplier-ledger';
+      } else {
+        headers = ['Date', 'Voucher No', 'Bank Name', 'Particular', 'Debits', 'Credits'];
+        rows = bankLedgerRows.map((entry) => ([
+          formatDate(entry?.date),
+          entry?.voucherNo || '-',
+          entry?.bankName || '-',
+          entry?.particular || '-',
+          Number(entry?.debitAmount) || 0,
+          Number(entry?.creditAmount) || 0,
+        ]));
+        fileLabel = 'bank-ledger';
+      }
+
+      if (!rows.length) {
+        toast.error('No data to export');
+        return;
+      }
+
+      const csv = [
+        headers.map(escapeCsv).join(','),
+        ...rows.map((row) => row.map(escapeCsv).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${fileLabel}-${filters.startDate || 'from'}-to-${filters.endDate || 'to'}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Exported successfully');
+    } catch (err) {
+      handleApiError(err, 'Export account ledger summary');
+      toast.error('Failed to export');
+    }
   };
 
   const handleBackfillSales = async () => {
@@ -606,7 +834,7 @@ const AccountLedgerSummary = () => {
       {/* Filters - clean card */}
       <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
         <h2 className="text-sm font-medium text-gray-700 mb-4 uppercase tracking-wide">Filters</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Customer Dropdown */}
           <div className="relative" ref={customerDropdownRef}>
             <label className="block text-xs font-medium text-gray-600 mb-1.5">Customer</label>
@@ -708,6 +936,25 @@ const AccountLedgerSummary = () => {
                 className="flex-1 min-w-0 h-9 border-gray-300 text-sm relative [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
               />
             </div>
+          </div>
+
+          {/* Bank */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Bank</label>
+            <select
+              value={selectedBankId}
+              onChange={(e) => setSelectedBankId(e.target.value)}
+              autoComplete="off"
+              className="w-full h-9 border border-gray-300 rounded-md px-2 text-sm bg-white"
+            >
+              <option value="">Select Bank</option>
+              <option value={ALL_BANKS_VALUE}>All Banks</option>
+              {(banks || []).map((bank) => (
+                <option key={bank._id || bank.id} value={bank._id || bank.id}>
+                  {bank.bankName}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Clear */}
@@ -1026,6 +1273,46 @@ const AccountLedgerSummary = () => {
               </p>
             </div>
           )}
+
+          <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-300 bg-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">Bank Ledger</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border border-gray-300">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Voucher No</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Bank Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Particular</th>
+                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Debits</th>
+                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Credits</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white">
+                  {bankLedgerRows.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="px-4 py-8 text-center text-gray-500 border border-gray-300">
+                        {!selectedBankId ? 'Please select a bank to view ledger entries.' : 'No bank ledger entries found for this period.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    bankLedgerRows.map((entry, index) => (
+                      <tr key={`${entry.voucherNo}-${entry.date}-${index}`} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{formatDate(entry.date)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.voucherNo}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.bankName}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.particular}</td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.debitAmount)}</td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.creditAmount)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 

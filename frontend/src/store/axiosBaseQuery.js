@@ -21,8 +21,18 @@ const axiosBaseQuery = ({ baseUrl = '' } = {}) => {
   // Note: Auth token is handled via HTTP-only cookies (sent automatically with withCredentials: true)
   axiosInstance.interceptors.request.use(
     (config) => {
-      // Token is in HTTP-only cookie, sent automatically by browser
-      // No need to read from localStorage
+      // Token in cookie is preferred, but add Authorization fallback for Safari/iPad cookie restrictions
+      if (typeof window !== 'undefined') {
+        try {
+          const storedToken = localStorage.getItem('authToken');
+          if (storedToken) {
+            config.headers = config.headers ? { ...config.headers } : {};
+            config.headers.Authorization = `Bearer ${storedToken}`;
+          }
+        } catch {
+          // ignore storage errors
+        }
+      }
 
       // Don't generate idempotency keys automatically - let the backend handle duplicate detection
       // The frontend guard (isSubmittingRef/isSubmitting) prevents duplicate clicks
@@ -64,6 +74,13 @@ const axiosBaseQuery = ({ baseUrl = '' } = {}) => {
     (error) => {
       // Handle authentication errors
       if (error.response?.status === 401) {
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.removeItem('authToken');
+          } catch {
+            // ignore storage errors
+          }
+        }
         // Token is in HTTP-only cookie, backend should clear it on logout
         // Just redirect to login
         window.location.href = '/login';

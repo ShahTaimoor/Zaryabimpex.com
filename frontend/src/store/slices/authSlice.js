@@ -1,12 +1,21 @@
 import { createSlice } from '@reduxjs/toolkit';
 import { authApi } from '../services/authApi';
 
+const getStoredToken = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem('authToken');
+  } catch {
+    return null;
+  }
+};
+
 const initialState = {
   user: null,
-  token: null, // Token is stored in HTTP-only cookie, not in localStorage
+  token: getStoredToken(), // Prefer token fallback for Safari/iPad cross-site cookie issues
   status: 'idle',
   error: null,
-  isAuthenticated: false,
+  isAuthenticated: !!getStoredToken(),
 };
 
 const authSlice = createSlice({
@@ -27,7 +36,14 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.status = 'idle';
       state.error = null;
-      // Token is in HTTP-only cookie, backend handles logout/clearing
+      // Keep state and storage in sync
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem('authToken');
+        } catch {
+          // ignore storage errors
+        }
+      }
     },
   },
   extraReducers: (builder) => {
@@ -38,12 +54,18 @@ const authSlice = createSlice({
       })
       .addMatcher(authApi.endpoints.login.matchFulfilled, (state, { payload }) => {
         state.user = payload.user || payload;
-        // Token is stored in HTTP-only cookie by backend, not in localStorage
-        state.token = payload.token || 'cookie'; // Placeholder to indicate auth success
+        state.token = payload.token || state.token || 'cookie';
         state.isAuthenticated = true;
         state.status = 'succeeded';
         state.error = null;
-        // Backend should set HTTP-only cookie with token
+        // Store token fallback for browsers that block cross-site cookies (e.g. Safari/iPad)
+        if (payload?.token && typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('authToken', payload.token);
+          } catch {
+            // ignore storage errors
+          }
+        }
       })
       .addMatcher(authApi.endpoints.login.matchRejected, (state, action) => {
         state.status = 'failed';
@@ -52,7 +74,7 @@ const authSlice = createSlice({
       })
       .addMatcher(authApi.endpoints.currentUser.matchFulfilled, (state, { payload }) => {
         state.user = payload.user || payload;
-        state.token = 'cookie'; // Placeholder to indicate auth via HTTP-only cookie
+        state.token = state.token || 'cookie';
         state.isAuthenticated = true;
         state.status = 'succeeded';
         state.error = null;
@@ -60,6 +82,14 @@ const authSlice = createSlice({
       .addMatcher(authApi.endpoints.currentUser.matchRejected, (state) => {
         state.user = null;
         state.isAuthenticated = false;
+        state.token = null;
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.removeItem('authToken');
+          } catch {
+            // ignore storage errors
+          }
+        }
       });
   },
 });

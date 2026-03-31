@@ -72,6 +72,24 @@ const canDeleteInvoice = (order) => {
   return invoiceDate >= twoWeeksAgo && invoiceDate <= now;
 };
 
+const getDerivedPaymentStatus = (order) => {
+  const total = Number(order?.pricing?.total ?? order?.total ?? 0) || 0;
+  const paid = Number(
+    order?.payment?.amountPaid ??
+    order?.payment?.amountReceived ??
+    order?.amount_paid ??
+    order?.amountPaid ??
+    order?.amount_received ??
+    order?.amountReceived ??
+    0
+  ) || 0;
+
+  if (total <= 0) return order?.payment?.status ?? order?.payment_status ?? order?.paymentStatus ?? 'pending';
+  if (paid <= 0) return 'pending';
+  if (paid + 0.01 >= total) return 'paid';
+  return 'partial';
+};
+
 const OrderCard = ({ order, onView, onEdit, onPrint }) => {
   const getStatusColor = (status) => {
     switch (status) {
@@ -131,8 +149,8 @@ const OrderCard = ({ order, onView, onEdit, onPrint }) => {
             <span className={`badge ${getStatusColor(order?.status ?? '')}`}>
               {order?.status ?? '—'}
             </span>
-            <span className={`badge ${getPaymentStatusColor(order.payment?.status ?? order.payment_status ?? order.paymentStatus ?? 'pending')}`}>
-              {order.payment?.status ?? order.payment_status ?? order.paymentStatus ?? 'pending'}
+            <span className={`badge ${getPaymentStatusColor(getDerivedPaymentStatus(order))}`}>
+              {getDerivedPaymentStatus(order)}
             </span>
             <span className="badge badge-info">
               {order.orderType}
@@ -523,13 +541,13 @@ export const Orders = () => {
                           } `}>
                           {order?.status ?? '—'}
                         </span>
-                        <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${(order.payment?.status ?? order.payment_status ?? order.paymentStatus) === 'paid'
+                        <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${getDerivedPaymentStatus(order) === 'paid'
                             ? 'bg-green-100 text-green-800'
-                            : (order.payment?.status ?? order.payment_status ?? order.paymentStatus) === 'partial'
+                            : getDerivedPaymentStatus(order) === 'partial'
                               ? 'bg-yellow-100 text-yellow-800'
                               : 'bg-gray-100 text-gray-800'
                           } `}>
-                          {order.payment?.status ?? order.payment_status ?? order.paymentStatus ?? 'pending'}
+                          {getDerivedPaymentStatus(order)}
                         </span>
                       </div>
                     </div>
@@ -642,13 +660,13 @@ export const Orders = () => {
                         } `}>
                         {order?.status ?? '—'}
                       </span>
-                      <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${(order.payment?.status ?? order.payment_status ?? order.paymentStatus) === 'paid'
+                      <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${getDerivedPaymentStatus(order) === 'paid'
                           ? 'bg-green-100 text-green-800'
-                          : (order.payment?.status ?? order.payment_status ?? order.paymentStatus) === 'partial'
+                          : getDerivedPaymentStatus(order) === 'partial'
                             ? 'bg-yellow-100 text-yellow-800'
                             : 'bg-gray-100 text-gray-800'
                         } `}>
-                        {order.payment?.status ?? order.payment_status ?? order.paymentStatus ?? 'pending'}
+                        {getDerivedPaymentStatus(order)}
                       </span>
                     </div>
 
@@ -798,7 +816,7 @@ export const Orders = () => {
                 <div className="text-right">
                   <h3 className="font-semibold text-gray-900 border-b border-gray-300 pb-2 mb-4">Payment:</h3>
                   <div className="space-y-1">
-                    <p><span className="font-medium">Status:</span> {selectedOrder.payment?.status ?? selectedOrder.payment_status ?? selectedOrder.paymentStatus ?? '—'}</p>
+                    <p><span className="font-medium">Status:</span> {getDerivedPaymentStatus(selectedOrder)}</p>
                     <p><span className="font-medium">Method:</span> {selectedOrder.payment?.method ?? selectedOrder.payment_method ?? '—'}</p>
                     <p><span className="font-medium">Amount:</span> {Math.round(selectedOrder.pricing?.total ?? selectedOrder.total ?? 0)}</p>
                   </div>
