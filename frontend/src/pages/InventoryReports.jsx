@@ -143,8 +143,19 @@ const InventoryReports = () => {
 
   const handleExportReportClick = async (reportId, format) => {
     try {
-      const result = await exportReport({ id: reportId, format }).unwrap();
-      toast.success(result?.message || `Export initiated (${format.toUpperCase()})`);
+      const response = await exportReport({ id: reportId, format }).unwrap();
+      const blob = response instanceof Blob ? response : new Blob([response]);
+      const extension = format === 'excel' ? 'xlsx' : format;
+      const filename = `inventory_report_${reportId}.${extension}`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success(`${format.toUpperCase()} downloaded successfully`);
     } catch (error) {
       handleApiError(error, 'Export Report');
     }

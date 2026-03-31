@@ -28,6 +28,15 @@ const createEmptyEntry = () => ({
   particulars: ''
 });
 
+const getAccountDisplayLabel = (account) => {
+  if (!account) return '';
+  const isCustomerAccount = Array.isArray(account.tags) && account.tags.includes('customer');
+  if (isCustomerAccount) {
+    return account.accountName || '';
+  }
+  return `${account.accountCode} — ${account.accountName}`;
+};
+
 export const JournalVouchers = () => {
   const [filters, setFilters] = useState({
     fromDate: todayISO(),
@@ -99,7 +108,7 @@ export const JournalVouchers = () => {
         .sort((a, b) => a.accountCode.localeCompare(b.accountCode))
         .map((account) => ({
           value: account._id,
-          label: `${account.accountCode} — ${account.accountName}`
+          label: getAccountDisplayLabel(account)
         }))
     }));
   }, [accountMap]);
@@ -141,7 +150,7 @@ export const JournalVouchers = () => {
           .sort((a, b) => a.accountCode.localeCompare(b.accountCode))
           .map((account) => ({
             value: account._id,
-            label: `${account.accountCode} — ${account.accountName}`
+            label: getAccountDisplayLabel(account)
           }))
       }));
     } catch (error) {
@@ -392,7 +401,7 @@ export const JournalVouchers = () => {
                             entry.accountId && accountMap.has(entry.accountId)
                               ? {
                                 value: entry.accountId,
-                                label: `${accountMap.get(entry.accountId).accountCode} — ${accountMap.get(entry.accountId).accountName}`
+                                label: getAccountDisplayLabel(accountMap.get(entry.accountId))
                               }
                               : null
                           }

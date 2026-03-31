@@ -139,13 +139,33 @@ export const suppliersApi = api.injectEndpoints({
         data: params,
       }),
     }),
-    importExcel: builder.mutation({
-      query: (file) => {
+    importExcelSheets: builder.mutation({
+      query: (payload) => {
+        const file = payload instanceof File ? payload : payload?.file;
         const formData = new FormData();
-        formData.append('file', file);
+        if (file) formData.append('file', file);
+        return {
+          url: 'suppliers/import/excel/sheets',
+          method: 'post',
+          data: formData,
+        };
+      },
+    }),
+    importExcel: builder.mutation({
+      query: (payload) => {
+        const file = payload instanceof File ? payload : payload?.file;
+        const sheetName = payload instanceof File ? undefined : payload?.sheetName;
+        const sheetIndex = payload instanceof File ? undefined : payload?.sheetIndex;
+        const formData = new FormData();
+        if (sheetName) formData.append('sheetName', sheetName);
+        if (file) formData.append('file', file);
         return {
           url: 'suppliers/import/excel',
           method: 'post',
+          params: {
+            ...(sheetName ? { sheetName } : {}),
+            ...(Number.isInteger(sheetIndex) ? { sheetIndex } : {}),
+          },
           data: formData,
         };
       },
@@ -163,7 +183,7 @@ export const suppliersApi = api.injectEndpoints({
     }),
     downloadTemplate: builder.query({
       query: () => ({
-        url: 'suppliers/export/template',
+        url: 'suppliers/template/excel',
         method: 'get',
         responseType: 'blob',
       }),
@@ -195,8 +215,10 @@ export const {
   useSearchSuppliersQuery,
   useLazySearchSuppliersQuery,
   useExportExcelMutation,
+  useImportExcelSheetsMutation,
   useImportExcelMutation,
   useDownloadTemplateQuery,
+  useLazyDownloadTemplateQuery,
   useLazyDownloadExportFileQuery,
 } = suppliersApi;
 

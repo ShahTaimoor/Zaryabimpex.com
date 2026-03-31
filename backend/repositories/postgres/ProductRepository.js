@@ -418,7 +418,8 @@ class ProductRepository {
     return transaction(async (client) => {
       await client.query('DELETE FROM product_transformations');
       await client.query('DELETE FROM inventory_balance');
-      await client.query('TRUNCATE TABLE stock_movements');
+      // Use DELETE (not TRUNCATE) to avoid FK constraint failures on related movement tables.
+      await client.query('DELETE FROM stock_movements');
       await client.query('DELETE FROM batches');
       await client.query('DELETE FROM profit_shares');
       await client.query('DELETE FROM inventory');

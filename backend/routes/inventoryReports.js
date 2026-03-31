@@ -1,5 +1,7 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
+const PDFDocument = require('pdfkit');
+const XLSX = require('xlsx');
 const { auth, requirePermission } = require('../middleware/auth');
 const { handleValidationErrors, sanitizeRequest } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
@@ -27,11 +29,11 @@ router.post('/generate', [
     .isIn(['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'custom'])
     .withMessage('Invalid period type. Must be one of: daily, weekly, monthly, quarterly, yearly, custom'),
   body('startDate')
-    .optional()
+    .optional({ checkFalsy: true })
     .isISO8601()
     .withMessage('Start date must be a valid ISO 8601 date'),
   body('endDate')
-    .optional()
+    .optional({ checkFalsy: true })
     .isISO8601()
     .withMessage('End date must be a valid ISO 8601 date'),
   body('includeMetrics')
@@ -92,11 +94,11 @@ router.post('/', [
     .isIn(['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'custom'])
     .withMessage('Invalid period type. Must be one of: daily, weekly, monthly, quarterly, yearly, custom'),
   body('startDate')
-    .optional()
+    .optional({ checkFalsy: true })
     .isISO8601()
     .withMessage('Start date must be a valid ISO 8601 date'),
   body('endDate')
-    .optional()
+    .optional({ checkFalsy: true })
     .isISO8601()
     .withMessage('End date must be a valid ISO 8601 date'),
   body('includeMetrics')
@@ -191,10 +193,25 @@ router.get('/:reportId', [
 ], async (req, res) => {
   try {
     const report = await inventoryReportService.getInventoryReportById(req.params.reportId);
-    
-    // Mark as viewed
-    await report.markAsViewed();
-    
+
+    // Persist view tracking in config JSONB for Postgres implementation.
+    if (report?.id) {
+      const nowIso = new Date().toISOString();
+      const nextViewCount = Number(report.viewCount || 0) + 1;
+      const nextConfig = {
+        ...(report.config || {}),
+        lastViewedAt: nowIso,
+        viewCount: nextViewCount
+      };
+      await inventoryReportRepository.updateById(report.id, { config: nextConfig });
+      return res.json({
+        ...report,
+        config: nextConfig,
+        lastViewedAt: nowIso,
+        viewCount: nextViewCount
+      });
+    }
+
     res.json(report);
   } catch (error) {
     console.error('Error fetching inventory report:', error);
@@ -290,21 +307,186 @@ router.post('/:reportId/export', [
     const { reportId } = req.params;
     const { format } = req.body;
 
-    const report = await inventoryReportRepository.findByReportId(reportId);
+    const report = await inventoryReportService.getInventoryReportById(reportId);
     if (!report) {
       return res.status(404).json({ message: 'Inventory report not found' });
     }
 
-    // Add export record
-    await report.addExport(format, req.user._id);
-    await report.save();
+    const safeDate = new Date().toISOString().slice(0, 10);
+    const baseName = `inventory_report_${reportId}_${safeDate}`;
+    const stockRows = Array.isArray(report.stockLevels) ? report.stockLevels : [];
+    const productIds = Array.from(
+      new Set(
+        stockRows
+          .map((item) => {
+            const pid =
+              typeof item?.product === 'object'
+                ? (item.product?.id || item.product?._id)
+                : item?.product;
+            return pid != null ? String(pid) : null;
+          })
+          .filter(Boolean)
+      )
+    );
+    const productIdRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const validUuidIds = productIds.filter((id) => productIdRegex.test(id));
+    const nameById = new Map();
+    if (validUuidIds.length > 0) {
+      const nameRows = await pgQuery(
+        'SELECT id, name FROM products WHERE id = ANY($1::uuid[])',
+        [validUuidIds]
+      );
+      for (const row of nameRows.rows || []) {
+        nameById.set(String(row.id), row.name || '');
+      }
+    }
 
-    res.json({
-      message: `Export initiated for ${format.toUpperCase()} format`,
-      exportId: `${reportId}-${format}-${Date.now()}`,
-      format,
-      status: 'processing'
-    });
+    const resolveProductName = (item) => {
+      if (item?.product?.name) return item.product.name;
+      if (item?.productName) return item.productName;
+      if (item?.product_name) return item.product_name;
+      const pid =
+        typeof item?.product === 'object'
+          ? (item.product?.id || item.product?._id)
+          : item?.product;
+      if (pid != null) {
+        const mapped = nameById.get(String(pid));
+        if (mapped) return mapped;
+      }
+      return 'Unknown Product';
+    };
+
+    if (format === 'json') {
+      const filename = `${baseName}.json`;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(JSON.stringify(report, null, 2));
+    }
+
+    if (format === 'csv') {
+      const header = ['Product', 'Current Stock', 'Reorder Point', 'Stock Value', 'Retail Value', 'Status'];
+      const csvLines = [header.join(',')];
+      for (const item of stockRows) {
+        const name = resolveProductName(item);
+        const currentStock = Number(item?.metrics?.currentStock || 0);
+        const reorderPoint = Number(item?.metrics?.reorderPoint || 0);
+        const stockValue = Number(item?.metrics?.stockValue || 0);
+        const retailValue = Number(item?.metrics?.retailValue || 0);
+        const status = String(item?.metrics?.stockStatus || '');
+        const escapedName = `"${String(name).replace(/"/g, '""')}"`;
+        csvLines.push([escapedName, currentStock, reorderPoint, stockValue, retailValue, status].join(','));
+      }
+      const filename = `${baseName}.csv`;
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(csvLines.join('\n'));
+    }
+
+    if (format === 'excel') {
+      const data = stockRows.map((item) => ({
+        Product: resolveProductName(item),
+        'Current Stock': Number(item?.metrics?.currentStock || 0),
+        'Reorder Point': Number(item?.metrics?.reorderPoint || 0),
+        'Stock Value': Number(item?.metrics?.stockValue || 0),
+        'Retail Value': Number(item?.metrics?.retailValue || 0),
+        Status: String(item?.metrics?.stockStatus || '')
+      }));
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Stock Levels');
+      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+      const filename = `${baseName}.xlsx`;
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(buffer);
+    }
+
+    // PDF export (default path when format === 'pdf')
+    const filename = `${baseName}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    const doc = new PDFDocument({ margin: 36, size: 'A4' });
+    doc.pipe(res);
+    doc.fontSize(16).text('Inventory Report', { align: 'left' });
+    doc.moveDown(0.4);
+    doc.fontSize(10).text(`Report: ${report.reportName || report.reportId || 'N/A'}`);
+    doc.text(`Type: ${String(report.reportType || 'N/A').toUpperCase()}`);
+    doc.text(`Period: ${String(report.periodType || 'N/A').toUpperCase()}`);
+    doc.text(`Generated: ${report.generatedAt ? new Date(report.generatedAt).toLocaleString() : 'N/A'}`);
+    doc.moveDown(0.6);
+
+    const summary = report.summary || {};
+    doc.fontSize(12).text('Summary');
+    doc.fontSize(10).text(`Total Products: ${Number(summary.totalProducts || 0)}`);
+    doc.text(`Total Stock Value: ${Number(summary.totalStockValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    doc.text(`Total Retail Value: ${Number(summary.totalRetailValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    doc.moveDown(0.6);
+
+    doc.moveDown(0.2);
+    doc.fontSize(12).text('Top Stock Items (Table)');
+    doc.moveDown(0.3);
+
+    const tableRows = stockRows.slice(0, 50).map((item, idx) => ({
+      no: idx + 1,
+      product: String(resolveProductName(item) || 'Unknown Product'),
+      stock: Number(item?.metrics?.currentStock || 0).toLocaleString(),
+      value: Number(item?.metrics?.stockValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      status: String(item?.metrics?.stockStatus || '').replace(/_/g, ' ')
+    }));
+
+    const startX = doc.page.margins.left;
+    const pageUsableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const colWidths = {
+      no: 28,
+      product: 250,
+      stock: 80,
+      value: 120,
+      status: Math.max(70, pageUsableWidth - (28 + 250 + 80 + 120))
+    };
+    // Must be tall enough to avoid text drawing over the next row.
+    const rowHeight = 20;
+    const drawHeader = () => {
+      const y = doc.y;
+      doc.rect(startX, y, pageUsableWidth, rowHeight).fill('#f3f4f6');
+      doc.fillColor('#111827').fontSize(9).font('Helvetica-Bold');
+      let x = startX + 4;
+      doc.text('No', x, y + 5, { width: colWidths.no - 8, height: rowHeight - 6, align: 'left', lineBreak: false });
+      x += colWidths.no;
+      doc.text('Product', x + 4, y + 5, { width: colWidths.product - 8, height: rowHeight - 6, align: 'left', ellipsis: true, lineBreak: false });
+      x += colWidths.product;
+      doc.text('Stock', x + 4, y + 5, { width: colWidths.stock - 8, height: rowHeight - 6, align: 'right', lineBreak: false });
+      x += colWidths.stock;
+      doc.text('Value', x + 4, y + 5, { width: colWidths.value - 8, height: rowHeight - 6, align: 'right', lineBreak: false });
+      x += colWidths.value;
+      doc.text('Status', x + 4, y + 5, { width: colWidths.status - 8, height: rowHeight - 6, align: 'left', ellipsis: true, lineBreak: false });
+      doc.moveDown(0);
+      doc.y = y + rowHeight;
+      doc.fillColor('black').font('Helvetica');
+    };
+
+    drawHeader();
+    for (const row of tableRows) {
+      if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom) {
+        doc.addPage();
+        drawHeader();
+      }
+      const y = doc.y;
+      doc.rect(startX, y, pageUsableWidth, rowHeight).stroke('#e5e7eb');
+      let x = startX + 4;
+      doc.fontSize(9).text(String(row.no), x, y + 5, { width: colWidths.no - 8, height: rowHeight - 6, align: 'left', lineBreak: false });
+      x += colWidths.no;
+      doc.text(row.product, x + 4, y + 5, { width: colWidths.product - 8, height: rowHeight - 6, align: 'left', ellipsis: true, lineBreak: false });
+      x += colWidths.product;
+      doc.text(row.stock, x + 4, y + 5, { width: colWidths.stock - 8, height: rowHeight - 6, align: 'right', lineBreak: false });
+      x += colWidths.stock;
+      doc.text(row.value, x + 4, y + 5, { width: colWidths.value - 8, height: rowHeight - 6, align: 'right', lineBreak: false });
+      x += colWidths.value;
+      doc.text(row.status, x + 4, y + 5, { width: colWidths.status - 8, height: rowHeight - 6, align: 'left', ellipsis: true, lineBreak: false });
+      doc.y = y + rowHeight;
+    }
+
+    doc.end();
   } catch (error) {
     console.error('Error exporting inventory report:', error);
     res.status(500).json({ 

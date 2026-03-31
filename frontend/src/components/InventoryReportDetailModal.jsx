@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 
 import { useGetReportQuery } from '../store/services/inventoryApi';
+import { useGetProductsQuery } from '../store/services/productsApi';
 
 const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onToggleFavorite }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -35,11 +36,13 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
       skip: !report.reportId,
     }
   );
+  const { data: productsData } = useGetProductsQuery({ limit: 10000 });
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
+      style: 'decimal',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(amount);
   };
 
@@ -138,6 +141,61 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
   ];
 
   const reportData = detailedReport || report;
+  const products = productsData?.data?.products || productsData?.products || [];
+  const productNameById = new Map(
+    products.map((p) => [String(p.id || p._id), p.name || p.productName || p.title || ''])
+  );
+
+  const resolveProductName = (item) => {
+    if (item?.product?.name) return item.product.name;
+    if (item?.productName) return item.productName;
+    if (item?.product_name) return item.product_name;
+    const pid =
+      typeof item?.product === 'object'
+        ? (item.product?.id || item.product?._id)
+        : item?.product;
+    if (pid != null) {
+      const mapped = productNameById.get(String(pid));
+      if (mapped) return mapped;
+      return `Product ${String(pid).slice(0, 8)}`;
+    }
+    return 'Unknown Product';
+  };
+  const computedSummary = (() => {
+    const rows = Array.isArray(reportData?.stockLevels) ? reportData.stockLevels : [];
+    const base = rows.reduce(
+      (acc, row) => {
+        const currentStock = Number(row?.metrics?.currentStock || 0);
+        const reorderPoint = Number(row?.metrics?.reorderPoint || 0);
+        const stockValue = Number(row?.metrics?.stockValue || 0);
+        const retailValue = Number(row?.metrics?.retailValue || 0);
+        const status = String(row?.metrics?.stockStatus || '');
+        acc.totalProducts += 1;
+        acc.totalStockValue += stockValue;
+        acc.totalRetailValue += retailValue;
+        if (currentStock <= reorderPoint) acc.lowStockProducts += 1;
+        if (currentStock === 0 || status === 'out_of_stock') acc.outOfStockProducts += 1;
+        if (status === 'overstocked') acc.overstockedProducts += 1;
+        return acc;
+      },
+      {
+        totalProducts: 0,
+        totalStockValue: 0,
+        totalRetailValue: 0,
+        lowStockProducts: 0,
+        outOfStockProducts: 0,
+        overstockedProducts: 0
+      }
+    );
+
+    return {
+      ...base,
+      averageTurnoverRate: Number(reportData?.summary?.averageTurnoverRate || 0),
+      fastMovingProducts: Number(reportData?.summary?.fastMovingProducts || 0),
+      totalPotentialLoss: Number(reportData?.summary?.totalPotentialLoss || 0)
+    };
+  })();
+  const summary = reportData?.summary || computedSummary;
 
   const headerExtra = !isLoading ? (
     <div className="flex items-center space-x-2">
@@ -233,7 +291,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                     <div className="ml-3">
                       <p className="text-sm font-medium text-gray-500">Total Products</p>
                       <p className="text-2xl font-semibold text-gray-900">
-                        {formatNumber(reportData.summary?.totalProducts || 0)}
+                        {formatNumber(summary.totalProducts || 0)}
                       </p>
                     </div>
                   </div>
@@ -245,7 +303,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                     <div className="ml-3">
                       <p className="text-sm font-medium text-gray-500">Retail Valuation</p>
                       <p className="text-2xl font-semibold text-gray-900">
-                        {formatCurrency(reportData.summary?.totalRetailValue || 0)}
+                        {formatCurrency(summary.totalRetailValue || 0)}
                       </p>
                     </div>
                   </div>
@@ -257,7 +315,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                     <div className="ml-3">
                       <p className="text-sm font-medium text-gray-500">Total Stock Value</p>
                       <p className="text-2xl font-semibold text-gray-900">
-                        {formatCurrency(reportData.summary?.totalStockValue || 0)}
+                        {formatCurrency(summary.totalStockValue || 0)}
                       </p>
                     </div>
                   </div>
@@ -269,7 +327,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                     <div className="ml-3">
                       <p className="text-sm font-medium text-gray-500">Low Stock</p>
                       <p className="text-2xl font-semibold text-gray-900">
-                        {formatNumber(reportData.summary?.lowStockProducts || 0)}
+                        {formatNumber(summary.lowStockProducts || 0)}
                       </p>
                     </div>
                   </div>
@@ -281,7 +339,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                     <div className="ml-3">
                       <p className="text-sm font-medium text-gray-500">Out of Stock</p>
                       <p className="text-2xl font-semibold text-gray-900">
-                        {formatNumber(reportData.summary?.outOfStockProducts || 0)}
+                        {formatNumber(summary.outOfStockProducts || 0)}
                       </p>
                     </div>
                   </div>
@@ -295,7 +353,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                     <div>
                       <p className="text-sm font-medium text-gray-500">Average Turnover Rate</p>
                       <p className="text-lg font-semibold text-gray-900">
-                        {(reportData.summary?.averageTurnoverRate || 0).toFixed(1)}x/year
+                        {(summary.averageTurnoverRate || 0).toFixed(1)}x/year
                       </p>
                     </div>
                     <TrendingUp className="h-6 w-6 text-green-600" />
@@ -307,7 +365,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                     <div>
                       <p className="text-sm font-medium text-gray-500">Fast Moving Products</p>
                       <p className="text-lg font-semibold text-gray-900">
-                        {formatNumber(reportData.summary?.fastMovingProducts || 0)}
+                        {formatNumber(summary.fastMovingProducts || 0)}
                       </p>
                     </div>
                     <Activity className="h-6 w-6 text-blue-600" />
@@ -319,7 +377,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                     <div>
                       <p className="text-sm font-medium text-gray-500">Potential Loss</p>
                       <p className="text-lg font-semibold text-gray-900">
-                        {formatCurrency(reportData.summary?.totalPotentialLoss || 0)}
+                        {formatCurrency(summary.totalPotentialLoss || 0)}
                       </p>
                     </div>
                     <AlertTriangle className="h-6 w-6 text-red-600" />
@@ -408,7 +466,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                       {reportData.stockLevels.slice(0, 10).map((item, index) => (
                         <tr key={index}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {item.product?.name || 'Unknown Product'}
+                            {resolveProductName(item)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {formatNumber(item.metrics.currentStock)}
@@ -473,7 +531,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                       {reportData.turnoverRates.slice(0, 10).map((item, index) => (
                         <tr key={index}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {item.product?.name || 'Unknown Product'}
+                            {resolveProductName(item)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {item.metrics.turnoverRate.toFixed(1)}x/year
@@ -538,7 +596,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
                       {reportData.agingAnalysis.slice(0, 10).map((item, index) => (
                         <tr key={index}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {item.product?.name || 'Unknown Product'}
+                            {resolveProductName(item)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {formatNumber(item.metrics.daysInStock)} days

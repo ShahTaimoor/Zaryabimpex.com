@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import BaseModal from './BaseModal';
 import { 
   Download, 
@@ -11,6 +11,7 @@ import {
 import {
   useExportExcelMutation,
   useImportExcelMutation,
+  useImportExcelSheetsMutation,
   useLazyDownloadTemplateQuery,
   useLazyDownloadExportFileQuery,
 } from '../store/services/customersApi';
@@ -24,11 +25,26 @@ const CustomerImportExport = ({ onImportComplete, filters = {} }) => {
   const [importFile, setImportFile] = useState(null);
   const [importResults, setImportResults] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
+
+  const [sheetNames, setSheetNames] = useState([]);
+  const [selectedSheetName, setSelectedSheetName] = useState('');
+  const [isLoadingSheets, setIsLoadingSheets] = useState(false);
   
   const [exportExcel, { isLoading: isExporting }] = useExportExcelMutation();
   const [importExcel, { isLoading: isImporting }] = useImportExcelMutation();
+  const [importExcelSheets, { isLoading: isLoadingSheetsRTK }] = useImportExcelSheetsMutation();
   const [downloadTemplateTrigger] = useLazyDownloadTemplateQuery();
   const [downloadExportFile] = useLazyDownloadExportFileQuery();
+
+  const isLoading = isLoadingSheets || isLoadingSheetsRTK;
+
+  useEffect(() => {
+    if (!showImportModal) {
+      setSheetNames([]);
+      setSelectedSheetName('');
+      setIsLoadingSheets(false);
+    }
+  }, [showImportModal]);
 
   const handleExportExcel = async () => {
     try {
@@ -58,6 +74,25 @@ const CustomerImportExport = ({ onImportComplete, filters = {} }) => {
     }
   };
 
+  const handleFetchSheetNames = async (file) => {
+    if (!file) return;
+    setIsLoadingSheets(true);
+    try {
+      const resp = await importExcelSheets(file).unwrap();
+      const names = resp?.sheetNames || [];
+      setSheetNames(names);
+      setSelectedSheetName(names[0] || '');
+    } catch (error) {
+      // If reading sheets fails, we still allow import (backend will default to first sheet).
+      console.error('Failed to fetch sheet names:', error);
+      setSheetNames([]);
+      setSelectedSheetName('');
+      toast.error('Failed to read Excel sheets. Import will use the first sheet.');
+    } finally {
+      setIsLoadingSheets(false);
+    }
+  };
+
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -79,6 +114,10 @@ const CustomerImportExport = ({ onImportComplete, filters = {} }) => {
       }
       
       setImportFile(file);
+      setImportResults(null);
+      setSheetNames([]);
+      setSelectedSheetName('');
+      handleFetchSheetNames(file);
     }
   };
 
@@ -89,7 +128,12 @@ const CustomerImportExport = ({ onImportComplete, filters = {} }) => {
     }
 
     try {
-      const response = await importExcel(importFile).unwrap();
+      const selectedSheetIndex = sheetNames.findIndex((name) => name === selectedSheetName);
+      const response = await importExcel({
+        file: importFile,
+        sheetName: selectedSheetName,
+        sheetIndex: selectedSheetIndex >= 0 ? selectedSheetIndex : undefined,
+      }).unwrap();
       
       setImportResults(response?.results || response);
       
@@ -144,6 +188,9 @@ const CustomerImportExport = ({ onImportComplete, filters = {} }) => {
     setImportFile(null);
     setImportResults(null);
     setShowImportModal(false);
+    setSheetNames([]);
+    setSelectedSheetName('');
+    setIsLoadingSheets(false);
   };
 
   return (
@@ -251,6 +298,30 @@ const CustomerImportExport = ({ onImportComplete, filters = {} }) => {
                       </div>
                     </div>
                   )}
+
+                {sheetNames.length > 0 && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Sheet
+                    </label>
+                    <select
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white"
+                      value={selectedSheetName}
+                      onChange={(e) => setSelectedSheetName(e.target.value)}
+                      disabled={isLoading}
+                    >
+                      {sheetNames.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {isLoadingSheets && (
+                  <div className="mb-4 text-sm text-gray-600">Reading sheets...</div>
+                )}
 
                   <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
                     <Button

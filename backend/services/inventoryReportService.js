@@ -42,7 +42,9 @@ async function getProductsForReport(filters = {}) {
       return true;
     });
   }
-  return ProductRepository.findAll({ isActive: true }, { limit: 2000 });
+  // Do not force isActive=true for reports; migrated data can have NULL/false
+  // while still representing valid inventory items.
+  return ProductRepository.findAll({}, { limit: 2000 });
 }
 
 class InventoryReportService {
@@ -79,6 +81,14 @@ class InventoryReportService {
     }
 
     const status = dbRow.status || config?.status || config?.config?.status || 'generating';
+    const parsedStockLevels = Array.isArray(dbRow.stockLevels ?? dbRow.stock_levels)
+      ? (dbRow.stockLevels ?? dbRow.stock_levels)
+      : (config?.stockLevels || []);
+    const parsedTurnoverRates = dbRow.turnoverRates ?? dbRow.turnover_rates ?? config?.turnoverRates ?? [];
+    const parsedAgingAnalysis = dbRow.agingAnalysis ?? dbRow.aging_analysis ?? config?.agingAnalysis ?? [];
+    const parsedSummary = dbRow.summary ?? config?.summary ?? null;
+    const parsedComparison = dbRow.comparison ?? config?.comparison ?? null;
+    const parsedInsights = dbRow.insights ?? config?.insights ?? [];
 
     return {
       // Frontend uses `_id` as React key
@@ -95,15 +105,21 @@ class InventoryReportService {
 
       generatedAt: dbRow.generatedAt || dbRow.created_at || dbRow.createdAt,
       updatedAt: dbRow.updatedAt || dbRow.updated_at || dbRow.updatedAt || null,
+      lastViewedAt: dbRow.last_viewed_at || dbRow.lastViewedAt || config?.lastViewedAt || null,
 
       status,
       config,
-      // Some code uses `stockLevels`, some uses `stock_levels`
-      stockLevels: dbRow.stockLevels ?? dbRow.stock_levels ?? [],
+      // Some code uses camelCase, some snake_case.
+      stockLevels: parsedStockLevels,
+      turnoverRates: parsedTurnoverRates,
+      agingAnalysis: parsedAgingAnalysis,
+      summary: parsedSummary,
+      comparison: parsedComparison,
+      insights: parsedInsights,
 
       // Optional fields (might not exist in current schema)
       isFavorite: dbRow.is_favorite ?? dbRow.isFavorite ?? false,
-      viewCount: dbRow.view_count ?? dbRow.viewCount ?? 0
+      viewCount: dbRow.view_count ?? dbRow.viewCount ?? config?.viewCount ?? 0
     };
   }
 
@@ -171,6 +187,15 @@ class InventoryReportService {
         report.status = 'completed';
         report.config = report.config || {};
         report.config.status = 'completed';
+        // Persist computed report sections in config (JSONB) so GET by id returns full details.
+        report.config.summary = report.summary || report.config.summary;
+        report.config.turnoverRates = report.turnoverRates || report.config.turnoverRates || [];
+        report.config.agingAnalysis = report.agingAnalysis || report.config.agingAnalysis || [];
+        report.config.comparison = report.comparison || report.config.comparison || null;
+        report.config.insights = report.insights || report.config.insights || [];
+        report.config.categoryPerformance = report.categoryPerformance || report.config.categoryPerformance || [];
+        report.config.supplierPerformance = report.supplierPerformance || report.config.supplierPerformance || [];
+        report.config.stockLevels = report.stockLevels || report.stock_levels || report.config.stockLevels || [];
         await InventoryReportRepository.updateById(report.id, { config: report.config, stockLevels: report.stockLevels || report.stock_levels });
         return this.toApiInventoryReport({ ...created, ...report });
       } catch (error) {
@@ -249,7 +274,10 @@ class InventoryReportService {
         }
 
         return {
-          product: pid,
+          product: {
+            id: pid,
+            name: product.name || product.product_name || 'Unknown Product'
+          },
           metrics: {
             currentStock,
             minStock,
@@ -326,7 +354,10 @@ class InventoryReportService {
           (previousSalesDataForProduct.totalSold / periodYears) / averageStock : 0;
 
         turnoverRates.push({
-          product: pid,
+          product: {
+            id: pid,
+            name: product.name || product.product_name || 'Unknown Product'
+          },
           metrics: {
             turnoverRate,
             totalSold,
@@ -425,7 +456,10 @@ class InventoryReportService {
         }
 
         agingAnalysis.push({
-          product: pid,
+          product: {
+            id: pid,
+            name: product.name || product.product_name || 'Unknown Product'
+          },
           metrics: {
             daysInStock,
             lastSoldDate,
@@ -470,7 +504,7 @@ class InventoryReportService {
   async generateCategoryPerformanceData(report) {
     try {
       const { startDate, endDate } = report;
-      const products = await ProductRepository.findAll({ isActive: true }, { limit: 5000 });
+      const products = await ProductRepository.findAll({}, { limit: 5000 });
       const byCategory = {};
       for (const p of products) {
         const cid = (p.category_id || p.category || p._id)?.toString?.() ?? 'none';
@@ -613,7 +647,7 @@ class InventoryReportService {
       const { startDate, endDate, config } = report;
       const { thresholds } = config;
 
-      const products = await ProductRepository.findAll({ isActive: true }, { limit: 10000 });
+      const products = await ProductRepository.findAll({}, { limit: 10000 });
       const summaryData = products.reduce(
         (acc, p) => {
           acc.totalProducts++;
@@ -678,7 +712,7 @@ class InventoryReportService {
       const { startDate, endDate, periodType } = report;
       const previousPeriod = this.getPreviousPeriod(startDate, endDate, periodType);
 
-      const prevProducts = await ProductRepository.findAll({ isActive: true }, { limit: 10000 });
+      const prevProducts = await ProductRepository.findAll({}, { limit: 10000 });
       const previousData = prevProducts.reduce(
         (acc, p) => {
           acc.totalProducts++;

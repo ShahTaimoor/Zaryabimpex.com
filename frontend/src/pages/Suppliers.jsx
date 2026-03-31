@@ -224,7 +224,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
     const timeoutId = setTimeout(async () => {
       try {
         setEmailChecking(true);
-        const excludeId = supplier?._id || null;
+        const excludeId = supplier?.id || supplier?._id || null;
         const response = await triggerCheckEmail({ email: formData.email, excludeId }).unwrap();
         const exists = response?.data?.exists ?? response?.exists;
         setEmailExists(!!exists);
@@ -257,7 +257,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
     const timeoutId = setTimeout(async () => {
       try {
         setCompanyNameChecking(true);
-        const excludeId = supplier?._id || null;
+        const excludeId = supplier?.id || supplier?._id || null;
         const response = await triggerCheckCompany({ companyName: formData.companyName, excludeId }).unwrap();
         const exists = response?.data?.exists ?? response?.exists;
         setCompanyNameExists(!!exists);
@@ -290,7 +290,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
     const timeoutId = setTimeout(async () => {
       try {
         setContactNameChecking(true);
-        const excludeId = supplier?._id || null;
+        const excludeId = supplier?.id || supplier?._id || null;
         const response = await triggerCheckContact({ contactName: formData.contactPerson.name, excludeId }).unwrap();
         const exists = response?.data?.exists ?? response?.exists;
         setContactNameExists(!!exists);
@@ -726,6 +726,7 @@ export const Suppliers = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_LIMIT);
   const [filters, setFilters] = useState({});
+  const [refreshToken, setRefreshToken] = useState(0);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
@@ -735,6 +736,7 @@ export const Suppliers = () => {
     search: searchTerm || undefined,
     page: currentPage,
     limit: itemsPerPage,
+    _refresh: refreshToken || undefined,
     ...filters
   };
 
@@ -813,7 +815,7 @@ export const Suppliers = () => {
     };
 
     if (selectedSupplier) {
-      updateSupplier({ id: selectedSupplier._id, data: cleanData })
+      updateSupplier({ id: selectedSupplier.id || selectedSupplier._id, data: cleanData })
         .unwrap()
         .then(() => {
           toast.success('Supplier updated successfully!');
@@ -852,7 +854,7 @@ export const Suppliers = () => {
 
   const handleDelete = (supplier) => {
     if (window.confirm(`Are you sure you want to delete ${supplier.companyName}?`)) {
-      deleteSupplier(supplier._id)
+      deleteSupplier(supplier.id || supplier._id)
         .unwrap()
         .then(() => {
           toast.success('Supplier deleted successfully!');
@@ -919,7 +921,13 @@ export const Suppliers = () => {
 
       {/* Import/Export Section */}
       <SupplierImportExport
-        onImportComplete={() => queryClient.invalidateQueries('suppliers')}
+        onImportComplete={() => {
+          setSearchTerm('');
+          setFilters({});
+          setCurrentPage(1);
+          setRefreshToken(Date.now());
+          refetch();
+        }}
         filters={{ ...queryParams, limit: 999999, page: 1 }}
       />
 
@@ -978,7 +986,7 @@ export const Suppliers = () => {
             {/* Supplier Rows */}
             <div className="divide-y divide-gray-200">
               {filteredSuppliers.map((supplier) => (
-                <div key={supplier._id} className="px-4 py-4 lg:px-8 lg:py-6 hover:bg-gray-50">
+                <div key={supplier.id || supplier._id} className="px-4 py-4 lg:px-8 lg:py-6 hover:bg-gray-50">
                   {/* Mobile Card Layout */}
                   <div className="md:hidden space-y-4">
                     <div className="flex items-start justify-between">
@@ -996,7 +1004,7 @@ export const Suppliers = () => {
                       <div className="flex items-center space-x-2 ml-2">
                         <button
                           onClick={() => {
-                            setNotesEntity({ type: 'Supplier', id: supplier._id, name: supplier.companyName || supplier.company_name || supplier.businessName || 'Supplier' });
+                            setNotesEntity({ type: 'Supplier', id: supplier.id || supplier._id, name: supplier.companyName || supplier.company_name || supplier.businessName || 'Supplier' });
                             setShowNotes(true);
                           }}
                           className="text-green-600 hover:text-green-800 p-1"
@@ -1133,7 +1141,7 @@ export const Suppliers = () => {
                       <div className="flex items-center space-x-2 lg:space-x-3">
                         <button
                           onClick={() => {
-                            setNotesEntity({ type: 'Supplier', id: supplier._id, name: supplier.companyName || supplier.company_name || supplier.businessName || 'Supplier' });
+                            setNotesEntity({ type: 'Supplier', id: supplier.id || supplier._id, name: supplier.companyName || supplier.company_name || supplier.businessName || 'Supplier' });
                             setShowNotes(true);
                           }}
                           className="text-green-600 hover:text-green-800 p-1"

@@ -391,6 +391,7 @@ export const inventoryApi = api.injectEndpoints({
         url: `inventory-reports/${id}/export`,
         method: 'post',
         data: { format },
+        responseType: 'blob',
       }),
     }),
   }),

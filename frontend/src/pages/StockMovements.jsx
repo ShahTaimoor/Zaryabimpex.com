@@ -291,8 +291,9 @@ export const StockMovements = () => {
     const val = parseFloat(amount);
     if (isNaN(val)) return '—';
     return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
+      style: 'decimal',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(val);
   };
 
@@ -455,6 +456,7 @@ export const StockMovements = () => {
             </div>
 
             <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
               <DateFilter
                 startDate={filters.dateFrom}
                 endDate={filters.dateTo}

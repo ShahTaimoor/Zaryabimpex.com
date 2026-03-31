@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Calendar,
@@ -61,6 +61,18 @@ const CreateInventoryReportModal = ({ onClose, onSuccess }) => {
   
   const [createReport, { isLoading: isGenerating }] = useCreateReportMutation();
 
+  useEffect(() => {
+    // Set default date range for initial period to avoid backend validation errors.
+    if (!formData.startDate || !formData.endDate) {
+      const dateRange = getDateRange(formData.periodType || 'monthly');
+      setFormData(prev => ({
+        ...prev,
+        startDate: prev.startDate || dateRange.startDate,
+        endDate: prev.endDate || dateRange.endDate
+      }));
+    }
+  }, []);
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
@@ -93,7 +105,13 @@ const CreateInventoryReportModal = ({ onClose, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await createReport(formData).unwrap();
+      const payload = { ...formData };
+      if (!payload.startDate || !payload.endDate) {
+        const dateRange = getDateRange(payload.periodType || 'monthly');
+        payload.startDate = payload.startDate || dateRange.startDate;
+        payload.endDate = payload.endDate || dateRange.endDate;
+      }
+      await createReport(payload).unwrap();
       toast.success('Inventory report generated successfully');
       onSuccess();
     } catch (error) {

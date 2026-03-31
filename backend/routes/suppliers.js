@@ -137,6 +137,12 @@ router.get('/', [
   query('phoneStatus').optional().isIn(['verified', 'unverified', 'no-phone'])
 ], async (req, res) => {
   try {
+    // Prevent stale list after import (avoid 304/cached supplier listing)
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Surrogate-Control', 'no-store');
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       console.error('Suppliers validation errors:', errors.array());
@@ -413,15 +419,43 @@ router.post('/:id/restore', [
 // @route   POST /api/suppliers/import/excel
 // @desc    Import suppliers from Excel
 // @access  Private
+router.post('/import/excel/sheets', [
+  auth,
+  requirePermission('create_suppliers'),
+  upload.single('file')
+], async (req, res) => {
+  let filePath = null;
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    filePath = req.file.path;
+    const workbook = XLSX.readFile(filePath);
+    return res.json({ sheetNames: workbook?.SheetNames || [] });
+  } catch (error) {
+    console.error('Supplier import sheets error:', error);
+    return res.status(500).json({ message: 'Failed to read Excel sheets' });
+  } finally {
+    if (filePath) {
+      try { fs.unlinkSync(filePath); } catch (e) { /* ignore */ }
+    }
+  }
+});
+
+// @route   POST /api/suppliers/import/excel
+// @desc    Import suppliers from Excel
+// @access  Private
 router.post('/import/excel', [
   auth,
   requirePermission('create_suppliers'),
   upload.single('file')
 ], async (req, res) => {
+  let filePath = null;
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
+    filePath = req.file.path;
     
     const results = {
       total: 0,
@@ -431,31 +465,102 @@ router.post('/import/excel', [
     
     // Read Excel file
     const workbook = XLSX.readFile(req.file.path);
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const suppliers = XLSX.utils.sheet_to_json(worksheet);
+    const requestedSheetNameFromQuery =
+      typeof req.query?.sheetName === 'string' && req.query.sheetName.trim()
+        ? req.query.sheetName.trim()
+        : null;
+    const requestedSheetNameFromBody =
+      typeof req.body?.sheetName === 'string' && req.body.sheetName.trim()
+        ? req.body.sheetName.trim()
+        : null;
+    const requestedSheetName = requestedSheetNameFromQuery || requestedSheetNameFromBody;
+    const requestedSheetIndexFromQuery = Number.isFinite(Number(req.query?.sheetIndex))
+      ? Number(req.query.sheetIndex)
+      : null;
+    const requestedSheetIndexFromBody = Number.isFinite(Number(req.body?.sheetIndex))
+      ? Number(req.body.sheetIndex)
+      : null;
+    const requestedSheetIndex = requestedSheetIndexFromQuery ?? requestedSheetIndexFromBody;
+
+    const availableSheetNames = workbook?.SheetNames || [];
+    let effectiveSheetName = null;
+    if (
+      Number.isInteger(requestedSheetIndex) &&
+      requestedSheetIndex >= 0 &&
+      requestedSheetIndex < availableSheetNames.length
+    ) {
+      effectiveSheetName = availableSheetNames[requestedSheetIndex];
+    } else if (requestedSheetName) {
+      if (workbook?.Sheets?.[requestedSheetName]) {
+        effectiveSheetName = requestedSheetName;
+      } else {
+        const lowerRequested = requestedSheetName.toLowerCase();
+        const matched = availableSheetNames.find((name) => String(name).toLowerCase() === lowerRequested);
+        if (matched) {
+          effectiveSheetName = matched;
+        } else {
+          return res.status(400).json({
+            message: `Invalid sheet selected: ${requestedSheetName}`,
+            availableSheets: availableSheetNames
+          });
+        }
+      }
+    } else {
+      effectiveSheetName = availableSheetNames[0] || null;
+    }
+
+    if (!effectiveSheetName) {
+      return res.status(400).json({ message: 'No sheets found in Excel file' });
+    }
+
+    const worksheet = workbook.Sheets[effectiveSheetName];
+    const suppliers = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
     
     results.total = suppliers.length;
     
     for (let i = 0; i < suppliers.length; i++) {
       try {
-        const row = suppliers[i];
+        const rawRow = suppliers[i];
+        // Normalize keys to handle spaces/case sensitivity.
+        // Also create a lowercased lookup for robust mapping.
+        const row = {};
+        const rowLower = {};
+        Object.keys(rawRow || {}).forEach((key) => {
+          const trimmedKey = String(key || '').trim();
+          const v = rawRow[key];
+          row[trimmedKey] = v;
+          rowLower[String(trimmedKey).toLowerCase()] = v;
+        });
         
         // Map Excel columns to our format
         const supplierData = {
-          companyName: row['Company Name'] || row['companyName'] || row.companyName,
-          contactPersonName: row['Contact Person'] || row['contactPerson'] || row.contactPersonName,
-          contactPersonTitle: row['Contact Title'] || row['contactTitle'] || row.contactPersonTitle || '',
-          email: row['Email'] || row['email'] || row.email || undefined,
-          phone: row['Phone'] || row['phone'] || row.phone || '',
-          website: row['Website'] || row['website'] || row.website || '',
-          taxId: row['Tax ID'] || row['taxId'] || row.taxId || '',
-          businessType: row['Business Type'] || row['businessType'] || row.businessType || 'wholesaler',
-          paymentTerms: row['Payment Terms'] || row['paymentTerms'] || row.paymentTerms || 'net30',
-          reliability: row['Reliability'] || row['reliability'] || row.reliability || 'average',
-          rating: row['Rating'] || row['rating'] || row.rating || 3,
-          status: row['Status'] || row['status'] || row.status || 'active',
-          notes: row['Notes'] || row['notes'] || row.notes || ''
+          companyName:
+            rowLower['company name'] ||
+            rowLower['companyname'] ||
+            rowLower['company_name'] ||
+            rowLower['business name'] ||
+            '',
+          contactPersonName:
+            rowLower['contact person'] ||
+            rowLower['contactperson'] ||
+            rowLower['contact_person'] ||
+            rowLower['contact name'] ||
+            '',
+          contactPersonTitle:
+            rowLower['contact title'] ||
+            rowLower['contacttitle'] ||
+            rowLower['contact_title'] ||
+            '',
+          email: rowLower['email'] || rowLower['e-mail'] || rowLower['email address'] || undefined,
+          phone: rowLower['phone'] || rowLower['mobile'] || '',
+          website: rowLower['website'] || rowLower['web site'] || '',
+          taxId: rowLower['tax id'] || rowLower['taxid'] || rowLower['tax_id'] || '',
+          businessType: rowLower['business type'] || rowLower['businesstype'] || rowLower['business_type'] || 'wholesaler',
+          paymentTerms: rowLower['payment terms'] || rowLower['paymentterms'] || rowLower['payment_terms'] || 'net30',
+          reliability: rowLower['reliability'] || 'average',
+          rating: rowLower['rating'] || 3,
+          status: rowLower['status'] || 'active',
+          notes: rowLower['notes'] || ''
         };
         
         // Validate required fields
@@ -511,17 +616,22 @@ router.post('/import/excel', [
       }
     }
     
-    // Clean up uploaded file
-    fs.unlinkSync(req.file.path);
-    
     res.json({
       message: 'Import completed',
+      usedSheetName: effectiveSheetName,
+      requestedSheetName,
+      requestedSheetIndex: Number.isInteger(requestedSheetIndex) ? requestedSheetIndex : null,
+      availableSheets: availableSheetNames,
       results: results
     });
     
   } catch (error) {
     console.error('Excel import error:', error);
     res.status(500).json({ message: 'Import failed' });
+  } finally {
+    if (filePath) {
+      try { fs.unlinkSync(filePath); } catch (e) { /* ignore */ }
+    }
   }
 });
 
@@ -649,8 +759,10 @@ router.get('/template/excel', [auth, requirePermission('create_suppliers')], (re
         'Payment Terms': 'net30',
         'Reliability': 'good',
         'Rating': '4',
+        'Current Balance': '0',
         'Status': 'active',
-        'Notes': 'Sample supplier for template'
+        'Notes': 'Sample supplier for template',
+        'Created Date': '2026-01-01'
       }
     ];
     
@@ -671,8 +783,10 @@ router.get('/template/excel', [auth, requirePermission('create_suppliers')], (re
       { wch: 15 }, // Payment Terms
       { wch: 12 }, // Reliability
       { wch: 8 },  // Rating
+      { wch: 15 }, // Current Balance
       { wch: 10 }, // Status
-      { wch: 30 }  // Notes
+      { wch: 30 }, // Notes
+      { wch: 12 }  // Created Date
     ];
     worksheet['!cols'] = columnWidths;
     

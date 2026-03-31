@@ -70,6 +70,12 @@ const preventDuplicates = (options = {}) => {
       return next();
     }
 
+    // Export/download endpoints often return binary streams (res.send/res.download),
+    // which are not cached by this middleware. Do not block them as duplicates.
+    if (req.path.includes('/export') || req.path.includes('/download')) {
+      return next();
+    }
+
     const idempotencyKey = generateIdempotencyKey(req);
 
     if (!idempotencyKey) {
