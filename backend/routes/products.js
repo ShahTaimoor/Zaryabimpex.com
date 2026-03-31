@@ -26,6 +26,20 @@ const coerceImportPrice = (value) => {
   return Math.max(0, n);
 };
 
+// Import text normalizer:
+// keep symbols like "&" as-is, and decode common HTML entities
+const normalizeImportText = (value) => {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#x27;|&#39;/gi, "'")
+    .replace(/&#x2f;|&#47;/gi, '/')
+    .trim();
+};
+
 // Helper function to transform product names to uppercase
 const transformProductToUppercase = (product) => {
   if (!product) return product;
@@ -803,7 +817,7 @@ router.post('/import/csv', [
             // This supports both exported/template headers like "Product Name"
             // and simpler keys like "name", "cost", etc.
             const mapped = {
-              name: row['Product Name'] || row['Name'] || row['Product'] || row.name,
+              name: normalizeImportText(row['Product Name'] || row['Name'] || row['Product'] || row.name),
               description: row['Description'] || row['description'] || row.description || '',
               category: row['Category'] || row['category'] || row.category || 'Uncategorized',
               brand: row['Brand'] || row['brand'] || row.brand || '',
@@ -829,7 +843,7 @@ router.post('/import/csv', [
             }
             
             // Check if product already exists
-            const existingProduct = await productService.getProductByName(mapped.name.toString().trim());
+            const existingProduct = await productService.getProductByName(normalizeImportText(mapped.name));
             
             const costCoerced = coerceImportPrice(mapped.cost);
             const retailCoerced = coerceImportPrice(mapped.retail);
@@ -874,7 +888,7 @@ router.post('/import/csv', [
 
             // Create product using service
             const productData = {
-              name: mapped.name.toString().trim(),
+              name: normalizeImportText(mapped.name),
               description: mapped.description?.toString().trim() || '',
               category: mapped.category?.toString().trim() || 'Uncategorized',
               brand: mapped.brand?.toString().trim() || '',
@@ -959,7 +973,7 @@ router.post('/import/excel', [
         
         // Map Excel columns to our format (handle different column names)
         const productData = {
-          name: row['Product Name'] || row['Name'] || row['Product'] || row.name,
+          name: normalizeImportText(row['Product Name'] || row['Name'] || row['Product'] || row.name),
           description: row['Description'] || row['description'] || row.description || '',
           category: row['Category'] || row['category'] || row.category || 'Uncategorized',
           brand: row['Brand'] || row['brand'] || row.brand || '',
@@ -985,7 +999,7 @@ router.post('/import/excel', [
         }
         
         // Check if product already exists
-        const existingProduct = await productService.getProductByName(productData.name.toString().trim());
+        const existingProduct = await productService.getProductByName(normalizeImportText(productData.name));
         
         const costCoerced = coerceImportPrice(productData.cost);
         const retailCoerced = coerceImportPrice(productData.retail);
@@ -1030,7 +1044,7 @@ router.post('/import/excel', [
 
         // Create product using service
         const productPayload = {
-          name: productData.name.toString().trim(),
+          name: normalizeImportText(productData.name),
           description: productData.description?.toString().trim() || '',
           category: productData.category?.toString().trim() || 'Uncategorized',
           brand: productData.brand?.toString().trim() || '',
