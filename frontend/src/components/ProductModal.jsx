@@ -27,8 +27,15 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       currentStock: '',
       reorderPoint: ''
     },
+    unit: 'PCS',
     piecesPerBox: '',
-    hsCode: ''
+    hsCode: '',
+    countryOfOrigin: '',
+    netWeightKg: '',
+    grossWeightKg: '',
+    importRefNo: '',
+    gdNumber: '',
+    invoiceRef: ''
   });
   
   const [showSimilarProducts, setShowSimilarProducts] = useState(false);
@@ -223,6 +230,12 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       barcode: newData.barcode || '',
       sku: newData.sku || '',
       hsCode: newData.hsCode ?? newData.hs_code ?? '',
+      countryOfOrigin: newData.countryOfOrigin || newData.country_of_origin || '',
+      netWeightKg: newData.netWeightKg ?? newData.net_weight_kg ?? '',
+      grossWeightKg: newData.grossWeightKg ?? newData.gross_weight_kg ?? '',
+      importRefNo: newData.importRefNo || newData.import_ref_no || '',
+      gdNumber: newData.gdNumber || newData.gd_number || '',
+      invoiceRef: newData.invoiceRef || newData.invoice_ref || '',
       brand: newData.brand || '',
       imageUrl: newData.imageUrl || '',
       pricing: {
@@ -234,6 +247,7 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
         currentStock: newData.inventory?.currentStock || '',
         reorderPoint: newData.inventory?.reorderPoint || ''
       },
+      unit: newData.unit || 'PCS',
       piecesPerBox: newData.piecesPerBox ?? newData.pieces_per_box ?? ''
     });
     setErrors({});
@@ -588,6 +602,34 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                     <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Min stock for reorder</p>
                   </div>
                   <div>
+                    <label htmlFor="unit" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                      Unit of Measurement
+                    </label>
+                    <select
+                      id="unit"
+                      name="unit"
+                      value={formData.unit || 'PCS'}
+                      onChange={handleChange}
+                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                    >
+                      <option value="PCS">PCS (Pieces)</option>
+                      <option value="U">U (Unit)</option>
+                      <option value="KG">KG (Kilogram)</option>
+                      <option value="G">G (Gram)</option>
+                      <option value="L">L (Liter)</option>
+                      <option value="ML">ML (Milliliter)</option>
+                      <option value="MTR">MTR (Meter)</option>
+                      <option value="SQFT">SQFT (Square Feet)</option>
+                      <option value="BOX">BOX</option>
+                      <option value="CTN">CTN (Carton)</option>
+                      <option value="SET">SET</option>
+                      <option value="PAIR">PAIR</option>
+                    </select>
+                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">
+                      Customs and shipping measurement unit (Pakistan clearance use-case)
+                    </p>
+                  </div>
+                  <div>
                     <label htmlFor="piecesPerBox" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                       Pieces per Box
                     </label>
@@ -705,6 +747,100 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                       </p>
                     </div>
                   )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 xl:gap-4">
+                  <div>
+                    <label htmlFor="countryOfOrigin" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                      Country of Origin
+                    </label>
+                    <input
+                      id="countryOfOrigin"
+                      name="countryOfOrigin"
+                      type="text"
+                      value={formData.countryOfOrigin || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. China"
+                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="netWeightKg" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                      Net Weight (KG)
+                    </label>
+                    <input
+                      id="netWeightKg"
+                      name="netWeightKg"
+                      type="number"
+                      min="0"
+                      step="0.001"
+                      value={formData.netWeightKg || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. 1.200"
+                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="grossWeightKg" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                      Gross Weight (KG)
+                    </label>
+                    <input
+                      id="grossWeightKg"
+                      name="grossWeightKg"
+                      type="number"
+                      min="0"
+                      step="0.001"
+                      value={formData.grossWeightKg || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. 1.350"
+                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 xl:gap-4">
+                  <div>
+                    <label htmlFor="importRefNo" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                      Import Ref No
+                    </label>
+                    <input
+                      id="importRefNo"
+                      name="importRefNo"
+                      type="text"
+                      value={formData.importRefNo || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. IMP-2026-0001"
+                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="gdNumber" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                      GD Number
+                    </label>
+                    <input
+                      id="gdNumber"
+                      name="gdNumber"
+                      type="text"
+                      value={formData.gdNumber || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. GD-KHI-123456"
+                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="invoiceRef" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                      Invoice Ref
+                    </label>
+                    <input
+                      id="invoiceRef"
+                      name="invoiceRef"
+                      type="text"
+                      value={formData.invoiceRef || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. INV-REF-7788"
+                      className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                    />
+                  </div>
                 </div>
               </div>
               

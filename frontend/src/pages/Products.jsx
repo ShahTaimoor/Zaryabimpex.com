@@ -280,7 +280,7 @@ export const Products = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               type="text"
-              placeholder="Search products..."
+              placeholder="Search name, SKU, barcode, HS, import refs..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 w-full text-sm sm:text-base"

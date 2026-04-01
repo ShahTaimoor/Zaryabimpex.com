@@ -154,6 +154,13 @@ export const ProductList = ({
                             return null;
                           })()}
                         </div>
+                        {(product.importRefNo || product.gdNumber || product.invoiceRef) && (
+                          <p className="text-[10px] xl:text-xs text-gray-500 truncate mt-0.5">
+                            {product.importRefNo ? `IMP: ${product.importRefNo}` : ''}
+                            {product.gdNumber ? `${product.importRefNo ? ' | ' : ''}GD: ${product.gdNumber}` : ''}
+                            {product.invoiceRef ? `${(product.importRefNo || product.gdNumber) ? ' | ' : ''}INV: ${product.invoiceRef}` : ''}
+                          </p>
+                        )}
 
                       </div>
                     </div>
@@ -327,6 +334,16 @@ export const ProductList = ({
                               {product.category?.name || '-'}
                             </p>
                           </div>
+                          {(product.importRefNo || product.gdNumber || product.invoiceRef) && (
+                            <div className="col-span-2 sm:col-span-3">
+                              <p className="text-[10px] xl:text-xs text-gray-500 mb-0.5">Import References</p>
+                              <p className="text-xs xl:text-sm font-semibold text-gray-900 truncate">
+                                {product.importRefNo ? `IMP: ${product.importRefNo}` : ''}
+                                {product.gdNumber ? `${product.importRefNo ? ' | ' : ''}GD: ${product.gdNumber}` : ''}
+                                {product.invoiceRef ? `${(product.importRefNo || product.gdNumber) ? ' | ' : ''}INV: ${product.invoiceRef}` : ''}
+                              </p>
+                            </div>
+                          )}
                         </div>
 
                         {/* Expiry Date Badge */}

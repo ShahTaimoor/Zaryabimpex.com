@@ -58,9 +58,17 @@ const PRODUCT_TEMPLATE_HEADERS = [
   'Product Name',
   'Description',
   'Category',
+  'Unit',
   'Brand',
   'Barcode',
   'SKU',
+  'HS Code',
+  'Country of Origin',
+  'Net Weight (KG)',
+  'Gross Weight (KG)',
+  'Import Ref No',
+  'GD Number',
+  'Invoice Ref',
   'Cost Price',
   'Retail Price',
   'Wholesale Price',
@@ -79,9 +87,17 @@ const PRODUCT_TEMPLATE_SAMPLE_ROW = [
   'Sample Product',
   'This is a sample product',
   'Electronics',
+  'PCS',
   'Sample Brand',
   '1234567890123',
   'SKU-001',
+  '8517.12',
+  'China',
+  '1.200',
+  '1.350',
+  'IMP-2026-0001',
+  'GD-KHI-123456',
+  'INV-REF-7788',
   '10.00',
   '15.00',
   '12.00',
@@ -395,10 +411,12 @@ const ProductImportExport = ({ onImportComplete, filters = {} }) => {
             <h4 className="text-sm sm:text-base font-medium text-blue-900 mb-2">Import Guidelines</h4>
             <ul className="text-xs sm:text-sm text-blue-800 space-y-1">
               <li>• Download the template to see the required format</li>
-              <li>• Required fields: Product Name, Category</li>
+              <li>• Required fields: Product Name (Category optional)</li>
               <li>• Supported formats: CSV, Excel (.xlsx)</li>
               <li>• Maximum file size: 10MB</li>
-              <li>• Products with duplicate names will be skipped</li>
+              <li>• Existing products are updated; new products are created</li>
+              <li>• Search supports Import Ref No, GD Number, and Invoice Ref</li>
+              <li>• Customs columns: HS Code, Country of Origin, Net/Gross Weight, Import Ref No, GD Number, Invoice Ref</li>
             </ul>
             <Button
               onClick={handleDownloadTemplate}

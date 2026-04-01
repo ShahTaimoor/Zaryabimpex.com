@@ -62,7 +62,17 @@ export const useProductOperations = (products, refetch) => {
       inventory: {
         currentStock: parseInt(data.inventory.currentStock) || 0,
         reorderPoint: parseInt(data.inventory.reorderPoint) || 10
-      }
+      },
+      countryOfOrigin: data.countryOfOrigin?.trim() || null,
+      netWeightKg: data.netWeightKg === '' || data.netWeightKg === null || data.netWeightKg === undefined
+        ? null
+        : parseFloat(data.netWeightKg),
+      grossWeightKg: data.grossWeightKg === '' || data.grossWeightKg === null || data.grossWeightKg === undefined
+        ? null
+        : parseFloat(data.grossWeightKg),
+      importRefNo: data.importRefNo?.trim() || null,
+      gdNumber: data.gdNumber?.trim() || null,
+      invoiceRef: data.invoiceRef?.trim() || null
     };
     
     if (!selectedProduct) {
