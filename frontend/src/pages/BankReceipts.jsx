@@ -401,13 +401,6 @@ const BankReceipts = () => {
     bankReceiptsData?.data?.receipts ||
     bankReceiptsData?.receipts ||
     [];
-
-  const sortedLedgerRows = [...bankReceipts].sort((a, b) => {
-    const dateA = new Date(a?.date || 0).getTime();
-    const dateB = new Date(b?.date || 0).getTime();
-    if (dateA !== dateB) return dateA - dateB;
-    return String(a?.voucherCode || '').localeCompare(String(b?.voucherCode || ''));
-  });
   const resolveBankInfo = (receipt) => {
     if (receipt?.bank && typeof receipt.bank === 'object') return receipt.bank;
     const bankId = receipt?.bank_id || receipt?.bankId || receipt?.bank;
@@ -712,7 +705,7 @@ const BankReceipts = () => {
                   className="input w-full"
                   required
                 >
-                  <option value="">Select Bank</option>
+                  <option value="">Select bank account...</option>
                   {(banks || []).map((bank) => (
                     <option key={bank._id || bank.id} value={bank._id || bank.id}>
                       {bank.bankName} - {bank.accountNumber} {bank.accountName ? `(${bank.accountName})` : ''}
@@ -919,11 +912,11 @@ const BankReceipts = () => {
             <>
               {/* Table */}
               <div className="overflow-x-auto">
-                <table className="min-w-full border border-gray-300">
-                  <thead className="bg-gray-100">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
                     <tr>
                       <th
-                        className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300 cursor-pointer hover:bg-gray-200"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                         onClick={() => handleSort('date')}
                       >
                         <div className="flex items-center space-x-1">
@@ -932,51 +925,110 @@ const BankReceipts = () => {
                         </div>
                       </th>
                       <th
-                        className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300 cursor-pointer hover:bg-gray-200"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                         onClick={() => handleSort('voucherCode')}
                       >
                         <div className="flex items-center space-x-1">
-                          <span>Voucher No</span>
+                          <span>Voucher Code</span>
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">
-                        Bank Name
+                      <th
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('amount')}
+                      >
+                        <div className="flex items-center space-x-1">
+                          <span>Amount</span>
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Particular
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">
-                        Debits
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Bank Account
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">
-                        Credits
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Customer
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white">
-                    {sortedLedgerRows.map((receipt) => (
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {bankReceipts.map((receipt, index) => (
                       <tr
                         key={receipt._id}
-                        className="hover:bg-gray-50"
+                        className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
                       >
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border border-gray-300">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {formatDate(receipt.date)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border border-gray-300">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {receipt.voucherCode}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900 border border-gray-300">
-                          {resolveBankInfo(receipt)?.bankName || receipt.bankName || receipt.bank_name || '-'}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {Math.round(receipt.amount)}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900 border border-gray-300 max-w-xs truncate">
-                          {receipt.particular || '-'}
+                        <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                          {receipt.particular}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border border-gray-300">
-                          {Math.round(receipt.amount || 0).toLocaleString()}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {resolveBankInfo(receipt) ? (
+                            <div>
+                              <div className="font-medium">{resolveBankInfo(receipt).bankName}</div>
+                              <div className="text-gray-500 text-xs">{resolveBankInfo(receipt).accountNumber}</div>
+                            </div>
+                          ) : (
+                            receipt.bankAccount || receipt.bankName || receipt.bank_name || '-'
+                          )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 border border-gray-300">
-                          0
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {receipt.customer ? (
+                            <div>
+                              <div className="font-medium">{(receipt.customer.businessName || receipt.customer.business_name || receipt.customer.name || '').toUpperCase()}</div>
+                              <div className="text-gray-500 text-xs">{receipt.customer.email}</div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handlePrint(receipt)}
+                              className="text-green-600 hover:text-green-900"
+                              title="Print"
+                            >
+                              <Printer className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleView(receipt)}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="View"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            {(
+                              <>
+                                <button
+                                  onClick={() => handleEdit(receipt)}
+                                  className="text-indigo-600 hover:text-indigo-900"
+                                  title="Edit"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(receipt)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1093,7 +1145,7 @@ const BankReceipts = () => {
                     className="input w-full"
                     required
                   >
-                    <option value="">Select Bank</option>
+                    <option value="">Select bank account...</option>
                     {(banks || []).map((bank) => (
                       <option key={bank._id || bank.id} value={bank._id || bank.id}>
                         {bank.bankName} - {bank.accountNumber} {bank.accountName ? `(${bank.accountName})` : ''}
@@ -1256,7 +1308,7 @@ const BankReceipts = () => {
               onChange={(e) => setFormData(prev => ({ ...prev, bank: e.target.value }))}
               className="input w-full"
             >
-              <option value="">Select Bank</option>
+              <option value="">Select bank account...</option>
               {(banks || []).map((bank) => (
                 <option key={bank._id || bank.id} value={bank._id || bank.id}>{bank.bankName} - {bank.accountNumber}</option>
               ))}
