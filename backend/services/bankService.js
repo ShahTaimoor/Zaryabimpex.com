@@ -1,6 +1,7 @@
 const BankRepository = require('../repositories/BankRepository');
 const BankPaymentRepository = require('../repositories/BankPaymentRepository');
 const BankReceiptRepository = require('../repositories/BankReceiptRepository');
+const AccountingService = require('./accountingService');
 
 /**
  * Map DB bank row (snake_case) to API response format (camelCase)
@@ -87,6 +88,10 @@ class BankService {
     };
 
     const created = await BankRepository.create(processedData);
+    await AccountingService.postBankOpeningBalance(created.id, processedData.openingBalance, {
+      createdBy: userId,
+      transactionDate: new Date()
+    });
     return mapBankForResponse(created);
   }
 
@@ -115,15 +120,23 @@ class BankService {
     if (updateData.iban !== undefined) processedData.iban = updateData.iban ? updateData.iban.trim() : null;
     if (updateData.openingBalance !== undefined) {
       const newOpeningBalance = parseFloat(updateData.openingBalance);
-      const balanceDifference = newOpeningBalance - bank.openingBalance;
+      const existingOpeningBalance = parseFloat(bank.opening_balance ?? bank.openingBalance ?? 0);
+      const existingCurrentBalance = parseFloat(bank.current_balance ?? bank.currentBalance ?? 0);
+      const balanceDifference = newOpeningBalance - existingOpeningBalance;
       processedData.openingBalance = newOpeningBalance;
-      processedData.currentBalance = bank.currentBalance + balanceDifference;
+      processedData.currentBalance = existingCurrentBalance + balanceDifference;
     }
     if (updateData.isActive !== undefined) processedData.isActive = updateData.isActive;
     if (updateData.notes !== undefined) processedData.notes = updateData.notes ? updateData.notes.trim() : null;
     processedData.updatedBy = userId;
 
     const updated = await BankRepository.updateById(id, processedData);
+    if (updateData.openingBalance !== undefined) {
+      await AccountingService.postBankOpeningBalance(id, processedData.openingBalance, {
+        createdBy: userId,
+        transactionDate: new Date()
+      });
+    }
     return mapBankForResponse(updated);
   }
 

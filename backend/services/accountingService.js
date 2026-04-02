@@ -437,6 +437,77 @@ class AccountingService {
   }
 
   /**
+   * Post or update bank opening balance in account ledger.
+   * Reverses previous bank opening entries for the bank and posts current amount.
+   *
+   * Double-entry policy:
+   * - Positive opening: Dr Bank (1001), Cr Retained Earnings (3100)
+   * - Negative opening: Dr Retained Earnings (3100), Cr Bank (1001)
+   *
+   * @param {string} bankId - Bank UUID
+   * @param {number} amount - Opening balance amount
+   * @param {Object} options - { createdBy, transactionDate, client }
+   */
+  static async postBankOpeningBalance(bankId, amount, options = {}) {
+    const { createdBy, transactionDate, client } = options;
+    const amt = parseFloat(amount) || 0;
+
+    const runInTransaction = async (clientToUse) => {
+      // Reverse any existing bank opening entries for this bank
+      await this.reverseLedgerEntriesByReference('bank_opening_balance', bankId, clientToUse);
+
+      // If zero after reversal, refresh balances and exit
+      if (Math.abs(amt) < 0.01) {
+        await this.updateAccountBalance(clientToUse, '1001');
+        await this.updateAccountBalance(clientToUse, '3100');
+        return;
+      }
+
+      const absAmt = Math.abs(amt);
+      const refNum = `BANK-OB-${String(bankId).replace(/-/g, '').slice(0, 10)}`;
+      const txnDate = transactionDate || new Date();
+
+      if (amt > 0) {
+        await this.createTransaction(
+          { accountCode: '1001', debitAmount: absAmt, description: 'Bank opening balance' },
+          { accountCode: '3100', creditAmount: absAmt, description: 'Bank opening balance offset (equity)' },
+          {
+            referenceType: 'bank_opening_balance',
+            referenceId: bankId,
+            referenceNumber: refNum,
+            transactionDate: txnDate,
+            currency: 'PKR',
+            createdBy
+          },
+          clientToUse
+        );
+      } else {
+        await this.createTransaction(
+          { accountCode: '3100', debitAmount: absAmt, description: 'Bank opening balance offset (equity)' },
+          { accountCode: '1001', creditAmount: absAmt, description: 'Bank opening balance' },
+          {
+            referenceType: 'bank_opening_balance',
+            referenceId: bankId,
+            referenceNumber: refNum,
+            transactionDate: txnDate,
+            currency: 'PKR',
+            createdBy
+          },
+          clientToUse
+        );
+      }
+    };
+
+    if (client) {
+      await runInTransaction(client);
+    } else {
+      await transaction(async (clientToUse) => {
+        await runInTransaction(clientToUse);
+      });
+    }
+  }
+
+  /**
    * Reverse ledger entries by reference (for edits - mark old entries as reversed)
    * @param {string} referenceType - e.g. 'cash_receipt', 'cash_payment', 'bank_receipt', 'bank_payment'
    * @param {string} referenceId - UUID of the receipt/payment

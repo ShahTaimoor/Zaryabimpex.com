@@ -79,8 +79,40 @@ export const Reports = () => {
   };
 
   const handleExport = () => {
+    if (activeTab === 'party-balance') {
+      const rows = partyReportData?.data || [];
+      if (!rows.length) {
+        toast.error(`No ${partyType} data to export.`);
+        return;
+      }
+
+      const headers = ['S.NO', 'Party Name', 'Contact', 'City', 'Total Debit', 'Total Credit', 'Net Balance'];
+      const bodyRows = rows.map((r, idx) => ([
+        idx + 1,
+        r.businessName || r.name || '',
+        r.contactPerson || '',
+        r.city || '',
+        r.totalDebit || 0,
+        r.totalCredit || 0,
+        r.balance || 0
+      ]));
+
+      const cityLabel =
+        city === 'all'
+          ? 'all-cities'
+          : ((cities || []).find((c) => (c.id || c._id) === city)?.name || String(city)).replace(/\s+/g, '-').toLowerCase();
+
+      downloadCsv(
+        `${partyType}-balances-${cityLabel}-${formatDateStamp()}.csv`,
+        headers,
+        bodyRows
+      );
+      toast.success(`${partyType === 'customer' ? 'Customer' : 'Supplier'} balances CSV exported.`);
+      return;
+    }
+
     if (activeTab !== 'inventory' || inventoryType !== 'stock-summary') {
-      toast.error('Export is currently enabled for Inventory Stock Summary only.');
+      toast.error('Export is enabled for Party Balances and Inventory Stock Summary.');
       return;
     }
     const rows = inventoryReportData?.data || [];
