@@ -877,7 +877,11 @@ class ReportsService {
       SELECT SUM(balance) as total FROM (
         SELECT c.opening_balance + COALESCE(SUM(l.debit_amount - l.credit_amount), 0) as balance
         FROM customers c
-        LEFT JOIN account_ledger l ON c.id = l.customer_id AND l.status = 'completed' AND l.account_code = '1100' AND l.reversed_at IS NULL
+        LEFT JOIN account_ledger l ON c.id = l.customer_id
+          AND l.status = 'completed'
+          AND l.account_code = '1100'
+          AND l.reversed_at IS NULL
+          AND (l.reference_type IS NULL OR l.reference_type <> 'customer_opening_balance')
         WHERE c.deleted_at IS NULL AND c.is_deleted = FALSE
         ${city ? `AND (
           (jsonb_typeof(c.address) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements(c.address) addr WHERE addr->>'city' = $1))
@@ -1082,7 +1086,11 @@ class ReportsService {
           COALESCE(SUM(l.debit_amount), 0) as "totalDebit",
           COALESCE(SUM(l.credit_amount), 0) as "totalCredit"
         FROM customers c
-        LEFT JOIN account_ledger l ON c.id = l.customer_id AND l.status = 'completed' AND l.account_code = '1100' AND l.reversed_at IS NULL
+        LEFT JOIN account_ledger l ON c.id = l.customer_id
+          AND l.status = 'completed'
+          AND l.account_code = '1100'
+          AND l.reversed_at IS NULL
+          AND (l.reference_type IS NULL OR l.reference_type <> 'customer_opening_balance')
         WHERE c.deleted_at IS NULL AND c.is_deleted = FALSE
       `;
       if (city) {

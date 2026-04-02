@@ -133,6 +133,18 @@ class CustomerService {
       console.error('Failed to create Chart of Accounts entry for customer:', chartError);
       // Don't fail the customer creation if chart account creation fails
     }
+
+    // Post opening balance to ledger (Dr AR / Cr Equity, or reverse for advances)
+    try {
+      const openingBalance = parseFloat(customer.opening_balance ?? customer.openingBalance ?? options.openingBalance ?? 0) || 0;
+      await AccountingService.postCustomerOpeningBalance(customer.id, openingBalance, {
+        createdBy: userId,
+        transactionDate: customer.created_at || new Date()
+      });
+    } catch (openingBalanceError) {
+      console.error('Failed to post customer opening balance to ledger:', openingBalanceError);
+      // Don't fail customer creation if ledger posting fails
+    }
     
     const withBalance = await this.getCustomerById(customer.id);
     return { customer: withBalance, message: 'Customer created successfully' };
@@ -143,6 +155,19 @@ class CustomerService {
     if (options.openingBalance != null) data.openingBalance = options.openingBalance;
     const customer = await customerRepository.update(id, data);
     if (!customer) throw new Error('Customer not found');
+
+    if (options.openingBalance != null || Object.prototype.hasOwnProperty.call(customerData, 'openingBalance')) {
+      try {
+        const openingBalance = parseFloat(customer.opening_balance ?? customer.openingBalance ?? options.openingBalance ?? 0) || 0;
+        await AccountingService.postCustomerOpeningBalance(id, openingBalance, {
+          createdBy: userId,
+          transactionDate: customer.updated_at || new Date()
+        });
+      } catch (openingBalanceError) {
+        console.error('Failed to update customer opening balance in ledger:', openingBalanceError);
+      }
+    }
+
     const updated = await this.getCustomerById(id);
     return { customer: updated, message: 'Customer updated successfully' };
   }

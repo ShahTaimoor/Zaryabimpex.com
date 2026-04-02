@@ -322,6 +322,7 @@ class AccountingService {
          AND account_code = '1100'
          AND status = 'completed'
          AND reversed_at IS NULL
+         AND (reference_type IS NULL OR reference_type <> 'customer_opening_balance')
          ${dateFilter}`,
       params
     );
@@ -489,6 +490,77 @@ class AccountingService {
             referenceType: 'bank_opening_balance',
             referenceId: bankId,
             referenceNumber: refNum,
+            transactionDate: txnDate,
+            currency: 'PKR',
+            createdBy
+          },
+          clientToUse
+        );
+      }
+    };
+
+    if (client) {
+      await runInTransaction(client);
+    } else {
+      await transaction(async (clientToUse) => {
+        await runInTransaction(clientToUse);
+      });
+    }
+  }
+
+  /**
+   * Post or update customer opening balance in account ledger.
+   * Reverses previous customer opening entries for the customer and posts current amount.
+   *
+   * Double-entry policy:
+   * - Positive opening (customer owes us): Dr AR (1100), Cr Retained Earnings (3100)
+   * - Negative opening (we owe customer/advance): Dr Retained Earnings (3100), Cr AR (1100)
+   *
+   * @param {string} customerId - Customer UUID
+   * @param {number} amount - Opening balance amount
+   * @param {Object} options - { createdBy, transactionDate, client }
+   */
+  static async postCustomerOpeningBalance(customerId, amount, options = {}) {
+    const { createdBy, transactionDate, client } = options;
+    const amt = parseFloat(amount) || 0;
+
+    const runInTransaction = async (clientToUse) => {
+      await this.reverseLedgerEntriesByReference('customer_opening_balance', customerId, clientToUse);
+
+      if (Math.abs(amt) < 0.01) {
+        await this.updateAccountBalance(clientToUse, '1100');
+        await this.updateAccountBalance(clientToUse, '3100');
+        return;
+      }
+
+      const absAmt = Math.abs(amt);
+      const refNum = `CUST-OB-${String(customerId).replace(/-/g, '').slice(0, 10)}`;
+      const txnDate = transactionDate || new Date();
+
+      if (amt > 0) {
+        await this.createTransaction(
+          { accountCode: '1100', debitAmount: absAmt, description: 'Customer opening balance (receivable)' },
+          { accountCode: '3100', creditAmount: absAmt, description: 'Customer opening balance offset (equity)' },
+          {
+            referenceType: 'customer_opening_balance',
+            referenceId: customerId,
+            referenceNumber: refNum,
+            customerId,
+            transactionDate: txnDate,
+            currency: 'PKR',
+            createdBy
+          },
+          clientToUse
+        );
+      } else {
+        await this.createTransaction(
+          { accountCode: '3100', debitAmount: absAmt, description: 'Customer opening balance offset (equity)' },
+          { accountCode: '1100', creditAmount: absAmt, description: 'Customer opening balance (advance)' },
+          {
+            referenceType: 'customer_opening_balance',
+            referenceId: customerId,
+            referenceNumber: refNum,
+            customerId,
             transactionDate: txnDate,
             currency: 'PKR',
             createdBy
@@ -1487,6 +1559,7 @@ class AccountingService {
          AND ledger.account_code = '1100'
          AND ledger.status = 'completed'
          AND ledger.reversed_at IS NULL
+         AND (ledger.reference_type IS NULL OR ledger.reference_type <> 'customer_opening_balance')
          ${dateFilter}
        WHERE c.id = ANY($1)
          AND c.is_deleted = FALSE
