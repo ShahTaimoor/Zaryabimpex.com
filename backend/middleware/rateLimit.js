@@ -12,6 +12,12 @@ const createRateLimiter = ({ windowMs = 60_000, max = 60, keyGenerator } = {}) =
   }, Math.max(5_000, Math.floor(windowMs / 2))).unref();
 
   return (req, res, next) => {
+    // CORS preflight requests are extremely frequent (OPTIONS) and are not meaningful "rate usage"
+    // from the user perspective. Counting them causes bursts of 429s and breaks preflight.
+    if (req.method === 'OPTIONS') {
+      return next();
+    }
+
     const key = getKey(req);
     const now = Date.now();
     const record = hits.get(key) || { count: 0, start: now };

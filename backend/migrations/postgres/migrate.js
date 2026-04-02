@@ -64,8 +64,7 @@ const MIGRATIONS = [
   '043_investor_payouts.sql',
   '044_backfill_investor_payouts_from_totals.sql',
   '045_investor_payout_ledger.sql',
-  '046_products_customs_fields.sql',
-  '047_products_import_refs.sql'
+  '046_add_order_type_to_sales_orders.sql'
 ];
 
 async function ensureMigrationsTable() {

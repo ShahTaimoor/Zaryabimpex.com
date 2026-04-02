@@ -267,9 +267,32 @@ export const Orders = () => {
   // Event handlers - Edit opens Sales page in new tab (same as Purchase Invoice edit)
   const handleEdit = async (order) => {
     try {
+      // Use the list row's derived payment status (this is already correct in the UI)
+      // because the "fetch by id" response can contain mismatched payment fields.
+      const derivedPaymentStatus = getDerivedPaymentStatus(order);
+
       const result = await fetchOrderById(order._id || order.id).unwrap();
       const orderData = result?.order || result?.data?.order || result;
       const freshOrder = orderData || order;
+
+      const isPendingInEditor = derivedPaymentStatus === 'pending';
+      const paymentFromFetched = freshOrder.payment || {};
+      const paymentFromList = order.payment || {};
+
+      const amountPaidCandidate =
+        paymentFromFetched?.amountPaid ??
+        paymentFromFetched?.amountReceived ??
+        paymentFromList?.amountPaid ??
+        paymentFromList?.amountReceived ??
+        0;
+
+      const paymentForEditor = {
+        ...paymentFromFetched,
+        ...paymentFromList,
+        status: isPendingInEditor ? 'pending' : (paymentFromFetched?.status ?? paymentFromFetched?.payment_status ?? paymentFromList?.status ?? paymentFromList?.payment_status ?? ''),
+        amountPaid: isPendingInEditor ? 0 : Number(amountPaidCandidate) || 0,
+        amountReceived: isPendingInEditor ? 0 : Number(amountPaidCandidate) || 0,
+      };
 
       const editData = {
         orderId: freshOrder._id || freshOrder.id,
@@ -304,7 +327,11 @@ export const Orders = () => {
           };
         }),
         isTaxExempt: freshOrder.isTaxExempt ?? freshOrder.is_tax_exempt ?? true,
-        payment: freshOrder.payment || {},
+        payment: paymentForEditor,
+        // The "Pending" label in the UI is based on the invoice/order status (not payment.status).
+        // Pass it through so the edit screen can correctly initialize Amount Paid.
+        orderStatus: freshOrder.status ?? freshOrder.order_status ?? freshOrder.orderStatus ?? '',
+        paymentStatus: freshOrder.payment?.status ?? freshOrder.payment_status ?? freshOrder.paymentStatus ?? '',
         orderType: freshOrder.orderType ?? freshOrder.order_type ?? 'retail',
         billDate: freshOrder.sale_date ?? freshOrder.billDate ?? freshOrder.order_date ?? freshOrder.created_at ?? freshOrder.createdAt
       };

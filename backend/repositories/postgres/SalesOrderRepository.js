@@ -181,14 +181,15 @@ class SalesOrderRepository {
     const computedSubtotal = data.subtotal ?? subtotal;
     const computedTotal = data.total ?? total;
     const confirmationStatus = computeOrderConfirmationStatus(items);
+    const orderType = data.orderType ?? data.order_type ?? data.orderType ?? 'retail';
 
     const result = await query(
       `INSERT INTO sales_orders (
         so_number, customer_id, items, subtotal, tax, is_tax_exempt, total, status, confirmation_status,
-        order_date, expected_delivery, confirmed_date, last_invoiced_date, notes, terms,
+        order_type, order_date, expected_delivery, confirmed_date, last_invoiced_date, notes, terms,
         conversions, ledger_posted, auto_posted, posted_at, ledger_reference_id, invoice_id, auto_converted,
         created_by, last_modified_by, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *`,
       [
         (data.soNumber || data.so_number || '').toUpperCase(),
@@ -200,10 +201,11 @@ class SalesOrderRepository {
         computedTotal,
         data.status || 'draft',
         confirmationStatus,
+        orderType,
         data.orderDate || data.order_date || new Date(),
         data.expectedDelivery || data.expected_delivery || null,
         data.confirmedDate || data.confirmed_date || null,
-        data.lastInvoicedDate || data.last_invoiced_date || null,
+        data.lastInvoicedDate || data.lastInvoiced_date || null,
         data.notes || null,
         data.terms || null,
         data.conversions ? JSON.stringify(data.conversions) : '[]',
@@ -232,6 +234,7 @@ class SalesOrderRepository {
       customer: 'customer_id', customerId: 'customer_id',
       items: 'items', subtotal: 'subtotal', tax: 'tax', isTaxExempt: 'is_tax_exempt', total: 'total',
       status: 'status', confirmationStatus: 'confirmation_status',
+      orderType: 'order_type', order_type: 'order_type',
       orderDate: 'order_date', expectedDelivery: 'expected_delivery',
       confirmedDate: 'confirmed_date', lastInvoicedDate: 'last_invoiced_date', notes: 'notes', terms: 'terms',
       conversions: 'conversions', ledgerPosted: 'ledger_posted', autoPosted: 'auto_posted',

@@ -897,9 +897,39 @@ export const Sales = ({ tabId, editData }) => {
       // Set payment method and amount paid if available
       if (editData.payment) {
         setPaymentMethod(editData.payment.method || 'cash');
-        // Hard rule for edit screen: never auto-fill paid amount from existing invoice payload.
-        // User must enter payment manually to avoid incorrect forced totals.
-        setAmountPaid(0);
+        // IMPORTANT:
+        // When the invoice is pending, Amount Paid should NOT be derived from amountReceived.
+        // Some backend payloads may include `amountReceived` even when payment was never made,
+        // which incorrectly pre-fills the full sale amount in edit mode.
+        const paymentStatusRaw =
+          editData.payment.status ??
+          editData.paymentStatus ??
+          editData.payment_status ??
+          'pending';
+        const normalizedPaymentStatus = String(paymentStatusRaw).toLowerCase();
+
+        const orderStatusRaw =
+          editData.orderStatus ??
+          editData.status ??
+          editData.order_status ??
+          '';
+        const normalizedOrderStatus = String(orderStatusRaw).toLowerCase();
+
+        // Important: the UI "Pending" label comes from the invoice/order status, not payment.status.
+        // If the invoice is pending (e.g. "confirmed_pending"), Amount Paid must be 0 in edit mode.
+        const isInvoicePending =
+          normalizedOrderStatus.includes('pending') || normalizedOrderStatus.includes('draft');
+
+        const paidFromPayload = isInvoicePending
+          ? 0
+          : (normalizedPaymentStatus === 'pending'
+              ? 0
+              : (editData.payment.amountPaid ??
+                  editData.payment.amountReceived ??
+                  editData.amountPaid ??
+                  0));
+        const normalizedPaid = Number(paidFromPayload);
+        setAmountPaid(Number.isFinite(normalizedPaid) && normalizedPaid >= 0 ? normalizedPaid : 0);
         if (editData.payment.method === 'bank') {
           setSelectedBankAccount(editData.payment.bankAccount || '');
         } else {
@@ -2777,8 +2807,22 @@ export const Sales = ({ tabId, editData }) => {
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     Order Type
                   </label>
+                  {/*
+                    In edit mode, show the invoice's saved order type.
+                    Previously this UI was tied to `selectedCustomer.businessType`, which could differ from
+                    what was used when the invoice was created (causing the "price type" mismatch).
+                  */}
+                  {(() => {
+                    const editOrderType = editData?.isEditMode ? editData?.orderType : null;
+                    const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
+                    const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
+                    const valueToShow =
+                      normalizedEditOrderType && allowed.has(normalizedEditOrderType)
+                        ? normalizedEditOrderType
+                        : mapBusinessTypeToOrderType(selectedCustomer?.businessType);
+                    return (
                   <select
-                    value={selectedCustomer?.businessType || 'wholesale'}
+                    value={valueToShow}
                     className="h-10 text-sm w-full"
                     disabled
                   >
@@ -2787,6 +2831,8 @@ export const Sales = ({ tabId, editData }) => {
                     <option value="return">Return</option>
                     <option value="exchange">Exchange</option>
                   </select>
+                    );
+                  })()}
                 </div>
 
                 {/* Tax Exemption Option */}
@@ -2905,7 +2951,18 @@ export const Sales = ({ tabId, editData }) => {
                     Order Type
                   </label>
                   <select
-                    value={selectedCustomer?.businessType || 'wholesale'}
+                    value={
+                      (() => {
+                        const editOrderType = editData?.isEditMode ? editData?.orderType : null;
+                        const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
+                        const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
+                        return (
+                          normalizedEditOrderType && allowed.has(normalizedEditOrderType)
+                            ? normalizedEditOrderType
+                            : mapBusinessTypeToOrderType(selectedCustomer?.businessType)
+                        );
+                      })()
+                    }
                     className="h-8 text-sm"
                     disabled
                   >

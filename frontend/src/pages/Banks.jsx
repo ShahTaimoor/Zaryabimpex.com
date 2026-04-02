@@ -489,12 +489,6 @@ const Banks = () => {
           <p className="mt-2 text-gray-500">
             {searchTerm ? 'Try adjusting your search terms' : 'Get started by adding your first bank account'}
           </p>
-          {!searchTerm && (
-            <Button onClick={handleAddNew} variant="default" size="default" className="flex items-center justify-center gap-2 mt-4">
-              <Plus className="h-4 w-4" />
-              Add Bank Account
-            </Button>
-          )}
         </div>
       ) : (
         <div className="card overflow-hidden">
@@ -566,7 +560,7 @@ const Banks = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-medium text-green-600">
-                        ${(bank.openingBalance || 0).toFixed(2)}
+                        {(bank.openingBalance || 0).toFixed(2)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
