@@ -5,6 +5,18 @@ import { Input } from '@/components/ui/input';
 
 const EMPTY_ARRAY = [];
 
+const DEFAULT_INITIAL_LIMIT = 20;
+
+/** Stable id for list deduping when valueKey may not match (e.g. id vs _id). */
+const getItemId = (item, valueKey) => {
+  if (!item || typeof item !== 'object') return null;
+  const v = item[valueKey];
+  if (v != null && v !== '') return v;
+  if (item.id != null && item.id !== '') return item.id;
+  if (item._id != null && item._id !== '') return item._id;
+  return null;
+};
+
 export const SearchableDropdown = forwardRef(({
   placeholder = "Search...",
   items = EMPTY_ARRAY,
@@ -21,7 +33,9 @@ export const SearchableDropdown = forwardRef(({
   showSelected = true,
   value = null,
   openOnFocus = false,
-  rightContentKey = null // Function or key to get right-side content (e.g., city)
+  rightContentKey = null, // Function or key to get right-side content (e.g., city)
+  /** Max rows when not searching; type to see full filtered list. Set null to show all (legacy). */
+  maxInitialItems = DEFAULT_INITIAL_LIMIT
 }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -129,9 +143,10 @@ export const SearchableDropdown = forwardRef(({
     displayKeyRef.current = displayKey;
   }, [displayKey]);
 
-  // Filter items based on search term
+  // Filter items based on search term; cap visible rows when not searching (see maxInitialItems)
   useEffect(() => {
-    const currentSearchTerm = value !== null ? value : searchTerm;
+    const rawTerm = value !== null ? value : searchTerm;
+    const currentSearchTerm = typeof rawTerm === 'string' ? rawTerm.trim() : '';
     const currentDisplayKey = displayKeyRef.current;
 
     if (currentSearchTerm) {
@@ -147,7 +162,11 @@ export const SearchableDropdown = forwardRef(({
             item.companyName,
             item.company_name,
             item.email,
-            item.phone
+            item.phone,
+            item.sku,
+            item.barcode,
+            item.retail_code,
+            item.retailCode
           ].filter(Boolean); // Remove null/undefined values
 
           return searchableFields.some(field =>
@@ -163,11 +182,40 @@ export const SearchableDropdown = forwardRef(({
         return displayValue.toLowerCase().includes(currentSearchTerm.toLowerCase());
       });
       setFilteredItems(filtered);
-    } else {
-      setFilteredItems(items);
+      setSelectedIndex(-1);
+      return;
     }
+
+    // No search text: show at most maxInitialItems, but always include selectedItem if it exists
+    if (maxInitialItems == null || maxInitialItems === false || maxInitialItems <= 0) {
+      setFilteredItems(items);
+      setSelectedIndex(-1);
+      return;
+    }
+
+    if (items.length <= maxInitialItems) {
+      setFilteredItems(items);
+      setSelectedIndex(-1);
+      return;
+    }
+
+    const seen = new Set();
+    const out = [];
+    const selId = getItemId(selectedItem, valueKey);
+    if (selectedItem && selId != null) {
+      out.push(selectedItem);
+      seen.add(selId);
+    }
+    for (let i = 0; i < items.length && out.length < maxInitialItems; i++) {
+      const item = items[i];
+      const id = getItemId(item, valueKey);
+      if (id != null && seen.has(id)) continue;
+      if (id != null) seen.add(id);
+      out.push(item);
+    }
+    setFilteredItems(out);
     setSelectedIndex(-1);
-  }, [value, searchTerm, items]); // Removed displayKey from deps, using ref instead
+  }, [value, searchTerm, items, selectedItem, valueKey, maxInitialItems]); // displayKey via ref
 
   // Handle search
   const handleSearch = (term) => {
@@ -449,11 +497,12 @@ export const SearchableDropdown = forwardRef(({
             <div className="py-1">
               {filteredItems.map((item, index) => {
                 const isSelected = selectedIndex === index;
-                const isItemSelected = selectedItem && selectedItem[valueKey] === item[valueKey];
+                const isItemSelected =
+                  selectedItem && getItemId(selectedItem, valueKey) === getItemId(item, valueKey);
 
                 return (
                   <button
-                    key={item[valueKey]}
+                    key={String(getItemId(item, valueKey) ?? `row-${index}`)}
                     ref={el => itemRefs.current[index] = el}
                     type="button"
                     onClick={() => handleSelect(item)}
@@ -484,3 +533,5 @@ export const SearchableDropdown = forwardRef(({
     </div>
   );
 });
+
+SearchableDropdown.displayName = 'SearchableDropdown';

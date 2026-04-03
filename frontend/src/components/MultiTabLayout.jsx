@@ -146,7 +146,7 @@ export const navigation = [
     icon: Warehouse,
     children: [
       { name: 'Inventory', href: '/inventory', icon: Warehouse, permission: 'view_inventory' },
-      { name: 'Inventory Alerts', href: '/inventory-alerts', icon: AlertTriangle, permission: 'view_inventory' },
+      { name: 'Inventory Alerts', href: '/inventory-alerts', icon: AlertTriangle, permission: 'view_inventory', allowMultiple: true },
       { name: 'Warehouses', href: '/warehouses', icon: Warehouse, permission: 'view_inventory' },
       { name: 'Stock Movements', href: '/stock-movements', icon: ArrowUpDown, permission: 'view_stock_movements' },
       { name: 'Stock Ledger', href: '/stock-ledger', icon: FileText, permission: 'view_reports' },
