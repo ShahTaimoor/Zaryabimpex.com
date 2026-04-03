@@ -56,6 +56,14 @@ import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, L
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  OrderCheckoutCard,
+  OrderDetailsSection,
+  OrderSummaryBar,
+  OrderSummaryContent,
+  OrderCheckoutActions,
+} from '../components/order/OrderCheckoutLayout';
+import { ShowDetailsSectionHeader } from '../components/ShowDetailsSectionHeader';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../utils/componentUtils';
 import { formatDate, formatCurrency } from '../utils/formatters';
@@ -373,6 +381,7 @@ export const PurchaseOrders = ({ tabId }) => {
 
   // Current order for operations
   const [currentOrder, setCurrentOrder] = useState(null);
+  const [showPurchaseOrderDetailsFields, setShowPurchaseOrderDetailsFields] = useState(false);
 
   // Auto-focus on product search field when component mounts
   useEffect(() => {
@@ -1942,14 +1951,16 @@ export const PurchaseOrders = ({ tabId }) => {
 
       {/* Purchase Order Details - Create Mode */}
       {formData.items.length > 0 && !showEditModal && (
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg max-w-5xl ml-auto mt-4">
-          {/* Purchase Details Section */}
-          <div className="px-4 sm:px-6 py-4 border-b border-blue-200">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 text-left sm:text-right">
-              Purchase Order Details
-            </h3>
-          </div>
-          <div className="px-4 sm:px-6 py-4">
+        <OrderCheckoutCard>
+          <OrderDetailsSection
+            detailsTitle="Purchase Order Details"
+            showDetails={showPurchaseOrderDetailsFields}
+            onShowDetailsChange={setShowPurchaseOrderDetailsFields}
+            checkboxId="showPurchaseOrderDetailsFields"
+            headerClassName="mb-0"
+          >
+            {showPurchaseOrderDetailsFields && (
+            <>
             {/* Mobile Layout - Stacked */}
             <div className="md:hidden space-y-3">
               {/* Invoice Number */}
@@ -2095,15 +2106,13 @@ export const PurchaseOrders = ({ tabId }) => {
                 />
               </div>
             </div>
+            </>
+            )}
+          </OrderDetailsSection>
 
-            {/* Order Summary Section */}
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 border-t border-blue-200 mt-6">
-              <h3 className="text-lg font-semibold text-white">Order Summary</h3>
-            </div>
-
-            {/* Order Summary Details */}
-            <div className="px-6 py-4">
-              <div className="space-y-3 mb-6">
+          <OrderSummaryBar />
+          <OrderSummaryContent>
+              <div className="mb-6 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-800 font-semibold">Subtotal:</span>
                   <span className="text-xl font-bold text-gray-900">{Math.round(subtotal)}</span>
@@ -2127,10 +2136,9 @@ export const PurchaseOrders = ({ tabId }) => {
                   <span className="text-blue-900 text-3xl">{Math.round(totalPayables)}</span>
                 </div>
               </div>
-            </div>
 
             {/* Action Buttons */}
-            <div className="flex space-x-3 mt-6 px-6 pb-6">
+            <OrderCheckoutActions className="mt-6 border-0 pt-0">
               {formData.items.length > 0 && !showEditModal && (
                 <Button
                   onClick={resetForm}
@@ -2185,9 +2193,9 @@ export const PurchaseOrders = ({ tabId }) => {
                 <Save className="h-4 w-4 mr-2" />
                 {creating ? 'Creating...' : 'Create Purchase Order'}
               </Button>
-            </div>
-          </div>
-        </div>
+            </OrderCheckoutActions>
+          </OrderSummaryContent>
+        </OrderCheckoutCard>
       )}
 
       {/* Edit Modal */}
@@ -2224,14 +2232,17 @@ export const PurchaseOrders = ({ tabId }) => {
               </div>
 
               {/* Purchase Order Details */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg mb-6">
-                {/* Purchase Details Section */}
-                <div className="px-6 py-4 border-b border-blue-200">
-                  <h3 className="text-lg font-medium text-gray-900 text-right">
-                    Edit Purchase Order Details
-                  </h3>
+              <OrderCheckoutCard className="mb-6 ml-0 mt-0 max-w-none">
+                <div className="border-b border-blue-200/60 bg-white/40 px-5 py-4 sm:px-7">
+                  <ShowDetailsSectionHeader
+                    title="Edit Purchase Order Details"
+                    showDetails={showPurchaseOrderDetailsFields}
+                    onShowDetailsChange={setShowPurchaseOrderDetailsFields}
+                    checkboxId="showPurchaseOrderDetailsFieldsEdit"
+                    titleClassName="text-lg"
+                  />
                 </div>
-                <div className="px-6 py-4">
+                <div className="px-5 py-4 sm:px-7">
                   {/* Supplier Selection */}
                   <div className="mb-4">
                     <div className="flex flex-col">
@@ -2283,6 +2294,8 @@ export const PurchaseOrders = ({ tabId }) => {
                     </div>
                   </div>
 
+                  {showPurchaseOrderDetailsFields && (
+                  <>
                   {/* Single Row Layout for Purchase Order Details */}
                   <div className="flex flex-nowrap gap-3 items-end justify-end">
                     {/* Invoice Number */}
@@ -2364,6 +2377,8 @@ export const PurchaseOrders = ({ tabId }) => {
                       </div>
                     </div>
                   </div>
+                  </>
+                  )}
                 </div>
 
                 {/* Product Selection & Cart Items */}
@@ -2651,8 +2666,8 @@ export const PurchaseOrders = ({ tabId }) => {
                 </div>
 
                 {/* Order Items Summary */}
-                <div className="px-6 py-4 border-t border-blue-200">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Order Items Summary</h4>
+                <div className="border-t border-blue-200 px-6 py-4">
+                  <h4 className="mb-3 text-sm font-medium text-gray-900">Order Items Summary</h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="bg-white rounded-lg p-3 border border-gray-200">
                       <div className="text-xs text-gray-600 mb-1">Total Items</div>
@@ -2711,7 +2726,7 @@ export const PurchaseOrders = ({ tabId }) => {
                     {updating ? 'Updating...' : 'Update Purchase Order'}
                   </button>
                 </div>
-              </div>
+              </OrderCheckoutCard>
             </div>
           </div>
         </div>

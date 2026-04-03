@@ -44,6 +44,15 @@ import { buildReceiptLabelProductsFromLineItems } from '../utils/receiptLabelUti
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  OrderCheckoutCard,
+  OrderDetailsSection,
+  OrderSummaryBar,
+  OrderSummaryContent,
+  OrderInsetPanel,
+  OrderCheckoutActions,
+} from '../components/order/OrderCheckoutLayout';
 import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
 import {
   hasDualUnit,
@@ -623,6 +632,7 @@ export const Purchase = ({ tabId, editData }) => {
   const [billDate, setBillDate] = useState(getLocalDateString()); // Bill Date for backdating (same as Sale page)
   const [notes, setNotes] = useState('');
   const [taxExempt, setTaxExempt] = useState(true);
+  const [showPurchaseDetailsFields, setShowPurchaseDetailsFields] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   // Ref for supplier selection field to focus on page load
@@ -1653,11 +1663,15 @@ export const Purchase = ({ tabId, editData }) => {
 
         {/* Combined Purchase Details and Order Summary */}
         {purchaseItems.length > 0 && (
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg w-full lg:max-w-5xl lg:ml-auto mt-4">
-            {/* Purchase Details Section */}
-            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-blue-200">
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 text-left sm:text-right mb-3 sm:mb-4">Purchase Details</h3>
-              {/* Single Row Layout for Purchase Details */}
+          <OrderCheckoutCard className="w-full lg:max-w-5xl lg:ml-auto">
+            <OrderDetailsSection
+              detailsTitle="Purchase Details"
+              showDetails={showPurchaseDetailsFields}
+              onShowDetailsChange={setShowPurchaseDetailsFields}
+              checkboxId="showPurchaseDetailsFields"
+              headerClassName="mb-3 sm:mb-4"
+            >
+              {showPurchaseDetailsFields && (
               <div className="flex flex-col sm:flex-row sm:flex-nowrap gap-3 sm:items-end sm:justify-end">
                 {/* Invoice Number */}
                 <div className="flex flex-col w-full sm:w-44">
@@ -1748,16 +1762,12 @@ export const Purchase = ({ tabId, editData }) => {
                   />
                 </div>
               </div>
-            </div>
+              )}
+            </OrderDetailsSection>
 
-            {/* Order Summary Section */}
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-4 sm:px-6 py-3 sm:py-4">
-              <h3 className="text-base sm:text-lg font-semibold text-white">Order Summary</h3>
-            </div>
-
-            {/* Order Summary Details */}
-            <div className="px-4 sm:px-6 py-3 sm:py-4">
-              <div className="space-y-3 mb-4 sm:mb-6">
+            <OrderSummaryBar />
+            <OrderSummaryContent>
+              <div className="mb-4 space-y-3 sm:mb-6">
                 <div className="flex justify-between items-center">
                   <span className="text-sm sm:text-base text-gray-800 font-semibold">Subtotal:</span>
                   <span className="text-lg sm:text-xl font-bold text-gray-900">{subtotal.toFixed(2)}</span>
@@ -1784,8 +1794,8 @@ export const Purchase = ({ tabId, editData }) => {
               </div>
 
               {/* Payment and Discount Section - One Row */}
-              <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 items-start">
+              <OrderInsetPanel className="p-3 sm:p-4">
+                <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-3">
                   {/* Apply Discount */}
                   <div className="flex flex-col">
                     <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-2">
@@ -1871,12 +1881,10 @@ export const Purchase = ({ tabId, editData }) => {
                     </Button>
                   </div>
                 )}
-              </div>
-
-            </div>
+              </OrderInsetPanel>
 
             {!editData?.isEditMode && purchaseItems.length > 0 && (
-              <div className="px-4 sm:px-6 pt-2 border-t border-gray-100">
+              <div className="border-t border-gray-100 pt-3">
                 <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
                   <input
                     type="checkbox"
@@ -1890,7 +1898,7 @@ export const Purchase = ({ tabId, editData }) => {
             )}
 
             {/* Action Buttons */}
-            <div className="flex flex-col-reverse sm:flex-row gap-3 mt-4 sm:mt-6 px-4 sm:px-6 pb-4 sm:pb-6">
+            <OrderCheckoutActions className="mt-4 border-0 pt-4 sm:mt-6 sm:pt-6 sm:flex-row-reverse">
               {purchaseItems.length > 0 && (
                 <Button
                   onClick={() => {
@@ -2002,8 +2010,9 @@ export const Purchase = ({ tabId, editData }) => {
                 <span className="hidden sm:inline">{editData?.isEditMode ? 'Update Purchase Invoice' : 'Complete Purchase & Update Inventory'}</span>
                 <span className="sm:hidden">{editData?.isEditMode ? 'Update' : 'Complete Purchase'}</span>
               </LoadingButton>
-            </div>
-          </div>
+            </OrderCheckoutActions>
+            </OrderSummaryContent>
+          </OrderCheckoutCard>
         )}
 
         {/* Print Modal */}

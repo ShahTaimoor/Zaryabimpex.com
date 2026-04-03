@@ -46,6 +46,14 @@ import { handleApiError, showSuccessToast, showErrorToast } from '../utils/error
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  OrderCheckoutCard,
+  OrderDetailsSection,
+  OrderSummaryBar,
+  OrderSummaryContent,
+  OrderInsetPanel,
+  OrderCheckoutActions,
+} from '../components/order/OrderCheckoutLayout';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import AsyncErrorBoundary from '../components/AsyncErrorBoundary';
 import { ClearConfirmationDialog } from '../components/ConfirmationDialog';
@@ -763,6 +771,7 @@ export const Sales = ({ tabId, editData }) => {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [autoGenerateInvoice, setAutoGenerateInvoice] = useState(true);
   const [autoPrint, setAutoPrint] = useState(false); // Default to false as requested
+  const [showSalesDetailsFields, setShowSalesDetailsFields] = useState(false);
   const [billDate, setBillDate] = useState(getLocalDateString()); // Default to current date for backdating invoices
   const [notes, setNotes] = useState('');
   const [isLoadingLastPrices, setIsLoadingLastPrices] = useState(false);
@@ -2796,12 +2805,15 @@ export const Sales = ({ tabId, editData }) => {
 
         {/* Combined Sales Details and Order Summary */}
         {cart.length > 0 && (
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg max-w-5xl ml-auto mt-4">
-            {/* Sales Details Section */}
-            <div className="px-4 sm:px-6 py-4 border-b border-blue-200">
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 text-left sm:text-right mb-4">Sales Details</h3>
-
+          <OrderCheckoutCard>
+            <OrderDetailsSection
+              detailsTitle="Sales Details"
+              showDetails={showSalesDetailsFields}
+              onShowDetailsChange={setShowSalesDetailsFields}
+              checkboxId="showSalesDetailsFields"
+            >
               {/* Mobile Layout - Stacked */}
+              {showSalesDetailsFields && (
               <div className="md:hidden space-y-3">
                 {/* Order Type */}
                 <div>
@@ -2943,8 +2955,10 @@ export const Sales = ({ tabId, editData }) => {
                   />
                 </div>
               </div>
+              )}
 
               {/* Desktop Layout - Horizontal */}
+              {showSalesDetailsFields && (
               <div className="hidden md:flex flex-nowrap gap-3 items-end justify-end">
                 {/* Order Type */}
                 <div className="flex flex-col w-44">
@@ -3080,13 +3094,11 @@ export const Sales = ({ tabId, editData }) => {
                   />
                 </div>
               </div>
-            </div>
+              )}
+            </OrderDetailsSection>
 
-            {/* Order Summary Section */}
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4">
-              <h3 className="text-lg font-semibold text-white">Order Summary</h3>
-            </div>
-            <div className="px-6 py-4">
+            <OrderSummaryBar />
+            <OrderSummaryContent>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-800 font-semibold">Subtotal:</span>
@@ -3153,7 +3165,7 @@ export const Sales = ({ tabId, editData }) => {
               </div>
 
               {/* Payment and Discount Section - One Row */}
-              <div className="mt-4 bg-white rounded-lg p-4 shadow-sm">
+              <OrderInsetPanel>
                 {/* Discount code (from Discount Management) */}
                 <div className="mb-4">
                   <label className="block text-sm font-semibold text-gray-800 mb-2">
@@ -3357,10 +3369,10 @@ export const Sales = ({ tabId, editData }) => {
                     </button>
                   </div>
                 )}
-              </div>
+              </OrderInsetPanel>
 
               {/* Action Buttons */}
-              <div className="flex space-x-3 mt-6">
+              <OrderCheckoutActions>
                 {cart.length > 0 && (
                   <LoadingButton
                     onClick={handleClearCart}
@@ -3504,9 +3516,9 @@ export const Sales = ({ tabId, editData }) => {
                     : (amountPaid === 0 ? 'Create Invoice' : 'Complete Sale')
                   }
                 </LoadingButton>
-              </div>
-            </div>
-          </div>
+              </OrderCheckoutActions>
+            </OrderSummaryContent>
+          </OrderCheckoutCard>
         )}
 
         {/* Recommendations Section */}

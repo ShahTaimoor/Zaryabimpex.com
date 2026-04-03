@@ -36,6 +36,14 @@ import { showSuccessToast, showErrorToast, handleApiError } from '../utils/error
 import { formatDate, formatCurrency } from '../utils/formatters';
 import { LoadingButton } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  OrderCheckoutCard,
+  OrderDetailsSection,
+  OrderSummaryBar,
+  OrderSummaryContent,
+  OrderCheckoutActions,
+} from '../components/order/OrderCheckoutLayout';
 import { useGetCustomersQuery, useGetCustomerQuery } from '../store/services/customersApi';
 import { useGetProductsQuery, useLazyGetLastPurchasePriceQuery } from '../store/services/productsApi';
 import { useGetVariantsQuery } from '../store/services/productVariantsApi';
@@ -166,6 +174,7 @@ const SalesOrders = ({ tabId }) => {
     orderNumber: ''
   });
   const [autoGenerateOrderNumber, setAutoGenerateOrderNumber] = useState(true);
+  const [showSalesOrderDetailsFields, setShowSalesOrderDetailsFields] = useState(false);
 
   const generateOrderNumber = useCallback(
     (customer) => {
@@ -2610,11 +2619,14 @@ const SalesOrders = ({ tabId }) => {
 
       {/* Sales Order Details */}
       {formData.items.length > 0 && (
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg max-w-5xl ml-auto mt-4 w-full overflow-x-hidden">
-          <div className="px-4 sm:px-6 py-4 border-b border-blue-200">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 text-right mb-4">
-              Sales Order Details
-            </h3>
+        <OrderCheckoutCard className="overflow-x-hidden">
+          <OrderDetailsSection
+            detailsTitle="Sales Order Details"
+            showDetails={showSalesOrderDetailsFields}
+            onShowDetailsChange={setShowSalesOrderDetailsFields}
+            checkboxId="showSalesOrderDetailsFields"
+          >
+            {showSalesOrderDetailsFields && (
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-end justify-end">
               {/* Order Type */}
               <div className="flex flex-col w-full sm:w-44">
@@ -2726,14 +2738,12 @@ const SalesOrders = ({ tabId }) => {
                 />
               </div>
             </div>
-          </div>
+            )}
+          </OrderDetailsSection>
 
-          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-4 sm:px-6 py-4">
-            <h3 className="text-base sm:text-lg font-semibold text-white">Order Summary</h3>
-          </div>
-
-          <div className="px-4 sm:px-6 py-4">
-            <div className="space-y-3 mb-6">
+          <OrderSummaryBar />
+          <OrderSummaryContent>
+            <div className="mb-6 space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-gray-800 font-semibold">Subtotal:</span>
                 <span className="text-xl font-bold text-gray-900">{Math.round(subtotal)}</span>
@@ -2798,9 +2808,8 @@ const SalesOrders = ({ tabId }) => {
                 );
               })()}
             </div>
-          </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 mt-6 px-4 sm:px-6 pb-6">
+          <OrderCheckoutActions className="mt-6 border-0 pt-0 sm:flex-row">
             <Button
               onClick={resetForm}
               variant="secondary"
@@ -2878,8 +2887,9 @@ const SalesOrders = ({ tabId }) => {
                 <span className="sm:hidden">{creating ? 'Creating...' : 'Create Order'}</span>
               </Button>
             )}
-          </div>
-        </div>
+          </OrderCheckoutActions>
+          </OrderSummaryContent>
+        </OrderCheckoutCard>
       )}
 
       {/* Filters */}
