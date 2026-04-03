@@ -139,11 +139,10 @@ export const componentRegistry = {
     icon: 'BarChart3',
     component: () => import('../pages/PLStatements').then(m => m.default || m.PLStatements)
   },
-  '/balance-sheets': {
-    title: 'Balance Sheets',
+  '/balance-sheet-statement': {
+    title: 'Balance Sheet',
     icon: 'FileText',
-    allowMultiple: true,
-    component: () => import('../pages/BalanceSheets').then(m => m.default || m.BalanceSheets)
+    component: () => import('../pages/BalanceSheetStatement').then(m => m.default || m.BalanceSheetStatement)
   },
   '/discounts': {
     title: 'Discounts',

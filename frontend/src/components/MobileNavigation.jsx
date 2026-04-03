@@ -93,7 +93,7 @@ const MobileNavigation = ({ user, onLogout }) => {
     { path: '/purchase-returns', icon: RotateCcw, label: 'Purchase Returns', badge: null, permission: 'view_returns' },
     { path: '/discounts', icon: Tag, label: 'Discounts', badge: null, permission: 'view_discounts' },
     { path: '/pl-statements', icon: BarChart3, label: 'P&L Statements', badge: null, permission: 'view_pl_statements' },
-    { path: '/balance-sheets', icon: FileText, label: 'Balance Sheets', badge: null, permission: 'view_balance_sheets' },
+    { path: '/balance-sheet-statement', icon: FileText, label: 'Balance Sheet', badge: null, permission: 'view_balance_sheets' },
     { path: '/sales-performance', icon: TrendingUp, label: 'Sales Performance', badge: null, permission: 'view_sales_performance' },
     { path: '/inventory-reports', icon: Warehouse, label: 'Inventory Reports', badge: null, permission: 'view_inventory_reports' },
     { path: '/reports', icon: BarChart3, label: 'Reports', badge: null, permission: 'view_general_reports' },

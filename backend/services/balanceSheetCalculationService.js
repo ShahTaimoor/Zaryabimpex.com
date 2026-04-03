@@ -227,7 +227,7 @@ class BalanceSheetCalculationService {
       statementDate: date,
       assets: {
         currentAssets: {
-          cashAndCashEquivalents: { total: cash + bank },
+          cashAndCashEquivalents: { cash, bank, total: cash + bank },
           accountsReceivable: { netReceivables: ar },
           inventory: { total: inventory },
           prepaidExpenses: prepaid,

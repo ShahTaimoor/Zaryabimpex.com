@@ -134,7 +134,7 @@ export const navigation = [
     icon: BarChart3,
     children: [
       { name: 'P&L Statements', href: '/pl-statements', icon: BarChart3 },
-      { name: 'Balance Sheets', href: '/balance-sheets', icon: FileText },
+      { name: 'Balance Sheet', href: '/balance-sheet-statement', icon: FileText },
       { name: 'Sales Performance', href: '/sales-performance', icon: TrendingUp },
       { name: 'Inventory Reports', href: '/inventory-reports', icon: Warehouse },
       { name: 'Reports', href: '/reports', icon: BarChart3 },

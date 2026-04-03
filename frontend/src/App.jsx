@@ -32,10 +32,10 @@ const AnomalyDetection = lazy(() => import('./pages/AnomalyDetection'));
 const Warehouses = lazy(() => import('./pages/Warehouses'));
 const Backups = lazy(() => import('./pages/Backups').then(m => ({ default: m.Backups })));
 const PLStatements = lazy(() => import('./pages/PLStatements').then(m => ({ default: m.PLStatements })));
+const BalanceSheetStatement = lazy(() => import('./pages/BalanceSheetStatement').then(m => ({ default: m.BalanceSheetStatement })));
 const SaleReturns = lazy(() => import('./pages/SaleReturns'));
 const PurchaseReturns = lazy(() => import('./pages/PurchaseReturns'));
 const PurchaseBySupplierReport = lazy(() => import('./pages/PurchaseBySupplierReport'));
-const BalanceSheets = lazy(() => import('./pages/BalanceSheets'));
 const Discounts = lazy(() => import('./pages/Discounts'));
 const SalesPerformanceReports = lazy(() => import('./pages/SalesPerformanceReports'));
 const InventoryReports = lazy(() => import('./pages/InventoryReports'));
@@ -103,10 +103,10 @@ function App() {
                       <Route path="/stock-movements" element={<Suspense fallback={<LoadingPage />}><StockMovements /></Suspense>} />
                       <Route path="/backups" element={<Suspense fallback={<LoadingPage />}><Backups /></Suspense>} />
                       <Route path="/pl-statements" element={<Suspense fallback={<LoadingPage />}><PLStatements /></Suspense>} />
+                      <Route path="/balance-sheet-statement" element={<Suspense fallback={<LoadingPage />}><BalanceSheetStatement /></Suspense>} />
                       <Route path="/sale-returns" element={<Suspense fallback={<LoadingPage />}><SaleReturns /></Suspense>} />
                       <Route path="/purchase-returns" element={<Suspense fallback={<LoadingPage />}><PurchaseReturns /></Suspense>} />
                       <Route path="/purchase-by-supplier" element={<Suspense fallback={<LoadingPage />}><PurchaseBySupplierReport /></Suspense>} />
-                      <Route path="/balance-sheets" element={<Suspense fallback={<LoadingPage />}><BalanceSheets /></Suspense>} />
                       <Route path="/discounts" element={<Suspense fallback={<LoadingPage />}><Discounts /></Suspense>} />
                       <Route path="/sales-performance" element={<Suspense fallback={<LoadingPage />}><SalesPerformanceReports /></Suspense>} />
                       <Route path="/inventory-reports" element={<Suspense fallback={<LoadingPage />}><InventoryReports /></Suspense>} />

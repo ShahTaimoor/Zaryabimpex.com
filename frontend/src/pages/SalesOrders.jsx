@@ -2181,9 +2181,10 @@ const SalesOrders = ({ tabId }) => {
                       onChange={(q, dual) => setQuantity(q)}
                       max={selectedProduct?.inventory?.currentStock > 0 ? selectedProduct.inventory.currentStock : undefined}
                       stockPiecesForRemaining={selectedProduct?.inventory?.currentStock ?? 0}
-                      showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
+                     
                       showBoxInput={dualUnitShowBoxInputEnabled}
                       showPiecesInput={dualUnitShowPiecesInputEnabled}
+                      showPiecesUnitLabel={false}
                       onKeyDown={handleInputKeyDown}
                       inputClassName="input text-center h-10"
                       compact={!dualSel}
@@ -2306,8 +2307,8 @@ const SalesOrders = ({ tabId }) => {
                         </span>
                       </div>
 
-                      {/* Product Name - 5 columns (reduced from 6 to accommodate Cost column when shown) */}
-                      <div className={`${showCostPrice && canViewCostPrice ? 'col-span-5' : 'col-span-6'} flex items-center h-8`}>
+                      {/* Product Name - reduced width to keep row alignment */}
+                      <div className={`${showCostPrice && canViewCostPrice ? 'col-span-4' : 'col-span-5'} flex items-center h-8`}>
                         <div className="flex flex-col">
                           <span className="font-medium text-sm truncate">
                             {product?.isVariant
@@ -2350,8 +2351,8 @@ const SalesOrders = ({ tabId }) => {
                         </span>
                       </div>
 
-                      {/* Quantity — dual unit uses compact 3-cell row inside col-span-2 */}
-                      <div className={hasDualUnit(product) ? 'col-span-2' : 'col-span-1'}>
+                      {/* Quantity */}
+                      <div className="col-span-2">
                         <DualUnitQuantityInput
                           product={product}
                           quantity={item.quantity}
@@ -2377,9 +2378,10 @@ const SalesOrders = ({ tabId }) => {
                           min={1}
                           max={product?.inventory?.currentStock}
                           stockPiecesForRemaining={product?.inventory?.currentStock ?? 0}
-                          showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
+                          
                           showBoxInput={dualUnitShowBoxInputEnabled}
                           showPiecesInput={dualUnitShowPiecesInputEnabled}
+                          showPiecesUnitLabel={false}
                           inputClassName="input text-center h-8"
                           compact={hasDualUnit(product)}
                         />
@@ -2532,6 +2534,7 @@ const SalesOrders = ({ tabId }) => {
                             showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
                             showBoxInput={dualUnitShowBoxInputEnabled}
                             showPiecesInput={dualUnitShowPiecesInputEnabled}
+                            showPiecesUnitLabel={false}
                             inputClassName="input text-center h-8 text-sm w-full"
                           />
                         </div>

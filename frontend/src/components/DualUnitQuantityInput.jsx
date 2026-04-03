@@ -37,6 +37,8 @@ export function DualUnitQuantityInput({
   showBoxInput = true,
   /** Show loose Pieces column for dual-unit products (default true). */
   showPiecesInput = true,
+  /** When false, hide trailing "pcs" labels next to quantity (e.g. sales order cart). */
+  showPiecesUnitLabel = true,
   ...props
 }) {
   const ppb = getPiecesPerBox(product);
@@ -157,7 +159,9 @@ export function DualUnitQuantityInput({
             placeholder={placeholder}
             className={baseInput}
           />
-          {!compact && <span className="text-xs text-gray-500">pcs</span>}
+          {!compact && showPiecesUnitLabel && (
+            <span className="text-xs text-gray-500">pcs</span>
+          )}
         </div>
         {remainingLine}
       </div>
@@ -180,7 +184,9 @@ export function DualUnitQuantityInput({
             placeholder={placeholder}
             className={baseInput}
           />
-          {!compact && <span className="text-xs text-gray-500">pcs</span>}
+          {!compact && showPiecesUnitLabel && (
+            <span className="text-xs text-gray-500">pcs</span>
+          )}
         </div>
         {remainingLine}
       </div>
@@ -190,11 +196,11 @@ export function DualUnitQuantityInput({
   if (compact || variant === 'compact') {
     return (
       <div className={`flex flex-col gap-1 ${className}`} {...props}>
-        <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-2.5 shadow-sm">
-          <div className="flex flex-wrap items-end gap-2 sm:gap-3">
+        <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-2 shadow-sm">
+          <div className="grid grid-cols-3 gap-1">
             {showBoxInput && (
-              <div className="flex min-w-[3.25rem] flex-1 flex-col gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Box</span>
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-600">Box</span>
                 <input
                   type="number"
                   min={0}
@@ -203,14 +209,14 @@ export function DualUnitQuantityInput({
                   onKeyDown={onKeyDown}
                   disabled={disabled}
                   placeholder="0"
-                  className={`${baseInput} h-10`}
+                  className={`${baseInput} h-8 px-1 text-xs`}
                   title="Boxes"
                 />
               </div>
             )}
             {showPiecesInput && (
-              <div className="flex min-w-[3.25rem] flex-1 flex-col gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Pcs</span>
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-600">Pcs</span>
                 <input
                   type="number"
                   min={0}
@@ -219,18 +225,21 @@ export function DualUnitQuantityInput({
                   onKeyDown={onKeyDown}
                   disabled={disabled}
                   placeholder="0"
-                  className={`${baseInput} h-10`}
+                  className={`${baseInput} h-8 px-1 text-xs`}
                   title="Loose pieces (not full boxes)"
                 />
               </div>
             )}
-            <div className="flex min-w-[4.75rem] shrink-0 flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Total</span>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-600">Total</span>
               <div
-                className="flex h-10 min-w-[4.75rem] items-center justify-center rounded-md border border-gray-200 bg-white px-2 text-xs font-semibold tabular-nums text-gray-900 shadow-sm"
+                className="flex h-8 items-center justify-center rounded-md border border-gray-200 bg-white px-1 text-[11px] font-semibold tabular-nums text-gray-900 shadow-sm"
                 title="Total quantity in pieces"
               >
-                {quantity || 0} <span className="ml-0.5 font-medium text-gray-600">pcs</span>
+                {quantity || 0}
+                {showPiecesUnitLabel ? (
+                  <span className="ml-0.5 font-medium text-gray-600">pcs</span>
+                ) : null}
               </div>
             </div>
           </div>

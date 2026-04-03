@@ -85,7 +85,6 @@ const ProductSearch = ({
   hasCostPricePermission,
   priceType,
   onRefetchReady,
-  showRemainingStockAfterSale = true,
   dualUnitShowBoxInput = true,
   dualUnitShowPiecesInput = true,
 }) => {
@@ -423,7 +422,7 @@ const ProductSearch = ({
         : showCostPrice && hasCostPricePermission
           ? 'col-span-6'
           : 'col-span-7';
-  /** Wider column so Box + Pcs + Total + “After sale” don’t feel cramped */
+  /** Wider column when dual unit (boxes + pieces + total) */
   const quantityColClass = dualUnit ? 'col-span-4' : 'col-span-1';
 
   return (
@@ -510,7 +509,8 @@ const ProductSearch = ({
                 quantity={quantity}
                 onChange={(q) => setQuantity(q)}
                 max={selectedProduct?.inventory?.currentStock}
-                showRemainingAfterSale={showRemainingStockAfterSale}
+                showRemainingAfterSale={false}
+                showPiecesUnitLabel={false}
                 showBoxInput={dualUnitShowBoxInput}
                 showPiecesInput={dualUnitShowPiecesInput}
                 onKeyDown={handleKeyDown}
@@ -572,7 +572,7 @@ const ProductSearch = ({
           </div>
         </div>
 
-        {/* Desktop Layout — items-start so “After sale” line doesn’t throw off alignment */}
+        {/* Desktop Layout — items-start for quantity column alignment */}
         <div className="hidden md:grid grid-cols-12 gap-x-3 gap-y-3 items-start">
           {/* Product Search - 7 columns */}
           <div className={searchColClass}>
@@ -640,7 +640,8 @@ const ProductSearch = ({
               quantity={quantity}
               onChange={(q) => setQuantity(q)}
               max={selectedProduct?.inventory?.currentStock}
-              showRemainingAfterSale={showRemainingStockAfterSale}
+              showRemainingAfterSale={false}
+              showPiecesUnitLabel={false}
               showBoxInput={dualUnitShowBoxInput}
               showPiecesInput={dualUnitShowPiecesInput}
               onKeyDown={handleKeyDown}
@@ -805,7 +806,6 @@ export const Sales = ({ tabId, editData }) => {
   const { updateTabTitle, getActiveTab, openTab } = useTab();
   const { hasPermission, user } = useAuth();
   const { companyInfo: companySettings } = useCompanyInfo();
-  const showRemainingStockAfterSaleEnabled = companySettings.orderSettings?.showRemainingStockAfterSale !== false;
   const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const [showProfit, setShowProfit] = useState(false);
@@ -2408,7 +2408,6 @@ export const Sales = ({ tabId, editData }) => {
                 showCostPrice={showCostPrice}
                 hasCostPricePermission={hasPermission('view_cost_prices')}
                 priceType={priceType}
-                showRemainingStockAfterSale={showRemainingStockAfterSaleEnabled}
                 dualUnitShowBoxInput={dualUnitShowBoxInputEnabled}
                 dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
                 onRefetchReady={setRefetchProducts}
@@ -2468,13 +2467,13 @@ export const Sales = ({ tabId, editData }) => {
                   <div className="col-span-1">
                     <span className="text-xs font-semibold text-gray-600 uppercase">#</span>
                   </div>
-                  <div className={`${showCostPrice && hasPermission('view_cost_prices') ? 'col-span-5' : 'col-span-6'}`}>
+                  <div className={`${showCostPrice && hasPermission('view_cost_prices') ? 'col-span-4' : 'col-span-5'}`}>
                     <span className="text-xs font-semibold text-gray-600 uppercase">Product</span>
                   </div>
                   <div className="col-span-1">
                     <span className="text-xs font-semibold text-gray-600 uppercase">Stock</span>
                   </div>
-                  <div className="col-span-1">
+                  <div className="col-span-2">
                     <span className="text-xs font-semibold text-gray-600 uppercase">Qty</span>
                   </div>
                   {showCostPrice && hasPermission('view_cost_prices') && (
@@ -2578,7 +2577,8 @@ export const Sales = ({ tabId, editData }) => {
                               min={1}
                               max={item.product.inventory?.currentStock || 999999}
                               stockPiecesForRemaining={item.product.inventory?.currentStock ?? 0}
-                              showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
+                              showRemainingAfterSale={false}
+                              showPiecesUnitLabel={false}
                               showBoxInput={dualUnitShowBoxInputEnabled}
                               showPiecesInput={dualUnitShowPiecesInputEnabled}
                               inputClassName="text-center h-8 w-full border border-gray-300 rounded px-2"
@@ -2625,7 +2625,7 @@ export const Sales = ({ tabId, editData }) => {
                           </div>
 
                           {/* Product Name - mirror Sales Order layout (6 columns normally, 5 when cost column shown) */}
-                          <div className={`${showCostPrice && hasPermission('view_cost_prices') ? 'col-span-5' : 'col-span-6'} flex items-center h-8`}>
+                          <div className={`${showCostPrice && hasPermission('view_cost_prices') ? 'col-span-4' : 'col-span-5'} flex items-center h-8`}>
                             <div className="flex flex-col">
                               <span className="font-medium text-sm truncate">
                                 {item.product.isVariant
@@ -2674,8 +2674,8 @@ export const Sales = ({ tabId, editData }) => {
                             </span>
                           </div>
 
-                          {/* Quantity - 1 or 2 columns for dual unit */}
-                          <div className={hasDualUnit(item.product) ? 'col-span-2' : 'col-span-1'}>
+                          {/* Quantity */}
+                          <div className="col-span-2">
                             <DualUnitQuantityInput
                               product={item.product}
                               quantity={item.quantity}
@@ -2683,7 +2683,8 @@ export const Sales = ({ tabId, editData }) => {
                               min={1}
                               max={item.product.inventory?.currentStock || 999999}
                               stockPiecesForRemaining={item.product.inventory?.currentStock ?? 0}
-                              showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
+                              showRemainingAfterSale={false}
+                              showPiecesUnitLabel={false}
                               showBoxInput={dualUnitShowBoxInputEnabled}
                               showPiecesInput={dualUnitShowPiecesInputEnabled}
                               inputClassName="text-center h-8 border border-gray-300 rounded px-2"

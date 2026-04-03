@@ -21,7 +21,7 @@ const componentLoader = {
   '/purchase-by-supplier': () => import('../pages/PurchaseBySupplierReport').then(module => module.default),
   '/reports': () => import('../pages/Reports').then(module => module.Reports),
   '/pl-statements': () => import('../pages/PLStatements').then(module => module.PLStatements),
-  '/balance-sheets': () => import('../pages/BalanceSheets').then(module => module.default),
+  '/balance-sheet-statement': () => import('../pages/BalanceSheetStatement').then(module => module.BalanceSheetStatement),
   '/discounts': () => import('../pages/Discounts').then(module => module.default),
   '/sales-performance': () => import('../pages/SalesPerformanceReports').then(module => module.default),
   '/inventory-reports': () => import('../pages/InventoryReports').then(module => module.default),
@@ -129,8 +129,8 @@ export const componentRegistry = {
     title: 'P&L Statements',
     icon: 'BarChart3'
   },
-  '/balance-sheets': {
-    title: 'Balance Sheets',
+  '/balance-sheet-statement': {
+    title: 'Balance Sheet',
     icon: 'FileText'
   },
   '/discounts': {
