@@ -1,8 +1,9 @@
-const { query } = require('../config/postgres');
+const { query, transaction } = require('../config/postgres');
 const productRepository = require('../repositories/postgres/ProductRepository');
 const categoryRepository = require('../repositories/postgres/CategoryRepository');
 const inventoryRepository = require('../repositories/postgres/InventoryRepository');
 const investorRepository = require('../repositories/postgres/InvestorRepository');
+const AccountingService = require('./accountingService');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -261,29 +262,44 @@ class ProductServicePostgres {
     }
 
     const piecesPerBox = productData.piecesPerBox ?? productData.pieces_per_box;
-    const product = await productRepository.create({
-      name: productData.name,
-      sku: productData.sku,
-      barcode: productData.barcode,
-      hsCode: productData.hsCode ?? productData.hs_code,
-      description: productData.description,
-      categoryId,
-      costPrice: cost,
-      sellingPrice: retail,
-      wholesalePrice: wholesale,
-      stockQuantity: inv.currentStock ?? inv.stockQuantity ?? 0,
-      minStockLevel: inv.reorderPoint ?? inv.minStock ?? inv.minStockLevel ?? 0,
-      unit: productData.unit,
-      countryOfOrigin: productData.countryOfOrigin ?? productData.country_of_origin ?? null,
-      netWeightKg: productData.netWeightKg ?? productData.net_weight_kg ?? null,
-      grossWeightKg: productData.grossWeightKg ?? productData.gross_weight_kg ?? null,
-      importRefNo: productData.importRefNo ?? productData.import_ref_no ?? null,
-      gdNumber: productData.gdNumber ?? productData.gd_number ?? null,
-      invoiceRef: productData.invoiceRef ?? productData.invoice_ref ?? null,
-      piecesPerBox: piecesPerBox != null && piecesPerBox !== '' ? parseFloat(piecesPerBox) : null,
-      isActive: productData.status !== 'inactive' && productData.isActive !== false,
-      createdBy: userId,
-      imageUrl: productData.imageUrl || null
+    const openingQty = parseFloat(inv.currentStock ?? inv.stockQuantity ?? 0) || 0;
+
+    const product = await transaction(async (client) => {
+      const created = await productRepository.create(
+        {
+          name: productData.name,
+          sku: productData.sku,
+          barcode: productData.barcode,
+          hsCode: productData.hsCode ?? productData.hs_code,
+          description: productData.description,
+          categoryId,
+          costPrice: cost,
+          sellingPrice: retail,
+          wholesalePrice: wholesale,
+          stockQuantity: openingQty,
+          minStockLevel: inv.reorderPoint ?? inv.minStock ?? inv.minStockLevel ?? 0,
+          unit: productData.unit,
+          countryOfOrigin: productData.countryOfOrigin ?? productData.country_of_origin ?? null,
+          netWeightKg: productData.netWeightKg ?? productData.net_weight_kg ?? null,
+          grossWeightKg: productData.grossWeightKg ?? productData.gross_weight_kg ?? null,
+          importRefNo: productData.importRefNo ?? productData.import_ref_no ?? null,
+          gdNumber: productData.gdNumber ?? productData.gd_number ?? null,
+          invoiceRef: productData.invoiceRef ?? productData.invoice_ref ?? null,
+          piecesPerBox: piecesPerBox != null && piecesPerBox !== '' ? parseFloat(piecesPerBox) : null,
+          isActive: productData.status !== 'inactive' && productData.isActive !== false,
+          createdBy: userId,
+          imageUrl: productData.imageUrl || null
+        },
+        client
+      );
+
+      await AccountingService.postProductOpeningStock(created.id, openingQty, cost, {
+        createdBy: userId,
+        transactionDate: new Date(),
+        client
+      });
+
+      return created;
     });
 
     const categoryMap = product.category_id ? await getCategoryMap([product.category_id]) : null;
@@ -460,7 +476,10 @@ class ProductServicePostgres {
   async deleteProduct(id, req = null) {
     const product = await productRepository.findById(id);
     if (!product) throw new Error('Product not found');
-    await productRepository.delete(id);
+    await transaction(async (client) => {
+      await AccountingService.removeProductOpeningStockLedger(id, { client });
+      await productRepository.delete(id, client);
+    });
     return { message: 'Product deleted successfully' };
   }
 

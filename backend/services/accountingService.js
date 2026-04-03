@@ -580,6 +580,82 @@ class AccountingService {
   }
 
   /**
+   * Post product opening stock to the ledger (new product registration with initial quantity).
+   * Dr Inventory (1200), Cr Retained Earnings (3100) — same equity offset pattern as customer/bank opening balances.
+   *
+   * @param {string} productId - Product UUID
+   * @param {number} quantity - Opening stock quantity (units)
+   * @param {number} unitCost - Cost per unit (from product pricing.cost)
+   * @param {Object} options - { createdBy, transactionDate, client }
+   */
+  static async postProductOpeningStock(productId, quantity, unitCost, options = {}) {
+    const { createdBy, transactionDate, client } = options;
+    const qty = Math.max(0, parseFloat(quantity) || 0);
+    const cost = Math.max(0, parseFloat(unitCost) || 0);
+    const amount = Math.round(qty * cost * 100) / 100;
+    const refId = String(productId);
+
+    const runInTransaction = async (clientToUse) => {
+      await this.reverseLedgerEntriesByReference('product_opening_stock', refId, clientToUse);
+
+      if (amount < 0.01) {
+        await this.updateAccountBalance(clientToUse, '1200');
+        await this.updateAccountBalance(clientToUse, '3100');
+        return;
+      }
+
+      const refNum = `PROD-OB-${refId.replace(/-/g, '').slice(0, 10)}`;
+      const txnDate = transactionDate || new Date();
+
+      await this.createTransaction(
+        { accountCode: '1200', debitAmount: amount, description: 'Product opening stock (inventory)' },
+        { accountCode: '3100', creditAmount: amount, description: 'Product opening stock (equity offset)' },
+        {
+          referenceType: 'product_opening_stock',
+          referenceId: refId,
+          referenceNumber: refNum,
+          transactionDate: txnDate,
+          currency: 'PKR',
+          createdBy
+        },
+        clientToUse
+      );
+    };
+
+    if (client) {
+      await runInTransaction(client);
+    } else {
+      await transaction(async (clientToUse) => {
+        await runInTransaction(clientToUse);
+      });
+    }
+  }
+
+  /**
+   * Reverse product opening stock ledger entries (e.g. when product is deleted).
+   * @param {string} productId - Product UUID
+   * @param {Object} options - { client }
+   */
+  static async removeProductOpeningStockLedger(productId, options = {}) {
+    const { client } = options;
+    const refId = String(productId);
+
+    const runInTransaction = async (clientToUse) => {
+      await this.reverseLedgerEntriesByReference('product_opening_stock', refId, clientToUse);
+      await this.updateAccountBalance(clientToUse, '1200');
+      await this.updateAccountBalance(clientToUse, '3100');
+    };
+
+    if (client) {
+      await runInTransaction(client);
+    } else {
+      await transaction(async (clientToUse) => {
+        await runInTransaction(clientToUse);
+      });
+    }
+  }
+
+  /**
    * Reverse ledger entries by reference (for edits - mark old entries as reversed)
    * @param {string} referenceType - e.g. 'cash_receipt', 'cash_payment', 'bank_receipt', 'bank_payment'
    * @param {string} referenceId - UUID of the receipt/payment

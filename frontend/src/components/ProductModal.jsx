@@ -571,7 +571,7 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                   </div>
                   <div>
                     <label htmlFor="inventory.currentStock" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
-                      Current Stock
+                      {product ? 'Current Stock' : 'Opening Stock'}
                     </label>
                     <input
                       id="inventory.currentStock"
@@ -583,7 +583,9 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                       placeholder="0"
                       className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
                     />
-                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Inventory quantity</p>
+                    <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">
+                      {product ? 'Inventory quantity' : 'Opening inventory quantity'}
+                    </p>
                   </div>
                   <div>
                     <label htmlFor="inventory.reorderPoint" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
