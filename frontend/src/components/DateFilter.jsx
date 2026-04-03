@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
  * @param {string} props.className - Additional CSS classes
  * @param {boolean} props.compact - Compact layout for smaller spaces (default: false)
  * @param {boolean} props.showClear - Show clear button (default: true)
+ * @param {boolean} props.showLabel - Show the default "Date range" label (default: true)
  */
 const DateFilter = ({
   startDate: initialStartDate,
@@ -43,7 +44,8 @@ const DateFilter = ({
   required = false,
   className = '',
   compact = false,
-  showClear = true
+  showClear = true,
+  showLabel = true
 }) => {
   const [startDate, setStartDate] = useState(initialStartDate || '');
   const [endDate, setEndDate] = useState(initialEndDate || '');
@@ -134,7 +136,7 @@ const DateFilter = ({
       {/* Date Range Picker - Popover + Calendar design */}
       <div className={compact ? 'flex items-center gap-2 flex-1 min-w-0' : 'flex flex-col sm:flex-row items-stretch sm:items-center gap-3'}>
         <div className={compact ? 'flex-1 min-w-0' : 'flex-1 min-w-0'}>
-          {!compact && (
+          {!compact && showLabel && (
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Date range {required && <span className="text-red-500">*</span>}
             </label>
@@ -177,7 +179,7 @@ const DateFilter = ({
 
         {showClear && (startDate || endDate) && (
           <div className={compact ? 'flex-none' : 'flex-1 sm:flex-none'}>
-            {!compact && (
+            {!compact && showLabel && (
               <label className="block text-sm font-medium text-gray-700 mb-1.5 opacity-0 pointer-events-none">
                 Clear
               </label>

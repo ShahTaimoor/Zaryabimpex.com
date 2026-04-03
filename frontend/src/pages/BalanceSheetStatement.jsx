@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { FileText, Search, TrendingDown, TrendingUp } from 'lucide-react';
+import { useDispatch } from 'react-redux';
+import { FileText, Search, TrendingDown, RefreshCw } from 'lucide-react';
 import DateFilter from '../components/DateFilter';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { useGetLatestBalanceSheetQuery } from '../store/services/balanceSheetsApi';
+import { balanceSheetsApi, useGetLatestBalanceSheetQuery } from '../store/services/balanceSheetsApi';
 import { formatCurrency } from '../utils/formatters';
 import { getCurrentDatePakistan, getStartOfMonth, formatDatePakistan } from '../utils/dateUtils';
 
@@ -25,6 +26,7 @@ const formatDate = (dateString) => {
 };
 
 export const BalanceSheetStatement = () => {
+  const dispatch = useDispatch();
   const today = getCurrentDatePakistan();
   const firstDayOfMonth = getStartOfMonth();
 
@@ -62,6 +64,16 @@ export const BalanceSheetStatement = () => {
     setSearchFromDate(fromDate);
     setSearchToDate(toDate);
     setShowData(true);
+  };
+
+  const handleRefresh = () => {
+    if (!showData) return;
+    dispatch(
+      balanceSheetsApi.endpoints.getLatestBalanceSheet.initiate(
+        { asOfDate: searchToDate },
+        { forceRefetch: true }
+      )
+    );
   };
 
   const balanceSheet = latestBalanceSheetData?.data || latestBalanceSheetData;
@@ -155,11 +167,23 @@ export const BalanceSheetStatement = () => {
 
       {/* Date filter and Generate */}
       <section className="bg-white border border-gray-200 rounded-lg shadow-sm mb-6 overflow-hidden no-print">
-        <div className="px-4 py-4 sm:px-6 sm:py-5 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
-            Statement Period
-          </h2>
-          <p className="text-sm text-gray-500 mt-0.5">Select date range to generate report</p>
+        <div className="px-4 py-4 sm:px-6 sm:py-5 border-b border-gray-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+              Statement Period
+            </h2>
+            <p className="text-sm text-gray-500 mt-0.5">Select date range to generate report</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={!showData || isButtonLoading}
+            title={showData ? 'Reload balance sheet for this period' : 'Generate a report first'}
+            className="inline-flex items-center justify-center gap-2 self-start sm:self-auto shrink-0 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetching && showData ? 'animate-spin' : ''}`} aria-hidden />
+            Refresh
+          </button>
         </div>
         <div className="px-4 py-4 sm:px-6 sm:py-5 bg-gray-50 border-t border-gray-100">
           <div className="flex flex-col sm:flex-row gap-4 sm:items-end">

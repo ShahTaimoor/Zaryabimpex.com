@@ -45,10 +45,10 @@ export const ProductList = ({
   }
 
   return (
-    <div className="w-full overflow-hidden">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <div className="w-full min-w-0 max-w-full">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto max-w-full">
         {/* Desktop Table Header - Hidden on mobile/tablet - Responsive scaling */}
-        <div className="hidden lg:block bg-gray-50 border-b border-gray-200">
+        <div className="hidden lg:block bg-gray-50 border-b border-gray-200 min-w-[960px]">
           <div className="px-3 py-2 xl:px-4 xl:py-3 2xl:px-6 2xl:py-4">
             <div className="grid grid-cols-12 gap-2 xl:gap-3 2xl:gap-4 items-center">
               <div className="col-span-1">
@@ -108,7 +108,7 @@ export const ProductList = ({
           {products.map((product) => (
             <div key={product._id}>
               {/* Desktop Table Row - Responsive scaling */}
-              <div className="hidden lg:block px-3 py-2 xl:px-4 xl:py-3 2xl:px-6 2xl:py-4 hover:bg-gray-50 transition-colors">
+              <div className="hidden lg:block px-3 py-2 xl:px-4 xl:py-3 2xl:px-6 2xl:py-4 hover:bg-gray-50 transition-colors min-w-[960px]">
                 <div className="grid grid-cols-12 gap-2 xl:gap-3 2xl:gap-4 items-center">
                   <div className="col-span-1">
                     <Checkbox
@@ -210,32 +210,36 @@ export const ProductList = ({
                     </span>
                   </div>
 
-                  <div className="col-span-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-0.5 xl:gap-1">
+                  <div className="col-span-1 min-w-0 flex flex-col items-end gap-1">
+                    <div className="flex flex-nowrap items-center justify-end gap-0.5 xl:gap-1 shrink-0">
                       <button
+                        type="button"
                         onClick={() => onGenerateBarcode(product)}
-                        className="text-green-600 hover:text-green-800 p-0.5 xl:p-1"
+                        className="text-green-600 hover:text-green-800 p-0.5 xl:p-1 shrink-0 rounded"
                         title="Generate Barcode"
                       >
                         <Barcode className="h-3.5 w-3.5 xl:h-4 xl:w-4 2xl:h-5 2xl:w-5" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => onManageInvestors(product)}
-                        className="text-blue-600 hover:text-blue-800 p-0.5 xl:p-1"
+                        className="text-blue-600 hover:text-blue-800 p-0.5 xl:p-1 shrink-0 rounded"
                         title="Manage Investors"
                       >
                         <TrendingUp className="h-3.5 w-3.5 xl:h-4 xl:w-4 2xl:h-5 2xl:w-5" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => onEdit(product)}
-                        className="text-primary-600 hover:text-primary-800 p-0.5 xl:p-1"
+                        className="text-primary-600 hover:text-primary-800 p-0.5 xl:p-1 shrink-0 rounded"
                         title="Edit Product"
                       >
                         <Edit className="h-3.5 w-3.5 xl:h-4 xl:w-4 2xl:h-5 2xl:w-5" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => onDelete(product)}
-                        className="text-danger-600 hover:text-danger-800 p-0.5 xl:p-1"
+                        className="text-danger-600 hover:text-danger-800 p-0.5 xl:p-1 shrink-0 rounded"
                         title="Delete Product"
                       >
                         <Trash2 className="h-3.5 w-3.5 xl:h-4 xl:w-4 2xl:h-5 2xl:w-5" />

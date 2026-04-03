@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   AlertTriangle, 
-  ShoppingCart,
   TrendingDown,
   Package,
   CheckCircle,
   XCircle,
   Loader2,
   Zap,
-  Search
+  Search,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import {
   useGetLowStockAlertsQuery,
@@ -17,7 +18,6 @@ import {
   useGeneratePurchaseOrdersMutation,
 } from '../store/services/inventoryApi';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
-import { formatCurrency } from '../utils/formatters';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
@@ -30,6 +30,24 @@ const InventoryAlerts = () => {
   const [autoConfirm, setAutoConfirm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [limit, setLimit] = useState(50);
+  const tableScrollRef = useRef(null);
+  const [canScrollTableLeft, setCanScrollTableLeft] = useState(false);
+  const [canScrollTableRight, setCanScrollTableRight] = useState(false);
+
+  const updateTableScrollState = useCallback(() => {
+    const el = tableScrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    const max = scrollWidth - clientWidth;
+    setCanScrollTableLeft(scrollLeft > 4);
+    setCanScrollTableRight(max > 4 && scrollLeft < max - 4);
+  }, []);
+
+  const scrollTableBy = (delta) => {
+    const el = tableScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: delta, behavior: 'smooth' });
+  };
 
   // Fetch low stock alerts
   const { 
@@ -54,6 +72,20 @@ const InventoryAlerts = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [filterLevel, searchTerm, limit]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    const id = requestAnimationFrame(() => updateTableScrollState());
+    return () => cancelAnimationFrame(id);
+  }, [alertsResponse, isLoading, updateTableScrollState]);
+
+  useEffect(() => {
+    const el = tableScrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => updateTableScrollState());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [updateTableScrollState]);
 
   // Fetch alert summary
   const { data: summaryResponse } = useGetAlertSummaryQuery(undefined, {
@@ -272,7 +304,22 @@ const InventoryAlerts = () => {
             <p className="text-gray-400 text-sm mt-2">All products are well stocked!</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="flex items-stretch">
+            <button
+              type="button"
+              onClick={() => scrollTableBy(-280)}
+              disabled={!canScrollTableLeft}
+              aria-label="Scroll table left"
+              title="Scroll left"
+              className="flex-shrink-0 flex items-center justify-center w-9 sm:w-10 border-r border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-gray-50 transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5" aria-hidden />
+            </button>
+            <div
+              ref={tableScrollRef}
+              onScroll={updateTableScrollState}
+              className="flex-1 min-w-0 overflow-x-auto scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            >
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -372,6 +419,17 @@ const InventoryAlerts = () => {
                 ))}
               </tbody>
             </table>
+            </div>
+            <button
+              type="button"
+              onClick={() => scrollTableBy(280)}
+              disabled={!canScrollTableRight}
+              aria-label="Scroll table right"
+              title="Scroll right"
+              className="flex-shrink-0 flex items-center justify-center w-9 sm:w-10 border-l border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-gray-50 transition-colors"
+            >
+              <ChevronRight className="h-5 w-5" aria-hidden />
+            </button>
           </div>
         )}
 

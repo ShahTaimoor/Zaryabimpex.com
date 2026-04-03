@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import JsBarcode from 'jsbarcode';
-import { Printer, Download, X, Package, Settings } from 'lucide-react';
+import { Printer, Download, X, Package, Settings, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 /**
@@ -22,7 +22,14 @@ export const BarcodeLabelPrinter = ({
   const [includePrice, setIncludePrice] = useState(false);
   const [includeName, setIncludeName] = useState(true);
   const [labelsPerRow, setLabelsPerRow] = useState(2);
+  const [productSearch, setProductSearch] = useState('');
   const printRef = useRef(null);
+
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => (p.name || '').toLowerCase().includes(q));
+  }, [products, productSearch]);
 
   useEffect(() => {
     if (products.length > 0) {
@@ -70,7 +77,7 @@ export const BarcodeLabelPrinter = ({
   };
 
   const selectAll = () => {
-    setSelectedProducts(products.map(p => p._id || p.id));
+    setSelectedProducts(filteredProducts.map((p) => p._id || p.id));
   };
 
   const deselectAll = () => {
@@ -401,19 +408,21 @@ export const BarcodeLabelPrinter = ({
 
             {/* Product List */}
             <div className="lg:col-span-2">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
                 <h3 className="font-medium text-gray-900">
                   {quantityMode ? 'Receipt lines' : 'Select products'} ({selectedProducts.length} of {products.length})
                 </h3>
-                <div className="flex space-x-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <button
+                    type="button"
                     onClick={selectAll}
                     className="text-sm text-primary-600 hover:text-primary-700"
                   >
                     Select All
                   </button>
-                  <span className="text-gray-300">|</span>
+                  <span className="text-gray-300 hidden sm:inline">|</span>
                   <button
+                    type="button"
                     onClick={deselectAll}
                     className="text-sm text-gray-600 hover:text-gray-700"
                   >
@@ -422,15 +431,40 @@ export const BarcodeLabelPrinter = ({
                 </div>
               </div>
 
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" aria-hidden />
+                <input
+                  type="search"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="Search by product name..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  autoComplete="off"
+                  aria-label="Search products by name"
+                />
+              </div>
+
               <div className="border rounded-lg max-h-96 overflow-y-auto">
                 {products.length === 0 ? (
                   <div className="p-8 text-center text-gray-500">
                     <Package className="h-12 w-12 mx-auto mb-2 text-gray-400" />
                     <p>No products available</p>
                   </div>
+                ) : filteredProducts.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">
+                    <Search className="h-10 w-10 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm">No products match &quot;{productSearch.trim()}&quot;</p>
+                    <button
+                      type="button"
+                      onClick={() => setProductSearch('')}
+                      className="mt-2 text-sm text-primary-600 hover:text-primary-700"
+                    >
+                      Clear search
+                    </button>
+                  </div>
                 ) : (
                   <div className="divide-y">
-                    {products.map(product => {
+                    {filteredProducts.map(product => {
                       const pid = product._id || product.id;
                       const isSelected = selectedProducts.includes(pid);
                       const hasBarcode = !!(product.barcode || product.sku);
