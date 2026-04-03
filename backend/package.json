@@ -11,6 +11,7 @@
     "db:reset": "node scripts/resetDatabase.js",
     "seed:admin": "node scripts/seedAdmin.js",
     "seed:data": "node scripts/seedData.js",
+    "seed:accounting": "node scripts/seedAccounting.js",
     "seed:suppliers": "node scripts/seedSuppliers.js",
     "test": "jest",
     "test:watch": "jest --watch",

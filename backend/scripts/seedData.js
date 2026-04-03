@@ -2,6 +2,9 @@
 /**
  * Data seed / reset: deletes all products and dependent rows so you can re-import cleanly.
  * Run: npm run seed:data
+ *
+ * For demo opening balances on the balance sheet (cash, bank, AR, inventory, AP, equity), see:
+ *   npm run seed:accounting
  */
 require('dotenv').config();
 const productRepository = require('../repositories/postgres/ProductRepository');
