@@ -14,6 +14,7 @@ export function OrderItemWiseConfirmationSettings() {
   const showRemainingStockAfterSale = orderSettings.showRemainingStockAfterSale !== false;
   const dualUnitShowBoxInput = orderSettings.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInput = orderSettings.dualUnitShowPiecesInput !== false;
+  const showSalesDiscountCode = orderSettings.showSalesDiscountCode === true;
 
   const handleSalesChange = async (checked) => {
     try {
@@ -69,6 +70,17 @@ export function OrderItemWiseConfirmationSettings() {
         orderSettings: { ...orderSettings, dualUnitShowPiecesInput: checked },
       }).unwrap();
       toast.success(checked ? 'Pieces column shown for dual-unit products' : 'Pieces column hidden for dual-unit products');
+    } catch (err) {
+      handleApiError(err, 'Failed to update setting');
+    }
+  };
+
+  const handleShowSalesDiscountCodeChange = async (checked) => {
+    try {
+      await updateCompanySettings({
+        orderSettings: { ...orderSettings, showSalesDiscountCode: checked },
+      }).unwrap();
+      toast.success(checked ? 'Sales discount code dropdown shown' : 'Sales discount code dropdown hidden');
     } catch (err) {
       handleApiError(err, 'Failed to update setting');
     }
@@ -151,6 +163,22 @@ export function OrderItemWiseConfirmationSettings() {
           </div>
         </label>
       </div>
+
+      <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+        <input
+          type="checkbox"
+          checked={showSalesDiscountCode}
+          onChange={(e) => handleShowSalesDiscountCodeChange(e.target.checked)}
+          disabled={updating}
+          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+        />
+        <div>
+          <div className="text-sm font-medium text-gray-900">Show Discount Code in Sales</div>
+          <div className="text-xs text-gray-500">
+            Show or hide the discount code dropdown in the Sales payment panel.
+          </div>
+        </div>
+      </label>
     </>
   );
 }

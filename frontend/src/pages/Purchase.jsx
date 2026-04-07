@@ -1,24 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Package,
-  Search,
   Plus,
-  Minus,
   Trash2,
   Building,
   Truck,
-  Calculator,
-  Save,
   Receipt,
-  User,
+  Printer,
+  Eye,
+  ChevronDown,
   Phone,
   Mail,
   MapPin,
   ArrowUpDown,
   Download
 } from 'lucide-react';
-import { useGetProductsQuery } from '../store/services/productsApi';
-import { useGetVariantsQuery } from '../store/services/productVariantsApi';
 import {
   useGetSupplierQuery,
   useLazySearchSuppliersQuery,
@@ -32,12 +28,10 @@ import {
   useExportJSONMutation,
   useDownloadFileMutation,
 } from '../store/services/purchaseInvoicesApi';
-import { useGetBanksQuery } from '../store/services/banksApi';
-import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import { toast } from 'sonner';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
-import PrintModal from '../components/PrintModal';
+import PrintModal, { DirectPrintInvoice } from '../components/PrintModal';
 import BarcodeLabelPrinter from '../components/BarcodeLabelPrinter';
 import { buildReceiptLabelProductsFromLineItems } from '../utils/receiptLabelUtils';
 import { useTab } from '../contexts/TabContext';
@@ -45,19 +39,28 @@ import { getComponentInfo } from '../components/ComponentRegistry';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   OrderCheckoutCard,
   OrderDetailsSection,
-  OrderSummaryBar,
   OrderSummaryContent,
   OrderInsetPanel,
   OrderCheckoutActions,
 } from '../components/order/OrderCheckoutLayout';
+import { ProductSelectionCartSection } from '../components/order/ProductSelectionCartSection';
+import { CartItemsTableSection } from '../components/order/CartItemsTableSection';
+import { CartTableHeader } from '../components/order/CartTableHeader';
 import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
 import {
   hasDualUnit,
   getPiecesPerBox,
   piecesToBoxesAndPieces,
   formatStockDualLabel,
+  computeTotalPieces,
 } from '../utils/dualUnitUtils';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { getLocalDateString } from '../utils/dateUtils';
@@ -68,8 +71,11 @@ import {
   notifyExportDownloadCatchError,
 } from '../utils/exportReportPresentation';
 import ExportReportModal from '../components/ExportReportModal';
+import AsyncErrorBoundary from '../components/AsyncErrorBoundary';
+import { useResponsive } from '../components/ResponsiveContainer';
+import { ProductSearch as SharedSalesProductSearch } from '../components/sales/ProductSearch';
 
-const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove }) => {
+const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove, onUpdateCartBoxCount }) => {
   const { companyInfo: companySettings } = useCompanyInfo();
   const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
@@ -180,109 +186,142 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
         </div>
       </div>
 
-      {/* Desktop Table Layout — 1+4+1+3+1+1+1 = 12 when dual qty needs box+pcs+total */}
-      <div className="hidden md:grid grid-cols-12 gap-3 sm:gap-4 items-center">
-        {/* Serial Number - 1 column */}
-        <div className="col-span-1">
-          <span className="text-xs sm:text-sm font-medium text-gray-700 bg-gray-50 px-0.5 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
-            {index + 1}
-          </span>
-        </div>
-
-        {/* Product Name */}
-        <div className={`${hasDualUnit(product) ? 'col-span-4' : 'col-span-6'} flex items-center min-h-8 min-w-0`}>
-          <div className="flex flex-col min-w-0 flex-1">
-            <span className="font-medium text-xs sm:text-sm truncate">
-              {displayName}
-              {isLowStock && <span className="text-yellow-600 text-xs ml-2">⚠️ Low Stock</span>}
+      {/* Desktop Table Row — same column model as Sales (Box + Qty split when dual-unit) */}
+      <div className={`hidden md:block py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+        <div
+          className={`grid gap-x-1 items-center ${
+            dualUnitShowBoxInputEnabled
+              ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+              : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+          }`}
+        >
+          <div className="min-w-0 flex justify-start">
+            <span className="text-sm font-medium text-gray-700 bg-gray-50 px-0.5 py-1 rounded border border-gray-200 block w-8 text-center h-8 flex items-center justify-center">
+              {index + 1}
             </span>
-            {product.isVariant && (
-              <span className="text-xs text-gray-500 truncate">
-                {product.variantType}: {product.variantValue}
-              </span>
-            )}
-            {(() => {
-              const b = (product.barcode ?? '').toString().trim();
-              if (b) return <span className="text-xs text-gray-600 font-mono truncate">Barcode: {b}</span>;
-              const s = (product.sku ?? '').toString().trim();
-              if (s) return <span className="text-xs text-gray-600 font-mono truncate">SKU: {s}</span>;
-              return null;
-            })()}
           </div>
-        </div>
 
-        {/* Stock - 1 column */}
-        <div className="col-span-1 min-w-0">
-          <span className="text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center min-h-8 flex items-center justify-center leading-tight">
-            {hasDualUnit(product)
-              ? formatStockDualLabel(currentStock, product)
-              : currentStock}
-          </span>
-        </div>
+          <div className="min-w-0 flex items-center h-8">
+            <div className="flex flex-col min-w-0 w-full">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-medium text-sm truncate min-w-0">{displayName}</span>
+                {isLowStock && <span className="text-yellow-600 text-xs whitespace-nowrap">⚠️ Low Stock</span>}
+              </div>
+              {product.isVariant && (
+                <span className="text-xs text-gray-500 truncate">
+                  {product.variantType}: {product.variantValue}
+                </span>
+              )}
+            </div>
+          </div>
 
-        {/* Quantity */}
-        <div className={`${hasDualUnit(product) ? 'col-span-3' : 'col-span-1'} min-w-0`}>
-          {hasDualUnit(product) ? (
+          {dualUnitShowBoxInputEnabled && (
+            <div className="min-w-0">
+              {hasDualUnit(product) ? (
+                (() => {
+                  const ppb = getPiecesPerBox(product);
+                  const boxVal =
+                    item.boxes != null
+                      ? item.boxes
+                      : ppb
+                        ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
+                        : 0;
+                  return (
+                    <input
+                      type="number"
+                      min={0}
+                      value={item.quantity === 0 ? '' : boxVal}
+                      onChange={(e) => onUpdateCartBoxCount(item.product?._id, e.target.value)}
+                      className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${
+                        (product.inventory?.currentStock || 0) === 0
+                          ? 'text-red-700 bg-red-50 border-red-200'
+                          : (product.inventory?.currentStock || 0) <= (product.inventory?.reorderPoint || 0)
+                            ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                            : 'text-gray-700 bg-gray-100 border-gray-200'
+                      }`}
+                      title="Full boxes"
+                    />
+                  );
+                })()
+              ) : (
+                <span
+                  className="text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200"
+                  title="Not applicable"
+                >
+                  —
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="min-w-0">
+            <span
+              className={`text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center ${
+                (product.inventory?.currentStock || 0) === 0
+                  ? 'text-red-700 bg-red-50 border-red-200'
+                  : (product.inventory?.currentStock || 0) <= (product.inventory?.reorderPoint || 0)
+                    ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
+                    : 'text-gray-700 bg-gray-100 border-gray-200'
+              }`}
+            >
+              {hasDualUnit(product) ? formatStockDualLabel(currentStock, product) : currentStock}
+            </span>
+          </div>
+
+          <div className="min-w-0">
             <DualUnitQuantityInput
               product={product}
               quantity={item.quantity}
-              showBoxInput={dualUnitShowBoxInputEnabled}
-              showPiecesInput={dualUnitShowPiecesInputEnabled}
               onChange={(newQuantity, dual) => {
                 if (newQuantity <= 0) {
                   onRemove(item.product?._id);
                   return;
                 }
                 const ppb = getPiecesPerBox(product);
-                const { boxes, pieces } = ppb && dual ? dual : (ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {});
+                const { boxes, pieces } = ppb && dual ? dual : ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {};
                 onUpdateQuantity(item.product?._id, newQuantity, ppb ? { boxes, pieces } : undefined);
               }}
               min={1}
-              inputClassName="input text-center text-xs sm:text-sm h-8"
+              max={product.inventory?.currentStock || 999999}
+              stockPiecesForRemaining={product.inventory?.currentStock ?? 0}
+              showRemainingAfterSale={false}
+              showPiecesUnitLabel={false}
+              showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
+              showPiecesInput={dualUnitShowPiecesInputEnabled}
+              inputClassName="w-full min-w-0 text-center h-8 border border-gray-300 rounded px-2"
               compact={hasDualUnit(product)}
             />
-          ) : (
-            <input
+          </div>
+
+          <div className="min-w-0">
+            <Input
               type="number"
+              step="0.01"
               autoComplete="off"
-              value={item.quantity}
-              onChange={(e) => onUpdateQuantity(item.product?._id, parseInt(e.target.value) || 1)}
-              className="input text-center text-xs sm:text-sm h-8"
-              min="1"
+              value={item.costPerUnit}
+              onChange={(e) => onUpdateCost(item.product?._id, parseFloat(e.target.value) || 0)}
+              className="text-center h-8"
+              min="0"
             />
-          )}
-        </div>
+          </div>
 
-        {/* Cost - 1 column */}
-        <div className="col-span-1">
-          <input
-            type="number"
-            step="0.01"
-            autoComplete="off"
-            value={item.costPerUnit}
-            onChange={(e) => onUpdateCost(item.product?._id, parseFloat(e.target.value) || 0)}
-            className="input text-center text-xs sm:text-sm h-8"
-            min="0"
-          />
-        </div>
+          <div className="min-w-0">
+            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block w-full min-w-0 text-center h-8 flex items-center justify-center">
+              {Number.isFinite(totalPrice) ? totalPrice.toFixed(2) : '0.00'}
+            </span>
+          </div>
 
-        {/* Total - 1 column */}
-        <div className="col-span-1">
-          <span className="text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
-            {totalPrice.toFixed(2)}
-          </span>
-        </div>
-
-        {/* Delete Button - 1 column */}
-        <div className="col-span-1">
-          <Button
-            onClick={() => onRemove(item.product?._id)}
-            variant="destructive"
-            size="sm"
-            className="h-8 w-full"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <div className="min-w-0 flex justify-end">
+            <Button
+              onClick={() => onRemove(item.product?._id)}
+              variant="destructive"
+              size="sm"
+              className="h-8 w-8 p-0"
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -293,329 +332,26 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove })
 // This was using react-query instead of RTK Query, causing conflicts
 
 const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [quantity, setQuantity] = useState(1);
-  const [costPerUnit, setCostPerUnit] = useState('0');
   const { companyInfo: companySettings } = useCompanyInfo();
   const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
 
-  // Ref for the product search input to focus after adding to cart
-  const productSearchRef = useRef(null);
-
-  // Focus on product search field only after adding to cart
-  // Removed auto-focus on mount to let supplier selection be focused first
-
-  // Fetch all active products for client-side fuzzy search
-  const { data: productsData, isLoading, error, refetch: refetchProducts } = useGetProductsQuery(
-    { limit: 999999, status: 'active' },
-    {
-      keepPreviousData: true,
-      staleTime: 0, // Always consider data stale to get fresh stock levels
-      refetchOnMountOrArgChange: true, // Refetch when component mounts or params change
-    }
-  );
-
-  // Fetch all variants for search
-  const { data: variantsData, isLoading: variantsLoading } = useGetVariantsQuery(
-    { status: 'active' },
-    {
-      keepPreviousData: true,
-      staleTime: 0,
-      refetchOnMountOrArgChange: true,
-    }
-  );
-
-  // Expose refetch function to parent component via callback
-  useEffect(() => {
-    if (onRefetchReady && refetchProducts && typeof refetchProducts === 'function') {
-      onRefetchReady(refetchProducts);
-    }
-  }, [onRefetchReady, refetchProducts]);
-
-  // Extract products array from RTK Query response
-  const allProducts = React.useMemo(() => {
-    if (!productsData) return [];
-    if (Array.isArray(productsData)) return productsData;
-    if (productsData?.data?.products) return productsData.data.products;
-    if (productsData?.products) return productsData.products;
-    if (productsData?.data?.data?.products) return productsData.data.data.products;
-    return [];
-  }, [productsData]);
-
-  // Extract variants array from RTK Query response
-  const allVariants = React.useMemo(() => {
-    if (!variantsData) return [];
-    if (Array.isArray(variantsData)) return variantsData;
-    if (variantsData?.data?.variants) return variantsData.data.variants;
-    if (variantsData?.variants) return variantsData.variants;
-    return [];
-  }, [variantsData]);
-
-  // Combine products and variants for search, marking variants with isVariant flag
-  const allItems = React.useMemo(() => {
-    const productsList = allProducts.map(p => ({ ...p, isVariant: false }));
-    const variantsList = allVariants
-      .filter(v => v.status === 'active')
-      .map(v => ({
-        ...v,
-        isVariant: true,
-        // Use variant's display name for search, but keep variant data
-        name: v.displayName || v.variantName || `${v.baseProduct?.name || ''} - ${v.variantValue || ''}`,
-        // Use variant pricing and inventory
-        pricing: v.pricing || { retail: 0, wholesale: 0, cost: 0 },
-        inventory: v.inventory || { currentStock: 0, reorderPoint: 0 },
-        // Keep reference to base product
-        baseProductId: v.baseProduct?._id || v.baseProduct,
-        baseProductName: v.baseProduct?.name || '',
-        variantType: v.variantType,
-        variantValue: v.variantValue,
-        variantName: v.variantName,
-      }));
-    return [...productsList, ...variantsList];
-  }, [allProducts, allVariants]);
-
-  const filteredProducts = useFuzzySearch(
-    allItems,
-    searchTerm,
-    ['name', 'description', 'brand', 'barcode', 'sku', 'displayName', 'variantValue', 'variantName'],
-    {
-      threshold: 0.4,
-      minScore: 0.3,
-      limit: null // Show unlimited products
-    }
-  );
-
-  const handleProductSelect = (product) => {
-    setSelectedProduct(product);
-    // Use variant pricing if it's a variant
-    const cost = product.pricing?.cost || 0;
-    setCostPerUnit(cost.toString());
-    // Keep the product/variant name visible in the search field until it's added to cart
-    const displayName = product.isVariant
-      ? (product.displayName || product.variantName || product.name)
-      : product.name;
-    setSearchTerm(displayName);
-  };
-
-  const handleAddToCart = () => {
-    if (!selectedProduct) return;
-
-    // Validate that cost is filled
-    if (!costPerUnit || parseFloat(costPerUnit) <= 0) {
-      toast.error('Please enter a valid cost per unit');
-      return;
-    }
-
-    const ppb = getPiecesPerBox(selectedProduct);
-    const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(quantity, ppb) : {};
-    onAddProduct({
-      product: selectedProduct,
-      quantity,
-      costPerUnit: parseFloat(costPerUnit),
-      ...(ppb && { boxes, pieces }),
-    });
-
-    // Reset form
-    setSelectedProduct(null);
-    setQuantity(1);
-    setCostPerUnit('0');
-    setSearchTerm('');
-
-    // Focus back to product search field for next product selection
-    setTimeout(() => {
-      if (productSearchRef.current) {
-        productSearchRef.current.focus();
-      }
-    }, 100);
-  };
-
-  const productDisplayKey = (product) => {
-    const inventory = product.inventory || {};
-    const pricing = product.pricing || {};
-
-    // Get display name - use variant display name if it's a variant
-    const displayName = product.isVariant
-      ? (product.displayName || product.variantName || product.name)
-      : product.name;
-
-    // Show variant indicator
-    const variantInfo = product.isVariant
-      ? <span className="text-xs text-blue-600 font-semibold">({product.variantType}: {product.variantValue})</span>
-      : null;
-
-    return (
-      <div className="flex items-center justify-between w-full">
-        <div className="flex flex-col">
-          <div className="font-medium">{displayName}</div>
-          {variantInfo && <div className="text-xs text-gray-500">{variantInfo}</div>}
-        </div>
-        <div className="flex items-center space-x-4">
-          <div className={`text-sm ${inventory.currentStock === 0 ? 'text-red-600' : inventory.currentStock <= (inventory.reorderPoint || inventory.minStock || 0) ? 'text-orange-600' : 'text-gray-600'}`}>
-            Stock:{' '}
-            {hasDualUnit(product)
-              ? formatStockDualLabel(inventory.currentStock || 0, product)
-              : `${inventory.currentStock || 0} pcs`}
-          </div>
-          <div className="text-sm text-gray-600">Cost: {Math.round(pricing.cost || 0)}</div>
-        </div>
-      </div>
-    );
-  };
-
-  const selDual = hasDualUnit(selectedProduct);
-
   return (
-    <div className="space-y-4">
-      {/* Product Selection — wider qty when dual (box + pcs + total) */}
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4 items-start">
-        {/* Product Search */}
-        <div className={`col-span-1 ${selDual ? 'sm:col-span-5' : 'sm:col-span-7'} min-w-0`}>
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-            Product Search
-          </label>
-          <SearchableDropdown
-            ref={productSearchRef}
-            placeholder="Search or select product..."
-            items={filteredProducts || []}
-            onSelect={handleProductSelect}
-            onSearch={(term) => {
-              setSearchTerm(term);
-              // Clear selected product if user starts typing a new search (different from selected product name)
-              if (selectedProduct && term !== selectedProduct.name) {
-                setSelectedProduct(null);
-                setCostPerUnit('0');
-              }
-            }}
-            displayKey={productDisplayKey}
-            selectedItem={selectedProduct}
-            loading={isLoading}
-            emptyMessage={searchTerm.length > 0 ? "No products found" : "Start typing to search products..."}
-            value={selectedProduct ? selectedProduct.name : searchTerm}
-            showSelected={true}
-          />
-        </div>
-
-        {/* Stock - 1 column */}
-        <div className="col-span-1 sm:col-span-1 min-w-0">
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-            Stock
-          </label>
-          <span className="text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center min-h-10 flex flex-col items-center justify-center leading-tight">
-            {selectedProduct ? (
-              selDual ? (
-                <>
-                  <span className="text-[11px]">{formatStockDualLabel(selectedProduct.inventory?.currentStock || 0, selectedProduct)}</span>
-                  <span className="text-[10px] font-normal text-gray-500">available</span>
-                </>
-              ) : (
-                <span>{selectedProduct.inventory?.currentStock || 0}</span>
-              )
-            ) : (
-              '0'
-            )}
-          </span>
-        </div>
-
-        {/* Quantity */}
-        <div className={`col-span-1 ${selDual ? 'sm:col-span-3' : 'sm:col-span-1'} min-w-0`}>
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-            Quantity
-          </label>
-          {selectedProduct && selDual ? (
-            <DualUnitQuantityInput
-              product={selectedProduct}
-              quantity={quantity}
-              onChange={(q) => setQuantity(q)}
-              showBoxInput={dualUnitShowBoxInputEnabled}
-              showPiecesInput={dualUnitShowPiecesInputEnabled}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && selectedProduct) {
-                  e.preventDefault();
-                  handleAddToCart();
-                }
-              }}
-              inputClassName="input text-center text-sm sm:text-base h-10"
-              compact={selDual}
-            />
-          ) : (
-            <input
-              type="number"
-              min="1"
-              autoComplete="off"
-              value={quantity}
-              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && selectedProduct) {
-                  e.preventDefault();
-                  handleAddToCart();
-                }
-              }}
-              className="input text-center text-sm sm:text-base h-10"
-              placeholder="1 (Enter to add & focus search)"
-            />
-          )}
-        </div>
-
-        {/* Cost - 1 column (reduced from 2) */}
-        <div className="col-span-1 sm:col-span-1">
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-            Cost
-          </label>
-          <input
-            type="number"
-            step="1"
-            autoComplete="off"
-            value={costPerUnit}
-            onChange={(e) => setCostPerUnit(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && selectedProduct) {
-                e.preventDefault();
-                handleAddToCart();
-              }
-            }}
-            className="input text-center text-sm sm:text-base"
-            placeholder="0 (Enter to add & focus search)"
-            required
-          />
-        </div>
-
-        {/* Amount - 1 column */}
-        <div className="col-span-1 sm:col-span-1">
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-            Amount
-          </label>
-          <input
-            type="text"
-            autoComplete="off"
-            value={selectedProduct ? Math.round(quantity * parseFloat(costPerUnit || 0)) : ''}
-            className="input text-center font-medium text-sm sm:text-base"
-            disabled
-            placeholder=""
-          />
-        </div>
-
-        {/* Add Button - 1 column */}
-        <div className="col-span-1 sm:col-span-1">
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-            &nbsp;
-          </label>
-          <Button
-            type="button"
-            onClick={handleAddToCart}
-            variant="default"
-            size="default"
-            className="w-full flex items-center justify-center gap-2"
-            disabled={!selectedProduct}
-            title="Add to cart (or press Enter in Quantity/Cost fields - focus returns to search)"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add</span>
-          </Button>
-        </div>
-      </div>
-    </div>
+    <SharedSalesProductSearch
+      onAddProduct={(item) =>
+        onAddProduct({
+          ...item,
+          costPerUnit: Number(item.costPerUnit ?? item.unitPrice ?? 0),
+        })
+      }
+      selectedCustomer={null}
+      showCostPrice={false}
+      hasCostPricePermission={false}
+      priceType="wholesale"
+      dualUnitShowBoxInput={dualUnitShowBoxInputEnabled}
+      dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
+      onRefetchReady={onRefetchReady}
+    />
   );
 };
 
@@ -630,7 +366,10 @@ export const Purchase = ({ tabId, editData }) => {
   const [notes, setNotes] = useState('');
   const [taxExempt, setTaxExempt] = useState(true);
   const [showPurchaseDetailsFields, setShowPurchaseDetailsFields] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+
+  const { isMobile } = useResponsive();
+  const { companyInfo: companySettings } = useCompanyInfo();
+  const dualUnitShowBoxInputEnabledPage = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
 
   // Ref for supplier selection field to focus on page load
   const supplierSearchRef = useRef(null);
@@ -643,6 +382,7 @@ export const Purchase = ({ tabId, editData }) => {
   // Print modal state
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
+  const [directPrintOrder, setDirectPrintOrder] = useState(null);
 
   const PURCHASE_INVOICE_LABEL_KEY = 'purchaseInvoiceOfferBarcodeLabels';
   const [printBarcodeLabelsAfterInvoice, setPrintBarcodeLabelsAfterInvoice] = useState(() => {
@@ -701,7 +441,6 @@ export const Purchase = ({ tabId, editData }) => {
 
   // RTK Query hooks
   const [searchSuppliers, { data: suppliersSearchResult, isLoading: suppliersLoading, refetch: refetchSuppliers }] = useLazySearchSuppliersQuery();
-  const { data: banksData } = useGetBanksQuery();
   const [createPurchaseInvoice] = useCreatePurchaseInvoiceMutation();
   const [updatePurchaseInvoice] = useUpdatePurchaseInvoiceMutation();
   const [exportExcel] = useExportExcelMutation();
@@ -709,17 +448,6 @@ export const Purchase = ({ tabId, editData }) => {
   const [exportPDF] = useExportPDFMutation();
   const [exportJSON] = useExportJSONMutation();
   const [downloadFile] = useDownloadFileMutation();
-
-  // Check if mobile on mount and resize
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   // Focus on supplier selection field when component mounts
   useEffect(() => {
@@ -1173,6 +901,37 @@ export const Purchase = ({ tabId, editData }) => {
     setPurchaseItems(prevItems => prevItems.filter(item => item.product?._id !== productId));
   };
 
+  const updateCartBoxCount = (productId, newBoxes) => {
+    const boxes = Math.max(0, parseInt(String(newBoxes), 10) || 0);
+    setPurchaseItems((prevItems) => {
+      const cartItem = prevItems.find((item) => item.product?._id === productId);
+      if (!cartItem) return prevItems;
+      const ppb = getPiecesPerBox(cartItem.product);
+      if (!ppb) return prevItems;
+
+      const pieces =
+        cartItem.pieces != null ? cartItem.pieces : piecesToBoxesAndPieces(cartItem.quantity, ppb).pieces;
+      const total = computeTotalPieces(boxes, pieces, ppb);
+      const availableStock = cartItem.product.inventory?.currentStock || 0;
+
+      if (total > availableStock) {
+        toast.error(
+          `Cannot set quantity to ${total} pcs. Only ${availableStock} units available in stock.`
+        );
+        return prevItems;
+      }
+
+      if (total <= 0) {
+        return prevItems.filter((item) => item.product?._id !== productId);
+      }
+
+      const { boxes: nb, pieces: np } = piecesToBoxesAndPieces(total, ppb);
+      return prevItems.map((item) =>
+        item.product?._id === productId ? { ...item, quantity: total, boxes: nb, pieces: np } : item
+      );
+    });
+  };
+
   const handleSortPurchaseItems = () => {
     setPurchaseItems(prevItems => {
       if (!prevItems || prevItems.length < 2) {
@@ -1368,24 +1127,22 @@ export const Purchase = ({ tabId, editData }) => {
 
 
   return (
-    <>
+    <AsyncErrorBoundary>
       <div className="space-y-4 lg:space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
+        <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start justify-between'}`}>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Purchase</h1>
-            <p className="text-sm sm:text-base text-gray-600">Process purchase transactions</p>
+            <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Purchase</h1>
+            <p className="text-gray-600">Process purchase transactions</p>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:space-x-2 w-full sm:w-auto">
+          <div className="flex items-center space-x-2">
             <Button
               onClick={handleExport}
               variant="secondary"
               size="default"
-              className="flex items-center justify-center gap-2 w-full sm:w-auto"
               title="Export Purchase Report"
             >
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Export Purchase Report</span>
-              <span className="sm:hidden">Export</span>
+              <Download className="h-4 w-4 mr-2" />
+              Export Purchase Report
             </Button>
             <Button
               onClick={() => {
@@ -1404,29 +1161,27 @@ export const Purchase = ({ tabId, editData }) => {
               }}
               variant="default"
               size="default"
-              className="flex items-center justify-center gap-2 w-full sm:w-auto"
             >
-              <Plus className="h-4 w-4" />
-              <span>New Purchase</span>
+              <Plus className="h-4 w-4 mr-2" />
+              New Purchase
             </Button>
           </div>
         </div>
 
         {/* Supplier Selection and Information Row */}
-        <div className="flex flex-col lg:flex-row items-start lg:gap-12 gap-4">
+        <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start space-x-12'}`}>
           {/* Supplier Selection */}
-          <div className="w-full lg:w-[750px] lg:flex-shrink-0">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-2">
-              <label className="block text-xs sm:text-sm font-medium text-gray-700">
-                Select Supplier
-              </label>
-              <div className="flex items-center space-x-2">
+          <div className={`${isMobile ? 'w-full' : 'w-[750px] flex-shrink-0'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Select Supplier
+                </label>
                 {selectedSupplier && (
                   <button
                     onClick={() => {
                       setSelectedSupplier(null);
                       setSupplierSearchTerm('');
-                      // Focus on the supplier search field after clearing
                       setTimeout(() => {
                         if (supplierSearchRef.current) {
                           supplierSearchRef.current.focus();
@@ -1439,6 +1194,8 @@ export const Purchase = ({ tabId, editData }) => {
                     Change Supplier
                   </button>
                 )}
+              </div>
+              <div className="flex items-center space-x-2">
                 <button
                   type="button"
                   onClick={async () => {
@@ -1485,14 +1242,14 @@ export const Purchase = ({ tabId, editData }) => {
           </div>
 
           {/* Supplier Information - Right Side */}
-          <div className="w-full lg:flex-1">
+          <div className={`${isMobile ? 'w-full' : 'flex-1'}`}>
             {selectedSupplier ? (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
-                <div className="flex items-start sm:items-center space-x-3">
-                  <Building className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 flex-shrink-0 mt-1 sm:mt-0" />
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center space-x-3">
+                  <Building className="h-5 w-5 text-gray-400" />
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm sm:text-base truncate">{selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name || 'Unknown Supplier'}</p>
-                    <p className="text-xs sm:text-sm text-gray-600 capitalize mt-1">
+                    <p className="font-medium truncate">{selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name || 'Unknown Supplier'}</p>
+                    <p className="text-sm text-gray-600 capitalize mt-1">
                       {selectedSupplier.businessType && selectedSupplier.reliability
                         ? `${selectedSupplier.businessType} • ${selectedSupplier.reliability}`
                         : selectedSupplier.businessType || selectedSupplier.reliability || 'Supplier Information'
@@ -1542,405 +1299,624 @@ export const Purchase = ({ tabId, editData }) => {
         </div>
 
         {/* Combined Product Selection and Cart Section */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900">Product Selection & Cart</h3>
-          </div>
-          <div className="card-content">
-            {/* Product Search */}
-            <div className="mb-4 sm:mb-6">
-              <ProductSearch onAddProduct={addToPurchase} onRefetchReady={setRefetchProducts} />
-            </div>
-
-            {/* Cart Items */}
-            {purchaseItems.length === 0 ? (
-              <div className="p-6 sm:p-8 text-center text-gray-500 border-t border-gray-200">
-                <Package className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-gray-400" />
-                <p className="mt-2 text-sm sm:text-base">No items in cart</p>
-              </div>
-            ) : (
-              <div className="space-y-4 border-t border-gray-200 pt-4 sm:pt-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4">
-                  <h4 className="text-sm sm:text-md font-medium text-gray-700">Cart Items</h4>
-                  <Button
-                    type="button"
-                    onClick={handleSortPurchaseItems}
-                    variant="secondary"
-                    size="sm"
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto"
-                    title="Sort products alphabetically"
-                  >
-                    <ArrowUpDown className="h-4 w-4" />
-                    <span>Sort A-Z</span>
-                  </Button>
-                </div>
-                {purchaseItems.map((item, index) => (
-                  <PurchaseItem
-                    key={item.product?._id}
-                    item={item}
-                    index={index}
-                    onUpdateQuantity={updateQuantity}
-                    onUpdateCost={updateCost}
-                    onRemove={removeFromPurchase}
-                  />
-                ))}
-              </div>
+        <ProductSelectionCartSection
+          headerActions={
+            purchaseItems.length > 0 ? (
+              <Button
+                type="button"
+                onClick={handleSortPurchaseItems}
+                variant="secondary"
+                size="sm"
+                className="flex items-center space-x-2"
+                title="Sort products alphabetically"
+              >
+                <ArrowUpDown className="h-4 w-4" />
+                <span>Sort A-Z</span>
+              </Button>
+            ) : null
+          }
+          searchSection={<ProductSearch onAddProduct={addToPurchase} onRefetchReady={setRefetchProducts} />}
+          isEmpty={purchaseItems.length === 0}
+          emptyIcon={Package}
+          emptyText="No items in cart"
+        >
+          <CartItemsTableSection
+            desktopHeader={(
+              <CartTableHeader
+                className={`hidden md:grid gap-x-1 items-center pb-2 border-b border-gray-300 mb-2 ${
+                  dualUnitShowBoxInputEnabledPage
+                    ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                    : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                }`}
+                columns={[
+                  { key: 'sno', label: 'S.NO', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-left' },
+                  { key: 'product', label: 'Product' },
+                  ...(dualUnitShowBoxInputEnabledPage ? [{ key: 'box', label: 'Box' }] : []),
+                  { key: 'stock', label: 'Stock' },
+                  { key: 'qty', label: 'Qty' },
+                  { key: 'cost', label: 'Cost' },
+                  { key: 'total', label: 'Total', labelClassName: 'text-xs font-semibold text-gray-600 uppercase block text-center' },
+                  { key: 'action', label: 'Action', wrapperClassName: 'min-w-0 flex justify-end', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-right' },
+                ]}
+              />
             )}
-          </div>
-        </div>
+          >
+            {purchaseItems.map((item, index) => (
+              <PurchaseItem
+                key={item.product?._id}
+                item={item}
+                index={index}
+                onUpdateQuantity={updateQuantity}
+                onUpdateCost={updateCost}
+                onRemove={removeFromPurchase}
+                onUpdateCartBoxCount={updateCartBoxCount}
+              />
+            ))}
+          </CartItemsTableSection>
+        </ProductSelectionCartSection>
 
-        {/* Combined Purchase Details and Order Summary */}
+        {/* Purchase Details + Order Summary — same two-column pattern as Sales */}
         {purchaseItems.length > 0 && (
-          <OrderCheckoutCard className="w-full lg:max-w-5xl lg:ml-auto">
-            <OrderDetailsSection
-              detailsTitle="Purchase Details"
-              showDetails={showPurchaseDetailsFields}
-              onShowDetailsChange={setShowPurchaseDetailsFields}
-              checkboxId="showPurchaseDetailsFields"
-              headerClassName="mb-3 sm:mb-4"
+          <div
+            className={`mt-4 grid w-full min-w-0 grid-cols-1 gap-4 lg:gap-5 lg:items-start ${
+              showPurchaseDetailsFields ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
+            }`}
+          >
+            <OrderCheckoutCard
+              className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${
+                showPurchaseDetailsFields ? 'order-1' : 'order-2'
+              }`}
             >
-              {showPurchaseDetailsFields && (
-                <div className="flex flex-col sm:flex-row sm:flex-nowrap gap-3 sm:items-end sm:justify-end">
-                  {/* Invoice Number */}
-                  <div className="flex flex-col w-full sm:w-44">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Invoice Number
-                    </label>
-                    <input
-                      type="text"
-                      autoComplete="off"
-                      value={invoiceNumber}
-                      onChange={(e) => setInvoiceNumber(e.target.value)}
-                      className="input h-8 sm:h-8 text-sm"
-                      placeholder={autoGenerateInvoice ? "Auto-generated" : "Enter invoice number"}
-                      disabled={autoGenerateInvoice}
-                    />
-                  </div>
-
-                  {/* Expected Delivery */}
-                  <div className="flex flex-col w-full sm:w-48">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Expected Delivery
-                    </label>
-                    <input
-                      type="date"
-                      autoComplete="off"
-                      value={expectedDelivery}
-                      onChange={(e) => setExpectedDelivery(e.target.value)}
-                      className="input h-8 sm:h-8 text-sm"
-                    />
-                  </div>
-
-                  {/* Bill Date (for backdating - same as Sale page) */}
-                  <div className="flex flex-col w-full sm:w-48">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Bill Date <span className="text-xs text-gray-500">(Optional - for backdating)</span>
-                    </label>
-                    <input
-                      type="date"
-                      autoComplete="off"
-                      value={billDate}
-                      onChange={(e) => setBillDate(e.target.value)}
-                      className="input h-8 sm:h-8 text-sm"
-                      max={getLocalDateString()}
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Set custom date for backdating purchase
-                    </p>
-                  </div>
-
-                  {/* Tax Exemption Option */}
-                  <div className="flex flex-col w-full sm:w-40">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Tax Status
-                    </label>
-                    <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
-                      <input
-                        type="checkbox"
-                        id="taxExempt"
-                        checked={taxExempt}
-                        onChange={(e) => setTaxExempt(e.target.checked)}
-                        className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                      />
-                      <div className="flex-1">
-                        <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
-                          Tax Exempt
-                        </label>
+              <OrderDetailsSection
+                detailsTitle="Purchase Details"
+                showDetails={showPurchaseDetailsFields}
+                onShowDetailsChange={setShowPurchaseDetailsFields}
+                checkboxId="showPurchaseDetailsFields"
+              >
+                {showPurchaseDetailsFields && (
+                  <>
+                    <div className="md:hidden space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-xs font-medium text-gray-700">Invoice Number</label>
+                          <label
+                            htmlFor="autoGenerateInvoicePurchaseMobile"
+                            className="flex items-center space-x-1 text-xs text-gray-600 cursor-pointer select-none"
+                          >
+                            <Input
+                              type="checkbox"
+                              id="autoGenerateInvoicePurchaseMobile"
+                              checked={autoGenerateInvoice}
+                              onChange={(e) => {
+                                setAutoGenerateInvoice(e.target.checked);
+                                if (e.target.checked && selectedSupplier) {
+                                  setInvoiceNumber(generateInvoiceNumber(selectedSupplier));
+                                }
+                              }}
+                              className="h-3.5 w-3.5 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                            />
+                            <span>Auto-generate</span>
+                          </label>
+                        </div>
+                        <div className="relative">
+                          <Input
+                            type="text"
+                            autoComplete="off"
+                            value={invoiceNumber}
+                            onChange={(e) => setInvoiceNumber(e.target.value)}
+                            className="w-full pr-20 h-10 text-sm"
+                            placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
+                            disabled={autoGenerateInvoice}
+                          />
+                          {autoGenerateInvoice && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (selectedSupplier) {
+                                  setInvoiceNumber(generateInvoiceNumber(selectedSupplier));
+                                }
+                              }}
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-primary-600 hover:text-primary-800 font-medium"
+                            >
+                              Regenerate
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      {taxExempt && (
-                        <div className="text-green-600 text-xs font-medium">
-                          ✓
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Expected Delivery</label>
+                        <Input
+                          type="date"
+                          autoComplete="off"
+                          value={expectedDelivery}
+                          onChange={(e) => setExpectedDelivery(e.target.value)}
+                          className="h-10 text-sm w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Bill Date <span className="text-gray-500">(Optional)</span>
+                        </label>
+                        <Input
+                          type="date"
+                          autoComplete="off"
+                          value={billDate}
+                          onChange={(e) => setBillDate(e.target.value)}
+                          className="h-10 text-sm w-full"
+                          max={getLocalDateString()}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Tax Status</label>
+                        <div className="flex items-center space-x-2 px-3 py-2 border border-gray-200 rounded h-10">
+                          <Input
+                            type="checkbox"
+                            id="taxExemptPurchaseMobile"
+                            checked={taxExempt}
+                            onChange={(e) => setTaxExempt(e.target.checked)}
+                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          />
+                          <div className="flex-1">
+                            <label htmlFor="taxExemptPurchaseMobile" className="text-sm font-medium text-gray-700 cursor-pointer">
+                              Tax Exempt
+                            </label>
+                          </div>
+                          {taxExempt && <div className="text-green-600 text-sm font-medium">✓</div>}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+                        <Input
+                          type="text"
+                          autoComplete="off"
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          className="h-10 text-sm w-full"
+                          placeholder="Additional notes..."
+                        />
+                      </div>
+                    </div>
+
+                    <div className="hidden md:flex flex-wrap gap-3 items-end justify-start">
+                      <div className="flex flex-col w-72">
+                        <div className="flex items-center gap-3 mb-1">
+                          <label className="block text-xs font-medium text-gray-700 m-0">Invoice Number</label>
+                          <label
+                            htmlFor="autoGenerateInvoicePurchase"
+                            className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
+                          >
+                            <Input
+                              type="checkbox"
+                              id="autoGenerateInvoicePurchase"
+                              checked={autoGenerateInvoice}
+                              onChange={(e) => {
+                                setAutoGenerateInvoice(e.target.checked);
+                                if (e.target.checked && selectedSupplier) {
+                                  setInvoiceNumber(generateInvoiceNumber(selectedSupplier));
+                                }
+                              }}
+                              className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                            />
+                            <span>Auto-generate</span>
+                          </label>
+                        </div>
+                        <div className="relative">
+                          <Input
+                            type="text"
+                            autoComplete="off"
+                            value={invoiceNumber}
+                            onChange={(e) => setInvoiceNumber(e.target.value)}
+                            className="w-full pr-16 h-8 text-sm"
+                            placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
+                            disabled={autoGenerateInvoice}
+                          />
+                          {autoGenerateInvoice && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (selectedSupplier) {
+                                  setInvoiceNumber(generateInvoiceNumber(selectedSupplier));
+                                }
+                              }}
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[11px] text-primary-600 hover:text-primary-800 font-medium"
+                            >
+                              Regenerate
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col w-44">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Expected Delivery</label>
+                        <Input
+                          type="date"
+                          autoComplete="off"
+                          value={expectedDelivery}
+                          onChange={(e) => setExpectedDelivery(e.target.value)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="flex flex-col w-44">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Bill Date <span className="text-gray-500">(Optional)</span>
+                        </label>
+                        <Input
+                          type="date"
+                          autoComplete="off"
+                          value={billDate}
+                          onChange={(e) => setBillDate(e.target.value)}
+                          className="h-8 text-sm"
+                          max={getLocalDateString()}
+                        />
+                      </div>
+                      <div className="flex flex-col w-40">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Tax Status</label>
+                        <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
+                          <Input
+                            type="checkbox"
+                            id="taxExemptPurchase"
+                            checked={taxExempt}
+                            onChange={(e) => setTaxExempt(e.target.checked)}
+                            className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          />
+                          <div className="flex-1">
+                            <label htmlFor="taxExemptPurchase" className="text-xs font-medium text-gray-700 cursor-pointer">
+                              Tax Exempt
+                            </label>
+                          </div>
+                          {taxExempt && <div className="text-green-600 text-xs font-medium">✓</div>}
+                        </div>
+                      </div>
+                      <div className="flex min-w-0 flex-1 flex-col basis-[min(100%,20rem)]">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+                        <Input
+                          type="text"
+                          autoComplete="off"
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          className="h-8 w-full min-w-0 text-sm"
+                          placeholder="Additional notes..."
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </OrderDetailsSection>
+            </OrderCheckoutCard>
+
+            <OrderCheckoutCard
+              className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${
+                showPurchaseDetailsFields ? 'order-2' : 'order-1'
+              }`}
+            >
+              <OrderSummaryContent className="bg-none bg-slate-50">
+                <div className="space-y-2">
+                  {directDiscountAmount > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">Discount:</span>
+                      <span className="text-xl font-semibold tabular-nums text-red-600">
+                        -{directDiscountAmount.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  {!taxExempt && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">Tax:</span>
+                      <span className="text-xl font-semibold tabular-nums text-foreground">{tax.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="mt-2">
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-4 md:gap-4">
+                      <div className="flex items-center justify-between md:block">
+                        <span className="text-sm font-medium text-muted-foreground">Subtotal:</span>
+                        <div className="text-2xl font-semibold tabular-nums text-foreground md:mt-1">{subtotal.toFixed(2)}</div>
+                      </div>
+                      <div className="flex items-center justify-between md:block">
+                        <span className="text-sm font-medium text-muted-foreground">Purchase Total:</span>
+                        <div className="text-2xl font-bold tabular-nums text-primary md:mt-1">{total.toFixed(2)}</div>
+                      </div>
+                      <div className="flex items-center justify-between md:block">
+                        <span className="text-sm font-medium text-muted-foreground">Previous Outstanding:</span>
+                        <div
+                          className={`text-2xl font-semibold tabular-nums md:mt-1 ${
+                            supplierOutstanding > 0 ? 'text-red-600' : 'text-green-600'
+                          }`}
+                        >
+                          {supplierOutstanding.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between md:block">
+                        <span className="text-sm font-semibold text-foreground">Total Payables:</span>
+                        <div className="text-2xl font-bold tabular-nums text-primary md:mt-1">{totalPayables.toFixed(2)}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <OrderInsetPanel>
+                  <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 items-start">
+                    <div className="flex flex-col">
+                      <label className="block text-sm font-medium text-foreground mb-2">Apply Discount (manual)</label>
+                      <div className="flex space-x-2">
+                        <select
+                          value={directDiscount.type}
+                          onChange={(e) => setDirectDiscount({ ...directDiscount, type: e.target.value })}
+                          className="h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium"
+                        >
+                          <option value="amount">Amount</option>
+                          <option value="percentage">%</option>
+                        </select>
+                        <Input
+                          type="number"
+                          autoComplete="off"
+                          placeholder={directDiscount.type === 'amount' ? 'Enter amount...' : 'Enter percentage...'}
+                          value={directDiscount.value || ''}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            setDirectDiscount({ ...directDiscount, value });
+                          }}
+                          className="flex-1 h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
+                          min="0"
+                          step={directDiscount.type === 'percentage' ? '0.1' : '0.01'}
+                        />
+                      </div>
+                      {directDiscount.value > 0 && (
+                        <div className="mt-2">
+                          <Button
+                            onClick={() => setDirectDiscount({ type: 'amount', value: 0 })}
+                            variant="destructive"
+                            size="sm"
+                          >
+                            Clear Discount
+                          </Button>
                         </div>
                       )}
                     </div>
-                  </div>
 
-                  {/* Notes */}
-                  <div className="flex flex-col w-full sm:w-[28rem]">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Notes
-                    </label>
-                    <input
-                      type="text"
-                      autoComplete="off"
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      className="input h-8 sm:h-8 text-sm"
-                      placeholder="Additional notes..."
-                    />
-                  </div>
-                </div>
-              )}
-            </OrderDetailsSection>
-
-            <OrderSummaryBar />
-            <OrderSummaryContent>
-              <div className="mb-4 space-y-3 sm:mb-6">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm sm:text-base text-gray-800 font-semibold">Subtotal:</span>
-                  <span className="text-lg sm:text-xl font-bold text-gray-900">{subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm sm:text-base text-gray-800 font-semibold">
-                    {taxExempt ? 'Tax (Exempt):' : 'Tax (8%):'}
-                  </span>
-                  <span className="text-lg sm:text-xl font-bold text-gray-900">{tax.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm sm:text-base text-gray-800 font-semibold">Purchase Total:</span>
-                  <span className="text-lg sm:text-xl font-bold text-gray-900">{total.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm sm:text-base text-gray-800 font-semibold">Previous Outstanding:</span>
-                  <span className="text-lg sm:text-xl font-bold text-red-600">{supplierOutstanding.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center text-base sm:text-xl font-bold border-t-2 border-blue-400 pt-3 mt-2">
-                  <span className="text-blue-900">Total Payables:</span>
-                  <span className="text-blue-900 text-2xl sm:text-3xl">{totalPayables.toFixed(2)}</span>
-                </div>
-
-              </div>
-
-              {/* Payment and Discount Section - One Row */}
-              <OrderInsetPanel className="p-3 sm:p-4">
-                <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-3">
-                  {/* Apply Discount */}
-                  <div className="flex flex-col">
-                    <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-2">
-                      Apply Discount
-                    </label>
-                    <div className="flex space-x-2">
+                    <div className="flex flex-col md:col-start-2 md:row-start-1 w-full">
+                      <label className="block text-sm font-medium text-foreground mb-2">Payment Method</label>
                       <select
-                        value={directDiscount.type}
-                        onChange={(e) => setDirectDiscount({ ...directDiscount, type: e.target.value })}
-                        className="px-2 sm:px-3 py-2 text-xs sm:text-sm border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium h-[42px]"
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
                       >
-                        <option value="amount">Amount</option>
-                        <option value="percentage">%</option>
+                        <option value="cash">Cash</option>
+                        <option value="credit_card">Credit Card</option>
+                        <option value="debit_card">Debit Card</option>
+                        <option value="check">Check</option>
                       </select>
-                      <input
+                    </div>
+
+                    <div className="flex flex-col">
+                      <label className="block text-sm font-medium text-foreground mb-2">Amount Paid</label>
+                      <Input
                         type="number"
+                        step="0.01"
                         autoComplete="off"
-                        placeholder={directDiscount.type === 'amount' ? 'Enter amount...' : 'Enter percentage...'}
-                        value={directDiscount.value || ''}
-                        onChange={(e) => {
-                          const value = parseFloat(e.target.value) || 0;
-                          setDirectDiscount({ ...directDiscount, value });
-                        }}
-                        className="flex-1 px-2 sm:px-3 py-2 text-xs sm:text-sm border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 h-[42px]"
-                        min="0"
-                        step={directDiscount.type === 'percentage' ? '0.1' : '0.01'}
+                        value={amountPaid}
+                        onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
+                        onFocus={(e) => e.target.select()}
+                        className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground text-lg"
+                        placeholder="0.00"
                       />
                     </div>
-                    {directDiscount.value > 0 && (
-                      <div className="text-xs sm:text-sm text-green-700 font-semibold mt-2 bg-green-50 px-2 py-1 rounded">
-                        {directDiscount.type === 'percentage'
-                          ? `${directDiscount.value}% = ${directDiscountAmount.toFixed(2)} off`
-                          : `${directDiscount.value} off`
-                        }
-                      </div>
-                    )}
                   </div>
+                </OrderInsetPanel>
 
-                  {/* Payment Method */}
-                  <div className="flex flex-col">
-                    <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-2">
-                      Payment Method
-                    </label>
-                    <select
-                      value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="w-full px-2 sm:px-3 py-2 text-xs sm:text-sm border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 h-[42px]"
-                    >
-                      <option value="cash">Cash</option>
-                      <option value="credit_card">Credit Card</option>
-                      <option value="debit_card">Debit Card</option>
-                      <option value="check">Check</option>
-                    </select>
-                  </div>
-
-                  {/* Amount Paid */}
-                  <div className="flex flex-col">
-                    <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-2">
-                      Amount Paid
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      autoComplete="off"
-                      value={amountPaid}
-                      onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
-                      onFocus={(e) => e.target.select()}
-                      className="w-full px-2 sm:px-3 py-2 text-sm sm:text-base border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 h-[42px]"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-
-                {/* Clear Discount Button */}
-                {directDiscount.value > 0 && (
-                  <div className="mt-2">
+                <OrderCheckoutActions>
+                  {purchaseItems.length > 0 && (
                     <Button
-                      onClick={() => setDirectDiscount({ type: 'amount', value: 0 })}
-                      variant="destructive"
-                      size="sm"
+                      onClick={() => {
+                        setPurchaseItems([]);
+                        setSelectedSupplier(null);
+                        setSupplierSearchTerm('');
+                        setTaxExempt(true);
+                        setDirectDiscount({ type: 'amount', value: 0 });
+                        setAmountPaid(0);
+                        setPaymentMethod('cash');
+                        setBillDate(getLocalDateString());
+                        toast.success('Cart cleared');
+                      }}
+                      variant="secondary"
+                      className="flex-1"
                     >
-                      Clear Discount
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Clear Cart
                     </Button>
-                  </div>
-                )}
-              </OrderInsetPanel>
+                  )}
+                  {purchaseItems.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="secondary" className="flex-1">
+                          <Printer className="h-4 w-4 mr-2" />
+                          Print
+                          <ChevronDown className="h-4 w-4 ml-2" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const supplierInfoForPrint = selectedSupplier ? {
+                              name: selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name,
+                              email: selectedSupplier.email,
+                              phone: selectedSupplier.phone,
+                              address: (() => {
+                                if (typeof selectedSupplier.address === 'string' && selectedSupplier.address.trim()) return selectedSupplier.address.trim();
+                                const addr = selectedSupplier.address || selectedSupplier.companyAddress || selectedSupplier.location;
+                                if (addr && typeof addr === 'object') {
+                                  const parts = [addr.street || addr.address_line1 || addr.addressLine1 || addr.line1, addr.address_line2 || addr.addressLine2, addr.city, addr.province || addr.state, addr.country, addr.zipCode || addr.zip || addr.postalCode || addr.postal_code].filter(Boolean);
+                                  if (parts.length) return parts.join(', ');
+                                }
+                                if (selectedSupplier.addresses?.length) {
+                                  const a = selectedSupplier.addresses.find(x => x.isDefault) || selectedSupplier.addresses.find(x => x.type === 'billing' || x.type === 'both') || selectedSupplier.addresses[0];
+                                  const parts = [a.street || a.address_line1 || a.addressLine1, a.city, a.province || a.state, a.country, a.zipCode || a.zip].filter(Boolean);
+                                  if (parts.length) return parts.join(', ');
+                                }
+                                return null;
+                              })(),
+                              businessName: selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.companyName
+                            } : null;
+                            const tempOrder = {
+                              orderNumber: `PO-${Date.now()}`,
+                              orderType: 'purchase',
+                              supplier: selectedSupplier,
+                              supplierInfo: supplierInfoForPrint,
+                              customer: selectedSupplier,
+                              customerInfo: supplierInfoForPrint,
+                              items: purchaseItems.map(item => {
+                                const product = item.product || {};
+                                const displayName = product.isVariant
+                                  ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
+                                  : (product.name || 'Unknown Product');
 
-              {!editData?.isEditMode && purchaseItems.length > 0 && (
-                <div className="border-t border-gray-100 pt-3">
-                  <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={printBarcodeLabelsAfterInvoice}
-                      onChange={(e) => setPrintBarcodeLabelsAfterInvoice(e.target.checked)}
-                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mt-0.5"
-                    />
-                    <span>After saving purchase invoice, open barcode label printer (default copies = quantity per line; uses product barcode or SKU)</span>
-                  </label>
-                </div>
-              )}
+                                return {
+                                  product: {
+                                    name: displayName,
+                                    isVariant: product.isVariant,
+                                    variantType: product.variantType,
+                                    variantValue: product.variantValue,
+                                    ...(product.barcode ? { barcode: product.barcode } : {}),
+                                    ...(product.sku ? { sku: product.sku } : {})
+                                  },
+                                  quantity: item.quantity,
+                                  unitPrice: item.costPerUnit
+                                };
+                              }),
+                              pricing: {
+                                subtotal: subtotal,
+                                discountAmount: directDiscountAmount,
+                                taxAmount: tax,
+                                isTaxExempt: taxExempt,
+                                total: total
+                              },
+                              payment: {
+                                method: paymentMethod,
+                                amountPaid: amountPaid,
+                                remainingBalance: total - amountPaid,
+                                isPartialPayment: amountPaid < total
+                              },
+                              createdAt: new Date(),
+                              createdBy: { name: 'Current User' },
+                              invoiceNumber: invoiceNumber,
+                              expectedDelivery: expectedDelivery,
+                              notes: notes
+                            };
+                            setDirectPrintOrder(tempOrder);
+                          }}
+                        >
+                          <Printer className="h-4 w-4 mr-2" />
+                          Print
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const supplierInfoForPrint = selectedSupplier ? {
+                              name: selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name,
+                              email: selectedSupplier.email,
+                              phone: selectedSupplier.phone,
+                              address: (() => {
+                                if (typeof selectedSupplier.address === 'string' && selectedSupplier.address.trim()) return selectedSupplier.address.trim();
+                                const addr = selectedSupplier.address || selectedSupplier.companyAddress || selectedSupplier.location;
+                                if (addr && typeof addr === 'object') {
+                                  const parts = [addr.street || addr.address_line1 || addr.addressLine1 || addr.line1, addr.address_line2 || addr.addressLine2, addr.city, addr.province || addr.state, addr.country, addr.zipCode || addr.zip || addr.postalCode || addr.postal_code].filter(Boolean);
+                                  if (parts.length) return parts.join(', ');
+                                }
+                                if (selectedSupplier.addresses?.length) {
+                                  const a = selectedSupplier.addresses.find(x => x.isDefault) || selectedSupplier.addresses.find(x => x.type === 'billing' || x.type === 'both') || selectedSupplier.addresses[0];
+                                  const parts = [a.street || a.address_line1 || a.addressLine1, a.city, a.province || a.state, a.country, a.zipCode || a.zip].filter(Boolean);
+                                  if (parts.length) return parts.join(', ');
+                                }
+                                return null;
+                              })(),
+                              businessName: selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.companyName
+                            } : null;
+                            const tempOrder = {
+                              orderNumber: `PO-${Date.now()}`,
+                              orderType: 'purchase',
+                              supplier: selectedSupplier,
+                              supplierInfo: supplierInfoForPrint,
+                              customer: selectedSupplier,
+                              customerInfo: supplierInfoForPrint,
+                              items: purchaseItems.map(item => {
+                                const product = item.product || {};
+                                const displayName = product.isVariant
+                                  ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
+                                  : (product.name || 'Unknown Product');
 
-              {/* Action Buttons */}
-              <OrderCheckoutActions className="mt-4 border-0 pt-4 sm:mt-6 sm:pt-6 sm:flex-row-reverse">
-                {purchaseItems.length > 0 && (
-                  <Button
-                    onClick={() => {
-                      setPurchaseItems([]);
-                      setSelectedSupplier(null);
-                      setSupplierSearchTerm('');
-                      setTaxExempt(true);
-                      setDirectDiscount({ type: 'amount', value: 0 });
-                      setAmountPaid(0);
-                      setPaymentMethod('cash');
-                      setBillDate(getLocalDateString()); // Reset Bill Date
-                      toast.success('Cart cleared');
-                    }}
-                    variant="secondary"
-                    size="default"
-                    className="flex items-center justify-center gap-2 w-full sm:flex-1"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span>Clear Cart</span>
-                  </Button>
-                )}
-                {purchaseItems.length > 0 && (
-                  <Button
-                    onClick={() => {
-                      const supplierInfoForPrint = selectedSupplier ? {
-                        name: selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name,
-                        email: selectedSupplier.email,
-                        phone: selectedSupplier.phone,
-                        address: (() => {
-                          if (typeof selectedSupplier.address === 'string' && selectedSupplier.address.trim()) return selectedSupplier.address.trim();
-                          const addr = selectedSupplier.address || selectedSupplier.companyAddress || selectedSupplier.location;
-                          if (addr && typeof addr === 'object') {
-                            const parts = [addr.street || addr.address_line1 || addr.addressLine1 || addr.line1, addr.address_line2 || addr.addressLine2, addr.city, addr.province || addr.state, addr.country, addr.zipCode || addr.zip || addr.postalCode || addr.postal_code].filter(Boolean);
-                            if (parts.length) return parts.join(', ');
-                          }
-                          if (selectedSupplier.addresses?.length) {
-                            const a = selectedSupplier.addresses.find(x => x.isDefault) || selectedSupplier.addresses.find(x => x.type === 'billing' || x.type === 'both') || selectedSupplier.addresses[0];
-                            const parts = [a.street || a.address_line1 || a.addressLine1, a.city, a.province || a.state, a.country, a.zipCode || a.zip].filter(Boolean);
-                            if (parts.length) return parts.join(', ');
-                          }
-                          return null;
-                        })(),
-                        businessName: selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.companyName
-                      } : null;
-                      const tempOrder = {
-                        orderNumber: `PO-${Date.now()}`,
-                        orderType: 'purchase',
-                        supplier: selectedSupplier,
-                        supplierInfo: supplierInfoForPrint,
-                        customer: selectedSupplier,
-                        customerInfo: supplierInfoForPrint,
-                        items: purchaseItems.map(item => {
-                          const product = item.product || {};
-                          const displayName = product.isVariant
-                            ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
-                            : (product.name || 'Unknown Product');
-
-                          return {
-                            product: {
-                              name: displayName,
-                              isVariant: product.isVariant,
-                              variantType: product.variantType,
-                              variantValue: product.variantValue,
-                              ...(product.barcode ? { barcode: product.barcode } : {}),
-                              ...(product.sku ? { sku: product.sku } : {})
-                            },
-                            quantity: item.quantity,
-                            unitPrice: item.costPerUnit
-                          };
-                        }),
-                        pricing: {
-                          subtotal: subtotal,
-                          discountAmount: directDiscountAmount,
-                          taxAmount: tax,
-                          isTaxExempt: taxExempt,
-                          total: total
-                        },
-                        payment: {
-                          method: paymentMethod,
-                          amountPaid: amountPaid,
-                          remainingBalance: total - amountPaid,
-                          isPartialPayment: amountPaid < total
-                        },
-                        createdAt: new Date(),
-                        createdBy: { name: 'Current User' },
-                        invoiceNumber: invoiceNumber,
-                        expectedDelivery: expectedDelivery,
-                        notes: notes
-                      };
-                      setCurrentOrder(tempOrder);
-                      setShowPrintModal(true);
-                    }}
-                    variant="secondary"
-                    size="default"
-                    className="flex items-center justify-center gap-2 w-full sm:flex-1"
-                  >
-                    <Receipt className="h-4 w-4" />
-                    <span>Print Preview</span>
-                  </Button>
+                                return {
+                                  product: {
+                                    name: displayName,
+                                    isVariant: product.isVariant,
+                                    variantType: product.variantType,
+                                    variantValue: product.variantValue,
+                                    ...(product.barcode ? { barcode: product.barcode } : {}),
+                                    ...(product.sku ? { sku: product.sku } : {})
+                                  },
+                                  quantity: item.quantity,
+                                  unitPrice: item.costPerUnit
+                                };
+                              }),
+                              pricing: {
+                                subtotal: subtotal,
+                                discountAmount: directDiscountAmount,
+                                taxAmount: tax,
+                                isTaxExempt: taxExempt,
+                                total: total
+                              },
+                              payment: {
+                                method: paymentMethod,
+                                amountPaid: amountPaid,
+                                remainingBalance: total - amountPaid,
+                                isPartialPayment: amountPaid < total
+                              },
+                              createdAt: new Date(),
+                              createdBy: { name: 'Current User' },
+                              invoiceNumber: invoiceNumber,
+                              expectedDelivery: expectedDelivery,
+                              notes: notes
+                            };
+                            setCurrentOrder(tempOrder);
+                            setShowPrintModal(true);
+                          }}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Print Preview
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                  {!editData?.isEditMode && purchaseItems.length > 0 && (
+                    <label className="flex items-center space-x-2 px-2 text-sm font-medium text-gray-700 cursor-pointer">
+                      <Input
+                        type="checkbox"
+                        checked={printBarcodeLabelsAfterInvoice}
+                        onChange={(e) => setPrintBarcodeLabelsAfterInvoice(e.target.checked)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span>Print labels after purchase</span>
+                    </label>
                 )}
                 <LoadingButton
                   onClick={handleProcessPurchase}
                   isLoading={false}
                   variant="default"
                   size="lg"
-                  className="flex items-center justify-center gap-2 w-full sm:flex-2"
+                  className="flex-2"
                 >
-                  <Truck className="h-4 w-4" />
-                  <span className="hidden sm:inline">{editData?.isEditMode ? 'Update Purchase Invoice' : 'Complete Purchase & Update Inventory'}</span>
-                  <span className="sm:hidden">{editData?.isEditMode ? 'Update' : 'Complete Purchase'}</span>
+                  <Truck className="h-4 w-4 mr-2" />
+                  {editData?.isEditMode ? 'Update Purchase Invoice' : 'Complete Purchase & Update Inventory'}
                 </LoadingButton>
               </OrderCheckoutActions>
             </OrderSummaryContent>
           </OrderCheckoutCard>
+          </div>
+        )}
+
+        {directPrintOrder && (
+          <DirectPrintInvoice
+            orderData={directPrintOrder}
+            documentTitle="Purchase Invoice"
+            partyLabel="Supplier"
+            onComplete={() => setDirectPrintOrder(null)}
+          />
         )}
 
         {/* Print Modal */}
@@ -1992,6 +1968,6 @@ export const Purchase = ({ tabId, editData }) => {
           namePrefix="purchase-export-format"
         />
       </div>
-    </>
+    </AsyncErrorBoundary>
   );
 };

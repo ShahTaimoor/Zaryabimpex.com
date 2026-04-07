@@ -524,7 +524,9 @@ class SalesService {
     let finalTax = totalTax;
     const appliedDiscountsForSale = Array.isArray(payloadDiscounts) ? payloadDiscounts : [];
 
-    if (appliedDiscountsForSale.length > 0 && (payloadDiscountAmount != null || payloadTotal != null)) {
+    // Accept POS-calculated invoice numbers (manual discount, code discount, tax/total overrides)
+    // even when no discount code is selected.
+    if (payloadDiscountAmount != null || payloadTax != null || payloadTotal != null) {
       if (payloadDiscountAmount != null) finalDiscount = Number(payloadDiscountAmount);
       if (payloadTax != null) finalTax = Number(payloadTax);
       if (payloadTotal != null) orderTotal = Number(payloadTotal);
@@ -658,8 +660,8 @@ class SalesService {
           transactionType: 'invoice',
           netAmount: orderTotal,
           grossAmount: subtotal,
-          discountAmount: totalDiscount,
-          taxAmount: totalTax,
+          discountAmount: finalDiscount,
+          taxAmount: finalTax,
           referenceType: 'sales_order',
           referenceId: order.id,
           referenceNumber: order.order_number,

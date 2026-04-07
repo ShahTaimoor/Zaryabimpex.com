@@ -317,7 +317,34 @@ export const Orders = () => {
         orderStatus: freshOrder.status ?? freshOrder.order_status ?? freshOrder.orderStatus ?? '',
         paymentStatus: freshOrder.payment?.status ?? freshOrder.payment_status ?? freshOrder.paymentStatus ?? '',
         orderType: freshOrder.orderType ?? freshOrder.order_type ?? 'retail',
-        billDate: freshOrder.sale_date ?? freshOrder.billDate ?? freshOrder.order_date ?? freshOrder.created_at ?? freshOrder.createdAt
+        billDate: freshOrder.sale_date ?? freshOrder.billDate ?? freshOrder.order_date ?? freshOrder.created_at ?? freshOrder.createdAt,
+        // Pass discount fields explicitly so Sales edit can hydrate manual/code discounts.
+        discountAmount:
+          freshOrder.discountAmount ??
+          freshOrder.discount ??
+          freshOrder.pricing?.discountAmount ??
+          freshOrder.pricing?.discount ??
+          0,
+        discount:
+          freshOrder.discount ??
+          freshOrder.discountAmount ??
+          freshOrder.pricing?.discountAmount ??
+          freshOrder.pricing?.discount ??
+          0,
+        appliedDiscounts:
+          freshOrder.appliedDiscounts ??
+          freshOrder.applied_discounts ??
+          freshOrder.pricing?.appliedDiscounts ??
+          [],
+        pricing: {
+          ...(freshOrder.pricing || {}),
+          discountAmount:
+            freshOrder.pricing?.discountAmount ??
+            freshOrder.discountAmount ??
+            freshOrder.discount ??
+            freshOrder.pricing?.discount ??
+            0
+        }
       };
 
       const componentInfo = getComponentInfo('/sales');

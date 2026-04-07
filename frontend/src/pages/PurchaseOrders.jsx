@@ -1668,10 +1668,10 @@ export const PurchaseOrders = ({ tabId }) => {
                 </Button>
               </div>
 
-              {/* Desktop Table Header — 1+4+1+3+1+1+1 = 12 (wide Qty for box + pcs + total) */}
+              {/* Desktop Table Header — 1+4+1+3+1+1+1 = 12 */}
               <div className="hidden md:grid grid-cols-12 gap-4 items-center pb-2 border-b border-gray-300 mb-2">
-                <div className="col-span-1">
-                  <span className="text-xs font-semibold text-gray-600 uppercase">#</span>
+                <div className="col-span-1 flex justify-center">
+                  <span className="text-xs font-semibold text-gray-600 uppercase w-1/2 min-w-[56px] text-center">S.NO</span>
                 </div>
                 <div className="col-span-4">
                   <span className="text-xs font-semibold text-gray-600 uppercase">Product</span>
@@ -1688,8 +1688,8 @@ export const PurchaseOrders = ({ tabId }) => {
                 <div className="col-span-1">
                   <span className="text-xs font-semibold text-gray-600 uppercase">Total</span>
                 </div>
-                <div className="col-span-1">
-                  <span className="text-xs font-semibold text-gray-600 uppercase">Action</span>
+                <div className="col-span-1 flex justify-center">
+                  <span className="text-xs font-semibold text-gray-600 uppercase w-1/2 min-w-[56px] text-center">Action</span>
                 </div>
               </div>
 
@@ -1835,8 +1835,8 @@ export const PurchaseOrders = ({ tabId }) => {
                     <div className={`hidden md:block py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                       <div className="grid grid-cols-12 gap-4 items-center">
                         {/* Serial Number - 1 column (new field) */}
-                        <div className="col-span-1">
-                          <span className="text-sm font-medium text-gray-700 bg-gray-50 px-0.5 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
+                        <div className="col-span-1 flex justify-center">
+                          <span className="text-sm font-medium text-gray-700 bg-gray-50 px-0.5 py-1 rounded border border-gray-200 block text-center h-8 w-1/2 min-w-[56px] flex items-center justify-center">
                             {index + 1}
                           </span>
                         </div>
@@ -1927,12 +1927,12 @@ export const PurchaseOrders = ({ tabId }) => {
                         </div>
 
                         {/* Delete Button - 1 column (matches Product Selection Add Button) */}
-                        <div className="col-span-1">
+                        <div className="col-span-1 flex justify-center">
                           <Button
                             onClick={() => handleRemoveItem(index)}
                             variant="destructive"
                             size="sm"
-                            className="h-8 w-full"
+                            className="h-8 w-1/2 min-w-[56px]"
                             title="Delete"
                           >
                             <Trash2 className="h-4 w-4" />

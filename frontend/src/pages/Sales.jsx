@@ -58,6 +58,9 @@ import {
   OrderInsetPanel,
   OrderCheckoutActions,
 } from '../components/order/OrderCheckoutLayout';
+import { ProductSelectionCartSection } from '../components/order/ProductSelectionCartSection';
+import { CartItemsTableSection } from '../components/order/CartItemsTableSection';
+import { CartTableHeader } from '../components/order/CartTableHeader';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import AsyncErrorBoundary from '../components/AsyncErrorBoundary';
 import { ClearConfirmationDialog } from '../components/ConfirmationDialog';
@@ -155,6 +158,7 @@ export const Sales = ({ tabId, editData }) => {
   const { companyInfo: companySettings } = useCompanyInfo();
   const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
+  const showSalesDiscountCodeEnabled = companySettings.orderSettings?.showSalesDiscountCode === true;
   const [showProfit, setShowProfit] = useState(false);
   const totalProfit = useMemo(() => {
     if (!Array.isArray(cart) || cart.length === 0) return 0;
@@ -240,6 +244,34 @@ export const Sales = ({ tabId, editData }) => {
       if (editData.isTaxExempt !== undefined) {
         setIsTaxExempt(editData.isTaxExempt);
       }
+
+      // Restore existing discounts in edit mode (code + manual)
+      const rawAppliedDiscounts = Array.isArray(editData.appliedDiscounts)
+        ? editData.appliedDiscounts
+        : Array.isArray(editData.applied_discounts)
+          ? editData.applied_discounts
+          : [];
+      const hydratedAppliedDiscounts = rawAppliedDiscounts
+        .map((d) => ({
+          code: String(d.code || d.discountCode || d.discount_code || '').trim(),
+          amount: Number(d.amount ?? 0) || 0,
+          discountId: d.discountId || d.discount_id || d.id || d._id || null,
+          type: d.type,
+          value: d.value
+        }))
+        .filter((d) => d.code);
+      setAppliedDiscounts(hydratedAppliedDiscounts);
+
+      const invoiceDiscountRaw = Number(
+        editData.discountAmount ??
+        editData.discount ??
+        editData.pricing?.discountAmount ??
+        editData.pricing?.discount ??
+        0
+      ) || 0;
+      const appliedDiscountTotal = hydratedAppliedDiscounts.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+      const manualDiscountForEdit = Math.max(0, invoiceDiscountRaw - appliedDiscountTotal);
+      setDirectDiscount({ type: 'amount', value: manualDiscountForEdit });
 
       // Set payment method and amount paid if available
       if (editData.payment) {
@@ -432,6 +464,7 @@ export const Sales = ({ tabId, editData }) => {
   const tax = isTaxExempt ? 0 : subtotalAfterDiscount * 0.08;
   const total = subtotalAfterDiscount + tax;
   const change = amountPaid - total;
+  const manualDiscountDisplay = Math.max(0, Math.round(directDiscountAmount || 0));
 
   // Map businessType to orderType
   // businessType: ['retail', 'wholesale', 'distributor', 'individual']
@@ -1519,186 +1552,168 @@ export const Sales = ({ tabId, editData }) => {
         </div>
 
         {/* Combined Product Selection and Cart Section */}
-        <div className="card">
-          <div className="card-header">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-              <h3 className="text-lg font-medium text-gray-900">Product Selection & Cart</h3>
-              <div className="flex flex-wrap items-center justify-start lg:justify-end gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  {cart.length > 0 && (
-                    <Button
-                      type="button"
-                      onClick={handleSortCartItems}
-                      variant="secondary"
-                      size="sm"
-                      className="flex items-center space-x-2"
-                      title="Sort products alphabetically"
-                    >
-                      <ArrowUpDown className="h-4 w-4" />
-                      <span>Sort A-Z</span>
-                    </Button>
-                  )}
-                  {/* Show/Hide Cost Price Toggle Button */}
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      type="button"
-                      onClick={() => setShowCostPrice(!showCostPrice)}
-                      variant="secondary"
-                      size="sm"
-                      className="flex items-center space-x-2"
-                      title={showCostPrice ? "Hide purchase cost prices" : "Show purchase cost prices"}
-                    >
-                      {showCostPrice ? (
-                        <>
-                          <EyeOff className="h-4 w-4" />
-                          <span>Hide Cost</span>
-                        </>
-                      ) : (
-                        <>
-                          <Eye className="h-4 w-4" />
-                          <span>Show Cost</span>
-                        </>
-                      )}
-                    </Button>
-                    {user?.role === 'admin' && (
+        <ProductSelectionCartSection
+          headerActions={
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                {cart.length > 0 && (
+                  <Button
+                    type="button"
+                    onClick={handleSortCartItems}
+                    variant="secondary"
+                    size="sm"
+                    className="flex items-center space-x-2"
+                    title="Sort products alphabetically"
+                  >
+                    <ArrowUpDown className="h-4 w-4" />
+                    <span>Sort A-Z</span>
+                  </Button>
+                )}
+                <div className="flex items-center space-x-2">
+                  <Button
+                    type="button"
+                    onClick={() => setShowCostPrice(!showCostPrice)}
+                    variant="secondary"
+                    size="sm"
+                    className="flex items-center space-x-2"
+                    title={showCostPrice ? 'Hide purchase cost prices' : 'Show purchase cost prices'}
+                  >
+                    {showCostPrice ? (
                       <>
-                        <Button
-                          type="button"
-                          onClick={() => setShowProfit((prev) => !prev)}
-                          variant="secondary"
-                          size="sm"
-                          className="flex items-center space-x-2"
-                          title="Show estimated profit (BP)"
-                        >
-                          <Calculator className="h-4 w-4" />
-                          <span>{showProfit ? 'Hide BP' : 'Show BP'}</span>
-                        </Button>
-                        {showProfit && (
-                          <span
-                            className={`text-sm font-semibold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'
-                              }`}
-                          >
-                            {new Intl.NumberFormat('en-US', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }).format(totalProfit || 0)}
-                          </span>
-                        )}
+                        <EyeOff className="h-4 w-4" />
+                        <span>Hide Cost</span>
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="h-4 w-4" />
+                        <span>Show Cost</span>
                       </>
                     )}
-                  </div>
-                </div>
-                {selectedCustomer && cart.length > 0 && (
-                  <>
-                    {!isLastPricesApplied ? (
-                      <LoadingButton
-                        onClick={handleApplyLastPrices}
-                        isLoading={isLoadingLastPrices}
-                        variant="secondary"
-                        size="sm"
-                        title="Apply prices from last order for this customer"
-                      >
-                        <History className="h-4 w-4 mr-2" />
-                        Apply Last Prices
-                      </LoadingButton>
-                    ) : (
-                      <LoadingButton
-                        onClick={handleRestoreCurrentPrices}
-                        isLoading={isRestoringPrices}
+                  </Button>
+                  {user?.role === 'admin' && (
+                    <>
+                      <Button
+                        type="button"
+                        onClick={() => setShowProfit((prev) => !prev)}
                         variant="secondary"
                         size="sm"
                         className="flex items-center space-x-2"
-                        title="Restore original/current prices"
+                        title="Show estimated profit (BP)"
                       >
-                        <RotateCcw className="h-4 w-4" />
-                        <span>Restore Current Prices</span>
-                      </LoadingButton>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="card-content">
-            {/* Product Search */}
-            <div className="mb-6">
-              <ProductSearch
-                onAddProduct={addToCart}
-                selectedCustomer={selectedCustomer}
-                showCostPrice={showCostPrice}
-                hasCostPricePermission={hasPermission('view_cost_prices')}
-                priceType={priceType}
-                dualUnitShowBoxInput={dualUnitShowBoxInputEnabled}
-                dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
-                onRefetchReady={setRefetchProducts}
-                onLastPurchasePriceFetched={(productId, price) => {
-                  setLastPurchasePrices(prev => ({
-                    ...prev,
-                    [productId]: price
-                  }));
-                }}
-              />
-            </div>
-
-            {/* Cart Items */}
-            {cart.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <ShoppingCart className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2">No items in cart</p>
-              </div>
-            ) : (
-              <div className="pt-6">
-                {isLastPricesApplied && Object.keys(priceStatus).length > 0 && (
-                  <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 mb-3 text-xs">
-                    <span className="text-gray-600 font-medium">Price Status:</span>
-                    <div className="flex items-center space-x-1">
-                      <CheckCircle className="h-3 w-3 text-green-600" />
-                      <span className="text-gray-600">Updated</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Info className="h-3 w-3 text-blue-600" />
-                      <span className="text-gray-600">Same Price</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <AlertCircle className="h-3 w-3 text-yellow-600" />
-                      <span className="text-gray-600">Not in Last Order</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Desktop Table Header Row */}
-                <div className="hidden md:grid grid-cols-12 gap-4 items-center pb-2 border-b border-gray-300 mb-2">
-                  <div className="col-span-1">
-                    <span className="text-xs font-semibold text-gray-600 uppercase">#</span>
-                  </div>
-                  <div className={`${showCostPrice && hasPermission('view_cost_prices') ? 'col-span-4' : 'col-span-5'}`}>
-                    <span className="text-xs font-semibold text-gray-600 uppercase">Product</span>
-                  </div>
-                  <div className="col-span-1">
-                    <span className="text-xs font-semibold text-gray-600 uppercase">Box</span>
-                  </div>
-                  <div className="col-span-1">
-                    <span className="text-xs font-semibold text-gray-600 uppercase">Stock</span>
-                  </div>
-                  <div className="col-span-1">
-                    <span className="text-xs font-semibold text-gray-600 uppercase">Qty</span>
-                  </div>
-                  {showCostPrice && hasPermission('view_cost_prices') && (
-                    <div className="col-span-1">
-                      <span className="text-xs font-semibold text-gray-600 uppercase">Cost</span>
-                    </div>
+                        <Calculator className="h-4 w-4" />
+                        <span>{showProfit ? 'Hide BP' : 'Show BP'}</span>
+                      </Button>
+                      {showProfit && (
+                        <span className={`text-sm font-semibold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {new Intl.NumberFormat('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }).format(totalProfit || 0)}
+                        </span>
+                      )}
+                    </>
                   )}
-                  <div className="col-span-1">
-                    <span className="text-xs font-semibold text-gray-600 uppercase">Rate</span>
-                  </div>
-                  <div className="col-span-1">
-                    <span className="text-xs font-semibold text-gray-600 uppercase">Total</span>
-                  </div>
-                  <div className="col-span-1">
-                    <span className="text-xs font-semibold text-gray-600 uppercase">Action</span>
-                  </div>
                 </div>
-
+              </div>
+              {selectedCustomer && cart.length > 0 && (
+                <>
+                  {!isLastPricesApplied ? (
+                    <LoadingButton
+                      onClick={handleApplyLastPrices}
+                      isLoading={isLoadingLastPrices}
+                      variant="secondary"
+                      size="sm"
+                      title="Apply prices from last order for this customer"
+                    >
+                      <History className="h-4 w-4 mr-2" />
+                      Apply Last Prices
+                    </LoadingButton>
+                  ) : (
+                    <LoadingButton
+                      onClick={handleRestoreCurrentPrices}
+                      isLoading={isRestoringPrices}
+                      variant="secondary"
+                      size="sm"
+                      className="flex items-center space-x-2"
+                      title="Restore original/current prices"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      <span>Restore Current Prices</span>
+                    </LoadingButton>
+                  )}
+                </>
+              )}
+            </>
+          }
+          searchSection={
+            <ProductSearch
+              onAddProduct={addToCart}
+              selectedCustomer={selectedCustomer}
+              showCostPrice={showCostPrice}
+              hasCostPricePermission={hasPermission('view_cost_prices')}
+              priceType={priceType}
+              dualUnitShowBoxInput={dualUnitShowBoxInputEnabled}
+              dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
+              onRefetchReady={setRefetchProducts}
+              onLastPurchasePriceFetched={(productId, price) => {
+                setLastPurchasePrices(prev => ({
+                  ...prev,
+                  [productId]: price
+                }));
+              }}
+            />
+          }
+          isEmpty={cart.length === 0}
+          emptyIcon={ShoppingCart}
+          emptyText="No items in cart"
+        >
+          <CartItemsTableSection
+            topContent={isLastPricesApplied && Object.keys(priceStatus).length > 0 ? (
+              <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 mb-3 text-xs">
+                <span className="text-gray-600 font-medium">Price Status:</span>
+                <div className="flex items-center space-x-1">
+                  <CheckCircle className="h-3 w-3 text-green-600" />
+                  <span className="text-gray-600">Updated</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <Info className="h-3 w-3 text-blue-600" />
+                  <span className="text-gray-600">Same Price</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <AlertCircle className="h-3 w-3 text-yellow-600" />
+                  <span className="text-gray-600">Not in Last Order</span>
+                </div>
+              </div>
+            ) : null}
+            desktopHeader={(
+              <CartTableHeader
+                className={`hidden md:grid gap-x-1 items-center pb-2 border-b border-gray-300 mb-2 ${
+                  dualUnitShowBoxInputEnabled
+                    ? (
+                      showCostPrice && hasPermission('view_cost_prices')
+                        ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                        : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                    )
+                    : (
+                      showCostPrice && hasPermission('view_cost_prices')
+                        ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                        : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                    )
+                }`}
+                columns={[
+                  { key: 'sno', label: 'S.NO', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-left' },
+                  { key: 'product', label: 'Product' },
+                  ...(dualUnitShowBoxInputEnabled ? [{ key: 'box', label: 'Box' }] : []),
+                  { key: 'stock', label: 'Stock' },
+                  { key: 'qty', label: 'Qty' },
+                  ...(showCostPrice && hasPermission('view_cost_prices') ? [{ key: 'cost', label: 'Cost' }] : []),
+                  { key: 'rate', label: 'Rate' },
+                  { key: 'total', label: 'Total', labelClassName: 'text-xs font-semibold text-gray-600 uppercase block text-center' },
+                  { key: 'action', label: 'Action', wrapperClassName: 'min-w-0 flex justify-end', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-right' },
+                ]}
+              />
+            )}
+          >
                 {cart.map((item, index) => {
                   const totalPrice = item.unitPrice * item.quantity;
                   const isLowStock = item.product.inventory?.currentStock <= item.product.inventory?.reorderPoint;
@@ -1856,31 +1871,52 @@ export const Sales = ({ tabId, editData }) => {
 
                       {/* Desktop Table Row */}
                       <div className={`hidden md:block py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                        <div className="grid grid-cols-12 gap-4 items-center">
+                        <div
+                          className={`grid gap-x-1 items-center ${
+                            dualUnitShowBoxInputEnabled
+                              ? (
+                                showCostPrice && hasPermission('view_cost_prices')
+                                  ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                                  : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                              )
+                              : (
+                                showCostPrice && hasPermission('view_cost_prices')
+                                  ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                                  : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                              )
+                          }`}
+                        >
                           {/* Serial Number - 1 column */}
-                          <div className="col-span-1">
-                            <span className="text-sm font-medium text-gray-700 bg-gray-50 px-0.5 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
+                          <div className="min-w-0 flex justify-start">
+                            <span className="text-sm font-medium text-gray-700 bg-gray-50 px-0.5 py-1 rounded border border-gray-200 block w-8 text-center h-8 flex items-center justify-center">
                               {index + 1}
                             </span>
                           </div>
 
                           {/* Product Name - mirror Sales Order layout (6 columns normally, 5 when cost column shown) */}
-                          <div className={`${showCostPrice && hasPermission('view_cost_prices') ? 'col-span-4' : 'col-span-5'} flex items-center h-8`}>
-                            <div className="flex flex-col">
-                              <span className="font-medium text-sm truncate">
-                                {item.product.isVariant
-                                  ? (item.product.displayName || item.product.variantName || item.product.name)
-                                  : item.product.name}
-                                {isLowStock && <span className="text-yellow-600 text-xs ml-2">⚠️ Low Stock</span>}
+                          <div className="min-w-0 flex items-center h-8">
+                            <div className="flex flex-col min-w-0 w-full">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className="font-medium text-sm truncate min-w-0"
+                                  title={item.product.isVariant
+                                    ? (item.product.displayName || item.product.variantName || item.product.name)
+                                    : item.product.name}
+                                >
+                                  {item.product.isVariant
+                                    ? (item.product.displayName || item.product.variantName || item.product.name)
+                                    : item.product.name}
+                                </span>
+                                {isLowStock && <span className="text-yellow-600 text-xs whitespace-nowrap">⚠️ Low Stock</span>}
                                 {/* Warning if sale price is below cost price (always show, regardless of showCostPrice) */}
                                 {lastPurchasePrices[item.product._id] !== undefined &&
                                   item.unitPrice < lastPurchasePrices[item.product._id] && (
-                                    <span className="text-xs ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold" title={`Sale price below cost! Loss: ${Math.round(lastPurchasePrices[item.product._id] - item.unitPrice)} per unit`}>
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold whitespace-nowrap" title={`Sale price below cost! Loss: ${Math.round(lastPurchasePrices[item.product._id] - item.unitPrice)} per unit`}>
                                       ⚠️ Loss
                                     </span>
                                   )}
                                 {isLastPricesApplied && priceStatus[item.product._id] && (
-                                  <span className={`text-xs ml-2 px-1.5 py-0.5 rounded ${priceStatus[item.product._id] === 'updated'
+                                  <span className={`text-xs px-1.5 py-0.5 rounded whitespace-nowrap ${priceStatus[item.product._id] === 'updated'
                                     ? 'bg-green-100 text-green-700'
                                     : priceStatus[item.product._id] === 'unchanged'
                                       ? 'bg-blue-100 text-blue-700'
@@ -1893,58 +1929,60 @@ export const Sales = ({ tabId, editData }) => {
                                         : 'Not in Last Order'}
                                   </span>
                                 )}
-                              </span>
+                              </div>
                               {item.product.isVariant && (
-                                <span className="text-xs text-gray-500">
+                                <span className="text-xs text-gray-500 truncate">
                                   {item.product.variantType}: {item.product.variantValue}
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          {/* Box — dual-unit boxes only; styled like Stock */}
-                          <div className="col-span-1 min-w-0">
-                            {hasDualUnit(item.product) && dualUnitShowBoxInputEnabled ? (
-                              (() => {
-                                const ppb = getPiecesPerBox(item.product);
-                                const boxVal =
-                                  item.boxes != null
-                                    ? item.boxes
-                                    : ppb
-                                      ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
-                                      : 0;
-                                return (
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={item.quantity === 0 ? '' : boxVal}
-                                    onChange={(e) =>
-                                      updateCartBoxCount(item.product._id, e.target.value)
-                                    }
-                                    className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${
-                                      (item.product.inventory?.currentStock || 0) === 0
-                                        ? 'text-red-700 bg-red-50 border-red-200'
-                                        : (item.product.inventory?.currentStock || 0) <=
-                                            (item.product.inventory?.reorderPoint || 0)
-                                          ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                                          : 'text-gray-700 bg-gray-100 border-gray-200'
-                                    }`}
-                                    title="Full boxes"
-                                  />
-                                );
-                              })()
-                            ) : (
-                              <span
-                                className="text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200"
-                                title="Not applicable"
-                              >
-                                —
-                              </span>
-                            )}
-                          </div>
+                          {/* Box — dual-unit boxes only; hidden fully when box input setting is off */}
+                          {dualUnitShowBoxInputEnabled && (
+                            <div className="min-w-0">
+                              {hasDualUnit(item.product) ? (
+                                (() => {
+                                  const ppb = getPiecesPerBox(item.product);
+                                  const boxVal =
+                                    item.boxes != null
+                                      ? item.boxes
+                                      : ppb
+                                        ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
+                                        : 0;
+                                  return (
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={item.quantity === 0 ? '' : boxVal}
+                                      onChange={(e) =>
+                                        updateCartBoxCount(item.product._id, e.target.value)
+                                      }
+                                      className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${
+                                        (item.product.inventory?.currentStock || 0) === 0
+                                          ? 'text-red-700 bg-red-50 border-red-200'
+                                          : (item.product.inventory?.currentStock || 0) <=
+                                              (item.product.inventory?.reorderPoint || 0)
+                                            ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                                            : 'text-gray-700 bg-gray-100 border-gray-200'
+                                      }`}
+                                      title="Full boxes"
+                                    />
+                                  );
+                                })()
+                              ) : (
+                                <span
+                                  className="text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200"
+                                  title="Not applicable"
+                                >
+                                  —
+                                </span>
+                              )}
+                            </div>
+                          )}
 
                           {/* Stock - 1 column */}
-                          <div className="col-span-1">
+                          <div className="min-w-0">
                             <span className={`text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center ${(item.product.inventory?.currentStock || 0) === 0
                               ? 'text-red-700 bg-red-50 border-red-200'
                               : (item.product.inventory?.currentStock || 0) <= (item.product.inventory?.reorderPoint || 0)
@@ -1956,7 +1994,7 @@ export const Sales = ({ tabId, editData }) => {
                           </div>
 
                           {/* Quantity */}
-                          <div className="col-span-1 min-w-0">
+                          <div className="min-w-0">
                             <DualUnitQuantityInput
                               product={item.product}
                               quantity={item.quantity}
@@ -1975,7 +2013,7 @@ export const Sales = ({ tabId, editData }) => {
 
                           {/* Purchase Price (Cost) - 1 column (conditional) - Between Quantity and Rate */}
                           {showCostPrice && hasPermission('view_cost_prices') && (
-                            <div className="col-span-1">
+                            <div className="min-w-0">
                               <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-8 flex items-center justify-center" title="Cost Price">
                                 {lastPurchasePrices[item.product._id] !== undefined
                                   ? `${Math.round(lastPurchasePrices[item.product._id])}`
@@ -1987,7 +2025,7 @@ export const Sales = ({ tabId, editData }) => {
                           )}
 
                           {/* Rate - 1 column */}
-                          <div className="col-span-1 relative">
+                          <div className="min-w-0 relative">
                             {(() => {
                               const effectiveCost = lastPurchasePrices[item.product._id] !== undefined
                                 ? lastPurchasePrices[item.product._id]
@@ -2047,20 +2085,20 @@ export const Sales = ({ tabId, editData }) => {
                           </div>
 
                           {/* Total - 1 column */}
-                          <div className="col-span-1">
-                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
+                          <div className="min-w-0">
+                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block w-full min-w-0 text-center h-8 flex items-center justify-center">
                               {Math.round(totalPrice)}
                             </span>
                           </div>
 
                           {/* Delete Button - 1 column */}
-                          <div className="col-span-1">
+                          <div className="min-w-0 flex justify-end">
                             <LoadingButton
                               onClick={() => removeFromCart(item.product._id)}
                               isLoading={isRemovingFromCart[item.product._id]}
                               variant="destructive"
                               size="sm"
-                              className="h-8 w-full"
+                              className="h-8 w-8 p-0"
                             >
                               <Trash2 className="h-4 w-4" />
                             </LoadingButton>
@@ -2070,15 +2108,17 @@ export const Sales = ({ tabId, editData }) => {
                     </div>
                   );
                 })}
-              </div>
-            )}
-          </div>
-        </div>
+          </CartItemsTableSection>
+        </ProductSelectionCartSection>
 
         {/* Sales Details (left) + totals & payment (right) on lg+; full width of card */}
         {cart.length > 0 && (
-          <div className="mt-4 grid w-full min-w-0 grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5 lg:items-start">
-            <OrderCheckoutCard className="mt-0 ml-0 max-w-none min-w-0 w-full">
+          <div
+            className={`mt-4 grid w-full min-w-0 grid-cols-1 gap-4 lg:gap-5 lg:items-start ${
+              showSalesDetailsFields ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
+            }`}
+          >
+            <OrderCheckoutCard className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${showSalesDetailsFields ? 'order-1' : 'order-2'}`}>
             <OrderDetailsSection
               detailsTitle="Sales Details"
               showDetails={showSalesDetailsFields}
@@ -2371,23 +2411,19 @@ export const Sales = ({ tabId, editData }) => {
             </OrderDetailsSection>
             </OrderCheckoutCard>
 
-            <OrderCheckoutCard className="mt-0 ml-0 max-w-none min-w-0 w-full">
-            <OrderSummaryContent>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-800 font-semibold">Subtotal:</span>
-                  <span className="text-xl font-bold text-gray-900">{Math.round(subtotal)}</span>
-                </div>
+            <OrderCheckoutCard className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${showSalesDetailsFields ? 'order-2' : 'order-1'}`}>
+            <OrderSummaryContent className="bg-none bg-slate-50">
+              <div className="space-y-2">
                 {totalDiscountAmount > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-800 font-semibold">Discount:</span>
-                    <span className="text-xl font-bold text-red-600">-{Math.round(totalDiscountAmount)}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">Discount:</span>
+                    <span className="text-xl font-semibold tabular-nums text-red-600">-{Math.round(totalDiscountAmount)}</span>
                   </div>
                 )}
                 {!isTaxExempt && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-800 font-semibold">Tax (8%):</span>
-                    <span className="text-xl font-bold text-gray-900">{Math.round(tax)}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">Tax (8%):</span>
+                    <span className="text-xl font-semibold tabular-nums text-foreground">{Math.round(tax)}</span>
                   </div>
                 )}
                 {selectedCustomer && (() => {
@@ -2406,34 +2442,40 @@ export const Sales = ({ tabId, editData }) => {
                     : ledgerBalance + invoiceBalance;
 
                   return (
-                    <>
-                      {(previousBalance !== 0 || editData?.isEditMode) && (
-                        <div className="flex justify-between items-center mt-2">
-                          <span className="text-gray-800 font-semibold">Previous Balance:</span>
-                          <span className={`text-xl font-bold ${previousBalance < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {previousBalance < 0 ? '-' : '+'}{Math.abs(Number(previousBalance.toFixed(2)))}
-                          </span>
+                    <div className="mt-2">
+                      <div className="grid grid-cols-1 gap-2 md:grid-cols-4 md:gap-4">
+                        <div className="flex items-center justify-between md:block">
+                          <span className="text-sm font-medium text-muted-foreground">Subtotal:</span>
+                          <div className="text-2xl font-semibold tabular-nums text-foreground md:mt-1">{Math.round(subtotal)}</div>
                         </div>
-                      )}
-                      <div className="flex justify-between items-center text-xl font-bold border-t-2 border-blue-400 pt-3 mt-2">
-                        <span className="text-blue-900">Net Amount:</span>
-                        <span className="text-blue-900 text-3xl">{Number(total.toFixed(2))}</span>
+                        <div className="flex items-center justify-between md:block">
+                          <span className="text-sm font-medium text-muted-foreground">Net Amount:</span>
+                          <div className="text-2xl font-bold tabular-nums text-primary md:mt-1">{Number(total.toFixed(2))}</div>
+                        </div>
+                        {(previousBalance !== 0 || editData?.isEditMode) && (
+                          <div className="flex items-center justify-between md:block">
+                            <span className="text-sm font-medium text-muted-foreground">Previous Balance:</span>
+                            <div className={`text-2xl font-semibold tabular-nums md:mt-1 ${previousBalance < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {previousBalance < 0 ? '-' : '+'}{Math.abs(Number(previousBalance.toFixed(2)))}
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between md:block">
+                          <span className={`text-sm font-semibold ${totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}`}>
+                            Total Receivables:
+                          </span>
+                          <div className={`text-2xl font-bold tabular-nums md:mt-1 ${totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}`}>
+                            {totalReceivables < 0 ? '-' : '+'}{Math.abs(Number(totalReceivables.toFixed(2)))}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex justify-between items-center text-lg font-bold border-t-2 border-red-400 pt-3 mt-2">
-                        <span className={totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}>
-                          Total Receivables:
-                        </span>
-                        <span className={`text-2xl ${totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}`}>
-                          {totalReceivables < 0 ? '-' : '+'}{Math.abs(Number(totalReceivables.toFixed(2)))}
-                        </span>
-                      </div>
-                    </>
+                    </div>
                   );
                 })()}
                 {!selectedCustomer && (
-                  <div className="flex justify-between items-center text-xl font-bold border-t-2 border-blue-400 pt-3 mt-2">
-                    <span className="text-blue-900">Total:</span>
-                    <span className="text-blue-900 text-3xl">{Math.round(total)}</span>
+                  <div className="mt-2 flex items-center justify-between border-t pt-3">
+                    <span className="text-lg font-semibold text-primary">Total:</span>
+                    <span className="text-3xl font-bold tabular-nums text-primary">{Math.round(total)}</span>
                   </div>
                 )}
               </div>
@@ -2441,82 +2483,93 @@ export const Sales = ({ tabId, editData }) => {
               {/* Payment and Discount Section - One Row */}
               <OrderInsetPanel>
                 {/* Discount code (from Discount Management) */}
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-800 mb-2">
-                    Discount code
-                  </label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      value=""
-                      onChange={handleSelectDiscountFromDropdown}
-                      disabled={subtotal <= 0 || applicableDiscountList.length === 0}
-                      className="px-3 py-2 border-2 border-slate-200 rounded-md bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 min-w-[180px] max-w-full"
-                      title="Choose an applicable discount"
-                    >
-                      <option value="">
-                        {subtotal <= 0
-                          ? 'Add items to see discounts'
-                          : applicableDiscountList.length === 0
-                            ? 'No applicable discounts'
-                            : 'Select discount code...'}
-                      </option>
-                      {applicableDiscountList
-                        .filter(
-                          (item) =>
-                            !appliedDiscounts.some(
-                              (d) =>
-                                (d.code || '').toUpperCase() ===
-                                (item.discount?.code || item.discount?.discount_code || '').toString().toUpperCase()
-                            )
-                        )
-                        .map((item) => {
-                          const d = item.discount || {};
-                          const code = (d.code || d.discount_code || '').toString();
-                          const amt = item.calculatedAmount ?? 0;
-                          const label =
-                            d.type === 'percentage'
-                              ? `${code} - ${d.value}% off (${typeof amt === 'number' ? amt.toFixed(2) : amt})`
-                              : `${code} - ${typeof amt === 'number' ? amt.toFixed(2) : amt} off`;
-                          return (
-                            <option key={code} value={code}>
-                              {label}
-                            </option>
-                          );
-                        })}
-                    </select>
-                  </div>
-                  {appliedDiscounts.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {appliedDiscounts.map((d) => (
-                        <span
-                          key={d.code}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded text-sm font-medium"
-                        >
-                          {d.code} -{typeof d.amount === 'number' ? d.amount.toFixed(2) : d.amount}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveDiscountCode(d.code)}
-                            className="ml-1 text-green-600 hover:text-green-900"
-                            aria-label="Remove"
-                          >
-                            <XCircle className="h-4 w-4" />
-                          </button>
-                        </span>
-                      ))}
+                {showSalesDiscountCodeEnabled && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Discount code
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value=""
+                        onChange={handleSelectDiscountFromDropdown}
+                        disabled={subtotal <= 0 || applicableDiscountList.length === 0}
+                        className="h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground min-w-[180px] max-w-full"
+                        title="Choose an applicable discount"
+                      >
+                        <option value="">
+                          {subtotal <= 0
+                            ? 'Add items to see discounts'
+                            : applicableDiscountList.length === 0
+                              ? 'No applicable discounts'
+                              : 'Select discount code...'}
+                        </option>
+                        {applicableDiscountList
+                          .filter(
+                            (item) =>
+                              !appliedDiscounts.some(
+                                (d) =>
+                                  (d.code || '').toUpperCase() ===
+                                  (item.discount?.code || item.discount?.discount_code || '').toString().toUpperCase()
+                              )
+                          )
+                          .map((item) => {
+                            const d = item.discount || {};
+                            const code = (d.code || d.discount_code || '').toString();
+                            const amt = item.calculatedAmount ?? 0;
+                            const label =
+                              d.type === 'percentage'
+                                ? `${code} - ${d.value}% off (${typeof amt === 'number' ? amt.toFixed(2) : amt})`
+                                : `${code} - ${typeof amt === 'number' ? amt.toFixed(2) : amt} off`;
+                            return (
+                              <option key={code} value={code}>
+                                {label}
+                              </option>
+                            );
+                          })}
+                      </select>
                     </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-4 items-start">
+                    {appliedDiscounts.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {appliedDiscounts.map((d) => (
+                          <span
+                            key={d.code}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded text-sm font-medium"
+                          >
+                            {d.code} -{typeof d.amount === 'number' ? d.amount.toFixed(2) : d.amount}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDiscountCode(d.code)}
+                              className="ml-1 text-green-600 hover:text-green-900"
+                              aria-label="Remove"
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 items-start">
                   {/* Manual discount (amount or %) */}
                   <div className="flex flex-col">
-                    <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">
                       Apply Discount (manual)
                     </label>
                     <div className="flex space-x-2">
                       <select
                         value={directDiscount.type}
-                        onChange={(e) => setDirectDiscount({ ...directDiscount, type: e.target.value })}
-                        className="px-3 py-2 border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium h-[42px]"
+                        onChange={(e) => {
+                          const nextType = e.target.value;
+                          setDirectDiscount((prev) => {
+                            const raw = Number(prev.value) || 0;
+                            const nextValue = nextType === 'percentage'
+                              ? Math.min(Math.max(raw, 0), 100)
+                              : Math.min(Math.max(raw, 0), Math.max(0, Math.round(subtotal)));
+                            return { ...prev, type: nextType, value: nextValue };
+                          });
+                        }}
+                        className="h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium"
                       >
                         <option value="amount">Amount</option>
                         <option value="percentage">%</option>
@@ -2526,27 +2579,22 @@ export const Sales = ({ tabId, editData }) => {
                         placeholder={directDiscount.type === 'amount' ? 'Enter amount...' : 'Enter percentage...'}
                         value={directDiscount.value || ''}
                         onChange={(e) => {
-                          const value = parseInt(e.target.value) || 0;
-                          setDirectDiscount({ ...directDiscount, value });
+                          const raw = parseInt(e.target.value, 10) || 0;
+                          const value = directDiscount.type === 'percentage'
+                            ? Math.min(Math.max(raw, 0), 100)
+                            : Math.min(Math.max(raw, 0), Math.max(0, Math.round(subtotal)));
+                          setDirectDiscount((prev) => ({ ...prev, value }));
                         }}
-                        className="flex-1 px-3 py-2 border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 h-[42px]"
+                        className="flex-1 h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
                         min="0"
                         step={directDiscount.type === 'percentage' ? '1' : '1'}
                       />
                     </div>
-                    {directDiscount.value > 0 && (
-                      <div className="text-sm text-green-700 font-semibold mt-2 bg-green-50 px-2 py-1 rounded">
-                        {directDiscount.type === 'percentage'
-                          ? `${directDiscount.value}% = ${Math.round(directDiscountAmount)} off`
-                          : `${Math.round(directDiscount.value)} off`
-                        }
-                      </div>
-                    )}
                   </div>
 
                   {/* Payment Method */}
                   <div className="flex flex-col md:col-start-2 md:row-start-1 w-full">
-                    <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">
                       Payment Method
                     </label>
                     <select
@@ -2558,7 +2606,7 @@ export const Sales = ({ tabId, editData }) => {
                           setSelectedBankAccount('');
                         }
                       }}
-                      className="w-full px-3 py-2 border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 h-[42px]"
+                      className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
                     >
                       <option value="cash">Cash</option>
                       <option value="bank">Bank Transfer</option>
@@ -2576,7 +2624,7 @@ export const Sales = ({ tabId, editData }) => {
                         <select
                           value={selectedBankAccount}
                           onChange={(e) => setSelectedBankAccount(e.target.value)}
-                          className="w-full px-3 py-2 border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 h-[42px]"
+                          className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
                         >
                           <option value="">Select bank account...</option>
                           {activeBanks.map((bank) => (
@@ -2600,7 +2648,7 @@ export const Sales = ({ tabId, editData }) => {
 
                   {/* Amount Paid */}
                   <div className="flex flex-col">
-                    <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">
                       Amount Paid
                     </label>
                     <Input
@@ -2609,23 +2657,12 @@ export const Sales = ({ tabId, editData }) => {
                       value={Math.round(amountPaid)}
                       onChange={(e) => setAmountPaid(parseInt(e.target.value) || 0)}
                       onFocus={(e) => e.target.select()}
-                      className="w-full px-3 py-2 border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 text-lg h-[42px]"
+                      className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground text-lg"
                       placeholder="0"
                     />
                   </div>
                 </div>
 
-                {/* Clear Discount Button */}
-                {directDiscount.value > 0 && (
-                  <div className="mt-2">
-                    <button
-                      onClick={() => setDirectDiscount({ type: 'amount', value: 0 })}
-                      className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
-                    >
-                      Clear Discount
-                    </button>
-                  </div>
-                )}
               </OrderInsetPanel>
 
               {/* Action Buttons */}

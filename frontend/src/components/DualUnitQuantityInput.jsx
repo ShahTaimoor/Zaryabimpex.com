@@ -211,7 +211,7 @@ export function DualUnitQuantityInput({
   }
 
   if (compact || variant === 'compact') {
-    /** Input row (h-8) + caption row under it: Box / Pieces / Total (aligned to columns) */
+    /** Input row (h-8): Box/Pieces inputs only (no trailing Total box, no caption row). */
     const segmentInputClass =
       'min-w-0 flex-1 border-0 bg-transparent p-0 text-center text-sm tabular-nums text-gray-900 shadow-none ring-0 placeholder:text-gray-400 focus:outline-none focus:ring-0 h-full';
 
@@ -252,33 +252,6 @@ export function DualUnitQuantityInput({
               />
             </div>
           )}
-          <div
-            className="flex min-w-[2.75rem] flex-none shrink-0 items-center justify-center gap-0.5 bg-gray-50 px-1.5"
-            title="Total quantity in pieces"
-          >
-            <span className="text-xs font-semibold tabular-nums text-gray-900">{quantity || 0}</span>
-            {showPiecesUnitLabel ? (
-              <span className="text-[10px] font-medium text-gray-500">pcs</span>
-            ) : null}
-          </div>
-        </div>
-        <div
-          className="flex w-full min-w-0 items-stretch pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500"
-          aria-hidden="true"
-        >
-          {showBoxInput && (
-            <div className="min-w-0 flex-1 text-center leading-none" title="Boxes">
-              Box
-            </div>
-          )}
-          {showPiecesInput && (
-            <div className="min-w-0 flex-1 text-center leading-none" title="Loose pieces">
-              Pieces
-            </div>
-          )}
-          <div className="flex min-w-[2.75rem] flex-none shrink-0 items-start justify-center text-center leading-none">
-            Total
-          </div>
         </div>
         {remainingLine}
       </div>

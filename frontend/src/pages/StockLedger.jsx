@@ -21,6 +21,9 @@ import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo, formatDateForInput } from '../utils/dateUtils';
 import { toast } from 'sonner';
 
+/** Max rows per filter dropdown (type to search for different matches) */
+const ENTITY_DROPDOWN_LIMIT = 20;
+
 export const StockLedger = () => {
   const defaultDateTo = getCurrentDatePakistan();
   const defaultDateFrom = getDateDaysAgo(365); // Default to 1 year
@@ -89,9 +92,12 @@ export const StockLedger = () => {
     }
   );
 
-  // Fetch customers
   const { data: customersData } = useGetCustomersQuery(
-    { search: customerSearchQuery, limit: 100 },
+    {
+      limit: ENTITY_DROPDOWN_LIMIT,
+      page: 1,
+      ...(customerSearchQuery.trim() ? { search: customerSearchQuery.trim() } : {}),
+    },
     { skip: !showCustomerDropdown }
   );
 
@@ -99,9 +105,12 @@ export const StockLedger = () => {
     return customersData?.data?.customers || customersData?.customers || customersData?.data || [];
   }, [customersData]);
 
-  // Fetch suppliers
   const { data: suppliersData } = useGetSuppliersQuery(
-    { search: supplierSearchQuery, limit: 100 },
+    {
+      limit: ENTITY_DROPDOWN_LIMIT,
+      page: 1,
+      ...(supplierSearchQuery.trim() ? { search: supplierSearchQuery.trim() } : {}),
+    },
     { skip: !showSupplierDropdown }
   );
 
@@ -109,9 +118,13 @@ export const StockLedger = () => {
     return suppliersData?.data?.suppliers || suppliersData?.suppliers || suppliersData?.data || [];
   }, [suppliersData]);
 
-  // Fetch products
+  // Product dropdown: at most ENTITY_DROPDOWN_LIMIT rows; optional server search while typing
   const { data: productsData } = useGetProductsQuery(
-    { search: productSearchQuery, limit: 100 },
+    {
+      limit: ENTITY_DROPDOWN_LIMIT,
+      page: 1,
+      ...(productSearchQuery.trim() ? { search: productSearchQuery.trim() } : {}),
+    },
     { skip: !showProductDropdown }
   );
 
@@ -119,40 +132,20 @@ export const StockLedger = () => {
     return productsData?.data?.products || productsData?.products || productsData?.data || [];
   }, [productsData]);
 
-  // Filter customers for dropdown
-  const filteredCustomers = useMemo(() => {
-    if (!customerSearchQuery.trim()) return allCustomers.slice(0, 50);
-    const query = customerSearchQuery.toLowerCase();
-    return allCustomers.filter(customer => {
-      const name = (customer.businessName || customer.business_name || customer.name || '').toLowerCase();
-      const email = (customer.email || '').toLowerCase();
-      const phone = (customer.phone || '').toLowerCase();
-      return name.includes(query) || email.includes(query) || phone.includes(query);
-    }).slice(0, 50);
-  }, [allCustomers, customerSearchQuery]);
+  const filteredCustomers = useMemo(
+    () => allCustomers.slice(0, ENTITY_DROPDOWN_LIMIT),
+    [allCustomers]
+  );
 
-  // Filter suppliers for dropdown
-  const filteredSuppliers = useMemo(() => {
-    if (!supplierSearchQuery.trim()) return allSuppliers.slice(0, 50);
-    const query = supplierSearchQuery.toLowerCase();
-    return allSuppliers.filter(supplier => {
-      const name = (supplier.companyName || supplier.company_name || supplier.businessName || supplier.business_name || supplier.name || '').toLowerCase();
-      const email = (supplier.email || '').toLowerCase();
-      const phone = (supplier.phone || '').toLowerCase();
-      return name.includes(query) || email.includes(query) || phone.includes(query);
-    }).slice(0, 50);
-  }, [allSuppliers, supplierSearchQuery]);
+  const filteredSuppliers = useMemo(
+    () => allSuppliers.slice(0, ENTITY_DROPDOWN_LIMIT),
+    [allSuppliers]
+  );
 
-  // Filter products for dropdown
-  const filteredProducts = useMemo(() => {
-    if (!productSearchQuery.trim()) return allProducts.slice(0, 50);
-    const query = productSearchQuery.toLowerCase();
-    return allProducts.filter(product => {
-      const name = (product.name || '').toLowerCase();
-      const sku = (product.sku || '').toLowerCase();
-      return name.includes(query) || sku.includes(query);
-    }).slice(0, 50);
-  }, [allProducts, productSearchQuery]);
+  const filteredProducts = useMemo(
+    () => allProducts.slice(0, ENTITY_DROPDOWN_LIMIT),
+    [allProducts]
+  );
 
   const handleFilterChange = (field, value) => {
     setFilters({ ...filters, [field]: value });

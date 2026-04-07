@@ -12,6 +12,9 @@ import { Input } from '@/components/ui/input';
 import { LoadingButton } from '@/components/LoadingSpinner';
 import BarcodeScanner from '@/components/BarcodeScanner';
 
+/** Max rows in the product search dropdown (type more to narrow results) */
+const PRODUCT_DROPDOWN_LIMIT = 20;
+
 function ProductSearchComponent({
   onAddProduct,
   selectedCustomer,
@@ -25,7 +28,7 @@ function ProductSearchComponent({
 }) {
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(0);
   const [customRate, setCustomRate] = useState('');
   const [calculatedRate, setCalculatedRate] = useState(0);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
@@ -106,16 +109,21 @@ function ProductSearchComponent({
     return [...productsList, ...variantsList];
   }, [allProducts, allVariants]);
 
-  const products = useFuzzySearch(
+  const fuzzyFiltered = useFuzzySearch(
     allItems,
     productSearchTerm,
     ['name', 'description', 'brand', 'displayName', 'variantValue', 'variantName'],
     {
       threshold: 0.4,
       minScore: 0.3,
-      limit: null // Show unlimited products
+      limit: PRODUCT_DROPDOWN_LIMIT,
     }
   );
+
+  const products = React.useMemo(() => {
+    if (!productSearchTerm?.trim()) return allItems.slice(0, PRODUCT_DROPDOWN_LIMIT);
+    return fuzzyFiltered;
+  }, [allItems, productSearchTerm, fuzzyFiltered]);
 
   const calculatePrice = (product, priceType) => {
     if (!product) return 0;
@@ -213,6 +221,11 @@ function ProductSearchComponent({
       return;
     }
 
+    if (quantity <= 0) {
+      toast.error('Please enter a valid quantity');
+      return;
+    }
+
     // Check if requested quantity exceeds available stock
     if (quantity > currentStock) {
       toast.error(`Cannot add ${quantity} units. Only ${currentStock} units available in stock.`);
@@ -256,7 +269,7 @@ function ProductSearchComponent({
 
       // Reset form
       setSelectedProduct(null);
-      setQuantity(1);
+      setQuantity(0);
       setCustomRate('');
       setCalculatedRate(0);
       setIsAddingProduct(false);
@@ -290,7 +303,7 @@ function ProductSearchComponent({
     } else if (e.key === 'Escape' && isAddingProduct) {
       e.preventDefault();
       setSelectedProduct(null);
-      setQuantity(1);
+      setQuantity(0);
       setCustomRate('');
       setCalculatedRate(0);
       setIsAddingProduct(false);
@@ -346,18 +359,21 @@ function ProductSearchComponent({
     );
   };
 
-  // Fit dual-unit quantity (boxes + pieces + total) in one row: 12 cols total
+  // Fit dual-unit quantity (box + qty) in one row: 12 cols total
   const dualUnit = hasDualUnit(selectedProduct);
+  const selectedPpb = getPiecesPerBox(selectedProduct);
+  const selectedStockPieces = Number(selectedProduct?.inventory?.currentStock || 0);
+  const selectedBoxCount = selectedPpb ? piecesToBoxesAndPieces(quantity, selectedPpb).boxes : 0;
   const searchColClass =
     dualUnit && showCostPrice && hasCostPricePermission
-      ? 'col-span-3'
+      ? 'col-span-5'
       : dualUnit
-        ? 'col-span-4'
+        ? 'col-span-6'
         : showCostPrice && hasCostPricePermission
           ? 'col-span-6'
           : 'col-span-7';
-  /** Wider column when dual unit (boxes + pieces + total) */
-  const quantityColClass = dualUnit ? 'col-span-4' : 'col-span-1';
+  /** Dual-unit uses two regular-width columns: Box + Qty */
+  const quantityColClass = dualUnit ? 'col-span-2' : 'col-span-1';
 
   return (
     <div className="space-y-4">
@@ -412,7 +428,7 @@ function ProductSearchComponent({
                   hasDualUnit(selectedProduct) ? (
                     <>
                       <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
-                      <span className="text-[10px] font-normal text-gray-500">available</span>
+
                     </>
                   ) : (
                     <span>{selectedProduct.inventory?.currentStock ?? 0} pcs</span>
@@ -433,24 +449,85 @@ function ProductSearchComponent({
               </span>
             </div>
 
-            {/* Quantity — full width on mobile when dual unit */}
+            {/* Box + Qty (dual unit): no parent "Quantity" label — matches cart columns */}
             <div className={dualUnit ? 'col-span-2' : ''}>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Quantity
-              </label>
-              <DualUnitQuantityInput
-                product={selectedProduct}
-                quantity={quantity}
-                onChange={(q) => setQuantity(q)}
-                max={selectedProduct?.inventory?.currentStock}
-                showRemainingAfterSale={false}
-                showPiecesUnitLabel={false}
-                showBoxInput={dualUnitShowBoxInput}
-                showPiecesInput={dualUnitShowPiecesInput}
-                onKeyDown={handleKeyDown}
-                inputClassName="text-center h-10 border border-gray-300 rounded px-2 w-full"
-                compact
-              />
+              {!dualUnit && (
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Quantity
+                </label>
+              )}
+              {dualUnit ? (
+                (dualUnitShowBoxInput || dualUnitShowPiecesInput) ? (
+                  <div className={`grid ${dualUnitShowBoxInput && dualUnitShowPiecesInput ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                    {dualUnitShowBoxInput && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Box</label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={quantity === 0 ? '' : selectedBoxCount}
+                          onChange={(e) => {
+                            const boxVal = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            const currentPieces = dualUnitShowPiecesInput
+                              ? piecesToBoxesAndPieces(quantity, selectedPpb || 1).pieces
+                              : 0;
+                            const raw = boxVal * (selectedPpb || 1) + currentPieces;
+                            const capped = Math.min(raw, selectedStockPieces);
+                            setQuantity(Math.max(1, capped || 0));
+                          }}
+                          onKeyDown={handleKeyDown}
+                          className="text-center h-10"
+                        />
+                      </div>
+                    )}
+                    {dualUnitShowPiecesInput && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Qty</label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={quantity || ''}
+                          onChange={(e) => {
+                            const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            const capped = Math.min(raw, selectedStockPieces);
+                            setQuantity(Math.max(1, capped || 0));
+                          }}
+                          onKeyDown={handleKeyDown}
+                          className="text-center h-10"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <DualUnitQuantityInput
+                    product={selectedProduct}
+                    quantity={quantity}
+                    onChange={(q) => setQuantity(q)}
+                    max={selectedProduct?.inventory?.currentStock}
+                    showRemainingAfterSale={false}
+                    showPiecesUnitLabel={false}
+                    showBoxInput={false}
+                    showPiecesInput={false}
+                    onKeyDown={handleKeyDown}
+                    inputClassName="text-center h-10 border border-gray-300 rounded px-2 w-full"
+                    compact
+                  />
+                )
+              ) : (
+                <DualUnitQuantityInput
+                  product={selectedProduct}
+                  quantity={quantity}
+                  onChange={(q) => setQuantity(q)}
+                  max={selectedProduct?.inventory?.currentStock}
+                  showRemainingAfterSale={false}
+                  showPiecesUnitLabel={false}
+                  showBoxInput={dualUnitShowBoxInput}
+                  showPiecesInput={dualUnitShowPiecesInput}
+                  onKeyDown={handleKeyDown}
+                  inputClassName="text-center h-10 border border-gray-300 rounded px-2 w-full"
+                  compact
+                />
+              )}
             </div>
 
             {/* Rate */}
@@ -553,7 +630,7 @@ function ProductSearchComponent({
                 dualUnit ? (
                   <>
                     <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
-                    <span className="text-[10px] font-normal text-gray-500">available</span>
+                   
                   </>
                 ) : (
                   <span>{selectedProduct.inventory?.currentStock ?? 0} pcs</span>
@@ -564,24 +641,85 @@ function ProductSearchComponent({
             </span>
           </div>
 
-          {/* Quantity — wider when dual unit (boxes + pieces + total) */}
+          {/* Box + Qty (dual unit): no parent "Quantity" label — matches cart columns */}
           <div className={`${quantityColClass} min-w-0`}>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Quantity
-            </label>
-            <DualUnitQuantityInput
-              product={selectedProduct}
-              quantity={quantity}
-              onChange={(q) => setQuantity(q)}
-              max={selectedProduct?.inventory?.currentStock}
-              showRemainingAfterSale={false}
-              showPiecesUnitLabel={false}
-              showBoxInput={dualUnitShowBoxInput}
-              showPiecesInput={dualUnitShowPiecesInput}
-              onKeyDown={handleKeyDown}
-              inputClassName="text-center border border-gray-300 rounded px-2 h-10"
-              compact
-            />
+            {!dualUnit && (
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Quantity
+              </label>
+            )}
+            {dualUnit ? (
+              (dualUnitShowBoxInput || dualUnitShowPiecesInput) ? (
+                <div className={`grid ${dualUnitShowBoxInput && dualUnitShowPiecesInput ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                  {dualUnitShowBoxInput && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Box</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={quantity === 0 ? '' : selectedBoxCount}
+                        onChange={(e) => {
+                          const boxVal = Math.max(0, parseInt(e.target.value, 10) || 0);
+                          const currentPieces = dualUnitShowPiecesInput
+                            ? piecesToBoxesAndPieces(quantity, selectedPpb || 1).pieces
+                            : 0;
+                          const raw = boxVal * (selectedPpb || 1) + currentPieces;
+                          const capped = Math.min(raw, selectedStockPieces);
+                          setQuantity(Math.max(1, capped || 0));
+                        }}
+                        onKeyDown={handleKeyDown}
+                        className="text-center h-10"
+                      />
+                    </div>
+                  )}
+                  {dualUnitShowPiecesInput && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Qty</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={quantity || ''}
+                        onChange={(e) => {
+                          const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                          const capped = Math.min(raw, selectedStockPieces);
+                          setQuantity(Math.max(1, capped || 0));
+                        }}
+                        onKeyDown={handleKeyDown}
+                        className="text-center h-10"
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <DualUnitQuantityInput
+                  product={selectedProduct}
+                  quantity={quantity}
+                  onChange={(q) => setQuantity(q)}
+                  max={selectedProduct?.inventory?.currentStock}
+                  showRemainingAfterSale={false}
+                  showPiecesUnitLabel={false}
+                  showBoxInput={false}
+                  showPiecesInput={false}
+                  onKeyDown={handleKeyDown}
+                  inputClassName="text-center border border-gray-300 rounded px-2 h-10"
+                  compact
+                />
+              )
+            ) : (
+              <DualUnitQuantityInput
+                product={selectedProduct}
+                quantity={quantity}
+                onChange={(q) => setQuantity(q)}
+                max={selectedProduct?.inventory?.currentStock}
+                showRemainingAfterSale={false}
+                showPiecesUnitLabel={false}
+                showBoxInput={dualUnitShowBoxInput}
+                showPiecesInput={dualUnitShowPiecesInput}
+                onKeyDown={handleKeyDown}
+                inputClassName="text-center border border-gray-300 rounded px-2 h-10"
+                compact
+              />
+            )}
           </div>
 
           {/* Purchase Price - 1 column (conditional) - Between Quantity and Rate */}
@@ -614,7 +752,7 @@ function ProductSearchComponent({
               onKeyDown={handleKeyDown}
               onFocus={(e) => e.target.select()}
               className="text-center h-10"
-              placeholder="0 (Enter to add & focus search)"
+              placeholder="0"
               required
             />
           </div>

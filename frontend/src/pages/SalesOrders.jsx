@@ -13,7 +13,6 @@ import {
   ArrowUpDown,
   RotateCcw,
   Printer,
-  Save,
   ShoppingCart,
   Package,
   User,
@@ -30,7 +29,8 @@ import {
   AlertCircle,
   EyeOff,
   Calculator,
-  MessageSquare
+  MessageSquare,
+  ChevronDown
 } from 'lucide-react';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatDate, formatCurrency } from '../utils/formatters';
@@ -38,9 +38,14 @@ import { LoadingButton } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   OrderCheckoutCard,
   OrderDetailsSection,
-  OrderSummaryBar,
   OrderSummaryContent,
   OrderCheckoutActions,
 } from '../components/order/OrderCheckoutLayout';
@@ -73,10 +78,12 @@ import {
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
+import { ProductSearch } from '../components/sales/ProductSearch';
+import { CartTableHeader } from '../components/order/CartTableHeader';
 import { hasDualUnit, piecesToBoxesAndPieces, getPiecesPerBox, formatStockDualLabel } from '../utils/dualUnitUtils';
 import { useTab } from '../contexts/TabContext';
 import { useAuth } from '../contexts/AuthContext';
-import PrintModal from '../components/PrintModal';
+import PrintModal, { DirectPrintInvoice } from '../components/PrintModal';
 import BaseModal from '../components/BaseModal';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import NotesPanel from '../components/NotesPanel';
@@ -247,6 +254,9 @@ const SalesOrders = ({ tabId }) => {
   const { hasPermission, user } = useAuth();
   const canViewCostPrice = hasPermission('view_cost_prices');
   const [showProfit, setShowProfit] = useState(false);
+
+  const [autoPrint, setAutoPrint] = useState(false);
+  const [directPrintOrder, setDirectPrintOrder] = useState(null);
 
   const totalProfit = useMemo(() => {
     if (!Array.isArray(formData.items) || formData.items.length === 0) return 0;
@@ -524,6 +534,9 @@ const SalesOrders = ({ tabId }) => {
     setIsRestoringPrices(false);
     setIsRemovingFromCart({});
     setIsSortingItems(false);
+
+    setAutoPrint(false);
+    setDirectPrintOrder(null);
 
     // Tab title will be updated by useEffect when selectedCustomer changes
   };
@@ -902,6 +915,83 @@ const SalesOrders = ({ tabId }) => {
     }
   };
 
+  const addToCartFromProductSearch = useCallback((payload) => {
+    const product = payload?.product;
+    if (!product?._id) return;
+
+    const qty = Math.max(1, Number(payload.quantity) || 1);
+    const unitPrice = Number(payload.unitPrice) || 0;
+    const taxRate = product.isVariant
+      ? (product.baseProduct?.taxSettings?.taxRate || 0)
+      : (product.taxSettings?.taxRate || 0);
+    const subtotal = unitPrice * qty;
+    const discountAmount = 0;
+    const taxAmount = formData.isTaxExempt ? 0 : (subtotal * taxRate / 100);
+    const total = subtotal - discountAmount + taxAmount;
+    const ppb = getPiecesPerBox(product);
+    const derivedDual = ppb ? piecesToBoxesAndPieces(qty, ppb) : {};
+
+    setFormData((prev) => {
+      const productId = product._id.toString();
+      const getItemProductId = (item) => (
+        typeof item.product === 'string' ? item.product : item.product?._id
+      )?.toString?.() || item.product;
+      const existingIndex = prev.items.findIndex((item) => getItemProductId(item) === productId);
+
+      if (existingIndex >= 0) {
+        const existingItem = prev.items[existingIndex];
+        const newQuantity = (Number(existingItem.quantity) || 0) + qty;
+        const newSubtotal = newQuantity * unitPrice;
+        const newTaxAmount = prev.isTaxExempt ? 0 : (newSubtotal * (existingItem.taxRate || taxRate) / 100);
+        const newTotal = newSubtotal - (existingItem.discountAmount || 0) + newTaxAmount;
+        const mergedDual = ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {};
+
+        return {
+          ...prev,
+          items: prev.items.map((item, i) => (
+            i === existingIndex
+              ? {
+                ...item,
+                quantity: newQuantity,
+                ...(ppb && {
+                  boxes: payload.boxes ?? mergedDual.boxes,
+                  pieces: payload.pieces ?? mergedDual.pieces
+                }),
+                unitPrice,
+                taxRate: item.taxRate || taxRate,
+                subtotal: newSubtotal,
+                taxAmount: newTaxAmount,
+                total: newTotal
+              }
+              : item
+          ))
+        };
+      }
+
+      const newItem = {
+        product: product._id,
+        productData: product,
+        quantity: qty,
+        ...(ppb && {
+          boxes: payload.boxes ?? derivedDual.boxes,
+          pieces: payload.pieces ?? derivedDual.pieces
+        }),
+        unitPrice,
+        discountPercent: 0,
+        taxRate,
+        subtotal,
+        discountAmount,
+        taxAmount,
+        total
+      };
+
+      return {
+        ...prev,
+        items: [...prev.items, newItem]
+      };
+    });
+  }, [formData.isTaxExempt]);
+
   const handleAddModalItem = async () => {
     if (!modalSelectedProduct) return;
     const unitPrice = parseFloat(customRate) || 0;
@@ -1194,11 +1284,19 @@ const SalesOrders = ({ tabId }) => {
 
   const calculateTotals = () => {
     const subtotal = formData.items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-    const totalDiscount = formData.items.reduce((sum, item) => sum + (item.discountAmount || 0), 0);
-    const totalTax = formData.isTaxExempt ? 0 : subtotal * 0.08; // 8% tax if not exempt
-    const total = subtotal - totalDiscount + totalTax;
+    const lineDiscountTotal = formData.items.reduce((sum, item) => sum + (item.discountAmount || 0), 0);
+    const totalDiscount = Math.min(lineDiscountTotal, subtotal);
+    const subtotalAfterDiscount = subtotal - totalDiscount;
+    const totalTax = formData.isTaxExempt ? 0 : subtotalAfterDiscount * 0.08;
+    const total = subtotalAfterDiscount + totalTax;
 
-    return { subtotal, totalDiscount, totalTax, total };
+    return {
+      subtotal,
+      lineDiscountTotal,
+      totalDiscount,
+      totalTax,
+      total,
+    };
   };
 
   const handleFilterChange = (key, value) => {
@@ -1222,8 +1320,7 @@ const SalesOrders = ({ tabId }) => {
     // Calculate totals
     const { subtotal, totalDiscount, totalTax, total } = calculateTotals();
 
-    // Remove payment field as sales orders don't have payment information
-    const { payment, ...orderDataWithoutPayment } = formData;
+    const { payment: _payment, ...orderDataWithoutPayment } = formData;
 
     // Transform items to match backend expectations (quantity in pieces for stock)
     const transformedItems = formData.items.map(item => {
@@ -1246,14 +1343,22 @@ const SalesOrders = ({ tabId }) => {
     const orderData = {
       ...orderDataWithoutPayment,
       items: transformedItems,
-      subtotal: subtotal,
+      subtotal,
       tax: totalTax,
-      total: total
+      total,
+      discountAmount: totalDiscount > 0 ? totalDiscount : undefined,
     };
 
     createSalesOrderMutation(orderData)
       .unwrap()
-      .then(() => {
+      .then((result) => {
+        if (autoPrint && result?.salesOrder) {
+          const formatted = formatOrderForPrint(result.salesOrder);
+          if (formatted) {
+            setPrintOrderData(formatted);
+            setShowPrintModal(true);
+          }
+        }
         resetForm();
         showSuccessToast('Sales order created successfully');
         // Tab title will be updated by useEffect when selectedCustomer is reset
@@ -1302,7 +1407,14 @@ const SalesOrders = ({ tabId }) => {
 
     updateSalesOrderMutation({ id: selectedOrder._id || selectedOrder.id, ...cleanedData })
       .unwrap()
-      .then(() => {
+      .then((result) => {
+        if (autoPrint && result?.salesOrder) {
+          const formatted = formatOrderForPrint(result.salesOrder);
+          if (formatted) {
+            setPrintOrderData(formatted);
+            setShowPrintModal(true);
+          }
+        }
         setSelectedOrder(null);
         setModalProductSearchTerm('');
         setModalSelectedProduct(null);
@@ -1702,6 +1814,66 @@ const SalesOrders = ({ tabId }) => {
     setShowPrintModal(true);
   };
 
+  const buildDraftSalesOrderPrintOrder = () => {
+    const { subtotal, totalDiscount, totalTax, total } = calculateTotals();
+    let customerAddress = '';
+    if (selectedCustomer?.addresses?.length) {
+      const addr = selectedCustomer.addresses.find((a) => a.isDefault)
+        || selectedCustomer.addresses.find((a) => a.type === 'billing' || a.type === 'both')
+        || selectedCustomer.addresses[0];
+      if (addr) {
+        customerAddress = [addr.street, addr.city, addr.state, addr.country, addr.zipCode || addr.zip]
+          .filter(Boolean)
+          .join(', ');
+      }
+    } else if (selectedCustomer?.address) {
+      customerAddress = selectedCustomer.address;
+    }
+    return {
+      soNumber: formData.orderNumber || `SO-${Date.now()}`,
+      orderNumber: formData.orderNumber || `SO-${Date.now()}`,
+      orderType: formData.orderType || 'wholesale',
+      customer: selectedCustomer ?? undefined,
+      customerInfo: selectedCustomer
+        ? {
+          name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,
+          email: selectedCustomer.email,
+          phone: selectedCustomer.phone,
+          businessName: selectedCustomer.businessName || selectedCustomer.business_name,
+          address: customerAddress || undefined,
+          currentBalance: selectedCustomer.currentBalance,
+          pendingBalance: selectedCustomer.pendingBalance,
+          advanceBalance: selectedCustomer.advanceBalance
+        }
+        : null,
+      items: formData.items.map((item) => ({
+        product: item.productData
+          ? { name: item.productData.name || item.productData.displayName || 'Product' }
+          : { name: 'Product' },
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.total
+      })),
+      pricing: {
+        subtotal,
+        discountAmount: totalDiscount,
+        taxAmount: totalTax,
+        isTaxExempt: formData.isTaxExempt,
+        total
+      },
+      payment: {
+        method: 'cash',
+        bankAccount: null,
+        amountPaid: 0,
+        remainingBalance: total,
+        isPartialPayment: false
+      },
+      notes: formData.notes,
+      status: 'draft',
+      createdAt: new Date().toISOString()
+    };
+  };
+
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -1735,7 +1907,12 @@ const SalesOrders = ({ tabId }) => {
 
   const salesOrders = salesOrdersData?.data?.salesOrders ?? salesOrdersData?.salesOrders ?? [];
   const paginationInfo = salesOrdersData?.data?.pagination ?? salesOrdersData?.pagination ?? {};
-  const { subtotal, totalDiscount, totalTax, total } = calculateTotals();
+  const {
+    subtotal,
+    totalDiscount,
+    totalTax,
+    total,
+  } = calculateTotals();
 
   return (
     <div className="space-y-4 lg:space-y-6 w-full max-w-full overflow-x-hidden px-2 sm:px-0">
@@ -1905,6 +2082,20 @@ const SalesOrders = ({ tabId }) => {
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <h3 className="text-lg font-medium text-gray-900">Product Selection & Cart</h3>
             <div className="flex flex-wrap items-center justify-start lg:justify-end gap-2">
+              {formData.items.length > 0 && (
+                <LoadingButton
+                  type="button"
+                  onClick={handleSortCartItems}
+                  isLoading={isSortingItems}
+                  variant="secondary"
+                  size="sm"
+                  className="flex items-center space-x-2"
+                  title="Sort products alphabetically"
+                >
+                  <ArrowUpDown className="h-4 w-4" />
+                  <span>Sort A-Z</span>
+                </LoadingButton>
+              )}
               {/* Show/Hide Cost Price Toggle Button */}
               <div className="flex items-center space-x-2">
                 <Button
@@ -1984,7 +2175,22 @@ const SalesOrders = ({ tabId }) => {
         <div className="card-content">
           {/* Product Search */}
           <div className="mb-6">
-            {(() => {
+            <ProductSearch
+              onAddProduct={addToCartFromProductSearch}
+              selectedCustomer={selectedCustomer}
+              showCostPrice={showCostPrice}
+              hasCostPricePermission={canViewCostPrice}
+              priceType={priceType}
+              dualUnitShowBoxInput={dualUnitShowBoxInputEnabled}
+              dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
+              onLastPurchasePriceFetched={(productId, price) => {
+                setLastPurchasePrices(prev => ({
+                  ...prev,
+                  [productId]: price
+                }));
+              }}
+            />
+            {false && (() => {
               const dualSel = hasDualUnit(selectedProduct);
               const productSearchMdClass = dualSel
                 ? (canViewCostPrice && showCostPrice ? 'md:col-span-4' : 'md:col-span-5')
@@ -1996,120 +2202,6 @@ const SalesOrders = ({ tabId }) => {
 
               return (
                 <div className="grid grid-cols-12 gap-4 items-end">
-                  <div className={`col-span-12 ${productSearchMdClass}`}>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Product Search
-                    </label>
-                    <SearchableDropdown
-                      key={searchKey}
-                      ref={productSearchRef}
-                      placeholder="Search or select product..."
-                      items={productsData || []}
-                      onSelect={handleProductSelect}
-                      onSearch={handleProductSearch}
-                      displayKey={productDisplayKey}
-                      selectedItem={selectedProduct}
-                      loading={productsLoading}
-                      emptyMessage="No products found"
-                      value={productSearchTerm}
-                    />
-                  </div>
-
-                  <div className="col-span-6 md:col-span-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Stock
-                    </label>
-                    <span
-                      className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center min-h-[2.5rem] flex flex-col items-center justify-center gap-0.5 leading-tight"
-                      title="Available stock"
-                    >
-                      {selectedProduct ? (
-                        hasDualUnit(selectedProduct) ? (
-                          <>
-                            <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock || 0, selectedProduct)}</span>
-                            <span className="text-[10px] font-normal text-gray-500">available</span>
-                          </>
-                        ) : (
-                          <span>{selectedProduct.inventory?.currentStock || 0} pcs</span>
-                        )
-                      ) : (
-                        '0'
-                      )}
-                    </span>
-                  </div>
-
-                  <div className={qtyMdClass}>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Quantity
-                    </label>
-                    <DualUnitQuantityInput
-                      product={selectedProduct}
-                      quantity={quantity}
-                      onChange={(q, dual) => setQuantity(q)}
-                      max={selectedProduct?.inventory?.currentStock > 0 ? selectedProduct.inventory.currentStock : undefined}
-                      stockPiecesForRemaining={selectedProduct?.inventory?.currentStock ?? 0}
-
-                      showBoxInput={dualUnitShowBoxInputEnabled}
-                      showPiecesInput={dualUnitShowPiecesInputEnabled}
-                      showPiecesUnitLabel={false}
-                      onKeyDown={handleInputKeyDown}
-                      inputClassName="input text-center h-10"
-                      compact={!dualSel}
-                    />
-                  </div>
-
-                  {showCostPrice && canViewCostPrice && (
-                    <div className="col-span-6 md:col-span-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Cost
-                      </label>
-                      <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-10 flex items-center justify-center" title="Last Purchase Price">
-                        {lastPurchasePrice !== null ? `${Math.round(lastPurchasePrice)}` : selectedProduct ? 'N/A' : '0'}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="col-span-6 md:col-span-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Rate
-                    </label>
-                    <input
-                      type="number"
-                      step="1"
-                      autoComplete="off"
-                      value={customRate}
-                      onChange={(e) => setCustomRate(e.target.value)}
-                      onKeyDown={handleInputKeyDown}
-                      onFocus={(e) => e.target.select()}
-                      className="input text-center"
-                      placeholder="0 (Enter to add & focus search)"
-                      required
-                    />
-                  </div>
-
-                  <div className="col-span-6 md:col-span-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Amount
-                    </label>
-                    <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
-                      {previewAmount}
-                    </span>
-                  </div>
-
-                  <div className="col-span-6 md:col-span-1 flex items-end">
-                    <LoadingButton
-                      type="button"
-                      onClick={handleAddItem}
-                      isLoading={isAddingToCart}
-                      variant="default"
-                      className="w-full flex items-center justify-center px-3 py-2"
-                      disabled={!selectedProduct || isAddingToCart}
-                      title="Add to cart (or press Enter in Quantity/Rate fields - focus returns to search)"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add
-                    </LoadingButton>
-                  </div>
                 </div>
               );
             })()}
@@ -2122,42 +2214,50 @@ const SalesOrders = ({ tabId }) => {
               <p className="mt-2">No items in cart</p>
             </div>
           ) : (
-            <div className="space-y-4 border-t border-gray-200 pt-6 overflow-x-hidden">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-                <h4 className="text-md font-medium text-gray-700">Cart Items</h4>
-                <div className="flex items-center flex-wrap gap-2">
-                  <LoadingButton
-                    type="button"
-                    onClick={handleSortCartItems}
-                    isLoading={isSortingItems}
-                    variant="secondary"
-                    size="sm"
-                    className="flex items-center space-x-2"
-                    title="Sort products alphabetically"
-                  >
-                    <ArrowUpDown className="h-4 w-4" />
-                    <span className="hidden sm:inline">Sort A-Z</span>
-                    <span className="sm:hidden">Sort</span>
-                  </LoadingButton>
-                  {isLastPricesApplied && Object.keys(priceStatus).length > 0 && (
-                    <div className="flex items-center space-x-3 text-xs">
-                      <span className="text-gray-600 font-medium">Price Status:</span>
-                      <div className="flex items-center space-x-1">
-                        <CheckCircle className="h-3 w-3 text-green-600" />
-                        <span className="text-gray-600">Updated</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Info className="h-3 w-3 text-blue-600" />
-                        <span className="text-gray-600">Same Price</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <AlertCircle className="h-3 w-3 text-yellow-600" />
-                        <span className="text-gray-600">Not in Last Order</span>
-                      </div>
-                    </div>
-                  )}
+            <div className="border-t border-gray-200 pt-6 overflow-x-hidden">
+              {isLastPricesApplied && Object.keys(priceStatus).length > 0 && (
+                <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 mb-3 text-xs">
+                  <span className="text-gray-600 font-medium">Price Status:</span>
+                  <div className="flex items-center space-x-1">
+                    <CheckCircle className="h-3 w-3 text-green-600" />
+                    <span className="text-gray-600">Updated</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Info className="h-3 w-3 text-blue-600" />
+                    <span className="text-gray-600">Same Price</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <AlertCircle className="h-3 w-3 text-yellow-600" />
+                    <span className="text-gray-600">Not in Last Order</span>
+                  </div>
                 </div>
-              </div>
+              )}
+              <CartTableHeader
+                className={`hidden md:grid gap-x-1 items-center pb-2 border-b border-gray-300 mb-2 ${
+                  dualUnitShowBoxInputEnabled
+                    ? (
+                      showCostPrice && canViewCostPrice
+                        ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                        : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                    )
+                    : (
+                      showCostPrice && canViewCostPrice
+                        ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                        : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                    )
+                }`}
+                columns={[
+                  { key: 'sno', label: 'S.NO', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-left' },
+                  { key: 'product', label: 'Product' },
+                  ...(dualUnitShowBoxInputEnabled ? [{ key: 'box', label: 'Box' }] : []),
+                  { key: 'stock', label: 'Stock' },
+                  { key: 'qty', label: 'Qty' },
+                  ...(showCostPrice && canViewCostPrice ? [{ key: 'cost', label: 'Cost' }] : []),
+                  { key: 'rate', label: 'Rate' },
+                  { key: 'total', label: 'Total', labelClassName: 'text-xs font-semibold text-gray-600 uppercase block text-center' },
+                  { key: 'action', label: 'Action', wrapperClassName: 'min-w-0 flex justify-end', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-right' },
+                ]}
+              />
               {formData.items.map((item, index) => {
                 const product = item.productData || item.product; // Use stored product data or fallback to product
                 const totalPrice = item.unitPrice * item.quantity;
@@ -2166,18 +2266,32 @@ const SalesOrders = ({ tabId }) => {
                 return (
                   <div key={index} className={`py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                     {/* Desktop Grid Layout */}
-                    <div className="hidden lg:grid grid-cols-12 gap-3 xl:gap-4 items-center">
+                    <div
+                      className={`hidden md:grid gap-x-1 items-center ${
+                        dualUnitShowBoxInputEnabled
+                          ? (
+                            showCostPrice && canViewCostPrice
+                              ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                              : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                          )
+                          : (
+                            showCostPrice && canViewCostPrice
+                              ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                              : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                          )
+                      }`}
+                    >
                       {/* Serial Number - 1 column */}
-                      <div className="col-span-1">
+                      <div className="min-w-0 flex justify-start">
                         <span className="text-sm font-medium text-gray-700 bg-gray-50 px-0.5 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
                           {index + 1}
                         </span>
                       </div>
 
                       {/* Product Name - reduced width to keep row alignment */}
-                      <div className={`${showCostPrice && canViewCostPrice ? 'col-span-4' : 'col-span-5'} flex items-center h-8`}>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-sm truncate">
+                      <div className="min-w-0 flex items-center h-8">
+                        <div className="flex flex-col min-w-0 w-full">
+                          <span className="font-medium text-sm truncate min-w-0">
                             {product?.isVariant
                               ? (safeRender(product?.displayName || product?.variantName || product?.name) || 'Unknown Variant')
                               : (safeRender(product?.name) || 'Unknown Product')}
@@ -2211,15 +2325,69 @@ const SalesOrders = ({ tabId }) => {
                         </div>
                       </div>
 
+                      {/* Box column */}
+                      {dualUnitShowBoxInputEnabled && (
+                        <div className="min-w-0">
+                          {hasDualUnit(product) ? (
+                            (() => {
+                              const ppb = getPiecesPerBox(product);
+                              const boxVal =
+                                item.boxes != null
+                                  ? item.boxes
+                                  : ppb
+                                    ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
+                                    : 0;
+                              return (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={item.quantity === 0 ? '' : boxVal}
+                                  onChange={(e) => {
+                                    const nextBoxes = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                    const piecesPerBox = getPiecesPerBox(product) || 1;
+                                    const currentPieces = item.pieces != null
+                                      ? Math.max(0, Number(item.pieces) || 0)
+                                      : piecesToBoxesAndPieces(item.quantity, piecesPerBox).pieces;
+                                    const rawQty = nextBoxes * piecesPerBox + currentPieces;
+                                    const stockCap = Number(product?.inventory?.currentStock ?? 0);
+                                    const cappedQty = stockCap > 0 ? Math.min(rawQty, stockCap) : rawQty;
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      items: prev.items.map((itm, i) => (
+                                        i === index
+                                          ? { ...itm, boxes: nextBoxes, quantity: cappedQty, total: cappedQty * itm.unitPrice }
+                                          : itm
+                                      ))
+                                    }));
+                                  }}
+                                  className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${
+                                    (product?.inventory?.currentStock || 0) === 0
+                                      ? 'text-red-700 bg-red-50 border-red-200'
+                                      : (product?.inventory?.currentStock || 0) <= (product?.inventory?.reorderPoint || 0)
+                                        ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                                        : 'text-gray-700 bg-gray-100 border-gray-200'
+                                  }`}
+                                  title="Full boxes"
+                                />
+                              );
+                            })()
+                          ) : (
+                            <span className="text-sm font-semibold text-gray-400 bg-gray-50 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
+                              —
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* Stock - 1 column */}
-                      <div className="col-span-1">
+                      <div className="min-w-0">
                         <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
                           {product?.inventory?.currentStock || 0}
                         </span>
                       </div>
 
                       {/* Quantity */}
-                      <div className="col-span-2">
+                      <div className="min-w-0">
                         <DualUnitQuantityInput
                           product={product}
                           quantity={item.quantity}
@@ -2246,7 +2414,7 @@ const SalesOrders = ({ tabId }) => {
                           max={product?.inventory?.currentStock}
                           stockPiecesForRemaining={product?.inventory?.currentStock ?? 0}
 
-                          showBoxInput={dualUnitShowBoxInputEnabled}
+                          showBoxInput={!dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
                           showPiecesInput={dualUnitShowPiecesInputEnabled}
                           showPiecesUnitLabel={false}
                           inputClassName="input text-center h-8"
@@ -2256,7 +2424,7 @@ const SalesOrders = ({ tabId }) => {
 
                       {/* Purchase Price (Cost) - 1 column (conditional) - Between Quantity and Rate */}
                       {showCostPrice && canViewCostPrice && (
-                        <div className="col-span-1">
+                        <div className="min-w-0">
                           <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-8 flex items-center justify-center" title={lastPurchasePrices[item.product?.toString()] !== undefined ? 'Last Purchase Price' : 'Product Cost (from pricing)'}>
                             {lastPurchasePrices[item.product?.toString()] !== undefined
                               ? `${Math.round(lastPurchasePrices[item.product?.toString()])}`
@@ -2268,7 +2436,7 @@ const SalesOrders = ({ tabId }) => {
                       )}
 
                       {/* Rate - 1 column */}
-                      <div className="col-span-1">
+                      <div className="min-w-0">
                         <input
                           type="number"
                           step="0.01"
@@ -2315,20 +2483,20 @@ const SalesOrders = ({ tabId }) => {
                       </div>
 
                       {/* Total - 1 column */}
-                      <div className="col-span-1">
+                      <div className="min-w-0">
                         <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
                           {Math.round(totalPrice)}
                         </span>
                       </div>
 
                       {/* Delete Button - 1 column */}
-                      <div className="col-span-1 min-w-0">
+                      <div className="min-w-0 flex justify-end">
                         <LoadingButton
                           onClick={() => handleRemoveItem(index)}
                           isLoading={isRemovingFromCart[formData.items[index]?.product?.toString() || index]}
                           variant="destructive"
                           size="sm"
-                          className="h-8 w-full flex-shrink-0"
+                          className="h-8 w-8 p-0 flex-shrink-0"
                         >
                           <Trash2 className="h-4 w-4" />
                         </LoadingButton>
@@ -2336,7 +2504,7 @@ const SalesOrders = ({ tabId }) => {
                     </div>
 
                     {/* Mobile Card Layout */}
-                    <div className="lg:hidden p-3 bg-white border border-gray-200 rounded-lg space-y-3">
+                    <div className="md:hidden p-3 bg-white border border-gray-200 rounded-lg space-y-3">
                       {/* Product Name and Delete Button Row */}
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
@@ -2399,7 +2567,7 @@ const SalesOrders = ({ tabId }) => {
                             max={product?.inventory?.currentStock}
                             stockPiecesForRemaining={product?.inventory?.currentStock ?? 0}
                             showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
-                            showBoxInput={dualUnitShowBoxInputEnabled}
+                            showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
                             showPiecesInput={dualUnitShowPiecesInputEnabled}
                             showPiecesUnitLabel={false}
                             inputClassName="input text-center h-8 text-sm w-full"
@@ -2475,247 +2643,264 @@ const SalesOrders = ({ tabId }) => {
         </div>
       </div>
 
-      {/* Sales Order Details */}
+      {/* Sales Order Details + checkout (same two-card layout as Sales) */}
       {formData.items.length > 0 && (
-        <OrderCheckoutCard className="overflow-x-hidden">
-          <OrderDetailsSection
-            detailsTitle="Sales Order Details"
-            showDetails={showSalesOrderDetailsFields}
-            onShowDetailsChange={setShowSalesOrderDetailsFields}
-            checkboxId="showSalesOrderDetailsFields"
+        <div
+          className={`mt-4 grid w-full min-w-0 grid-cols-1 gap-4 overflow-x-hidden lg:gap-5 lg:items-start ${
+            showSalesOrderDetailsFields ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
+          }`}
+        >
+          <OrderCheckoutCard
+            className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${
+              showSalesOrderDetailsFields ? 'order-1' : 'order-2'
+            }`}
           >
-            {showSalesOrderDetailsFields && (
-              <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-end justify-end">
-                {/* Order Type */}
-                <div className="flex flex-col w-full sm:w-44">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Order Type
-                  </label>
-                  <select
-                    value={formData.orderType}
-                    onChange={(e) => setFormData(prev => ({ ...prev, orderType: e.target.value }))}
-                    className="input h-8 text-sm"
-                  >
-                    <option value="retail">Retail</option>
-                    <option value="wholesale">Wholesale</option>
-                    <option value="return">Return</option>
-                    <option value="exchange">Exchange</option>
-                  </select>
-                </div>
-
-                {/* Tax Exemption Option */}
-                <div className="flex flex-col w-full sm:w-40">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Tax Status
-                  </label>
-                  <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
-                    <input
-                      type="checkbox"
-                      id="taxExempt"
-                      checked={formData.isTaxExempt}
-                      onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
-                      className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                    />
-                    <div className="flex-1">
-                      <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
-                        Tax Exempt
-                      </label>
-                    </div>
-                    {formData.isTaxExempt && (
-                      <div className="text-green-600 text-xs font-medium">
-                        ✓
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Invoice Number */}
-                <div className="flex flex-col w-full sm:w-72">
-                  <div className="flex items-center gap-3 mb-1 flex-wrap">
-                    <label className="block text-xs font-medium text-gray-700 m-0">
-                      Invoice Number
+            <OrderDetailsSection
+              detailsTitle="Sales Order Details"
+              showDetails={showSalesOrderDetailsFields}
+              onShowDetailsChange={setShowSalesOrderDetailsFields}
+              checkboxId="showSalesOrderDetailsFields"
+            >
+              {showSalesOrderDetailsFields && (
+                <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-end justify-end">
+                  {/* Order Type */}
+                  <div className="flex flex-col w-full sm:w-44">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Order Type
                     </label>
-                    <label
-                      htmlFor="soAutoGenerateInvoice"
-                      className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
+                    <select
+                      value={formData.orderType}
+                      onChange={(e) => setFormData(prev => ({ ...prev, orderType: e.target.value }))}
+                      className="input h-8 text-sm"
                     >
+                      <option value="retail">Retail</option>
+                      <option value="wholesale">Wholesale</option>
+                      <option value="return">Return</option>
+                      <option value="exchange">Exchange</option>
+                    </select>
+                  </div>
+
+                  {/* Tax Exemption Option */}
+                  <div className="flex flex-col w-full sm:w-40">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Tax Status
+                    </label>
+                    <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
                       <input
                         type="checkbox"
-                        id="soAutoGenerateInvoice"
-                        checked={autoGenerateOrderNumber}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setAutoGenerateOrderNumber(checked);
-                          if (checked) {
-                            const newNumber = generateOrderNumber(selectedCustomer);
-                            setFormData((prev) => ({ ...prev, orderNumber: newNumber }));
-                          }
-                        }}
+                        id="taxExempt"
+                        checked={formData.isTaxExempt}
+                        onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
                         className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                       />
-                      <span>Auto-generate</span>
-                    </label>
+                      <div className="flex-1">
+                        <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
+                          Tax Exempt
+                        </label>
+                      </div>
+                      {formData.isTaxExempt && (
+                        <div className="text-green-600 text-xs font-medium">
+                          ✓
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="relative">
+
+                  {/* Invoice Number */}
+                  <div className="flex flex-col w-full sm:w-72">
+                    <div className="flex items-center gap-3 mb-1 flex-wrap">
+                      <label className="block text-xs font-medium text-gray-700 m-0">
+                        Invoice Number
+                      </label>
+                      <label
+                        htmlFor="soAutoGenerateInvoice"
+                        className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
+                      >
+                        <input
+                          type="checkbox"
+                          id="soAutoGenerateInvoice"
+                          checked={autoGenerateOrderNumber}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setAutoGenerateOrderNumber(checked);
+                            if (checked) {
+                              const newNumber = generateOrderNumber(selectedCustomer);
+                              setFormData((prev) => ({ ...prev, orderNumber: newNumber }));
+                            }
+                          }}
+                          className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        />
+                        <span>Auto-generate</span>
+                      </label>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        value={formData.orderNumber}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, orderNumber: e.target.value }))}
+                        className="w-full input pr-16 h-8 text-sm"
+                        placeholder={autoGenerateOrderNumber ? 'Auto-generated' : 'Enter invoice number'}
+                        disabled={autoGenerateOrderNumber}
+                      />
+                      {autoGenerateOrderNumber && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newNumber = generateOrderNumber(selectedCustomer);
+                            setFormData((prev) => ({ ...prev, orderNumber: newNumber }));
+                          }}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[11px] text-primary-600 hover:text-primary-800 font-medium"
+                        >
+                          Regenerate
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div className="flex flex-col w-full sm:w-[28rem]">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Notes
+                    </label>
                     <input
                       type="text"
                       autoComplete="off"
-                      value={formData.orderNumber}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, orderNumber: e.target.value }))}
-                      className="w-full input pr-16 h-8 text-sm"
-                      placeholder={autoGenerateOrderNumber ? 'Auto-generated' : 'Enter invoice number'}
-                      disabled={autoGenerateOrderNumber}
+                      value={formData.notes}
+                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      className="input h-8 text-sm"
+                      placeholder="Additional notes..."
                     />
-                    {autoGenerateOrderNumber && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newNumber = generateOrderNumber(selectedCustomer);
-                          setFormData((prev) => ({ ...prev, orderNumber: newNumber }));
-                        }}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[11px] text-primary-600 hover:text-primary-800 font-medium"
-                      >
-                        Regenerate
-                      </button>
-                    )}
                   </div>
                 </div>
+              )}
+            </OrderDetailsSection>
+          </OrderCheckoutCard>
 
-                {/* Notes */}
-                <div className="flex flex-col w-full sm:w-[28rem]">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    value={formData.notes}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    className="input h-8 text-sm"
-                    placeholder="Additional notes..."
-                  />
-                </div>
-              </div>
-            )}
-          </OrderDetailsSection>
-
-          <OrderSummaryBar />
-          <OrderSummaryContent>
-            <div className="mb-6 space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-800 font-semibold">Subtotal:</span>
-                <span className="text-xl font-bold text-gray-900">{Math.round(subtotal)}</span>
-              </div>
+          <OrderCheckoutCard
+            className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${
+              showSalesOrderDetailsFields ? 'order-2' : 'order-1'
+            }`}
+          >
+            <OrderSummaryContent className="bg-none bg-slate-50">
+            <div className="space-y-2">
               {totalDiscount > 0 && (
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-800 font-semibold">Discount:</span>
-                  <span className="text-xl font-bold text-red-600">-{Math.round(totalDiscount)}</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">Discount:</span>
+                  <span className="text-xl font-semibold tabular-nums text-red-600">-{Math.round(totalDiscount)}</span>
                 </div>
               )}
               {!formData.isTaxExempt && (
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-800 font-semibold">Tax (8%):</span>
-                  <span className="text-xl font-bold text-gray-900">{Math.round(totalTax)}</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">Tax (8%):</span>
+                  <span className="text-xl font-semibold tabular-nums text-foreground">{Math.round(totalTax)}</span>
                 </div>
               )}
               {selectedCustomer && (() => {
-                // Calculate total balance: currentBalance (which is net balance)
-                const totalBalance = selectedCustomer.currentBalance !== undefined
-                  ? selectedCustomer.currentBalance
+                const ledgerBalance = selectedCustomer.currentBalance !== undefined && selectedCustomer.currentBalance !== null
+                  ? Number(selectedCustomer.currentBalance)
                   : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
-                const hasPreviousBalance = totalBalance !== 0;
-
-                if (!hasPreviousBalance) return null;
+                const receivedAmount = 0;
+                const invoiceBalance = total - receivedAmount;
+                const previousBalance = selectedOrder ? ledgerBalance - invoiceBalance : ledgerBalance;
+                const totalReceivables = selectedOrder ? ledgerBalance : ledgerBalance + invoiceBalance;
 
                 return (
-                  <div className="flex justify-between items-center mt-2">
-                    <span className="text-gray-800 font-semibold">
-                      Previous Total Balance:
-                    </span>
-                    <span className={`text-xl font-bold ${totalBalance < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {totalBalance < 0 ? '-' : '+'}{Math.abs(Math.round(totalBalance))}
-                    </span>
+                  <div className="mt-2">
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-4 md:gap-4">
+                      <div className="flex items-center justify-between md:block">
+                        <span className="text-sm font-medium text-muted-foreground">Subtotal:</span>
+                        <div className="text-2xl font-semibold tabular-nums text-foreground md:mt-1">{Math.round(subtotal)}</div>
+                      </div>
+                      <div className="flex items-center justify-between md:block">
+                        <span className="text-sm font-medium text-muted-foreground">Net Amount:</span>
+                        <div className="text-2xl font-bold tabular-nums text-primary md:mt-1">{Number(total.toFixed(2))}</div>
+                      </div>
+                      {(previousBalance !== 0 || selectedOrder) && (
+                        <div className="flex items-center justify-between md:block">
+                          <span className="text-sm font-medium text-muted-foreground">Previous Balance:</span>
+                          <div className={`text-2xl font-semibold tabular-nums md:mt-1 ${previousBalance < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {previousBalance < 0 ? '-' : '+'}{Math.abs(Number(previousBalance.toFixed(2)))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between md:block">
+                        <span className={`text-sm font-semibold ${totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}`}>
+                          Total Receivables:
+                        </span>
+                        <div className={`text-2xl font-bold tabular-nums md:mt-1 ${totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}`}>
+                          {totalReceivables < 0 ? '-' : '+'}{Math.abs(Number(totalReceivables.toFixed(2)))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 );
               })()}
-              <div className="flex justify-between items-center text-xl font-bold border-t-2 border-blue-400 pt-3 mt-2">
-                <span className="text-blue-900">Total:</span>
-                <span className="text-blue-900 text-3xl">{Math.round(total)}</span>
-              </div>
-              {selectedCustomer && (() => {
-                // Calculate total balance: currentBalance (which is net balance)
-                const totalBalance = selectedCustomer.currentBalance !== undefined
-                  ? selectedCustomer.currentBalance
-                  : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
-                const hasPreviousBalance = totalBalance !== 0;
-
-                if (!hasPreviousBalance) return null;
-
-                const totalBalanceAfterOrder = total + totalBalance;
-                const isPayable = totalBalanceAfterOrder < 0;
-
-                return (
-                  <div className="flex justify-between items-center text-lg font-bold border-t-2 border-red-400 pt-3 mt-2">
-                    <span className={isPayable ? 'text-red-700' : 'text-green-700'}>
-                      Total Balance After Order:
-                    </span>
-                    <span className={`text-2xl ${isPayable ? 'text-red-700' : 'text-green-700'}`}>
-                      {isPayable ? '-' : '+'}{Math.abs(Math.round(totalBalanceAfterOrder))}
-                    </span>
-                  </div>
-                );
-              })()}
+              {!selectedCustomer && (
+                <div className="mt-2 flex items-center justify-between border-t pt-3">
+                  <span className="text-lg font-semibold text-primary">Total:</span>
+                  <span className="text-3xl font-bold tabular-nums text-primary">{Math.round(total)}</span>
+                </div>
+              )}
             </div>
 
-            <OrderCheckoutActions className="mt-6 border-0 pt-0 sm:flex-row">
-              <Button
-                onClick={resetForm}
-                variant="secondary"
-                className="flex-1 w-full sm:w-auto"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Clear Cart</span>
-                <span className="sm:hidden">Clear</span>
-              </Button>
-              <Button
-                onClick={() => {
-                  const tempOrder = {
-                    soNumber: formData.orderNumber || `SO-${Date.now()}`,
-                    orderNumber: formData.orderNumber || `SO-${Date.now()}`,
-                    customer: selectedCustomer,
-                    items: formData.items.map(item => ({
-                      product: item.productData,
-                      quantity: item.quantity,
-                      unitPrice: item.unitPrice,
-                      totalPrice: item.total
-                    })),
-                    subtotal: subtotal,
-                    discount: totalDiscount,
-                    tax: totalTax,
-                    total: total,
-                    orderType: formData.orderType || 'wholesale',
-                    status: 'draft',
-                    paymentMethod: formData.paymentMethod,
-                    isTaxExempt: formData.isTaxExempt,
-                    notes: formData.notes,
-                    createdAt: new Date().toISOString()
-                  };
-                  handlePrint(tempOrder);
-                }}
-                variant="secondary"
-                className="flex-1 w-full sm:w-auto"
-              >
-                <Receipt className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">Print Preview</span>
-                <span className="sm:hidden">Print</span>
-              </Button>
+            <OrderCheckoutActions>
+              {formData.items.length > 0 && (
+                <Button
+                  onClick={resetForm}
+                  variant="secondary"
+                  className="flex-1"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Cart
+                </Button>
+              )}
+              {formData.items.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="secondary" className="flex-1">
+                      <Printer className="h-4 w-4 mr-2" />
+                      Print
+                      <ChevronDown className="h-4 w-4 ml-2" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setDirectPrintOrder(buildDraftSalesOrderPrintOrder());
+                      }}
+                    >
+                      <Printer className="h-4 w-4 mr-2" />
+                      Print
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handlePrint(buildDraftSalesOrderPrintOrder())}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      Print Preview
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              <div className="flex items-center space-x-2 px-2">
+                <Input
+                  type="checkbox"
+                  id="soAutoPrint"
+                  checked={autoPrint}
+                  onChange={(e) => setAutoPrint(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="soAutoPrint" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  Print after sale
+                </label>
+              </div>
               {selectedOrder ? (
                 <>
                   <Button
                     type="button"
                     onClick={cancelEdit}
                     variant="secondary"
-                    className="flex-1 w-full sm:w-auto"
+                    className="flex-1"
                   >
                     Cancel Edit
                   </Button>
@@ -2725,11 +2910,10 @@ const SalesOrders = ({ tabId }) => {
                     disabled={updating || formData.items.length === 0}
                     variant="default"
                     size="lg"
-                    className="flex-2 w-full sm:w-auto"
+                    className="flex-2"
                   >
-                    <Save className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">{updating ? 'Updating...' : 'Update Sales Order'}</span>
-                    <span className="sm:hidden">{updating ? 'Updating...' : 'Update'}</span>
+                    <Receipt className="h-4 w-4 mr-2" />
+                    {updating ? 'Updating...' : 'Update Sales Order'}
                   </LoadingButton>
                 </>
               ) : (
@@ -2738,16 +2922,16 @@ const SalesOrders = ({ tabId }) => {
                   disabled={creating || formData.items.length === 0}
                   variant="default"
                   size="lg"
-                  className="flex-2 w-full sm:w-auto"
+                  className="flex-2"
                 >
-                  <Save className="h-4 w-4 mr-2" />
-                  <span className="hidden sm:inline">{creating ? 'Creating...' : 'Create Sales Order'}</span>
-                  <span className="sm:hidden">{creating ? 'Creating...' : 'Create Order'}</span>
+                  <Receipt className="h-4 w-4 mr-2" />
+                  {creating ? 'Creating...' : 'Create Sales Order'}
                 </Button>
               )}
             </OrderCheckoutActions>
           </OrderSummaryContent>
         </OrderCheckoutCard>
+        </div>
       )}
 
       {/* Filters */}
@@ -3394,6 +3578,15 @@ const SalesOrders = ({ tabId }) => {
           ))}
         </ul>
       </BaseModal>
+
+      {directPrintOrder && (
+        <DirectPrintInvoice
+          orderData={directPrintOrder}
+          documentTitle="Sales Order"
+          partyLabel="Customer"
+          onComplete={() => setDirectPrintOrder(null)}
+        />
+      )}
 
       <PrintModal
         isOpen={showPrintModal}
