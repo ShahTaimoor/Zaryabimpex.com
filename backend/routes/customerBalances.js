@@ -165,7 +165,8 @@ router.get('/reports/balance-issues', [
     for (const customerId of customerIds) {
       try {
         const summary = await CustomerBalanceService.getBalanceSummary(customerId);
-        balanceMap.set(customerId, summary.currentBalance || 0);
+        // Full AR balance (opening + ledger 1100) — same as AccountingService.getCustomerBalance
+        balanceMap.set(customerId, summary.balances?.currentBalance ?? 0);
       } catch (error) {
         balanceMap.set(customerId, 0);
       }
@@ -176,8 +177,7 @@ router.get('/reports/balance-issues', [
     const overCreditLimit = [];
 
     customers.forEach(c => {
-      const ledgerBalance = balanceMap.get(c._id.toString()) || 0;
-      const netBalance = (c.openingBalance || 0) + ledgerBalance;
+      const netBalance = balanceMap.get(c._id.toString()) || 0;
 
       const customerWithBalance = {
         ...c.toObject(),

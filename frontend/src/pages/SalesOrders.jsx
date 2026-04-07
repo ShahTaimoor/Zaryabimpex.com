@@ -77,10 +77,18 @@ import { hasDualUnit, piecesToBoxesAndPieces, getPiecesPerBox, formatStockDualLa
 import { useTab } from '../contexts/TabContext';
 import { useAuth } from '../contexts/AuthContext';
 import PrintModal from '../components/PrintModal';
+import BaseModal from '../components/BaseModal';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import NotesPanel from '../components/NotesPanel';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
+import ExportReportModal from '../components/ExportReportModal';
+import {
+  presentPdfExportBlob,
+  presentNonPdfExportDownload,
+  notifyExportDownloadCatchError,
+  unwrapExportDownloadBlob,
+} from '../utils/exportReportPresentation';
 
 // Helper function to safely render values
 const safeRender = (value) => {
@@ -829,14 +837,14 @@ const SalesOrders = ({ tabId }) => {
           items: prev.items.map((item, i) =>
             i === existingIndex
               ? {
-                  ...item,
-                  quantity: newQuantity,
-                  ...(ppb && { boxes, pieces }),
-                  unitPrice: unitPrice,
-                  subtotal: newSubtotal,
-                  taxAmount: newTaxAmount,
-                  total: newTotal
-                }
+                ...item,
+                quantity: newQuantity,
+                ...(ppb && { boxes, pieces }),
+                unitPrice: unitPrice,
+                subtotal: newSubtotal,
+                taxAmount: newTaxAmount,
+                total: newTotal
+              }
               : item
           )
         }));
@@ -1456,184 +1464,34 @@ const SalesOrders = ({ tabId }) => {
             await new Promise(resolve => setTimeout(resolve, 500));
           }
 
-          // Download the file
           let downloadResponse;
           try {
             downloadResponse = await downloadFileMutation(filename).unwrap();
           } catch (downloadErr) {
-            showErrorToast('Download failed');
+            notifyExportDownloadCatchError(downloadErr, showErrorToast);
             return;
           }
 
-          // Check if response is successful
-          if (!downloadResponse) {
-            showErrorToast('Download failed: No response received');
-            return;
-          }
-
-          // Check if data exists
-          if (!downloadResponse) {
+          if (downloadResponse == null) {
             showErrorToast('Download failed: No data received from server');
             return;
           }
 
           if (exportFormat === 'pdf') {
-            // For PDF, open in new tab for preview
-            const blob = downloadResponse;
-
-            // Check if blob is valid
-            if (!blob || !(blob instanceof Blob)) {
-              // Handle different response types
-              if (typeof blob === 'string') {
-                showErrorToast(`Server error: ${blob.substring(0, 100)}`);
-              } else if (blob && typeof blob === 'object') {
-                // Try to extract error message from object
-                let errorMsg = blob.message || blob.error;
-
-                // If no message property, try to stringify but check if it's meaningful
-                if (!errorMsg) {
-                  try {
-                    const stringified = JSON.stringify(blob);
-                    // If stringified is just "{}" or empty, try to get more info
-                    if (stringified === '{}' || stringified === 'null' || stringified === '') {
-                      // Check if it's an error object with other properties
-                      errorMsg = blob.statusText || blob.status || 'Unknown server error';
-                      // Error response from server
-                    } else {
-                      errorMsg = stringified.substring(0, 150);
-                    }
-                  } catch (e) {
-                    errorMsg = 'Invalid response format';
-                  }
-                }
-
-                showErrorToast(`Server error: ${errorMsg || 'Unknown error'}`);
-              } else {
-                showErrorToast('Invalid PDF file received - expected Blob. Response type: ' + typeof blob);
-              }
-              return;
-            }
-
-            // Check if content type indicates an error (JSON/HTML response)
-            const contentType = blob.type || '';
-            if (contentType.includes('application/json') || contentType.includes('text/html')) {
-              // Read the blob to see the error message
-              const reader = new FileReader();
-              reader.onload = () => {
-                const text = reader.result;
-                try {
-                  const errorData = JSON.parse(text);
-                  showErrorToast(errorData.message || 'File not found or generation failed');
-                } catch {
-                  showErrorToast('Server returned error instead of PDF. Please try again.');
-                }
-              };
-              reader.readAsText(blob);
-              return;
-            }
-
-            // Check if blob has content
-            if (blob.size === 0) {
-              showErrorToast('PDF file is empty');
-              return;
-            }
-
-            // Check if blob type is PDF (or at least not HTML/JSON error)
-            if (blob.type && !blob.type.includes('pdf') && !blob.type.includes('application/octet-stream')) {
-              // Might be an error response, try to read it
-              const reader = new FileReader();
-              reader.onload = () => {
-                const text = reader.result;
-                if (text.includes('<!DOCTYPE') || text.includes('{"error"') || text.includes('{"message"')) {
-                  showErrorToast('Server returned an error instead of PDF file');
-                } else {
-                  // Try to open anyway
-                  const url = URL.createObjectURL(blob);
-                  const newWindow = window.open(url, '_blank');
-                  if (!newWindow) {
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = filename;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    showSuccessToast('PDF downloaded (popup was blocked)');
-                  } else {
-                    showSuccessToast('PDF opened in new tab');
-                  }
-                  setTimeout(() => URL.revokeObjectURL(url), 10000);
-                }
-              };
-              reader.readAsText(blob.slice(0, 100)); // Read first 100 bytes to check
-              return;
-            }
-
-            // Valid PDF blob, proceed with opening
-            const url = URL.createObjectURL(blob);
-            const newWindow = window.open(url, '_blank');
-
-            if (!newWindow) {
-              // Popup blocked, fallback to download
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = filename;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              showSuccessToast('PDF downloaded (popup was blocked)');
-            } else {
-              showSuccessToast('PDF opened in new tab');
-            }
-
-            // Revoke URL after a delay to ensure it loads
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
+            presentPdfExportBlob(unwrapExportDownloadBlob(downloadResponse), filename, {
+              error: showErrorToast,
+              success: showSuccessToast,
+            });
           } else {
-            // For other formats, download directly
-            const blob = downloadResponse instanceof Blob
-              ? downloadResponse
-              : new Blob([downloadResponse], {
-                type: exportFormat === 'excel'
-                  ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                  : exportFormat === 'csv'
-                    ? 'text/csv'
-                    : 'application/json'
-              });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-
-            showSuccessToast(`${exportFormat.toUpperCase()} file downloaded successfully`);
+            presentNonPdfExportDownload(downloadResponse, exportFormat, filename, showSuccessToast);
           }
         } catch (downloadError) {
-          // Handle download errors
-          if (downloadError.response) {
-            // Server returned an error status
-            if (downloadError.response.data instanceof Blob) {
-              // Error response is a blob, try to read it
-              const reader = new FileReader();
-              reader.onload = () => {
-                const text = reader.result;
-                try {
-                  const errorData = JSON.parse(text);
-                  showErrorToast(errorData.message || 'Download failed');
-                } catch {
-                  showErrorToast('Download failed: ' + text.substring(0, 100));
-                }
-              };
-              reader.readAsText(downloadError.response.data);
-            } else {
-              showErrorToast(downloadError.response.data?.message || `Download failed: ${downloadError.response.status}`);
-            }
-          } else {
-            showErrorToast('Download failed: ' + (downloadError.message || 'Unknown error'));
-          }
+          notifyExportDownloadCatchError(downloadError, showErrorToast);
           return;
         }
+      } else {
+        showErrorToast('Export failed: No filename received');
+        return;
       }
 
       setShowExportModal(false);
@@ -1738,10 +1596,10 @@ const SalesOrders = ({ tabId }) => {
               (order.customerInfo?.address && typeof order.customerInfo.address === 'string')
                 ? order.customerInfo.address
                 : formatAddressForPrint(customerData) ||
-                  customerData.address ||
-                  customerData.location ||
-                  customerData.companyAddress ||
-                  ''
+                customerData.address ||
+                customerData.location ||
+                customerData.companyAddress ||
+                ''
           }
           : null);
 
@@ -1756,12 +1614,12 @@ const SalesOrders = ({ tabId }) => {
         const productName =
           (typeof productData === 'object' && productData !== null)
             ? (productData.name ||
-               productData.displayName ||
-               productData.display_name ||
-               productData.variantName ||
-               productData.variant_name ||
-               productData.title ||
-               item.productName)
+              productData.displayName ||
+              productData.display_name ||
+              productData.variantName ||
+              productData.variant_name ||
+              productData.title ||
+              item.productName)
             : item.productName;
         return {
           ...item,
@@ -2190,7 +2048,7 @@ const SalesOrders = ({ tabId }) => {
                       onChange={(q, dual) => setQuantity(q)}
                       max={selectedProduct?.inventory?.currentStock > 0 ? selectedProduct.inventory.currentStock : undefined}
                       stockPiecesForRemaining={selectedProduct?.inventory?.currentStock ?? 0}
-                     
+
                       showBoxInput={dualUnitShowBoxInputEnabled}
                       showPiecesInput={dualUnitShowPiecesInputEnabled}
                       showPiecesUnitLabel={false}
@@ -2387,7 +2245,7 @@ const SalesOrders = ({ tabId }) => {
                           min={1}
                           max={product?.inventory?.currentStock}
                           stockPiecesForRemaining={product?.inventory?.currentStock ?? 0}
-                          
+
                           showBoxInput={dualUnitShowBoxInputEnabled}
                           showPiecesInput={dualUnitShowPiecesInputEnabled}
                           showPiecesUnitLabel={false}
@@ -2627,117 +2485,117 @@ const SalesOrders = ({ tabId }) => {
             checkboxId="showSalesOrderDetailsFields"
           >
             {showSalesOrderDetailsFields && (
-            <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-end justify-end">
-              {/* Order Type */}
-              <div className="flex flex-col w-full sm:w-44">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Order Type
-                </label>
-                <select
-                  value={formData.orderType}
-                  onChange={(e) => setFormData(prev => ({ ...prev, orderType: e.target.value }))}
-                  className="input h-8 text-sm"
-                >
-                  <option value="retail">Retail</option>
-                  <option value="wholesale">Wholesale</option>
-                  <option value="return">Return</option>
-                  <option value="exchange">Exchange</option>
-                </select>
-              </div>
-
-              {/* Tax Exemption Option */}
-              <div className="flex flex-col w-full sm:w-40">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Tax Status
-                </label>
-                <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
-                  <input
-                    type="checkbox"
-                    id="taxExempt"
-                    checked={formData.isTaxExempt}
-                    onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
-                    className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                  />
-                  <div className="flex-1">
-                    <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
-                      Tax Exempt
-                    </label>
-                  </div>
-                  {formData.isTaxExempt && (
-                    <div className="text-green-600 text-xs font-medium">
-                      ✓
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Invoice Number */}
-              <div className="flex flex-col w-full sm:w-72">
-                <div className="flex items-center gap-3 mb-1 flex-wrap">
-                  <label className="block text-xs font-medium text-gray-700 m-0">
-                    Invoice Number
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-end justify-end">
+                {/* Order Type */}
+                <div className="flex flex-col w-full sm:w-44">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Order Type
                   </label>
-                  <label
-                    htmlFor="soAutoGenerateInvoice"
-                    className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
+                  <select
+                    value={formData.orderType}
+                    onChange={(e) => setFormData(prev => ({ ...prev, orderType: e.target.value }))}
+                    className="input h-8 text-sm"
                   >
+                    <option value="retail">Retail</option>
+                    <option value="wholesale">Wholesale</option>
+                    <option value="return">Return</option>
+                    <option value="exchange">Exchange</option>
+                  </select>
+                </div>
+
+                {/* Tax Exemption Option */}
+                <div className="flex flex-col w-full sm:w-40">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Tax Status
+                  </label>
+                  <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
                     <input
                       type="checkbox"
-                      id="soAutoGenerateInvoice"
-                      checked={autoGenerateOrderNumber}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setAutoGenerateOrderNumber(checked);
-                        if (checked) {
-                          const newNumber = generateOrderNumber(selectedCustomer);
-                          setFormData((prev) => ({ ...prev, orderNumber: newNumber }));
-                        }
-                      }}
+                      id="taxExempt"
+                      checked={formData.isTaxExempt}
+                      onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
                       className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                     />
-                    <span>Auto-generate</span>
-                  </label>
+                    <div className="flex-1">
+                      <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
+                        Tax Exempt
+                      </label>
+                    </div>
+                    {formData.isTaxExempt && (
+                      <div className="text-green-600 text-xs font-medium">
+                        ✓
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="relative">
+
+                {/* Invoice Number */}
+                <div className="flex flex-col w-full sm:w-72">
+                  <div className="flex items-center gap-3 mb-1 flex-wrap">
+                    <label className="block text-xs font-medium text-gray-700 m-0">
+                      Invoice Number
+                    </label>
+                    <label
+                      htmlFor="soAutoGenerateInvoice"
+                      className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
+                    >
+                      <input
+                        type="checkbox"
+                        id="soAutoGenerateInvoice"
+                        checked={autoGenerateOrderNumber}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setAutoGenerateOrderNumber(checked);
+                          if (checked) {
+                            const newNumber = generateOrderNumber(selectedCustomer);
+                            setFormData((prev) => ({ ...prev, orderNumber: newNumber }));
+                          }
+                        }}
+                        className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      />
+                      <span>Auto-generate</span>
+                    </label>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      value={formData.orderNumber}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, orderNumber: e.target.value }))}
+                      className="w-full input pr-16 h-8 text-sm"
+                      placeholder={autoGenerateOrderNumber ? 'Auto-generated' : 'Enter invoice number'}
+                      disabled={autoGenerateOrderNumber}
+                    />
+                    {autoGenerateOrderNumber && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newNumber = generateOrderNumber(selectedCustomer);
+                          setFormData((prev) => ({ ...prev, orderNumber: newNumber }));
+                        }}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[11px] text-primary-600 hover:text-primary-800 font-medium"
+                      >
+                        Regenerate
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Notes */}
+                <div className="flex flex-col w-full sm:w-[28rem]">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Notes
+                  </label>
                   <input
                     type="text"
                     autoComplete="off"
-                    value={formData.orderNumber}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, orderNumber: e.target.value }))}
-                    className="w-full input pr-16 h-8 text-sm"
-                    placeholder={autoGenerateOrderNumber ? 'Auto-generated' : 'Enter invoice number'}
-                    disabled={autoGenerateOrderNumber}
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    className="input h-8 text-sm"
+                    placeholder="Additional notes..."
                   />
-                  {autoGenerateOrderNumber && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newNumber = generateOrderNumber(selectedCustomer);
-                        setFormData((prev) => ({ ...prev, orderNumber: newNumber }));
-                      }}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[11px] text-primary-600 hover:text-primary-800 font-medium"
-                    >
-                      Regenerate
-                    </button>
-                  )}
                 </div>
               </div>
-
-              {/* Notes */}
-              <div className="flex flex-col w-full sm:w-[28rem]">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Notes
-                </label>
-                <input
-                  type="text"
-                  autoComplete="off"
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="input h-8 text-sm"
-                  placeholder="Additional notes..."
-                />
-              </div>
-            </div>
             )}
           </OrderDetailsSection>
 
@@ -2809,85 +2667,85 @@ const SalesOrders = ({ tabId }) => {
               })()}
             </div>
 
-          <OrderCheckoutActions className="mt-6 border-0 pt-0 sm:flex-row">
-            <Button
-              onClick={resetForm}
-              variant="secondary"
-              className="flex-1 w-full sm:w-auto"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Clear Cart</span>
-              <span className="sm:hidden">Clear</span>
-            </Button>
-            <Button
-              onClick={() => {
-                const tempOrder = {
-                  soNumber: formData.orderNumber || `SO-${Date.now()}`,
-                  orderNumber: formData.orderNumber || `SO-${Date.now()}`,
-                  customer: selectedCustomer,
-                  items: formData.items.map(item => ({
-                    product: item.productData,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice,
-                    totalPrice: item.total
-                  })),
-                  subtotal: subtotal,
-                  discount: totalDiscount,
-                  tax: totalTax,
-                  total: total,
-                  orderType: formData.orderType || 'wholesale',
-                  status: 'draft',
-                  paymentMethod: formData.paymentMethod,
-                  isTaxExempt: formData.isTaxExempt,
-                  notes: formData.notes,
-                  createdAt: new Date().toISOString()
-                };
-                handlePrint(tempOrder);
-              }}
-              variant="secondary"
-              className="flex-1 w-full sm:w-auto"
-            >
-              <Receipt className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Print Preview</span>
-              <span className="sm:hidden">Print</span>
-            </Button>
-            {selectedOrder ? (
-              <>
+            <OrderCheckoutActions className="mt-6 border-0 pt-0 sm:flex-row">
+              <Button
+                onClick={resetForm}
+                variant="secondary"
+                className="flex-1 w-full sm:w-auto"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Clear Cart</span>
+                <span className="sm:hidden">Clear</span>
+              </Button>
+              <Button
+                onClick={() => {
+                  const tempOrder = {
+                    soNumber: formData.orderNumber || `SO-${Date.now()}`,
+                    orderNumber: formData.orderNumber || `SO-${Date.now()}`,
+                    customer: selectedCustomer,
+                    items: formData.items.map(item => ({
+                      product: item.productData,
+                      quantity: item.quantity,
+                      unitPrice: item.unitPrice,
+                      totalPrice: item.total
+                    })),
+                    subtotal: subtotal,
+                    discount: totalDiscount,
+                    tax: totalTax,
+                    total: total,
+                    orderType: formData.orderType || 'wholesale',
+                    status: 'draft',
+                    paymentMethod: formData.paymentMethod,
+                    isTaxExempt: formData.isTaxExempt,
+                    notes: formData.notes,
+                    createdAt: new Date().toISOString()
+                  };
+                  handlePrint(tempOrder);
+                }}
+                variant="secondary"
+                className="flex-1 w-full sm:w-auto"
+              >
+                <Receipt className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Print Preview</span>
+                <span className="sm:hidden">Print</span>
+              </Button>
+              {selectedOrder ? (
+                <>
+                  <Button
+                    type="button"
+                    onClick={cancelEdit}
+                    variant="secondary"
+                    className="flex-1 w-full sm:w-auto"
+                  >
+                    Cancel Edit
+                  </Button>
+                  <LoadingButton
+                    onClick={handleUpdate}
+                    isLoading={updating}
+                    disabled={updating || formData.items.length === 0}
+                    variant="default"
+                    size="lg"
+                    className="flex-2 w-full sm:w-auto"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">{updating ? 'Updating...' : 'Update Sales Order'}</span>
+                    <span className="sm:hidden">{updating ? 'Updating...' : 'Update'}</span>
+                  </LoadingButton>
+                </>
+              ) : (
                 <Button
-                  type="button"
-                  onClick={cancelEdit}
-                  variant="secondary"
-                  className="flex-1 w-full sm:w-auto"
-                >
-                  Cancel Edit
-                </Button>
-                <LoadingButton
-                  onClick={handleUpdate}
-                  isLoading={updating}
-                  disabled={updating || formData.items.length === 0}
+                  onClick={handleCreate}
+                  disabled={creating || formData.items.length === 0}
                   variant="default"
                   size="lg"
                   className="flex-2 w-full sm:w-auto"
                 >
                   <Save className="h-4 w-4 mr-2" />
-                  <span className="hidden sm:inline">{updating ? 'Updating...' : 'Update Sales Order'}</span>
-                  <span className="sm:hidden">{updating ? 'Updating...' : 'Update'}</span>
-                </LoadingButton>
-              </>
-            ) : (
-              <Button
-                onClick={handleCreate}
-                disabled={creating || formData.items.length === 0}
-                variant="default"
-                size="lg"
-                className="flex-2 w-full sm:w-auto"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                <span className="hidden sm:inline">{creating ? 'Creating...' : 'Create Sales Order'}</span>
-                <span className="sm:hidden">{creating ? 'Creating...' : 'Create Order'}</span>
-              </Button>
-            )}
-          </OrderCheckoutActions>
+                  <span className="hidden sm:inline">{creating ? 'Creating...' : 'Create Sales Order'}</span>
+                  <span className="sm:hidden">{creating ? 'Creating...' : 'Create Order'}</span>
+                </Button>
+              )}
+            </OrderCheckoutActions>
           </OrderSummaryContent>
         </OrderCheckoutCard>
       )}
@@ -3151,499 +3009,391 @@ const SalesOrders = ({ tabId }) => {
       </div>
 
       {/* View Modal - Bill Format */}
-      {showViewModal && selectedOrder && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-5 border w-4/5 max-w-4xl shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              {/* Header */}
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-gray-900">Sales Order</h3>
-                <button
-                  onClick={() => {
-                    setShowViewModal(false);
-                    setSelectedOrder(null);
-                    setSelectedItemIndices([]);
-                  }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+      <BaseModal
+        isOpen={showViewModal && !!selectedOrder}
+        onClose={() => {
+          setShowViewModal(false);
+          setSelectedOrder(null);
+          setSelectedItemIndices([]);
+        }}
+        title="Sales Order"
+        maxWidth="2xl"
+        variant="scrollable"
+        contentClassName="p-5"
+        footer={
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 w-full">
+            <div className="text-xs text-gray-500">
+              Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
+            </div>
+            <div className="flex flex-wrap gap-2 justify-end">
+              <Button
+                type="button"
+                onClick={() => handlePrint(selectedOrder)}
+                variant="default"
+                className="inline-flex items-center"
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Print
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setShowViewModal(false);
+                  setSelectedOrder(null);
+                  setSelectedItemIndices([]);
+                }}
+                variant="secondary"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        {selectedOrder && (
+          <>
+            {/* Company Info */}
+            <div className="mb-6 text-center">
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">{resolvedCompanyName}</h4>
+              {resolvedCompanyAddress && (
+                <p className="text-sm text-gray-600">{resolvedCompanyAddress}</p>
+              )}
+              {resolvedCompanyPhone && (
+                <p className="text-sm text-gray-600">Phone: {resolvedCompanyPhone}</p>
+              )}
+            </div>
 
-              {/* Company Info */}
-              <div className="mb-6 text-center">
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">{resolvedCompanyName}</h4>
-                {resolvedCompanyAddress && (
-                  <p className="text-sm text-gray-600">{resolvedCompanyAddress}</p>
-                )}
-                {resolvedCompanyPhone && (
-                  <p className="text-sm text-gray-600">Phone: {resolvedCompanyPhone}</p>
-                )}
-              </div>
-
-              {/* SO Details */}
-              <div className="grid grid-cols-2 gap-6 mb-6">
-                <div>
-                  <h5 className="font-semibold text-gray-900 mb-2">Sales Order Details</h5>
-                  <div className="space-y-1 text-sm">
-                    <p><span className="font-medium">SO Number:</span> {selectedOrder.soNumber}</p>
-                    <p><span className="font-medium">Date:</span> {formatDate(selectedOrder.createdAt)}</p>
-                    <p><span className="font-medium">Order Type:</span> {selectedOrder.orderType || 'Standard'}</p>
-                    <p><span className="font-medium">Status:</span>
-                      <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${selectedOrder.status === 'draft' ? 'bg-gray-100 text-gray-800' :
-                        selectedOrder.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
-                          selectedOrder.status === 'partially_invoiced' ? 'bg-yellow-100 text-yellow-800' :
-                            selectedOrder.status === 'fully_invoiced' ? 'bg-green-100 text-green-800' :
-                              selectedOrder.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                                'bg-gray-100 text-gray-800'
-                        }`}>
-                        {selectedOrder.status === 'draft' ? 'Pending' : selectedOrder.status.replace('_', ' ')}
-                      </span>
+            {/* SO Details */}
+            <div className="grid grid-cols-2 gap-6 mb-6">
+              <div>
+                <h5 className="font-semibold text-gray-900 mb-2">Sales Order Details</h5>
+                <div className="space-y-1 text-sm">
+                  <p><span className="font-medium">SO Number:</span> {selectedOrder.soNumber}</p>
+                  <p><span className="font-medium">Date:</span> {formatDate(selectedOrder.createdAt)}</p>
+                  <p><span className="font-medium">Order Type:</span> {selectedOrder.orderType || 'Standard'}</p>
+                  <p><span className="font-medium">Status:</span>
+                    <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${selectedOrder.status === 'draft' ? 'bg-gray-100 text-gray-800' :
+                      selectedOrder.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                        selectedOrder.status === 'partially_invoiced' ? 'bg-yellow-100 text-yellow-800' :
+                          selectedOrder.status === 'fully_invoiced' ? 'bg-green-100 text-green-800' :
+                            selectedOrder.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                              'bg-gray-100 text-gray-800'
+                      }`}>
+                      {selectedOrder.status === 'draft' ? 'Pending' : selectedOrder.status.replace('_', ' ')}
+                    </span>
+                  </p>
+                  {itemWiseConfirmationEnabled && (
+                    <p><span className="font-medium">Confirmation:</span>
+                      <OrderConfirmationStatusBadge order={selectedOrder} />
                     </p>
-                    {itemWiseConfirmationEnabled && (
-                      <p><span className="font-medium">Confirmation:</span>
-                        <OrderConfirmationStatusBadge order={selectedOrder} />
-                      </p>
-                    )}
-                    {selectedOrder.expectedDelivery && (
-                      <p><span className="font-medium">Expected Delivery:</span> {formatDate(selectedOrder.expectedDelivery)}</p>
-                    )}
-                  </div>
+                  )}
+                  {selectedOrder.expectedDelivery && (
+                    <p><span className="font-medium">Expected Delivery:</span> {formatDate(selectedOrder.expectedDelivery)}</p>
+                  )}
                 </div>
-                <div className="text-right">
-                  <h5 className="font-semibold text-gray-900 mb-2">Customer Details</h5>
-                  <div className="space-y-1 text-sm">
-                    <p><span className="font-medium">Customer:</span> {safeRender(selectedOrder.customer?.business_name ?? selectedOrder.customer?.businessName ?? selectedOrder.customer?.name ?? selectedOrder.customer?.displayName) ?? 'Walk-in'}</p>
-                    {selectedOrder.customer?.email && (
-                      <p><span className="font-medium">Email:</span> {safeRender(selectedOrder.customer.email)}</p>
-                    )}
-                    {selectedOrder.customer?.phone && (
-                      <p><span className="font-medium">Phone:</span> {safeRender(selectedOrder.customer.phone)}</p>
-                    )}
-                    <p><span className="font-medium">Address:</span> {formatAddressForDisplay(selectedOrder.customer) || '—'}</p>
-                    {selectedOrder.customer?.contactPerson && (
-                      <p><span className="font-medium">Contact:</span> {safeRender(selectedOrder.customer.contactPerson)}</p>
-                    )}
-                    <div className="mt-3 pt-2 border-t border-gray-200">
-                      <p className={`font-semibold ${(() => {
+              </div>
+              <div className="text-right">
+                <h5 className="font-semibold text-gray-900 mb-2">Customer Details</h5>
+                <div className="space-y-1 text-sm">
+                  <p><span className="font-medium">Customer:</span> {safeRender(selectedOrder.customer?.business_name ?? selectedOrder.customer?.businessName ?? selectedOrder.customer?.name ?? selectedOrder.customer?.displayName) ?? 'Walk-in'}</p>
+                  {selectedOrder.customer?.email && (
+                    <p><span className="font-medium">Email:</span> {safeRender(selectedOrder.customer.email)}</p>
+                  )}
+                  {selectedOrder.customer?.phone && (
+                    <p><span className="font-medium">Phone:</span> {safeRender(selectedOrder.customer.phone)}</p>
+                  )}
+                  <p><span className="font-medium">Address:</span> {formatAddressForDisplay(selectedOrder.customer) || '—'}</p>
+                  {selectedOrder.customer?.contactPerson && (
+                    <p><span className="font-medium">Contact:</span> {safeRender(selectedOrder.customer.contactPerson)}</p>
+                  )}
+                  <div className="mt-3 pt-2 border-t border-gray-200">
+                    <p className={`font-semibold ${(() => {
+                      const customer = selectedOrder.customer || {};
+                      const totalBalance = customer.currentBalance !== undefined
+                        ? customer.currentBalance
+                        : ((customer.pendingBalance || 0) - (customer.advanceBalance || 0));
+                      return totalBalance < 0 ? 'text-red-600' : 'text-green-600';
+                    })()}`}>
+                      <span className="font-medium">Total Balance:</span> {(() => {
                         const customer = selectedOrder.customer || {};
                         const totalBalance = customer.currentBalance !== undefined
                           ? customer.currentBalance
                           : ((customer.pendingBalance || 0) - (customer.advanceBalance || 0));
-                        return totalBalance < 0 ? 'text-red-600' : 'text-green-600';
-                      })()}`}>
-                        <span className="font-medium">Total Balance:</span> {(() => {
-                          const customer = selectedOrder.customer || {};
-                          const totalBalance = customer.currentBalance !== undefined
-                            ? customer.currentBalance
-                            : ((customer.pendingBalance || 0) - (customer.advanceBalance || 0));
-                          return totalBalance < 0 ? '-' : '+';
-                        })()}{Math.abs(Math.round((() => {
-                          const customer = selectedOrder.customer || {};
-                          return customer.currentBalance !== undefined
-                            ? customer.currentBalance
-                            : ((customer.pendingBalance || 0) - (customer.advanceBalance || 0));
-                        })()))}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Items Table */}
-              <div className="mb-6">
-                <h5 className="font-semibold text-gray-900 mb-3">Items Ordered</h5>
-                {itemWiseConfirmationEnabled && (
-                  <OrderConfirmSelectedActions
-                    items={selectedOrder.items}
-                    canEdit={selectedOrder.status !== 'cancelled'}
-                    selectedIndices={selectedItemIndices}
-                    onSelectAll={(indices) => setSelectedItemIndices(indices)}
-                    onSelectNone={() => setSelectedItemIndices([])}
-                    onConfirmSelected={(indices) => {
-                      if (indices.length) {
-                        handleUpdateItemsConfirmation(
-                          indices.map((i) => ({ itemIndex: i, confirmationStatus: 'confirmed' })),
-                          false,
-                          false
-                        );
-                      }
-                    }}
-                    isUpdating={updatingItemsConfirmation}
-                  />
-                )}
-                <div className="overflow-x-auto">
-                  <table className="min-w-full border border-gray-200 rounded-lg">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
-                          #
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
-                          Product
-                        </th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
-                          Quantity
-                        </th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
-                          Unit Price
-                        </th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
-                          Total Price
-                        </th>
-                        {itemWiseConfirmationEnabled && (
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
-                            Confirmation
-                          </th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {selectedOrder.items && selectedOrder.items.map((item, index) => (
-                        <tr key={index} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${(item.confirmationStatus ?? item.confirmation_status) === 'cancelled' ? 'opacity-60' : ''}`}>
-                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
-                            {index + 1}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
-                            <div>
-                              <div className="font-medium">
-                                {typeof item.product === 'object' && item.product !== null
-                                  ? (item.product.name || item.product.displayName || item.product.display_name || item.product.variantName || item.product.variant_name || 'Unknown Product')
-                                  : (safeRender(item.product) || item.productData?.name || 'Unknown Product')}
-                              </div>
-                              {item.product?.description && (
-                                <div className="text-gray-500 text-xs">{safeRender(item.product.description)}</div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900 text-right border-b border-gray-200">
-                            {item.quantity}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900 text-right border-b border-gray-200">
-                            {Math.round(item.unitPrice || item.price || 0)}
-                          </td>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900 text-right border-b border-gray-200">
-                            {Math.round(item.totalPrice || (item.quantity * (item.unitPrice || item.price || 0)))}
-                          </td>
-                          {itemWiseConfirmationEnabled && (
-                            <td className="px-4 py-3 text-sm border-b border-gray-200">
-                              <OrderItemConfirmationCell
-                                item={item}
-                                itemIndex={index}
-                                status={getItemConfirmationStatus(item)}
-                                canEdit={selectedOrder.status !== 'cancelled'}
-                                selected={selectedItemIndices.includes(index)}
-                                onToggleSelect={toggleItemSelection}
-                                onCancel={(idx) => handleUpdateItemsConfirmation([{ itemIndex: idx, confirmationStatus: 'cancelled' }], false, false)}
-                                isUpdating={updatingItemsConfirmation}
-                              />
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Totals */}
-              <div className="flex justify-end mb-6">
-                <div className="w-80">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Subtotal:</span>
-                      <span className="font-medium">{Math.round(selectedOrder.subtotal || 0)}</span>
-                    </div>
-                    {selectedOrder.tax && selectedOrder.tax > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Tax:</span>
-                        <span className="font-medium">{Math.round(selectedOrder.tax)}</span>
-                      </div>
-                    )}
-                    {selectedOrder.discount && selectedOrder.discount > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Discount:</span>
-                        <span className="font-medium text-green-600">-{Math.round(selectedOrder.discount)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">SO Total:</span>
-                      <span className="font-medium">{Math.round(selectedOrder.total || 0)}</span>
-                    </div>
-                    <div className="border-t border-gray-200 my-2 pt-2">
-                      {(() => {
+                        return totalBalance < 0 ? '-' : '+';
+                      })()}{Math.abs(Math.round((() => {
                         const customer = selectedOrder.customer || {};
-                        const currentBal = customer.currentBalance !== undefined
+                        return customer.currentBalance !== undefined
                           ? customer.currentBalance
                           : ((customer.pendingBalance || 0) - (customer.advanceBalance || 0));
+                      })()))}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-                        const orderTotal = selectedOrder.total || 0;
-                        const paid = selectedOrder.payment?.amountPaid || 0;
-                        // For legacy/simple orders without payment obj, assume unpaid if no payment info
-                        const remaining = selectedOrder.payment?.remainingBalance ?? (orderTotal - paid);
-
-                        const isDraft = ['draft', 'cancelled'].includes(selectedOrder.status);
-
-                        // If draft, currentBal doesn't include this order yet -> Previous = Current
-                        // If confirmed, currentBal includes this order -> Previous = Current - Remaining
-                        const prevBal = isDraft ? currentBal : (currentBal - remaining);
-                        const totalBal = isDraft ? (currentBal + remaining) : currentBal;
-
-                        return (
-                          <>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-gray-600">Previous Balance:</span>
-                              <span className={`font-medium ${prevBal < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                {prevBal < 0 ? '-' : '+'}{Math.round(Math.abs(prevBal))}
-                              </span>
+            {/* Items Table */}
+            <div className="mb-6">
+              <h5 className="font-semibold text-gray-900 mb-3">Items Ordered</h5>
+              {itemWiseConfirmationEnabled && (
+                <OrderConfirmSelectedActions
+                  items={selectedOrder.items}
+                  canEdit={selectedOrder.status !== 'cancelled'}
+                  selectedIndices={selectedItemIndices}
+                  onSelectAll={(indices) => setSelectedItemIndices(indices)}
+                  onSelectNone={() => setSelectedItemIndices([])}
+                  onConfirmSelected={(indices) => {
+                    if (indices.length) {
+                      handleUpdateItemsConfirmation(
+                        indices.map((i) => ({ itemIndex: i, confirmationStatus: 'confirmed' })),
+                        false,
+                        false
+                      );
+                    }
+                  }}
+                  isUpdating={updatingItemsConfirmation}
+                />
+              )}
+              <div className="overflow-x-auto">
+                <table className="min-w-full border border-gray-200 rounded-lg">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                        #
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                        Product
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                        Quantity
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                        Unit Price
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                        Total Price
+                      </th>
+                      {itemWiseConfirmationEnabled && (
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                          Confirmation
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {selectedOrder.items && selectedOrder.items.map((item, index) => (
+                      <tr key={index} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${(item.confirmationStatus ?? item.confirmation_status) === 'cancelled' ? 'opacity-60' : ''}`}>
+                        <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
+                          {index + 1}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
+                          <div>
+                            <div className="font-medium">
+                              {typeof item.product === 'object' && item.product !== null
+                                ? (item.product.name || item.product.displayName || item.product.display_name || item.product.variantName || item.product.variant_name || 'Unknown Product')
+                                : (safeRender(item.product) || item.productData?.name || 'Unknown Product')}
                             </div>
-                            <div className="flex justify-between text-lg font-bold">
-                              <span className="text-gray-900">Total Balance:</span>
-                              <span className={`${totalBal < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                {totalBal < 0 ? '-' : '+'}{Math.round(Math.abs(totalBal))}
-                              </span>
-                            </div>
-                          </>
-                        );
-                      })()}
+                            {item.product?.description && (
+                              <div className="text-gray-500 text-xs">{safeRender(item.product.description)}</div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right border-b border-gray-200">
+                          {item.quantity}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right border-b border-gray-200">
+                          {Math.round(item.unitPrice || item.price || 0)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900 text-right border-b border-gray-200">
+                          {Math.round(item.totalPrice || (item.quantity * (item.unitPrice || item.price || 0)))}
+                        </td>
+                        {itemWiseConfirmationEnabled && (
+                          <td className="px-4 py-3 text-sm border-b border-gray-200">
+                            <OrderItemConfirmationCell
+                              item={item}
+                              itemIndex={index}
+                              status={getItemConfirmationStatus(item)}
+                              canEdit={selectedOrder.status !== 'cancelled'}
+                              selected={selectedItemIndices.includes(index)}
+                              onToggleSelect={toggleItemSelection}
+                              onCancel={(idx) => handleUpdateItemsConfirmation([{ itemIndex: idx, confirmationStatus: 'cancelled' }], false, false)}
+                              isUpdating={updatingItemsConfirmation}
+                            />
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Totals */}
+            <div className="flex justify-end mb-6">
+              <div className="w-80">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Subtotal:</span>
+                    <span className="font-medium">{Math.round(selectedOrder.subtotal || 0)}</span>
+                  </div>
+                  {selectedOrder.tax && selectedOrder.tax > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Tax:</span>
+                      <span className="font-medium">{Math.round(selectedOrder.tax)}</span>
                     </div>
+                  )}
+                  {selectedOrder.discount && selectedOrder.discount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Discount:</span>
+                      <span className="font-medium text-green-600">-{Math.round(selectedOrder.discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">SO Total:</span>
+                    <span className="font-medium">{Math.round(selectedOrder.total || 0)}</span>
+                  </div>
+                  <div className="border-t border-gray-200 my-2 pt-2">
+                    {(() => {
+                      const customer = selectedOrder.customer || {};
+                      const currentBal = customer.currentBalance !== undefined
+                        ? customer.currentBalance
+                        : ((customer.pendingBalance || 0) - (customer.advanceBalance || 0));
+
+                      const orderTotal = selectedOrder.total || 0;
+                      const paid = selectedOrder.payment?.amountPaid || 0;
+                      // For legacy/simple orders without payment obj, assume unpaid if no payment info
+                      const remaining = selectedOrder.payment?.remainingBalance ?? (orderTotal - paid);
+
+                      const isDraft = ['draft', 'cancelled'].includes(selectedOrder.status);
+
+                      // If draft, currentBal doesn't include this order yet -> Previous = Current
+                      // If confirmed, currentBal includes this order -> Previous = Current - Remaining
+                      const prevBal = isDraft ? currentBal : (currentBal - remaining);
+                      const totalBal = isDraft ? (currentBal + remaining) : currentBal;
+
+                      return (
+                        <>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="text-gray-600">Previous Balance:</span>
+                            <span className={`font-medium ${prevBal < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {prevBal < 0 ? '-' : '+'}{Math.round(Math.abs(prevBal))}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-lg font-bold">
+                            <span className="text-gray-900">Total Balance:</span>
+                            <span className={`${totalBal < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {totalBal < 0 ? '-' : '+'}{Math.round(Math.abs(totalBal))}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Payment Info */}
-              {selectedOrder.paymentMethod && (
-                <div className="mb-6">
-                  <h5 className="font-semibold text-gray-900 mb-2">Payment Information</h5>
-                  <div className="space-y-1 text-sm">
-                    <p><span className="font-medium">Payment Method:</span> {safeRender(selectedOrder.paymentMethod)}</p>
-                    {selectedOrder.paymentStatus && (
-                      <p><span className="font-medium">Payment Status:</span> {safeRender(selectedOrder.paymentStatus)}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Notes */}
-              {selectedOrder.notes && (
-                <div className="mb-6">
-                  <h5 className="font-semibold text-gray-900 mb-2">Notes</h5>
-                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded border">
-                    {safeRender(selectedOrder.notes)}
-                  </p>
-                </div>
-              )}
-
-              {/* Terms */}
-              {selectedOrder.terms && (
-                <div className="mb-6">
-                  <h5 className="font-semibold text-gray-900 mb-2">Terms & Conditions</h5>
-                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded border">
-                    {safeRender(selectedOrder.terms)}
-                  </p>
-                </div>
-              )}
-
-              {/* Footer */}
-              <div className="flex justify-between items-center pt-4 border-t">
-                <div className="text-xs text-gray-500">
-                  Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
-                </div>
-                <div className="flex space-x-3">
-                  <Button
-                    onClick={() => handlePrint(selectedOrder)}
-                    variant="default"
-                    className="flex items-center"
-                  >
-                    <Printer className="h-4 w-4 mr-2" />
-                    Print
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setShowViewModal(false);
-                      setSelectedOrder(null);
-                      setSelectedItemIndices([]);
-                    }}
-                    variant="secondary"
-                  >
-                    Close
-                  </Button>
+            {/* Payment Info */}
+            {selectedOrder.paymentMethod && (
+              <div className="mb-6">
+                <h5 className="font-semibold text-gray-900 mb-2">Payment Information</h5>
+                <div className="space-y-1 text-sm">
+                  <p><span className="font-medium">Payment Method:</span> {safeRender(selectedOrder.paymentMethod)}</p>
+                  {selectedOrder.paymentStatus && (
+                    <p><span className="font-medium">Payment Status:</span> {safeRender(selectedOrder.paymentStatus)}</p>
+                  )}
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+            )}
 
-      {/* Export Format Selection Modal */}
-      {showExportModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">Export Sales Orders</h2>
-              <button
-                onClick={() => setShowExportModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <XCircle className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              <div className="space-y-6">
-                {/* Export Format */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Export Format
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="format"
-                        value="pdf"
-                        checked={exportFormat === 'pdf'}
-                        onChange={(e) => setExportFormat(e.target.value)}
-                        className="mr-3"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-900">PDF</div>
-                        <div className="text-sm text-gray-500">Print-ready format</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="format"
-                        value="excel"
-                        checked={exportFormat === 'excel'}
-                        onChange={(e) => setExportFormat(e.target.value)}
-                        className="mr-3"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-900">Excel</div>
-                        <div className="text-sm text-gray-500">Spreadsheet format</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="format"
-                        value="csv"
-                        checked={exportFormat === 'csv'}
-                        onChange={(e) => setExportFormat(e.target.value)}
-                        className="mr-3"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-900">CSV</div>
-                        <div className="text-sm text-gray-500">Comma-separated values</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="format"
-                        value="json"
-                        checked={exportFormat === 'json'}
-                        onChange={(e) => setExportFormat(e.target.value)}
-                        className="mr-3"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-900">JSON</div>
-                        <div className="text-sm text-gray-500">Data format</div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                  <Button
-                    type="button"
-                    onClick={() => setShowExportModal(false)}
-                    variant="secondary"
-                    disabled={isExporting}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleExportConfirm}
-                    variant="default"
-                    disabled={isExporting}
-                  >
-                    {isExporting ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        Exporting...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4 mr-2" />
-                        Export
-                      </>
-                    )}
-                  </Button>
-                </div>
+            {/* Notes */}
+            {selectedOrder.notes && (
+              <div className="mb-6">
+                <h5 className="font-semibold text-gray-900 mb-2">Notes</h5>
+                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded border">
+                  {safeRender(selectedOrder.notes)}
+                </p>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+            )}
+
+            {/* Terms */}
+            {selectedOrder.terms && (
+              <div className="mb-6">
+                <h5 className="font-semibold text-gray-900 mb-2">Terms & Conditions</h5>
+                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded border">
+                  {safeRender(selectedOrder.terms)}
+                </p>
+              </div>
+            )}
+
+          </>
+        )}
+      </BaseModal>
+
+      <ExportReportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Export Sales Orders"
+        format={exportFormat}
+        onFormatChange={setExportFormat}
+        onConfirm={handleExportConfirm}
+        isExporting={isExporting}
+        showDateRange={false}
+        namePrefix="sales-orders-export-format"
+      />
 
       {/* Out-of-stock warning modal (before confirm) */}
-      {showOutOfStockModal && outOfStockItems.length > 0 && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-          <div className="relative mx-auto p-6 border w-full max-w-md shadow-lg rounded-lg bg-white">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-                <AlertCircle className="h-5 w-5 text-amber-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Products out of stock
-              </h3>
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              The following products have insufficient stock. Confirmation will fail unless you add stock first.
-            </p>
-            <ul className="space-y-2 mb-6 max-h-48 overflow-y-auto">
-              {outOfStockItems.map((item, idx) => (
-                <li key={idx} className="flex justify-between text-sm bg-red-50 px-3 py-2 rounded border border-red-100">
-                  <span className="font-medium text-gray-900">{item.productName}</span>
-                  <span className="text-red-600">
-                    Need: {item.requestedQty} | Available: {item.availableStock}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <div className="flex justify-end gap-3">
-              <Button
-                type="button"
-                onClick={() => {
-                  setShowOutOfStockModal(false);
-                  setOutOfStockItems([]);
-                  setPendingConfirmId(null);
-                }}
-                variant="secondary"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={handleConfirmProceedAnyway}
-                className="bg-amber-600 hover:bg-amber-700 text-white"
-              >
-                Proceed anyway
-              </Button>
-            </div>
+      <BaseModal
+        isOpen={showOutOfStockModal && outOfStockItems.length > 0}
+        onClose={() => {
+          setShowOutOfStockModal(false);
+          setOutOfStockItems([]);
+          setPendingConfirmId(null);
+        }}
+        title="Products out of stock"
+        subtitle="The following products have insufficient stock. Confirmation will fail unless you add stock first."
+        maxWidth="md"
+        variant="centered"
+        contentClassName="p-6 pt-2"
+        headerExtra={
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+            <AlertCircle className="h-5 w-5 text-amber-600" />
           </div>
-        </div>
-      )}
+        }
+        footer={
+          <div className="flex justify-end gap-3 w-full">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowOutOfStockModal(false);
+                setOutOfStockItems([]);
+                setPendingConfirmId(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmProceedAnyway}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              Proceed anyway
+            </Button>
+          </div>
+        }
+      >
+        <ul className="space-y-2 max-h-48 overflow-y-auto">
+          {outOfStockItems.map((item, idx) => (
+            <li key={idx} className="flex justify-between gap-2 text-sm bg-red-50 px-3 py-2 rounded border border-red-100">
+              <span className="font-medium text-gray-900">{item.productName}</span>
+              <span className="text-red-600 shrink-0 text-right">
+                Need: {item.requestedQty} | Available: {item.availableStock}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </BaseModal>
 
       <PrintModal
         isOpen={showPrintModal}

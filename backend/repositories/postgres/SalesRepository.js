@@ -87,6 +87,15 @@ class SalesRepository {
       }
     }
 
+    if (filters.excludeStatuses && filters.excludeStatuses.length > 0) {
+      sql += ` AND NOT (status = ANY($${paramCount++}::text[]))`;
+      params.push(filters.excludeStatuses);
+    }
+
+    if (filters.requireCustomerId) {
+      sql += ' AND customer_id IS NOT NULL';
+    }
+
     const { toSortString } = require('../../utils/sortParam');
     const sortStr = toSortString(options.sort, 'created_at DESC');
     const [field, direction] = sortStr.split(' ');
@@ -172,6 +181,15 @@ class SalesRepository {
         )`;
         countParams.push(filters.productIds.map(id => String(id)));
       }
+    }
+
+    if (filters.excludeStatuses && filters.excludeStatuses.length > 0) {
+      countSql += ` AND NOT (status = ANY($${paramCount++}::text[]))`;
+      countParams.push(filters.excludeStatuses);
+    }
+
+    if (filters.requireCustomerId) {
+      countSql += ' AND customer_id IS NOT NULL';
     }
 
     const countResult = await query(countSql, countParams);

@@ -1,6 +1,6 @@
 /**
  * Date Utility Functions for Pakistan Standard Time (Asia/Karachi)
- * 
+ *
  * All date formatting and manipulation uses Pakistan timezone.
  * Dates are sent to backend as YYYY-MM-DD strings for consistent filtering.
  */
@@ -14,7 +14,7 @@ const TIMEZONE = 'Asia/Karachi';
  */
 export function formatDateForInput(date) {
   if (!date) return '';
-  
+
   let d;
   if (date instanceof Date) {
     d = date;
@@ -23,17 +23,17 @@ export function formatDateForInput(date) {
   } else {
     return '';
   }
-  
+
   if (isNaN(d.getTime())) return '';
-  
+
   // Get date in Pakistan timezone (UTC+5)
   // Convert to Pakistan timezone by adding 5 hours to UTC
-  const pakistanDate = new Date(d.getTime() + (5 * 60 * 60 * 1000));
-  
+  const pakistanDate = new Date(d.getTime() + 5 * 60 * 60 * 1000);
+
   const year = pakistanDate.getUTCFullYear();
   const month = String(pakistanDate.getUTCMonth() + 1).padStart(2, '0');
   const day = String(pakistanDate.getUTCDate()).padStart(2, '0');
-  
+
   return `${year}-${month}-${day}`;
 }
 
@@ -45,7 +45,7 @@ export function formatDateForInput(date) {
  */
 export function formatDatePakistan(date, options = {}) {
   if (!date) return '';
-  
+
   let d;
   if (date instanceof Date) {
     d = date;
@@ -54,42 +54,38 @@ export function formatDatePakistan(date, options = {}) {
   } else {
     return '';
   }
-  
+
   if (isNaN(d.getTime())) return '';
-  
+
   // Convert to Pakistan timezone
-  const pakistanDate = new Date(d.getTime() + (5 * 60 * 60 * 1000));
-  
-  const {
-    includeTime = false,
-    format = 'short' // 'short', 'long', 'medium'
-  } = options;
-  
+  const pakistanDate = new Date(d.getTime() + 5 * 60 * 60 * 1000);
+
+  const { includeTime = false, format = 'short' } = options;
+
   const year = pakistanDate.getUTCFullYear();
   const month = pakistanDate.getUTCMonth() + 1;
   const day = pakistanDate.getUTCDate();
-  
+
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'July', 'August', 'September', 'October', 'November', 'December',
   ];
-  
+
   const monthNamesShort = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
-  
+
   let formattedDate = '';
-  
+
   if (format === 'long') {
     formattedDate = `${day} ${monthNames[month - 1]}, ${year}`;
   } else if (format === 'medium') {
     formattedDate = `${day} ${monthNamesShort[month - 1]}, ${year}`;
   } else {
-    // short format: DD/MM/YYYY
     formattedDate = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
   }
-  
+
   if (includeTime) {
     const hours = pakistanDate.getUTCHours();
     const minutes = pakistanDate.getUTCMinutes();
@@ -97,7 +93,7 @@ export function formatDatePakistan(date, options = {}) {
     const displayHours = hours % 12 || 12;
     formattedDate += ` ${String(displayHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
   }
-  
+
   return formattedDate;
 }
 
@@ -107,6 +103,21 @@ export function formatDatePakistan(date, options = {}) {
  */
 export function getCurrentDatePakistan() {
   return formatDateForInput(new Date());
+}
+
+/**
+ * Browser-local calendar date as YYYY-MM-DD (for inputs tied to the user's system date).
+ * Invalid values fall back to today in local time. Unlike {@link formatDateForInput}, this does not apply Pakistan offset.
+ * @param {Date|string|number} [date=new Date()]
+ * @returns {string}
+ */
+export function getLocalDateString(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  const valid = Number.isNaN(d.getTime()) ? new Date() : d;
+  const year = valid.getFullYear();
+  const month = String(valid.getMonth() + 1).padStart(2, '0');
+  const day = String(valid.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**
@@ -127,11 +138,11 @@ export function getDateDaysAgo(days) {
  */
 export function getStartOfMonth(date = null) {
   const d = date ? (date instanceof Date ? date : new Date(date)) : new Date();
-  const pakistanDate = new Date(d.getTime() + (5 * 60 * 60 * 1000));
-  
+  const pakistanDate = new Date(d.getTime() + 5 * 60 * 60 * 1000);
+
   const year = pakistanDate.getUTCFullYear();
   const month = pakistanDate.getUTCMonth();
-  
+
   return formatDateForInput(new Date(Date.UTC(year, month, 1)));
 }
 
@@ -142,14 +153,13 @@ export function getStartOfMonth(date = null) {
  */
 export function getEndOfMonth(date = null) {
   const d = date ? (date instanceof Date ? date : new Date(date)) : new Date();
-  const pakistanDate = new Date(d.getTime() + (5 * 60 * 60 * 1000));
-  
+  const pakistanDate = new Date(d.getTime() + 5 * 60 * 60 * 1000);
+
   const year = pakistanDate.getUTCFullYear();
   const month = pakistanDate.getUTCMonth();
-  
-  // Get last day of month
+
   const lastDay = new Date(Date.UTC(year, month + 1, 0));
-  
+
   return formatDateForInput(lastDay);
 }
 
@@ -172,9 +182,8 @@ export function parseDatePakistan(dateString) {
   if (!dateString || !isValidDateString(dateString)) {
     return null;
   }
-  
+
   const [year, month, day] = dateString.split('-').map(Number);
-  // Create date in UTC, then adjust for Pakistan timezone
   const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
   date.setUTCHours(date.getUTCHours() - 5);
   return date;
@@ -186,43 +195,43 @@ export function parseDatePakistan(dateString) {
  */
 export function getDatePresets() {
   const today = getCurrentDatePakistan();
-  
+
   return {
     today: {
       startDate: today,
       endDate: today,
-      label: 'Today'
+      label: 'Today',
     },
     yesterday: {
       startDate: getDateDaysAgo(1),
       endDate: getDateDaysAgo(1),
-      label: 'Yesterday'
+      label: 'Yesterday',
     },
     last7Days: {
       startDate: getDateDaysAgo(7),
       endDate: today,
-      label: 'Last 7 Days'
+      label: 'Last 7 Days',
     },
     last30Days: {
       startDate: getDateDaysAgo(30),
       endDate: today,
-      label: 'Last 30 Days'
+      label: 'Last 30 Days',
     },
     thisMonth: {
       startDate: getStartOfMonth(),
       endDate: today,
-      label: 'This Month'
+      label: 'This Month',
     },
     lastMonth: {
       startDate: getStartOfMonth(getDateDaysAgo(30)),
       endDate: getEndOfMonth(getDateDaysAgo(30)),
-      label: 'Last Month'
+      label: 'Last Month',
     },
     thisYear: {
       startDate: `${new Date().getFullYear()}-01-01`,
       endDate: today,
-      label: 'This Year'
-    }
+      label: 'This Year',
+    },
   };
 }
 

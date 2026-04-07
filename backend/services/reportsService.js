@@ -1,5 +1,7 @@
 const salesRepository = require('../repositories/SalesRepository');
 const productRepository = require('../repositories/ProductRepository');
+const customerRepository = require('../repositories/CustomerRepository');
+const salesService = require('./salesService');
 const ReturnRepository = require('../repositories/postgres/ReturnRepository');
 
 class ReportsService {
@@ -238,21 +240,34 @@ class ReportsService {
     
     const limit = parseInt(queryParams.limit) || 20;
 
-    const orders = await salesRepository.findAll({
-      createdAt: { $gte: dateFrom, $lte: dateTo },
-      status: { $nin: ['cancelled'] }
-    }, {
-      populate: [{ path: 'items.product', select: 'name description pricing' }],
-      sort: { createdAt: 1 }
-    });
+    const orders = await salesRepository.findAll(
+      {
+        dateFrom,
+        dateTo,
+        excludeStatuses: ['cancelled']
+      },
+      { sort: { created_at: 1 } }
+    );
+
+    for (const order of orders) {
+      order.items = await salesService.enrichItemsWithProductNames(order.items || []);
+    }
 
     // Aggregate product sales
     const productSales = {};
 
     orders.forEach(order => {
-      order.items.forEach(item => {
+      let items = order.items || [];
+      if (typeof items === 'string') {
+        try {
+          items = JSON.parse(items);
+        } catch {
+          items = [];
+        }
+      }
+      items.forEach(item => {
         if (!item.product) return;
-        const productId = item.product._id.toString();
+        const productId = (item.product._id || item.product.id).toString();
         if (!productSales[productId]) {
           productSales[productId] = {
             product: item.product,
@@ -263,8 +278,8 @@ class ReportsService {
           };
         }
 
-        productSales[productId].totalQuantity += item.quantity;
-        productSales[productId].totalRevenue += item.total;
+        productSales[productId].totalQuantity += Number(item.quantity || 0);
+        productSales[productId].totalRevenue += Number(item.total || 0);
         productSales[productId].totalOrders += 1;
       });
     });
@@ -315,27 +330,46 @@ class ReportsService {
     const limit = parseInt(queryParams.limit) || 20;
     const businessType = queryParams.businessType;
 
-    const filter = {
-      createdAt: { $gte: dateFrom, $lte: dateTo },
-      status: { $nin: ['cancelled'] },
-      customer: { $exists: true, $ne: null }
-    };
+    const orders = await salesRepository.findAll(
+      {
+        dateFrom,
+        dateTo,
+        excludeStatuses: ['cancelled'],
+        requireCustomerId: true
+      },
+      { sort: { created_at: 1 } }
+    );
 
-    const orders = await salesRepository.findAll(filter, {
-      populate: [{ path: 'customer', select: 'firstName lastName businessName businessType customerTier' }],
-      sort: { createdAt: 1 }
-    });
+    const rawIds = [...new Set(orders.map(o => o.customer_id).filter(Boolean))];
+    const customerMap = new Map();
+    if (rawIds.length > 0) {
+      const rows = await customerRepository.findAll({ customerIds: rawIds });
+      rows.forEach((c) => {
+        const id = String(c.id);
+        customerMap.set(id, {
+          _id: c.id,
+          id: c.id,
+          firstName: c.first_name ?? c.firstName,
+          lastName: c.last_name ?? c.lastName,
+          businessName: c.business_name ?? c.businessName,
+          businessType: c.business_type ?? c.businessType,
+          customerTier: c.customer_tier ?? c.customerTier
+        });
+      });
+    }
 
     // Aggregate customer sales
     const customerSales = {};
 
     orders.forEach(order => {
-      if (!order.customer) return;
+      const cid = order.customer_id ? String(order.customer_id) : null;
+      const customer = cid ? customerMap.get(cid) : null;
+      if (!customer) return;
 
-      const customerId = order.customer._id.toString();
+      const customerId = String(customer._id);
       if (!customerSales[customerId]) {
         customerSales[customerId] = {
-          customer: order.customer,
+          customer,
           totalOrders: 0,
           totalRevenue: 0,
           totalItems: 0,
@@ -344,12 +378,24 @@ class ReportsService {
         };
       }
 
-      customerSales[customerId].totalOrders += 1;
-      customerSales[customerId].totalRevenue += order.pricing.total;
-      customerSales[customerId].totalItems += order.items.reduce((sum, item) => sum + item.quantity, 0);
+      let items = order.items || [];
+      if (typeof items === 'string') {
+        try {
+          items = JSON.parse(items);
+        } catch {
+          items = [];
+        }
+      }
 
-      if (!customerSales[customerId].lastOrderDate || order.createdAt > customerSales[customerId].lastOrderDate) {
-        customerSales[customerId].lastOrderDate = order.createdAt;
+      const orderDate = order.created_at || order.createdAt;
+      const orderTotal = Number(order.total ?? order.pricing?.total ?? 0);
+
+      customerSales[customerId].totalOrders += 1;
+      customerSales[customerId].totalRevenue += orderTotal;
+      customerSales[customerId].totalItems += items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+
+      if (!customerSales[customerId].lastOrderDate || (orderDate && orderDate > customerSales[customerId].lastOrderDate)) {
+        customerSales[customerId].lastOrderDate = orderDate;
       }
     });
 
@@ -751,6 +797,7 @@ class ReportsService {
           FROM chart_of_accounts coa
           LEFT JOIN account_ledger l ON coa.account_code = l.account_code 
             AND l.status = 'completed' 
+            AND l.reversed_at IS NULL
             ${dateFrom && dateTo ? 'AND l.transaction_date BETWEEN $1 AND $2' : dateTo ? 'AND l.transaction_date <= $1' : ''}
           WHERE coa.deleted_at IS NULL
           GROUP BY coa.id, coa.account_code, coa.account_name, coa.account_type, coa.normal_balance, coa.opening_balance
@@ -773,6 +820,7 @@ class ReportsService {
           JOIN account_ledger l ON coa.account_code = l.account_code
           WHERE coa.account_type IN ('revenue', 'expense')
             AND l.status = 'completed'
+            AND l.reversed_at IS NULL
             ${dateFrom && dateTo ? 'AND l.transaction_date BETWEEN $1 AND $2' : dateTo ? 'AND l.transaction_date <= $1' : ''}
           GROUP BY coa.account_category, coa.account_name, coa.account_type
           ORDER BY coa.account_type DESC, coa.account_category ASC
@@ -794,6 +842,7 @@ class ReportsService {
           FROM chart_of_accounts coa
           LEFT JOIN account_ledger l ON coa.account_code = l.account_code 
             AND l.status = 'completed'
+            AND l.reversed_at IS NULL
             ${dateTo ? 'AND l.transaction_date <= $1' : ''}
           WHERE coa.account_type IN ('asset', 'liability', 'equity')
             AND coa.deleted_at IS NULL
@@ -968,8 +1017,29 @@ class ReportsService {
     const { query } = require('../config/postgres');
     const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
 
-    const dateFrom = filters.dateFrom ? getStartOfDayPakistan(filters.dateFrom) : null;
-    const dateTo = filters.dateTo ? getEndOfDayPakistan(filters.dateTo) : null;
+    let resolvedDateFrom = filters.dateFrom || null;
+    let resolvedDateTo = filters.dateTo || null;
+    if ((!resolvedDateFrom || !resolvedDateTo) && filters.month) {
+      const monthMatch = String(filters.month).match(/^(\d{4})-(\d{2})$/);
+      if (monthMatch) {
+        const year = Number(monthMatch[1]);
+        const month = Number(monthMatch[2]);
+        if (Number.isFinite(year) && Number.isFinite(month) && month >= 1 && month <= 12) {
+          const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+          const monthEndDate = new Date(Date.UTC(year, month, 0));
+          const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(monthEndDate.getUTCDate()).padStart(2, '0')}`;
+          resolvedDateFrom = resolvedDateFrom || monthStart;
+          resolvedDateTo = resolvedDateTo || monthEnd;
+        }
+      }
+    }
+
+    const dateFrom = resolvedDateFrom ? getStartOfDayPakistan(resolvedDateFrom) : null;
+    const dateTo = resolvedDateTo ? getEndOfDayPakistan(resolvedDateTo) : null;
+    const bankIds = String(filters.bankIds || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
 
     let dateClause = '';
     let params = [];
@@ -982,6 +1052,20 @@ class ReportsService {
     } else if (dateTo) {
       dateClause = 'AND date <= $1';
       params = [dateTo];
+    }
+
+    const dateParams = [...params];
+    let bankParams = [...params];
+
+    let bankIdFilterBankTable = '';
+    let bankIdFilterReceiptTable = '';
+    let bankIdFilterPaymentTable = '';
+    if (bankIds.length > 0) {
+      const bankParamIndex = bankParams.length + 1;
+      bankParams.push(bankIds);
+      bankIdFilterBankTable = `AND b.id = ANY($${bankParamIndex}::uuid[])`;
+      bankIdFilterReceiptTable = `AND bank_id = ANY($${bankParamIndex}::uuid[])`;
+      bankIdFilterPaymentTable = `AND bank_id = ANY($${bankParamIndex}::uuid[])`;
     }
 
     const bankSummarySql = `
@@ -999,6 +1083,7 @@ class ReportsService {
         FROM bank_receipts
         WHERE deleted_at IS NULL
         ${dateClause}
+        ${bankIdFilterReceiptTable}
         GROUP BY bank_id
       ) r ON r.bank_id = b.id
       LEFT JOIN (
@@ -1006,13 +1091,15 @@ class ReportsService {
         FROM bank_payments
         WHERE deleted_at IS NULL
         ${dateClause}
+        ${bankIdFilterPaymentTable}
         GROUP BY bank_id
       ) p ON p.bank_id = b.id
       WHERE b.deleted_at IS NULL
+      ${bankIdFilterBankTable}
       ORDER BY b.bank_name ASC, b.account_number ASC
     `;
 
-    const bankResult = await query(bankSummarySql, params);
+    const bankResult = await query(bankSummarySql, bankParams);
     const banks = bankResult.rows.map(row => {
       const openingBalance = parseFloat(row.openingBalance || 0);
       const totalReceipts = parseFloat(row.totalReceipts || 0);
@@ -1032,7 +1119,7 @@ class ReportsService {
         COALESCE((SELECT SUM(amount) FROM cash_receipts WHERE deleted_at IS NULL ${dateClause}), 0) as "totalReceipts",
         COALESCE((SELECT SUM(amount) FROM cash_payments WHERE deleted_at IS NULL ${dateClause}), 0) as "totalPayments"
     `;
-    const cashResult = await query(cashSummarySql, params);
+    const cashResult = await query(cashSummarySql, dateParams);
     const cashRow = cashResult.rows[0] || {};
     const cash = {
       openingBalance: parseFloat(cashRow.openingBalance || 0),
@@ -1052,6 +1139,11 @@ class ReportsService {
       banks,
       cash,
       totals,
+      receiptSummary: {
+        totalBankReceipts: totals.totalBankReceipts,
+        totalCashReceipts: cash.totalReceipts,
+        totalReceipts: totals.totalBankReceipts + cash.totalReceipts
+      },
       dateRange: { from: dateFrom, to: dateTo }
     };
   }
@@ -1082,6 +1174,7 @@ class ReportsService {
             END,
             'N/A'
           ) as city,
+          c.opening_balance as "openingBalance",
           (c.opening_balance + COALESCE(SUM(l.debit_amount - l.credit_amount), 0)) as balance,
           COALESCE(SUM(l.debit_amount), 0) as "totalDebit",
           COALESCE(SUM(l.credit_amount), 0) as "totalCredit"
@@ -1114,6 +1207,7 @@ class ReportsService {
             END,
             'N/A'
           ) as city,
+          s.opening_balance as "openingBalance",
           (s.opening_balance + COALESCE(SUM(l.credit_amount - l.debit_amount), 0)) as balance,
           COALESCE(SUM(l.debit_amount), 0) as "totalDebit",
           COALESCE(SUM(l.credit_amount), 0) as "totalCredit"
@@ -1139,6 +1233,7 @@ class ReportsService {
     return {
       data: result.rows.map(row => ({
         ...row,
+        openingBalance: parseFloat(row.openingBalance || 0),
         balance: parseFloat(row.balance),
         totalDebit: parseFloat(row.totalDebit),
         totalCredit: parseFloat(row.totalCredit)

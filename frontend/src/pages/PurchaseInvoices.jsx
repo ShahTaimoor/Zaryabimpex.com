@@ -10,7 +10,8 @@ import {
   Clock,
   TrendingUp,
   Printer,
-  Calendar
+  Calendar,
+  Download
 } from 'lucide-react';
 import {
   useGetPurchaseInvoicesQuery,
@@ -32,6 +33,13 @@ import PrintModal from '../components/PrintModal';
 import { Button } from '@/components/ui/button';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
+import ExportReportModal from '../components/ExportReportModal';
+import { useExportTabularDownload } from '../hooks/useExportTabularDownload';
+import {
+  buildTabularExportRunners,
+  TABULAR_EXPORT_FALLBACK_FILENAMES,
+} from '../utils/exportReportDownload';
+import { confirmTabularExportDownload } from '../utils/tabularExportConfirm';
 
 // Edit allowed only within 1 month of invoice date
 const canEditByDate = (invoice) => {
@@ -147,6 +155,9 @@ export const PurchaseInvoices = () => {
   const [dateTo, setDateTo] = useState(today); // Today
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState('csv');
+  const [isExporting, setIsExporting] = useState(false);
 
   const { openTab } = useTab();
 
@@ -185,6 +196,7 @@ export const PurchaseInvoices = () => {
   const [exportPDFMutation] = useExportPDFMutation();
   const [exportJSONMutation] = useExportJSONMutation();
   const [downloadFileMutation] = useDownloadFileMutation();
+  const runExportDownload = useExportTabularDownload(downloadFileMutation);
 
   const [getSupplierById] = useLazyGetSupplierQuery();
 
@@ -417,63 +429,25 @@ export const PurchaseInvoices = () => {
     setShowViewModal(true);
   };
 
-  const handleExport = async (format = 'csv') => {
-    try {
-      const payload = {
-        search: searchTerm || undefined,
-        status: statusFilter || undefined,
-        dateFrom: dateFrom || undefined,
-        dateTo: dateTo || undefined,
-      };
-      let response;
-      if (format === 'excel') {
-        response = await exportExcelMutation(payload).unwrap();
-      } else if (format === 'pdf') {
-        response = await exportPDFMutation(payload).unwrap();
-      } else if (format === 'json') {
-        response = await exportJSONMutation(payload).unwrap();
-      } else {
-        response = await exportCSVMutation(payload).unwrap();
-      }
-
-      const filename =
-        response?.filename ||
-        (format === 'excel'
-          ? 'purchase_invoices.xlsx'
-          : format === 'pdf'
-            ? 'purchase_invoices.pdf'
-            : format === 'json'
-              ? 'purchase_invoices.json'
-              : 'purchase_invoices.csv');
-
-      const downloadResponse = await downloadFileMutation(filename).unwrap();
-      const blob =
-        downloadResponse instanceof Blob
-          ? downloadResponse
-          : new Blob([downloadResponse], {
-            type:
-              format === 'excel'
-                ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                : format === 'pdf'
-                  ? 'application/pdf'
-                  : format === 'json'
-                    ? 'application/json'
-                    : 'text/csv',
-          });
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showSuccessToast(`Exported purchase invoices as ${format.toUpperCase()}`);
-    } catch (error) {
-      handleApiError(error, 'Purchase Invoice Export');
-    }
-  };
+  const handleExportConfirm = () =>
+    confirmTabularExportDownload({
+      format: exportFormat,
+      runExportDownload,
+      exportRunners: buildTabularExportRunners(
+        {
+          search: searchTerm || undefined,
+          status: statusFilter || undefined,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined,
+        },
+        { exportExcelMutation, exportPDFMutation, exportJSONMutation, exportCSVMutation }
+      ),
+      fallbackFilenames: TABULAR_EXPORT_FALLBACK_FILENAMES.purchaseInvoices,
+      successMessage: (f) => `Exported purchase invoices as ${f.toUpperCase()}`,
+      errorContext: 'Purchase Invoice Export',
+      setIsExporting,
+      onSuccess: () => setShowExportModal(false),
+    });
 
   // Memoize invoices data - must be before conditional returns to follow Rules of Hooks
   const invoices = React.useMemo(() => {
@@ -508,20 +482,31 @@ export const PurchaseInvoices = () => {
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Purchase Invoices</h1>
           <p className="text-sm sm:text-base text-gray-600">Track and manage supplier invoices and receipts</p>
         </div>
-        
-        {/* Date Filter using DateFilter component */}
-        <div className="w-full sm:w-auto">
-          <DateFilter
-            startDate={dateFrom}
-            endDate={dateTo}
-            onDateChange={(start, end) => {
-              setDateFrom(start || '');
-              setDateTo(end || '');
-            }}
-            compact={true}
-            showPresets={true}
-            className="w-full"
-          />
+
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto items-stretch sm:items-center">
+          <Button
+            type="button"
+            variant="outline"
+            size="default"
+            className="flex items-center justify-center gap-2"
+            onClick={() => setShowExportModal(true)}
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+          <div className="w-full sm:w-auto">
+            <DateFilter
+              startDate={dateFrom}
+              endDate={dateTo}
+              onDateChange={(start, end) => {
+                setDateFrom(start || '');
+                setDateTo(end || '');
+              }}
+              compact={true}
+              showPresets={true}
+              className="w-full"
+            />
+          </div>
         </div>
       </div>
 
@@ -777,6 +762,18 @@ export const PurchaseInvoices = () => {
         </div>
       )}
 
+
+      <ExportReportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Export Purchase Invoices"
+        format={exportFormat}
+        onFormatChange={setExportFormat}
+        onConfirm={handleExportConfirm}
+        isExporting={isExporting}
+        showDateRange={false}
+        namePrefix="purchase-invoices-export-format"
+      />
 
       {/* View Modal with Print Support */}
       <PrintModal

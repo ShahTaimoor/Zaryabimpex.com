@@ -15,8 +15,7 @@ import {
   Mail,
   MapPin,
   ArrowUpDown,
-  Download,
-  XCircle
+  Download
 } from 'lucide-react';
 import { useGetProductsQuery } from '../store/services/productsApi';
 import { useGetVariantsQuery } from '../store/services/productVariantsApi';
@@ -61,16 +60,14 @@ import {
   formatStockDualLabel,
 } from '../utils/dualUnitUtils';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
-
-// Helper to get local date in YYYY-MM-DD format (matches Sale page Bill Date)
-const getLocalDateString = (date = new Date()) => {
-  const d = date instanceof Date ? date : new Date(date);
-  if (isNaN(d.getTime())) return new Date().toISOString().split('T')[0];
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+import { getLocalDateString } from '../utils/dateUtils';
+import {
+  presentPdfExportBlob,
+  presentNonPdfExportDownload,
+  unwrapExportDownloadBlob,
+  notifyExportDownloadCatchError,
+} from '../utils/exportReportPresentation';
+import ExportReportModal from '../components/ExportReportModal';
 
 const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove }) => {
   const { companyInfo: companySettings } = useCompanyInfo();
@@ -938,7 +935,7 @@ export const Purchase = ({ tabId, editData }) => {
             if (s && (s._id || s.id)) {
               setSelectedSupplier(s);
             }
-          }).catch(() => {});
+          }).catch(() => { });
         } catch {
           /* ignore */
         }
@@ -1121,16 +1118,16 @@ export const Purchase = ({ tabId, editData }) => {
         return prevItems.map(item =>
           item.product?._id === newItem.product?._id
             ? (() => {
-                const mergedQty = item.quantity + newItem.quantity;
-                const ppb = getPiecesPerBox(item.product);
-                const split = ppb ? piecesToBoxesAndPieces(mergedQty, ppb) : {};
-                return {
-                  ...item,
-                  quantity: mergedQty,
-                  costPerUnit: newItem.costPerUnit,
-                  ...(ppb ? { boxes: split.boxes, pieces: split.pieces } : {}),
-                };
-              })()
+              const mergedQty = item.quantity + newItem.quantity;
+              const ppb = getPiecesPerBox(item.product);
+              const split = ppb ? piecesToBoxesAndPieces(mergedQty, ppb) : {};
+              return {
+                ...item,
+                quantity: mergedQty,
+                costPerUnit: newItem.costPerUnit,
+                ...(ppb ? { boxes: split.boxes, pieces: split.pieces } : {}),
+              };
+            })()
             : item
         );
       }
@@ -1255,95 +1252,26 @@ export const Purchase = ({ tabId, editData }) => {
           try {
             downloadResponse = await downloadFile(filename).unwrap();
           } catch (downloadErr) {
-            const errorData = downloadErr?.data || downloadErr?.response?.data;
-            if (errorData instanceof Blob) {
-              const reader = new FileReader();
-              reader.onload = () => {
-                const text = reader.result;
-                try {
-                  const parsedError = JSON.parse(text);
-                  toast.error(parsedError.message || 'Download failed');
-                } catch {
-                  toast.error('Download failed');
-                }
-              };
-              reader.readAsText(errorData);
-            } else if (typeof errorData === 'object' && errorData !== null) {
-              toast.error(errorData.message || 'Download failed');
-            } else {
-              toast.error(downloadErr?.message || 'Download failed');
-            }
+            notifyExportDownloadCatchError(downloadErr, (m) => toast.error(m));
             return;
           }
 
-          if (!downloadResponse) {
+          if (downloadResponse == null) {
             toast.error('Download failed: No data received from server');
             return;
           }
 
-          // RTK Query returns the blob directly for blob responses
-          const blob = downloadResponse instanceof Blob ? downloadResponse : downloadResponse.data;
+          const notifyPdf = { error: (m) => toast.error(m), success: (m) => toast.success(m) };
 
           if (exportFormat === 'pdf') {
-
-            if (!blob || !(blob instanceof Blob)) {
-              toast.error('Invalid PDF file received');
-              return;
-            }
-
-            if (blob.size === 0) {
-              toast.error('PDF file is empty');
-              return;
-            }
-
-            // Check if blob is actually an error JSON
-            if (blob.type && (blob.type.includes('application/json') || blob.type.includes('text/html'))) {
-              const reader = new FileReader();
-              reader.onload = () => {
-                const text = reader.result;
-                try {
-                  const errorData = JSON.parse(text);
-                  toast.error(errorData.message || 'File not found or generation failed');
-                } catch {
-                  toast.error('Server returned error instead of PDF. Please try again.');
-                }
-              };
-              reader.readAsText(blob);
-              return;
-            }
-
-            const url = URL.createObjectURL(blob);
-            const newWindow = window.open(url, '_blank');
-
-            if (!newWindow) {
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = filename;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              toast.success('PDF downloaded (popup was blocked)');
-            } else {
-              toast.success('PDF opened in new tab');
-            }
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
+            presentPdfExportBlob(unwrapExportDownloadBlob(downloadResponse), filename, notifyPdf);
           } else {
-            // For Excel, CSV, JSON - download directly
-            const blob = downloadResponse instanceof Blob ? downloadResponse : downloadResponse.data;
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            setTimeout(() => URL.revokeObjectURL(url), 100);
-            toast.success(`${exportFormat.toUpperCase()} file downloaded successfully`);
+            presentNonPdfExportDownload(downloadResponse, exportFormat, filename, (msg) => toast.success(msg));
           }
 
           setShowExportModal(false);
         } catch (downloadError) {
-          toast.error('Failed to download file');
+          notifyExportDownloadCatchError(downloadError, (m) => toast.error(m));
         }
       } else {
         toast.error('Export failed: No filename received');
@@ -1672,96 +1600,96 @@ export const Purchase = ({ tabId, editData }) => {
               headerClassName="mb-3 sm:mb-4"
             >
               {showPurchaseDetailsFields && (
-              <div className="flex flex-col sm:flex-row sm:flex-nowrap gap-3 sm:items-end sm:justify-end">
-                {/* Invoice Number */}
-                <div className="flex flex-col w-full sm:w-44">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Invoice Number
-                  </label>
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    value={invoiceNumber}
-                    onChange={(e) => setInvoiceNumber(e.target.value)}
-                    className="input h-8 sm:h-8 text-sm"
-                    placeholder={autoGenerateInvoice ? "Auto-generated" : "Enter invoice number"}
-                    disabled={autoGenerateInvoice}
-                  />
-                </div>
-
-                {/* Expected Delivery */}
-                <div className="flex flex-col w-full sm:w-48">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Expected Delivery
-                  </label>
-                  <input
-                    type="date"
-                    autoComplete="off"
-                    value={expectedDelivery}
-                    onChange={(e) => setExpectedDelivery(e.target.value)}
-                    className="input h-8 sm:h-8 text-sm"
-                  />
-                </div>
-
-                {/* Bill Date (for backdating - same as Sale page) */}
-                <div className="flex flex-col w-full sm:w-48">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Bill Date <span className="text-xs text-gray-500">(Optional - for backdating)</span>
-                  </label>
-                  <input
-                    type="date"
-                    autoComplete="off"
-                    value={billDate}
-                    onChange={(e) => setBillDate(e.target.value)}
-                    className="input h-8 sm:h-8 text-sm"
-                    max={getLocalDateString()}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Set custom date for backdating purchase
-                  </p>
-                </div>
-
-                {/* Tax Exemption Option */}
-                <div className="flex flex-col w-full sm:w-40">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Tax Status
-                  </label>
-                  <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
+                <div className="flex flex-col sm:flex-row sm:flex-nowrap gap-3 sm:items-end sm:justify-end">
+                  {/* Invoice Number */}
+                  <div className="flex flex-col w-full sm:w-44">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Invoice Number
+                    </label>
                     <input
-                      type="checkbox"
-                      id="taxExempt"
-                      checked={taxExempt}
-                      onChange={(e) => setTaxExempt(e.target.checked)}
-                      className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      type="text"
+                      autoComplete="off"
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                      className="input h-8 sm:h-8 text-sm"
+                      placeholder={autoGenerateInvoice ? "Auto-generated" : "Enter invoice number"}
+                      disabled={autoGenerateInvoice}
                     />
-                    <div className="flex-1">
-                      <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
-                        Tax Exempt
-                      </label>
-                    </div>
-                    {taxExempt && (
-                      <div className="text-green-600 text-xs font-medium">
-                        ✓
+                  </div>
+
+                  {/* Expected Delivery */}
+                  <div className="flex flex-col w-full sm:w-48">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Expected Delivery
+                    </label>
+                    <input
+                      type="date"
+                      autoComplete="off"
+                      value={expectedDelivery}
+                      onChange={(e) => setExpectedDelivery(e.target.value)}
+                      className="input h-8 sm:h-8 text-sm"
+                    />
+                  </div>
+
+                  {/* Bill Date (for backdating - same as Sale page) */}
+                  <div className="flex flex-col w-full sm:w-48">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Bill Date <span className="text-xs text-gray-500">(Optional - for backdating)</span>
+                    </label>
+                    <input
+                      type="date"
+                      autoComplete="off"
+                      value={billDate}
+                      onChange={(e) => setBillDate(e.target.value)}
+                      className="input h-8 sm:h-8 text-sm"
+                      max={getLocalDateString()}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Set custom date for backdating purchase
+                    </p>
+                  </div>
+
+                  {/* Tax Exemption Option */}
+                  <div className="flex flex-col w-full sm:w-40">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Tax Status
+                    </label>
+                    <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
+                      <input
+                        type="checkbox"
+                        id="taxExempt"
+                        checked={taxExempt}
+                        onChange={(e) => setTaxExempt(e.target.checked)}
+                        className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      />
+                      <div className="flex-1">
+                        <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
+                          Tax Exempt
+                        </label>
                       </div>
-                    )}
+                      {taxExempt && (
+                        <div className="text-green-600 text-xs font-medium">
+                          ✓
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div className="flex flex-col w-full sm:w-[28rem]">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Notes
+                    </label>
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="input h-8 sm:h-8 text-sm"
+                      placeholder="Additional notes..."
+                    />
                   </div>
                 </div>
-
-                {/* Notes */}
-                <div className="flex flex-col w-full sm:w-[28rem]">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="input h-8 sm:h-8 text-sm"
-                    placeholder="Additional notes..."
-                  />
-                </div>
-              </div>
               )}
             </OrderDetailsSection>
 
@@ -1883,47 +1811,47 @@ export const Purchase = ({ tabId, editData }) => {
                 )}
               </OrderInsetPanel>
 
-            {!editData?.isEditMode && purchaseItems.length > 0 && (
-              <div className="border-t border-gray-100 pt-3">
-                <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={printBarcodeLabelsAfterInvoice}
-                    onChange={(e) => setPrintBarcodeLabelsAfterInvoice(e.target.checked)}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mt-0.5"
-                  />
-                  <span>After saving purchase invoice, open barcode label printer (default copies = quantity per line; uses product barcode or SKU)</span>
-                </label>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <OrderCheckoutActions className="mt-4 border-0 pt-4 sm:mt-6 sm:pt-6 sm:flex-row-reverse">
-              {purchaseItems.length > 0 && (
-                <Button
-                  onClick={() => {
-                    setPurchaseItems([]);
-                    setSelectedSupplier(null);
-                    setSupplierSearchTerm('');
-                    setTaxExempt(true);
-                    setDirectDiscount({ type: 'amount', value: 0 });
-                    setAmountPaid(0);
-                    setPaymentMethod('cash');
-                    setBillDate(getLocalDateString()); // Reset Bill Date
-                    toast.success('Cart cleared');
-                  }}
-                  variant="secondary"
-                  size="default"
-                  className="flex items-center justify-center gap-2 w-full sm:flex-1"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span>Clear Cart</span>
-                </Button>
+              {!editData?.isEditMode && purchaseItems.length > 0 && (
+                <div className="border-t border-gray-100 pt-3">
+                  <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={printBarcodeLabelsAfterInvoice}
+                      onChange={(e) => setPrintBarcodeLabelsAfterInvoice(e.target.checked)}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mt-0.5"
+                    />
+                    <span>After saving purchase invoice, open barcode label printer (default copies = quantity per line; uses product barcode or SKU)</span>
+                  </label>
+                </div>
               )}
-              {purchaseItems.length > 0 && (
-                <Button
-                  onClick={() => {
-                    const supplierInfoForPrint = selectedSupplier ? {
+
+              {/* Action Buttons */}
+              <OrderCheckoutActions className="mt-4 border-0 pt-4 sm:mt-6 sm:pt-6 sm:flex-row-reverse">
+                {purchaseItems.length > 0 && (
+                  <Button
+                    onClick={() => {
+                      setPurchaseItems([]);
+                      setSelectedSupplier(null);
+                      setSupplierSearchTerm('');
+                      setTaxExempt(true);
+                      setDirectDiscount({ type: 'amount', value: 0 });
+                      setAmountPaid(0);
+                      setPaymentMethod('cash');
+                      setBillDate(getLocalDateString()); // Reset Bill Date
+                      toast.success('Cart cleared');
+                    }}
+                    variant="secondary"
+                    size="default"
+                    className="flex items-center justify-center gap-2 w-full sm:flex-1"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>Clear Cart</span>
+                  </Button>
+                )}
+                {purchaseItems.length > 0 && (
+                  <Button
+                    onClick={() => {
+                      const supplierInfoForPrint = selectedSupplier ? {
                         name: selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name,
                         email: selectedSupplier.email,
                         phone: selectedSupplier.phone,
@@ -1943,74 +1871,74 @@ export const Purchase = ({ tabId, editData }) => {
                         })(),
                         businessName: selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.companyName
                       } : null;
-                    const tempOrder = {
-                      orderNumber: `PO-${Date.now()}`,
-                      orderType: 'purchase',
-                      supplier: selectedSupplier,
-                      supplierInfo: supplierInfoForPrint,
-                      customer: selectedSupplier,
-                      customerInfo: supplierInfoForPrint,
-                      items: purchaseItems.map(item => {
-                        const product = item.product || {};
-                        const displayName = product.isVariant
-                          ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
-                          : (product.name || 'Unknown Product');
+                      const tempOrder = {
+                        orderNumber: `PO-${Date.now()}`,
+                        orderType: 'purchase',
+                        supplier: selectedSupplier,
+                        supplierInfo: supplierInfoForPrint,
+                        customer: selectedSupplier,
+                        customerInfo: supplierInfoForPrint,
+                        items: purchaseItems.map(item => {
+                          const product = item.product || {};
+                          const displayName = product.isVariant
+                            ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
+                            : (product.name || 'Unknown Product');
 
-                        return {
-                          product: {
-                            name: displayName,
-                            isVariant: product.isVariant,
-                            variantType: product.variantType,
-                            variantValue: product.variantValue,
-                            ...(product.barcode ? { barcode: product.barcode } : {}),
-                            ...(product.sku ? { sku: product.sku } : {})
-                          },
-                          quantity: item.quantity,
-                          unitPrice: item.costPerUnit
-                        };
-                      }),
-                      pricing: {
-                        subtotal: subtotal,
-                        discountAmount: directDiscountAmount,
-                        taxAmount: tax,
-                        isTaxExempt: taxExempt,
-                        total: total
-                      },
-                      payment: {
-                        method: paymentMethod,
-                        amountPaid: amountPaid,
-                        remainingBalance: total - amountPaid,
-                        isPartialPayment: amountPaid < total
-                      },
-                      createdAt: new Date(),
-                      createdBy: { name: 'Current User' },
-                      invoiceNumber: invoiceNumber,
-                      expectedDelivery: expectedDelivery,
-                      notes: notes
-                    };
-                    setCurrentOrder(tempOrder);
-                    setShowPrintModal(true);
-                  }}
-                  variant="secondary"
-                  size="default"
-                  className="flex items-center justify-center gap-2 w-full sm:flex-1"
+                          return {
+                            product: {
+                              name: displayName,
+                              isVariant: product.isVariant,
+                              variantType: product.variantType,
+                              variantValue: product.variantValue,
+                              ...(product.barcode ? { barcode: product.barcode } : {}),
+                              ...(product.sku ? { sku: product.sku } : {})
+                            },
+                            quantity: item.quantity,
+                            unitPrice: item.costPerUnit
+                          };
+                        }),
+                        pricing: {
+                          subtotal: subtotal,
+                          discountAmount: directDiscountAmount,
+                          taxAmount: tax,
+                          isTaxExempt: taxExempt,
+                          total: total
+                        },
+                        payment: {
+                          method: paymentMethod,
+                          amountPaid: amountPaid,
+                          remainingBalance: total - amountPaid,
+                          isPartialPayment: amountPaid < total
+                        },
+                        createdAt: new Date(),
+                        createdBy: { name: 'Current User' },
+                        invoiceNumber: invoiceNumber,
+                        expectedDelivery: expectedDelivery,
+                        notes: notes
+                      };
+                      setCurrentOrder(tempOrder);
+                      setShowPrintModal(true);
+                    }}
+                    variant="secondary"
+                    size="default"
+                    className="flex items-center justify-center gap-2 w-full sm:flex-1"
+                  >
+                    <Receipt className="h-4 w-4" />
+                    <span>Print Preview</span>
+                  </Button>
+                )}
+                <LoadingButton
+                  onClick={handleProcessPurchase}
+                  isLoading={false}
+                  variant="default"
+                  size="lg"
+                  className="flex items-center justify-center gap-2 w-full sm:flex-2"
                 >
-                  <Receipt className="h-4 w-4" />
-                  <span>Print Preview</span>
-                </Button>
-              )}
-              <LoadingButton
-                onClick={handleProcessPurchase}
-                isLoading={false}
-                variant="default"
-                size="lg"
-                className="flex items-center justify-center gap-2 w-full sm:flex-2"
-              >
-                <Truck className="h-4 w-4" />
-                <span className="hidden sm:inline">{editData?.isEditMode ? 'Update Purchase Invoice' : 'Complete Purchase & Update Inventory'}</span>
-                <span className="sm:hidden">{editData?.isEditMode ? 'Update' : 'Complete Purchase'}</span>
-              </LoadingButton>
-            </OrderCheckoutActions>
+                  <Truck className="h-4 w-4" />
+                  <span className="hidden sm:inline">{editData?.isEditMode ? 'Update Purchase Invoice' : 'Complete Purchase & Update Inventory'}</span>
+                  <span className="sm:hidden">{editData?.isEditMode ? 'Update' : 'Complete Purchase'}</span>
+                </LoadingButton>
+              </OrderCheckoutActions>
             </OrderSummaryContent>
           </OrderCheckoutCard>
         )}
@@ -2039,162 +1967,30 @@ export const Purchase = ({ tabId, editData }) => {
           />
         )}
 
-        {/* Export Format Selection Modal */}
-        {showExportModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
-              <div className="flex justify-between items-center p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Export Purchase Report</h2>
-                <button
-                  onClick={() => {
-                    setShowExportModal(false);
-                    setExportDateFrom('');
-                    setExportDateTo('');
-                  }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <XCircle className="h-6 w-6" />
-                </button>
-              </div>
-
-              <div className="p-6">
-                <div className="space-y-6">
-                  {/* Export Format */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Export Format
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                        <input
-                          type="radio"
-                          name="format"
-                          value="pdf"
-                          checked={exportFormat === 'pdf'}
-                          onChange={(e) => setExportFormat(e.target.value)}
-                          className="mr-3"
-                        />
-                        <div>
-                          <div className="font-medium text-gray-900">PDF</div>
-                          <div className="text-sm text-gray-500">Print-ready format</div>
-                        </div>
-                      </label>
-
-                      <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                        <input
-                          type="radio"
-                          name="format"
-                          value="excel"
-                          checked={exportFormat === 'excel'}
-                          onChange={(e) => setExportFormat(e.target.value)}
-                          className="mr-3"
-                        />
-                        <div>
-                          <div className="font-medium text-gray-900">Excel</div>
-                          <div className="text-sm text-gray-500">Spreadsheet format</div>
-                        </div>
-                      </label>
-
-                      <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                        <input
-                          type="radio"
-                          name="format"
-                          value="csv"
-                          checked={exportFormat === 'csv'}
-                          onChange={(e) => setExportFormat(e.target.value)}
-                          className="mr-3"
-                        />
-                        <div>
-                          <div className="font-medium text-gray-900">CSV</div>
-                          <div className="text-sm text-gray-500">Comma-separated values</div>
-                        </div>
-                      </label>
-
-                      <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                        <input
-                          type="radio"
-                          name="format"
-                          value="json"
-                          checked={exportFormat === 'json'}
-                          onChange={(e) => setExportFormat(e.target.value)}
-                          className="mr-3"
-                        />
-                        <div>
-                          <div className="font-medium text-gray-900">JSON</div>
-                          <div className="text-sm text-gray-500">Data format</div>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Date Range Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Date Range (Optional)
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1">From Date</label>
-                        <input
-                          type="date"
-                          autoComplete="off"
-                          value={exportDateFrom}
-                          onChange={(e) => setExportDateFrom(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-1">To Date</label>
-                        <input
-                          type="date"
-                          autoComplete="off"
-                          value={exportDateTo}
-                          onChange={(e) => setExportDateTo(e.target.value)}
-                          min={exportDateFrom}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        />
-                      </div>
-                    </div>
-                    {(exportDateFrom || exportDateTo) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setExportDateFrom('');
-                          setExportDateTo('');
-                        }}
-                        className="mt-2 text-sm text-primary-600 hover:text-primary-700"
-                      >
-                        Clear dates
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                    <button
-                      onClick={() => {
-                        setShowExportModal(false);
-                        setExportDateFrom('');
-                        setExportDateTo('');
-                      }}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                      disabled={isExporting}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleExportConfirm}
-                      disabled={isExporting}
-                      className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isExporting ? 'Exporting...' : 'Export'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <ExportReportModal
+          isOpen={showExportModal}
+          onClose={() => {
+            setShowExportModal(false);
+            setExportDateFrom('');
+            setExportDateTo('');
+          }}
+          title="Export Purchase Report"
+          format={exportFormat}
+          onFormatChange={setExportFormat}
+          dateFrom={exportDateFrom}
+          dateTo={exportDateTo}
+          onDateFromChange={setExportDateFrom}
+          onDateToChange={setExportDateTo}
+          onResetDates={() => {
+            setExportDateFrom('');
+            setExportDateTo('');
+          }}
+          showDateResetLink={Boolean(exportDateFrom || exportDateTo)}
+          dateResetLinkLabel="Clear dates"
+          onConfirm={handleExportConfirm}
+          isExporting={isExporting}
+          namePrefix="purchase-export-format"
+        />
       </div>
     </>
   );

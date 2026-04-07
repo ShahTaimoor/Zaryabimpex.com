@@ -364,10 +364,25 @@ const PrintDocument = ({
 
     const hasCameraTime = orderData?.billStartTime || orderData?.billEndTime;
 
-    // Received amount: from API or fallback when paid (so we don't show 0.0 on paid invoices)
-    const rawReceived = toNumber(orderData?.payment?.amountPaid ?? orderData?.amount_paid, 0);
-    const isPaid = orderData?.payment_status === 'paid' || orderData?.payment?.status === 'paid';
-    const receivedAmount = rawReceived > 0 ? rawReceived : (isPaid ? toNumber(totalValue, 0) : 0);
+    // Received amount: trust explicit amount_paid / payment.amountPaid when present (including 0).
+    // Do NOT substitute net total when received is 0 but status says "paid" (API can be inconsistent).
+    // Only if both fields are missing, fall back to full net for legacy rows that are paid but have no amount stored.
+    const explicitFromPayment = orderData?.payment?.amountPaid;
+    const explicitFromRoot = orderData?.amount_paid;
+    const hasExplicitPaymentAmount =
+      (explicitFromPayment !== undefined && explicitFromPayment !== null) ||
+      (explicitFromRoot !== undefined && explicitFromRoot !== null);
+    const rawReceived = toNumber(
+      hasExplicitPaymentAmount ? (explicitFromPayment ?? explicitFromRoot) : 0,
+      0
+    );
+    const normalizedPaymentStatus = String(
+      orderData?.payment_status ?? orderData?.payment?.status ?? ''
+    ).toLowerCase();
+    const isPaidStatus = normalizedPaymentStatus === 'paid';
+    const receivedAmount = hasExplicitPaymentAmount
+      ? rawReceived
+      : (isPaidStatus ? toNumber(totalValue, 0) : 0);
     const invoiceBalance = toNumber(totalValue, 0) - toNumber(receivedAmount, 0);
     const previousBalance = ledgerBalance - invoiceBalance;
 

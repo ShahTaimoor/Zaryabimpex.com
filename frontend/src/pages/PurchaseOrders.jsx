@@ -1960,182 +1960,182 @@ export const PurchaseOrders = ({ tabId }) => {
             headerClassName="mb-0"
           >
             {showPurchaseOrderDetailsFields && (
-            <>
-            {/* Mobile Layout - Stacked */}
-            <div className="md:hidden space-y-3">
-              {/* Invoice Number */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Invoice Number
-                </label>
-                <Input
-                  type="text"
-                  value={formData.invoiceNumber || "Auto-generated"}
-                  onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
-                  className="h-10 text-sm w-full"
-                  placeholder="Auto-generated"
-                  disabled
-                />
-              </div>
-
-              {/* Expected Delivery */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Expected Delivery
-                </label>
-                <div className="relative">
-                  <Input
-                    type="date"
-                    value={formData.expectedDelivery}
-                    onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
-                    className="h-10 text-sm w-full pr-8"
-                  />
-                  <Calendar className="absolute right-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none sm:hidden" />
-                </div>
-              </div>
-
-              {/* Tax Exemption Option */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Tax Status
-                </label>
-                <div className="flex items-center space-x-2 px-3 py-2 border border-gray-200 rounded h-10">
-                  <input
-                    type="checkbox"
-                    id="taxExemptMobile"
-                    checked={formData.isTaxExempt}
-                    onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                  />
-                  <div className="flex-1">
-                    <label htmlFor="taxExemptMobile" className="text-sm font-medium text-gray-700 cursor-pointer">
-                      Tax Exempt
+              <>
+                {/* Mobile Layout - Stacked */}
+                <div className="md:hidden space-y-3">
+                  {/* Invoice Number */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Invoice Number
                     </label>
+                    <Input
+                      type="text"
+                      value={formData.invoiceNumber || "Auto-generated"}
+                      onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
+                      className="h-10 text-sm w-full"
+                      placeholder="Auto-generated"
+                      disabled
+                    />
                   </div>
-                  {formData.isTaxExempt && (
-                    <div className="text-green-600 text-sm font-medium">
-                      ✓
-                    </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Notes */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Notes
-                </label>
-                <Input
-                  type="text"
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="h-10 text-sm w-full"
-                  placeholder="Additional notes..."
-                />
-              </div>
-            </div>
-
-            {/* Desktop Layout - Horizontal */}
-            <div className="hidden md:flex flex-nowrap gap-3 items-end justify-end">
-              {/* Invoice Number */}
-              <div className="flex flex-col w-44">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Invoice Number
-                </label>
-                <Input
-                  type="text"
-                  value={formData.invoiceNumber || "Auto-generated"}
-                  onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
-                  className="h-8 text-sm"
-                  placeholder="Auto-generated"
-                  disabled
-                />
-              </div>
-
-              {/* Expected Delivery */}
-              <div className="flex flex-col w-48">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Expected Delivery
-                </label>
-                <Input
-                  type="date"
-                  value={formData.expectedDelivery}
-                  onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
-                  className="h-8 text-sm"
-                />
-              </div>
-
-              {/* Tax Exemption Option */}
-              <div className="flex flex-col w-40">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Tax Status
-                </label>
-                <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
-                  <input
-                    type="checkbox"
-                    id="taxExempt"
-                    checked={formData.isTaxExempt}
-                    onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
-                    className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                  />
-                  <div className="flex-1">
-                    <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
-                      Tax Exempt
+                  {/* Expected Delivery */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Expected Delivery
                     </label>
-                  </div>
-                  {formData.isTaxExempt && (
-                    <div className="text-green-600 text-xs font-medium">
-                      ✓
+                    <div className="relative">
+                      <Input
+                        type="date"
+                        value={formData.expectedDelivery}
+                        onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
+                        className="h-10 text-sm w-full pr-8"
+                      />
+                      <Calendar className="absolute right-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none sm:hidden" />
                     </div>
-                  )}
-                </div>
-              </div>
+                  </div>
 
-              {/* Notes */}
-              <div className="flex flex-col w-[28rem]">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Notes
-                </label>
-                <Input
-                  type="text"
-                  autoComplete="off"
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="h-8 text-sm"
-                  placeholder="Additional notes..."
-                />
-              </div>
-            </div>
-            </>
+                  {/* Tax Exemption Option */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Tax Status
+                    </label>
+                    <div className="flex items-center space-x-2 px-3 py-2 border border-gray-200 rounded h-10">
+                      <input
+                        type="checkbox"
+                        id="taxExemptMobile"
+                        checked={formData.isTaxExempt}
+                        onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
+                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      />
+                      <div className="flex-1">
+                        <label htmlFor="taxExemptMobile" className="text-sm font-medium text-gray-700 cursor-pointer">
+                          Tax Exempt
+                        </label>
+                      </div>
+                      {formData.isTaxExempt && (
+                        <div className="text-green-600 text-sm font-medium">
+                          ✓
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Notes
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.notes}
+                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      className="h-10 text-sm w-full"
+                      placeholder="Additional notes..."
+                    />
+                  </div>
+                </div>
+
+                {/* Desktop Layout - Horizontal */}
+                <div className="hidden md:flex flex-nowrap gap-3 items-end justify-end">
+                  {/* Invoice Number */}
+                  <div className="flex flex-col w-44">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Invoice Number
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.invoiceNumber || "Auto-generated"}
+                      onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
+                      className="h-8 text-sm"
+                      placeholder="Auto-generated"
+                      disabled
+                    />
+                  </div>
+
+                  {/* Expected Delivery */}
+                  <div className="flex flex-col w-48">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Expected Delivery
+                    </label>
+                    <Input
+                      type="date"
+                      value={formData.expectedDelivery}
+                      onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+
+                  {/* Tax Exemption Option */}
+                  <div className="flex flex-col w-40">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Tax Status
+                    </label>
+                    <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
+                      <input
+                        type="checkbox"
+                        id="taxExempt"
+                        checked={formData.isTaxExempt}
+                        onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
+                        className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      />
+                      <div className="flex-1">
+                        <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
+                          Tax Exempt
+                        </label>
+                      </div>
+                      {formData.isTaxExempt && (
+                        <div className="text-green-600 text-xs font-medium">
+                          ✓
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div className="flex flex-col w-[28rem]">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Notes
+                    </label>
+                    <Input
+                      type="text"
+                      autoComplete="off"
+                      value={formData.notes}
+                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      className="h-8 text-sm"
+                      placeholder="Additional notes..."
+                    />
+                  </div>
+                </div>
+              </>
             )}
           </OrderDetailsSection>
 
           <OrderSummaryBar />
           <OrderSummaryContent>
-              <div className="mb-6 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-800 font-semibold">Subtotal:</span>
-                  <span className="text-xl font-bold text-gray-900">{Math.round(subtotal)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-800 font-semibold">
-                    {formData.isTaxExempt ? 'Tax (Exempt):' : 'Tax (8%):'}
-                  </span>
-                  <span className="text-xl font-bold text-gray-900">{Math.round(tax)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-800 font-semibold">PO Total:</span>
-                  <span className="text-xl font-bold text-gray-900">{Math.round(total)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-800 font-semibold">Previous Outstanding:</span>
-                  <span className="text-xl font-bold text-red-600">{Math.round(supplierOutstanding)}</span>
-                </div>
-                <div className="flex justify-between items-center text-xl font-bold border-t-2 border-blue-400 pt-3 mt-2">
-                  <span className="text-blue-900">Total Payables:</span>
-                  <span className="text-blue-900 text-3xl">{Math.round(totalPayables)}</span>
-                </div>
+            <div className="mb-6 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-800 font-semibold">Subtotal:</span>
+                <span className="text-xl font-bold text-gray-900">{Math.round(subtotal)}</span>
               </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-800 font-semibold">
+                  {formData.isTaxExempt ? 'Tax (Exempt):' : 'Tax (8%):'}
+                </span>
+                <span className="text-xl font-bold text-gray-900">{Math.round(tax)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-800 font-semibold">PO Total:</span>
+                <span className="text-xl font-bold text-gray-900">{Math.round(total)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-800 font-semibold">Previous Outstanding:</span>
+                <span className="text-xl font-bold text-red-600">{Math.round(supplierOutstanding)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xl font-bold border-t-2 border-blue-400 pt-3 mt-2">
+                <span className="text-blue-900">Total Payables:</span>
+                <span className="text-blue-900 text-3xl">{Math.round(totalPayables)}</span>
+              </div>
+            </div>
 
             {/* Action Buttons */}
             <OrderCheckoutActions className="mt-6 border-0 pt-0">
@@ -2295,89 +2295,89 @@ export const PurchaseOrders = ({ tabId }) => {
                   </div>
 
                   {showPurchaseOrderDetailsFields && (
-                  <>
-                  {/* Single Row Layout for Purchase Order Details */}
-                  <div className="flex flex-nowrap gap-3 items-end justify-end">
-                    {/* Invoice Number */}
-                    <div className="flex flex-col w-44">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Invoice Number
-                      </label>
-                      <Input
-                        type="text"
-                        value={formData.invoiceNumber || "Auto-generated"}
-                        onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
-                        className="h-8 text-sm"
-                        placeholder="Auto-generated"
-                        disabled
-                      />
-                    </div>
+                    <>
+                      {/* Single Row Layout for Purchase Order Details */}
+                      <div className="flex flex-nowrap gap-3 items-end justify-end">
+                        {/* Invoice Number */}
+                        <div className="flex flex-col w-44">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Invoice Number
+                          </label>
+                          <Input
+                            type="text"
+                            value={formData.invoiceNumber || "Auto-generated"}
+                            onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
+                            className="h-8 text-sm"
+                            placeholder="Auto-generated"
+                            disabled
+                          />
+                        </div>
 
-                    {/* Expected Delivery */}
-                    <div className="flex flex-col w-48">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Expected Delivery
-                      </label>
-                      <Input
-                        type="date"
-                        autoComplete="off"
-                        value={formData.expectedDelivery}
-                        onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
-                        className="h-8 text-sm"
-                      />
-                    </div>
+                        {/* Expected Delivery */}
+                        <div className="flex flex-col w-48">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Expected Delivery
+                          </label>
+                          <Input
+                            type="date"
+                            autoComplete="off"
+                            value={formData.expectedDelivery}
+                            onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
+                            className="h-8 text-sm"
+                          />
+                        </div>
 
-                    {/* Tax Exemption Option */}
-                    <div className="flex flex-col w-40">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Tax Status
-                      </label>
-                      <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
-                        <input
-                          type="checkbox"
-                          id="taxExemptEdit"
-                          checked={formData.isTaxExempt}
-                          onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <label htmlFor="taxExemptEdit" className="text-xs text-gray-700">
-                          Tax Exempt
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Notes and Terms Row */}
-                  <div className="mt-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      {/* Notes Column */}
-                      <div className="flex flex-col">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Notes
-                        </label>
-                        <Textarea
-                          value={formData.notes}
-                          onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                          className="h-16 text-sm resize-none"
-                          placeholder="Add any notes or comments..."
-                        />
+                        {/* Tax Exemption Option */}
+                        <div className="flex flex-col w-40">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Tax Status
+                          </label>
+                          <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
+                            <input
+                              type="checkbox"
+                              id="taxExemptEdit"
+                              checked={formData.isTaxExempt}
+                              onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <label htmlFor="taxExemptEdit" className="text-xs text-gray-700">
+                              Tax Exempt
+                            </label>
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Terms Column */}
-                      <div className="flex flex-col">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Terms & Conditions
-                        </label>
-                        <Textarea
-                          value={formData.terms}
-                          onChange={(e) => setFormData(prev => ({ ...prev, terms: e.target.value }))}
-                          className="h-16 text-sm resize-none"
-                          placeholder="Add terms and conditions..."
-                        />
+                      {/* Notes and Terms Row */}
+                      <div className="mt-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* Notes Column */}
+                          <div className="flex flex-col">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Notes
+                            </label>
+                            <Textarea
+                              value={formData.notes}
+                              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                              className="h-16 text-sm resize-none"
+                              placeholder="Add any notes or comments..."
+                            />
+                          </div>
+
+                          {/* Terms Column */}
+                          <div className="flex flex-col">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Terms & Conditions
+                            </label>
+                            <Textarea
+                              value={formData.terms}
+                              onChange={(e) => setFormData(prev => ({ ...prev, terms: e.target.value }))}
+                              className="h-16 text-sm resize-none"
+                              placeholder="Add terms and conditions..."
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  </>
+                    </>
                   )}
                 </div>
 

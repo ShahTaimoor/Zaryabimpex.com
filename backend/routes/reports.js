@@ -205,6 +205,8 @@ router.get('/bank-cash-summary', [
   auth,
   requirePermission('view_reports'),
   ...validateDateParams,
+  query('month').optional().matches(/^\d{4}-\d{2}$/),
+  query('bankIds').optional().isString(),
   handleValidationErrors,
 ], async (req, res) => {
   try {

@@ -25,15 +25,9 @@ import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
 import DateFilter from '../components/DateFilter';
 import PrintModal from '../components/PrintModal';
-import { formatDateForInput, getCurrentDatePakistan } from '../utils/dateUtils';
-
-// Helper function to get local date in YYYY-MM-DD format (avoids timezone issues with toISOString)
-const getLocalDateString = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+import BaseModal from '../components/BaseModal';
+import { Button } from '@/components/ui/button';
+import { formatDateForInput, getCurrentDatePakistan, getLocalDateString } from '../utils/dateUtils';
 
 // Safe date display: avoid "Invalid Date" when value is missing or invalid (PostgreSQL may send sale_date, created_at)
 const formatOrderDate = (order) => {
@@ -254,16 +248,6 @@ export const Orders = () => {
     }
   };
 
-  const handleUpdateOrder = async (id, data) => {
-    try {
-      await updateOrder({ id, ...data }).unwrap();
-      showSuccessToast('Sales invoice updated successfully');
-      refetchOrders();
-    } catch (error) {
-      handleApiError(error, 'Sales Invoice Update');
-    }
-  };
-
   // Event handlers - Edit opens Sales page in new tab (same as Purchase Invoice edit)
   const handleEdit = async (order) => {
     try {
@@ -358,9 +342,41 @@ export const Orders = () => {
 
   const handlePrint = async (order) => {
     try {
+      // Same payment normalization as handleEdit: fetch-by-id can disagree with list row on payment fields.
+      const derivedPaymentStatus = getDerivedPaymentStatus(order);
       const result = await fetchOrderById(order._id || order.id).unwrap();
       const orderData = result?.order || result?.data?.order || result;
-      setPrintOrderData(orderData || order);
+      const freshOrder = orderData || order;
+
+      const isPendingInEditor = derivedPaymentStatus === 'pending';
+      const paymentFromFetched = freshOrder.payment || {};
+      const paymentFromList = order.payment || {};
+
+      const amountPaidCandidate =
+        paymentFromFetched?.amountPaid ??
+        paymentFromFetched?.amountReceived ??
+        paymentFromList?.amountPaid ??
+        paymentFromList?.amountReceived ??
+        freshOrder.amount_paid ??
+        order.amount_paid ??
+        0;
+
+      const paymentForPrint = {
+        ...paymentFromFetched,
+        ...paymentFromList,
+        status: isPendingInEditor ? 'pending' : (paymentFromFetched?.status ?? paymentFromFetched?.payment_status ?? paymentFromList?.status ?? paymentFromList?.payment_status ?? ''),
+        amountPaid: isPendingInEditor ? 0 : Number(amountPaidCandidate) || 0,
+        amountReceived: isPendingInEditor ? 0 : Number(amountPaidCandidate) || 0,
+      };
+
+      const mergedPrintData = {
+        ...freshOrder,
+        payment: paymentForPrint,
+        amount_paid: isPendingInEditor ? 0 : Number(amountPaidCandidate) || 0,
+        payment_status: isPendingInEditor ? 'pending' : (freshOrder.payment_status ?? freshOrder.paymentStatus ?? paymentForPrint.status),
+      };
+
+      setPrintOrderData(mergedPrintData);
       setShowPrintModal(true);
     } catch (err) {
       handleApiError(err, 'Loading invoice for print');
@@ -753,44 +769,51 @@ export const Orders = () => {
       )}
 
       {/* View Modal */}
-      {showViewModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              {/* Header */}
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Sales Invoice Details</h2>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => handlePrint(selectedOrder)}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2"
-                  >
-                    <Printer className="h-4 w-4" />
-                    <span>Print</span>
-                  </button>
-                  {canDeleteInvoice(selectedOrder) && (
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`Are you sure you want to delete invoice ${selectedOrder.order_number ?? selectedOrder.orderNumber ?? 'this'}?`)) {
-                          handleDeleteOrder(selectedOrder._id);
-                          setShowViewModal(false);
-                        }
-                      }}
-                      className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center space-x-2"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span>Delete</span>
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setShowViewModal(false)}
-                    className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-
+      <BaseModal
+        isOpen={showViewModal && !!selectedOrder}
+        onClose={() => setShowViewModal(false)}
+        title="Sales Invoice Details"
+        maxWidth="xl"
+        variant="scrollable"
+        contentClassName="p-6"
+        headerExtra={
+          selectedOrder ? (
+            <div className="flex flex-wrap gap-2 justify-end shrink-0">
+              <Button
+                type="button"
+                size="sm"
+                className="bg-green-600 text-white hover:bg-green-700"
+                onClick={() => handlePrint(selectedOrder)}
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </Button>
+              {canDeleteInvoice(selectedOrder) && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Are you sure you want to delete invoice ${selectedOrder.order_number ?? selectedOrder.orderNumber ?? 'this'}?`
+                      )
+                    ) {
+                      handleDeleteOrder(selectedOrder._id);
+                      setShowViewModal(false);
+                    }
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </Button>
+              )}
+            </div>
+          ) : null
+        }
+      >
+        {selectedOrder && (
+          <>
               {/* Invoice Header */}
               <div className="text-center mb-8">
                 <h1 className="text-3xl font-bold text-gray-900">{companyName}</h1>
@@ -981,583 +1004,11 @@ export const Orders = () => {
               <div className="mt-8 text-center text-sm text-gray-500">
                 Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </BaseModal>
 
       {/* Edit Modal removed: editing opens Sales page in new tab (same as Purchase Invoice) */}
-
-      {false && selectedOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-0">
-              {/* Header */}
-              <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex justify-between items-center">
-                <h2 className="text-xl sm:text-2xl font-bold text-white">Edit Sales Invoice</h2>
-                <button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setCustomerSearchTerm('');
-                  }}
-                  className="bg-white text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-100"
-                >
-                  Close
-                </button>
-              </div>
-
-              {/* Customer Information */}
-              <div className="px-6 py-5 bg-white border-b border-gray-200">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Customer Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Customer Selection</label>
-                    <input
-                      type="text"
-                      placeholder="Search customers..."
-                      value={customerSearchTerm}
-                      onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                      className="input w-full"
-                    />
-                    {/* Customer Suggestions */}
-                    {customerSearchTerm && customers?.length > 0 && (
-                      <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                        {customers.slice(0, 5).map((customer) => {
-                          // Get city from addresses
-                          const defaultAddress = customer.addresses?.find(addr => addr.isDefault) || customer.addresses?.[0];
-                          const city = defaultAddress?.city || '';
-                          const displayName =
-                            customer.displayName ??
-                            customer.display_name ??
-                            customer.business_name ??
-                            customer.businessName ??
-                            customer.name ??
-                            customer.email ??
-                            'Customer';
-
-                          return (
-                            <div
-                              key={customer._id || customer.id || displayName}
-                              onClick={() => {
-                                setEditFormData({ ...editFormData, customer: customer._id || customer.id });
-                                setCustomerSearchTerm(displayName);
-                              }}
-                              className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 flex items-center justify-between"
-                            >
-                              <div className="flex-1">
-                                <div className="font-medium">{displayName}</div>
-                                <div className="text-sm text-gray-600">
-                                  {customer.email || '—'}
-                                  {customer.phone ? ` - ${customer.phone}` : ''}
-                                </div>
-                              </div>
-                              {city && (
-                                <div className="text-xs text-gray-500 ml-2">{city}</div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                    {/* Selected Customer Display */}
-                    {editFormData.customer && (
-                      <div className="mt-2 p-2 bg-blue-50 rounded border">
-                        <div className="text-sm font-medium text-blue-900">
-                          Selected: {selectedCustomerName || 'Customer'}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Order Type</label>
-                    <select
-                      value={editFormData.orderType}
-                      onChange={(e) => setEditFormData({ ...editFormData, orderType: e.target.value })}
-                      className="input w-full"
-                    >
-                      <option value="retail">Retail</option>
-                      <option value="wholesale">Wholesale</option>
-                      <option value="return">Return</option>
-                      <option value="exchange">Exchange</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <p className="text-gray-900">{selectedOrder.customerInfo?.email || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Phone</label>
-                    <p className="text-gray-900">{selectedOrder.customerInfo?.phone || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
-                    <p className="text-gray-900">{selectedOrder.order_number ?? selectedOrder.orderNumber ?? '—'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                      Bill Date <span className="text-xs text-gray-500">(for backdating/postdating)</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={editFormData.billDate}
-                      onChange={(e) => setEditFormData({ ...editFormData, billDate: e.target.value })}
-                      className="input w-full"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Original date: {formatOrderDate(selectedOrder)}
-                    </p>
-                    {selectedOrder.billStartTime && editFormData.billDate &&
-                      new Date(editFormData.billDate).toDateString() !== new Date(selectedOrder.billStartTime).toDateString() && (
-                        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
-                          <p className="text-xs text-yellow-800">
-                            <strong>⚠ CCTV Note:</strong> Changing the bill date will not change CCTV recording timestamps.
-                            CCTV footage is available at the actual recording time ({new Date(selectedOrder.billStartTime).toLocaleString()}),
-                            not the bill date.
-                          </p>
-                        </div>
-                      )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Edit Form */}
-              <form className="px-6 py-6" onSubmit={(e) => {
-                e.preventDefault();
-                // Format items for backend - ensure product is ID, not object
-                const formattedItems = editFormData.items.map(item => ({
-                  product: item.product?._id || item.product, // Extract ID if object, otherwise use as-is
-                  quantity: item.quantity,
-                  unitPrice: item.unitPrice
-                }));
-
-                // Ensure customer is ID string, not object
-                let customerId = null;
-                if (editFormData.customer) {
-                  customerId = typeof editFormData.customer === 'object'
-                    ? (editFormData.customer._id || editFormData.customer.id || editFormData.customer)
-                    : editFormData.customer;
-                }
-
-                const updateData = {
-                  notes: editFormData.notes,
-                  items: formattedItems,
-                  orderType: editFormData.orderType,
-                  customer: customerId || undefined, // Only include if not null
-                  billDate: editFormData.billDate || undefined, // Include billDate for backdating/postdating
-                  discount: editFormData.discount !== '' ? parseFloat(editFormData.discount) : undefined,
-                  amountReceived: editFormData.amountReceived !== '' ? parseFloat(editFormData.amountReceived) : undefined
-                };
-
-                handleUpdateOrder(selectedOrder._id, updateData);
-                setShowEditModal(false);
-              }}>
-
-                {/* Notes */}
-                <div className="mb-6">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-                    Notes
-                  </label>
-                  <textarea
-                    value={editFormData.notes}
-                    onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
-                    rows={3}
-                    className="input w-full"
-                    placeholder="Add any notes or comments..."
-                  />
-                </div>
-
-                {/* Items Section */}
-                <div className="mb-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Items</h3>
-
-                  {/* Product Selection Bar */}
-                  <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                    <h4 className="text-md font-medium text-gray-900 mb-4">Add New Product</h4>
-
-                    {/* Product Search and Input Fields Row */}
-                    <div className="grid grid-cols-12 gap-4 items-end">
-                      {/* Product Search - 6 columns */}
-                      <div className="col-span-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Product Search
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Search or type product name..."
-                          value={productSearchTerm}
-                          onChange={(e) => setProductSearchTerm(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        {/* Product Suggestions */}
-                        {productSearchTerm && products?.length > 0 && (
-                          <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                            {products.slice(0, 5).map((product) => (
-                              <div
-                                key={product._id}
-                                onClick={() => {
-                                  setProductSearchTerm(product.name);
-                                  setSelectedProduct(product);
-                                  // Auto-fill rate with retail price when product is selected
-                                  const defaultRate = product.pricing?.retail || 0;
-                                  setNewProductRate(defaultRate);
-                                }}
-                                className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-                              >
-                                <div className="font-medium text-gray-900">{product.name}</div>
-                                <div className="text-sm text-gray-600">
-                                  Stock: {product.inventory?.currentStock || 0} |
-                                  Retail: {Math.round(product.pricing?.retail || 0)} |
-                                  Wholesale: {Math.round(product.pricing?.wholesale || 0)}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {productSearchTerm && products?.length === 0 && (
-                          <div className="mt-2 p-2 text-sm text-gray-500 text-center">
-                            No products found matching "{productSearchTerm}"
-                          </div>
-                        )}
-                        {/* Show selected product info */}
-                        {selectedProduct && (
-                          <div className="mt-2 p-2 bg-blue-50 rounded border">
-                            <div className="text-sm font-medium text-blue-900">
-                              Selected: {selectedProduct.name}
-                            </div>
-                            <div className="text-xs text-blue-700 mt-1">
-                              Stock: {selectedProduct.inventory?.currentStock || 0} |
-                              Retail: {Math.round(selectedProduct.pricing?.retail || 0)} |
-                              Wholesale: {Math.round(selectedProduct.pricing?.wholesale || 0)}
-                            </div>
-                            {newProductRate === 0 && (
-                              <div className="text-xs text-orange-600 mt-1">
-                                ⚠ Rate is 0 - please enter a rate or select a product again
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Stock - 1 column */}
-                      <div className="col-span-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Stock
-                        </label>
-                        <input
-                          type="text"
-                          value={selectedProduct ? selectedProduct.inventory?.currentStock || 0 : '0'}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-center bg-gray-50"
-                          disabled
-                          placeholder="0"
-                        />
-                      </div>
-
-                      {/* Quantity - 1 column */}
-                      <div className="col-span-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Quantity
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          max={selectedProduct?.inventory?.currentStock || 1}
-                          value={newProductQuantity}
-                          onChange={(e) => setNewProductQuantity(parseInt(e.target.value) || 1)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-center"
-                          placeholder="1"
-                        />
-                      </div>
-
-                      {/* Rate - 2 columns */}
-                      <div className="col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Rate
-                        </label>
-                        <input
-                          type="number"
-                          step="1"
-                          value={newProductRate}
-                          onChange={(e) => setNewProductRate(parseFloat(e.target.value) || 0)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-center"
-                          placeholder="0"
-                        />
-                      </div>
-
-                      {/* Amount - 1 column */}
-                      <div className="col-span-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Amount
-                        </label>
-                        <input
-                          type="text"
-                          value={selectedProduct ? Math.round(newProductQuantity * newProductRate) : ''}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-center font-medium bg-gray-50"
-                          disabled
-                          placeholder=""
-                        />
-                      </div>
-
-                      {/* Add Button - 1 column */}
-                      <div className="col-span-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          &nbsp;
-                        </label>
-                        <button
-                          type="button"
-                          onClick={handleAddNewProduct}
-                          className="w-full bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 flex items-center justify-center"
-                          disabled={!selectedProduct || !newProductRate}
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse border border-gray-300">
-                      <thead>
-                        <tr className="bg-gray-50">
-                          <th className="border border-gray-300 px-4 py-2 text-left">Item</th>
-                          <th className="border border-gray-300 px-4 py-2 text-right">Qty</th>
-                          <th className="border border-gray-300 px-4 py-2 text-right">Unit Price</th>
-                          <th className="border border-gray-300 px-4 py-2 text-right">Total</th>
-                          <th className="border border-gray-300 px-4 py-2 text-center">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {editFormData.items?.map((item, index) => (
-                          <tr key={index}>
-                            <td className="border border-gray-300 px-4 py-2">
-                              {item.productName || item.product?.name || 'Unknown Product'}
-                            </td>
-                            <td className="border border-gray-300 px-4 py-2">
-                              <input
-                                type="number"
-                                min="1"
-                                value={item.quantity}
-                                onChange={(e) => {
-                                  const newItems = [...editFormData.items];
-                                  newItems[index].quantity = parseInt(e.target.value) || 1;
-                                  newItems[index].total = newItems[index].quantity * newItems[index].unitPrice;
-                                  setEditFormData({ ...editFormData, items: newItems });
-                                }}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-right"
-                              />
-                            </td>
-                            <td className="border border-gray-300 px-4 py-2">
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={item.unitPrice}
-                                onChange={(e) => {
-                                  const newItems = [...editFormData.items];
-                                  newItems[index].unitPrice = parseFloat(e.target.value) || 0;
-                                  newItems[index].total = newItems[index].quantity * newItems[index].unitPrice;
-                                  setEditFormData({ ...editFormData, items: newItems });
-                                }}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-right"
-                              />
-                            </td>
-                            <td className="border border-gray-300 px-4 py-2 text-right">
-                              {Math.round(item.total)}
-                            </td>
-                            <td className="border border-gray-300 px-4 py-2 text-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newItems = editFormData.items.filter((_, i) => i !== index);
-                                  setEditFormData({ ...editFormData, items: newItems });
-                                }}
-                                className="text-red-600 hover:text-red-800"
-                                title="Remove Item"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        )) || (
-                            <tr>
-                              <td colSpan="5" className="border border-gray-300 px-4 py-2 text-center text-gray-500">
-                                No items found
-                              </td>
-                            </tr>
-                          )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Order Summary */}
-                  {editFormData.items && editFormData.items.length > 0 && (() => {
-                    const subtotal = editFormData.items.reduce((sum, item) => sum + item.total, 0);
-                    const tax = Number(selectedOrder.pricing?.taxAmount || 0);
-                    const discount = Number(editFormData.discount) || selectedOrder.pricing?.discountAmount || selectedOrder?.discount || 0;
-                    const total = subtotal + tax - discount;
-                    return (
-                      <div className="mt-6">
-                        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-3 rounded-t-lg">
-                          <h3 className="text-base font-semibold text-white">Order Summary</h3>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-b-lg p-4 space-y-3">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-800 font-semibold">Subtotal:</span>
-                            <span className="text-lg font-bold text-gray-900">{subtotal.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-800 font-semibold">Tax:</span>
-                            <span className="text-lg font-bold text-gray-900">{tax.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-800 font-semibold">Discount:</span>
-                            <span className="text-lg font-bold text-gray-900">{Number(discount).toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-base font-bold border-t-2 border-blue-400 pt-3 mt-2">
-                            <span className="text-blue-900">Total:</span>
-                            <span className="text-blue-900 text-2xl">{total.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Payment and Discount Section */}
-                  <div className="mt-6 bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                      <div className="flex flex-col">
-                        <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-2">
-                          Discount
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="0"
-                          value={editFormData.discount}
-                          onChange={(e) => setEditFormData({ ...editFormData, discount: e.target.value })}
-                          className="w-full px-3 py-2 text-sm border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 h-[42px]"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Invoice-level discount amount</p>
-                      </div>
-                      <div className="flex flex-col">
-                        <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-2">
-                          Amount Received
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="0"
-                          value={editFormData.amountReceived}
-                          onChange={(e) => setEditFormData({ ...editFormData, amountReceived: e.target.value })}
-                          className="w-full px-3 py-2 text-sm border-2 border-blue-200 rounded-md bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 h-[42px]"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Amount paid/received for this invoice</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Form Actions */}
-                <div className="flex justify-end space-x-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowEditModal(false)}
-                    className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={false}
-                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    Update Invoice
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Product Selection Modal - removed with edit modal */}
-      {false && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              {/* Header */}
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Select Product</h2>
-                <button
-                  onClick={() => setShowProductModal(false)}
-                  className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-                >
-                  Close
-                </button>
-              </div>
-
-              {/* Search */}
-              <div className="mb-6">
-                <input
-                  type="text"
-                  placeholder="Search products..."
-                  value={productSearchTerm}
-                  onChange={(e) => setProductSearchTerm(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Products List */}
-              <div className="max-h-96 overflow-y-auto">
-                {productsData?.products?.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-4">
-                    {productsData.products.map((product) => (
-                      <div key={product._id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                        <div className="flex justify-between items-center">
-                          <div className="flex-1">
-                            <h3 className="font-medium text-gray-900">{product.name}</h3>
-                            <p className="text-sm text-gray-600">{product.description}</p>
-                            <div className="mt-2 flex space-x-4 text-sm text-gray-500">
-                              <span>Stock: {product.inventory?.currentStock || 0}</span>
-                              <span>Retail: {Math.round(product.pricing?.retail || 0)}</span>
-                              <span>Wholesale: {Math.round(product.pricing?.wholesale || 0)}</span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => {
-                              // Add product to cart
-                              const newItem = {
-                                product: product._id, // Store product ID for backend
-                                productName: product.name, // Store name for display
-                                quantity: 1,
-                                unitPrice: product.pricing?.retail || 0,
-                                total: product.pricing?.retail || 0
-                              };
-
-                              const updatedItems = [...editFormData.items, newItem];
-                              setEditFormData({ ...editFormData, items: updatedItems });
-                              setShowProductModal(false);
-                              showSuccessToast('Product added to invoice');
-                            }}
-                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm"
-                          >
-                            Add to Invoice
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    {productSearchTerm ? 'No products found matching your search.' : 'No products available.'}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Print Modal */}
       <PrintModal

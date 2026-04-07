@@ -426,12 +426,15 @@ class AccountLedgerService {
             if (rawId == null) return null;
             const customerId = typeof rawId === 'string' ? rawId : (rawId && typeof rawId.toString === 'function' ? rawId.toString() : String(rawId));
 
+            // Ledger rows for customer opening balance posting (same amount as customers.opening_balance) — exclude from sums
+            // so we don't double-count with the Opening Balance line (matches supplier_opening_balance handling).
+            const isCustomerOpeningEntry = (e) => (e.referenceType || e.reference_type) === 'customer_opening_balance';
+
             // Get opening balance from customer record (support snake_case from Postgres)
             let openingBalance = parseFloat(customer.opening_balance ?? customer.openingBalance ?? 0) || 0;
 
             // Calculate adjusted opening balance from ledger entries before startDate
-            // SINGLE SOURCE OF TRUTH: Read from account_ledger table only
-            // Only AR (1100) entries affect customer receivable balance. Sale Return Cr AR is in 1100.
+            // Only AR (1100) entries. Exclude customer_opening_balance rows — that receivable is already in openingBalance.
             if (start) {
               const openingLedgerEntries = await transactionRepository.findAll({
                 customerId,
@@ -440,8 +443,10 @@ class AccountLedgerService {
                 accountCode: '1100'
               }, { lean: true });
 
+              const openingExcludingOb = openingLedgerEntries.filter((e) => !isCustomerOpeningEntry(e));
+
               // For AR accounts: debit increases balance, credit decreases balance
-              const openingLedgerBalance = openingLedgerEntries.reduce((sum, entry) => {
+              const openingLedgerBalance = openingExcludingOb.reduce((sum, entry) => {
                 return sum + (entry.debitAmount || 0) - (entry.creditAmount || 0);
               }, 0);
 
@@ -449,7 +454,6 @@ class AccountLedgerService {
             }
 
             // Get period transactions from ledger (within date range)
-            // SINGLE SOURCE OF TRUTH: Read from account_ledger table only
             // Only AR (1100) entries - Sale Return posts Cr AR to 1100, which correctly reduces balance
             const periodLedgerFilter = {
               customerId,
@@ -462,7 +466,9 @@ class AccountLedgerService {
               periodLedgerFilter.transactionDate.$lte = end;
             }
 
-            const periodLedgerEntries = await transactionRepository.findAll(periodLedgerFilter, { lean: true });
+            let periodLedgerEntries = await transactionRepository.findAll(periodLedgerFilter, { lean: true });
+            // Exclude customer_opening_balance from period lines (amount is already in Opening Balance from customer record).
+            periodLedgerEntries = periodLedgerEntries.filter((e) => !isCustomerOpeningEntry(e));
 
             // Calculate totals from ledger entries
             const totalDebits = periodLedgerEntries.reduce((sum, entry) => sum + (entry.debitAmount || 0), 0);

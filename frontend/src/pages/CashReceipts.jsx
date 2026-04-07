@@ -17,6 +17,8 @@ import {
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DetailRow } from '@/components/ui/detail-row';
+import BaseModal from '../components/BaseModal';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import { useLazyGetCustomerQuery } from '../store/services/customersApi';
@@ -41,6 +43,13 @@ import { useGetBalanceSummaryQuery as useGetSupplierBalanceSummaryQuery } from '
 import DateFilter from '../components/DateFilter';
 import PaginationControls from '../components/PaginationControls';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
+import ExportReportModal from '../components/ExportReportModal';
+import { useExportTabularDownload } from '../hooks/useExportTabularDownload';
+import {
+  buildTabularExportRunners,
+  TABULAR_EXPORT_FALLBACK_FILENAMES,
+} from '../utils/exportReportDownload';
+import { confirmTabularExportDownload } from '../utils/tabularExportConfirm';
 
 const CashReceipts = () => {
   const today = getCurrentDatePakistan();
@@ -67,6 +76,9 @@ const CashReceipts = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState('csv');
+  const [isExporting, setIsExporting] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [printData, setPrintData] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -165,6 +177,7 @@ const CashReceipts = () => {
   const [exportPDFMutation] = useExportPDFMutation();
   const [exportJSONMutation] = useExportJSONMutation();
   const [downloadFileMutation] = useDownloadFileMutation();
+  const runExportDownload = useExportTabularDownload(downloadFileMutation);
 
   // Helper functions
   const resetForm = () => {
@@ -814,58 +827,20 @@ const CashReceipts = () => {
     setShowViewModal(true);
   };
 
-  const handleExport = async (format = 'csv') => {
-    try {
-      const payload = { ...filters, ...pagination, sortConfig };
-      let response;
-      if (format === 'excel') {
-        response = await exportExcelMutation(payload).unwrap();
-      } else if (format === 'pdf') {
-        response = await exportPDFMutation(payload).unwrap();
-      } else if (format === 'json') {
-        response = await exportJSONMutation(payload).unwrap();
-      } else {
-        response = await exportCSVMutation(payload).unwrap();
-      }
-
-      const filename =
-        response?.filename ||
-        (format === 'excel'
-          ? 'cash_receipts.xlsx'
-          : format === 'pdf'
-            ? 'cash_receipts.pdf'
-            : format === 'json'
-              ? 'cash_receipts.json'
-              : 'cash_receipts.csv');
-
-      const downloadResponse = await downloadFileMutation(filename).unwrap();
-      const blob =
-        downloadResponse instanceof Blob
-          ? downloadResponse
-          : new Blob([downloadResponse], {
-            type:
-              format === 'excel'
-                ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                : format === 'pdf'
-                  ? 'application/pdf'
-                  : format === 'json'
-                    ? 'application/json'
-                    : 'text/csv',
-          });
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showSuccessToast(`Exported cash receipts as ${format.toUpperCase()}`);
-    } catch (error) {
-      showErrorToast(handleApiError(error, 'Cash Receipts Export'));
-    }
-  };
+  const handleExportConfirm = () =>
+    confirmTabularExportDownload({
+      format: exportFormat,
+      runExportDownload,
+      exportRunners: buildTabularExportRunners(
+        { ...filters, ...pagination, sortConfig },
+        { exportExcelMutation, exportPDFMutation, exportJSONMutation, exportCSVMutation }
+      ),
+      fallbackFilenames: TABULAR_EXPORT_FALLBACK_FILENAMES.cashReceipts,
+      successMessage: (f) => `Exported cash receipts as ${f.toUpperCase()}`,
+      errorContext: 'Cash Receipts Export',
+      setIsExporting,
+      onSuccess: () => setShowExportModal(false),
+    });
 
   const handlePrint = (receipt) => {
     setPrintData(receipt);
@@ -893,7 +868,7 @@ const CashReceipts = () => {
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
           <Button
-            onClick={handleExport}
+            onClick={() => setShowExportModal(true)}
             variant="outline"
             size="default"
             className="flex items-center justify-center gap-2 w-full sm:w-auto"
@@ -1492,408 +1467,179 @@ const CashReceipts = () => {
         </div>
       </div>
 
-      {/* Create Modal - Removed */}
-      {false && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-6 border w-4/5 max-w-4xl shadow-lg rounded-lg bg-white">
-            <div className="mb-6 flex justify-between items-center">
-              <h3 className="text-xl font-semibold text-gray-900">Receipt Details</h3>
-              <button
-                onClick={() => {
-                  resetForm();
-                }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left Column */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Customer
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      value={customerSearchTerm}
-                      onChange={(e) => handleCustomerSearch(e.target.value)}
-                      className="w-full pr-10"
-                      placeholder="Search or select customer..."
-                    />
-                    <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
-                  {customerSearchTerm && (
-                    <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {(customers || []).filter(customer =>
-                        (customer.businessName || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-                        customer.phone?.includes(customerSearchTerm)
-                      ).map((customer) => (
-                        <div
-                          key={customer._id}
-                          onClick={() => {
-                            handleCustomerSelect(customer._id);
-                            setCustomerSearchTerm(customer.businessName || customer.name || '');
-                          }}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-                        >
-                          <div className="font-medium text-gray-900">{customer.businessName || customer.name || 'Unknown'}</div>
-                          {customer.businessName && customer.name && (
-                            <div className="text-xs text-gray-500">Contact: {customer.name}</div>
-                          )}
-                          {customer.phone && (
-                            <div className="text-sm text-gray-500">{customer.phone}</div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Receivables
-                  </label>
-                  <Input
-                    type="text"
-                    value={selectedCustomer?.pendingBalance ? `${selectedCustomer.pendingBalance}` : 'No pending balance'}
-                    className="w-full bg-gray-50"
-                    readOnly
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description
-                  </label>
-                  <Textarea
-                    value={formData.particular}
-                    onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
-                    className="w-full resize-none"
-                    rows="4"
-                    placeholder="Enter receipt description or notes..."
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Right Column */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Receipt Date
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                      className="w-full pr-10"
-                    />
-                    <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Amount <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.amount}
-                    onChange={(e) => {
-                      const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
-                      setFormData(prev => ({ ...prev, amount: value }));
-                    }}
-                    className="w-full"
-                    placeholder="0.00"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Notes (Optional)
-                  </label>
-                  <Textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    className="w-full resize-none"
-                    rows="3"
-                    placeholder="Additional notes..."
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col-reverse sm:flex-row justify-between items-stretch sm:items-center gap-3 mt-8 pt-6 border-t border-gray-200">
-              <Button
-                onClick={resetForm}
-                variant="outline"
-                size="default"
-                className="flex items-center justify-center gap-2 w-full sm:w-auto"
-              >
-                <RotateCcw className="h-4 w-4" />
-                <span>Reset</span>
-              </Button>
-
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-                <Button
-                  variant="outline"
-                  size="default"
-                  className="flex items-center justify-center gap-2 w-full sm:w-auto"
-                >
-                  <Printer className="h-4 w-4" />
-                  <span>Print Preview</span>
-                </Button>
-                <Button
-                  onClick={handleCreate}
-                  disabled={creating}
-                  variant="default"
-                  size="default"
-                  className="flex items-center justify-center gap-2 w-full sm:w-auto"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>{creating ? 'Saving...' : 'Save Receipt'}</span>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Edit Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Edit Cash Receipt</h3>
-                <button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setSelectedReceipt(null);
-                    resetForm();
-                  }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Date
-                  </label>
-                  <Input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                    className="w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Amount
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.amount}
-                    onChange={(e) => {
-                      const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
-                      setFormData(prev => ({ ...prev, amount: value }));
-                    }}
-                    className="w-full"
-                    placeholder="0.00"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Particular
-                  </label>
-                  <Textarea
-                    value={formData.particular}
-                    onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
-                    className="w-full"
-                    rows="3"
-                    placeholder="Enter transaction details..."
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Customer (Optional)
-                  </label>
-                  <select
-                    value={formData.customer}
-                    onChange={(e) => setFormData(prev => ({ ...prev, customer: e.target.value }))}
-                    className="input w-full"
-                    disabled={customersLoading}
-                  >
-                    <option value="">
-                      {customersLoading ? 'Loading customers...' : 'Select Customer'}
-                    </option>
-                    {customers?.map((customer) => {
-                      const customerId = customer.id || customer._id;
-                      return (
-                        <option key={customerId} value={customerId}>
-                          {customer.businessName || customer.business_name || customer.displayName || customer.name} {customer.phone ? `(${customer.phone})` : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Notes (Optional)
-                  </label>
-                  <Textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    className="w-full"
-                    rows="2"
-                    placeholder="Additional notes..."
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end space-x-3 mt-6">
-                <Button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setSelectedReceipt(null);
-                    resetForm();
-                  }}
-                  variant="secondary"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleUpdate}
-                  disabled={updating}
-                  variant="default"
-                >
-                  {updating ? 'Updating...' : 'Update'}
-                </Button>
-              </div>
-            </div>
+      <BaseModal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedReceipt(null);
+          resetForm();
+        }}
+        title="Edit Cash Receipt"
+        maxWidth="md"
+        variant="centered"
+        contentClassName="p-5"
+        footer={
+          <div className="flex justify-end gap-3 w-full">
+            <Button
+              type="button"
+              onClick={() => {
+                setShowEditModal(false);
+                setSelectedReceipt(null);
+                resetForm();
+              }}
+              variant="secondary"
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleUpdate} disabled={updating} variant="default">
+              {updating ? 'Updating...' : 'Update'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+            <Input
+              type="date"
+              value={formData.date}
+              onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+              className="w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.amount}
+              onChange={(e) => {
+                const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
+                setFormData(prev => ({ ...prev, amount: value }));
+              }}
+              className="w-full"
+              placeholder="0.00"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Particular</label>
+            <Textarea
+              value={formData.particular}
+              onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
+              className="w-full"
+              rows={3}
+              placeholder="Enter transaction details..."
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Customer (Optional)</label>
+            <select
+              value={formData.customer}
+              onChange={(e) => setFormData(prev => ({ ...prev, customer: e.target.value }))}
+              className="input w-full"
+              disabled={customersLoading}
+            >
+              <option value="">{customersLoading ? 'Loading customers...' : 'Select Customer'}</option>
+              {customers?.map((customer) => {
+                const customerId = customer.id || customer._id;
+                return (
+                  <option key={customerId} value={customerId}>
+                    {customer.businessName || customer.business_name || customer.displayName || customer.name}{' '}
+                    {customer.phone ? `(${customer.phone})` : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Notes (Optional)</label>
+            <Textarea
+              value={formData.notes}
+              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              className="w-full"
+              rows={2}
+              placeholder="Additional notes..."
+            />
           </div>
         </div>
-      )}
+      </BaseModal>
 
       {/* View Modal */}
-      {showViewModal && selectedReceipt && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Cash Receipt Details</h3>
-                <button
-                  onClick={() => {
-                    setShowViewModal(false);
-                    setSelectedReceipt(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Voucher Code
-                  </label>
-                  <p className="text-sm text-gray-900">{selectedReceipt.voucherCode}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date
-                  </label>
-                  <p className="text-sm text-gray-900">{formatDate(selectedReceipt.date)}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Amount
-                  </label>
-                  <p className="text-sm text-gray-900">{formatCurrency(selectedReceipt.amount)}</p>
-                </div>
-                {(selectedReceipt.customer || selectedReceipt.supplier) && viewLedgerBalance != null && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Ledger Balance
-                    </label>
-                    <p className="text-sm text-gray-900">{formatCurrency(viewLedgerBalance)}</p>
-                  </div>
-                )}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Particular
-                  </label>
-                  <p className="text-sm text-gray-900">{selectedReceipt.particular}</p>
-                </div>
-                {(selectedReceipt.customer || selectedReceipt.supplier) && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {selectedReceipt.customer ? 'Customer' : 'Supplier'}
-                    </label>
-                    <p className="text-sm text-gray-900">
-                      {selectedReceipt.customer
-                        ? (selectedReceipt.customer.businessName || selectedReceipt.customer.business_name || selectedReceipt.customer.displayName || selectedReceipt.customer.name || 'N/A')
-                        : (selectedReceipt.supplier.companyName || selectedReceipt.supplier.businessName || selectedReceipt.supplier.displayName || selectedReceipt.supplier.name || 'N/A')}
-                    </p>
-                  </div>
-                )}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Payment Method
-                  </label>
-                  <p className="text-sm text-gray-900 capitalize">{(selectedReceipt.paymentMethod ?? '').replace(/_/g, ' ')}</p>
-                </div>
-                {selectedReceipt.notes && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Notes
-                    </label>
-                    <p className="text-sm text-gray-900">{selectedReceipt.notes}</p>
-                  </div>
-                )}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Created By
-                  </label>
-                  <p className="text-sm text-gray-900">
-                    {selectedReceipt.createdBy?.firstName} {selectedReceipt.createdBy?.lastName}
-                  </p>
-                </div>
-              </div>
-              <div className="flex justify-end mt-6">
-                <Button
-                  onClick={() => {
-                    setShowViewModal(false);
-                    setSelectedReceipt(null);
-                  }}
-                  variant="secondary"
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
+      <BaseModal
+        isOpen={showViewModal && !!selectedReceipt}
+        onClose={() => {
+          setShowViewModal(false);
+          setSelectedReceipt(null);
+        }}
+        title="Cash Receipt Details"
+        maxWidth="md"
+        variant="centered"
+        contentClassName="p-5"
+        footer={
+          <div className="flex justify-end w-full">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowViewModal(false);
+                setSelectedReceipt(null);
+              }}
+            >
+              Close
+            </Button>
           </div>
-        </div>
-      )}
+        }
+      >
+        {selectedReceipt && (
+          <div className="space-y-4">
+            <DetailRow label="Voucher Code">{selectedReceipt.voucherCode}</DetailRow>
+            <DetailRow label="Date">{formatDate(selectedReceipt.date)}</DetailRow>
+            <DetailRow label="Amount">{formatCurrency(selectedReceipt.amount)}</DetailRow>
+            {(selectedReceipt.customer || selectedReceipt.supplier) && viewLedgerBalance != null && (
+              <DetailRow label="Ledger Balance">{formatCurrency(viewLedgerBalance)}</DetailRow>
+            )}
+            <DetailRow label="Particular">{selectedReceipt.particular}</DetailRow>
+            {(selectedReceipt.customer || selectedReceipt.supplier) && (
+              <DetailRow label={selectedReceipt.customer ? 'Customer' : 'Supplier'}>
+                {selectedReceipt.customer
+                  ? selectedReceipt.customer.businessName ||
+                    selectedReceipt.customer.business_name ||
+                    selectedReceipt.customer.displayName ||
+                    selectedReceipt.customer.name ||
+                    'N/A'
+                  : selectedReceipt.supplier.companyName ||
+                    selectedReceipt.supplier.businessName ||
+                    selectedReceipt.supplier.displayName ||
+                    selectedReceipt.supplier.name ||
+                    'N/A'}
+              </DetailRow>
+            )}
+            <DetailRow label="Payment Method">
+              <span className="capitalize">{(selectedReceipt.paymentMethod ?? '').replace(/_/g, ' ')}</span>
+            </DetailRow>
+            {selectedReceipt.notes && <DetailRow label="Notes">{selectedReceipt.notes}</DetailRow>}
+            <DetailRow label="Created By">
+              {selectedReceipt.createdBy?.firstName} {selectedReceipt.createdBy?.lastName}
+            </DetailRow>
+          </div>
+        )}
+      </BaseModal>
+
+      <ExportReportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Export Cash Receipts"
+        format={exportFormat}
+        onFormatChange={setExportFormat}
+        onConfirm={handleExportConfirm}
+        isExporting={isExporting}
+        showDateRange={false}
+        namePrefix="cash-receipts-export-format"
+      />
 
       {/* Receipt print modal – dedicated layout for receipts only */}
       <ReceiptPaymentPrintModal

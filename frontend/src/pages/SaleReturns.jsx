@@ -705,76 +705,76 @@ const SaleReturns = () => {
               <p className="text-sm text-gray-600 mb-3">
                 Search by Product Name, SKU, or Barcode (products previously sold to this customer)
               </p>
-            <div className="flex gap-3 relative flex-col sm:flex-row">
-              <div className="flex-1 relative">
-                <Input
-                  ref={searchInputRef}
-                  type="text"
-                  value={productSearchTerm}
-                  onChange={(e) => {
-                    setProductSearchTerm(e.target.value);
-                    setShowSuggestions(true);
-                  }}
-                  onFocus={() => {
-                    setShowSuggestions(true); // Show all products on focus (even without typing)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      if (searchSuggestions.length > 0) {
-                        handleSuggestionSelect(searchSuggestions[0]);
+              <div className="flex gap-3 relative flex-col sm:flex-row">
+                <div className="flex-1 relative">
+                  <Input
+                    ref={searchInputRef}
+                    type="text"
+                    value={productSearchTerm}
+                    onChange={(e) => {
+                      setProductSearchTerm(e.target.value);
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => {
+                      setShowSuggestions(true); // Show all products on focus (even without typing)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (searchSuggestions.length > 0) {
+                          handleSuggestionSelect(searchSuggestions[0]);
+                        }
                       }
-                    }
-                  }}
-                  placeholder="Search product name, SKU, or barcode - click suggestion to add"
-                  className="w-full"
-                />
+                    }}
+                    placeholder="Search product name, SKU, or barcode - click suggestion to add"
+                    className="w-full"
+                  />
+                </div>
               </div>
-            </div>
-            {/* Suggestions Dropdown - Using Portal (renders to document.body) */}
-            {showSuggestions && createPortal(
-            <div
-              ref={suggestionsRef}
-              className="fixed z-[9999] bg-white shadow-lg max-h-96 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm border border-gray-200"
-              style={{
-                top: `${suggestionsPosition.top}px`,
-                left: `${suggestionsPosition.left}px`,
-                width: `${suggestionsPosition.width}px`
-              }}
-            >
-              {isSearching ? (
-                <div className="px-4 py-8 text-center">
-                  <LoadingSpinner size="sm" />
-                  <p className="text-sm text-gray-500 mt-2">Searching...</p>
-                </div>
-              ) : searchSuggestions.length > 0 ? (
-                <>
-                  <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase border-b border-gray-200">
-                    Suggestions ({searchSuggestions.length})
-                  </div>
-                  {searchSuggestions.map((suggestion) => (
-                    <button
-                      key={suggestion.id}
-                      onClick={() => handleSuggestionSelect(suggestion)}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0"
-                    >
-                      <div className="font-medium">{suggestion.name}</div>
-                      <div className="flex gap-4 text-xs text-gray-500 mt-1">
-                        {suggestion.sku && <span>SKU: {suggestion.sku}</span>}
-                        {suggestion.barcode && <span>Barcode: {suggestion.barcode}</span>}
-                        <span className="text-green-600">Available: {suggestion.remainingQuantity}</span>
+              {/* Suggestions Dropdown - Using Portal (renders to document.body) */}
+              {showSuggestions && createPortal(
+                <div
+                  ref={suggestionsRef}
+                  className="fixed z-[9999] bg-white shadow-lg max-h-96 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm border border-gray-200"
+                  style={{
+                    top: `${suggestionsPosition.top}px`,
+                    left: `${suggestionsPosition.left}px`,
+                    width: `${suggestionsPosition.width}px`
+                  }}
+                >
+                  {isSearching ? (
+                    <div className="px-4 py-8 text-center">
+                      <LoadingSpinner size="sm" />
+                      <p className="text-sm text-gray-500 mt-2">Searching...</p>
+                    </div>
+                  ) : searchSuggestions.length > 0 ? (
+                    <>
+                      <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase border-b border-gray-200">
+                        Suggestions ({searchSuggestions.length})
                       </div>
-                    </button>
-                  ))}
-                </>
-              ) : (
-                <div className="px-4 py-8 text-center text-gray-500 text-sm">
-                  No products found
-                </div>
+                      {searchSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion.id}
+                          onClick={() => handleSuggestionSelect(suggestion)}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="font-medium">{suggestion.name}</div>
+                          <div className="flex gap-4 text-xs text-gray-500 mt-1">
+                            {suggestion.sku && <span>SKU: {suggestion.sku}</span>}
+                            {suggestion.barcode && <span>Barcode: {suggestion.barcode}</span>}
+                            <span className="text-green-600">Available: {suggestion.remainingQuantity}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="px-4 py-8 text-center text-gray-500 text-sm">
+                      No products found
+                    </div>
+                  )}
+                </div>,
+                document.body
               )}
-            </div>,
-            document.body
-          )}
             </div>
 
             {/* Return Items - same table layout as Sales cart */}
@@ -989,9 +989,9 @@ const SaleReturns = () => {
               <RotateCcw className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600">No sale returns found</p>
             </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1055,9 +1055,9 @@ const SaleReturns = () => {
                     </tr>
                   ))}
                 </tbody>
-            </table>
-          </div>
-        )}
+              </table>
+            </div>
+          )}
         </div>
       </div>
 

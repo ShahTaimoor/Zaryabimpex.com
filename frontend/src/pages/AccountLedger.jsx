@@ -22,7 +22,7 @@ import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { handleApiError } from '../utils/errorHandler';
+import { handleApiError, showSuccessToast } from '../utils/errorHandler';
 import { toast } from 'sonner';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
@@ -175,10 +175,9 @@ const AccountLedger = () => {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
-      toast.success(`Ledger exported as ${format.toUpperCase()} successfully`);
+      showSuccessToast(`Ledger exported as ${format.toUpperCase()} successfully`);
     } catch (error) {
       handleApiError(error, 'Export ledger');
-      toast.error('Failed to export ledger');
     } finally {
       setIsExporting(false);
     }

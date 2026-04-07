@@ -121,13 +121,15 @@ const PrintReportModal = ({
             </div>
 
             {/* Filters Info */}
-            <div className="filters flex justify-between text-sm text-gray-600 mb-6 bg-gray-50 p-3 rounded-lg">
+            <div className="filters flex flex-wrap justify-between gap-3 text-sm text-gray-600 mb-6 bg-gray-50 p-3 rounded-lg">
               <div>
                 <span className="font-semibold">Period:</span> {filters?.dateFrom || 'All Time'} to {filters?.dateTo || 'Present'}
               </div>
-              <div>
-                <span className="font-semibold">City:</span> {filters?.city || 'All Cities'}
-              </div>
+              {filters?.city ? (
+                <div>
+                  <span className="font-semibold">City:</span> {filters.city}
+                </div>
+              ) : null}
               <div>
                 <span className="font-semibold">Printed:</span> {new Date().toLocaleString()}
               </div>

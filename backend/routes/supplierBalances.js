@@ -165,7 +165,8 @@ router.get('/reports/balance-issues', [
     for (const supplierId of supplierIds) {
       try {
         const summary = await SupplierBalanceService.getBalanceSummary(supplierId);
-        balanceMap.set(supplierId, summary.currentBalance || 0);
+        // Full AP balance (opening + ledger 2000) — same as AccountingService.getSupplierBalance
+        balanceMap.set(supplierId, summary.balances?.currentBalance ?? 0);
       } catch (error) {
         balanceMap.set(supplierId, 0);
       }
@@ -176,8 +177,7 @@ router.get('/reports/balance-issues', [
     const overCreditLimit = [];
 
     suppliers.forEach(s => {
-      const ledgerBalance = balanceMap.get(s._id.toString()) || 0;
-      const netBalance = (s.openingBalance || 0) + ledgerBalance;
+      const netBalance = balanceMap.get(s._id.toString()) || 0;
 
       const supplierWithBalance = {
         ...s.toObject(),

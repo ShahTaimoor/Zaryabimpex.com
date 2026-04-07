@@ -23,8 +23,7 @@ import {
   ArrowUpDown,
   ChevronDown
 } from 'lucide-react';
-import { useGetProductsQuery, useLazyGetLastPurchasePriceQuery, useGetLastPurchasePricesMutation } from '../store/services/productsApi';
-import { useGetVariantsQuery, useGetVariantsByBaseProductQuery } from '../store/services/productVariantsApi';
+import { useLazyGetLastPurchasePriceQuery, useGetLastPurchasePricesMutation } from '../store/services/productsApi';
 import { useGetCustomersQuery, useGetCustomerQuery, useLazySearchCustomersQuery } from '../store/services/customersApi';
 import {
   useCreateSaleMutation,
@@ -41,7 +40,13 @@ import { useGetBanksQuery } from '../store/services/banksApi';
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
-import { hasDualUnit, getPiecesPerBox, piecesToBoxesAndPieces, formatStockDualLabel } from '../utils/dualUnitUtils';
+import {
+  hasDualUnit,
+  getPiecesPerBox,
+  piecesToBoxesAndPieces,
+  computeTotalPieces,
+  formatStockDualLabel,
+} from '../utils/dualUnitUtils';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -49,7 +54,6 @@ import { Input } from '@/components/ui/input';
 import {
   OrderCheckoutCard,
   OrderDetailsSection,
-  OrderSummaryBar,
   OrderSummaryContent,
   OrderInsetPanel,
   OrderCheckoutActions,
@@ -73,682 +77,16 @@ import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
 import { useAuth } from '../contexts/AuthContext';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
-import BarcodeScanner from '../components/BarcodeScanner';
-import { Camera } from 'lucide-react';
 
-// Helper function to get local date in YYYY-MM-DD format (avoids timezone issues with toISOString)
-const getLocalDateString = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-// ProductSearch Component
-const ProductSearch = ({
-  onAddProduct,
-  selectedCustomer,
-  showCostPrice,
-  onLastPurchasePriceFetched,
-  hasCostPricePermission,
-  priceType,
-  onRefetchReady,
-  dualUnitShowBoxInput = true,
-  dualUnitShowPiecesInput = true,
-}) => {
-  const [productSearchTerm, setProductSearchTerm] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [quantity, setQuantity] = useState(1);
-  const [customRate, setCustomRate] = useState('');
-  const [calculatedRate, setCalculatedRate] = useState(0);
-  const [isAddingProduct, setIsAddingProduct] = useState(false);
-  const [isAddingToCart, setIsAddingToCart] = useState(false);
-  const [searchKey, setSearchKey] = useState(0); // Key to force re-render
-  const [lastPurchasePrice, setLastPurchasePrice] = useState(null);
-  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
-  const productSearchRef = useRef(null);
-
-  // Fetch all products (or a larger set) for client-side fuzzy search
-  const [getLastPurchasePrice] = useLazyGetLastPurchasePriceQuery();
-  const [getLastPurchasePrices] = useGetLastPurchasePricesMutation();
-
-  const { data: productsData, isLoading: productsLoading, error: productsError, refetch: refetchProducts } = useGetProductsQuery(
-    { limit: 999999, status: 'active' },
-    {
-      keepPreviousData: true,
-      staleTime: 0, // Always consider data stale to get fresh stock levels
-      refetchOnMountOrArgChange: true, // Refetch when component mounts or params change
-    }
-  );
-
-  // Fetch all variants for search
-  const { data: variantsData, isLoading: variantsLoading } = useGetVariantsQuery(
-    { status: 'active' },
-    {
-      keepPreviousData: true,
-      staleTime: 0,
-      refetchOnMountOrArgChange: true,
-    }
-  );
-
-  // Expose refetch function to parent component via callback
-  useEffect(() => {
-    if (onRefetchReady && refetchProducts && typeof refetchProducts === 'function') {
-      onRefetchReady(refetchProducts);
-    }
-  }, [onRefetchReady, refetchProducts]);
-
-  // Extract products array from RTK Query response
-  const allProducts = React.useMemo(() => {
-    if (!productsData) return [];
-    if (Array.isArray(productsData)) return productsData;
-    if (productsData?.data?.products) return productsData.data.products;
-    if (productsData?.products) return productsData.products;
-    if (productsData?.data?.data?.products) return productsData.data.data.products;
-    return [];
-  }, [productsData]);
-
-  // Extract variants array from RTK Query response
-  const allVariants = React.useMemo(() => {
-    if (!variantsData) return [];
-    if (Array.isArray(variantsData)) return variantsData;
-    if (variantsData?.data?.variants) return variantsData.data.variants;
-    if (variantsData?.variants) return variantsData.variants;
-    return [];
-  }, [variantsData]);
-
-  // Combine products and variants for search, marking variants with isVariant flag
-  const allItems = React.useMemo(() => {
-    const productsList = allProducts.map(p => ({ ...p, isVariant: false }));
-    const variantsList = allVariants
-      .filter(v => v.status === 'active')
-      .map(v => ({
-        ...v,
-        isVariant: true,
-        // Use variant's display name for search, but keep variant data
-        name: v.displayName || v.variantName || `${v.baseProduct?.name || ''} - ${v.variantValue || ''}`,
-        // Use variant pricing and inventory
-        pricing: v.pricing || { retail: 0, wholesale: 0, cost: 0 },
-        inventory: v.inventory || { currentStock: 0, reorderPoint: 0 },
-        // Keep reference to base product
-        baseProductId: v.baseProduct?._id || v.baseProduct,
-        baseProductName: v.baseProduct?.name || '',
-        variantType: v.variantType,
-        variantValue: v.variantValue,
-        variantName: v.variantName,
-      }));
-    return [...productsList, ...variantsList];
-  }, [allProducts, allVariants]);
-
-  const products = useFuzzySearch(
-    allItems,
-    productSearchTerm,
-    ['name', 'description', 'brand', 'displayName', 'variantValue', 'variantName'],
-    {
-      threshold: 0.4,
-      minScore: 0.3,
-      limit: null // Show unlimited products
-    }
-  );
-
-  const calculatePrice = (product, priceType) => {
-    if (!product) return 0;
-
-    // Handle both regular products and variants
-    const pricing = product.pricing || {};
-
-    if (priceType === 'distributor') {
-      return pricing.distributor || pricing.wholesale || pricing.retail || 0;
-    } else if (priceType === 'wholesale') {
-      return pricing.wholesale || pricing.retail || 0;
-    } else if (priceType === 'retail') {
-      return pricing.retail || 0;
-    } else {
-      // Custom - keep current rate or default to wholesale
-      return pricing.wholesale || pricing.retail || 0;
-    }
-  };
-
-  const handleProductSelect = async (product) => {
-    setSelectedProduct(product);
-    setQuantity(1);
-    setIsAddingProduct(true);
-
-    // Show selected product/variant name in search field
-    const displayName = product.isVariant
-      ? (product.displayName || product.variantName || product.name)
-      : product.name;
-    setProductSearchTerm(displayName);
-
-    // Fetch last purchase price (always, for loss alerts)
-    // For variants, use the base product ID to get purchase price
-    const productIdForPrice = product.isVariant ? product.baseProductId : product._id;
-
-    if (productIdForPrice) {
-      try {
-        const response = await getLastPurchasePrice(productIdForPrice).unwrap();
-        if (response && response.lastPurchasePrice !== null) {
-          setLastPurchasePrice(response.lastPurchasePrice);
-          if (onLastPurchasePriceFetched) {
-            onLastPurchasePriceFetched(productIdForPrice, response.lastPurchasePrice);
-          }
-        } else {
-          setLastPurchasePrice(null);
-        }
-      } catch (error) {
-        // Silently fail - last purchase price is optional
-        setLastPurchasePrice(null);
-      }
-    } else {
-      setLastPurchasePrice(null);
-    }
-
-    // Calculate the rate based on selected price type
-    const calculatedPrice = calculatePrice(product, priceType);
-
-    setCalculatedRate(calculatedPrice);
-    setCustomRate(calculatedPrice.toString());
-  };
-
-  // Update rate when price type changes
-  useEffect(() => {
-    if (selectedProduct) {
-      const calculatedPrice = calculatePrice(selectedProduct, priceType);
-      setCalculatedRate(calculatedPrice);
-      // Only update customRate if it matches the previous calculated rate (user hasn't manually changed it)
-      const previousCalculated = calculatePrice(selectedProduct, priceType === 'wholesale' ? 'retail' : 'wholesale');
-      if (!customRate || customRate === previousCalculated.toString() || customRate === calculatedRate.toString()) {
-        setCustomRate(calculatedPrice.toString());
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    // Note: customRate and calculatedRate are intentionally excluded from deps to prevent infinite loops.
-    // We only want to recalculate when priceType or selectedProduct changes.
-  }, [priceType, selectedProduct]);
-
-  const handleAddToCart = async () => {
-    if (!selectedProduct) return;
-
-    // Validate that rate is filled
-    if (!customRate || parseInt(customRate) <= 0) {
-      toast.error('Please enter a valid rate');
-      return;
-    }
-
-    // Get display name for error messages
-    const displayName = selectedProduct.isVariant
-      ? (selectedProduct.displayName || selectedProduct.variantName || selectedProduct.name)
-      : selectedProduct.name;
-
-    // Check if product/variant is out of stock
-    const currentStock = selectedProduct.inventory?.currentStock || 0;
-    if (currentStock === 0) {
-      toast.error(`${displayName} is out of stock and cannot be added to the invoice.`);
-      return;
-    }
-
-    // Check if requested quantity exceeds available stock
-    if (quantity > currentStock) {
-      toast.error(`Cannot add ${quantity} units. Only ${currentStock} units available in stock.`);
-      return;
-    }
-
-    setIsAddingToCart(true);
-    try {
-      // Use the rate from the input field
-      const unitPrice = parseInt(customRate) || Math.round(calculatedRate);
-
-      // Check if sale price is less than cost price (always check, regardless of showCostPrice)
-      const costPrice = lastPurchasePrice !== null ? lastPurchasePrice : selectedProduct?.pricing?.cost;
-      if (costPrice !== undefined && costPrice !== null && unitPrice < costPrice) {
-        const loss = costPrice - unitPrice;
-        const lossPercent = ((loss / costPrice) * 100).toFixed(1);
-        const shouldProceed = window.confirm(
-          `⚠️ WARNING: Sale price (${unitPrice}) is below cost price (${Math.round(costPrice)}).\n\n` +
-          `Loss per unit: ${Math.round(loss)} (${lossPercent}%)\n` +
-          `Total loss for ${quantity} unit(s): ${Math.round(loss * quantity)}\n\n` +
-          `Do you want to proceed?`
-        );
-        if (!shouldProceed) {
-          return;
-        }
-        // Show warning toast even if proceeding
-        toast.warning(
-          `Product added with loss: ${Math.round(loss)} per unit (${lossPercent}%)`,
-          { duration: 6000 }
-        );
-      }
-
-      const ppb = getPiecesPerBox(selectedProduct);
-      const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(quantity, ppb) : {};
-      onAddProduct({
-        product: selectedProduct,
-        quantity: quantity,
-        ...(ppb && { boxes, pieces }),
-        unitPrice: unitPrice
-      });
-
-      // Reset form
-      setSelectedProduct(null);
-      setQuantity(1);
-      setCustomRate('');
-      setCalculatedRate(0);
-      setIsAddingProduct(false);
-
-      // Clear search term and force re-render
-      setProductSearchTerm('');
-      setSearchKey(prev => prev + 1);
-
-      // Focus back to product search input
-      setTimeout(() => {
-        if (productSearchRef.current) {
-          productSearchRef.current.focus();
-        }
-      }, 100);
-
-      // Show success message
-      const priceLabel = selectedCustomer?.businessType === 'wholesale' ? 'wholesale' :
-        selectedCustomer?.businessType === 'distributor' ? 'distributor' : 'retail';
-      toast.success(`${selectedProduct.name} added to cart at ${priceLabel} price: ${Math.round(unitPrice)}`);
-    } catch (error) {
-      handleApiError(error, 'Product Price Check');
-    } finally {
-      setIsAddingToCart(false);
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && isAddingProduct) {
-      e.preventDefault();
-      handleAddToCart();
-    } else if (e.key === 'Escape' && isAddingProduct) {
-      e.preventDefault();
-      setSelectedProduct(null);
-      setQuantity(1);
-      setCustomRate('');
-      setCalculatedRate(0);
-      setIsAddingProduct(false);
-    }
-  };
-
-  const productDisplayKey = (product) => {
-    const inventory = product.inventory || {};
-    const isLowStock = inventory.currentStock <= inventory.reorderPoint;
-    const isOutOfStock = inventory.currentStock === 0;
-
-    // Get display name - use variant display name if it's a variant
-    const displayName = product.isVariant
-      ? (product.displayName || product.variantName || product.name)
-      : product.name;
-
-    // Get pricing based on selected price type
-    const pricing = product.pricing || {};
-    let unitPrice = pricing.wholesale || pricing.retail || 0;
-    let priceLabel = 'Wholesale';
-
-    if (priceType === 'wholesale') {
-      unitPrice = pricing.wholesale || pricing.retail || 0;
-      priceLabel = 'Wholesale';
-    } else if (priceType === 'retail') {
-      unitPrice = pricing.retail || 0;
-      priceLabel = 'Retail';
-    }
-
-    const purchasePrice = pricing?.cost || 0;
-
-    // Show variant indicator
-    const variantInfo = product.isVariant
-      ? <span className="text-xs text-blue-600 font-semibold">({product.variantType}: {product.variantValue})</span>
-      : null;
-
-    return (
-      <div className="flex items-center justify-between w-full">
-        <div className="flex flex-col">
-          <div className="font-medium">{displayName}</div>
-          {variantInfo && <div className="text-xs text-gray-500">{variantInfo}</div>}
-        </div>
-        <div className="flex items-center space-x-4">
-          <div className={`text-sm ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-orange-600' : 'text-gray-600'}`}>
-            Stock: {inventory.currentStock || 0}
-          </div>
-          {showCostPrice && hasCostPricePermission && (purchasePrice !== undefined && purchasePrice !== null) && (
-            <div className="text-sm text-red-600 font-medium">Cost: {Math.round(purchasePrice)}</div>
-          )}
-          <div className="text-sm text-gray-600">Price: {Math.round(unitPrice)}</div>
-        </div>
-      </div>
-    );
-  };
-
-  // Fit dual-unit quantity (boxes + pieces + total) in one row: 12 cols total
-  const dualUnit = hasDualUnit(selectedProduct);
-  const searchColClass =
-    dualUnit && showCostPrice && hasCostPricePermission
-      ? 'col-span-3'
-      : dualUnit
-        ? 'col-span-4'
-        : showCostPrice && hasCostPricePermission
-          ? 'col-span-6'
-          : 'col-span-7';
-  /** Wider column when dual unit (boxes + pieces + total) */
-  const quantityColClass = dualUnit ? 'col-span-4' : 'col-span-1';
-
-  return (
-    <div className="space-y-4">
-      {/* Product Selection - Responsive Layout */}
-      <div>
-        {/* Mobile Layout */}
-        <div className="md:hidden space-y-3">
-          {/* Product Search */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Product Search
-            </label>
-            <div className="relative flex space-x-2">
-              <div className="flex-1">
-                <SearchableDropdown
-                  key={searchKey}
-                  ref={productSearchRef}
-                  placeholder="Search or select product..."
-                  items={products || []}
-                  onSelect={handleProductSelect}
-                  onSearch={setProductSearchTerm}
-                  displayKey={productDisplayKey}
-                  selectedItem={selectedProduct}
-                  loading={productsLoading || variantsLoading}
-                  emptyMessage={productSearchTerm.length > 0 ? "No products found" : "Start typing to search products..."}
-                  value={productSearchTerm}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowBarcodeScanner(true)}
-                className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center flex-shrink-0"
-                title="Scan barcode to search product"
-              >
-                <Camera className="h-5 w-5 text-gray-600" />
-              </button>
-            </div>
-          </div>
-
-          {/* Fields Grid - 2 columns on mobile */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Stock */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Stock
-              </label>
-              <span
-                className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center min-h-[2.5rem] flex flex-col items-center justify-center gap-0.5 leading-tight"
-                title={selectedProduct ? `Available stock (pieces)` : ''}
-              >
-                {selectedProduct ? (
-                  hasDualUnit(selectedProduct) ? (
-                    <>
-                      <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
-                      <span className="text-[10px] font-normal text-gray-500">available</span>
-                    </>
-                  ) : (
-                    <span>{selectedProduct.inventory?.currentStock ?? 0} pcs</span>
-                  )
-                ) : (
-                  '0'
-                )}
-              </span>
-            </div>
-
-            {/* Amount */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Amount
-              </label>
-              <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
-                {isAddingProduct ? Math.round(quantity * parseInt(customRate || 0)) : 0}
-              </span>
-            </div>
-
-            {/* Quantity — full width on mobile when dual unit */}
-            <div className={dualUnit ? 'col-span-2' : ''}>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Quantity
-              </label>
-              <DualUnitQuantityInput
-                product={selectedProduct}
-                quantity={quantity}
-                onChange={(q) => setQuantity(q)}
-                max={selectedProduct?.inventory?.currentStock}
-                showRemainingAfterSale={false}
-                showPiecesUnitLabel={false}
-                showBoxInput={dualUnitShowBoxInput}
-                showPiecesInput={dualUnitShowPiecesInput}
-                onKeyDown={handleKeyDown}
-                inputClassName="text-center h-10 border border-gray-300 rounded px-2 w-full"
-                compact
-              />
-            </div>
-
-            {/* Rate */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Rate
-              </label>
-              <Input
-                type="number"
-                step="1"
-                autoComplete="off"
-                value={customRate}
-                onChange={(e) => setCustomRate(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onFocus={(e) => e.target.select()}
-                className="text-center h-10"
-                placeholder="0"
-                required
-              />
-            </div>
-
-            {/* Cost - Full width if shown */}
-            {showCostPrice && hasCostPricePermission && (
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Cost
-                </label>
-                <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-2 rounded border border-red-200 block text-center h-10 flex items-center justify-center" title="Cost Price">
-                  {lastPurchasePrice !== null
-                    ? `${Math.round(lastPurchasePrice)}`
-                    : (selectedProduct?.pricing?.cost !== undefined && selectedProduct?.pricing?.cost !== null)
-                      ? `${Math.round(selectedProduct.pricing.cost)}`
-                      : selectedProduct ? 'N/A' : '0'}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Add Button - Full width on mobile */}
-          <div>
-            <LoadingButton
-              type="button"
-              onClick={handleAddToCart}
-              isLoading={isAddingToCart}
-              variant="default"
-              className="w-full flex items-center justify-center px-4 py-2.5 h-11"
-              disabled={!selectedProduct || isAddingToCart}
-              title="Add to cart (or press Enter in Quantity/Rate fields - focus returns to search)"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add
-            </LoadingButton>
-          </div>
-        </div>
-
-        {/* Desktop Layout — items-start for quantity column alignment */}
-        <div className="hidden md:grid grid-cols-12 gap-x-3 gap-y-3 items-start">
-          {/* Product Search - 7 columns */}
-          <div className={searchColClass}>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Product Search
-            </label>
-            <div className="relative flex space-x-2">
-              <div className="flex-1">
-                <SearchableDropdown
-                  key={searchKey}
-                  ref={productSearchRef}
-                  placeholder="Search or select product..."
-                  items={products || []}
-                  onSelect={handleProductSelect}
-                  onSearch={setProductSearchTerm}
-                  displayKey={productDisplayKey}
-                  selectedItem={selectedProduct}
-                  loading={productsLoading || variantsLoading}
-                  emptyMessage={productSearchTerm.length > 0 ? "No products found" : "Start typing to search products..."}
-                  value={productSearchTerm}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowBarcodeScanner(true)}
-                className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center"
-                title="Scan barcode to search product"
-              >
-                <Camera className="h-5 w-5 text-gray-600" />
-              </button>
-            </div>
-          </div>
-
-          {/* Stock - 1 column */}
-          <div className="col-span-1 min-w-0">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Stock
-            </label>
-            <span
-              className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center min-h-[2.75rem] flex flex-col items-center justify-center gap-0.5 leading-snug"
-              title={selectedProduct ? 'Available stock (pieces)' : ''}
-            >
-              {selectedProduct ? (
-                dualUnit ? (
-                  <>
-                    <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
-                    <span className="text-[10px] font-normal text-gray-500">available</span>
-                  </>
-                ) : (
-                  <span>{selectedProduct.inventory?.currentStock ?? 0} pcs</span>
-                )
-              ) : (
-                '0'
-              )}
-            </span>
-          </div>
-
-          {/* Quantity — wider when dual unit (boxes + pieces + total) */}
-          <div className={`${quantityColClass} min-w-0`}>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Quantity
-            </label>
-            <DualUnitQuantityInput
-              product={selectedProduct}
-              quantity={quantity}
-              onChange={(q) => setQuantity(q)}
-              max={selectedProduct?.inventory?.currentStock}
-              showRemainingAfterSale={false}
-              showPiecesUnitLabel={false}
-              showBoxInput={dualUnitShowBoxInput}
-              showPiecesInput={dualUnitShowPiecesInput}
-              onKeyDown={handleKeyDown}
-              inputClassName="text-center border border-gray-300 rounded px-2 h-10"
-              compact
-            />
-          </div>
-
-          {/* Purchase Price - 1 column (conditional) - Between Quantity and Rate */}
-          {showCostPrice && hasCostPricePermission && (
-            <div className="col-span-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cost
-              </label>
-              <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-10 flex items-center justify-center" title="Cost Price">
-                {lastPurchasePrice !== null
-                  ? `${Math.round(lastPurchasePrice)}`
-                  : (selectedProduct?.pricing?.cost !== undefined && selectedProduct?.pricing?.cost !== null)
-                    ? `${Math.round(selectedProduct.pricing.cost)}`
-                    : selectedProduct ? 'N/A' : '0'}
-              </span>
-            </div>
-          )}
-
-          {/* Rate - 1 column (reduced from 2) */}
-          <div className="col-span-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Rate
-            </label>
-            <Input
-              type="number"
-              step="1"
-              autoComplete="off"
-              value={customRate}
-              onChange={(e) => setCustomRate(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onFocus={(e) => e.target.select()}
-              className="text-center h-10"
-              placeholder="0 (Enter to add & focus search)"
-              required
-            />
-          </div>
-
-          {/* Amount - 1 column */}
-          <div className="col-span-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Amount
-            </label>
-            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
-              {isAddingProduct ? Math.round(quantity * parseInt(customRate || 0)) : 0}
-            </span>
-          </div>
-
-          {/* Add Button - 1 column (spacer label aligns row with fields that have labels) */}
-          <div className="col-span-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2 invisible select-none" aria-hidden="true">
-              Add
-            </label>
-            <LoadingButton
-              type="button"
-              onClick={handleAddToCart}
-              isLoading={isAddingToCart}
-              variant="default"
-              className="w-full flex items-center justify-center px-3 py-2 h-10"
-              disabled={!selectedProduct || isAddingToCart}
-              title="Add to cart (or press Enter in Quantity/Rate fields - focus returns to search)"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add
-            </LoadingButton>
-          </div>
-        </div>
-      </div>
-
-      {/* Barcode Scanner Modal */}
-      <BarcodeScanner
-        isOpen={showBarcodeScanner}
-        onClose={() => setShowBarcodeScanner(false)}
-        onScan={(barcodeValue) => {
-          // Search for product by barcode
-          const foundProduct = allProducts.find(p =>
-            p.barcode === barcodeValue || p.sku === barcodeValue
-          );
-
-          if (foundProduct) {
-            handleProductSelect(foundProduct);
-            toast.success(`Product found: ${foundProduct.name}`);
-          } else {
-            // If not found by barcode, search by name/description
-            setProductSearchTerm(barcodeValue);
-            toast(`Searching for: ${barcodeValue}`, { icon: 'ℹ️' });
-          }
-          setShowBarcodeScanner(false);
-        }}
-        scanMode="both"
-      />
-    </div>
-  );
-};
+import { getLocalDateString } from '../utils/dateUtils';
+import {
+  interpretLazyQueryDownloadResult,
+  presentPdfExportBlob,
+  presentNonPdfExportDownload,
+  notifyExportDownloadCatchError,
+} from '../utils/exportReportPresentation';
+import { ProductSearch } from '../components/sales/ProductSearch';
+import ExportReportModal from '../components/ExportReportModal';
 
 export const Sales = ({ tabId, editData }) => {
   // Store refetch function from ProductSearch component
@@ -932,11 +270,11 @@ export const Sales = ({ tabId, editData }) => {
         const paidFromPayload = isInvoicePending
           ? 0
           : (normalizedPaymentStatus === 'pending'
-              ? 0
-              : (editData.payment.amountPaid ??
-                  editData.payment.amountReceived ??
-                  editData.amountPaid ??
-                  0));
+            ? 0
+            : (editData.payment.amountPaid ??
+              editData.payment.amountReceived ??
+              editData.amountPaid ??
+              0));
         const normalizedPaid = Number(paidFromPayload);
         setAmountPaid(Number.isFinite(normalizedPaid) && normalizedPaid >= 0 ? normalizedPaid : 0);
         if (editData.payment.method === 'bank') {
@@ -992,9 +330,7 @@ export const Sales = ({ tabId, editData }) => {
   const [exportPDF] = useExportPDFMutation();
   const [exportJSON] = useExportJSONMutation();
   const [downloadExportFile] = useLazyDownloadExportFileQuery();
-  const [checkApplicableDiscounts, { isLoading: checkingDiscount }] = useCheckApplicableDiscountsMutation();
-
-  const [discountCodeInput, setDiscountCodeInput] = useState('');
+  const [checkApplicableDiscounts] = useCheckApplicableDiscountsMutation();
   const [applicableDiscountList, setApplicableDiscountList] = useState([]);
 
   // Duplicate prevention: use BOTH ref (synchronous check) and state (button disable)
@@ -1235,6 +571,38 @@ export const Sales = ({ tabId, editData }) => {
       // applying last prices, so there's nothing to restore
       return [...prevCart, item];
     });
+  };
+
+  const updateCartBoxCount = (productId, newBoxes) => {
+    const boxes = Math.max(0, parseInt(String(newBoxes), 10) || 0);
+    const cartItem = cart.find((item) => item.product._id === productId);
+    if (!cartItem) return;
+    const ppb = getPiecesPerBox(cartItem.product);
+    if (!ppb) return;
+
+    const pieces =
+      cartItem.pieces != null ? cartItem.pieces : piecesToBoxesAndPieces(cartItem.quantity, ppb).pieces;
+    const total = computeTotalPieces(boxes, pieces, ppb);
+    const availableStock = cartItem.product.inventory?.currentStock || 0;
+
+    if (total > availableStock) {
+      toast.error(
+        `Cannot set quantity to ${total} pcs. Only ${availableStock} units available in stock.`
+      );
+      return;
+    }
+
+    if (total <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+
+    const { boxes: nb, pieces: np } = piecesToBoxesAndPieces(total, ppb);
+    setCart((prevCart) =>
+      prevCart.map((item) =>
+        item.product._id === productId ? { ...item, quantity: total, boxes: nb, pieces: np } : item
+      )
+    );
   };
 
   const updateQuantity = async (productId, newQuantity, dual = null) => {
@@ -1534,37 +902,7 @@ export const Sales = ({ tabId, editData }) => {
         value: discount.value
       }
     ]);
-    setDiscountCodeInput('');
     showSuccessToast(`Discount ${code} applied`);
-  };
-
-  const handleApplyDiscountCode = async () => {
-    const code = discountCodeInput?.trim?.()?.toUpperCase?.() || '';
-    if (!code) {
-      showErrorToast('Please enter a discount code');
-      return;
-    }
-    if (subtotal <= 0) {
-      showErrorToast('Add items to the cart before applying a discount');
-      return;
-    }
-    try {
-      const res = await checkApplicableDiscounts({
-        orderData: { total: subtotal },
-        customerData: selectedCustomer ? { id: selectedCustomer._id || selectedCustomer.id } : null
-      }).unwrap();
-      const list = res?.applicableDiscounts ?? res?.data?.applicableDiscounts ?? [];
-      const match = list.find(
-        (item) => (item.discount?.code || item.discount?.discount_code || '').toString().toUpperCase() === code
-      );
-      if (!match) {
-        showErrorToast('Invalid or not applicable discount code');
-        return;
-      }
-      applyDiscountFromItem(match);
-    } catch (e) {
-      showErrorToast(e?.data?.message || e?.message || 'Failed to apply discount code');
-    }
   };
 
   const handleSelectDiscountFromDropdown = (e) => {
@@ -1590,7 +928,6 @@ export const Sales = ({ tabId, editData }) => {
           setSelectedCustomer(null);
           setCustomerSearchTerm('');
           setAppliedDiscounts([]);
-          setDiscountCodeInput('');
           setIsTaxExempt(true);
           setDirectDiscount({ type: 'amount', value: 0 });
           setIsAdvancePayment(false);
@@ -1653,169 +990,29 @@ export const Sales = ({ tabId, editData }) => {
             await new Promise(resolve => setTimeout(resolve, 500));
           }
 
-          // Download the file
           const downloadResult = await downloadExportFile(filename);
-
-          if (downloadResult.error) {
-            const err = downloadResult.error;
-            const msg = err?.data?.message || err?.data?.error || err?.message || 'Download failed';
-            showErrorToast(typeof msg === 'string' ? msg : 'Download failed');
+          const parsed = interpretLazyQueryDownloadResult(downloadResult);
+          if (!parsed.ok) {
+            showErrorToast(parsed.errorMessage);
             return;
           }
-
-          const blob = downloadResult.data;
-          if (!blob) {
-            showErrorToast('Download failed: No data received from server');
-            return;
-          }
-
-          const contentType = blob.type || '';
+          const blob = parsed.blob;
 
           if (exportFormat === 'pdf') {
-            // For PDF, open in new tab for preview
-
-            // Check if blob is valid
-            if (!blob || !(blob instanceof Blob)) {
-              // Handle different response types
-              if (typeof blob === 'string') {
-                showErrorToast(`Server error: ${blob.substring(0, 100)}`);
-              } else if (blob && typeof blob === 'object') {
-                // Try to extract error message from object
-                let errorMsg = blob.message || blob.error;
-
-                // If no message property, try to stringify but check if it's meaningful
-                if (!errorMsg) {
-                  try {
-                    const stringified = JSON.stringify(blob);
-                    // If stringified is just "{}" or empty, try to get more info
-                    if (stringified === '{}' || stringified === 'null' || stringified === '') {
-                      // Check if it's an error object with other properties
-                      errorMsg = blob.statusText || blob.status || 'Unknown server error';
-                    } else {
-                      errorMsg = stringified.substring(0, 150);
-                    }
-                  } catch (e) {
-                    errorMsg = 'Invalid response format';
-                  }
-                }
-
-                showErrorToast(`Server error: ${errorMsg || 'Unknown error'}`);
-              } else {
-                showErrorToast('Invalid PDF file received - expected Blob. Response type: ' + typeof blob);
-              }
-              return;
-            }
-
-            // Check if content type indicates an error (JSON error response)
-            if (contentType.includes('application/json') || contentType.includes('text/html')) {
-              // Read the blob to see the error message
-              const reader = new FileReader();
-              reader.onload = () => {
-                const text = reader.result;
-                try {
-                  const errorData = JSON.parse(text);
-                  showErrorToast(errorData.message || 'File not found or generation failed');
-                } catch {
-                  showErrorToast('Server returned error instead of PDF. Please try again.');
-                }
-              };
-              reader.readAsText(blob);
-              return;
-            }
-
-            // Check if blob has content
-            if (blob.size === 0) {
-              showErrorToast('PDF file is empty');
-              return;
-            }
-
-            // Check if blob type is PDF (or at least not HTML/JSON error)
-            if (blob.type && !blob.type.includes('pdf') && !blob.type.includes('application/octet-stream')) {
-              // Might be an error response, try to read it
-              const reader = new FileReader();
-              reader.onload = () => {
-                const text = reader.result;
-                if (text.includes('<!DOCTYPE') || text.includes('{"error"') || text.includes('{"message"')) {
-                  showErrorToast('Server returned an error instead of PDF file');
-                } else {
-                  // Try to open anyway
-                  const url = URL.createObjectURL(blob);
-                  const newWindow = window.open(url, '_blank');
-                  if (!newWindow) {
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = filename;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    showSuccessToast('PDF downloaded (popup was blocked)');
-                  } else {
-                    showSuccessToast('PDF opened in new tab');
-                  }
-                  setTimeout(() => URL.revokeObjectURL(url), 10000);
-                }
-              };
-              reader.readAsText(blob.slice(0, 100)); // Read first 100 bytes to check
-              return;
-            }
-
-            // Valid PDF blob, proceed with opening
-            const url = URL.createObjectURL(blob);
-            const newWindow = window.open(url, '_blank');
-
-            if (!newWindow) {
-              // Popup blocked, fallback to download
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = filename;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              showSuccessToast('PDF downloaded (popup was blocked)');
-            } else {
-              showSuccessToast('PDF opened in new tab');
-            }
-
-            // Revoke URL after a delay to ensure it loads
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
+            presentPdfExportBlob(blob, filename, {
+              error: showErrorToast,
+              success: showSuccessToast,
+            });
           } else {
-            // For other formats, download directly (blob from server has correct type)
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-
-            showSuccessToast(`${exportFormat.toUpperCase()} file downloaded successfully`);
+            presentNonPdfExportDownload(blob, exportFormat, filename, showSuccessToast);
           }
         } catch (downloadError) {
-          // Handle download errors
-          if (downloadError.response) {
-            // Server returned an error status
-            if (downloadError.response.data instanceof Blob) {
-              // Error response is a blob, try to read it
-              const reader = new FileReader();
-              reader.onload = () => {
-                const text = reader.result;
-                try {
-                  const errorData = JSON.parse(text);
-                  showErrorToast(errorData.message || 'Download failed');
-                } catch {
-                  showErrorToast('Download failed: ' + text.substring(0, 100));
-                }
-              };
-              reader.readAsText(downloadError.response.data);
-            } else {
-              showErrorToast(downloadError.response.data?.message || `Download failed: ${downloadError.response.status}`);
-            }
-          } else {
-            showErrorToast('Download failed: ' + (downloadError.message || 'Unknown error'));
-          }
+          notifyExportDownloadCatchError(downloadError, showErrorToast);
           return;
         }
+      } else {
+        showErrorToast('Export failed: No filename received');
+        return;
       }
 
       setShowExportModal(false);
@@ -1851,7 +1048,6 @@ export const Sales = ({ tabId, editData }) => {
       // setSelectedCustomer(null);
       setAmountPaid(0);
       setAppliedDiscounts([]);
-      setDiscountCodeInput('');
       setDirectDiscount({ type: 'amount', value: 0 });
       setNotes('');
       setInvoiceNumber('');
@@ -2328,54 +1524,69 @@ export const Sales = ({ tabId, editData }) => {
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <h3 className="text-lg font-medium text-gray-900">Product Selection & Cart</h3>
               <div className="flex flex-wrap items-center justify-start lg:justify-end gap-2">
-                {/* Show/Hide Cost Price Toggle Button */}
-                <div className="flex items-center space-x-2">
-                  <Button
-                    type="button"
-                    onClick={() => setShowCostPrice(!showCostPrice)}
-                    variant="secondary"
-                    size="sm"
-                    className="flex items-center space-x-2"
-                    title={showCostPrice ? "Hide purchase cost prices" : "Show purchase cost prices"}
-                  >
-                    {showCostPrice ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  {cart.length > 0 && (
+                    <Button
+                      type="button"
+                      onClick={handleSortCartItems}
+                      variant="secondary"
+                      size="sm"
+                      className="flex items-center space-x-2"
+                      title="Sort products alphabetically"
+                    >
+                      <ArrowUpDown className="h-4 w-4" />
+                      <span>Sort A-Z</span>
+                    </Button>
+                  )}
+                  {/* Show/Hide Cost Price Toggle Button */}
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      type="button"
+                      onClick={() => setShowCostPrice(!showCostPrice)}
+                      variant="secondary"
+                      size="sm"
+                      className="flex items-center space-x-2"
+                      title={showCostPrice ? "Hide purchase cost prices" : "Show purchase cost prices"}
+                    >
+                      {showCostPrice ? (
+                        <>
+                          <EyeOff className="h-4 w-4" />
+                          <span>Hide Cost</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="h-4 w-4" />
+                          <span>Show Cost</span>
+                        </>
+                      )}
+                    </Button>
+                    {user?.role === 'admin' && (
                       <>
-                        <EyeOff className="h-4 w-4" />
-                        <span>Hide Cost</span>
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="h-4 w-4" />
-                        <span>Show Cost</span>
+                        <Button
+                          type="button"
+                          onClick={() => setShowProfit((prev) => !prev)}
+                          variant="secondary"
+                          size="sm"
+                          className="flex items-center space-x-2"
+                          title="Show estimated profit (BP)"
+                        >
+                          <Calculator className="h-4 w-4" />
+                          <span>{showProfit ? 'Hide BP' : 'Show BP'}</span>
+                        </Button>
+                        {showProfit && (
+                          <span
+                            className={`text-sm font-semibold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                              }`}
+                          >
+                            {new Intl.NumberFormat('en-US', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }).format(totalProfit || 0)}
+                          </span>
+                        )}
                       </>
                     )}
-                  </Button>
-                  {user?.role === 'admin' && (
-                    <>
-                      <Button
-                        type="button"
-                        onClick={() => setShowProfit((prev) => !prev)}
-                        variant="secondary"
-                        size="sm"
-                        className="flex items-center space-x-2"
-                        title="Show estimated profit (BP)"
-                      >
-                        <Calculator className="h-4 w-4" />
-                        <span>{showProfit ? 'Hide BP' : 'Show BP'}</span>
-                      </Button>
-                      {showProfit && (
-                        <span
-                          className={`text-sm font-semibold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'
-                            }`}
-                        >
-                          {new Intl.NumberFormat('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          }).format(totalProfit || 0)}
-                        </span>
-                      )}
-                    </>
-                  )}
+                  </div>
                 </div>
                 {selectedCustomer && cart.length > 0 && (
                   <>
@@ -2431,45 +1642,29 @@ export const Sales = ({ tabId, editData }) => {
 
             {/* Cart Items */}
             {cart.length === 0 ? (
-              <div className="p-8 text-center text-gray-500 border-t border-gray-200">
+              <div className="p-8 text-center text-gray-500">
                 <ShoppingCart className="mx-auto h-12 w-12 text-gray-400" />
                 <p className="mt-2">No items in cart</p>
               </div>
             ) : (
-              <div className="space-y-4 border-t border-gray-200 pt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-md font-medium text-gray-700">Cart Items</h4>
-                  <div className="flex items-center space-x-3">
-                    <Button
-                      type="button"
-                      onClick={handleSortCartItems}
-                      variant="secondary"
-                      size="sm"
-                      className="flex items-center space-x-2"
-                      title="Sort products alphabetically"
-                    >
-                      <ArrowUpDown className="h-4 w-4" />
-                      <span>Sort A-Z</span>
-                    </Button>
-                    {isLastPricesApplied && Object.keys(priceStatus).length > 0 && (
-                      <div className="flex items-center space-x-3 text-xs">
-                        <span className="text-gray-600 font-medium">Price Status:</span>
-                        <div className="flex items-center space-x-1">
-                          <CheckCircle className="h-3 w-3 text-green-600" />
-                          <span className="text-gray-600">Updated</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <Info className="h-3 w-3 text-blue-600" />
-                          <span className="text-gray-600">Same Price</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <AlertCircle className="h-3 w-3 text-yellow-600" />
-                          <span className="text-gray-600">Not in Last Order</span>
-                        </div>
-                      </div>
-                    )}
+              <div className="pt-6">
+                {isLastPricesApplied && Object.keys(priceStatus).length > 0 && (
+                  <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 mb-3 text-xs">
+                    <span className="text-gray-600 font-medium">Price Status:</span>
+                    <div className="flex items-center space-x-1">
+                      <CheckCircle className="h-3 w-3 text-green-600" />
+                      <span className="text-gray-600">Updated</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Info className="h-3 w-3 text-blue-600" />
+                      <span className="text-gray-600">Same Price</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <AlertCircle className="h-3 w-3 text-yellow-600" />
+                      <span className="text-gray-600">Not in Last Order</span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Desktop Table Header Row */}
                 <div className="hidden md:grid grid-cols-12 gap-4 items-center pb-2 border-b border-gray-300 mb-2">
@@ -2480,9 +1675,12 @@ export const Sales = ({ tabId, editData }) => {
                     <span className="text-xs font-semibold text-gray-600 uppercase">Product</span>
                   </div>
                   <div className="col-span-1">
+                    <span className="text-xs font-semibold text-gray-600 uppercase">Box</span>
+                  </div>
+                  <div className="col-span-1">
                     <span className="text-xs font-semibold text-gray-600 uppercase">Stock</span>
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-1">
                     <span className="text-xs font-semibold text-gray-600 uppercase">Qty</span>
                   </div>
                   {showCostPrice && hasPermission('view_cost_prices') && (
@@ -2560,6 +1758,39 @@ export const Sales = ({ tabId, editData }) => {
                           </LoadingButton>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
+                          {hasDualUnit(item.product) && dualUnitShowBoxInputEnabled && (
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Box</label>
+                              {(() => {
+                                const ppb = getPiecesPerBox(item.product);
+                                const boxVal =
+                                  item.boxes != null
+                                    ? item.boxes
+                                    : ppb
+                                      ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
+                                      : 0;
+                                return (
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={item.quantity === 0 ? '' : boxVal}
+                                    onChange={(e) =>
+                                      updateCartBoxCount(item.product._id, e.target.value)
+                                    }
+                                    className={`text-sm font-semibold w-full rounded border px-2 py-1 text-center focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${
+                                      (item.product.inventory?.currentStock || 0) === 0
+                                        ? 'text-red-700 bg-red-50 border-red-200'
+                                        : (item.product.inventory?.currentStock || 0) <=
+                                            (item.product.inventory?.reorderPoint || 0)
+                                          ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                                          : 'text-gray-700 bg-gray-100 border-gray-200'
+                                    }`}
+                                    title="Full boxes"
+                                  />
+                                );
+                              })()}
+                            </div>
+                          )}
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">Stock</label>
                             <span className={`text-sm font-semibold px-2 py-1 rounded border block text-center ${(item.product.inventory?.currentStock || 0) === 0
@@ -2588,9 +1819,9 @@ export const Sales = ({ tabId, editData }) => {
                               stockPiecesForRemaining={item.product.inventory?.currentStock ?? 0}
                               showRemainingAfterSale={false}
                               showPiecesUnitLabel={false}
-                              showBoxInput={dualUnitShowBoxInputEnabled}
+                              showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(item.product)}
                               showPiecesInput={dualUnitShowPiecesInputEnabled}
-                              inputClassName="text-center h-8 w-full border border-gray-300 rounded px-2"
+                              inputClassName="w-full min-w-0 text-center h-8 border border-gray-300 rounded px-2"
                               compact={hasDualUnit(item.product)}
                             />
                           </div>
@@ -2671,6 +1902,47 @@ export const Sales = ({ tabId, editData }) => {
                             </div>
                           </div>
 
+                          {/* Box — dual-unit boxes only; styled like Stock */}
+                          <div className="col-span-1 min-w-0">
+                            {hasDualUnit(item.product) && dualUnitShowBoxInputEnabled ? (
+                              (() => {
+                                const ppb = getPiecesPerBox(item.product);
+                                const boxVal =
+                                  item.boxes != null
+                                    ? item.boxes
+                                    : ppb
+                                      ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
+                                      : 0;
+                                return (
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={item.quantity === 0 ? '' : boxVal}
+                                    onChange={(e) =>
+                                      updateCartBoxCount(item.product._id, e.target.value)
+                                    }
+                                    className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${
+                                      (item.product.inventory?.currentStock || 0) === 0
+                                        ? 'text-red-700 bg-red-50 border-red-200'
+                                        : (item.product.inventory?.currentStock || 0) <=
+                                            (item.product.inventory?.reorderPoint || 0)
+                                          ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                                          : 'text-gray-700 bg-gray-100 border-gray-200'
+                                    }`}
+                                    title="Full boxes"
+                                  />
+                                );
+                              })()
+                            ) : (
+                              <span
+                                className="text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200"
+                                title="Not applicable"
+                              >
+                                —
+                              </span>
+                            )}
+                          </div>
+
                           {/* Stock - 1 column */}
                           <div className="col-span-1">
                             <span className={`text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center ${(item.product.inventory?.currentStock || 0) === 0
@@ -2684,7 +1956,7 @@ export const Sales = ({ tabId, editData }) => {
                           </div>
 
                           {/* Quantity */}
-                          <div className="col-span-2">
+                          <div className="col-span-1 min-w-0">
                             <DualUnitQuantityInput
                               product={item.product}
                               quantity={item.quantity}
@@ -2694,9 +1966,9 @@ export const Sales = ({ tabId, editData }) => {
                               stockPiecesForRemaining={item.product.inventory?.currentStock ?? 0}
                               showRemainingAfterSale={false}
                               showPiecesUnitLabel={false}
-                              showBoxInput={dualUnitShowBoxInputEnabled}
+                              showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(item.product)}
                               showPiecesInput={dualUnitShowPiecesInputEnabled}
-                              inputClassName="text-center h-8 border border-gray-300 rounded px-2"
+                              inputClassName="w-full min-w-0 text-center h-8 border border-gray-300 rounded px-2"
                               compact={hasDualUnit(item.product)}
                             />
                           </div>
@@ -2803,9 +2075,10 @@ export const Sales = ({ tabId, editData }) => {
           </div>
         </div>
 
-        {/* Combined Sales Details and Order Summary */}
+        {/* Sales Details (left) + totals & payment (right) on lg+; full width of card */}
         {cart.length > 0 && (
-          <OrderCheckoutCard>
+          <div className="mt-4 grid w-full min-w-0 grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5 lg:items-start">
+            <OrderCheckoutCard className="mt-0 ml-0 max-w-none min-w-0 w-full">
             <OrderDetailsSection
               detailsTitle="Sales Details"
               showDetails={showSalesDetailsFields}
@@ -2814,290 +2087,291 @@ export const Sales = ({ tabId, editData }) => {
             >
               {/* Mobile Layout - Stacked */}
               {showSalesDetailsFields && (
-              <div className="md:hidden space-y-3">
-                {/* Order Type */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Order Type
-                  </label>
-                  {/*
+                <div className="md:hidden space-y-3">
+                  {/* Order Type */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Order Type
+                    </label>
+                    {/*
                     In edit mode, show the invoice's saved order type.
                     Previously this UI was tied to `selectedCustomer.businessType`, which could differ from
                     what was used when the invoice was created (causing the "price type" mismatch).
                   */}
-                  {(() => {
-                    const editOrderType = editData?.isEditMode ? editData?.orderType : null;
-                    const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
-                    const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
-                    const valueToShow =
-                      normalizedEditOrderType && allowed.has(normalizedEditOrderType)
-                        ? normalizedEditOrderType
-                        : mapBusinessTypeToOrderType(selectedCustomer?.businessType);
-                    return (
-                  <select
-                    value={valueToShow}
-                    className="h-10 text-sm w-full"
-                    disabled
-                  >
-                    <option value="retail">Retail</option>
-                    <option value="wholesale">Wholesale</option>
-                    <option value="return">Return</option>
-                    <option value="exchange">Exchange</option>
-                  </select>
-                    );
-                  })()}
-                </div>
-
-                {/* Tax Exemption Option */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Tax Status
-                  </label>
-                  <div className="flex items-center space-x-2 px-3 py-2 border border-gray-200 rounded h-10">
-                    <Input
-                      type="checkbox"
-                      id="taxExemptMobile"
-                      checked={isTaxExempt}
-                      onChange={(e) => setIsTaxExempt(e.target.checked)}
-                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                    />
-                    <div className="flex-1">
-                      <label htmlFor="taxExemptMobile" className="text-sm font-medium text-gray-700 cursor-pointer">
-                        Tax Exempt
-                      </label>
-                    </div>
-                    {isTaxExempt && (
-                      <div className="text-green-600 text-sm font-medium">
-                        ✓
-                      </div>
-                    )}
+                    {(() => {
+                      const editOrderType = editData?.isEditMode ? editData?.orderType : null;
+                      const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
+                      const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
+                      const valueToShow =
+                        normalizedEditOrderType && allowed.has(normalizedEditOrderType)
+                          ? normalizedEditOrderType
+                          : mapBusinessTypeToOrderType(selectedCustomer?.businessType);
+                      return (
+                        <select
+                          value={valueToShow}
+                          className="h-10 text-sm w-full"
+                          disabled
+                        >
+                          <option value="retail">Retail</option>
+                          <option value="wholesale">Wholesale</option>
+                          <option value="return">Return</option>
+                          <option value="exchange">Exchange</option>
+                        </select>
+                      );
+                    })()}
                   </div>
-                </div>
 
-                {/* Invoice Number */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-medium text-gray-700">
-                      Invoice Number
+                  {/* Tax Exemption Option */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Tax Status
                     </label>
-                    <label
-                      htmlFor="autoGenerateInvoiceMobile"
-                      className="flex items-center space-x-1 text-xs text-gray-600 cursor-pointer select-none"
-                    >
+                    <div className="flex items-center space-x-2 px-3 py-2 border border-gray-200 rounded h-10">
                       <Input
                         type="checkbox"
-                        id="autoGenerateInvoiceMobile"
-                        checked={autoGenerateInvoice}
-                        onChange={(e) => {
-                          setAutoGenerateInvoice(e.target.checked);
-                          if (e.target.checked && selectedCustomer) {
-                            setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
-                          }
-                        }}
-                        className="h-3.5 w-3.5 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        id="taxExemptMobile"
+                        checked={isTaxExempt}
+                        onChange={(e) => setIsTaxExempt(e.target.checked)}
+                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                       />
-                      <span>Auto-generate</span>
-                    </label>
+                      <div className="flex-1">
+                        <label htmlFor="taxExemptMobile" className="text-sm font-medium text-gray-700 cursor-pointer">
+                          Tax Exempt
+                        </label>
+                      </div>
+                      {isTaxExempt && (
+                        <div className="text-green-600 text-sm font-medium">
+                          ✓
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="relative">
+
+                  {/* Invoice Number */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-gray-700">
+                        Invoice Number
+                      </label>
+                      <label
+                        htmlFor="autoGenerateInvoiceMobile"
+                        className="flex items-center space-x-1 text-xs text-gray-600 cursor-pointer select-none"
+                      >
+                        <Input
+                          type="checkbox"
+                          id="autoGenerateInvoiceMobile"
+                          checked={autoGenerateInvoice}
+                          onChange={(e) => {
+                            setAutoGenerateInvoice(e.target.checked);
+                            if (e.target.checked && selectedCustomer) {
+                              setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
+                            }
+                          }}
+                          className="h-3.5 w-3.5 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        />
+                        <span>Auto-generate</span>
+                      </label>
+                    </div>
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        autoComplete="off"
+                        value={invoiceNumber}
+                        onChange={(e) => setInvoiceNumber(e.target.value)}
+                        className="w-full pr-20 h-10 text-sm"
+                        placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
+                        disabled={autoGenerateInvoice}
+                      />
+                      {autoGenerateInvoice && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedCustomer) {
+                              setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
+                            }
+                          }}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-primary-600 hover:text-primary-800 font-medium"
+                        >
+                          Regenerate
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bill Date (for backdating) */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Bill Date <span className="text-gray-500">(Optional - for backdating)</span>
+                    </label>
+                    <Input
+                      type="date"
+                      autoComplete="off"
+                      value={billDate}
+                      onChange={(e) => setBillDate(e.target.value)}
+                      className="h-10 text-sm w-full"
+                      max={getLocalDateString()} // Prevent future dates
+                    />
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Notes
+                    </label>
                     <Input
                       type="text"
                       autoComplete="off"
-                      value={invoiceNumber}
-                      onChange={(e) => setInvoiceNumber(e.target.value)}
-                      className="w-full pr-20 h-10 text-sm"
-                      placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
-                      disabled={autoGenerateInvoice}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="h-10 text-sm w-full"
+                      placeholder="Additional notes..."
                     />
-                    {autoGenerateInvoice && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (selectedCustomer) {
-                            setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
-                          }
-                        }}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-primary-600 hover:text-primary-800 font-medium"
-                      >
-                        Regenerate
-                      </button>
-                    )}
                   </div>
                 </div>
-
-                {/* Bill Date (for backdating) */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Bill Date <span className="text-gray-500">(Optional - for backdating)</span>
-                  </label>
-                  <Input
-                    type="date"
-                    autoComplete="off"
-                    value={billDate}
-                    onChange={(e) => setBillDate(e.target.value)}
-                    className="h-10 text-sm w-full"
-                    max={getLocalDateString()} // Prevent future dates
-                  />
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <Input
-                    type="text"
-                    autoComplete="off"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="h-10 text-sm w-full"
-                    placeholder="Additional notes..."
-                  />
-                </div>
-              </div>
               )}
 
-              {/* Desktop Layout - Horizontal */}
+              {/* Desktop Layout — wrap & start-align so half-width column uses full width */}
               {showSalesDetailsFields && (
-              <div className="hidden md:flex flex-nowrap gap-3 items-end justify-end">
-                {/* Order Type */}
-                <div className="flex flex-col w-44">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Order Type
-                  </label>
-                  <select
-                    value={
-                      (() => {
-                        const editOrderType = editData?.isEditMode ? editData?.orderType : null;
-                        const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
-                        const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
-                        return (
-                          normalizedEditOrderType && allowed.has(normalizedEditOrderType)
-                            ? normalizedEditOrderType
-                            : mapBusinessTypeToOrderType(selectedCustomer?.businessType)
-                        );
-                      })()
-                    }
-                    className="h-8 text-sm"
-                    disabled
-                  >
-                    <option value="retail">Retail</option>
-                    <option value="wholesale">Wholesale</option>
-                    <option value="return">Return</option>
-                    <option value="exchange">Exchange</option>
-                  </select>
-                </div>
-
-                {/* Tax Exemption Option */}
-                <div className="flex flex-col w-40">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Tax Status
-                  </label>
-                  <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
-                    <Input
-                      type="checkbox"
-                      id="taxExempt"
-                      checked={isTaxExempt}
-                      onChange={(e) => setIsTaxExempt(e.target.checked)}
-                      className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                    />
-                    <div className="flex-1">
-                      <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
-                        Tax Exempt
-                      </label>
-                    </div>
-                    {isTaxExempt && (
-                      <div className="text-green-600 text-xs font-medium">
-                        ✓
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Invoice Number */}
-                <div className="flex flex-col w-72">
-                  <div className="flex items-center gap-3 mb-1">
-                    <label className="block text-xs font-medium text-gray-700 m-0">
-                      Invoice Number
+                <div className="hidden md:flex flex-wrap gap-3 items-end justify-start">
+                  {/* Order Type */}
+                  <div className="flex flex-col w-44">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Order Type
                     </label>
-                    <label
-                      htmlFor="autoGenerateInvoice"
-                      className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
+                    <select
+                      value={
+                        (() => {
+                          const editOrderType = editData?.isEditMode ? editData?.orderType : null;
+                          const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
+                          const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
+                          return (
+                            normalizedEditOrderType && allowed.has(normalizedEditOrderType)
+                              ? normalizedEditOrderType
+                              : mapBusinessTypeToOrderType(selectedCustomer?.businessType)
+                          );
+                        })()
+                      }
+                      className="h-8 text-sm"
+                      disabled
                     >
+                      <option value="retail">Retail</option>
+                      <option value="wholesale">Wholesale</option>
+                      <option value="return">Return</option>
+                      <option value="exchange">Exchange</option>
+                    </select>
+                  </div>
+
+                  {/* Tax Exemption Option */}
+                  <div className="flex flex-col w-40">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Tax Status
+                    </label>
+                    <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
                       <Input
                         type="checkbox"
-                        id="autoGenerateInvoice"
-                        checked={autoGenerateInvoice}
-                        onChange={(e) => {
-                          setAutoGenerateInvoice(e.target.checked);
-                          if (e.target.checked && selectedCustomer) {
-                            setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
-                          }
-                        }}
+                        id="taxExempt"
+                        checked={isTaxExempt}
+                        onChange={(e) => setIsTaxExempt(e.target.checked)}
                         className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                       />
-                      <span>Auto-generate</span>
-                    </label>
+                      <div className="flex-1">
+                        <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
+                          Tax Exempt
+                        </label>
+                      </div>
+                      {isTaxExempt && (
+                        <div className="text-green-600 text-xs font-medium">
+                          ✓
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="relative">
+
+                  {/* Invoice Number */}
+                  <div className="flex flex-col w-72">
+                    <div className="flex items-center gap-3 mb-1">
+                      <label className="block text-xs font-medium text-gray-700 m-0">
+                        Invoice Number
+                      </label>
+                      <label
+                        htmlFor="autoGenerateInvoice"
+                        className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
+                      >
+                        <Input
+                          type="checkbox"
+                          id="autoGenerateInvoice"
+                          checked={autoGenerateInvoice}
+                          onChange={(e) => {
+                            setAutoGenerateInvoice(e.target.checked);
+                            if (e.target.checked && selectedCustomer) {
+                              setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
+                            }
+                          }}
+                          className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        />
+                        <span>Auto-generate</span>
+                      </label>
+                    </div>
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        autoComplete="off"
+                        value={invoiceNumber}
+                        onChange={(e) => setInvoiceNumber(e.target.value)}
+                        className="w-full pr-16 h-8 text-sm"
+                        placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
+                        disabled={autoGenerateInvoice}
+                      />
+                      {autoGenerateInvoice && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedCustomer) {
+                              setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
+                            }
+                          }}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[11px] text-primary-600 hover:text-primary-800 font-medium"
+                        >
+                          Regenerate
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bill Date (for backdating) - Desktop */}
+                  <div className="flex flex-col w-44">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Bill Date <span className="text-gray-500">(Optional)</span>
+                    </label>
+                    <Input
+                      type="date"
+                      autoComplete="off"
+                      value={billDate}
+                      onChange={(e) => setBillDate(e.target.value)}
+                      className="h-8 text-sm"
+                      max={getLocalDateString()} // Prevent future dates
+                    />
+                  </div>
+
+                  {/* Notes */}
+                  <div className="flex min-w-0 flex-1 flex-col basis-[min(100%,20rem)]">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Notes
+                    </label>
                     <Input
                       type="text"
-                      autoComplete="off"
-                      value={invoiceNumber}
-                      onChange={(e) => setInvoiceNumber(e.target.value)}
-                      className="w-full pr-16 h-8 text-sm"
-                      placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
-                      disabled={autoGenerateInvoice}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="h-8 w-full min-w-0 text-sm"
+                      placeholder="Additional notes..."
                     />
-                    {autoGenerateInvoice && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (selectedCustomer) {
-                            setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
-                          }
-                        }}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[11px] text-primary-600 hover:text-primary-800 font-medium"
-                      >
-                        Regenerate
-                      </button>
-                    )}
                   </div>
                 </div>
-
-                {/* Bill Date (for backdating) - Desktop */}
-                <div className="flex flex-col w-44">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Bill Date <span className="text-gray-500">(Optional)</span>
-                  </label>
-                  <Input
-                    type="date"
-                    autoComplete="off"
-                    value={billDate}
-                    onChange={(e) => setBillDate(e.target.value)}
-                    className="h-8 text-sm"
-                    max={getLocalDateString()} // Prevent future dates
-                  />
-                </div>
-
-                {/* Notes */}
-                <div className="flex flex-col w-[28rem]">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <Input
-                    type="text"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="h-8 text-sm"
-                    placeholder="Additional notes..."
-                  />
-                </div>
-              </div>
               )}
             </OrderDetailsSection>
+            </OrderCheckoutCard>
 
-            <OrderSummaryBar />
+            <OrderCheckoutCard className="mt-0 ml-0 max-w-none min-w-0 w-full">
             <OrderSummaryContent>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
@@ -3157,10 +2431,10 @@ export const Sales = ({ tabId, editData }) => {
                   );
                 })()}
                 {!selectedCustomer && (
-                <div className="flex justify-between items-center text-xl font-bold border-t-2 border-blue-400 pt-3 mt-2">
-                  <span className="text-blue-900">Total:</span>
-                  <span className="text-blue-900 text-3xl">{Math.round(total)}</span>
-                </div>
+                  <div className="flex justify-between items-center text-xl font-bold border-t-2 border-blue-400 pt-3 mt-2">
+                    <span className="text-blue-900">Total:</span>
+                    <span className="text-blue-900 text-3xl">{Math.round(total)}</span>
+                  </div>
                 )}
               </div>
 
@@ -3176,7 +2450,7 @@ export const Sales = ({ tabId, editData }) => {
                       value=""
                       onChange={handleSelectDiscountFromDropdown}
                       disabled={subtotal <= 0 || applicableDiscountList.length === 0}
-                      className="px-3 py-2 border-2 border-slate-200 rounded-md bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 min-w-[180px]"
+                      className="px-3 py-2 border-2 border-slate-200 rounded-md bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 min-w-[180px] max-w-full"
                       title="Choose an applicable discount"
                     >
                       <option value="">
@@ -3210,23 +2484,6 @@ export const Sales = ({ tabId, editData }) => {
                           );
                         })}
                     </select>
-                    <span className="text-slate-400 text-sm hidden sm:inline">or</span>
-                    <Input
-                      type="text"
-                      placeholder="Enter code (e.g. SUMMER)"
-                      value={discountCodeInput}
-                      onChange={(e) => setDiscountCodeInput((e.target.value || '').toUpperCase())}
-                      onKeyDown={(e) => e.key === 'Enter' && handleApplyDiscountCode()}
-                      className="px-3 py-2 border-2 border-slate-200 rounded-md bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium text-gray-900 w-40"
-                    />
-                    <LoadingButton
-                      onClick={handleApplyDiscountCode}
-                      isLoading={checkingDiscount}
-                      disabled={!discountCodeInput?.trim() || subtotal <= 0}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold"
-                    >
-                      Apply code
-                    </LoadingButton>
                   </div>
                   {appliedDiscounts.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
@@ -3518,12 +2775,13 @@ export const Sales = ({ tabId, editData }) => {
                 </LoadingButton>
               </OrderCheckoutActions>
             </OrderSummaryContent>
-          </OrderCheckoutCard>
+            </OrderCheckoutCard>
+          </div>
         )}
 
         {/* Recommendations Section */}
         {cart.length > 0 && (
-          <div className="mt-4 max-w-5xl ml-auto">
+          <div className="mt-4 w-full min-w-0">
             <RecommendationSection
               title="Customers Also Bought"
               algorithm="frequently_bought"
@@ -3589,172 +2847,29 @@ export const Sales = ({ tabId, editData }) => {
         partyLabel="Customer"
       />
 
-      {/* Export Format Selection Modal */}
-      {showExportModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">Export Sales Report</h2>
-              <button
-                onClick={() => {
-                  setShowExportModal(false);
-                  setExportDateFrom(defaultDateRange.from);
-                  setExportDateTo(defaultDateRange.to);
-                }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <XCircle className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              <div className="space-y-6">
-                {/* Export Format */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Export Format
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <Input
-                        type="radio"
-                        name="format"
-                        value="pdf"
-                        checked={exportFormat === 'pdf'}
-                        onChange={(e) => setExportFormat(e.target.value)}
-                        className="mr-3"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-900">PDF</div>
-                        <div className="text-sm text-gray-500">Print-ready format</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <Input
-                        type="radio"
-                        name="format"
-                        value="excel"
-                        checked={exportFormat === 'excel'}
-                        onChange={(e) => setExportFormat(e.target.value)}
-                        className="mr-3"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-900">Excel</div>
-                        <div className="text-sm text-gray-500">Spreadsheet format</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <Input
-                        type="radio"
-                        name="format"
-                        value="csv"
-                        checked={exportFormat === 'csv'}
-                        onChange={(e) => setExportFormat(e.target.value)}
-                        className="mr-3"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-900">CSV</div>
-                        <div className="text-sm text-gray-500">Comma-separated values</div>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <Input
-                        type="radio"
-                        name="format"
-                        value="json"
-                        checked={exportFormat === 'json'}
-                        onChange={(e) => setExportFormat(e.target.value)}
-                        className="mr-3"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-900">JSON</div>
-                        <div className="text-sm text-gray-500">Data format</div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Date Range Selection */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Date Range (Optional)
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">From Date</label>
-                      <Input
-                        type="date"
-                        value={exportDateFrom}
-                        onChange={(e) => setExportDateFrom(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">To Date</label>
-                      <Input
-                        type="date"
-                        value={exportDateTo}
-                        onChange={(e) => setExportDateTo(e.target.value)}
-                        min={exportDateFrom}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      />
-                    </div>
-                  </div>
-                  {(exportDateFrom || exportDateTo) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExportDateFrom(defaultDateRange.from);
-                        setExportDateTo(defaultDateRange.to);
-                      }}
-                      className="mt-2 text-sm text-primary-600 hover:text-primary-700"
-                    >
-                      Reset to default
-                    </button>
-                  )}
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setShowExportModal(false);
-                      setExportDateFrom(defaultDateRange.from);
-                      setExportDateTo(defaultDateRange.to);
-                    }}
-                    variant="secondary"
-                    disabled={isExporting}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleExportConfirm}
-                    variant="default"
-                    disabled={isExporting}
-                  >
-                    {isExporting ? (
-                      <>
-                        <LoadingSpinner className="h-4 w-4 mr-2" />
-                        Exporting...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4 mr-2" />
-                        Export
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ExportReportModal
+        isOpen={showExportModal}
+        onClose={() => {
+          setShowExportModal(false);
+          setExportDateFrom(defaultDateRange.from);
+          setExportDateTo(defaultDateRange.to);
+        }}
+        title="Export Sales Report"
+        format={exportFormat}
+        onFormatChange={setExportFormat}
+        dateFrom={exportDateFrom}
+        dateTo={exportDateTo}
+        onDateFromChange={setExportDateFrom}
+        onDateToChange={setExportDateTo}
+        onResetDates={() => {
+          setExportDateFrom(defaultDateRange.from);
+          setExportDateTo(defaultDateRange.to);
+        }}
+        defaultDateRange={defaultDateRange}
+        onConfirm={handleExportConfirm}
+        isExporting={isExporting}
+        namePrefix="sales-export-format"
+      />
     </AsyncErrorBoundary>
   );
 };

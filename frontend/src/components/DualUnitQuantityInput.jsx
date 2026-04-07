@@ -1,5 +1,6 @@
 import React, { useCallback, useRef } from 'react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import {
   computeTotalPieces,
   piecesToBoxesAndPieces,
@@ -123,9 +124,11 @@ export function DualUnitQuantityInput({
     [min, max, onChange, showCappedToast, ppb]
   );
 
-  const baseInput =
-    inputClassName ||
-    'w-full min-w-0 text-center border border-gray-300 rounded-md px-2 h-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
+  /** Always merge so callers can override sizing — never drop w-full/min-w-0 (prevents grid overflow into Rate, etc.) */
+  const baseInput = cn(
+    'w-full min-w-0 text-center border border-gray-300 rounded-md px-2 h-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500',
+    inputClassName
+  );
 
   const stockCap =
     max != null && max !== '' && !Number.isNaN(Number(max)) ? Number(max) : null;
@@ -146,8 +149,15 @@ export function DualUnitQuantityInput({
 
   if (!useDual) {
     return (
-      <div className={compact ? `flex flex-col gap-0 ${className}` : `space-y-1 ${className}`} {...props}>
-        <div className={compact ? 'flex items-center gap-1' : ''}>
+      <div
+        className={
+          compact
+            ? cn('flex w-full min-w-0 flex-col gap-0', className)
+            : `space-y-1 ${className}`
+        }
+        {...props}
+      >
+        <div className={compact ? 'flex min-w-0 items-center gap-1' : ''}>
           <input
             type="number"
             min={min}
@@ -171,8 +181,15 @@ export function DualUnitQuantityInput({
   // Dual unit but both box & pieces columns turned off → single total (pcs) input
   if (!showBoxInput && !showPiecesInput) {
     return (
-      <div className={compact ? `flex flex-col gap-0 ${className}` : `space-y-1 ${className}`} {...props}>
-        <div className={compact ? 'flex items-center gap-1' : ''}>
+      <div
+        className={
+          compact
+            ? cn('flex w-full min-w-0 flex-col gap-0', className)
+            : `space-y-1 ${className}`
+        }
+        {...props}
+      >
+        <div className={compact ? 'flex min-w-0 items-center gap-1' : ''}>
           <input
             type="number"
             min={min}
@@ -194,54 +211,73 @@ export function DualUnitQuantityInput({
   }
 
   if (compact || variant === 'compact') {
+    /** Input row (h-8) + caption row under it: Box / Pieces / Total (aligned to columns) */
+    const segmentInputClass =
+      'min-w-0 flex-1 border-0 bg-transparent p-0 text-center text-sm tabular-nums text-gray-900 shadow-none ring-0 placeholder:text-gray-400 focus:outline-none focus:ring-0 h-full';
+
     return (
-      <div className={`flex flex-col gap-1 ${className}`} {...props}>
-        <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-2 shadow-sm">
-          <div className="grid grid-cols-3 gap-1">
-            {showBoxInput && (
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-600">Box</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={quantity === 0 ? '' : (boxes !== undefined ? boxes : '')}
-                  onChange={handleBoxesChange}
-                  onKeyDown={onKeyDown}
-                  disabled={disabled}
-                  placeholder="0"
-                  className={`${baseInput} h-8 px-1 text-xs`}
-                  title="Boxes"
-                />
-              </div>
-            )}
-            {showPiecesInput && (
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-600">Pcs</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={quantity === 0 ? '' : (pieces !== undefined ? pieces : '')}
-                  onChange={handlePiecesChange}
-                  onKeyDown={onKeyDown}
-                  disabled={disabled}
-                  placeholder="0"
-                  className={`${baseInput} h-8 px-1 text-xs`}
-                  title="Loose pieces (not full boxes)"
-                />
-              </div>
-            )}
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-600">Total</span>
-              <div
-                className="flex h-8 items-center justify-center rounded-md border border-gray-200 bg-white px-1 text-[11px] font-semibold tabular-nums text-gray-900 shadow-sm"
-                title="Total quantity in pieces"
-              >
-                {quantity || 0}
-                {showPiecesUnitLabel ? (
-                  <span className="ml-0.5 font-medium text-gray-600">pcs</span>
-                ) : null}
-              </div>
+      <div className={`flex w-full min-w-0 flex-col gap-0.5 ${className}`} {...props}>
+        <div
+          className="flex h-8 w-full min-w-0 items-stretch overflow-hidden rounded-md border border-gray-300 bg-white shadow-sm focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-500/25"
+          role="group"
+          aria-label="Quantity: boxes, pieces, total pieces"
+        >
+          {showBoxInput && (
+            <div className="flex min-w-0 flex-1 items-center border-r border-gray-200 px-1.5">
+              <input
+                type="number"
+                min={0}
+                value={quantity === 0 ? '' : (boxes !== undefined ? boxes : '')}
+                onChange={handleBoxesChange}
+                onKeyDown={onKeyDown}
+                disabled={disabled}
+                placeholder="0"
+                className={segmentInputClass}
+                title="Full boxes"
+              />
             </div>
+          )}
+          {showPiecesInput && (
+            <div className="flex min-w-0 flex-1 items-center border-r border-gray-200 px-1.5">
+              <input
+                type="number"
+                min={0}
+                value={quantity === 0 ? '' : (pieces !== undefined ? pieces : '')}
+                onChange={handlePiecesChange}
+                onKeyDown={onKeyDown}
+                disabled={disabled}
+                placeholder="0"
+                className={segmentInputClass}
+                title="Loose pieces"
+              />
+            </div>
+          )}
+          <div
+            className="flex min-w-[2.75rem] flex-none shrink-0 items-center justify-center gap-0.5 bg-gray-50 px-1.5"
+            title="Total quantity in pieces"
+          >
+            <span className="text-xs font-semibold tabular-nums text-gray-900">{quantity || 0}</span>
+            {showPiecesUnitLabel ? (
+              <span className="text-[10px] font-medium text-gray-500">pcs</span>
+            ) : null}
+          </div>
+        </div>
+        <div
+          className="flex w-full min-w-0 items-stretch pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500"
+          aria-hidden="true"
+        >
+          {showBoxInput && (
+            <div className="min-w-0 flex-1 text-center leading-none" title="Boxes">
+              Box
+            </div>
+          )}
+          {showPiecesInput && (
+            <div className="min-w-0 flex-1 text-center leading-none" title="Loose pieces">
+              Pieces
+            </div>
+          )}
+          <div className="flex min-w-[2.75rem] flex-none shrink-0 items-start justify-center text-center leading-none">
+            Total
           </div>
         </div>
         {remainingLine}

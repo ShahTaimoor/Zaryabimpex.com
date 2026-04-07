@@ -38,6 +38,13 @@ import { Textarea } from '@/components/ui/textarea';
 import BaseModal from '../components/BaseModal';
 import FormField from '../components/FormField';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
+import ExportReportModal from '../components/ExportReportModal';
+import { useExportTabularDownload } from '../hooks/useExportTabularDownload';
+import {
+  buildTabularExportRunners,
+  TABULAR_EXPORT_FALLBACK_FILENAMES,
+} from '../utils/exportReportDownload';
+import { confirmTabularExportDownload } from '../utils/tabularExportConfirm';
 
 const BankReceipts = () => {
   const today = getCurrentDatePakistan();
@@ -64,6 +71,9 @@ const BankReceipts = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState('csv');
+  const [isExporting, setIsExporting] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [printData, setPrintData] = useState(null);
 
@@ -129,6 +139,12 @@ const BankReceipts = () => {
   const [createBankReceipt, { isLoading: creating }] = useCreateBankReceiptMutation();
   const [updateBankReceipt, { isLoading: updating }] = useUpdateBankReceiptMutation();
   const [deleteBankReceipt, { isLoading: deleting }] = useDeleteBankReceiptMutation();
+  const [exportExcelMutation] = useExportExcelMutation();
+  const [exportCSVMutation] = useExportCSVMutation();
+  const [exportPDFMutation] = useExportPDFMutation();
+  const [exportJSONMutation] = useExportJSONMutation();
+  const [downloadFileMutation] = useDownloadFileMutation();
+  const runExportDownload = useExportTabularDownload(downloadFileMutation);
 
   // Helper functions
   const resetForm = () => {
@@ -337,58 +353,20 @@ const BankReceipts = () => {
     setShowViewModal(true);
   };
 
-  const handleExport = async (format = 'csv') => {
-    try {
-      const payload = { ...filters, ...pagination, sortConfig };
-      let response;
-      if (format === 'excel') {
-        response = await exportExcelMutation(payload).unwrap();
-      } else if (format === 'pdf') {
-        response = await exportPDFMutation(payload).unwrap();
-      } else if (format === 'json') {
-        response = await exportJSONMutation(payload).unwrap();
-      } else {
-        response = await exportCSVMutation(payload).unwrap();
-      }
-
-      const filename =
-        response?.filename ||
-        (format === 'excel'
-          ? 'bank_receipts.xlsx'
-          : format === 'pdf'
-            ? 'bank_receipts.pdf'
-            : format === 'json'
-              ? 'bank_receipts.json'
-              : 'bank_receipts.csv');
-
-      const downloadResponse = await downloadFileMutation(filename).unwrap();
-      const blob =
-        downloadResponse instanceof Blob
-          ? downloadResponse
-          : new Blob([downloadResponse], {
-            type:
-              format === 'excel'
-                ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                : format === 'pdf'
-                  ? 'application/pdf'
-                  : format === 'json'
-                    ? 'application/json'
-                    : 'text/csv',
-          });
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showSuccessToast(`Exported bank receipts as ${format.toUpperCase()}`);
-    } catch (error) {
-      showErrorToast(handleApiError(error, 'Bank Receipts Export'));
-    }
-  };
+  const handleExportConfirm = () =>
+    confirmTabularExportDownload({
+      format: exportFormat,
+      runExportDownload,
+      exportRunners: buildTabularExportRunners(
+        { ...filters, ...pagination, sortConfig },
+        { exportExcelMutation, exportPDFMutation, exportJSONMutation, exportCSVMutation }
+      ),
+      fallbackFilenames: TABULAR_EXPORT_FALLBACK_FILENAMES.bankReceipts,
+      successMessage: (f) => `Exported bank receipts as ${f.toUpperCase()}`,
+      errorContext: 'Bank Receipts Export',
+      setIsExporting,
+      onSuccess: () => setShowExportModal(false),
+    });
 
   const handlePrint = (receipt) => {
     setPrintData(receipt);
@@ -422,7 +400,7 @@ const BankReceipts = () => {
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
           <Button
-            onClick={handleExport}
+            onClick={() => setShowExportModal(true)}
             variant="outline"
             size="default"
             className="flex items-center justify-center gap-2 w-full sm:w-auto"
@@ -1039,6 +1017,18 @@ const BankReceipts = () => {
           )}
         </div>
       </div>
+
+      <ExportReportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="Export Bank Receipts"
+        format={exportFormat}
+        onFormatChange={setExportFormat}
+        onConfirm={handleExportConfirm}
+        isExporting={isExporting}
+        showDateRange={false}
+        namePrefix="bank-receipts-export-format"
+      />
 
       {/* Receipt print modal – dedicated layout for receipts only */}
       <ReceiptPaymentPrintModal

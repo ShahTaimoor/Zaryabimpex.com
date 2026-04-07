@@ -19,14 +19,7 @@ import { useCreateBatchCashReceiptsMutation } from '../store/services/cashReceip
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import PrintModal from '../components/PrintModal';
 import { Button } from '@/components/ui/button';
-
-// Helper function to get local date in YYYY-MM-DD format (avoids timezone issues with toISOString)
-const getLocalDateString = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+import { getLocalDateString } from '../utils/dateUtils';
 
 const CashReceiving = () => {
   const today = getLocalDateString();

@@ -32,14 +32,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import RecurringExpensesPanel from '../components/RecurringExpensesPanel';
-
-// Helper function to get local date in YYYY-MM-DD format (avoids timezone issues with toISOString)
-const getLocalDateString = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+import { getLocalDateString } from '../utils/dateUtils';
 
 const today = getLocalDateString();
 

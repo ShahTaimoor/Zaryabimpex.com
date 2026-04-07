@@ -129,8 +129,7 @@ class CustomerService {
 
     return customers.map(customer => {
       const transformed = this.transformCustomerToUppercase(customer);
-      const balance = balanceMap.get(customer.id) || 0;
-      const netBalance = (customer.opening_balance ?? customer.openingBalance ?? 0) + balance;
+      const netBalance = balanceMap.get(customer.id) || 0;
 
       return {
         ...transformed,
@@ -316,7 +315,7 @@ class CustomerService {
     }
 
     const summary = await CustomerBalanceService.getBalanceSummary(id);
-    const balance = summary.currentBalance || 0;
+    const balance = summary.balances?.currentBalance ?? 0;
     if (Math.abs(balance) > 0.01) {
       throw new Error('Cannot delete customer with outstanding balance. Please settle all balances first.');
     }
@@ -373,8 +372,7 @@ class CustomerService {
     return {
       customers: customers.map(c => {
         const transformed = this.transformCustomerToUppercase(c);
-        const ledgerBalance = balanceMap.get(c.id) || 0;
-        const netBalance = (c.opening_balance ?? c.openingBalance ?? 0) + ledgerBalance;
+        const netBalance = balanceMap.get(c.id) || 0;
         return {
           ...transformed,
           currentBalance: netBalance,
@@ -440,8 +438,7 @@ class CustomerService {
       const raw = customer.address ?? customer.addresses;
       const addresses = Array.isArray(raw) ? raw : (typeof raw === 'string' ? (JSON.parse(raw || '[]') || []) : []);
       const defaultAddress = addresses.length > 0 ? (addresses.find(addr => addr.isDefault) || addresses[0]) : null;
-      const ledgerBalance = balanceMap.get(customer.id) || 0;
-      const netBalance = (customer.opening_balance ?? customer.openingBalance ?? 0) + ledgerBalance;
+      const netBalance = balanceMap.get(customer.id) || 0;
       if (!showZeroBalance && Math.abs(netBalance) < 0.01) return null;
       return {
         id: customer.id,
@@ -481,8 +478,7 @@ class CustomerService {
     const balanceMap = await AccountingService.getBulkCustomerBalances(customerIds);
 
     return customers.map(c => {
-      const ledgerBalance = balanceMap.get(c._id.toString()) || 0;
-      const netBalance = (c.openingBalance || 0) + ledgerBalance;
+      const netBalance = balanceMap.get(c._id.toString()) || 0;
       return {
         ...c,
         currentBalance: netBalance,
@@ -535,7 +531,7 @@ class CustomerService {
     if (!customer) throw new Error('Customer not found');
 
     const summary = await CustomerBalanceService.getBalanceSummary(customerId);
-    const balance = summary.currentBalance || 0;
+    const balance = summary.balances?.currentBalance ?? 0;
     const transformed = this.transformCustomerToUppercase(customer);
 
     return {

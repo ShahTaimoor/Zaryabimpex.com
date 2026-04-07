@@ -143,8 +143,7 @@ class SupplierService {
     // Transform supplier names to uppercase and attach balances
     result.suppliers = result.suppliers.map(s => {
       const transformed = this.transformSupplierToUppercase(s);
-      const balance = balanceMap.get(s.id) || 0;
-      const netBalance = (s.opening_balance || 0) + balance;
+      const netBalance = balanceMap.get(s.id) || 0;
 
       return {
         ...transformed,
@@ -171,7 +170,7 @@ class SupplierService {
 
     const transformed = this.transformSupplierToUppercase(supplier);
     const summary = await SupplierBalanceService.getBalanceSummary(id);
-    const balance = summary.currentBalance || 0;
+    const balance = summary.balances?.currentBalance ?? 0;
 
     return {
       ...transformed,
@@ -199,8 +198,7 @@ class SupplierService {
 
     return suppliers.map(supplier => {
       const transformed = this.transformSupplierToUppercase(supplier);
-      const balance = balanceMap.get(supplier.id) || 0;
-      const netBalance = (supplier.opening_balance || 0) + balance;
+      const netBalance = balanceMap.get(supplier.id) || 0;
 
       return {
         ...transformed,
@@ -285,8 +283,7 @@ class SupplierService {
 
     return suppliers.map(s => {
       const transformed = this.transformSupplierToUppercase(s);
-      const ledgerBalance = balanceMap.get(s._id.toString()) || 0;
-      const netBalance = (s.openingBalance || 0) + ledgerBalance;
+      const netBalance = balanceMap.get(s._id.toString()) || 0;
 
       return {
         ...transformed,
