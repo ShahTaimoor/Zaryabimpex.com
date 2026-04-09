@@ -246,42 +246,6 @@ export const salesApi = api.injectEndpoints({
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
-    exportExcel: builder.mutation({
-      query: (filters) => ({
-        url: 'sales/export/excel',
-        method: 'post',
-        data: { filters: filters || {} },
-      }),
-    }),
-    exportCSV: builder.mutation({
-      query: (filters) => ({
-        url: 'sales/export/csv',
-        method: 'post',
-        data: { filters: filters || {} },
-      }),
-    }),
-    exportPDF: builder.mutation({
-      query: (filters) => ({
-        url: 'sales/export/pdf',
-        method: 'post',
-        data: { filters: filters || {} },
-      }),
-    }),
-    exportJSON: builder.mutation({
-      query: (filters) => ({
-        url: 'sales/export/json',
-        method: 'post',
-        data: { filters: filters || {} },
-      }),
-    }),
-    downloadExportFile: builder.query({
-      query: (filename) => ({
-        url: `sales/download/${filename}`,
-        method: 'get',
-        responseHandler: (response) => response.blob(),
-      }),
-      providesTags: [{ type: 'Sales', id: 'EXPORT' }],
-    }),
   }),
   overrideExisting: false,
 });
@@ -302,10 +266,5 @@ export const {
   useGetCCTVOrdersQuery,
   usePostMissingSalesToLedgerMutation,
   useSyncSalesLedgerMutation,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useLazyDownloadExportFileQuery,
 } = salesApi;
 

@@ -5,7 +5,7 @@ import {
   Search,
   Filter,
   RefreshCw,
-  Download,
+
   Eye,
   Trash2,
   Star,
@@ -33,7 +33,7 @@ import {
   useGetQuickTurnoverRatesQuery,
   useGetQuickAgingAnalysisQuery,
   useDeleteReportMutation,
-  useExportReportMutation,
+
   useToggleFavoriteReportMutation,
 } from '../store/services/inventoryApi';
 import { handleApiError } from '../utils/errorHandler';
@@ -107,7 +107,7 @@ const InventoryReports = () => {
   );
 
   // Mutations
-  const [exportReport] = useExportReportMutation();
+
   const [deleteReport] = useDeleteReportMutation();
   const [toggleFavoriteReport] = useToggleFavoriteReportMutation();
 
@@ -141,27 +141,7 @@ const InventoryReports = () => {
     }
   };
 
-  const handleExportReportClick = async (reportId, format) => {
-    try {
-      const response = await exportReport({ id: reportId, format }).unwrap();
-      const blob = response instanceof Blob ? response : new Blob([response]);
-      const extension = format === 'excel' ? 'xlsx' : format;
-      const filename = `inventory_report_${reportId}.${extension}`;
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast.success(`${format.toUpperCase()} downloaded successfully`);
-    } catch (error) {
-      handleApiError(error, 'Export Report');
-    }
-  };
 
-  const handleExportReport = handleExportReportClick;
 
   const handleToggleFavorite = async (reportId, isFavorite) => {
     try {
@@ -268,9 +248,9 @@ const InventoryReports = () => {
         <div className="mt-4 sm:mt-0 flex space-x-3">
           <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white transition-all shadow-md active:scale-95 px-6 py-2.5 rounded-lg text-sm font-bold tracking-tight uppercase"
           >
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="h-4 w-4" />
             Generate Report
           </button>
         </div>
@@ -652,13 +632,7 @@ const InventoryReports = () => {
                       >
                         <Star className={`h-4 w-4 ${report.isFavorite ? 'fill-current' : ''}`} />
                       </button>
-                      <button
-                        onClick={() => handleExportReportClick(report.reportId, 'pdf')}
-                        className="text-gray-400 hover:text-gray-600"
-                        title="Export Report"
-                      >
-                        <Download className="h-4 w-4" />
-                      </button>
+
                       <button
                         onClick={() => handleDeleteReportClick(report.reportId)}
                         className="text-red-400 hover:text-red-600"
@@ -702,7 +676,7 @@ const InventoryReports = () => {
             setShowDetailModal(false);
             setSelectedReport(null);
           }}
-          onExport={handleExportReport}
+
           onDelete={handleDeleteReport}
           onToggleFavorite={handleToggleFavorite}
         />

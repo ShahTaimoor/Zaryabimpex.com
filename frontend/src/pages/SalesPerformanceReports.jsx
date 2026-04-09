@@ -7,7 +7,6 @@ import {
   Package,
   UserCheck,
   Calendar,
-  Download,
   Filter,
   Search,
   Plus,
@@ -33,7 +32,7 @@ import {
   useGetQuickTopCustomersQuery,
   useDeleteReportMutation,
   useToggleFavoriteMutation,
-  useExportReportMutation,
+
 } from '../store/services/salesPerformanceApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { toast } from 'sonner';
@@ -117,7 +116,7 @@ const SalesPerformanceReports = () => {
   // Mutations
   const [deleteReport] = useDeleteReportMutation();
   const [toggleFavorite] = useToggleFavoriteMutation();
-  const [exportReport] = useExportReportMutation();
+
 
   React.useEffect(() => {
     if (selectedReportData?.data) {
@@ -161,22 +160,7 @@ const SalesPerformanceReports = () => {
     }
   };
 
-  const handleExportReport = async (reportId, format) => {
-    try {
-      const blob = await exportReport({ id: reportId, format }).unwrap();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `sales-performance-report-${reportId}.${format}`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast.success(`Report exported as ${format.toUpperCase()} successfully!`);
-    } catch (error) {
-      handleApiError(error, 'Export Report');
-    }
-  };
+
 
   const handleRefresh = () => {
     refetchReports();
@@ -758,7 +742,7 @@ const SalesPerformanceReports = () => {
           handleDeleteReport(reportId);
           setShowDetailModal(false);
         }}
-        onExport={handleExportReport}
+
       />
     </AsyncErrorBoundary>
   );

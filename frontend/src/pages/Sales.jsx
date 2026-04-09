@@ -18,7 +18,6 @@ import {
   Info,
   Eye,
   EyeOff,
-  Download,
   XCircle,
   ArrowUpDown,
   ChevronDown
@@ -29,11 +28,7 @@ import {
   useCreateSaleMutation,
   useUpdateOrderMutation,
   useLazyGetLastPricesQuery,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useLazyDownloadExportFileQuery,
+
 } from '../store/services/salesApi';
 import { useCheckApplicableDiscountsMutation } from '../store/services/discountsApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
@@ -82,14 +77,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 
 import { getLocalDateString } from '../utils/dateUtils';
-import {
-  interpretLazyQueryDownloadResult,
-  presentPdfExportBlob,
-  presentNonPdfExportDownload,
-  notifyExportDownloadCatchError,
-} from '../utils/exportReportPresentation';
+
 import { ProductSearch } from '../components/sales/ProductSearch';
-import ExportReportModal from '../components/ExportReportModal';
+
 
 export const Sales = ({ tabId, editData }) => {
   // Store refetch function from ProductSearch component
@@ -125,32 +115,10 @@ export const Sales = ({ tabId, editData }) => {
   const [showCostPrice, setShowCostPrice] = useState(false); // Toggle to show/hide cost prices
   const [lastPurchasePrices, setLastPurchasePrices] = useState({}); // Store last purchase prices for products
   const [priceType, setPriceType] = useState('wholesale'); // Price type: 'retail' or 'wholesale' or 'custom'
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [exportFormat, setExportFormat] = useState('pdf');
-  const [isExporting, setIsExporting] = useState(false);
+
 
   // Calculate default date range (one month ago to today)
-  const getDefaultDateRange = () => {
-    const today = new Date();
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(today.getMonth() - 1);
 
-    const formatDate = (date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    };
-
-    return {
-      from: formatDate(oneMonthAgo),
-      to: formatDate(today)
-    };
-  };
-
-  const defaultDateRange = getDefaultDateRange();
-  const [exportDateFrom, setExportDateFrom] = useState(defaultDateRange.from);
-  const [exportDateTo, setExportDateTo] = useState(defaultDateRange.to);
   const { isMobile, isTablet } = useResponsive();
   const { trackAddToCart, trackProductView, trackPageView } = useBehaviorTracking();
   const { updateTabTitle, getActiveTab, openTab } = useTab();
@@ -357,11 +325,7 @@ export const Sales = ({ tabId, editData }) => {
   const [createSale, { isLoading: isCreatingSale }] = useCreateSaleMutation();
   const [updateOrder, { isLoading: isUpdatingOrder }] = useUpdateOrderMutation();
   const [getLastPrices] = useLazyGetLastPricesQuery();
-  const [exportExcel] = useExportExcelMutation();
-  const [exportCSV] = useExportCSVMutation();
-  const [exportPDF] = useExportPDFMutation();
-  const [exportJSON] = useExportJSONMutation();
-  const [downloadExportFile] = useLazyDownloadExportFileQuery();
+
   const [checkApplicableDiscounts] = useCheckApplicableDiscountsMutation();
   const [applicableDiscountList, setApplicableDiscountList] = useState([]);
 
@@ -562,8 +526,7 @@ export const Sales = ({ tabId, editData }) => {
           const displayName = product.isVariant
             ? (product.displayName || product.variantName || product.name)
             : product.name;
-          toast.error(`Cannot add ${newItem.quantity} more units. Only ${availableStock - existingItem.quantity} additional units available (${existingItem.quantity} already in cart).`);
-          return prevCart; // Return unchanged cart
+          toast.warning(`Stock for ${displayName} is insufficient. Adding ${item.quantity} units anyway.`);
         }
 
         const newQty = existingItem.quantity + item.quantity;
@@ -619,10 +582,9 @@ export const Sales = ({ tabId, editData }) => {
     const availableStock = cartItem.product.inventory?.currentStock || 0;
 
     if (total > availableStock) {
-      toast.error(
-        `Cannot set quantity to ${total} pcs. Only ${availableStock} units available in stock.`
+      toast.warning(
+        `Stock is insufficient. Setting quantity to ${total} pcs anyway.`
       );
-      return;
     }
 
     if (total <= 0) {
@@ -649,9 +611,10 @@ export const Sales = ({ tabId, editData }) => {
       if (!cartItem) return prevCart;
 
       const availableStock = cartItem.product.inventory?.currentStock || 0;
-      if (newQuantity > availableStock) {
-        toast.error(`Cannot set quantity to ${newQuantity}. Only ${availableStock} units available in stock.`);
-        return prevCart;
+      if (Number(newQuantity) > availableStock) {
+        toast.warning(
+          `Stock is insufficient. Setting quantity to ${newQuantity} anyway.`
+        );
       }
 
       const ppb = getPiecesPerBox(cartItem.product);
@@ -987,74 +950,7 @@ export const Sales = ({ tabId, editData }) => {
     }
   };
 
-  const handleExport = () => {
-    setShowExportModal(true);
-  };
 
-  const handleExportConfirm = async () => {
-    setIsExporting(true);
-    try {
-      // Build filters based on current view (if any filters exist)
-      const filters = {
-        // Include customer filter if a customer is selected
-        ...(selectedCustomer?._id && { customer: selectedCustomer._id }),
-        // Include date range if selected
-        ...(exportDateFrom && { dateFrom: exportDateFrom }),
-        ...(exportDateTo && { dateTo: exportDateTo }),
-      };
-
-      let response;
-      if (exportFormat === 'excel') {
-        response = await exportExcel(filters).unwrap();
-      } else if (exportFormat === 'csv') {
-        response = await exportCSV(filters).unwrap();
-      } else if (exportFormat === 'json') {
-        response = await exportJSON(filters).unwrap();
-      } else if (exportFormat === 'pdf') {
-        response = await exportPDF(filters).unwrap();
-      }
-
-      if (response?.filename) {
-        const filename = response.filename;
-
-        try {
-          // Add a small delay to ensure file is written (PDF generation is async)
-          if (exportFormat === 'pdf') {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-
-          const downloadResult = await downloadExportFile(filename);
-          const parsed = interpretLazyQueryDownloadResult(downloadResult);
-          if (!parsed.ok) {
-            showErrorToast(parsed.errorMessage);
-            return;
-          }
-          const blob = parsed.blob;
-
-          if (exportFormat === 'pdf') {
-            presentPdfExportBlob(blob, filename, {
-              error: showErrorToast,
-              success: showSuccessToast,
-            });
-          } else {
-            presentNonPdfExportDownload(blob, exportFormat, filename, showSuccessToast);
-          }
-        } catch (downloadError) {
-          notifyExportDownloadCatchError(downloadError, showErrorToast);
-          return;
-        }
-      } else {
-        showErrorToast('Export failed: No filename received');
-        return;
-      }
-
-      setShowExportModal(false);
-    } catch (error) {
-      handleApiError(error, 'Export');
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   const handleCreateOrder = useCallback(async (orderData) => {
     // Double-check: prevent duplicate calls even if handleCheckout guard fails
@@ -1369,15 +1265,7 @@ export const Sales = ({ tabId, editData }) => {
             <p className="text-gray-600">Process sales transactions</p>
           </div>
           <div className="flex items-center space-x-2">
-            <Button
-              onClick={handleExport}
-              variant="secondary"
-              size="default"
-              title="Export Sales Report"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export Sales Report
-            </Button>
+
             <Button
               onClick={() => {
                 const componentInfo = getComponentInfo('/sales');
@@ -1687,8 +1575,7 @@ export const Sales = ({ tabId, editData }) => {
             ) : null}
             desktopHeader={(
               <CartTableHeader
-                className={`hidden md:grid gap-x-1 items-center pb-2 border-b border-gray-300 mb-2 ${
-                  dualUnitShowBoxInputEnabled
+                className={`hidden md:grid gap-x-1 items-center pb-2 border-b border-gray-300 mb-2 ${dualUnitShowBoxInputEnabled
                     ? (
                       showCostPrice && hasPermission('view_cost_prices')
                         ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
@@ -1699,7 +1586,7 @@ export const Sales = ({ tabId, editData }) => {
                         ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
                         : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
                     )
-                }`}
+                  }`}
                 columns={[
                   { key: 'sno', label: 'S.NO', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-left' },
                   { key: 'product', label: 'Product' },
@@ -1714,1104 +1601,1100 @@ export const Sales = ({ tabId, editData }) => {
               />
             )}
           >
-                {cart.map((item, index) => {
-                  const totalPrice = item.unitPrice * item.quantity;
-                  const isLowStock = item.product.inventory?.currentStock <= item.product.inventory?.reorderPoint;
+            {cart.map((item, index) => {
+              const totalPrice = item.unitPrice * item.quantity;
+              const isLowStock = item.product.inventory?.currentStock <= item.product.inventory?.reorderPoint;
 
-                  return (
-                    <div key={item.product._id}>
-                      {/* Mobile Card View */}
-                      <div className="md:hidden mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
-                              <span className="font-medium text-sm truncate">
-                                {item.product.isVariant
-                                  ? (item.product.displayName || item.product.variantName || item.product.name)
-                                  : item.product.name}
-                              </span>
-                            </div>
-                            {item.product.isVariant && (
-                              <span className="text-xs text-gray-500 block">
-                                {item.product.variantType}: {item.product.variantValue}
+              return (
+                <div key={item.product._id}>
+                  {/* Mobile Card View */}
+                  <div className="md:hidden mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
+                          <span className="font-medium text-sm truncate">
+                            {item.product.isVariant
+                              ? (item.product.displayName || item.product.variantName || item.product.name)
+                              : item.product.name}
+                          </span>
+                        </div>
+                        {item.product.isVariant && (
+                          <span className="text-xs text-gray-500 block">
+                            {item.product.variantType}: {item.product.variantValue}
+                          </span>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low Stock</span>}
+                          {lastPurchasePrices[item.product._id] !== undefined &&
+                            item.unitPrice < lastPurchasePrices[item.product._id] && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
+                                ⚠️ Loss
                               </span>
                             )}
-                            <div className="flex flex-wrap items-center gap-2 mt-1">
-                              {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low Stock</span>}
-                              {lastPurchasePrices[item.product._id] !== undefined &&
-                                item.unitPrice < lastPurchasePrices[item.product._id] && (
-                                  <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
-                                    ⚠️ Loss
-                                  </span>
-                                )}
-                              {isLastPricesApplied && priceStatus[item.product._id] && (
-                                <span className={`text-xs px-1.5 py-0.5 rounded ${priceStatus[item.product._id] === 'updated'
-                                  ? 'bg-green-100 text-green-700'
-                                  : priceStatus[item.product._id] === 'unchanged'
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'bg-yellow-100 text-yellow-700'
-                                  }`}>
-                                  {priceStatus[item.product._id] === 'updated'
-                                    ? 'Updated'
-                                    : priceStatus[item.product._id] === 'unchanged'
-                                      ? 'Same Price'
-                                      : 'Not in Last Order'}
+                          {isLastPricesApplied && priceStatus[item.product._id] && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${priceStatus[item.product._id] === 'updated'
+                              ? 'bg-green-100 text-green-700'
+                              : priceStatus[item.product._id] === 'unchanged'
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-yellow-100 text-yellow-700'
+                              }`}>
+                              {priceStatus[item.product._id] === 'updated'
+                                ? 'Updated'
+                                : priceStatus[item.product._id] === 'unchanged'
+                                  ? 'Same Price'
+                                  : 'Not in Last Order'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <LoadingButton
+                        onClick={() => removeFromCart(item.product._id)}
+                        isLoading={isRemovingFromCart[item.product._id]}
+                        variant="destructive"
+                        size="sm"
+                        className="h-8 w-8 p-0 flex-shrink-0 ml-2"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </LoadingButton>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {hasDualUnit(item.product) && dualUnitShowBoxInputEnabled && (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Box</label>
+                          {(() => {
+                            const ppb = getPiecesPerBox(item.product);
+                            const boxVal =
+                              item.boxes != null
+                                ? item.boxes
+                                : ppb
+                                  ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
+                                  : 0;
+                            return (
+                              <input
+                                type="number"
+                                min={0}
+                                value={item.quantity === 0 ? '' : boxVal}
+                                onChange={(e) =>
+                                  updateCartBoxCount(item.product._id, e.target.value)
+                                }
+                                className={`text-sm font-semibold w-full rounded border px-2 py-1 text-center focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(item.product.inventory?.currentStock || 0) === 0
+                                    ? 'text-red-700 bg-red-50 border-red-200'
+                                    : (item.product.inventory?.currentStock || 0) <=
+                                      (item.product.inventory?.reorderPoint || 0)
+                                      ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                                      : 'text-gray-700 bg-gray-100 border-gray-200'
+                                  }`}
+                                title="Full boxes"
+                              />
+                            );
+                          })()}
+                        </div>
+                      )}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Stock</label>
+                        <span className={`text-sm font-semibold px-2 py-1 rounded border block text-center ${(item.product.inventory?.currentStock || 0) === 0
+                          ? 'text-red-700 bg-red-50 border-red-200'
+                          : (item.product.inventory?.currentStock || 0) <= (item.product.inventory?.reorderPoint || 0)
+                            ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
+                            : 'text-gray-700 bg-gray-100 border-gray-200'
+                          }`}>
+                          {item.product.inventory?.currentStock || 0}
+                        </span>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Total</label>
+                        <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center">
+                          {Math.round(totalPrice)}
+                        </span>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
+                        <DualUnitQuantityInput
+                          product={item.product}
+                          quantity={item.quantity}
+                          onChange={(q, dual) => updateQuantity(item.product._id, q, dual)}
+                          min={1}
+                          max={999999}
+                          stockPiecesForRemaining={item.product.inventory?.currentStock ?? 0}
+                          showRemainingAfterSale={false}
+                          showPiecesUnitLabel={false}
+                          showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(item.product)}
+                          showPiecesInput={dualUnitShowPiecesInputEnabled}
+                          inputClassName="w-full min-w-0 text-center h-8 border border-gray-300 rounded px-2"
+                          compact={hasDualUnit(item.product)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Rate</label>
+                        <Input
+                          type="number"
+                          step="1"
+                          autoComplete="off"
+                          value={Math.round(item.unitPrice)}
+                          onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
+                          className={`text-center h-8 w-full ${(lastPurchasePrices[item.product._id] !== undefined &&
+                            item.unitPrice < lastPurchasePrices[item.product._id])
+                            ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
+                            : ''
+                            }`}
+                          min="0"
+                        />
+                      </div>
+                      {showCostPrice && hasPermission('view_cost_prices') && (
+                        <div className="col-span-2">
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Cost</label>
+                          <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center">
+                            {lastPurchasePrices[item.product._id] !== undefined
+                              ? `${Math.round(lastPurchasePrices[item.product._id])}`
+                              : 'N/A'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Desktop Table Row */}
+                  <div className={`hidden md:block py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                    <div
+                      className={`grid gap-x-1 items-center ${dualUnitShowBoxInputEnabled
+                          ? (
+                            showCostPrice && hasPermission('view_cost_prices')
+                              ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                              : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                          )
+                          : (
+                            showCostPrice && hasPermission('view_cost_prices')
+                              ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                              : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                          )
+                        }`}
+                    >
+                      {/* Serial Number - 1 column */}
+                      <div className="min-w-0 flex justify-start">
+                        <span className="text-sm font-medium text-gray-700 bg-gray-50 px-0.5 py-1 rounded border border-gray-200 block w-8 text-center h-8 flex items-center justify-center">
+                          {index + 1}
+                        </span>
+                      </div>
+
+                      {/* Product Name - mirror Sales Order layout (6 columns normally, 5 when cost column shown) */}
+                      <div className="min-w-0 flex items-center h-8">
+                        <div className="flex flex-col min-w-0 w-full">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className="font-medium text-sm truncate min-w-0"
+                              title={item.product.isVariant
+                                ? (item.product.displayName || item.product.variantName || item.product.name)
+                                : item.product.name}
+                            >
+                              {item.product.isVariant
+                                ? (item.product.displayName || item.product.variantName || item.product.name)
+                                : item.product.name}
+                            </span>
+                            {isLowStock && <span className="text-yellow-600 text-xs whitespace-nowrap">⚠️ Low Stock</span>}
+                            {/* Warning if sale price is below cost price (always show, regardless of showCostPrice) */}
+                            {lastPurchasePrices[item.product._id] !== undefined &&
+                              item.unitPrice < lastPurchasePrices[item.product._id] && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold whitespace-nowrap" title={`Sale price below cost! Loss: ${Math.round(lastPurchasePrices[item.product._id] - item.unitPrice)} per unit`}>
+                                  ⚠️ Loss
                                 </span>
                               )}
-                            </div>
+                            {isLastPricesApplied && priceStatus[item.product._id] && (
+                              <span className={`text-xs px-1.5 py-0.5 rounded whitespace-nowrap ${priceStatus[item.product._id] === 'updated'
+                                ? 'bg-green-100 text-green-700'
+                                : priceStatus[item.product._id] === 'unchanged'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-yellow-100 text-yellow-700'
+                                }`}>
+                                {priceStatus[item.product._id] === 'updated'
+                                  ? 'Updated'
+                                  : priceStatus[item.product._id] === 'unchanged'
+                                    ? 'Same Price'
+                                    : 'Not in Last Order'}
+                              </span>
+                            )}
                           </div>
-                          <LoadingButton
-                            onClick={() => removeFromCart(item.product._id)}
-                            isLoading={isRemovingFromCart[item.product._id]}
-                            variant="destructive"
-                            size="sm"
-                            className="h-8 w-8 p-0 flex-shrink-0 ml-2"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </LoadingButton>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          {hasDualUnit(item.product) && dualUnitShowBoxInputEnabled && (
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Box</label>
-                              {(() => {
-                                const ppb = getPiecesPerBox(item.product);
-                                const boxVal =
-                                  item.boxes != null
-                                    ? item.boxes
-                                    : ppb
-                                      ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
-                                      : 0;
-                                return (
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={item.quantity === 0 ? '' : boxVal}
-                                    onChange={(e) =>
-                                      updateCartBoxCount(item.product._id, e.target.value)
-                                    }
-                                    className={`text-sm font-semibold w-full rounded border px-2 py-1 text-center focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${
-                                      (item.product.inventory?.currentStock || 0) === 0
-                                        ? 'text-red-700 bg-red-50 border-red-200'
-                                        : (item.product.inventory?.currentStock || 0) <=
-                                            (item.product.inventory?.reorderPoint || 0)
-                                          ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                                          : 'text-gray-700 bg-gray-100 border-gray-200'
-                                    }`}
-                                    title="Full boxes"
-                                  />
-                                );
-                              })()}
-                            </div>
+                          {item.product.isVariant && (
+                            <span className="text-xs text-gray-500 truncate">
+                              {item.product.variantType}: {item.product.variantValue}
+                            </span>
                           )}
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Stock</label>
-                            <span className={`text-sm font-semibold px-2 py-1 rounded border block text-center ${(item.product.inventory?.currentStock || 0) === 0
-                              ? 'text-red-700 bg-red-50 border-red-200'
-                              : (item.product.inventory?.currentStock || 0) <= (item.product.inventory?.reorderPoint || 0)
-                                ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
-                                : 'text-gray-700 bg-gray-100 border-gray-200'
-                              }`}>
-                              {item.product.inventory?.currentStock || 0}
+                        </div>
+                      </div>
+
+                      {/* Box — dual-unit boxes only; hidden fully when box input setting is off */}
+                      {dualUnitShowBoxInputEnabled && (
+                        <div className="min-w-0">
+                          {hasDualUnit(item.product) ? (
+                            (() => {
+                              const ppb = getPiecesPerBox(item.product);
+                              const boxVal =
+                                item.boxes != null
+                                  ? item.boxes
+                                  : ppb
+                                    ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
+                                    : 0;
+                              return (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={item.quantity === 0 ? '' : boxVal}
+                                  onChange={(e) =>
+                                    updateCartBoxCount(item.product._id, e.target.value)
+                                  }
+                                  className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(item.product.inventory?.currentStock || 0) === 0
+                                      ? 'text-red-700 bg-red-50 border-red-200'
+                                      : (item.product.inventory?.currentStock || 0) <=
+                                        (item.product.inventory?.reorderPoint || 0)
+                                        ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                                        : 'text-gray-700 bg-gray-100 border-gray-200'
+                                    }`}
+                                  title="Full boxes"
+                                />
+                              );
+                            })()
+                          ) : (
+                            <span
+                              className="text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200"
+                              title="Not applicable"
+                            >
+                              —
                             </span>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Total</label>
-                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center">
-                              {Math.round(totalPrice)}
-                            </span>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
-                            <DualUnitQuantityInput
-                              product={item.product}
-                              quantity={item.quantity}
-                              onChange={(q, dual) => updateQuantity(item.product._id, q, dual)}
-                              min={1}
-                              max={item.product.inventory?.currentStock || 999999}
-                              stockPiecesForRemaining={item.product.inventory?.currentStock ?? 0}
-                              showRemainingAfterSale={false}
-                              showPiecesUnitLabel={false}
-                              showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(item.product)}
-                              showPiecesInput={dualUnitShowPiecesInputEnabled}
-                              inputClassName="w-full min-w-0 text-center h-8 border border-gray-300 rounded px-2"
-                              compact={hasDualUnit(item.product)}
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Rate</label>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Stock - 1 column */}
+                      <div className="min-w-0">
+                        <span className={`text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center ${(item.product.inventory?.currentStock || 0) === 0
+                          ? 'text-red-700 bg-red-50 border-red-200'
+                          : (item.product.inventory?.currentStock || 0) <= (item.product.inventory?.reorderPoint || 0)
+                            ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
+                            : 'text-gray-700 bg-gray-100 border-gray-200'
+                          }`}>
+                          {item.product.inventory?.currentStock || 0}
+                        </span>
+                      </div>
+
+                      {/* Quantity */}
+                      <div className="min-w-0">
+                        <DualUnitQuantityInput
+                          product={item.product}
+                          quantity={item.quantity}
+                          onChange={(q, dual) => updateQuantity(item.product._id, q, dual)}
+                          min={1}
+                          max={999999}
+                          stockPiecesForRemaining={item.product.inventory?.currentStock ?? 0}
+                          showRemainingAfterSale={false}
+                          showPiecesUnitLabel={false}
+                          showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(item.product)}
+                          showPiecesInput={dualUnitShowPiecesInputEnabled}
+                          inputClassName="w-full min-w-0 text-center h-8 border border-gray-300 rounded px-2"
+                          compact={hasDualUnit(item.product)}
+                        />
+                      </div>
+
+                      {/* Purchase Price (Cost) - 1 column (conditional) - Between Quantity and Rate */}
+                      {showCostPrice && hasPermission('view_cost_prices') && (
+                        <div className="min-w-0">
+                          <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-8 flex items-center justify-center" title="Cost Price">
+                            {lastPurchasePrices[item.product._id] !== undefined
+                              ? `${Math.round(lastPurchasePrices[item.product._id])}`
+                              : item.product.pricing?.cost !== undefined
+                                ? `${Math.round(item.product.pricing.cost)}`
+                                : 'N/A'}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Rate - 1 column */}
+                      <div className="min-w-0 relative">
+                        {(() => {
+                          const effectiveCost = lastPurchasePrices[item.product._id] !== undefined
+                            ? lastPurchasePrices[item.product._id]
+                            : item.product.pricing?.cost;
+                          const isBelowCost = effectiveCost !== undefined && effectiveCost !== null && item.unitPrice < effectiveCost;
+
+                          return (
                             <Input
                               type="number"
                               step="1"
                               autoComplete="off"
                               value={Math.round(item.unitPrice)}
                               onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
-                              className={`text-center h-8 w-full ${(lastPurchasePrices[item.product._id] !== undefined &&
-                                item.unitPrice < lastPurchasePrices[item.product._id])
-                                ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
-                                : ''
+                              className={`text-center h-8 ${
+                                // Check if sale price is less than cost price - highest priority styling (always check)
+                                isBelowCost
+                                  ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
+                                  : priceStatus[item.product._id] === 'updated'
+                                    ? 'bg-green-50 border-green-300 ring-1 ring-green-200'
+                                    : priceStatus[item.product._id] === 'not-found'
+                                      ? 'bg-yellow-50 border-yellow-300 ring-1 ring-yellow-200'
+                                      : priceStatus[item.product._id] === 'unchanged'
+                                        ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200'
+                                        : ''
                                 }`}
                               min="0"
+                              title={
+                                isBelowCost
+                                  ? `⚠️ WARNING: Sale price ($${Math.round(item.unitPrice)}) is below cost price ($${Math.round(effectiveCost)})`
+                                  : ''
+                              }
                             />
-                          </div>
-                          {showCostPrice && hasPermission('view_cost_prices') && (
-                            <div className="col-span-2">
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Cost</label>
-                              <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center">
-                                {lastPurchasePrices[item.product._id] !== undefined
-                                  ? `${Math.round(lastPurchasePrices[item.product._id])}`
-                                  : 'N/A'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Desktop Table Row */}
-                      <div className={`hidden md:block py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                        <div
-                          className={`grid gap-x-1 items-center ${
-                            dualUnitShowBoxInputEnabled
-                              ? (
-                                showCostPrice && hasPermission('view_cost_prices')
-                                  ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
-                                  : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                              )
-                              : (
-                                showCostPrice && hasPermission('view_cost_prices')
-                                  ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
-                                  : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                              )
-                          }`}
-                        >
-                          {/* Serial Number - 1 column */}
-                          <div className="min-w-0 flex justify-start">
-                            <span className="text-sm font-medium text-gray-700 bg-gray-50 px-0.5 py-1 rounded border border-gray-200 block w-8 text-center h-8 flex items-center justify-center">
-                              {index + 1}
-                            </span>
-                          </div>
-
-                          {/* Product Name - mirror Sales Order layout (6 columns normally, 5 when cost column shown) */}
-                          <div className="min-w-0 flex items-center h-8">
-                            <div className="flex flex-col min-w-0 w-full">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span
-                                  className="font-medium text-sm truncate min-w-0"
-                                  title={item.product.isVariant
-                                    ? (item.product.displayName || item.product.variantName || item.product.name)
-                                    : item.product.name}
-                                >
-                                  {item.product.isVariant
-                                    ? (item.product.displayName || item.product.variantName || item.product.name)
-                                    : item.product.name}
-                                </span>
-                                {isLowStock && <span className="text-yellow-600 text-xs whitespace-nowrap">⚠️ Low Stock</span>}
-                                {/* Warning if sale price is below cost price (always show, regardless of showCostPrice) */}
-                                {lastPurchasePrices[item.product._id] !== undefined &&
-                                  item.unitPrice < lastPurchasePrices[item.product._id] && (
-                                    <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold whitespace-nowrap" title={`Sale price below cost! Loss: ${Math.round(lastPurchasePrices[item.product._id] - item.unitPrice)} per unit`}>
-                                      ⚠️ Loss
-                                    </span>
-                                  )}
-                                {isLastPricesApplied && priceStatus[item.product._id] && (
-                                  <span className={`text-xs px-1.5 py-0.5 rounded whitespace-nowrap ${priceStatus[item.product._id] === 'updated'
-                                    ? 'bg-green-100 text-green-700'
-                                    : priceStatus[item.product._id] === 'unchanged'
-                                      ? 'bg-blue-100 text-blue-700'
-                                      : 'bg-yellow-100 text-yellow-700'
-                                    }`}>
-                                    {priceStatus[item.product._id] === 'updated'
-                                      ? 'Updated'
-                                      : priceStatus[item.product._id] === 'unchanged'
-                                        ? 'Same Price'
-                                        : 'Not in Last Order'}
-                                  </span>
-                                )}
-                              </div>
-                              {item.product.isVariant && (
-                                <span className="text-xs text-gray-500 truncate">
-                                  {item.product.variantType}: {item.product.variantValue}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Box — dual-unit boxes only; hidden fully when box input setting is off */}
-                          {dualUnitShowBoxInputEnabled && (
-                            <div className="min-w-0">
-                              {hasDualUnit(item.product) ? (
-                                (() => {
-                                  const ppb = getPiecesPerBox(item.product);
-                                  const boxVal =
-                                    item.boxes != null
-                                      ? item.boxes
-                                      : ppb
-                                        ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
-                                        : 0;
-                                  return (
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      value={item.quantity === 0 ? '' : boxVal}
-                                      onChange={(e) =>
-                                        updateCartBoxCount(item.product._id, e.target.value)
-                                      }
-                                      className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${
-                                        (item.product.inventory?.currentStock || 0) === 0
-                                          ? 'text-red-700 bg-red-50 border-red-200'
-                                          : (item.product.inventory?.currentStock || 0) <=
-                                              (item.product.inventory?.reorderPoint || 0)
-                                            ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                                            : 'text-gray-700 bg-gray-100 border-gray-200'
-                                      }`}
-                                      title="Full boxes"
-                                    />
-                                  );
-                                })()
-                              ) : (
-                                <span
-                                  className="text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200"
-                                  title="Not applicable"
-                                >
-                                  —
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Stock - 1 column */}
-                          <div className="min-w-0">
-                            <span className={`text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center ${(item.product.inventory?.currentStock || 0) === 0
-                              ? 'text-red-700 bg-red-50 border-red-200'
-                              : (item.product.inventory?.currentStock || 0) <= (item.product.inventory?.reorderPoint || 0)
-                                ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
-                                : 'text-gray-700 bg-gray-100 border-gray-200'
-                              }`}>
-                              {item.product.inventory?.currentStock || 0}
-                            </span>
-                          </div>
-
-                          {/* Quantity */}
-                          <div className="min-w-0">
-                            <DualUnitQuantityInput
-                              product={item.product}
-                              quantity={item.quantity}
-                              onChange={(q, dual) => updateQuantity(item.product._id, q, dual)}
-                              min={1}
-                              max={item.product.inventory?.currentStock || 999999}
-                              stockPiecesForRemaining={item.product.inventory?.currentStock ?? 0}
-                              showRemainingAfterSale={false}
-                              showPiecesUnitLabel={false}
-                              showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(item.product)}
-                              showPiecesInput={dualUnitShowPiecesInputEnabled}
-                              inputClassName="w-full min-w-0 text-center h-8 border border-gray-300 rounded px-2"
-                              compact={hasDualUnit(item.product)}
-                            />
-                          </div>
-
-                          {/* Purchase Price (Cost) - 1 column (conditional) - Between Quantity and Rate */}
-                          {showCostPrice && hasPermission('view_cost_prices') && (
-                            <div className="min-w-0">
-                              <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-8 flex items-center justify-center" title="Cost Price">
-                                {lastPurchasePrices[item.product._id] !== undefined
-                                  ? `${Math.round(lastPurchasePrices[item.product._id])}`
-                                  : item.product.pricing?.cost !== undefined
-                                    ? `${Math.round(item.product.pricing.cost)}`
-                                    : 'N/A'}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Rate - 1 column */}
-                          <div className="min-w-0 relative">
-                            {(() => {
-                              const effectiveCost = lastPurchasePrices[item.product._id] !== undefined
-                                ? lastPurchasePrices[item.product._id]
-                                : item.product.pricing?.cost;
-                              const isBelowCost = effectiveCost !== undefined && effectiveCost !== null && item.unitPrice < effectiveCost;
-
-                              return (
-                                <Input
-                                  type="number"
-                                  step="1"
-                                  autoComplete="off"
-                                  value={Math.round(item.unitPrice)}
-                                  onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
-                                  className={`text-center h-8 ${
-                                    // Check if sale price is less than cost price - highest priority styling (always check)
-                                    isBelowCost
-                                      ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
-                                      : priceStatus[item.product._id] === 'updated'
-                                        ? 'bg-green-50 border-green-300 ring-1 ring-green-200'
-                                        : priceStatus[item.product._id] === 'not-found'
-                                          ? 'bg-yellow-50 border-yellow-300 ring-1 ring-yellow-200'
-                                          : priceStatus[item.product._id] === 'unchanged'
-                                            ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200'
-                                            : ''
-                                    }`}
-                                  min="0"
-                                  title={
-                                    isBelowCost
-                                      ? `⚠️ WARNING: Sale price ($${Math.round(item.unitPrice)}) is below cost price ($${Math.round(effectiveCost)})`
-                                      : ''
-                                  }
-                                />
-                              );
-                            })()}
-                            {isLastPricesApplied && priceStatus[item.product._id] && (
-                              <div
-                                className="absolute -right-7 top-1/2 transform -translate-y-1/2 flex items-center z-10"
-                                title={
-                                  priceStatus[item.product._id] === 'updated'
-                                    ? 'Price updated from last order'
-                                    : priceStatus[item.product._id] === 'unchanged'
-                                      ? 'Price same as last order'
-                                      : 'Product not found in previous order'
-                                }
-                              >
-                                {priceStatus[item.product._id] === 'updated' && (
-                                  <CheckCircle className="h-4 w-4 text-green-600 bg-white rounded-full" />
-                                )}
-                                {priceStatus[item.product._id] === 'unchanged' && (
-                                  <Info className="h-4 w-4 text-blue-600 bg-white rounded-full" />
-                                )}
-                                {priceStatus[item.product._id] === 'not-found' && (
-                                  <AlertCircle className="h-4 w-4 text-yellow-600 bg-white rounded-full" />
-                                )}
-                              </div>
+                          );
+                        })()}
+                        {isLastPricesApplied && priceStatus[item.product._id] && (
+                          <div
+                            className="absolute -right-7 top-1/2 transform -translate-y-1/2 flex items-center z-10"
+                            title={
+                              priceStatus[item.product._id] === 'updated'
+                                ? 'Price updated from last order'
+                                : priceStatus[item.product._id] === 'unchanged'
+                                  ? 'Price same as last order'
+                                  : 'Product not found in previous order'
+                            }
+                          >
+                            {priceStatus[item.product._id] === 'updated' && (
+                              <CheckCircle className="h-4 w-4 text-green-600 bg-white rounded-full" />
+                            )}
+                            {priceStatus[item.product._id] === 'unchanged' && (
+                              <Info className="h-4 w-4 text-blue-600 bg-white rounded-full" />
+                            )}
+                            {priceStatus[item.product._id] === 'not-found' && (
+                              <AlertCircle className="h-4 w-4 text-yellow-600 bg-white rounded-full" />
                             )}
                           </div>
+                        )}
+                      </div>
 
-                          {/* Total - 1 column */}
-                          <div className="min-w-0">
-                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block w-full min-w-0 text-center h-8 flex items-center justify-center">
-                              {Math.round(totalPrice)}
-                            </span>
-                          </div>
+                      {/* Total - 1 column */}
+                      <div className="min-w-0">
+                        <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block w-full min-w-0 text-center h-8 flex items-center justify-center">
+                          {Math.round(totalPrice)}
+                        </span>
+                      </div>
 
-                          {/* Delete Button - 1 column */}
-                          <div className="min-w-0 flex justify-end">
-                            <LoadingButton
-                              onClick={() => removeFromCart(item.product._id)}
-                              isLoading={isRemovingFromCart[item.product._id]}
-                              variant="destructive"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </LoadingButton>
-                          </div>
-                        </div>
+                      {/* Delete Button - 1 column */}
+                      <div className="min-w-0 flex justify-end">
+                        <LoadingButton
+                          onClick={() => removeFromCart(item.product._id)}
+                          isLoading={isRemovingFromCart[item.product._id]}
+                          variant="destructive"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </LoadingButton>
                       </div>
                     </div>
-                  );
-                })}
+                  </div>
+                </div>
+              );
+            })}
           </CartItemsTableSection>
         </ProductSelectionCartSection>
 
         {/* Sales Details (left) + totals & payment (right) on lg+; full width of card */}
         {cart.length > 0 && (
           <div
-            className={`mt-4 grid w-full min-w-0 grid-cols-1 gap-4 lg:gap-5 lg:items-start ${
-              showSalesDetailsFields ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
-            }`}
+            className={`mt-4 grid w-full min-w-0 grid-cols-1 gap-4 lg:gap-5 lg:items-start ${showSalesDetailsFields ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
+              }`}
           >
             <OrderCheckoutCard className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${showSalesDetailsFields ? 'order-1' : 'order-2'}`}>
-            <OrderDetailsSection
-              detailsTitle="Sales Details"
-              showDetails={showSalesDetailsFields}
-              onShowDetailsChange={setShowSalesDetailsFields}
-              checkboxId="showSalesDetailsFields"
-            >
-              {/* Mobile Layout - Stacked */}
-              {showSalesDetailsFields && (
-                <div className="md:hidden space-y-3">
-                  {/* Order Type */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Order Type
-                    </label>
-                    {/*
+              <OrderDetailsSection
+                detailsTitle="Sales Details"
+                showDetails={showSalesDetailsFields}
+                onShowDetailsChange={setShowSalesDetailsFields}
+                checkboxId="showSalesDetailsFields"
+              >
+                {/* Mobile Layout - Stacked */}
+                {showSalesDetailsFields && (
+                  <div className="md:hidden space-y-3">
+                    {/* Order Type */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Order Type
+                      </label>
+                      {/*
                     In edit mode, show the invoice's saved order type.
                     Previously this UI was tied to `selectedCustomer.businessType`, which could differ from
                     what was used when the invoice was created (causing the "price type" mismatch).
                   */}
-                    {(() => {
-                      const editOrderType = editData?.isEditMode ? editData?.orderType : null;
-                      const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
-                      const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
-                      const valueToShow =
-                        normalizedEditOrderType && allowed.has(normalizedEditOrderType)
-                          ? normalizedEditOrderType
-                          : mapBusinessTypeToOrderType(selectedCustomer?.businessType);
-                      return (
-                        <select
-                          value={valueToShow}
-                          className="h-10 text-sm w-full"
-                          disabled
-                        >
-                          <option value="retail">Retail</option>
-                          <option value="wholesale">Wholesale</option>
-                          <option value="return">Return</option>
-                          <option value="exchange">Exchange</option>
-                        </select>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Tax Exemption Option */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Tax Status
-                    </label>
-                    <div className="flex items-center space-x-2 px-3 py-2 border border-gray-200 rounded h-10">
-                      <Input
-                        type="checkbox"
-                        id="taxExemptMobile"
-                        checked={isTaxExempt}
-                        onChange={(e) => setIsTaxExempt(e.target.checked)}
-                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                      />
-                      <div className="flex-1">
-                        <label htmlFor="taxExemptMobile" className="text-sm font-medium text-gray-700 cursor-pointer">
-                          Tax Exempt
-                        </label>
-                      </div>
-                      {isTaxExempt && (
-                        <div className="text-green-600 text-sm font-medium">
-                          ✓
-                        </div>
-                      )}
+                      {(() => {
+                        const editOrderType = editData?.isEditMode ? editData?.orderType : null;
+                        const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
+                        const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
+                        const valueToShow =
+                          normalizedEditOrderType && allowed.has(normalizedEditOrderType)
+                            ? normalizedEditOrderType
+                            : mapBusinessTypeToOrderType(selectedCustomer?.businessType);
+                        return (
+                          <select
+                            value={valueToShow}
+                            className="h-10 text-sm w-full"
+                            disabled
+                          >
+                            <option value="retail">Retail</option>
+                            <option value="wholesale">Wholesale</option>
+                            <option value="return">Return</option>
+                            <option value="exchange">Exchange</option>
+                          </select>
+                        );
+                      })()}
                     </div>
-                  </div>
 
-                  {/* Invoice Number */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-medium text-gray-700">
-                        Invoice Number
+                    {/* Tax Exemption Option */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Tax Status
                       </label>
-                      <label
-                        htmlFor="autoGenerateInvoiceMobile"
-                        className="flex items-center space-x-1 text-xs text-gray-600 cursor-pointer select-none"
-                      >
+                      <div className="flex items-center space-x-2 px-3 py-2 border border-gray-200 rounded h-10">
                         <Input
                           type="checkbox"
-                          id="autoGenerateInvoiceMobile"
-                          checked={autoGenerateInvoice}
-                          onChange={(e) => {
-                            setAutoGenerateInvoice(e.target.checked);
-                            if (e.target.checked && selectedCustomer) {
-                              setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
-                            }
-                          }}
-                          className="h-3.5 w-3.5 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          id="taxExemptMobile"
+                          checked={isTaxExempt}
+                          onChange={(e) => setIsTaxExempt(e.target.checked)}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                         />
-                        <span>Auto-generate</span>
-                      </label>
+                        <div className="flex-1">
+                          <label htmlFor="taxExemptMobile" className="text-sm font-medium text-gray-700 cursor-pointer">
+                            Tax Exempt
+                          </label>
+                        </div>
+                        {isTaxExempt && (
+                          <div className="text-green-600 text-sm font-medium">
+                            ✓
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="relative">
+
+                    {/* Invoice Number */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-medium text-gray-700">
+                          Invoice Number
+                        </label>
+                        <label
+                          htmlFor="autoGenerateInvoiceMobile"
+                          className="flex items-center space-x-1 text-xs text-gray-600 cursor-pointer select-none"
+                        >
+                          <Input
+                            type="checkbox"
+                            id="autoGenerateInvoiceMobile"
+                            checked={autoGenerateInvoice}
+                            onChange={(e) => {
+                              setAutoGenerateInvoice(e.target.checked);
+                              if (e.target.checked && selectedCustomer) {
+                                setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
+                              }
+                            }}
+                            className="h-3.5 w-3.5 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          />
+                          <span>Auto-generate</span>
+                        </label>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          type="text"
+                          autoComplete="off"
+                          value={invoiceNumber}
+                          onChange={(e) => setInvoiceNumber(e.target.value)}
+                          className="w-full pr-20 h-10 text-sm"
+                          placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
+                          disabled={autoGenerateInvoice}
+                        />
+                        {autoGenerateInvoice && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (selectedCustomer) {
+                                setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
+                              }
+                            }}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-primary-600 hover:text-primary-800 font-medium"
+                          >
+                            Regenerate
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bill Date (for backdating) */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Bill Date <span className="text-gray-500">(Optional - for backdating)</span>
+                      </label>
+                      <Input
+                        type="date"
+                        autoComplete="off"
+                        value={billDate}
+                        onChange={(e) => setBillDate(e.target.value)}
+                        className="h-10 text-sm w-full"
+                        max={getLocalDateString()} // Prevent future dates
+                      />
+                    </div>
+
+                    {/* Notes */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Notes
+                      </label>
                       <Input
                         type="text"
                         autoComplete="off"
-                        value={invoiceNumber}
-                        onChange={(e) => setInvoiceNumber(e.target.value)}
-                        className="w-full pr-20 h-10 text-sm"
-                        placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
-                        disabled={autoGenerateInvoice}
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        className="h-10 text-sm w-full"
+                        placeholder="Additional notes..."
                       />
-                      {autoGenerateInvoice && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (selectedCustomer) {
-                              setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
-                            }
-                          }}
-                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-primary-600 hover:text-primary-800 font-medium"
-                        >
-                          Regenerate
-                        </button>
-                      )}
                     </div>
                   </div>
+                )}
 
-                  {/* Bill Date (for backdating) */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Bill Date <span className="text-gray-500">(Optional - for backdating)</span>
-                    </label>
-                    <Input
-                      type="date"
-                      autoComplete="off"
-                      value={billDate}
-                      onChange={(e) => setBillDate(e.target.value)}
-                      className="h-10 text-sm w-full"
-                      max={getLocalDateString()} // Prevent future dates
-                    />
-                  </div>
-
-                  {/* Notes */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Notes
-                    </label>
-                    <Input
-                      type="text"
-                      autoComplete="off"
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      className="h-10 text-sm w-full"
-                      placeholder="Additional notes..."
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Desktop Layout — wrap & start-align so half-width column uses full width */}
-              {showSalesDetailsFields && (
-                <div className="hidden md:flex flex-wrap gap-3 items-end justify-start">
-                  {/* Order Type */}
-                  <div className="flex flex-col w-44">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Order Type
-                    </label>
-                    <select
-                      value={
-                        (() => {
-                          const editOrderType = editData?.isEditMode ? editData?.orderType : null;
-                          const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
-                          const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
-                          return (
-                            normalizedEditOrderType && allowed.has(normalizedEditOrderType)
-                              ? normalizedEditOrderType
-                              : mapBusinessTypeToOrderType(selectedCustomer?.businessType)
-                          );
-                        })()
-                      }
-                      className="h-8 text-sm"
-                      disabled
-                    >
-                      <option value="retail">Retail</option>
-                      <option value="wholesale">Wholesale</option>
-                      <option value="return">Return</option>
-                      <option value="exchange">Exchange</option>
-                    </select>
-                  </div>
-
-                  {/* Tax Exemption Option */}
-                  <div className="flex flex-col w-40">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Tax Status
-                    </label>
-                    <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
-                      <Input
-                        type="checkbox"
-                        id="taxExempt"
-                        checked={isTaxExempt}
-                        onChange={(e) => setIsTaxExempt(e.target.checked)}
-                        className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                      />
-                      <div className="flex-1">
-                        <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
-                          Tax Exempt
-                        </label>
-                      </div>
-                      {isTaxExempt && (
-                        <div className="text-green-600 text-xs font-medium">
-                          ✓
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Invoice Number */}
-                  <div className="flex flex-col w-72">
-                    <div className="flex items-center gap-3 mb-1">
-                      <label className="block text-xs font-medium text-gray-700 m-0">
-                        Invoice Number
+                {/* Desktop Layout — wrap & start-align so half-width column uses full width */}
+                {showSalesDetailsFields && (
+                  <div className="hidden md:flex flex-wrap gap-3 items-end justify-start">
+                    {/* Order Type */}
+                    <div className="flex flex-col w-44">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Order Type
                       </label>
-                      <label
-                        htmlFor="autoGenerateInvoice"
-                        className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
+                      <select
+                        value={
+                          (() => {
+                            const editOrderType = editData?.isEditMode ? editData?.orderType : null;
+                            const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
+                            const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
+                            return (
+                              normalizedEditOrderType && allowed.has(normalizedEditOrderType)
+                                ? normalizedEditOrderType
+                                : mapBusinessTypeToOrderType(selectedCustomer?.businessType)
+                            );
+                          })()
+                        }
+                        className="h-8 text-sm"
+                        disabled
                       >
+                        <option value="retail">Retail</option>
+                        <option value="wholesale">Wholesale</option>
+                        <option value="return">Return</option>
+                        <option value="exchange">Exchange</option>
+                      </select>
+                    </div>
+
+                    {/* Tax Exemption Option */}
+                    <div className="flex flex-col w-40">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Tax Status
+                      </label>
+                      <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
                         <Input
                           type="checkbox"
-                          id="autoGenerateInvoice"
-                          checked={autoGenerateInvoice}
-                          onChange={(e) => {
-                            setAutoGenerateInvoice(e.target.checked);
-                            if (e.target.checked && selectedCustomer) {
-                              setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
-                            }
-                          }}
+                          id="taxExempt"
+                          checked={isTaxExempt}
+                          onChange={(e) => setIsTaxExempt(e.target.checked)}
                           className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                         />
-                        <span>Auto-generate</span>
-                      </label>
+                        <div className="flex-1">
+                          <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
+                            Tax Exempt
+                          </label>
+                        </div>
+                        {isTaxExempt && (
+                          <div className="text-green-600 text-xs font-medium">
+                            ✓
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="relative">
+
+                    {/* Invoice Number */}
+                    <div className="flex flex-col w-72">
+                      <div className="flex items-center gap-3 mb-1">
+                        <label className="block text-xs font-medium text-gray-700 m-0">
+                          Invoice Number
+                        </label>
+                        <label
+                          htmlFor="autoGenerateInvoice"
+                          className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
+                        >
+                          <Input
+                            type="checkbox"
+                            id="autoGenerateInvoice"
+                            checked={autoGenerateInvoice}
+                            onChange={(e) => {
+                              setAutoGenerateInvoice(e.target.checked);
+                              if (e.target.checked && selectedCustomer) {
+                                setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
+                              }
+                            }}
+                            className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          />
+                          <span>Auto-generate</span>
+                        </label>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          type="text"
+                          autoComplete="off"
+                          value={invoiceNumber}
+                          onChange={(e) => setInvoiceNumber(e.target.value)}
+                          className="w-full pr-16 h-8 text-sm"
+                          placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
+                          disabled={autoGenerateInvoice}
+                        />
+                        {autoGenerateInvoice && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (selectedCustomer) {
+                                setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
+                              }
+                            }}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[11px] text-primary-600 hover:text-primary-800 font-medium"
+                          >
+                            Regenerate
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bill Date (for backdating) - Desktop */}
+                    <div className="flex flex-col w-44">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Bill Date <span className="text-gray-500">(Optional)</span>
+                      </label>
+                      <Input
+                        type="date"
+                        autoComplete="off"
+                        value={billDate}
+                        onChange={(e) => setBillDate(e.target.value)}
+                        className="h-8 text-sm"
+                        max={getLocalDateString()} // Prevent future dates
+                      />
+                    </div>
+
+                    {/* Notes */}
+                    <div className="flex min-w-0 flex-1 flex-col basis-[min(100%,20rem)]">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Notes
+                      </label>
                       <Input
                         type="text"
-                        autoComplete="off"
-                        value={invoiceNumber}
-                        onChange={(e) => setInvoiceNumber(e.target.value)}
-                        className="w-full pr-16 h-8 text-sm"
-                        placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
-                        disabled={autoGenerateInvoice}
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        className="h-8 w-full min-w-0 text-sm"
+                        placeholder="Additional notes..."
                       />
-                      {autoGenerateInvoice && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (selectedCustomer) {
-                              setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
-                            }
-                          }}
-                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[11px] text-primary-600 hover:text-primary-800 font-medium"
-                        >
-                          Regenerate
-                        </button>
-                      )}
                     </div>
                   </div>
-
-                  {/* Bill Date (for backdating) - Desktop */}
-                  <div className="flex flex-col w-44">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Bill Date <span className="text-gray-500">(Optional)</span>
-                    </label>
-                    <Input
-                      type="date"
-                      autoComplete="off"
-                      value={billDate}
-                      onChange={(e) => setBillDate(e.target.value)}
-                      className="h-8 text-sm"
-                      max={getLocalDateString()} // Prevent future dates
-                    />
-                  </div>
-
-                  {/* Notes */}
-                  <div className="flex min-w-0 flex-1 flex-col basis-[min(100%,20rem)]">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Notes
-                    </label>
-                    <Input
-                      type="text"
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      className="h-8 w-full min-w-0 text-sm"
-                      placeholder="Additional notes..."
-                    />
-                  </div>
-                </div>
-              )}
-            </OrderDetailsSection>
+                )}
+              </OrderDetailsSection>
             </OrderCheckoutCard>
 
             <OrderCheckoutCard className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${showSalesDetailsFields ? 'order-2' : 'order-1'}`}>
-            <OrderSummaryContent className="bg-none bg-slate-50">
-              <div className="space-y-2">
-                {totalDiscountAmount > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-muted-foreground">Discount:</span>
-                    <span className="text-xl font-semibold tabular-nums text-red-600">-{Math.round(totalDiscountAmount)}</span>
-                  </div>
-                )}
-                {!isTaxExempt && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-muted-foreground">Tax (8%):</span>
-                    <span className="text-xl font-semibold tabular-nums text-foreground">{Math.round(tax)}</span>
-                  </div>
-                )}
-                {selectedCustomer && (() => {
-                  // Match Print logic: invoiceBalance = net amount - received; previousBalance = ledger - invoiceBalance; totalReceivables = ledger
-                  const ledgerBalance = selectedCustomer.currentBalance !== undefined && selectedCustomer.currentBalance !== null
-                    ? Number(selectedCustomer.currentBalance)
-                    : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
-                  const receivedAmount = amountPaid || 0;
-                  const invoiceBalance = total - receivedAmount;
-                  // In edit mode, ledger already includes this invoice; in new sale, it does not
-                  const previousBalance = editData?.isEditMode
-                    ? ledgerBalance - invoiceBalance
-                    : ledgerBalance;
-                  const totalReceivables = editData?.isEditMode
-                    ? ledgerBalance
-                    : ledgerBalance + invoiceBalance;
+              <OrderSummaryContent className="bg-none bg-slate-50">
+                <div className="space-y-2">
+                  {totalDiscountAmount > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">Discount:</span>
+                      <span className="text-xl font-semibold tabular-nums text-red-600">-{Math.round(totalDiscountAmount)}</span>
+                    </div>
+                  )}
+                  {!isTaxExempt && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">Tax (8%):</span>
+                      <span className="text-xl font-semibold tabular-nums text-foreground">{Math.round(tax)}</span>
+                    </div>
+                  )}
+                  {selectedCustomer && (() => {
+                    // Match Print logic: invoiceBalance = net amount - received; previousBalance = ledger - invoiceBalance; totalReceivables = ledger
+                    const ledgerBalance = selectedCustomer.currentBalance !== undefined && selectedCustomer.currentBalance !== null
+                      ? Number(selectedCustomer.currentBalance)
+                      : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
+                    const receivedAmount = amountPaid || 0;
+                    const invoiceBalance = total - receivedAmount;
+                    // In edit mode, ledger already includes this invoice; in new sale, it does not
+                    const previousBalance = editData?.isEditMode
+                      ? ledgerBalance - invoiceBalance
+                      : ledgerBalance;
+                    const totalReceivables = editData?.isEditMode
+                      ? ledgerBalance
+                      : ledgerBalance + invoiceBalance;
 
-                  return (
-                    <div className="mt-2">
-                      <div className="grid grid-cols-1 gap-2 md:grid-cols-4 md:gap-4">
-                        <div className="flex items-center justify-between md:block">
-                          <span className="text-sm font-medium text-muted-foreground">Subtotal:</span>
-                          <div className="text-2xl font-semibold tabular-nums text-foreground md:mt-1">{Math.round(subtotal)}</div>
-                        </div>
-                        <div className="flex items-center justify-between md:block">
-                          <span className="text-sm font-medium text-muted-foreground">Net Amount:</span>
-                          <div className="text-2xl font-bold tabular-nums text-primary md:mt-1">{Number(total.toFixed(2))}</div>
-                        </div>
-                        {(previousBalance !== 0 || editData?.isEditMode) && (
+                    return (
+                      <div className="mt-2">
+                        <div className="grid grid-cols-1 gap-2 md:grid-cols-4 md:gap-4">
                           <div className="flex items-center justify-between md:block">
-                            <span className="text-sm font-medium text-muted-foreground">Previous Balance:</span>
-                            <div className={`text-2xl font-semibold tabular-nums md:mt-1 ${previousBalance < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                              {previousBalance < 0 ? '-' : '+'}{Math.abs(Number(previousBalance.toFixed(2)))}
+                            <span className="text-sm font-medium text-muted-foreground">Subtotal:</span>
+                            <div className="text-2xl font-semibold tabular-nums text-foreground md:mt-1">{Math.round(subtotal)}</div>
+                          </div>
+                          <div className="flex items-center justify-between md:block">
+                            <span className="text-sm font-medium text-muted-foreground">Net Amount:</span>
+                            <div className="text-2xl font-bold tabular-nums text-primary md:mt-1">{Number(total.toFixed(2))}</div>
+                          </div>
+                          {(previousBalance !== 0 || editData?.isEditMode) && (
+                            <div className="flex items-center justify-between md:block">
+                              <span className="text-sm font-medium text-muted-foreground">Previous Balance:</span>
+                              <div className={`text-2xl font-semibold tabular-nums md:mt-1 ${previousBalance < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                {previousBalance < 0 ? '-' : '+'}{Math.abs(Number(previousBalance.toFixed(2)))}
+                              </div>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between md:block">
+                            <span className={`text-sm font-semibold ${totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}`}>
+                              Total Receivables:
+                            </span>
+                            <div className={`text-2xl font-bold tabular-nums md:mt-1 ${totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}`}>
+                              {totalReceivables < 0 ? '-' : '+'}{Math.abs(Number(totalReceivables.toFixed(2)))}
                             </div>
                           </div>
-                        )}
-                        <div className="flex items-center justify-between md:block">
-                          <span className={`text-sm font-semibold ${totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}`}>
-                            Total Receivables:
-                          </span>
-                          <div className={`text-2xl font-bold tabular-nums md:mt-1 ${totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}`}>
-                            {totalReceivables < 0 ? '-' : '+'}{Math.abs(Number(totalReceivables.toFixed(2)))}
-                          </div>
                         </div>
                       </div>
+                    );
+                  })()}
+                  {!selectedCustomer && (
+                    <div className="mt-2 flex items-center justify-between border-t pt-3">
+                      <span className="text-lg font-semibold text-primary">Total:</span>
+                      <span className="text-3xl font-bold tabular-nums text-primary">{Math.round(total)}</span>
                     </div>
-                  );
-                })()}
-                {!selectedCustomer && (
-                  <div className="mt-2 flex items-center justify-between border-t pt-3">
-                    <span className="text-lg font-semibold text-primary">Total:</span>
-                    <span className="text-3xl font-bold tabular-nums text-primary">{Math.round(total)}</span>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
 
-              {/* Payment and Discount Section - One Row */}
-              <OrderInsetPanel>
-                {/* Discount code (from Discount Management) */}
-                {showSalesDiscountCodeEnabled && (
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Discount code
-                    </label>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <select
-                        value=""
-                        onChange={handleSelectDiscountFromDropdown}
-                        disabled={subtotal <= 0 || applicableDiscountList.length === 0}
-                        className="h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground min-w-[180px] max-w-full"
-                        title="Choose an applicable discount"
-                      >
-                        <option value="">
-                          {subtotal <= 0
-                            ? 'Add items to see discounts'
-                            : applicableDiscountList.length === 0
-                              ? 'No applicable discounts'
-                              : 'Select discount code...'}
-                        </option>
-                        {applicableDiscountList
-                          .filter(
-                            (item) =>
-                              !appliedDiscounts.some(
-                                (d) =>
-                                  (d.code || '').toUpperCase() ===
-                                  (item.discount?.code || item.discount?.discount_code || '').toString().toUpperCase()
-                              )
-                          )
-                          .map((item) => {
-                            const d = item.discount || {};
-                            const code = (d.code || d.discount_code || '').toString();
-                            const amt = item.calculatedAmount ?? 0;
-                            const label =
-                              d.type === 'percentage'
-                                ? `${code} - ${d.value}% off (${typeof amt === 'number' ? amt.toFixed(2) : amt})`
-                                : `${code} - ${typeof amt === 'number' ? amt.toFixed(2) : amt} off`;
-                            return (
-                              <option key={code} value={code}>
-                                {label}
-                              </option>
-                            );
-                          })}
-                      </select>
-                    </div>
-                    {appliedDiscounts.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {appliedDiscounts.map((d) => (
-                          <span
-                            key={d.code}
-                            className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded text-sm font-medium"
-                          >
-                            {d.code} -{typeof d.amount === 'number' ? d.amount.toFixed(2) : d.amount}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveDiscountCode(d.code)}
-                              className="ml-1 text-green-600 hover:text-green-900"
-                              aria-label="Remove"
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </button>
-                          </span>
-                        ))}
+                {/* Payment and Discount Section - One Row */}
+                <OrderInsetPanel>
+                  {/* Discount code (from Discount Management) */}
+                  {showSalesDiscountCodeEnabled && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Discount code
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value=""
+                          onChange={handleSelectDiscountFromDropdown}
+                          disabled={subtotal <= 0 || applicableDiscountList.length === 0}
+                          className="h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground min-w-[180px] max-w-full"
+                          title="Choose an applicable discount"
+                        >
+                          <option value="">
+                            {subtotal <= 0
+                              ? 'Add items to see discounts'
+                              : applicableDiscountList.length === 0
+                                ? 'No applicable discounts'
+                                : 'Select discount code...'}
+                          </option>
+                          {applicableDiscountList
+                            .filter(
+                              (item) =>
+                                !appliedDiscounts.some(
+                                  (d) =>
+                                    (d.code || '').toUpperCase() ===
+                                    (item.discount?.code || item.discount?.discount_code || '').toString().toUpperCase()
+                                )
+                            )
+                            .map((item) => {
+                              const d = item.discount || {};
+                              const code = (d.code || d.discount_code || '').toString();
+                              const amt = item.calculatedAmount ?? 0;
+                              const label =
+                                d.type === 'percentage'
+                                  ? `${code} - ${d.value}% off (${typeof amt === 'number' ? amt.toFixed(2) : amt})`
+                                  : `${code} - ${typeof amt === 'number' ? amt.toFixed(2) : amt} off`;
+                              return (
+                                <option key={code} value={code}>
+                                  {label}
+                                </option>
+                              );
+                            })}
+                        </select>
                       </div>
-                    )}
-                  </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 items-start">
-                  {/* Manual discount (amount or %) */}
-                  <div className="flex flex-col">
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Apply Discount (manual)
-                    </label>
-                    <div className="flex space-x-2">
-                      <select
-                        value={directDiscount.type}
-                        onChange={(e) => {
-                          const nextType = e.target.value;
-                          setDirectDiscount((prev) => {
-                            const raw = Number(prev.value) || 0;
-                            const nextValue = nextType === 'percentage'
+                      {appliedDiscounts.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {appliedDiscounts.map((d) => (
+                            <span
+                              key={d.code}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded text-sm font-medium"
+                            >
+                              {d.code} -{typeof d.amount === 'number' ? d.amount.toFixed(2) : d.amount}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveDiscountCode(d.code)}
+                                className="ml-1 text-green-600 hover:text-green-900"
+                                aria-label="Remove"
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 items-start">
+                    {/* Manual discount (amount or %) */}
+                    <div className="flex flex-col">
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Apply Discount (manual)
+                      </label>
+                      <div className="flex space-x-2">
+                        <select
+                          value={directDiscount.type}
+                          onChange={(e) => {
+                            const nextType = e.target.value;
+                            setDirectDiscount((prev) => {
+                              const raw = Number(prev.value) || 0;
+                              const nextValue = nextType === 'percentage'
+                                ? Math.min(Math.max(raw, 0), 100)
+                                : Math.min(Math.max(raw, 0), Math.max(0, Math.round(subtotal)));
+                              return { ...prev, type: nextType, value: nextValue };
+                            });
+                          }}
+                          className="h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium"
+                        >
+                          <option value="amount">Amount</option>
+                          <option value="percentage">%</option>
+                        </select>
+                        <Input
+                          type="number"
+                          placeholder={directDiscount.type === 'amount' ? 'Enter amount...' : 'Enter percentage...'}
+                          value={directDiscount.value || ''}
+                          onChange={(e) => {
+                            const raw = parseInt(e.target.value, 10) || 0;
+                            const value = directDiscount.type === 'percentage'
                               ? Math.min(Math.max(raw, 0), 100)
                               : Math.min(Math.max(raw, 0), Math.max(0, Math.round(subtotal)));
-                            return { ...prev, type: nextType, value: nextValue };
-                          });
+                            setDirectDiscount((prev) => ({ ...prev, value }));
+                          }}
+                          className="flex-1 h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
+                          min="0"
+                          step={directDiscount.type === 'percentage' ? '1' : '1'}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Payment Method */}
+                    <div className="flex flex-col md:col-start-2 md:row-start-1 w-full">
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Payment Method
+                      </label>
+                      <select
+                        value={paymentMethod}
+                        onChange={(e) => {
+                          const method = e.target.value;
+                          setPaymentMethod(method);
+                          if (method !== 'bank') {
+                            setSelectedBankAccount('');
+                          }
                         }}
-                        className="h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium"
+                        className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
                       >
-                        <option value="amount">Amount</option>
-                        <option value="percentage">%</option>
+                        <option value="cash">Cash</option>
+                        <option value="bank">Bank Transfer</option>
+                        <option value="credit_card">Credit Card</option>
+                        <option value="debit_card">Debit Card</option>
+                        <option value="check">Check</option>
+                        <option value="account">Account</option>
+                        <option value="split">Split Payment</option>
                       </select>
+                      {paymentMethod === 'bank' && (
+                        <div className="mt-3">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Bank Account
+                          </label>
+                          <select
+                            value={selectedBankAccount}
+                            onChange={(e) => setSelectedBankAccount(e.target.value)}
+                            className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
+                          >
+                            <option value="">Select bank account...</option>
+                            {activeBanks.map((bank) => (
+                              <option key={bank._id} value={bank._id}>
+                                {bank.bankName} - {bank.accountNumber}
+                                {bank.accountName ? ` (${bank.accountName})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          {banksLoading && (
+                            <p className="text-xs text-gray-500 mt-1">Loading bank accounts...</p>
+                          )}
+                          {!banksLoading && activeBanks.length === 0 && (
+                            <p className="text-xs text-red-500 mt-1">
+                              No bank accounts available. Add one in Banks.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Amount Paid */}
+                    <div className="flex flex-col">
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Amount Paid
+                      </label>
                       <Input
                         type="number"
-                        placeholder={directDiscount.type === 'amount' ? 'Enter amount...' : 'Enter percentage...'}
-                        value={directDiscount.value || ''}
-                        onChange={(e) => {
-                          const raw = parseInt(e.target.value, 10) || 0;
-                          const value = directDiscount.type === 'percentage'
-                            ? Math.min(Math.max(raw, 0), 100)
-                            : Math.min(Math.max(raw, 0), Math.max(0, Math.round(subtotal)));
-                          setDirectDiscount((prev) => ({ ...prev, value }));
-                        }}
-                        className="flex-1 h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
-                        min="0"
-                        step={directDiscount.type === 'percentage' ? '1' : '1'}
+                        step="1"
+                        value={Math.round(amountPaid)}
+                        onChange={(e) => setAmountPaid(parseInt(e.target.value) || 0)}
+                        onFocus={(e) => e.target.select()}
+                        className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground text-lg"
+                        placeholder="0"
                       />
                     </div>
                   </div>
 
-                  {/* Payment Method */}
-                  <div className="flex flex-col md:col-start-2 md:row-start-1 w-full">
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Payment Method
-                    </label>
-                    <select
-                      value={paymentMethod}
-                      onChange={(e) => {
-                        const method = e.target.value;
-                        setPaymentMethod(method);
-                        if (method !== 'bank') {
-                          setSelectedBankAccount('');
-                        }
-                      }}
-                      className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
+                </OrderInsetPanel>
+
+                {/* Action Buttons */}
+                <OrderCheckoutActions>
+                  {cart.length > 0 && (
+                    <LoadingButton
+                      onClick={handleClearCart}
+                      isLoading={isClearingCart}
+                      variant="secondary"
+                      className="flex-1"
                     >
-                      <option value="cash">Cash</option>
-                      <option value="bank">Bank Transfer</option>
-                      <option value="credit_card">Credit Card</option>
-                      <option value="debit_card">Debit Card</option>
-                      <option value="check">Check</option>
-                      <option value="account">Account</option>
-                      <option value="split">Split Payment</option>
-                    </select>
-                    {paymentMethod === 'bank' && (
-                      <div className="mt-3">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Bank Account
-                        </label>
-                        <select
-                          value={selectedBankAccount}
-                          onChange={(e) => setSelectedBankAccount(e.target.value)}
-                          className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Clear Cart
+                    </LoadingButton>
+                  )}
+                  {cart.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="secondary" className="flex-1">
+                          <Printer className="h-4 w-4 mr-2" />
+                          Print
+                          <ChevronDown className="h-4 w-4 ml-2" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            let customerAddress = '';
+                            if (selectedCustomer?.addresses?.length) {
+                              const addr = selectedCustomer.addresses.find(a => a.isDefault) || selectedCustomer.addresses.find(a => a.type === 'billing' || a.type === 'both') || selectedCustomer.addresses[0];
+                              if (addr) customerAddress = [addr.street, addr.city, addr.state, addr.country, addr.zipCode || addr.zip].filter(Boolean).join(', ');
+                            } else if (selectedCustomer?.address) customerAddress = selectedCustomer.address;
+                            const tempOrder = {
+                              orderNumber: `TEMP-${Date.now()}`,
+                              orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
+                              customer: selectedCustomer ?? undefined,
+                              customerInfo: selectedCustomer ? {
+                                name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,
+                                email: selectedCustomer.email,
+                                phone: selectedCustomer.phone,
+                                businessName: selectedCustomer.businessName || selectedCustomer.business_name,
+                                address: customerAddress || undefined,
+                                currentBalance: selectedCustomer.currentBalance,
+                                pendingBalance: selectedCustomer.pendingBalance,
+                                advanceBalance: selectedCustomer.advanceBalance
+                              } : null,
+                              items: cart.map(item => ({
+                                product: { name: item.product.name },
+                                quantity: item.quantity,
+                                unitPrice: item.unitPrice
+                              })),
+                              pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt, total },
+                              payment: {
+                                method: paymentMethod,
+                                bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
+                                amountPaid,
+                                remainingBalance: total - amountPaid,
+                                isPartialPayment: amountPaid < total,
+                                isAdvancePayment,
+                                advanceAmount: isAdvancePayment ? (amountPaid - total) : 0
+                              },
+                              createdAt: new Date(),
+                              createdBy: user ? { firstName: user.firstName, lastName: user.lastName, name: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Admin' } : { name: 'Admin' },
+                              invoiceNumber
+                            };
+                            setDirectPrintOrder(tempOrder);
+                          }}
                         >
-                          <option value="">Select bank account...</option>
-                          {activeBanks.map((bank) => (
-                            <option key={bank._id} value={bank._id}>
-                              {bank.bankName} - {bank.accountNumber}
-                              {bank.accountName ? ` (${bank.accountName})` : ''}
-                            </option>
-                          ))}
-                        </select>
-                        {banksLoading && (
-                          <p className="text-xs text-gray-500 mt-1">Loading bank accounts...</p>
-                        )}
-                        {!banksLoading && activeBanks.length === 0 && (
-                          <p className="text-xs text-red-500 mt-1">
-                            No bank accounts available. Add one in Banks.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Amount Paid */}
-                  <div className="flex flex-col">
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Amount Paid
-                    </label>
+                          <Printer className="h-4 w-4 mr-2" />
+                          Print
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            let customerAddress = '';
+                            if (selectedCustomer?.addresses?.length) {
+                              const addr = selectedCustomer.addresses.find(a => a.isDefault) || selectedCustomer.addresses.find(a => a.type === 'billing' || a.type === 'both') || selectedCustomer.addresses[0];
+                              if (addr) customerAddress = [addr.street, addr.city, addr.state, addr.country, addr.zipCode || addr.zip].filter(Boolean).join(', ');
+                            } else if (selectedCustomer?.address) customerAddress = selectedCustomer.address;
+                            const tempOrder = {
+                              orderNumber: `TEMP-${Date.now()}`,
+                              orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
+                              customer: selectedCustomer ?? undefined,
+                              customerInfo: selectedCustomer ? {
+                                name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,
+                                email: selectedCustomer.email,
+                                phone: selectedCustomer.phone,
+                                businessName: selectedCustomer.businessName || selectedCustomer.business_name,
+                                address: customerAddress || undefined,
+                                currentBalance: selectedCustomer.currentBalance,
+                                pendingBalance: selectedCustomer.pendingBalance,
+                                advanceBalance: selectedCustomer.advanceBalance
+                              } : null,
+                              items: cart.map(item => ({
+                                product: { name: item.product.name },
+                                quantity: item.quantity,
+                                unitPrice: item.unitPrice
+                              })),
+                              pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt, total },
+                              payment: {
+                                method: paymentMethod,
+                                bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
+                                amountPaid,
+                                remainingBalance: total - amountPaid,
+                                isPartialPayment: amountPaid < total,
+                                isAdvancePayment,
+                                advanceAmount: isAdvancePayment ? (amountPaid - total) : 0
+                              },
+                              createdAt: new Date(),
+                              createdBy: user ? { firstName: user.firstName, lastName: user.lastName, name: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Admin' } : { name: 'Admin' },
+                              invoiceNumber
+                            };
+                            setCurrentOrder(tempOrder);
+                            setShowPrintModal(true);
+                          }}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Print Preview
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                  <div className="flex items-center space-x-2 px-2">
                     <Input
-                      type="number"
-                      step="1"
-                      value={Math.round(amountPaid)}
-                      onChange={(e) => setAmountPaid(parseInt(e.target.value) || 0)}
-                      onFocus={(e) => e.target.select()}
-                      className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground text-lg"
-                      placeholder="0"
+                      type="checkbox"
+                      id="autoPrint"
+                      checked={autoPrint}
+                      onChange={(e) => setAutoPrint(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
+                    <label htmlFor="autoPrint" className="text-sm font-medium text-gray-700 cursor-pointer">
+                      Print after sale
+                    </label>
                   </div>
-                </div>
-
-              </OrderInsetPanel>
-
-              {/* Action Buttons */}
-              <OrderCheckoutActions>
-                {cart.length > 0 && (
                   <LoadingButton
-                    onClick={handleClearCart}
-                    isLoading={isClearingCart}
-                    variant="secondary"
-                    className="flex-1"
+                    onClick={handleCheckout}
+                    isLoading={isSubmitting || isCreatingSale || isUpdatingOrder}
+                    disabled={isSubmitting || isCreatingSale || isUpdatingOrder}
+                    variant="default"
+                    size="lg"
+                    className="flex-2"
                   >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Clear Cart
+                    <Receipt className="h-4 w-4 mr-2" />
+                    {editData?.isEditMode
+                      ? (amountPaid === 0 ? 'Update Invoice' : 'Update Sale')
+                      : (amountPaid === 0 ? 'Create Invoice' : 'Complete Sale')
+                    }
                   </LoadingButton>
-                )}
-                {cart.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="secondary" className="flex-1">
-                        <Printer className="h-4 w-4 mr-2" />
-                        Print
-                        <ChevronDown className="h-4 w-4 ml-2" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      <DropdownMenuItem
-                        onClick={() => {
-                          let customerAddress = '';
-                          if (selectedCustomer?.addresses?.length) {
-                            const addr = selectedCustomer.addresses.find(a => a.isDefault) || selectedCustomer.addresses.find(a => a.type === 'billing' || a.type === 'both') || selectedCustomer.addresses[0];
-                            if (addr) customerAddress = [addr.street, addr.city, addr.state, addr.country, addr.zipCode || addr.zip].filter(Boolean).join(', ');
-                          } else if (selectedCustomer?.address) customerAddress = selectedCustomer.address;
-                          const tempOrder = {
-                            orderNumber: `TEMP-${Date.now()}`,
-                            orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
-                            customer: selectedCustomer ?? undefined,
-                            customerInfo: selectedCustomer ? {
-                              name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,
-                              email: selectedCustomer.email,
-                              phone: selectedCustomer.phone,
-                              businessName: selectedCustomer.businessName || selectedCustomer.business_name,
-                              address: customerAddress || undefined,
-                              currentBalance: selectedCustomer.currentBalance,
-                              pendingBalance: selectedCustomer.pendingBalance,
-                              advanceBalance: selectedCustomer.advanceBalance
-                            } : null,
-                            items: cart.map(item => ({
-                              product: { name: item.product.name },
-                              quantity: item.quantity,
-                              unitPrice: item.unitPrice
-                            })),
-                            pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt, total },
-                            payment: {
-                              method: paymentMethod,
-                              bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
-                              amountPaid,
-                              remainingBalance: total - amountPaid,
-                              isPartialPayment: amountPaid < total,
-                              isAdvancePayment,
-                              advanceAmount: isAdvancePayment ? (amountPaid - total) : 0
-                            },
-                            createdAt: new Date(),
-                            createdBy: user ? { firstName: user.firstName, lastName: user.lastName, name: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Admin' } : { name: 'Admin' },
-                            invoiceNumber
-                          };
-                          setDirectPrintOrder(tempOrder);
-                        }}
-                      >
-                        <Printer className="h-4 w-4 mr-2" />
-                        Print
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          let customerAddress = '';
-                          if (selectedCustomer?.addresses?.length) {
-                            const addr = selectedCustomer.addresses.find(a => a.isDefault) || selectedCustomer.addresses.find(a => a.type === 'billing' || a.type === 'both') || selectedCustomer.addresses[0];
-                            if (addr) customerAddress = [addr.street, addr.city, addr.state, addr.country, addr.zipCode || addr.zip].filter(Boolean).join(', ');
-                          } else if (selectedCustomer?.address) customerAddress = selectedCustomer.address;
-                          const tempOrder = {
-                            orderNumber: `TEMP-${Date.now()}`,
-                            orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
-                            customer: selectedCustomer ?? undefined,
-                            customerInfo: selectedCustomer ? {
-                              name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,
-                              email: selectedCustomer.email,
-                              phone: selectedCustomer.phone,
-                              businessName: selectedCustomer.businessName || selectedCustomer.business_name,
-                              address: customerAddress || undefined,
-                              currentBalance: selectedCustomer.currentBalance,
-                              pendingBalance: selectedCustomer.pendingBalance,
-                              advanceBalance: selectedCustomer.advanceBalance
-                            } : null,
-                            items: cart.map(item => ({
-                              product: { name: item.product.name },
-                              quantity: item.quantity,
-                              unitPrice: item.unitPrice
-                            })),
-                            pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt, total },
-                            payment: {
-                              method: paymentMethod,
-                              bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
-                              amountPaid,
-                              remainingBalance: total - amountPaid,
-                              isPartialPayment: amountPaid < total,
-                              isAdvancePayment,
-                              advanceAmount: isAdvancePayment ? (amountPaid - total) : 0
-                            },
-                            createdAt: new Date(),
-                            createdBy: user ? { firstName: user.firstName, lastName: user.lastName, name: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Admin' } : { name: 'Admin' },
-                            invoiceNumber
-                          };
-                          setCurrentOrder(tempOrder);
-                          setShowPrintModal(true);
-                        }}
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        Print Preview
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                <div className="flex items-center space-x-2 px-2">
-                  <Input
-                    type="checkbox"
-                    id="autoPrint"
-                    checked={autoPrint}
-                    onChange={(e) => setAutoPrint(e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="autoPrint" className="text-sm font-medium text-gray-700 cursor-pointer">
-                    Print after sale
-                  </label>
-                </div>
-                <LoadingButton
-                  onClick={handleCheckout}
-                  isLoading={isSubmitting || isCreatingSale || isUpdatingOrder}
-                  disabled={isSubmitting || isCreatingSale || isUpdatingOrder}
-                  variant="default"
-                  size="lg"
-                  className="flex-2"
-                >
-                  <Receipt className="h-4 w-4 mr-2" />
-                  {editData?.isEditMode
-                    ? (amountPaid === 0 ? 'Update Invoice' : 'Update Sale')
-                    : (amountPaid === 0 ? 'Create Invoice' : 'Complete Sale')
-                  }
-                </LoadingButton>
-              </OrderCheckoutActions>
-            </OrderSummaryContent>
+                </OrderCheckoutActions>
+              </OrderSummaryContent>
             </OrderCheckoutCard>
           </div>
         )}
@@ -2884,29 +2767,7 @@ export const Sales = ({ tabId, editData }) => {
         partyLabel="Customer"
       />
 
-      <ExportReportModal
-        isOpen={showExportModal}
-        onClose={() => {
-          setShowExportModal(false);
-          setExportDateFrom(defaultDateRange.from);
-          setExportDateTo(defaultDateRange.to);
-        }}
-        title="Export Sales Report"
-        format={exportFormat}
-        onFormatChange={setExportFormat}
-        dateFrom={exportDateFrom}
-        dateTo={exportDateTo}
-        onDateFromChange={setExportDateFrom}
-        onDateToChange={setExportDateTo}
-        onResetDates={() => {
-          setExportDateFrom(defaultDateRange.from);
-          setExportDateTo(defaultDateRange.to);
-        }}
-        defaultDateRange={defaultDateRange}
-        onConfirm={handleExportConfirm}
-        isExporting={isExporting}
-        namePrefix="sales-export-format"
-      />
+
     </AsyncErrorBoundary>
   );
 };

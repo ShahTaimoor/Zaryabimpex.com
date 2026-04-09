@@ -283,45 +283,7 @@ router.put('/:reportId/notes', [
   }
 });
 
-// @route   POST /api/sales-performance/:reportId/export
-// @desc    Export sales performance report
-// @access  Private (requires 'view_reports' permission)
-router.post('/:reportId/export', [
-  auth,
-  requirePermission('view_reports'),
-  sanitizeRequest,
-  param('reportId').isLength({ min: 1 }).withMessage('Report ID is required'),
-  body('format').isIn(['pdf', 'excel', 'csv', 'json']).withMessage('Invalid export format'),
-  handleValidationErrors,
-], async (req, res) => {
-  try {
-    const { reportId } = req.params;
-    const { format } = req.body;
 
-    const report = await salesPerformanceRepository.findByReportId(reportId);
-    if (!report) {
-      return res.status(404).json({ message: 'Sales performance report not found' });
-    }
-
-    // Add export record
-    await report.addExport(format, req.user._id);
-
-    // For now, return success message. In a real implementation,
-    // you would generate and return the actual file
-    res.json({
-      message: 'Export request received',
-      format,
-      reportId: report.reportId,
-      reportName: report.reportName
-    });
-  } catch (error) {
-    console.error('Error exporting report:', error);
-    res.status(500).json({ 
-      message: 'Server error exporting report', 
-      error: error.message 
-    });
-  }
-});
 
 // @route   GET /api/sales-performance/stats/overview
 // @desc    Get sales performance report statistics

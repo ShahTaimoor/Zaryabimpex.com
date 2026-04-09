@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
-import { Barcode, Download, Printer, Copy, Check, X } from 'lucide-react';
+import { Barcode, Printer, Copy, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 /**
@@ -53,17 +53,7 @@ export const BarcodeGenerator = ({
     }
   };
 
-  const handleDownload = () => {
-    if (!canvasRef.current) return;
 
-    const canvas = canvasRef.current;
-    const url = canvas.toDataURL('image/png');
-    const link = document.createElement('a');
-    link.download = `barcode-${displayValue}.png`;
-    link.href = url;
-    link.click();
-    toast.success('Barcode downloaded successfully');
-  };
 
   const handleCopy = () => {
     if (!displayValue) return;
@@ -202,13 +192,7 @@ export const BarcodeGenerator = ({
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             <span>{copied ? 'Copied!' : 'Copy Value'}</span>
           </button>
-          <button
-            onClick={handleDownload}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center space-x-2"
-          >
-            <Download className="h-4 w-4" />
-            <span>Download</span>
-          </button>
+
           <button
             onClick={handlePrint}
             className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 transition-colors flex items-center space-x-2"

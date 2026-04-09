@@ -235,41 +235,6 @@ export const salesOrdersApi = api.injectEndpoints({
       }),
       providesTags: (_res, _err, id) => [{ type: 'Orders', id }],
     }),
-    exportExcel: builder.mutation({
-      query: (filters) => ({
-        url: 'sales-orders/export/excel',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    exportCSV: builder.mutation({
-      query: (filters) => ({
-        url: 'sales-orders/export/csv',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    exportPDF: builder.mutation({
-      query: (filters) => ({
-        url: 'sales-orders/export/pdf',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    exportJSON: builder.mutation({
-      query: (filters) => ({
-        url: 'sales-orders/export/json',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    downloadFile: builder.mutation({
-      query: (filename) => ({
-        url: `sales-orders/download/${filename}`,
-        method: 'get',
-        responseType: 'blob',
-      }),
-    }),
   }),
   overrideExisting: false,
 });
@@ -286,10 +251,5 @@ export const {
   useCancelSalesOrderMutation,
   useCloseSalesOrderMutation,
   useGetConversionDataQuery,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useDownloadFileMutation,
 } = salesOrdersApi;
 

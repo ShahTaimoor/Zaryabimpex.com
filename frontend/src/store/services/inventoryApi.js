@@ -386,14 +386,6 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Inventory', id: `REPORT_${reportId}` },
       ],
     }),
-    exportReport: builder.mutation({
-      query: ({ id, format }) => ({
-        url: `inventory-reports/${id}/export`,
-        method: 'post',
-        data: { format },
-        responseType: 'blob',
-      }),
-    }),
   }),
   overrideExisting: false,
 });
@@ -419,9 +411,8 @@ export const {
   useGetQuickStockLevelsQuery,
   useGetQuickTurnoverRatesQuery,
   useGetQuickAgingAnalysisQuery,
-  useCreateReportMutation,
-  useDeleteReportMutation,
+  useCreateReportMutation, 
+  useDeleteReportMutation, 
   useToggleFavoriteReportMutation,
-  useExportReportMutation,
 } = inventoryApi;
 

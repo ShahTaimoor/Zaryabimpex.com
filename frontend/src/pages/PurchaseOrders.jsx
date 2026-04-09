@@ -19,7 +19,6 @@ import {
   ArrowRight,
   Save,
   RotateCcw,
-  Download,
   RefreshCw,
   Phone,
   Receipt,
@@ -1222,83 +1221,7 @@ export const PurchaseOrders = ({ tabId }) => {
     }
   };
 
-  const handleExport = () => {
-    try {
-      // Get all purchase orders (or filtered ones)
-      const ordersToExport = purchaseOrders || [];
 
-      if (ordersToExport.length === 0) {
-        toast.error('No purchase orders to export');
-        return;
-      }
-
-      // Prepare CSV headers
-      const headers = [
-        'Order Number',
-        'Date',
-        'Supplier',
-        'Status',
-        'Subtotal',
-        'Tax',
-        'Total',
-        'Items Count',
-        'Notes'
-      ];
-
-      // Convert orders to CSV rows
-      const csvRows = [
-        headers.join(',')
-      ];
-
-      ordersToExport.forEach(order => {
-        const supplierName = order.supplier?.companyName ||
-          order.supplier?.name ||
-          order.supplierInfo?.companyName ||
-          'N/A';
-        const status = order.status || 'N/A';
-        const subtotal = order.subtotal || order.pricing?.subtotal || 0;
-        const tax = order.tax || order.pricing?.taxAmount || 0;
-        const total = order.total || order.pricing?.total || 0;
-        const itemsCount = order.items?.length || 0;
-        const notes = (order.notes || '').replace(/"/g, '""'); // Escape quotes
-        const date = order.createdAt ? formatDate(order.createdAt) : formatDate(new Date());
-
-        const row = [
-          order.poNumber || order.orderNumber || 'N/A',
-          date,
-          `"${supplierName}"`,
-          status,
-          subtotal.toFixed(2),
-          tax.toFixed(2),
-          total.toFixed(2),
-          itemsCount,
-          `"${notes}"`
-        ];
-
-        csvRows.push(row.join(','));
-      });
-
-      // Create CSV content
-      const csvContent = csvRows.join('\n');
-
-      // Create blob and download
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      const timestamp = new Date().toISOString().split('T')[0];
-      link.setAttribute('href', url);
-      link.setAttribute('download', `purchase_orders_${timestamp}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      toast.success(`Exported ${ordersToExport.length} purchase order(s) to CSV`);
-    } catch (error) {
-      toast.error('Failed to export purchase orders');
-    }
-  };
 
   // Extract purchase orders data - handle multiple possible response structures
   const purchaseOrders = React.useMemo(() => {
@@ -1322,15 +1245,7 @@ export const PurchaseOrders = ({ tabId }) => {
           <p className="text-sm sm:text-base text-gray-600">Process purchase order transactions</p>
         </div>
         <div className="flex items-center space-x-2 w-full sm:w-auto">
-          <Button
-            onClick={handleExport}
-            variant="secondary"
-            size="default"
-            className="flex-1 sm:flex-initial"
-          >
-            <Download className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Export</span>
-          </Button>
+
           <Button
             onClick={resetForm}
             variant="default"

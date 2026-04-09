@@ -285,7 +285,7 @@ export const Settings2 = () => {
         // Inventory Operations - Granular
         { key: 'generate_purchase_orders', name: 'Generate Purchase Orders' },
         { key: 'acknowledge_inventory_alerts', name: 'Acknowledge Inventory Alerts' },
-        { key: 'export_inventory_reports', name: 'Export Inventory Reports' },
+
         { key: 'import_inventory_data', name: 'Import Inventory Data' }
       ]
     },
@@ -350,7 +350,7 @@ export const Settings2 = () => {
         { key: 'view_anomaly_detection', name: 'Anomaly Detection & Fraud Prevention' },
         { key: 'view_recommendations', name: 'View Recommendations' },
         // Reports & Analytics - Granular
-        { key: 'export_reports', name: 'Export Reports' },
+
         { key: 'share_reports', name: 'Share Reports' },
         { key: 'schedule_reports', name: 'Schedule Reports' },
         { key: 'view_advanced_analytics', name: 'View Advanced Analytics' }
@@ -398,7 +398,7 @@ export const Settings2 = () => {
         },
         // System Operations
         { key: 'view_audit_logs', name: 'View Audit Logs' },
-        { key: 'export_data', name: 'Export Data' },
+
         { key: 'import_data', name: 'Import Data' },
         { key: 'manage_integrations', name: 'Manage Integrations' },
         { key: 'configure_notifications', name: 'Configure Notifications' }
@@ -534,7 +534,7 @@ export const Settings2 = () => {
       view_pl_statements: true, view_balance_sheets: true, view_sales_performance: true,
       view_inventory_reports: true, view_general_reports: true, view_backdate_report: true,
       view_customer_analytics: true, view_anomaly_detection: true,
-      export_reports: true, share_reports: true, schedule_reports: true, view_advanced_analytics: true,
+      share_reports: true, schedule_reports: true, view_advanced_analytics: true,
       // Financial Operations
       view_cash_receipts: true, create_cash_receipts: true, edit_cash_receipts: true, delete_cash_receipts: true,
       view_cash_payments: true, create_cash_payments: true, edit_cash_payments: true, delete_cash_payments: true,
@@ -552,7 +552,7 @@ export const Settings2 = () => {
       apply_discounts: true, override_prices: true,
       // Inventory Operations - Granular
       generate_purchase_orders: true, acknowledge_inventory_alerts: true,
-      export_inventory_reports: true, import_inventory_data: true,
+      import_inventory_data: true,
       // Accounting
       view_accounting_transactions: true, view_accounting_accounts: true, view_trial_balance: true,
       update_balance_sheet: true, view_chart_of_accounts: true, view_accounting_summary: true,
@@ -568,7 +568,7 @@ export const Settings2 = () => {
       create_users: true, edit_users: true, delete_users: true, assign_roles: true,
       company_settings: true, system_settings: true, print_settings: true, security_settings: true,
       view_backup_list: true, view_backup_logs: true, create_backups: true, restore_backups: true, delete_backups: true,
-      view_audit_logs: true, export_data: true, import_data: true,
+      view_audit_logs: true, import_data: true,
       manage_integrations: true, configure_notifications: true
     },
     manager: {
@@ -601,7 +601,7 @@ export const Settings2 = () => {
       view_pl_statements: true, view_balance_sheets: true, view_sales_performance: true,
       view_inventory_reports: true, view_general_reports: true, view_backdate_report: true,
       view_customer_analytics: true, view_anomaly_detection: true,
-      export_reports: true, share_reports: true, schedule_reports: true, view_advanced_analytics: true,
+      share_reports: true, schedule_reports: true, view_advanced_analytics: true,
       // Financial Operations
       view_cash_receipts: true, create_cash_receipts: true, edit_cash_receipts: true, delete_cash_receipts: true,
       view_cash_payments: true, create_cash_payments: true, edit_cash_payments: true, delete_cash_payments: true,
@@ -619,7 +619,7 @@ export const Settings2 = () => {
       apply_discounts: true, override_prices: true,
       // Inventory Operations - Granular
       generate_purchase_orders: true, acknowledge_inventory_alerts: true,
-      export_inventory_reports: true, import_inventory_data: true,
+      import_inventory_data: true,
       // Accounting
       view_accounting_transactions: true, view_accounting_accounts: true, view_trial_balance: true,
       update_balance_sheet: true, view_chart_of_accounts: true, view_accounting_summary: true,

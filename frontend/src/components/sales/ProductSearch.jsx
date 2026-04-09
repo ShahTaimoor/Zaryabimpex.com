@@ -25,6 +25,7 @@ function ProductSearchComponent({
   onRefetchReady,
   dualUnitShowBoxInput = true,
   dualUnitShowPiecesInput = true,
+  allowOutOfStock = false,
 }) {
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -125,13 +126,35 @@ function ProductSearchComponent({
     return fuzzyFiltered;
   }, [allItems, productSearchTerm, fuzzyFiltered]);
 
+  const getCostPrice = (product) => {
+    if (!product) return 0;
+
+    const pricing = product.pricing || {};
+    const normalizedCost = pricing.cost
+      ?? pricing.costPrice
+      ?? pricing.cost_price
+      ?? pricing.purchasePrice
+      ?? pricing.purchase_price
+      ?? pricing.wholesaleCost
+      ?? product.pricing?.cost_price
+      ?? product.costPrice
+      ?? product.cost_price
+      ?? product.purchasePrice
+      ?? product.purchase_price;
+
+    const numericCost = Number(normalizedCost);
+    return Number.isFinite(numericCost) ? numericCost : 0;
+  };
+
   const calculatePrice = (product, priceType) => {
     if (!product) return 0;
 
     // Handle both regular products and variants
     const pricing = product.pricing || {};
 
-    if (priceType === 'distributor') {
+    if (priceType === 'cost') {
+      return getCostPrice(product);
+    } else if (priceType === 'distributor') {
       return pricing.distributor || pricing.wholesale || pricing.retail || 0;
     } else if (priceType === 'wholesale') {
       return pricing.wholesale || pricing.retail || 0;
@@ -214,9 +237,8 @@ function ProductSearchComponent({
       ? (selectedProduct.displayName || selectedProduct.variantName || selectedProduct.name)
       : selectedProduct.name;
 
-    // Check if product/variant is out of stock
     const currentStock = selectedProduct.inventory?.currentStock || 0;
-    if (currentStock === 0) {
+    if (!allowOutOfStock && currentStock === 0) {
       toast.error(`${displayName} is out of stock and cannot be added to the invoice.`);
       return;
     }
@@ -226,8 +248,7 @@ function ProductSearchComponent({
       return;
     }
 
-    // Check if requested quantity exceeds available stock
-    if (quantity > currentStock) {
+    if (!allowOutOfStock && quantity > currentStock) {
       toast.error(`Cannot add ${quantity} units. Only ${currentStock} units available in stock.`);
       return;
     }
@@ -238,7 +259,7 @@ function ProductSearchComponent({
       const unitPrice = parseInt(customRate) || Math.round(calculatedRate);
 
       // Check if sale price is less than cost price (always check, regardless of showCostPrice)
-      const costPrice = lastPurchasePrice !== null ? lastPurchasePrice : selectedProduct?.pricing?.cost;
+      const costPrice = lastPurchasePrice !== null ? lastPurchasePrice : getCostPrice(selectedProduct);
       if (costPrice !== undefined && costPrice !== null && unitPrice < costPrice) {
         const loss = costPrice - unitPrice;
         const lossPercent = ((loss / costPrice) * 100).toFixed(1);
@@ -286,8 +307,13 @@ function ProductSearchComponent({
       }, 100);
 
       // Show success message
-      const priceLabel = selectedCustomer?.businessType === 'wholesale' ? 'wholesale' :
-        selectedCustomer?.businessType === 'distributor' ? 'distributor' : 'retail';
+      const priceLabel = priceType === 'cost'
+        ? 'cost'
+        : selectedCustomer?.businessType === 'wholesale'
+          ? 'wholesale'
+          : selectedCustomer?.businessType === 'distributor'
+            ? 'distributor'
+            : 'retail';
       toast.success(`${selectedProduct.name} added to cart at ${priceLabel} price: ${Math.round(unitPrice)}`);
     } catch (error) {
       handleApiError(error, 'Product Price Check');
@@ -325,7 +351,10 @@ function ProductSearchComponent({
     let unitPrice = pricing.wholesale || pricing.retail || 0;
     let priceLabel = 'Wholesale';
 
-    if (priceType === 'wholesale') {
+    if (priceType === 'cost') {
+      unitPrice = getCostPrice(product);
+      priceLabel = 'Cost';
+    } else if (priceType === 'wholesale') {
       unitPrice = pricing.wholesale || pricing.retail || 0;
       priceLabel = 'Wholesale';
     } else if (priceType === 'retail') {
@@ -333,7 +362,7 @@ function ProductSearchComponent({
       priceLabel = 'Retail';
     }
 
-    const purchasePrice = pricing?.cost || 0;
+    const purchasePrice = getCostPrice(product);
 
     // Show variant indicator
     const variantInfo = product.isVariant
@@ -353,7 +382,7 @@ function ProductSearchComponent({
           {showCostPrice && hasCostPricePermission && (purchasePrice !== undefined && purchasePrice !== null) && (
             <div className="text-sm text-red-600 font-medium">Cost: {Math.round(purchasePrice)}</div>
           )}
-          <div className="text-sm text-gray-600">Price: {Math.round(unitPrice)}</div>
+          <div className="text-sm text-gray-600">{priceLabel}: {Math.round(unitPrice)}</div>
         </div>
       </div>
     );
@@ -364,6 +393,7 @@ function ProductSearchComponent({
   const selectedPpb = getPiecesPerBox(selectedProduct);
   const selectedStockPieces = Number(selectedProduct?.inventory?.currentStock || 0);
   const selectedBoxCount = selectedPpb ? piecesToBoxesAndPieces(quantity, selectedPpb).boxes : 0;
+  const quantityInputMax = allowOutOfStock ? undefined : selectedProduct?.inventory?.currentStock;
   const searchColClass =
     dualUnit && showCostPrice && hasCostPricePermission
       ? 'col-span-5'
@@ -472,7 +502,7 @@ function ProductSearchComponent({
                               ? piecesToBoxesAndPieces(quantity, selectedPpb || 1).pieces
                               : 0;
                             const raw = boxVal * (selectedPpb || 1) + currentPieces;
-                            const capped = Math.min(raw, selectedStockPieces);
+                            const capped = allowOutOfStock ? raw : Math.min(raw, selectedStockPieces);
                             setQuantity(Math.max(1, capped || 0));
                           }}
                           onKeyDown={handleKeyDown}
@@ -489,7 +519,7 @@ function ProductSearchComponent({
                           value={quantity || ''}
                           onChange={(e) => {
                             const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                            const capped = Math.min(raw, selectedStockPieces);
+                            const capped = allowOutOfStock ? raw : Math.min(raw, selectedStockPieces);
                             setQuantity(Math.max(1, capped || 0));
                           }}
                           onKeyDown={handleKeyDown}
@@ -503,7 +533,7 @@ function ProductSearchComponent({
                     product={selectedProduct}
                     quantity={quantity}
                     onChange={(q) => setQuantity(q)}
-                    max={selectedProduct?.inventory?.currentStock}
+                    max={quantityInputMax}
                     showRemainingAfterSale={false}
                     showPiecesUnitLabel={false}
                     showBoxInput={false}
@@ -518,7 +548,7 @@ function ProductSearchComponent({
                   product={selectedProduct}
                   quantity={quantity}
                   onChange={(q) => setQuantity(q)}
-                  max={selectedProduct?.inventory?.currentStock}
+                  max={quantityInputMax}
                   showRemainingAfterSale={false}
                   showPiecesUnitLabel={false}
                   showBoxInput={dualUnitShowBoxInput}
@@ -664,7 +694,7 @@ function ProductSearchComponent({
                             ? piecesToBoxesAndPieces(quantity, selectedPpb || 1).pieces
                             : 0;
                           const raw = boxVal * (selectedPpb || 1) + currentPieces;
-                          const capped = Math.min(raw, selectedStockPieces);
+                          const capped = allowOutOfStock ? raw : Math.min(raw, selectedStockPieces);
                           setQuantity(Math.max(1, capped || 0));
                         }}
                         onKeyDown={handleKeyDown}
@@ -681,7 +711,7 @@ function ProductSearchComponent({
                         value={quantity || ''}
                         onChange={(e) => {
                           const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                          const capped = Math.min(raw, selectedStockPieces);
+                          const capped = allowOutOfStock ? raw : Math.min(raw, selectedStockPieces);
                           setQuantity(Math.max(1, capped || 0));
                         }}
                         onKeyDown={handleKeyDown}
@@ -695,7 +725,7 @@ function ProductSearchComponent({
                   product={selectedProduct}
                   quantity={quantity}
                   onChange={(q) => setQuantity(q)}
-                  max={selectedProduct?.inventory?.currentStock}
+                  max={quantityInputMax}
                   showRemainingAfterSale={false}
                   showPiecesUnitLabel={false}
                   showBoxInput={false}
@@ -710,7 +740,7 @@ function ProductSearchComponent({
                 product={selectedProduct}
                 quantity={quantity}
                 onChange={(q) => setQuantity(q)}
-                max={selectedProduct?.inventory?.currentStock}
+                max={quantityInputMax}
                 showRemainingAfterSale={false}
                 showPiecesUnitLabel={false}
                 showBoxInput={dualUnitShowBoxInput}

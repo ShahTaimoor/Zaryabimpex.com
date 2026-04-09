@@ -2,16 +2,22 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Plus, 
   Search,
+  Download,
 } from 'lucide-react';
 import {
   useGetCustomersQuery,
+  useBulkCreateCustomersMutation,
 } from '../store/services/customersApi';
 import { LoadingPage } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import ExcelExportButton from '../components/ExcelExportButton';
+import ExcelImportButton from '../components/ExcelImportButton';
+import { exportTemplate } from '../utils/excelExport';
+import { toast } from 'sonner';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
-import CustomerImportExport from '../components/CustomerImportExport';
+
 import CustomerFilters from '../components/CustomerFilters';
 import NotesPanel from '../components/NotesPanel';
 import { CustomerFormModal } from '../components/CustomerFormModal';
@@ -79,6 +85,65 @@ export const Customers = () => {
     };
   }, [data, itemsPerPage]);
 
+  const getExportData = () => ({
+    title: 'Customer Directory',
+    filename: `Customers_${new Date().toLocaleDateString()}.xlsx`,
+    columns: [
+      { header: 'Business Name', key: 'businessName', width: 35 },
+      { header: 'Contact Person', key: 'contactPersonName', width: 25 },
+      { header: 'Email', key: 'email', width: 30 },
+      { header: 'Phone', key: 'phone', width: 20 },
+      { header: 'City', key: 'city', width: 15 },
+      { header: 'Balance', key: 'currentBalance', width: 15, type: 'currency' }
+    ],
+    data: customers.map(c => ({
+      ...c,
+      businessName: c.businessName || c.business_name || c.name || '',
+      contactPersonName: c.contactPerson?.name || c.contact_person || c.name || '',
+      city: c.city || (Array.isArray(c.address) ? (c.address[0]?.city || '') : (c.address?.city || '')),
+      currentBalance: c.currentBalance ?? c.balance ?? 0,
+      phone: c.phone || c.contact_phone || ''
+    }))
+  });
+
+  const handleDownloadTemplate = () => {
+    exportTemplate({
+      title: 'Customer Import Template',
+      filename: 'Customer_Template.xlsx',
+      columns: [
+        { header: 'Business Name', key: 'businessName', width: 35 },
+        { header: 'Contact Person', key: 'contactPerson', width: 25 },
+        { header: 'Email', key: 'email', width: 30 },
+        { header: 'Phone', key: 'phone', width: 20 },
+        { header: 'City', key: 'city', width: 15 },
+        { header: 'Opening Balance', key: 'balance', width: 15, type: 'currency' }
+      ]
+    });
+  };
+
+  const [bulkCreateCustomers] = useBulkCreateCustomersMutation();
+
+  const handleImportData = async (data) => {
+    if (!data || data.length === 0) return;
+
+    const toastId = toast.loading(`Saving ${data.length} customers to database...`);
+    try {
+      const response = await bulkCreateCustomers(data).unwrap();
+      if (response.created > 0) {
+        toast.success(`Successfully imported ${response.created} customers!`, { id: toastId });
+        if (response.failed > 0) {
+          toast.warning(`${response.failed} customers failed. Check console for details.`);
+          console.warn('Import failures:', response.errors);
+        }
+      } else {
+        toast.error('Failed to import customers. Check file format.', { id: toastId });
+      }
+    } catch (error) {
+      console.error('Bulk Import Error:', error);
+      toast.error(error.data?.message || 'Error occurred while saving customers.', { id: toastId });
+    }
+  };
+
   if (isLoading) {
     return <LoadingPage message="Loading customers..." />;
   }
@@ -98,15 +163,26 @@ export const Customers = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Customers</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your customer database</p>
         </div>
-        <div className="flex-shrink-0 w-full sm:w-auto">
+        <div className="flex-shrink-0 flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <Button
-            onClick={() => customerOps.setIsModalOpen(true)}
+            onClick={() => customerOps.handleAdd()}
             variant="default"
             size="default"
-            className="flex items-center justify-center gap-2 w-full sm:w-auto"
+            className="flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white transition-all shadow-md active:scale-95 px-6 font-bold tracking-tight"
           >
             <Plus className="h-4 w-4" />
-            Add Customer
+            <span className="uppercase">ADD CUSTOMER</span>
+          </Button>
+          <ExcelExportButton getData={getExportData} label="Export" />
+          <ExcelImportButton onDataImported={handleImportData} label="Import" />
+          <Button
+            onClick={handleDownloadTemplate}
+            variant="outline"
+            size="sm"
+            className="group flex items-center justify-center gap-2 border-orange-200 bg-white text-orange-600 hover:bg-orange-50 hover:border-orange-500 h-9 px-3 rounded-lg shadow-sm transition-all duration-200"
+          >
+            <Download className="h-3.5 w-3.5 group-hover:-translate-y-0.5 transition-transform" />
+            <span className="text-xs font-semibold tracking-tight uppercase">Template</span>
           </Button>
         </div>
       </div>
@@ -138,11 +214,7 @@ export const Customers = () => {
         </div>
       </div>
 
-      {/* Import/Export Section */}
-      <CustomerImportExport 
-        onImportComplete={() => refetch()}
-        filters={{ ...queryParams, limit: 999999, page: 1 }}
-      />
+
 
       {/* Advanced Filters */}
       <CustomerFilters 

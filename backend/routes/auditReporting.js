@@ -116,36 +116,7 @@ router.get('/failed-trial-balance', [
   }
 });
 
-// @route   GET /api/audit-reporting/export-audit
-// @desc    Get export audit report
-// @access  Private (requires 'view_reports' permission)
-router.get('/export-audit', [
-  auth,
-  requirePermission('view_reports'),
-  sanitizeRequest,
-  query('startDate').optional().isISO8601().toDate().withMessage('Valid start date required'),
-  query('endDate').optional().isISO8601().toDate().withMessage('Valid end date required'),
-  handleValidationErrors
-], async (req, res) => {
-  try {
-    const startDate = req.query.startDate ? new Date(req.query.startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Default: last 30 days
-    const endDate = req.query.endDate ? new Date(req.query.endDate) : new Date();
 
-    const report = await auditReportingService.getExportAuditReport(startDate, endDate);
-
-    res.json({
-      success: true,
-      data: report
-    });
-  } catch (error) {
-    console.error('Error getting export audit report:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error getting export audit report',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
 
 module.exports = router;
 

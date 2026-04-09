@@ -98,41 +98,6 @@ export const bankPaymentsApi = api.injectEndpoints({
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
-    exportExcel: builder.mutation({
-      query: (filters) => ({
-        url: 'bank-payments/export/excel',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    exportCSV: builder.mutation({
-      query: (filters) => ({
-        url: 'bank-payments/export/csv',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    exportPDF: builder.mutation({
-      query: (filters) => ({
-        url: 'bank-payments/export/pdf',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    exportJSON: builder.mutation({
-      query: (filters) => ({
-        url: 'bank-payments/export/json',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    downloadFile: builder.mutation({
-      query: (filename) => ({
-        url: `bank-payments/download/${filename}`,
-        method: 'get',
-        responseType: 'blob',
-      }),
-    }),
   }),
   overrideExisting: false,
 });
@@ -142,10 +107,5 @@ export const {
   useCreateBankPaymentMutation,
   useUpdateBankPaymentMutation,
   useDeleteBankPaymentMutation,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useDownloadFileMutation,
 } = bankPaymentsApi;
 

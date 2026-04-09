@@ -414,47 +414,9 @@ export const validateFile = (file, options = {}) => {
   return null;
 };
 
-// CSV/Excel data validation
-export const validateCSVData = (data, requiredFields = []) => {
-  const errors = [];
-  
-  if (!Array.isArray(data) || data.length === 0) {
-    errors.push('No data found in file');
-    return { isValid: false, errors };
-  }
-  
-  // Check for required fields
-  const headers = Object.keys(data[0] || {});
-  for (const field of requiredFields) {
-    if (!headers.includes(field)) {
-      errors.push(`Required field '${field}' is missing`);
-    }
-  }
-  
-  // Validate each row
-  data.forEach((row, index) => {
-    for (const field in row) {
-      const value = row[field];
-      if (typeof value === 'string') {
-        // Check for potential XSS
-        if (value.includes('<script') || value.includes('javascript:')) {
-          errors.push(`Row ${index + 1}: Potential XSS detected in field '${field}'`);
-        }
-      }
-    }
-  });
-  
-  return {
-    isValid: errors.length === 0,
-    errors
-  };
-};
 
-// CSV sanitization helper: strip BOM and trim
-export const sanitizeCSVData = (csvString) => {
-  if (typeof csvString !== 'string') return csvString;
-  return csvString.replace(/^\uFEFF/, '').trim();
-};
+
+
 
 export default {
   sanitizeInput,
@@ -484,6 +446,5 @@ export default {
   combineValidators,
   validateForm,
   sanitizeFormData,
-  validateFile,
-  validateCSVData
+  validateFile
 };

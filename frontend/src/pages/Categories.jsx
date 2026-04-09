@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
-import CategoryImportExport from '../components/CategoryImportExport';
+
 import {
   useGetCategoriesQuery,
   useCreateCategoryMutation,
@@ -437,11 +437,7 @@ export const Categories = () => {
         </div>
       </div>
 
-      {/* Import/Export Section */}
-      <CategoryImportExport 
-        onImportComplete={() => refetch()}
-        filters={{ search: searchTerm }}
-      />
+
 
       {/* Search */}
       <div className="flex items-center space-x-4">

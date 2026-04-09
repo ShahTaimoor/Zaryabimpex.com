@@ -132,70 +132,17 @@ export const suppliersApi = api.injectEndpoints({
       }),
       providesTags: [{ type: 'Suppliers', id: 'SEARCH' }],
     }),
-    exportExcel: builder.mutation({
-      query: (params) => ({
-        url: 'suppliers/export/excel',
+    bulkCreateSuppliers: builder.mutation({
+      query: (suppliers) => ({
+        url: 'suppliers/bulk-create',
         method: 'post',
-        data: params,
+        data: { suppliers },
       }),
-    }),
-    importExcelSheets: builder.mutation({
-      query: (payload) => {
-        const file = payload instanceof File ? payload : payload?.file;
-        const formData = new FormData();
-        if (file) formData.append('file', file);
-        return {
-          url: 'suppliers/import/excel/sheets',
-          method: 'post',
-          data: formData,
-        };
-      },
-    }),
-    importExcel: builder.mutation({
-      query: (payload) => {
-        const file = payload instanceof File ? payload : payload?.file;
-        const sheetName = payload instanceof File ? undefined : payload?.sheetName;
-        const sheetIndex = payload instanceof File ? undefined : payload?.sheetIndex;
-        const formData = new FormData();
-        if (sheetName) formData.append('sheetName', sheetName);
-        if (file) formData.append('file', file);
-        return {
-          url: 'suppliers/import/excel',
-          method: 'post',
-          params: {
-            ...(sheetName ? { sheetName } : {}),
-            ...(Number.isInteger(sheetIndex) ? { sheetIndex } : {}),
-          },
-          data: formData,
-        };
-      },
       invalidatesTags: [
         { type: 'Suppliers', id: 'LIST' },
         { type: 'Suppliers', id: 'ACTIVE' },
         { type: 'Suppliers', id: 'SEARCH' },
-        { type: 'Suppliers', id: 'CHECK' },
-        { type: 'Accounting' },
-        { type: 'Reports', id: 'PARTY_BALANCE' },
-        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
-        { type: 'Reports', id: 'SUMMARY_CARDS' },
-        { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
-    }),
-    downloadTemplate: builder.query({
-      query: () => ({
-        url: 'suppliers/template/excel',
-        method: 'get',
-        responseType: 'blob',
-      }),
-      providesTags: [{ type: 'Suppliers', id: 'TEMPLATE' }],
-    }),
-    downloadExportFile: builder.query({
-      query: (filename) => ({
-        url: `suppliers/download/${filename}`,
-        method: 'get',
-        responseType: 'blob',
-      }),
-      providesTags: [{ type: 'Suppliers', id: 'EXPORT' }],
     }),
   }),
   overrideExisting: false,
@@ -214,11 +161,5 @@ export const {
   useLazyGetSupplierQuery,
   useSearchSuppliersQuery,
   useLazySearchSuppliersQuery,
-  useExportExcelMutation,
-  useImportExcelSheetsMutation,
-  useImportExcelMutation,
-  useDownloadTemplateQuery,
-  useLazyDownloadTemplateQuery,
-  useLazyDownloadExportFileQuery,
+  useBulkCreateSuppliersMutation,
 } = suppliersApi;
-

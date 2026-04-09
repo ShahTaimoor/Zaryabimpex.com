@@ -157,29 +157,7 @@ export const sanitizeURLParams = (params) => {
   return sanitized;
 };
 
-// Sanitize CSV/Excel data
-export const sanitizeCSVData = (data) => {
-  if (!Array.isArray(data)) return [];
-  
-  return data.map(row => {
-    const sanitizedRow = {};
-    
-    for (const key in row) {
-      if (row.hasOwnProperty(key)) {
-        const sanitizedKey = sanitizeInput(key);
-        let value = row[key];
-        
-        if (typeof value === 'string') {
-          value = sanitizeInput(value);
-        }
-        
-        sanitizedRow[sanitizedKey] = value;
-      }
-    }
-    
-    return sanitizedRow;
-  });
-};
+
 
 // Sanitize user input for display
 export const sanitizeForDisplay = (input) => {
@@ -345,7 +323,7 @@ export default {
   sanitizeFileName,
   sanitizeHTML,
   sanitizeURLParams,
-  sanitizeCSVData,
+
   sanitizeForDisplay,
   sanitizeNumeric,
   sanitizeEmail,

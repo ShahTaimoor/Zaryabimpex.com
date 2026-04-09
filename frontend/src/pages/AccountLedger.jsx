@@ -7,16 +7,13 @@ import {
   TrendingUp,
   TrendingDown,
   Filter,
-  Download,
-  RefreshCw,
-  FileDown,
   Printer
 } from 'lucide-react';
 import {
   useGetLedgerEntriesQuery,
   useGetAccountsListQuery,
   useGetAllEntriesQuery,
-  useExportLedgerMutation,
+  useGetAllEntriesQuery,
 } from '../store/services/accountLedgerApi';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -67,21 +64,10 @@ const AccountLedger = () => {
   });
   const [showFilters, setShowFilters] = useState(true);
   const [accountSearchQuery, setAccountSearchQuery] = useState('');
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportLedger] = useExportLedgerMutation();
+
   const { companyInfo } = useCompanyInfo();
 
-  // Close export menu when clicking outside
-  React.useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showExportMenu && !event.target.closest('.relative')) {
-        setShowExportMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showExportMenu]);
+
 
   // Fetch all accounts list
   const { data: accountsData, isLoading: accountsLoading } = useGetAccountsListQuery(undefined, {
@@ -136,52 +122,7 @@ const AccountLedger = () => {
     });
   };
 
-  const handleExport = async (format = 'csv') => {
-    if (!ledgerData?.data?.entries?.length) {
-      toast.error('No data to export');
-      return;
-    }
 
-    try {
-      setIsExporting(true);
-      setShowExportMenu(false);
-
-      // Build export params with current filters
-      const params = {
-        export: format,
-      };
-
-      // Add filters that have values
-      if (filters.startDate) params.startDate = filters.startDate;
-      if (filters.endDate) params.endDate = filters.endDate;
-      if (filters.accountCode) params.accountCode = filters.accountCode;
-      if (filters.accountName) params.accountName = filters.accountName;
-
-      const result = await exportLedger(params).unwrap();
-
-      // Get filename - generate one based on format and account
-      const formatExtension = format === 'excel' ? 'xlsx' : format;
-      let filename = `account-ledger-${selectedAccount?.accountCode || 'all'}-${new Date().toISOString().split('T')[0]}.${formatExtension}`;
-
-      // Create blob and download
-      // RTK Query with responseType: 'blob' returns the blob directly
-      const blob = result instanceof Blob ? result : new Blob([result]);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-
-      showSuccessToast(`Ledger exported as ${format.toUpperCase()} successfully`);
-    } catch (error) {
-      handleApiError(error, 'Export ledger');
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   const handlePrint = () => {
     window.print();
@@ -221,62 +162,14 @@ const AccountLedger = () => {
             <Filter className="h-4 w-4 mr-2" />
             {showFilters ? 'Hide Filters' : 'Show Filters'}
           </Button>
-          {ledgerEntries.length > 0 && (
-            <div className="relative">
-              <Button
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                disabled={isExporting}
-                variant="secondary"
-                className="flex items-center"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                {isExporting ? 'Exporting...' : 'Export'}
-              </Button>
-
-              {showExportMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-50 border border-gray-200">
-                  <div className="py-1">
-                    <button
-                      onClick={() => handleExport('csv')}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                    >
-                      <FileDown className="h-4 w-4 mr-2" />
-                      Export as CSV
-                    </button>
-                    <button
-                      onClick={() => handleExport('excel')}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                    >
-                      <FileDown className="h-4 w-4 mr-2" />
-                      Export as Excel
-                    </button>
-                    <button
-                      onClick={() => handleExport('pdf')}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                    >
-                      <FileDown className="h-4 w-4 mr-2" />
-                      Export as PDF
-                    </button>
-                    <button
-                      onClick={() => handleExport('json')}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                    >
-                      <FileDown className="h-4 w-4 mr-2" />
-                      Export as JSON
-                    </button>
-                    <div className="border-t border-gray-200 my-1"></div>
-                    <button
-                      onClick={handlePrint}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                    >
-                      <Printer className="h-4 w-4 mr-2" />
-                      Print View
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          <Button
+            onClick={handlePrint}
+            variant="secondary"
+            className="flex items-center"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print
+          </Button>
           <Button
             onClick={() => refetchLedger()}
             variant="default"

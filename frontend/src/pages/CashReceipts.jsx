@@ -7,7 +7,6 @@ import {
   Edit,
   Trash2,
   Eye,
-  Download,
   RefreshCw,
   ArrowUpDown,
   RotateCcw,
@@ -27,11 +26,7 @@ import {
   useCreateCashReceiptMutation,
   useUpdateCashReceiptMutation,
   useDeleteCashReceiptMutation,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useDownloadFileMutation,
+
 } from '../store/services/cashReceiptsApi';
 import { useGetSuppliersQuery } from '../store/services/suppliersApi';
 import { useGetCustomersQuery } from '../store/services/customersApi';
@@ -43,13 +38,7 @@ import { useGetBalanceSummaryQuery as useGetSupplierBalanceSummaryQuery } from '
 import DateFilter from '../components/DateFilter';
 import PaginationControls from '../components/PaginationControls';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
-import ExportReportModal from '../components/ExportReportModal';
-import { useExportTabularDownload } from '../hooks/useExportTabularDownload';
-import {
-  buildTabularExportRunners,
-  TABULAR_EXPORT_FALLBACK_FILENAMES,
-} from '../utils/exportReportDownload';
-import { confirmTabularExportDownload } from '../utils/tabularExportConfirm';
+
 
 const CashReceipts = () => {
   const today = getCurrentDatePakistan();
@@ -76,9 +65,7 @@ const CashReceipts = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [exportFormat, setExportFormat] = useState('csv');
-  const [isExporting, setIsExporting] = useState(false);
+
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [printData, setPrintData] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -172,12 +159,7 @@ const CashReceipts = () => {
   const [createCashReceipt, { isLoading: creating }] = useCreateCashReceiptMutation();
   const [updateCashReceipt, { isLoading: updating }] = useUpdateCashReceiptMutation();
   const [deleteCashReceipt, { isLoading: deleting }] = useDeleteCashReceiptMutation();
-  const [exportExcelMutation] = useExportExcelMutation();
-  const [exportCSVMutation] = useExportCSVMutation();
-  const [exportPDFMutation] = useExportPDFMutation();
-  const [exportJSONMutation] = useExportJSONMutation();
-  const [downloadFileMutation] = useDownloadFileMutation();
-  const runExportDownload = useExportTabularDownload(downloadFileMutation);
+
 
   // Helper functions
   const resetForm = () => {
@@ -827,20 +809,7 @@ const CashReceipts = () => {
     setShowViewModal(true);
   };
 
-  const handleExportConfirm = () =>
-    confirmTabularExportDownload({
-      format: exportFormat,
-      runExportDownload,
-      exportRunners: buildTabularExportRunners(
-        { ...filters, ...pagination, sortConfig },
-        { exportExcelMutation, exportPDFMutation, exportJSONMutation, exportCSVMutation }
-      ),
-      fallbackFilenames: TABULAR_EXPORT_FALLBACK_FILENAMES.cashReceipts,
-      successMessage: (f) => `Exported cash receipts as ${f.toUpperCase()}`,
-      errorContext: 'Cash Receipts Export',
-      setIsExporting,
-      onSuccess: () => setShowExportModal(false),
-    });
+
 
   const handlePrint = (receipt) => {
     setPrintData(receipt);
@@ -867,15 +836,7 @@ const CashReceipts = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage and view all cash receipt transactions</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-          <Button
-            onClick={() => setShowExportModal(true)}
-            variant="outline"
-            size="default"
-            className="flex items-center justify-center gap-2 w-full sm:w-auto"
-          >
-            <Download className="h-4 w-4" />
-            <span>Export</span>
-          </Button>
+
           <Button
             onClick={resetForm}
             variant="default"
@@ -1629,17 +1590,7 @@ const CashReceipts = () => {
         )}
       </BaseModal>
 
-      <ExportReportModal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        title="Export Cash Receipts"
-        format={exportFormat}
-        onFormatChange={setExportFormat}
-        onConfirm={handleExportConfirm}
-        isExporting={isExporting}
-        showDateRange={false}
-        namePrefix="cash-receipts-export-format"
-      />
+
 
       {/* Receipt print modal – dedicated layout for receipts only */}
       <ReceiptPaymentPrintModal

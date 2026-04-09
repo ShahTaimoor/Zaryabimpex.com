@@ -7,6 +7,7 @@ import {
   Tag,
   Camera,
   Printer,
+  Download,
 } from 'lucide-react';
 import {
   useGetProductsQuery,
@@ -16,6 +17,7 @@ import {
   useBulkUpdateProductsMutation,
   useBulkDeleteProductsMutation,
   useLinkInvestorsMutation,
+  useBulkCreateProductsMutation,
 } from '../store/services/productsApi';
 import { useGetCategoriesQuery } from '../store/services/categoriesApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
@@ -23,12 +25,17 @@ import { toast } from 'sonner';
 import { LoadingPage } from '../components/LoadingSpinner';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
-import ProductImportExport from '../components/ProductImportExport';
+
 import ProductFilters from '../components/ProductFilters';
 import { useTab } from '../contexts/TabContext';
 import { useBulkOperations } from '../hooks/useBulkOperations';
 import BulkOperationsBar from '../components/BulkOperationsBar';
 import BulkUpdateModal from '../components/BulkUpdateModal';
+import { 
+  exportToExcel, 
+  importExcelFile,
+  exportTemplate 
+} from '../utils/excelExport';
 import { getComponentInfo } from '../utils/componentUtils';
 import BarcodeScanner from '../components/BarcodeScanner';
 import BarcodeGenerator from '../components/BarcodeGenerator';
@@ -42,6 +49,8 @@ import { api } from '../store/api';
 import { useProductOperations } from '../hooks/useProductOperations';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import ExcelExportButton from '../components/ExcelExportButton';
+import ExcelImportButton from '../components/ExcelImportButton';
 
 const LIMIT_OPTIONS = [50, 500, 1000, 5000];
 const DEFAULT_LIMIT = 50;
@@ -151,6 +160,68 @@ export const Products = () => {
     setBulkUpdateType(null);
   };
 
+  const [bulkCreateProducts] = useBulkCreateProductsMutation();
+
+  const getExportData = () => ({
+    title: 'Product Catalog',
+    filename: `Products_${new Date().toLocaleDateString()}.xlsx`,
+    columns: [
+      { header: 'Product Name', key: 'displayName', width: 40 },
+      { header: 'Category', key: 'categoryName', width: 25 },
+      { header: 'Cost Price', key: 'costPrice', width: 15, type: 'currency' },
+      { header: 'Retail Price', key: 'retailPrice', width: 15, type: 'currency' },
+      { header: 'Wholesale Price', key: 'wholesalePrice', width: 15, type: 'currency' },
+      { header: 'Stock', key: 'stock', width: 12, type: 'number' },
+      { header: 'Status', key: 'status', width: 15 }
+    ],
+    data: allProducts.map(p => ({
+      ...p,
+      displayName: p.name || 'N/A',
+      categoryName: p.categoryName || p.category?.name || (typeof p.category === 'string' ? p.category : '-'),
+      costPrice: p.pricing?.cost || 0,
+      retailPrice: p.pricing?.retail || 0,
+      wholesalePrice: p.pricing?.wholesale || 0,
+      stock: p.inventory?.currentStock || p.stockQuantity || 0
+    }))
+  });
+
+  const handleDownloadTemplate = () => {
+    exportTemplate({
+      title: 'Product Import Template',
+      filename: 'Product_Template.xlsx',
+      columns: [
+        { header: 'Product Name', key: 'name', width: 35 },
+        { header: 'Category', key: 'category', width: 20 },
+        { header: 'Status', key: 'status', width: 15 },
+        { header: 'Cost Price', key: 'costPrice', width: 15, type: 'currency' },
+        { header: 'Retail Price', key: 'retailPrice', width: 15, type: 'currency' },
+        { header: 'Wholesale Price', key: 'wholesalePrice', width: 20, type: 'currency' },
+        { header: 'Opening Stock', key: 'stock', width: 15, type: 'number' }
+      ]
+    });
+  };
+
+  const handleImportData = async (data) => {
+    if (!data || data.length === 0) return;
+
+    const toastId = toast.loading(`Saving ${data.length} products to database...`);
+    try {
+      const response = await bulkCreateProducts(data).unwrap();
+      if (response.created > 0) {
+        toast.success(`Successfully imported ${response.created} products!`, { id: toastId });
+        if (response.failed > 0) {
+          toast.warning(`${response.failed} products failed to import. Check console for details.`);
+          console.warn('Import failures:', response.errors);
+        }
+      } else {
+        toast.error('Failed to import products. Check file format.', { id: toastId });
+      }
+    } catch (error) {
+      console.error('Bulk Import Error:', error);
+      toast.error(error.data?.message || 'Error occurred while saving products.', { id: toastId });
+    }
+  };
+
   if (isLoading && !data) {
     return <LoadingPage message="Loading products..." />;
   }
@@ -205,7 +276,7 @@ export const Products = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Products</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your product catalog</p>
         </div>
-        <div className="flex-shrink-0 grid grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+        <div className="flex-shrink-0 flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <Button
             onClick={() => {
               const componentInfo = getComponentInfo('/categories');
@@ -222,54 +293,71 @@ export const Products = () => {
             }}
             variant="outline"
             size="default"
-            className="flex items-center justify-center gap-2"
+            className="flex items-center justify-center gap-2 border-gray-200 bg-white text-gray-700 hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-700 transition-all shadow-sm"
           >
-            <Tag className="h-4 w-4" />
-            <span className="hidden sm:inline">Category</span>
-            <span className="sm:hidden">Category</span>
+            <Tag className="h-4 w-4 text-indigo-600" />
+            <span className="hidden sm:inline font-semibold">Category</span>
+            <span className="sm:hidden font-semibold">Category</span>
           </Button>
           <Button
             onClick={refreshCategories}
             variant="outline"
             size="default"
-            className="flex items-center justify-center gap-2"
+            className="flex items-center justify-center gap-2 border-gray-200 bg-white text-gray-700 hover:border-teal-500 hover:bg-teal-50 hover:text-teal-700 transition-all shadow-sm"
             title="Refresh categories list"
           >
-            <RefreshCw className="h-4 w-4" />
-            <span className="hidden sm:inline">Refresh</span>
-            <span className="sm:hidden">Refresh</span>
+            <RefreshCw className="h-4 w-4 text-teal-600" />
+            <span className="hidden sm:inline font-semibold">Refresh</span>
+            <span className="sm:hidden font-semibold">Refresh</span>
           </Button>
           <Button
             onClick={() => setShowBarcodeScanner(true)}
             variant="outline"
             size="default"
-            className="flex items-center justify-center gap-2"
+            className="flex items-center justify-center gap-2 border-gray-200 bg-white text-gray-700 hover:border-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-all shadow-sm"
             title="Scan barcode to search product"
           >
-            <Camera className="h-4 w-4" />
-            <span className="hidden sm:inline">Scan</span>
-            <span className="sm:hidden">Scan</span>
+            <Camera className="h-4 w-4 text-amber-600" />
+            <span className="hidden sm:inline font-semibold">Scan</span>
+            <span className="sm:hidden font-semibold">Scan</span>
           </Button>
           <Button
             onClick={() => setShowLabelPrinter(true)}
             variant="outline"
             size="default"
-            className="flex items-center justify-center gap-2"
+            className="flex items-center justify-center gap-2 border-gray-200 bg-white text-gray-700 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700 transition-all shadow-sm"
             title="Print barcode labels"
           >
-            <Printer className="h-4 w-4" />
-            <span className="hidden sm:inline">Print</span>
-            <span className="sm:hidden">Print</span>
+            <Printer className="h-4 w-4 text-purple-600" />
+            <span className="hidden sm:inline font-semibold">Print</span>
+            <span className="sm:hidden font-semibold">Print</span>
           </Button>
           <Button
-            onClick={() => productOps.setIsModalOpen(true)}
+            onClick={() => productOps.handleAdd()}
             variant="default"
             size="default"
-            className="flex items-center justify-center gap-2 col-span-2 sm:col-span-1"
+            className="flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white transition-all shadow-md active:scale-95 px-6 font-bold tracking-tight"
           >
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Product</span>
-            <span className="sm:hidden">Add</span>
+            <span className="hidden sm:inline uppercase">ADD PRODUCT</span>
+            <span className="sm:hidden uppercase">ADD</span>
+          </Button>
+          <ExcelExportButton 
+            getData={getExportData} 
+            label="Export"
+          />
+          <ExcelImportButton 
+            onDataImported={handleImportData}
+            label="Import"
+          />
+          <Button
+            onClick={handleDownloadTemplate}
+            variant="outline"
+            size="sm"
+            className="group flex items-center justify-center gap-2 border-orange-200 bg-white text-orange-600 hover:bg-orange-50 hover:border-orange-500 h-9 px-3 rounded-lg shadow-sm transition-all duration-200"
+          >
+            <Download className="h-3.5 w-3.5 group-hover:-translate-y-0.5 transition-transform" />
+            <span className="text-xs font-semibold tracking-tight uppercase">Template</span>
           </Button>
         </div>
       </div>
@@ -302,12 +390,7 @@ export const Products = () => {
         </div>
       </div>
 
-      <ProductImportExport 
-        onImportComplete={() => {
-          dispatch(api.util.invalidateTags([{ type: 'Products', id: 'LIST' }]));
-        }}
-        filters={{ ...queryParams, limit: 999999, page: 1 }}
-      />
+
 
       <ProductFilters 
         filters={filters}
@@ -326,7 +409,7 @@ export const Products = () => {
           setShowBulkUpdateModal(true);
         }}
         onBulkDelete={() => productOps.handleBulkDelete(bulkOps)}
-        onBulkExport={() => productOps.handleBulkExport(bulkOps)}
+
         onBulkStatusChange={() => {
           setBulkUpdateType('status');
           setShowBulkUpdateModal(true);
@@ -345,7 +428,7 @@ export const Products = () => {
         }}
         onUndo={bulkOps.undoLastOperation}
         onClearSelection={bulkOps.deselectAll}
-        availableActions={['update', 'delete', 'export', 'status', 'category', 'price', 'stock']}
+        availableActions={['update', 'delete', 'status', 'category', 'price', 'stock']}
       />
 
       <BulkUpdateModal

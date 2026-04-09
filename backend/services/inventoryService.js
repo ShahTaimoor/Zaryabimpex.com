@@ -36,10 +36,7 @@ const updateStock = async ({ productId, type, quantity, reason, reference, refer
     const inv = await ensureInventoryRecord(productId);
     const current = getCurrentStock(inv);
     const isIn = ['in', 'return'].includes(type);
-    const newStock = isIn ? current + quantity : Math.max(0, current - quantity);
-    if (!isIn && newStock !== current - quantity) {
-      throw new Error('Insufficient stock');
-    }
+    const newStock = isIn ? current + quantity : current - quantity;
 
     const updatePayload = { currentStock: newStock };
     if (cost !== undefined && cost !== null && isIn) {

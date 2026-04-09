@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import BaseModal from './BaseModal';
 import {
-  Download,
+
   Star,
   Trash2,
   Eye,
@@ -26,7 +26,7 @@ import {
 import { useGetReportQuery } from '../store/services/inventoryApi';
 import { useGetProductsQuery } from '../store/services/productsApi';
 
-const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onToggleFavorite }) => {
+const InventoryReportDetailModal = ({ report, onClose, onDelete, onToggleFavorite }) => {
   const [activeTab, setActiveTab] = useState('overview');
 
   // Fetch detailed report data
@@ -206,13 +206,7 @@ const InventoryReportDetailModal = ({ report, onClose, onExport, onDelete, onTog
       >
         <Star className={`h-5 w-5 ${reportData.isFavorite ? 'fill-current' : ''}`} />
       </button>
-      <button
-        onClick={() => onExport(reportData.reportId, 'pdf')}
-        className="p-2 text-gray-400 hover:text-gray-600"
-        title="Export Report"
-      >
-        <Download className="h-5 w-5" />
-      </button>
+
       <button
         onClick={() => onDelete(reportData.reportId)}
         className="p-2 text-red-400 hover:text-red-600"

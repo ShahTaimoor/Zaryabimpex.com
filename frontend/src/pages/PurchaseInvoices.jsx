@@ -11,18 +11,14 @@ import {
   TrendingUp,
   Printer,
   Calendar,
-  Download
+
 } from 'lucide-react';
 import {
   useGetPurchaseInvoicesQuery,
   useLazyGetPurchaseInvoiceQuery,
   useConfirmPurchaseInvoiceMutation,
   useDeletePurchaseInvoiceMutation,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useDownloadFileMutation,
+
 } from '../store/services/purchaseInvoicesApi';
 import { useLazyGetSupplierQuery } from '../store/services/suppliersApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
@@ -33,13 +29,8 @@ import PrintModal from '../components/PrintModal';
 import { Button } from '@/components/ui/button';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
-import ExportReportModal from '../components/ExportReportModal';
-import { useExportTabularDownload } from '../hooks/useExportTabularDownload';
-import {
-  buildTabularExportRunners,
-  TABULAR_EXPORT_FALLBACK_FILENAMES,
-} from '../utils/exportReportDownload';
-import { confirmTabularExportDownload } from '../utils/tabularExportConfirm';
+import ExcelExportButton from '../components/ExcelExportButton';
+
 
 // Edit allowed only within 1 month of invoice date
 const canEditByDate = (invoice) => {
@@ -155,9 +146,7 @@ export const PurchaseInvoices = () => {
   const [dateTo, setDateTo] = useState(today); // Today
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [exportFormat, setExportFormat] = useState('csv');
-  const [isExporting, setIsExporting] = useState(false);
+
 
   const { openTab } = useTab();
 
@@ -191,12 +180,7 @@ export const PurchaseInvoices = () => {
   // Mutations
   const [confirmPurchaseInvoiceMutation, { isLoading: confirming }] = useConfirmPurchaseInvoiceMutation();
   const [deletePurchaseInvoiceMutation, { isLoading: deleting }] = useDeletePurchaseInvoiceMutation();
-  const [exportExcelMutation] = useExportExcelMutation();
-  const [exportCSVMutation] = useExportCSVMutation();
-  const [exportPDFMutation] = useExportPDFMutation();
-  const [exportJSONMutation] = useExportJSONMutation();
-  const [downloadFileMutation] = useDownloadFileMutation();
-  const runExportDownload = useExportTabularDownload(downloadFileMutation);
+
 
   const [getSupplierById] = useLazyGetSupplierQuery();
 
@@ -429,25 +413,7 @@ export const PurchaseInvoices = () => {
     setShowViewModal(true);
   };
 
-  const handleExportConfirm = () =>
-    confirmTabularExportDownload({
-      format: exportFormat,
-      runExportDownload,
-      exportRunners: buildTabularExportRunners(
-        {
-          search: searchTerm || undefined,
-          status: statusFilter || undefined,
-          dateFrom: dateFrom || undefined,
-          dateTo: dateTo || undefined,
-        },
-        { exportExcelMutation, exportPDFMutation, exportJSONMutation, exportCSVMutation }
-      ),
-      fallbackFilenames: TABULAR_EXPORT_FALLBACK_FILENAMES.purchaseInvoices,
-      successMessage: (f) => `Exported purchase invoices as ${f.toUpperCase()}`,
-      errorContext: 'Purchase Invoice Export',
-      setIsExporting,
-      onSuccess: () => setShowExportModal(false),
-    });
+
 
   // Memoize invoices data - must be before conditional returns to follow Rules of Hooks
   const invoices = React.useMemo(() => {
@@ -459,6 +425,44 @@ export const PurchaseInvoices = () => {
     if (Array.isArray(data?.data)) return data.data;
     return [];
   }, [data]);
+
+  const getExportData = () => {
+    return {
+      title: 'Purchase Invoices Report',
+      filename: `Purchase_Invoices_${dateFrom}_to_${dateTo}.xlsx`,
+      columns: [
+        { header: 'Invoice #', key: 'invoiceNumber', width: 15 },
+        { header: 'Supplier', key: 'supplierName', width: 35 },
+        { header: 'Date', key: 'date', width: 15 },
+        { header: 'Items', key: 'itemsCount', width: 10, type: 'number' },
+        { header: 'Total', key: 'total', width: 20, type: 'currency' },
+        { header: 'Status', key: 'status', width: 15 },
+        { header: 'Payment', key: 'paymentStatus', width: 15 },
+        { header: 'Notes', key: 'notes', width: 40 }
+      ],
+      data: invoices.map(invoice => ({
+        invoiceNumber: invoice.invoiceNumber ?? '—',
+        supplierName: invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || invoice.supplier?.companyName || invoice.supplier?.name || 'Unknown',
+        date: invoice.invoiceDate || invoice.invoice_date || invoice.createdAt 
+          ? new Date(invoice.invoiceDate || invoice.invoice_date || invoice.createdAt).toLocaleDateString()
+          : 'Invalid Date',
+        itemsCount: invoice.items?.length ?? 0,
+        total: Number(invoice.pricing?.total || 0),
+        status: (invoice.status || '—').toUpperCase(),
+        paymentStatus: (invoice.payment?.status || 'pending').toUpperCase(),
+        notes: invoice.notes?.trim() || ''
+      })),
+      summary: {
+          rows: [
+              {
+                  label: 'GRAND TOTAL:',
+                  invoiceNumber: `${invoices.length} Invoices`,
+                  total: invoices.reduce((sum, o) => sum + Number(o.pricing?.total || 0), 0)
+              }
+          ]
+      }
+    };
+  };
 
   if (isLoading) {
     return <LoadingSpinner />;
@@ -484,16 +488,10 @@ export const PurchaseInvoices = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto items-stretch sm:items-center">
-          <Button
-            type="button"
-            variant="outline"
-            size="default"
-            className="flex items-center justify-center gap-2"
-            onClick={() => setShowExportModal(true)}
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
+          <ExcelExportButton 
+            getData={getExportData}
+            label="Export"
+          />
           <div className="w-full sm:w-auto">
             <DateFilter
               startDate={dateFrom}
@@ -763,17 +761,7 @@ export const PurchaseInvoices = () => {
       )}
 
 
-      <ExportReportModal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        title="Export Purchase Invoices"
-        format={exportFormat}
-        onFormatChange={setExportFormat}
-        onConfirm={handleExportConfirm}
-        isExporting={isExporting}
-        showDateRange={false}
-        namePrefix="purchase-invoices-export-format"
-      />
+
 
       {/* View Modal with Print Support */}
       <PrintModal

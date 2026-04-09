@@ -25,14 +25,6 @@ export const accountLedgerApi = api.injectEndpoints({
       }),
       providesTags: [{ type: 'Accounting', id: 'ALL_ENTRIES' }],
     }),
-    exportLedger: builder.mutation({
-      query: (params) => ({
-        url: 'account-ledger/all-entries',
-        method: 'get',
-        params,
-        responseType: 'blob',
-      }),
-    }),
     getLedgerSummary: builder.query({
       query: (params) => ({
         url: 'account-ledger/summary',
@@ -70,7 +62,6 @@ export const {
   useGetLedgerEntriesQuery,
   useGetAccountsListQuery,
   useGetAllEntriesQuery,
-  useExportLedgerMutation,
   useGetLedgerSummaryQuery,
   useGetCustomerDetailedTransactionsQuery,
   useGetSupplierDetailedTransactionsQuery,

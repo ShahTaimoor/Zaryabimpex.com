@@ -8,7 +8,7 @@ import {
   Edit,
   Trash2,
   Eye,
-  Download,
+
   RefreshCw,
   ArrowUpDown,
   RotateCcw,
@@ -63,11 +63,7 @@ import {
   useConfirmSalesOrderMutation,
   useCancelSalesOrderMutation,
   useCloseSalesOrderMutation,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useDownloadFileMutation,
+
 } from '../store/services/salesOrdersApi';
 import {
   OrderConfirmationStatusBadge,
@@ -89,13 +85,7 @@ import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import NotesPanel from '../components/NotesPanel';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
-import ExportReportModal from '../components/ExportReportModal';
-import {
-  presentPdfExportBlob,
-  presentNonPdfExportDownload,
-  notifyExportDownloadCatchError,
-  unwrapExportDownloadBlob,
-} from '../utils/exportReportPresentation';
+
 
 // Helper function to safely render values
 const safeRender = (value) => {
@@ -245,10 +235,7 @@ const SalesOrders = ({ tabId }) => {
   const [lastPurchasePrice, setLastPurchasePrice] = useState(null); // Last purchase price for selected product
   const [lastPurchasePrices, setLastPurchasePrices] = useState({}); // Store last purchase prices for products in cart
 
-  // Export state
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [exportFormat, setExportFormat] = useState('pdf');
-  const [isExporting, setIsExporting] = useState(false);
+
 
   // Auth context for permissions
   const { hasPermission, user } = useAuth();
@@ -487,11 +474,7 @@ const SalesOrders = ({ tabId }) => {
   const [updateItemsConfirmationMutation, { isLoading: updatingItemsConfirmation }] = useUpdateSalesOrderItemsConfirmationMutation();
   const [cancelSalesOrderMutation, { isLoading: cancelling }] = useCancelSalesOrderMutation();
   const [closeSalesOrderMutation, { isLoading: closing }] = useCloseSalesOrderMutation();
-  const [exportExcelMutation] = useExportExcelMutation();
-  const [exportCSVMutation] = useExportCSVMutation();
-  const [exportPDFMutation] = useExportPDFMutation();
-  const [exportJSONMutation] = useExportJSONMutation();
-  const [downloadFileMutation] = useDownloadFileMutation();
+
 
   // Helper functions
   const resetForm = () => {
@@ -1543,76 +1526,7 @@ const SalesOrders = ({ tabId }) => {
     );
   };
 
-  const handleExportConfirm = async () => {
-    setIsExporting(true);
-    try {
-      // Build filters based on current filters
-      const exportFilters = {
-        dateFrom: filters.fromDate,
-        dateTo: filters.toDate,
-        status: filters.status,
-        customer: filters.customer,
-        orderNumber: filters.orderNumber,
-        orderType: filters.orderType
-      };
 
-      let response;
-      if (exportFormat === 'excel') {
-        response = await exportExcelMutation(exportFilters).unwrap();
-      } else if (exportFormat === 'csv') {
-        response = await exportCSVMutation(exportFilters).unwrap();
-      } else if (exportFormat === 'json') {
-        response = await exportJSONMutation(exportFilters).unwrap();
-      } else if (exportFormat === 'pdf') {
-        response = await exportPDFMutation(exportFilters).unwrap();
-      }
-
-      if (response?.filename) {
-        const filename = response.filename;
-
-        try {
-          // Add a small delay to ensure file is written (PDF generation is async)
-          if (exportFormat === 'pdf') {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-
-          let downloadResponse;
-          try {
-            downloadResponse = await downloadFileMutation(filename).unwrap();
-          } catch (downloadErr) {
-            notifyExportDownloadCatchError(downloadErr, showErrorToast);
-            return;
-          }
-
-          if (downloadResponse == null) {
-            showErrorToast('Download failed: No data received from server');
-            return;
-          }
-
-          if (exportFormat === 'pdf') {
-            presentPdfExportBlob(unwrapExportDownloadBlob(downloadResponse), filename, {
-              error: showErrorToast,
-              success: showSuccessToast,
-            });
-          } else {
-            presentNonPdfExportDownload(downloadResponse, exportFormat, filename, showSuccessToast);
-          }
-        } catch (downloadError) {
-          notifyExportDownloadCatchError(downloadError, showErrorToast);
-          return;
-        }
-      } else {
-        showErrorToast('Export failed: No filename received');
-        return;
-      }
-
-      setShowExportModal(false);
-    } catch (error) {
-      handleApiError(error, 'Export');
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   const handleEdit = (order) => {
     setSelectedOrder(order);
@@ -1922,16 +1836,7 @@ const SalesOrders = ({ tabId }) => {
           <p className="text-sm sm:text-base text-gray-600">Process sales order transactions</p>
         </div>
         <div className="flex items-center space-x-2 w-full sm:w-auto">
-          <Button
-            onClick={() => setShowExportModal(true)}
-            variant="secondary"
-            size="default"
-            className="flex-1 sm:flex-none"
-            title="Export sales orders data"
-          >
-            <Download className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Export</span>
-          </Button>
+
           <Button
             onClick={resetForm}
             variant="default"
@@ -2183,6 +2088,7 @@ const SalesOrders = ({ tabId }) => {
               priceType={priceType}
               dualUnitShowBoxInput={dualUnitShowBoxInputEnabled}
               dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
+              allowOutOfStock={true}
               onLastPurchasePriceFetched={(productId, price) => {
                 setLastPurchasePrices(prev => ({
                   ...prev,
@@ -2350,12 +2256,15 @@ const SalesOrders = ({ tabId }) => {
                                       : piecesToBoxesAndPieces(item.quantity, piecesPerBox).pieces;
                                     const rawQty = nextBoxes * piecesPerBox + currentPieces;
                                     const stockCap = Number(product?.inventory?.currentStock ?? 0);
-                                    const cappedQty = stockCap > 0 ? Math.min(rawQty, stockCap) : rawQty;
+                                    if (rawQty > stockCap && stockCap >= 0) {
+                                      toast.warning(`Warning: Quantity ${rawQty} exceeds available stock ${stockCap}`, { duration: 3000, icon: '⚠️' });
+                                    }
+                                    const nextQty = rawQty;
                                     setFormData(prev => ({
                                       ...prev,
                                       items: prev.items.map((itm, i) => (
                                         i === index
-                                          ? { ...itm, boxes: nextBoxes, quantity: cappedQty, total: cappedQty * itm.unitPrice }
+                                          ? { ...itm, boxes: nextBoxes, quantity: nextQty, total: nextQty * itm.unitPrice }
                                           : itm
                                       ))
                                     }));
@@ -2396,6 +2305,10 @@ const SalesOrders = ({ tabId }) => {
                               handleRemoveItem(index);
                               return;
                             }
+                            const stockCap = Number(product?.inventory?.currentStock ?? 0);
+                            if (newQuantity > stockCap && stockCap >= 0) {
+                              toast.warning(`Warning: Quantity ${newQuantity} exceeds available stock ${stockCap}`, { duration: 3000, icon: '⚠️' });
+                            }
                             const ppb = getPiecesPerBox(product);
                             const { boxes, pieces } = ppb && dual ? dual : (ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {});
                             setFormData(prev => ({
@@ -2411,7 +2324,7 @@ const SalesOrders = ({ tabId }) => {
                             }));
                           }}
                           min={1}
-                          max={product?.inventory?.currentStock}
+                          max={undefined}
                           stockPiecesForRemaining={product?.inventory?.currentStock ?? 0}
 
                           showBoxInput={!dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
@@ -2549,22 +2462,21 @@ const SalesOrders = ({ tabId }) => {
                                 handleRemoveItem(index);
                                 return;
                               }
-                              const ppb = getPiecesPerBox(product);
-                              const { boxes, pieces } = ppb && dual ? dual : (ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {});
+                              const stockCap = Number(product?.inventory?.currentStock ?? 0);
+                              if (newQuantity > stockCap && stockCap >= 0) {
+                                toast.warning(`Warning: Quantity ${newQuantity} exceeds available stock ${stockCap}`, { duration: 3000, icon: '⚠️' });
+                              }
                               setFormData(prev => ({
                                 ...prev,
                                 items: prev.items.map((itm, i) =>
-                                  i === index ? {
-                                    ...itm,
-                                    quantity: newQuantity,
-                                    ...(ppb && { boxes, pieces }),
-                                    total: newQuantity * itm.unitPrice
-                                  } : itm
+                                  i === index
+                                    ? { ...itm, quantity: newQuantity, ...(dual || {}), total: newQuantity * itm.unitPrice }
+                                    : itm
                                 )
                               }));
                             }}
                             min={1}
-                            max={product?.inventory?.currentStock}
+                            max={undefined}
                             stockPiecesForRemaining={product?.inventory?.currentStock ?? 0}
                             showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
                             showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
@@ -3514,17 +3426,7 @@ const SalesOrders = ({ tabId }) => {
         )}
       </BaseModal>
 
-      <ExportReportModal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        title="Export Sales Orders"
-        format={exportFormat}
-        onFormatChange={setExportFormat}
-        onConfirm={handleExportConfirm}
-        isExporting={isExporting}
-        showDateRange={false}
-        namePrefix="sales-orders-export-format"
-      />
+
 
       {/* Out-of-stock warning modal (before confirm) */}
       <BaseModal

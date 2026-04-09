@@ -541,6 +541,44 @@ class CustomerService {
       advanceBalance: balance < 0 ? Math.abs(balance) : 0
     };
   }
+
+  /**
+   * Bulk create customers from import data
+   */
+  async bulkCreateCustomers(customersData, userId) {
+    const results = { created: 0, failed: 0, errors: [] };
+    
+    for (const item of customersData) {
+      try {
+        const formattedCustomer = {
+          businessName: item.business_name || item.businessName || item['Business Name'],
+          name: item.contact_person || item.contactPerson || item.name || item['Contact Person'],
+          email: item.email || item['Email'],
+          phone: item.phone || item['Phone'],
+          address: item.city || item.address || item['City'],
+          openingBalance: item.opening_balance || item.balance || item['Opening Balance'] || 0,
+          isActive: true
+        };
+
+        if (!formattedCustomer.businessName) {
+          throw new Error('Business name is required');
+        }
+
+        await this.createCustomer(formattedCustomer, userId, { 
+          openingBalance: formattedCustomer.openingBalance 
+        });
+        results.created++;
+      } catch (error) {
+        results.failed++;
+        results.errors.push({ 
+          name: item.businessName || item['Business Name'] || 'Unknown', 
+          error: error.message 
+        });
+      }
+    }
+    
+    return results;
+  }
 }
 
 module.exports = new CustomerService();

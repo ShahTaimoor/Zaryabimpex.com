@@ -6,7 +6,7 @@ import {
   Plus,
   Search,
   Filter,
-  Download,
+
   Eye,
   RotateCcw,
   Calendar,
@@ -332,10 +332,7 @@ export const StockMovements = () => {
             <Plus className="h-4 w-4" />
             Stock Adjustment
           </Button>
-          <Button variant="secondary" size="default" className="flex items-center justify-center gap-2">
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
+
         </div>
       </div>
 

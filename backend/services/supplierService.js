@@ -1,6 +1,7 @@
 const supplierRepository = require('../repositories/SupplierRepository');
 // ledgerAccountService removed - using PostgreSQL Chart of Accounts directly
 const SupplierBalanceService = require('./supplierBalanceService');
+const AccountingService = require('./accountingService');
 
 class SupplierService {
   /**
@@ -292,6 +293,52 @@ class SupplierService {
         advanceBalance: netBalance < 0 ? Math.abs(netBalance) : 0
       };
     });
+  }
+
+  /**
+   * Bulk create suppliers from import data
+   */
+  async bulkCreateSuppliers(suppliersData, userId) {
+    const results = { created: 0, failed: 0, errors: [] };
+    
+    for (const item of suppliersData) {
+      try {
+        const formattedSupplier = {
+          companyName: item.company_name || item.companyName || item['Company Name'],
+          contactPerson: {
+            name: item.contact_person || item.contactPerson || item['Contact Person'] || '',
+            email: item.email || item['Email'] || '',
+            phone: item.phone || item['Phone'] || '',
+            designation: ''
+          },
+          email: item.email || item['Email'],
+          phone: item.phone || item['Phone'],
+          address: item.address || item['Address'] || '',
+          businessType: item.business_type || item.businessType || item['Business Type'] || 'Wholesale',
+          openingBalance: item.opening_balance || item.balance || item['Opening Balance'] || 0,
+          status: 'active'
+        };
+
+        if (!formattedSupplier.companyName) {
+          throw new Error('Company name is required');
+        }
+
+        // Note: Using a minimal check for required data
+        await supplierRepository.create({
+          ...formattedSupplier,
+          createdBy: userId
+        });
+        results.created++;
+      } catch (error) {
+        results.failed++;
+        results.errors.push({ 
+          name: item.company_name || item['Company Name'] || 'Unknown', 
+          error: error.message 
+        });
+      }
+    }
+    
+    return results;
   }
 }
 

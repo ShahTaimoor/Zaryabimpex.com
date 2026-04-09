@@ -7,7 +7,6 @@ import {
   Edit,
   Trash2,
   Eye,
-  Download,
   RefreshCw,
   ArrowUpDown,
   Calendar,
@@ -30,11 +29,7 @@ import {
   useCreateBankPaymentMutation,
   useUpdateBankPaymentMutation,
   useDeleteBankPaymentMutation,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useDownloadFileMutation,
+
 } from '../store/services/bankPaymentsApi';
 import { useGetSuppliersQuery } from '../store/services/suppliersApi';
 import { useGetCustomersQuery } from '../store/services/customersApi';
@@ -42,13 +37,7 @@ import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
-import ExportReportModal from '../components/ExportReportModal';
-import { useExportTabularDownload } from '../hooks/useExportTabularDownload';
-import {
-  buildTabularExportRunners,
-  TABULAR_EXPORT_FALLBACK_FILENAMES,
-} from '../utils/exportReportDownload';
-import { confirmTabularExportDownload } from '../utils/tabularExportConfirm';
+
 
 const BankPayments = () => {
   const today = getCurrentDatePakistan();
@@ -75,9 +64,7 @@ const BankPayments = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [exportFormat, setExportFormat] = useState('csv');
-  const [isExporting, setIsExporting] = useState(false);
+
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [printData, setPrintData] = useState(null);
 
@@ -188,12 +175,7 @@ const BankPayments = () => {
   const [createBankPayment, { isLoading: creating }] = useCreateBankPaymentMutation();
   const [updateBankPayment, { isLoading: updating }] = useUpdateBankPaymentMutation();
   const [deleteBankPayment, { isLoading: deleting }] = useDeleteBankPaymentMutation();
-  const [exportExcelMutation] = useExportExcelMutation();
-  const [exportCSVMutation] = useExportCSVMutation();
-  const [exportPDFMutation] = useExportPDFMutation();
-  const [exportJSONMutation] = useExportJSONMutation();
-  const [downloadFileMutation] = useDownloadFileMutation();
-  const runExportDownload = useExportTabularDownload(downloadFileMutation);
+
 
   // Helper functions
   const resetForm = () => {
@@ -582,20 +564,7 @@ const BankPayments = () => {
     setShowViewModal(true);
   };
 
-  const handleExportConfirm = () =>
-    confirmTabularExportDownload({
-      format: exportFormat,
-      runExportDownload,
-      exportRunners: buildTabularExportRunners(
-        { ...filters, ...pagination, sortConfig },
-        { exportExcelMutation, exportPDFMutation, exportJSONMutation, exportCSVMutation }
-      ),
-      fallbackFilenames: TABULAR_EXPORT_FALLBACK_FILENAMES.bankPayments,
-      successMessage: (f) => `Exported bank payments as ${f.toUpperCase()}`,
-      errorContext: 'Bank Payments Export',
-      setIsExporting,
-      onSuccess: () => setShowExportModal(false),
-    });
+
 
   const handlePrint = (payment) => {
     setPrintData(payment);
@@ -628,15 +597,7 @@ const BankPayments = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage and view all bank payment transactions</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-          <Button
-            onClick={() => setShowExportModal(true)}
-            variant="outline"
-            size="default"
-            className="flex items-center justify-center gap-2 w-full sm:w-auto"
-          >
-            <Download className="h-4 w-4" />
-            <span>Export</span>
-          </Button>
+
           <Button
             onClick={resetForm}
             variant="default"
@@ -1457,17 +1418,7 @@ const BankPayments = () => {
         </div>
       </div>
 
-      <ExportReportModal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        title="Export Bank Payments"
-        format={exportFormat}
-        onFormatChange={setExportFormat}
-        onConfirm={handleExportConfirm}
-        isExporting={isExporting}
-        showDateRange={false}
-        namePrefix="bank-payments-export-format"
-      />
+
 
       {/* Payment print modal – dedicated layout for payments only */}
       <ReceiptPaymentPrintModal

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import JsBarcode from 'jsbarcode';
-import { Printer, Download, X, Package, Settings, Search } from 'lucide-react';
+import { Printer, Eye, X, Package, Settings, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 /**
@@ -211,7 +211,7 @@ export const BarcodeLabelPrinter = ({
     toast.success(`Printing ${toPrint.length} label(s)`);
   };
 
-  const handleDownload = () => {
+  const handlePreview = () => {
     if (selectedProducts.length === 0) {
       toast.error('Please select at least one product');
       return;
@@ -528,10 +528,10 @@ export const BarcodeLabelPrinter = ({
             </button>
           )}
           <button
-            onClick={handleDownload}
+            onClick={handlePreview}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center space-x-2"
           >
-            <Download className="h-4 w-4" />
+            <Eye className="h-4 w-4" />
             <span>Preview</span>
           </button>
           <button

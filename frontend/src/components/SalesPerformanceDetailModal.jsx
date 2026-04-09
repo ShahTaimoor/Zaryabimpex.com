@@ -9,7 +9,6 @@ import {
   Package,
   UserCheck,
   Calendar,
-  Download,
   Star,
   Tag,
   FileText,
@@ -29,7 +28,7 @@ import { Button } from '@/components/ui/button';
 
 const SalesPerformanceDetailModal = ({ isOpen, onClose, report, onDelete, onExport }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [showExportMenu, setShowExportMenu] = useState(false);
+
 
   // Fetch detailed report data
   const { data: detailedReport, isLoading, error } = useGetReportQuery(
@@ -166,13 +165,7 @@ const SalesPerformanceDetailModal = ({ isOpen, onClose, report, onDelete, onExpo
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                <Button
-                  onClick={() => setShowExportMenu(!showExportMenu)}
-                  variant="secondary"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </Button>
+
                 <button
                   onClick={onClose}
                   className="text-gray-400 hover:text-gray-600"
@@ -183,43 +176,7 @@ const SalesPerformanceDetailModal = ({ isOpen, onClose, report, onDelete, onExpo
             </div>
           </div>
 
-          {/* Export Menu */}
-          {showExportMenu && (
-            <div className="absolute right-4 top-16 z-10 bg-white border border-gray-200 rounded-lg shadow-lg">
-              <div className="py-1">
-                <button
-                  onClick={() => {
-                    onExport(report.reportId, 'pdf');
-                    setShowExportMenu(false);
-                  }}
-                  className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full"
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Export as PDF
-                </button>
-                <button
-                  onClick={() => {
-                    onExport(report.reportId, 'excel');
-                    setShowExportMenu(false);
-                  }}
-                  className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full"
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Export as Excel
-                </button>
-                <button
-                  onClick={() => {
-                    onExport(report.reportId, 'csv');
-                    setShowExportMenu(false);
-                  }}
-                  className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full"
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Export as CSV
-                </button>
-              </div>
-            </div>
-          )}
+
 
           {/* Tabs */}
           <div className="border-b border-gray-200">

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { Users, Building2, Calendar, Download, FileText, ChevronDown, Printer } from 'lucide-react';
+import { Users, Building2, Calendar, FileText, ChevronDown, Printer } from 'lucide-react';
 import { useGetLedgerSummaryQuery, useGetCustomerDetailedTransactionsQuery, useGetSupplierDetailedTransactionsQuery, useGetAllEntriesQuery } from '../store/services/accountLedgerApi';
 import { useGetCustomersQuery } from '../store/services/customersApi';
 import { useGetSuppliersQuery } from '../store/services/suppliersApi';
@@ -602,81 +602,7 @@ const AccountLedgerSummary = () => {
     }
   };
 
-  const handleExport = () => {
-    try {
-      const escapeCsv = (value) => {
-        const stringValue = String(value ?? '');
-        if (stringValue.includes('"') || stringValue.includes(',') || stringValue.includes('\n')) {
-          return `"${stringValue.replace(/"/g, '""')}"`;
-        }
-        return stringValue;
-      };
 
-      let headers = [];
-      let rows = [];
-      let fileLabel = 'bank-ledger';
-
-      if (selectedCustomerId && (customerDetail?.entries ?? detailedTransactionsData?.data?.entries)?.length) {
-        headers = ['Date', 'Voucher No', 'Particular', 'Debits', 'Credits', 'Balance'];
-        rows = (customerDetail?.entries ?? detailedTransactionsData?.data?.entries).map((entry) => ([
-          formatDate(entry?.date),
-          entry?.voucherNo || '-',
-          entry?.particular || '-',
-          Number(entry?.debitAmount) || 0,
-          Number(entry?.creditAmount) || 0,
-          Number(entry?.balance) || 0,
-        ]));
-        fileLabel = 'customer-ledger';
-      } else if (selectedSupplierId && (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries)?.length) {
-        headers = ['Date', 'Voucher No', 'Particular', 'Debits', 'Credits', 'Balance'];
-        rows = (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries).map((entry) => ([
-          formatDate(entry?.date),
-          entry?.voucherNo || '-',
-          entry?.particular || '-',
-          Number(entry?.debitAmount) || 0,
-          Number(entry?.creditAmount) || 0,
-          Number(entry?.balance) || 0,
-        ]));
-        fileLabel = 'supplier-ledger';
-      } else {
-        headers = ['Date', 'Voucher No', 'Bank Name', 'Particular', 'Debits', 'Credits'];
-        rows = bankLedgerRows.map((entry) => ([
-          formatDate(entry?.date),
-          entry?.voucherNo || '-',
-          entry?.bankName || '-',
-          entry?.particular || '-',
-          Number(entry?.debitAmount) || 0,
-          Number(entry?.creditAmount) || 0,
-        ]));
-        fileLabel = 'bank-ledger';
-      }
-
-      if (!rows.length) {
-        toast.error('No data to export');
-        return;
-      }
-
-      const csv = [
-        headers.map(escapeCsv).join(','),
-        ...rows.map((row) => row.map(escapeCsv).join(','))
-      ].join('\n');
-
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${fileLabel}-${filters.startDate || 'from'}-to-${filters.endDate || 'to'}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      toast.success('Exported successfully');
-    } catch (err) {
-      handleApiError(err, 'Export account ledger summary');
-      toast.error('Failed to export');
-    }
-  };
 
   const handleBackfillSales = async () => {
     try {
@@ -818,15 +744,7 @@ const AccountLedgerSummary = () => {
               <Printer className="h-4 w-4" />
               Print
             </Button>
-            <Button
-              onClick={handleExport}
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
-            >
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
+
           </div>
         </div>
       </header>

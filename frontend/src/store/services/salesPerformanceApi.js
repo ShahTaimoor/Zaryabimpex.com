@@ -89,14 +89,6 @@ export const salesPerformanceApi = api.injectEndpoints({
         { type: 'Reports', id: 'SALES_PERFORMANCE' },
       ],
     }),
-    exportReport: builder.mutation({
-      query: ({ id, format }) => ({
-        url: `sales-performance/${id}/export`,
-        method: 'post',
-        data: { format },
-        responseType: 'blob',
-      }),
-    }),
     getReportStats: builder.query({
       query: (params) => ({
         url: 'sales-performance/stats/overview',
@@ -149,7 +141,6 @@ export const {
   useToggleFavoriteMutation,
   useUpdateTagsMutation,
   useUpdateNotesMutation,
-  useExportReportMutation,
   useGetReportStatsQuery,
   useGetQuickTopProductsQuery,
   useGetQuickTopCustomersQuery,

@@ -674,6 +674,46 @@ class ProductServicePostgres {
     const categoryMap = await getCategoryMap(categoryIds);
     return rows.map(p => toApiProduct(p, categoryMap));
   }
+  async bulkCreateProducts(productsData, userId, req = null) {
+    const results = { created: 0, failed: 0, errors: [] };
+    
+    for (const item of productsData) {
+      try {
+        // Map Excel-style fields to DB-style fields (handles both spaces and underscores)
+        const formattedProduct = {
+          name: item.name || item.product_name || item.productName || item['Product Name'],
+          sku: item.sku || item.product_sku || item['SKU'],
+          barcode: item.barcode || item['Barcode'],
+          category: item.category || item.category_name || item['Category'] || item['category'],
+          pricing: {
+            cost: item.cost || item.cost_price || item.costPrice || item['Cost Price'] || 0,
+            retail: item.retail || item.retail_price || item.retailPrice || item['Retail Price'] || 0,
+            wholesale: item.wholesale || item.wholesale_price || item.wholesalePrice || item['Wholesale Price'] || 0
+          },
+          inventory: {
+            currentStock: item.stock || item.opening_stock || item.openingStock || item['Opening Stock'] || 0,
+            reorderPoint: 10
+          },
+          status: (item.status || item['Status'] || 'active').toLowerCase()
+        };
+
+        if (!formattedProduct.name) {
+          throw new Error('Product name is missing');
+        }
+
+        await this.createProduct(formattedProduct, userId, req);
+        results.created++;
+      } catch (error) {
+        results.failed++;
+        results.errors.push({ 
+          name: item.name || 'Unknown', 
+          error: error.message 
+        });
+      }
+    }
+    
+    return results;
+  }
 }
 
 module.exports = new ProductServicePostgres();

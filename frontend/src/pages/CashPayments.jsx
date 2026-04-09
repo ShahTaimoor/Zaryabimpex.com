@@ -6,7 +6,6 @@ import {
   Edit,
   Trash2,
   Eye,
-  Download,
   RefreshCw,
   ArrowUpDown,
   Calendar,
@@ -30,11 +29,7 @@ import {
   useCreateCashPaymentMutation,
   useUpdateCashPaymentMutation,
   useDeleteCashPaymentMutation,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useDownloadFileMutation,
+
 } from '../store/services/cashPaymentsApi';
 import { useGetSuppliersQuery } from '../store/services/suppliersApi';
 import { useGetCustomersQuery } from '../store/services/customersApi';
@@ -45,13 +40,7 @@ import DateFilter from '../components/DateFilter';
 import BaseModal from '../components/BaseModal';
 import FormField from '../components/FormField';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
-import ExportReportModal from '../components/ExportReportModal';
-import { useExportTabularDownload } from '../hooks/useExportTabularDownload';
-import {
-  buildTabularExportRunners,
-  TABULAR_EXPORT_FALLBACK_FILENAMES,
-} from '../utils/exportReportDownload';
-import { confirmTabularExportDownload } from '../utils/tabularExportConfirm';
+
 
 const CashPayments = () => {
   const today = getCurrentDatePakistan();
@@ -78,9 +67,7 @@ const CashPayments = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [exportFormat, setExportFormat] = useState('csv');
-  const [isExporting, setIsExporting] = useState(false);
+
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [printData, setPrintData] = useState(null);
 
@@ -178,12 +165,7 @@ const CashPayments = () => {
   const [createCashPayment, { isLoading: creating }] = useCreateCashPaymentMutation();
   const [updateCashPayment, { isLoading: updating }] = useUpdateCashPaymentMutation();
   const [deleteCashPayment, { isLoading: deleting }] = useDeleteCashPaymentMutation();
-  const [exportExcelMutation] = useExportExcelMutation();
-  const [exportCSVMutation] = useExportCSVMutation();
-  const [exportPDFMutation] = useExportPDFMutation();
-  const [exportJSONMutation] = useExportJSONMutation();
-  const [downloadFileMutation] = useDownloadFileMutation();
-  const runExportDownload = useExportTabularDownload(downloadFileMutation);
+
 
   const dispatch = useAppDispatch();
 
@@ -551,20 +533,7 @@ const CashPayments = () => {
     setShowViewModal(true);
   };
 
-  const handleExportConfirm = () =>
-    confirmTabularExportDownload({
-      format: exportFormat,
-      runExportDownload,
-      exportRunners: buildTabularExportRunners(
-        { ...filters, ...pagination, sortConfig },
-        { exportExcelMutation, exportPDFMutation, exportJSONMutation, exportCSVMutation }
-      ),
-      fallbackFilenames: TABULAR_EXPORT_FALLBACK_FILENAMES.cashPayments,
-      successMessage: (f) => `Exported cash payments as ${f.toUpperCase()}`,
-      errorContext: 'Cash Payments Export',
-      setIsExporting,
-      onSuccess: () => setShowExportModal(false),
-    });
+
 
   const handlePrint = (payment) => {
     setPrintData(payment);
@@ -591,15 +560,7 @@ const CashPayments = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage and view all cash payment transactions</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-          <Button
-            onClick={() => setShowExportModal(true)}
-            variant="outline"
-            size="default"
-            className="flex items-center justify-center gap-2 w-full sm:w-auto"
-          >
-            <Download className="h-4 w-4" />
-            <span>Export</span>
-          </Button>
+
           <Button
             onClick={resetForm}
             variant="default"
@@ -1365,17 +1326,7 @@ const CashPayments = () => {
         </div>
       </div>
 
-      <ExportReportModal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        title="Export Cash Payments"
-        format={exportFormat}
-        onFormatChange={setExportFormat}
-        onConfirm={handleExportConfirm}
-        isExporting={isExporting}
-        showDateRange={false}
-        namePrefix="cash-payments-export-format"
-      />
+
 
       {/* Payment print modal – dedicated layout for payments only */}
       <ReceiptPaymentPrintModal

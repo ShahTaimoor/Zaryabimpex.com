@@ -28,6 +28,7 @@ import PrintModal from '../components/PrintModal';
 import BaseModal from '../components/BaseModal';
 import { Button } from '@/components/ui/button';
 import { formatDateForInput, getCurrentDatePakistan, getLocalDateString } from '../utils/dateUtils';
+import ExcelExportButton from '../components/ExcelExportButton';
 
 // Safe date display: avoid "Invalid Date" when value is missing or invalid (PostgreSQL may send sale_date, created_at)
 const formatOrderDate = (order) => {
@@ -441,6 +442,44 @@ export const Orders = () => {
       handleApiError(error, 'Post to ledger');
     }
   };
+  
+  const getExportData = () => {
+    return {
+      title: 'Sales Invoices Report',
+      filename: `Sales_Invoices_${fromDate}_to_${toDate}.xlsx`,
+      columns: [
+        { header: 'Invoice #', key: 'orderNumber', width: 15 },
+        { header: 'Customer', key: 'customerName', width: 35 },
+        { header: 'Date', key: 'date', width: 15 },
+        { header: 'Items', key: 'itemsCount', width: 10, type: 'number' },
+        { header: 'Total', key: 'total', width: 20, type: 'currency' },
+        { header: 'Status', key: 'status', width: 15 },
+        { header: 'Payment', key: 'paymentStatus', width: 15 },
+        { header: 'Type', key: 'orderType', width: 15 },
+        { header: 'Notes', key: 'notes', width: 40 }
+      ],
+      data: orders.map(order => ({
+        orderNumber: order.order_number ?? order.orderNumber ?? '—',
+        customerName: order.customer?.businessName ?? order.customer?.business_name ?? order.customer?.displayName ?? order.customer?.name ?? order.customerInfo?.businessName ?? order.customerInfo?.business_name ?? order.customerInfo?.name ?? 'Walk-in Customer',
+        date: formatOrderDate(order),
+        itemsCount: order.items?.length ?? 0,
+        total: Number(order.pricing?.total ?? order.total ?? 0),
+        status: (order?.status ?? '—').toUpperCase(),
+        paymentStatus: getDerivedPaymentStatus(order).toUpperCase(),
+        orderType: (order.orderType ?? order.order_type ?? '—').toUpperCase(),
+        notes: order.notes?.trim() || ''
+      })),
+      summary: {
+          rows: [
+              {
+                  label: 'GRAND TOTAL:',
+                  orderNumber: `${orders.length} Invoices`,
+                  total: orders.reduce((sum, o) => sum + Number(o.pricing?.total ?? o.total ?? 0), 0)
+              }
+          ]
+      }
+    };
+  };
 
   if (isLoading) {
     return (
@@ -480,6 +519,10 @@ export const Orders = () => {
             <BookOpen className="h-4 w-4" />
             {isPostingToLedger ? 'Posting…' : 'Post missing to ledger'}
           </button>
+          <ExcelExportButton 
+            getData={getExportData}
+            label="Export"
+          />
           <DateFilter
             startDate={fromDate}
             endDate={toDate}

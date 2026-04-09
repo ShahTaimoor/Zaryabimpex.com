@@ -8,7 +8,6 @@ import {
   PieChart,
   BarChart3,
   Filter,
-  Download,
   Crown,
   Star,
   Heart,

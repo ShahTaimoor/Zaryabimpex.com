@@ -66,52 +66,6 @@ export const categoriesApi = api.injectEndpoints({
         { type: 'Reports', id: 'SUMMARY_CARDS' },
       ],
     }),
-    exportCategories: builder.mutation({
-      query: (filters) => ({
-        url: 'categories/export/excel',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    importCategories: builder.mutation({
-      query: (file) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        return {
-          url: 'categories/import/excel',
-          method: 'post',
-          data: formData,
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        };
-      },
-      invalidatesTags: [
-        { type: 'Categories', id: 'LIST' },
-        { type: 'Categories', id: 'TREE' },
-        { type: 'Products', id: 'LIST' },
-        { type: 'Products', id: 'SEARCH' },
-        { type: 'Reports', id: 'PRODUCT_REPORT' },
-        { type: 'Reports', id: 'INVENTORY_REPORT' },
-        { type: 'Reports', id: 'SUMMARY_CARDS' },
-      ],
-    }),
-    downloadCategoryTemplate: builder.query({
-      query: () => ({
-        url: 'categories/template/excel',
-        method: 'get',
-        responseType: 'blob',
-      }),
-      providesTags: [{ type: 'Categories', id: 'TEMPLATE' }],
-    }),
-    downloadCategoryExportFile: builder.query({
-      query: (filename) => ({
-        url: `categories/download/${filename}`,
-        method: 'get',
-        responseType: 'blob',
-      }),
-      providesTags: [{ type: 'Categories', id: 'EXPORT' }],
-    }),
   }),
   overrideExisting: false,
 });
@@ -122,9 +76,5 @@ export const {
   useCreateCategoryMutation,
   useUpdateCategoryMutation,
   useDeleteCategoryMutation,
-  useExportCategoriesMutation,
-  useImportCategoriesMutation,
-  useDownloadCategoryTemplateQuery,
-  useLazyDownloadCategoryExportFileQuery,
 } = categoriesApi;
 

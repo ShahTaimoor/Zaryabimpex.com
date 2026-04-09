@@ -7,8 +7,16 @@ function normalizeCustomer(c) {
   if (!c) return c;
   return {
     ...c,
+    id: c.id,
+    businessName: c.business_name || c.businessName || '',
+    name: c.name || '',
+    email: c.email || '',
+    phone: c.phone || '',
+    openingBalance: c.opening_balance ?? c.openingBalance ?? 0,
     businessType: c.business_type ?? c.businessType ?? 'wholesale',
-    customerTier: c.customer_tier ?? c.customerTier ?? 'bronze'
+    customerTier: c.customer_tier ?? c.customerTier ?? 'bronze',
+    // Handle city extraction from address if needed
+    city: c.city || (typeof c.address === 'object' ? c.address?.city : '') || ''
   };
 }
 
@@ -323,6 +331,43 @@ class CustomerService {
         advanceBalance: balance < 0 ? Math.abs(balance) : 0
       });
     });
+  }
+
+  /**
+   * Bulk create customers from imported data
+   */
+  async bulkCreateCustomers(customersData, userId) {
+    let created = 0;
+    let failed = 0;
+    const errors = [];
+
+    for (const customer of customersData) {
+      try {
+        // Map user-friendly Excel headers to DB fields
+        const mappedData = {
+          businessName: customer.business_name || customer.businessName || customer.business_name || '',
+          name: customer.name || customer.contact_person || '',
+          email: customer.email || '',
+          phone: customer.phone || '',
+          openingBalance: parseFloat(customer.opening_balance || customer.openingBalance || customer.balance || 0),
+          businessType: (customer.business_type || customer.businessType || 'wholesale').toLowerCase(),
+          customerTier: (customer.customer_tier || customer.customerTier || 'bronze').toLowerCase(),
+          isActive: true
+        };
+
+        if (!mappedData.businessName && !mappedData.name) {
+          throw new Error('Customer business name or name is required');
+        }
+
+        await this.createCustomer(mappedData, userId, { openingBalance: mappedData.openingBalance });
+        created++;
+      } catch (err) {
+        failed++;
+        errors.push({ customer: customer.businessName || 'Row', error: err.message });
+      }
+    }
+
+    return { created, failed, errors };
   }
 }
 

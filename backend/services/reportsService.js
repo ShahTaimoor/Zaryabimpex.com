@@ -589,24 +589,24 @@ class ReportsService {
     });
 
     const totals = rows.reduce((acc, r) => ({
-      openingQty: acc.openingQty + r.openingQty,
-      openingAmount: acc.openingAmount + r.openingAmount,
-      purchaseQty: acc.purchaseQty + r.purchaseQty,
-      purchaseAmount: acc.purchaseAmount + r.purchaseAmount,
-      purchaseReturnQty: acc.purchaseReturnQty + r.purchaseReturnQty,
-      purchaseReturnAmount: acc.purchaseReturnAmount + r.purchaseReturnAmount,
-      saleQty: acc.saleQty + r.saleQty,
-      saleAmount: acc.saleAmount + r.saleAmount,
-      saleReturnQty: acc.saleReturnQty + r.saleReturnQty,
-      saleReturnAmount: acc.saleReturnAmount + r.saleReturnAmount,
-      damageQty: acc.damageQty + r.damageQty,
-      damageAmount: acc.damageAmount + r.damageAmount,
-      closingQty: acc.closingQty + r.closingQty,
-      closingAmount: acc.closingAmount + r.closingAmount,
-      currentStock: acc.currentStock + (r.currentStock || 0),
-      reconciliationDelta: acc.reconciliationDelta + (r.reconciliationDelta || 0),
-      wholesaleValuation: acc.wholesaleValuation + (r.wholesaleValuation || 0),
-      retailValuation: acc.retailValuation + (r.retailValuation || 0)
+      openingQty: acc.openingQty + (parseFloat(r.openingQty) || 0),
+      openingAmount: acc.openingAmount + (parseFloat(r.openingAmount) || 0),
+      purchaseQty: acc.purchaseQty + (parseFloat(r.purchaseQty) || 0),
+      purchaseAmount: acc.purchaseAmount + (parseFloat(r.purchaseAmount) || 0),
+      purchaseReturnQty: acc.purchaseReturnQty + (parseFloat(r.purchaseReturnQty) || 0),
+      purchaseReturnAmount: acc.purchaseReturnAmount + (parseFloat(r.purchaseReturnAmount) || 0),
+      saleQty: acc.saleQty + (parseFloat(r.saleQty) || 0),
+      saleAmount: acc.saleAmount + (parseFloat(r.saleAmount) || 0),
+      saleReturnQty: acc.saleReturnQty + (parseFloat(r.saleReturnQty) || 0),
+      saleReturnAmount: acc.saleReturnAmount + (parseFloat(r.saleReturnAmount) || 0),
+      damageQty: acc.damageQty + (parseFloat(r.damageQty) || 0),
+      damageAmount: acc.damageAmount + (parseFloat(r.damageAmount) || 0),
+      closingQty: acc.closingQty + (parseFloat(r.closingQty) || 0),
+      closingAmount: acc.closingAmount + (parseFloat(r.closingAmount) || 0),
+      currentStock: acc.currentStock + (parseFloat(r.currentStock) || 0),
+      reconciliationDelta: acc.reconciliationDelta + (parseFloat(r.reconciliationDelta) || 0),
+      wholesaleValuation: acc.wholesaleValuation + (parseFloat(r.wholesaleValuation) || 0),
+      retailValuation: acc.retailValuation + (parseFloat(r.retailValuation) || 0)
     }), { openingQty: 0, openingAmount: 0, purchaseQty: 0, purchaseAmount: 0, purchaseReturnQty: 0, purchaseReturnAmount: 0, saleQty: 0, saleAmount: 0, saleReturnQty: 0, saleReturnAmount: 0, damageQty: 0, damageAmount: 0, closingQty: 0, closingAmount: 0, currentStock: 0, reconciliationDelta: 0, wholesaleValuation: 0, retailValuation: 0 });
 
     const outOfStockCount = rows.filter(r => (r.closingQty || 0) === 0).length;
@@ -629,7 +629,7 @@ class ReportsService {
       summary: {
         ...totals,
         totalItems: rows.length,
-        totalValuation: totals.closingAmount,
+        totalCost: totals.closingAmount,
         totalWholesaleValuation: totals.wholesaleValuation,
         totalRetailValuation: totals.retailValuation,
         totalCurrentStock: totals.currentStock,
@@ -711,8 +711,8 @@ class ReportsService {
     const summarySql = `
       SELECT 
         COUNT(*) as "totalItems",
-        SUM(COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * p.cost_price) as "totalValuation",
-        SUM(COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * p.selling_price) as "totalRetailValuation",
+        SUM(COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * COALESCE(p.cost_price, 0)) as "totalCost",
+        SUM(COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * COALESCE(p.selling_price, 0)) as "totalRetailValuation",
         COUNT(*) FILTER (WHERE COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) = 0) as "outOfStockCount",
         COUNT(*) FILTER (WHERE COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) > 0 
                          AND COALESCE(p.min_stock_level, 0) > 0
@@ -744,7 +744,7 @@ class ReportsService {
       })),
       summary: {
         totalItems: parseInt(summary.totalItems || 0),
-        totalValuation: parseFloat(summary.totalValuation || 0),
+        totalCost: parseFloat(summary.totalCost || 0),
         totalRetailValuation: parseFloat(summary.totalRetailValuation || 0),
         lowStockCount: parseInt(summary.lowStockCount || 0),
         outOfStockCount: parseInt(summary.outOfStockCount || 0),

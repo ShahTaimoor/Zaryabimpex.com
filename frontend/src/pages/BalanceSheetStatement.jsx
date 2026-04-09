@@ -288,116 +288,118 @@ export const BalanceSheetStatement = () => {
           </section>
 
           {/* Statement Tables */}
-          <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-              <div className="px-4 py-4 sm:px-6 border-b border-gray-200">
-                <h2 className="text-base font-semibold text-gray-900">Assets</h2>
-                <p className="text-sm text-gray-500 mt-0.5">{formatDate(searchToDate)}</p>
+          <section className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden flex flex-col">
+                <div className="px-4 py-4 sm:px-6 border-b border-gray-200">
+                  <h2 className="text-base font-semibold text-gray-900">Assets</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">{formatDate(searchToDate)}</p>
+                </div>
+                <div className="overflow-x-auto flex-grow">
+                  <table className="w-full text-left min-w-[360px]">
+                    <tbody className="divide-y divide-gray-200">
+                      <tr className="bg-gray-100">
+                        <td colSpan="2" className="px-4 py-3 sm:px-6 font-semibold text-gray-700 text-xs uppercase tracking-wider">
+                          Current Assets
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3 sm:px-6 text-gray-600">Cash</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(cashValue)}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3 sm:px-6 text-gray-600">Bank</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(bankValue)}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3 sm:px-6 text-gray-600">Inventory (Stock)</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(inventoryValue)}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3 sm:px-6 text-gray-600">Accounts Receivable</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(receivableValue)}</td>
+                      </tr>
+                      <tr className="bg-gray-50">
+                        <td className="px-4 py-3 sm:px-6 font-semibold text-gray-800">Total Current Assets</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(totalCurrentAssets)}</td>
+                      </tr>
+                      <tr className="bg-gray-100">
+                        <td colSpan="2" className="px-4 py-3 sm:px-6 font-semibold text-gray-700 text-xs uppercase tracking-wider">
+                          Fixed Assets
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3 sm:px-6 text-gray-600">Equipment</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(equipmentValue)}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3 sm:px-6 text-gray-600">Furniture</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(furnitureValue)}</td>
+                      </tr>
+                      <tr className="bg-gray-50 border-b">
+                        <td className="px-4 py-3 sm:px-6 font-semibold text-gray-800">Total Fixed Assets</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(totalFixedAssets)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="bg-gray-900 px-4 py-5 sm:px-6 flex items-center justify-between border-t border-gray-800">
+                  <span className="text-white font-bold uppercase text-xs tracking-wider">Total Assets</span>
+                  <span className="text-right font-bold text-xl text-green-400 tabular-nums">{formatCurrency(totalAssets)}</span>
+                </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left min-w-[360px]">
-                  <tbody className="divide-y divide-gray-200">
-                    <tr className="bg-gray-100">
-                      <td colSpan="2" className="px-4 py-3 sm:px-6 font-semibold text-gray-700 text-xs uppercase tracking-wider">
-                        Current Assets
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 sm:px-6 text-gray-600">Cash</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(cashValue)}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 sm:px-6 text-gray-600">Bank</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(bankValue)}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 sm:px-6 text-gray-600">Inventory (Stock)</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(inventoryValue)}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 sm:px-6 text-gray-600">Accounts Receivable</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(receivableValue)}</td>
-                    </tr>
-                    <tr className="bg-gray-50">
-                      <td className="px-4 py-3 sm:px-6 font-semibold text-gray-800">Total Current Assets</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(totalCurrentAssets)}</td>
-                    </tr>
-                    <tr className="bg-gray-100">
-                      <td colSpan="2" className="px-4 py-3 sm:px-6 font-semibold text-gray-700 text-xs uppercase tracking-wider">
-                        Fixed Assets
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 sm:px-6 text-gray-600">Equipment</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(equipmentValue)}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 sm:px-6 text-gray-600">Furniture</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(furnitureValue)}</td>
-                    </tr>
-                    <tr className="bg-gray-50">
-                      <td className="px-4 py-3 sm:px-6 font-semibold text-gray-800">Total Fixed Assets</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(totalFixedAssets)}</td>
-                    </tr>
-                    <tr className="bg-gray-900">
-                      <td className="px-4 py-4 sm:px-6 text-white font-bold uppercase text-xs tracking-wider">Total Assets</td>
-                      <td className="px-4 py-4 sm:px-6 text-right font-bold text-lg text-green-400">{formatCurrency(totalAssets)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
 
-            <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-              <div className="px-4 py-4 sm:px-6 border-b border-gray-200">
-                <h2 className="text-base font-semibold text-gray-900">Liabilities &amp; Equity</h2>
-                <p className="text-sm text-gray-500 mt-0.5">{formatDate(searchToDate)}</p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left min-w-[360px]">
-                  <tbody className="divide-y divide-gray-200">
-                    <tr className="bg-gray-100">
-                      <td colSpan="2" className="px-4 py-3 sm:px-6 font-semibold text-gray-700 text-xs uppercase tracking-wider">
-                        Liabilities
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 sm:px-6 text-gray-600">Accounts Payable</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(accountsPayableValue)}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 sm:px-6 text-gray-600">Loans</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(loansValue)}</td>
-                    </tr>
-                    <tr className="bg-gray-50">
-                      <td className="px-4 py-3 sm:px-6 font-semibold text-gray-800">Total Liabilities</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(totalLiabilities)}</td>
-                    </tr>
-                    <tr className="bg-gray-100">
-                      <td colSpan="2" className="px-4 py-3 sm:px-6 font-semibold text-gray-700 text-xs uppercase tracking-wider">
-                        Equity
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 sm:px-6 text-gray-600">Owner Capital</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(ownerCapitalValue)}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 sm:px-6 text-gray-600">Retained Earnings</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(retainedEarningsValue)}</td>
-                    </tr>
-                    <tr className="bg-gray-50">
-                      <td className="px-4 py-3 sm:px-6 font-semibold text-gray-800">Total Equity</td>
-                      <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(totalEquity)}</td>
-                    </tr>
-                    <tr className="bg-gray-900">
-                      <td className="px-4 py-4 sm:px-6 text-white font-bold uppercase text-xs tracking-wider">Total Liabilities + Equity</td>
-                      <td className="px-4 py-4 sm:px-6 text-right font-bold text-lg text-green-400">
-                        {formatCurrency(totalLiabilities + totalEquity)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden flex flex-col">
+                <div className="px-4 py-4 sm:px-6 border-b border-gray-200">
+                  <h2 className="text-base font-semibold text-gray-900">Liabilities &amp; Equity</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">{formatDate(searchToDate)}</p>
+                </div>
+                <div className="overflow-x-auto flex-grow">
+                  <table className="w-full text-left min-w-[360px]">
+                    <tbody className="divide-y divide-gray-200">
+                      <tr className="bg-gray-100">
+                        <td colSpan="2" className="px-4 py-3 sm:px-6 font-semibold text-gray-700 text-xs uppercase tracking-wider">
+                          Liabilities
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3 sm:px-6 text-gray-600">Accounts Payable</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(accountsPayableValue)}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3 sm:px-6 text-gray-600">Loans</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-right font-semibold text-gray-900">{formatCurrency(loansValue)}</td>
+                      </tr>
+                      <tr className="bg-gray-50">
+                        <td className="px-4 py-3 sm:px-6 font-semibold text-gray-800">Total Liabilities</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(totalLiabilities)}</td>
+                      </tr>
+                      <tr className="bg-gray-100">
+                        <td colSpan="2" className="px-4 py-3 sm:px-6 font-semibold text-gray-700 text-xs uppercase tracking-wider">
+                          Equity
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3 sm:px-6 text-gray-600">Owner Capital</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(ownerCapitalValue)}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3 sm:px-6 text-gray-600">Retained Earnings</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(retainedEarningsValue)}</td>
+                      </tr>
+                      <tr className="bg-gray-50 border-b">
+                        <td className="px-4 py-3 sm:px-6 font-semibold text-gray-800">Total Equity</td>
+                        <td className="px-4 py-3 sm:px-6 text-right font-semibold text-gray-900">{formatCurrency(totalEquity)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="bg-gray-900 px-4 py-5 sm:px-6 flex items-center justify-between border-t border-gray-800">
+                  <span className="text-white font-bold uppercase text-xs tracking-wider">Total Liabilities + Equity</span>
+                  <span className="text-right font-bold text-xl text-green-400 tabular-nums">
+                    {formatCurrency(totalLiabilities + totalEquity)}
+                  </span>
+                </div>
               </div>
             </div>
           </section>

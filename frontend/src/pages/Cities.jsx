@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
-import CityImportExport from '../components/CityImportExport';
+
 import BaseModal from '../components/BaseModal';
 import {
   useGetCitiesQuery,
@@ -286,11 +286,7 @@ export const Cities = () => {
         </div>
       </div>
 
-      {/* Import/Export Section */}
-      <CityImportExport 
-        onImportComplete={() => refetch()}
-        filters={queryParams}
-      />
+
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4">

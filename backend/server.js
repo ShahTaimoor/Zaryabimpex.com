@@ -56,10 +56,10 @@ app.use(requestLogger);
 
 // Global rate limiting - protect all API endpoints
 const { createRateLimiter } = require('./middleware/rateLimit');
-// General API rate limiter: 100 requests per minute per IP
+// General API rate limiter: 500 requests per minute per IP (increased to prevent dashboard 429s)
 app.use('/api', createRateLimiter({
   windowMs: 60000, // 1 minute
-  max: 100 // 100 requests per minute
+  max: 500 // 500 requests per minute
 }));
 // Auth endpoints: allow normal use (user list, profile, update). Login brute-force still limited by global /api limit.
 app.use('/api/auth', createRateLimiter({
@@ -197,6 +197,7 @@ app.use('/api/warehouses', require('./routes/warehouses'));
 app.use('/api/employees', require('./routes/employees'));
 app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/tills', require('./routes/tills'));
+app.use('/api/export-excel', require('./routes/exportManagement'));
 app.use('/api/investors', require('./routes/investors'));
 app.use('/api/drop-shipping', require('./routes/dropShipping'));
 app.use('/api/customer-balances', require('./routes/customerBalances'));

@@ -139,41 +139,6 @@ export const cashReceiptsApi = api.injectEndpoints({
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
-    exportExcel: builder.mutation({
-      query: (filters) => ({
-        url: 'cash-receipts/export/excel',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    exportCSV: builder.mutation({
-      query: (filters) => ({
-        url: 'cash-receipts/export/csv',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    exportPDF: builder.mutation({
-      query: (filters) => ({
-        url: 'cash-receipts/export/pdf',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    exportJSON: builder.mutation({
-      query: (filters) => ({
-        url: 'cash-receipts/export/json',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    downloadFile: builder.mutation({
-      query: (filename) => ({
-        url: `cash-receipts/download/${filename}`,
-        method: 'get',
-        responseType: 'blob',
-      }),
-    }),
   }),
   overrideExisting: false,
 });
@@ -186,10 +151,5 @@ export const {
   useUpdateCashReceiptMutation,
   useDeleteCashReceiptMutation,
   useCreateBatchCashReceiptsMutation,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useDownloadFileMutation,
 } = cashReceiptsApi;
 

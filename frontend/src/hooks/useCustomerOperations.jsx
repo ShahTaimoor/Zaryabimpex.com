@@ -78,6 +78,11 @@ export const useCustomerOperations = (refetch) => {
     });
   };
 
+  const handleAdd = () => {
+    setSelectedCustomer(null);
+    setIsModalOpen(true);
+  };
+
   return {
     selectedCustomer,
     isModalOpen,
@@ -86,6 +91,7 @@ export const useCustomerOperations = (refetch) => {
     deleting,
     setSelectedCustomer,
     setIsModalOpen,
+    handleAdd,
     handleEdit,
     handleCloseModal,
     handleSave,

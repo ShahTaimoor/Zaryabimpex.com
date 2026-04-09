@@ -5,8 +5,6 @@ import {
   TrendingUp,
   Percent,
   Calculator,
-  Download,
-  Share2,
   Eye,
   EyeOff,
   AlertCircle,
@@ -90,20 +88,7 @@ const PLStatementDetail = ({ statement, onExport, onShare }) => {
               >
                 {showDetails ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
-              <button
-                onClick={() => onExport(statement)}
-                className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                title="Export Statement"
-              >
-                <Download className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => onShare(statement)}
-                className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                title="Share Statement"
-              >
-                <Share2 className="h-5 w-5" />
-              </button>
+
             </div>
           </div>
         </div>

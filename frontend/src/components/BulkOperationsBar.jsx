@@ -7,7 +7,6 @@ import React from 'react';
 import { 
   Edit, 
   Trash2, 
-  Download, 
   Tag, 
   Package, 
   TrendingUp, 
@@ -24,14 +23,13 @@ export const BulkOperationsBar = ({
   canUndo,
   onBulkUpdate,
   onBulkDelete,
-  onBulkExport,
   onBulkStatusChange,
   onBulkCategoryChange,
   onBulkPriceUpdate,
   onBulkStockAdjust,
   onUndo,
   onClearSelection,
-  availableActions = ['update', 'delete', 'export', 'status', 'category', 'price', 'stock'],
+  availableActions = ['update', 'delete', 'status', 'category', 'price', 'stock'],
   className = ''
 }) => {
   if (selectedCount === 0 && !isOperationInProgress) {
@@ -145,18 +143,7 @@ export const BulkOperationsBar = ({
             </Button>
           )}
 
-          {availableActions.includes('export') && onBulkExport && (
-            <Button
-              onClick={onBulkExport}
-              disabled={isOperationInProgress}
-              variant="outline"
-              size="default"
-              className="flex items-center justify-center gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
-          )}
+
 
           {availableActions.includes('delete') && onBulkDelete && (
             <Button

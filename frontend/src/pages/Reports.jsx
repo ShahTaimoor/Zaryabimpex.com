@@ -1,28 +1,23 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
 import {
-  BarChart3,
   TrendingUp,
   Users,
   Package,
-  Download,
-  Printer,
-  Building2,
-  Wallet,
-  ArrowUpRight,
-  ArrowDownRight,
-  Filter,
   RefreshCcw,
   DollarSign,
   ShoppingBag,
   CheckCircle,
-  AlertTriangle,
   XCircle,
   Search,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FileSpreadsheet,
+  Printer,
+  Wallet,
+  Building2
 } from 'lucide-react';
+import ExcelExportButton from '../components/ExcelExportButton';
 import {
   useGetSalesReportQuery,
   useGetProductReportQuery,
@@ -36,9 +31,8 @@ import {
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { useGetCategoriesQuery } from '../store/services/categoriesApi';
 import DateFilter from '../components/DateFilter';
-import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 import PrintReportModal from '../components/PrintReportModal';
-import { Button } from '@/components/ui/button';
+import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 
 export const Reports = () => {
   const [activeTab, setActiveTab] = useState('party-balance');
@@ -48,8 +42,10 @@ export const Reports = () => {
   const [financialType, setFinancialType] = useState('trial-balance');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [inventoryProductSearch, setInventoryProductSearch] = useState('');
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   /** Party Balances table: client-side paging */
   const [partyBalancePage, setPartyBalancePage] = useState(1);
+  const [partyBalancePageSize, setPartyBalancePageSize] = useState(50);
   const [partyPageSize, setPartyPageSize] = useState(50);
   const PARTY_PAGE_SIZES = [50, 100, 200, 500];
   /** Inventory table paging for Stock Summary / Current Stock / Stock Valuation */
@@ -69,140 +65,15 @@ export const Reports = () => {
   });
   const [selectedBankIds, setSelectedBankIds] = useState([]);
 
-  // Print Modal State
-  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-
-  const formatDateStamp = () => new Date().toISOString().slice(0, 10);
-
-  const downloadExcel = (filename, headers, rows) => {
-    const normalizedRows = rows.map((row) => {
-      const out = {};
-      headers.forEach((header, idx) => {
-        out[header] = row[idx] ?? '';
-      });
-      return out;
-    });
-    const worksheet = XLSX.utils.json_to_sheet(normalizedRows, { header: headers });
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Report');
-    XLSX.writeFile(workbook, filename);
+  const handleRefresh = () => {
+    refetchSummary();
+    if (activeTab === 'party-balance') refetchParty();
+    if (activeTab === 'sales') refetchSales();
+    if (activeTab === 'inventory') refetchInventory();
+    if (activeTab === 'financial') refetchFinancial();
+    if (activeTab === 'bank-cash') refetchBankCash();
   };
 
-  const handleExport = () => {
-    let headers = [];
-    let bodyRows = [];
-    let filename = `${activeTab}-report-${formatDateStamp()}.xlsx`;
-
-    if (activeTab === 'party-balance') {
-      const rows = partyReportData?.data || [];
-      if (!rows.length) return toast.error(`No ${partyType} data to export.`);
-      headers = ['S.NO', 'Party Name', 'Contact', 'City', 'Opening Balance', 'Ledger Debit', 'Ledger Credit', 'Net Balance'];
-      bodyRows = rows.map((r, idx) => [
-        idx + 1, r.businessName || r.name || '', r.contactPerson || '', r.city || '',
-        r.openingBalance ?? 0, r.totalDebit || 0, r.totalCredit || 0, r.balance || 0
-      ]);
-      filename = `${partyType}-balances-${formatDateStamp()}.xlsx`;
-    } else if (activeTab === 'sales') {
-      const rows = salesReportData?.data || [];
-      if (!rows.length) return toast.error('No sales data to export.');
-      filename = `sales-${salesGroupBy}-${formatDateStamp()}.xlsx`;
-      if (salesGroupBy === 'daily') {
-        headers = ['Date', 'Orders', 'Subtotal', 'Discount', 'Net Total'];
-        bodyRows = rows.map((r) => [r.date ? new Date(r.date).toLocaleDateString() : '', r.totalOrders || 0, r.subtotal || 0, r.discount || 0, r.total || 0]);
-      } else if (salesGroupBy === 'monthly') {
-        headers = ['Month', 'Orders', 'Revenue'];
-        bodyRows = rows.map((r) => [r.month || '', r.totalOrders || 0, r.total || 0]);
-      } else if (salesGroupBy === 'product') {
-        headers = ['Product', 'SKU', 'Qty Sold', 'Revenue'];
-        bodyRows = rows.map((r) => [r.productName || '', r.sku || '', r.totalQuantity || 0, r.totalRevenue || 0]);
-      } else if (salesGroupBy === 'category') {
-        headers = ['Category', 'Items Sold', 'Revenue'];
-        bodyRows = rows.map((r) => [r.categoryName || '', r.itemCount || 0, r.totalRevenue || 0]);
-      } else if (salesGroupBy === 'city') {
-        headers = ['City', 'Orders', 'Revenue'];
-        bodyRows = rows.map((r) => [r.city || '', r.totalOrders || 0, r.totalRevenue || 0]);
-      } else {
-        headers = ['Invoice #', 'Date', 'Customer', 'Total', 'Status', 'Method'];
-        bodyRows = rows.map((r) => [r.invoiceNo || '', r.date ? new Date(r.date).toLocaleDateString() : '', r.customerName || r.name || '', r.total || 0, r.status || '', r.method || '']);
-      }
-    } else if (activeTab === 'inventory') {
-      const rows = inventoryReportData?.data || [];
-      const summary = inventoryReportData?.summary || {};
-      if (!rows.length) return toast.error('No inventory data to export.');
-      filename = `inventory-${inventoryType}-${formatDateStamp()}.xlsx`;
-      if (inventoryType === 'stock-summary') {
-        headers = ['S.NO', 'Product Name', 'Last Purchase Price', 'Opening Qty', 'Opening Amount', 'Purchase Qty', 'Purchase Amount', 'Purchase Return Qty', 'Purchase Return Amount', 'Sale Qty', 'Sale Amount', 'Sale Return Qty', 'Sale Return Amount', 'Damage Qty', 'Damage Amount', 'Closing Qty', 'Current Stock', 'Reconcile Delta', 'Closing Amount', 'Retail Valuation', 'Sale Price1'];
-        bodyRows = rows.map((r, idx) => [idx + 1, r.name || '', r.lastPurchasePrice || 0, r.openingQty || 0, r.openingAmount || 0, r.purchaseQty || 0, r.purchaseAmount || 0, r.purchaseReturnQty || 0, r.purchaseReturnAmount || 0, r.saleQty || 0, r.saleAmount || 0, r.saleReturnQty || 0, r.saleReturnAmount || 0, r.damageQty || 0, r.damageAmount || 0, r.closingQty || 0, r.currentStock || 0, r.reconciliationDelta || 0, r.closingAmount || 0, r.retailValuation || 0, r.salePrice1 || 0]);
-        bodyRows.push(['', 'Grand Total', '', summary.openingQty || 0, summary.openingAmount || 0, summary.purchaseQty || 0, summary.purchaseAmount || 0, summary.purchaseReturnQty || 0, summary.purchaseReturnAmount || 0, summary.saleQty || 0, summary.saleAmount || 0, summary.saleReturnQty || 0, summary.saleReturnAmount || 0, summary.damageQty || 0, summary.damageAmount || 0, summary.closingQty || 0, summary.totalCurrentStock || 0, summary.totalReconciliationDelta || 0, summary.closingAmount || 0, summary.totalRetailValuation || 0, '']);
-      } else if (inventoryType === 'valuation') {
-        headers = ['Product Name', 'SKU', 'Category', 'Stock', 'Cost Price', 'Valuation', 'Retail Valuation'];
-        bodyRows = rows.map((r) => [r.name || '', r.sku || '', r.categoryName || '', r.stockQuantity || 0, r.costPrice || 0, r.valuation || 0, r.retailValuation || 0]);
-      } else {
-        headers = ['Product Name', 'SKU', 'Category', 'Stock', 'Min Level', ...(inventoryType === 'low-stock' ? ['Status'] : [])];
-        bodyRows = rows.map((r) => [r.name || '', r.sku || '', r.categoryName || '', r.stockQuantity || 0, r.minStockLevel || 0, ...(inventoryType === 'low-stock' ? [r.stockQuantity <= r.minStockLevel ? 'Low Stock' : 'Normal'] : [])]);
-      }
-    } else if (activeTab === 'financial') {
-      const rows = financialReportData?.data || [];
-      if (!rows.length) return toast.error('No financial data to export.');
-      filename = `financial-${financialType}-${formatDateStamp()}.xlsx`;
-      if (financialType === 'trial-balance') {
-        headers = ['Code', 'Account Name', 'Debit Balance', 'Credit Balance'];
-        bodyRows = rows.map((r) => [r.accountCode || '', r.accountName || '', r.debitBalance || 0, r.creditBalance || 0]);
-      } else if (financialType === 'pl-statement') {
-        headers = ['Category', 'Account', 'Type', 'Amount'];
-        bodyRows = rows.map((r) => [r.category || '', r.accountName || '', r.accountType || '', r.amount || 0]);
-      } else {
-        headers = ['Type', 'Category', 'Account', 'Balance'];
-        bodyRows = rows.map((r) => [r.accountType || '', r.category || '', r.accountName || '', r.balance || 0]);
-      }
-    } else if (activeTab === 'bank-cash') {
-      const rows = bankCashSummaryData?.banks || [];
-      if (!rows.length) return toast.error('No bank/cash data to export.');
-      filename = `bank-cash-${formatDateStamp()}.xlsx`;
-      const bankSheetRows = rows.map((r) => ({
-        Bank: r.bankName || '',
-        Account: r.accountNumber || r.accountName || '',
-        Opening: r.openingBalance || 0,
-        Receipts: r.totalReceipts || 0,
-        Payments: r.totalPayments || 0,
-        Balance: r.balance || 0
-      }));
-      bankSheetRows.push({
-        Bank: 'TOTAL',
-        Account: '',
-        Opening: bankCashSummaryData?.totals?.totalBankOpening || 0,
-        Receipts: bankCashSummaryData?.totals?.totalBankReceipts || 0,
-        Payments: bankCashSummaryData?.totals?.totalBankPayments || 0,
-        Balance: bankCashSummaryData?.totals?.totalBankBalance || 0
-      });
-
-      const cashSheetRows = [{
-        Metric: 'Cash Opening Balance',
-        Value: bankCashSummaryData?.cash?.openingBalance || 0
-      }, {
-        Metric: 'Cash Receipts',
-        Value: bankCashSummaryData?.cash?.totalReceipts || 0
-      }, {
-        Metric: 'Cash Payments',
-        Value: bankCashSummaryData?.cash?.totalPayments || 0
-      }, {
-        Metric: 'Cash Balance',
-        Value: bankCashSummaryData?.cash?.balance || 0
-      }];
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(bankSheetRows), 'Bank Balance');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(cashSheetRows), 'Cash Balance');
-      XLSX.writeFile(workbook, filename);
-      toast.success('Report exported to Excel.');
-      return;
-    } else {
-      return toast.error('No report data available for export.');
-    }
-
-    downloadExcel(filename, headers, bodyRows);
-    toast.success('Report exported to Excel.');
-  };
 
   // Fetch Summary Cards
   const { 
@@ -360,14 +231,7 @@ export const Reports = () => {
   const { data: categoriesData } = useGetCategoriesQuery({ limit: 999999 });
   const categories = categoriesData?.categories || [];
 
-  const handleRefresh = () => {
-    refetchSummary();
-    if (activeTab === 'party-balance') refetchParty();
-    if (activeTab === 'sales') refetchSales();
-    if (activeTab === 'inventory') refetchInventory();
-    if (activeTab === 'financial') refetchFinancial();
-    if (activeTab === 'bank-cash') refetchBankCash();
-  };
+
 
   const summary = summaryData || {};
   const handleToggleBank = (bankId) => {
@@ -617,7 +481,7 @@ export const Reports = () => {
     if (activeTab === 'inventory') {
       const base = {
         'Total Items': inventoryReportData?.summary?.totalItems || 0,
-        'Total Valuation': inventoryReportData?.summary?.totalValuation || 0,
+        'Total Cost': inventoryReportData?.summary?.totalCost || 0,
         'In Stock': inventoryReportData?.summary?.inStockCount || 0,
         'Out of Stock': inventoryReportData?.summary?.outOfStockCount || 0
       };
@@ -671,13 +535,164 @@ export const Reports = () => {
     if (activeTab === 'party-balance') return 'Current Total';
     if (activeTab === 'sales') return 'In Selected Period';
     if (activeTab === 'inventory') {
-      if (title === 'Total Valuation') return 'Cost Price';
+      if (title === 'Total Cost') return 'Cost Price';
       if (title === 'Wholesale Valuation') return 'Wholesale Price';
       if (title === 'Retail Valuation') return 'Retail Price';
       return 'Current Status';
     }
     if (activeTab === 'bank-cash') return 'Current Total';
     return '';
+  };
+
+  const getExportData = () => {
+    const reportTitle = getReportTitle();
+    const data = getReportData();
+    let columns = [];
+
+    // Map UI columns to ExcelJS columns
+    switch (activeTab) {
+      case 'party-balance':
+        columns = [
+          { header: 'Party Name', key: 'businessName', width: 35 },
+          { header: 'City', key: 'city', width: 15 },
+          { header: 'Opening Bal.', key: 'openingBalance', width: 15, type: 'currency' },
+          { header: 'Ledger Dr', key: 'totalDebit', width: 15, type: 'currency' },
+          { header: 'Ledger Cr', key: 'totalCredit', width: 15, type: 'currency' },
+          { header: 'Net Balance', key: 'balance', width: 20, type: 'currency' }
+        ];
+        break;
+      case 'sales':
+        if (salesGroupBy === 'daily') {
+          columns = [
+            { header: 'Date', key: 'date', width: 15 },
+            { header: 'Orders', key: 'totalOrders', width: 10, type: 'number' },
+            { header: 'Subtotal', key: 'subtotal', width: 15, type: 'currency' },
+            { header: 'Discount', key: 'discount', width: 15, type: 'currency' },
+            { header: 'Net Total', key: 'total', width: 15, type: 'currency' }
+          ];
+        } else if (salesGroupBy === 'product') {
+          columns = [
+            { header: 'Product', key: 'productName', width: 40 },
+            { header: 'SKU', key: 'sku', width: 15 },
+            { header: 'Qty Sold', key: 'totalQuantity', width: 12, type: 'number' },
+            { header: 'Revenue', key: 'totalRevenue', width: 15, type: 'currency' }
+          ];
+        } else {
+            columns = [
+                { header: 'Group', key: salesGroupBy === 'monthly' ? 'month' : salesGroupBy === 'category' ? 'categoryName' : 'name', width: 25 },
+                { header: 'Orders/Items', key: 'totalOrders', width: 15, type: 'number' },
+                { header: 'Revenue', key: 'totalRevenue', width: 20, type: 'currency' }
+            ];
+        }
+        break;
+      case 'inventory':
+        if (inventoryType === 'stock-summary') {
+          columns = [
+            { header: 'Product Name', key: 'name', width: 40 },
+            { header: 'SKU', key: 'sku', width: 15 },
+            { header: 'Category', key: 'categoryName', width: 20 },
+            { header: 'Op. Qty', key: 'openingQty', width: 12, type: 'number' },
+            { header: 'Op. Amount', key: 'openingAmount', width: 15, type: 'currency' },
+            { header: 'Purchase Qty', key: 'purchaseQty', width: 12, type: 'number' },
+            { header: 'Purchase Amt', key: 'purchaseAmount', width: 15, type: 'currency' },
+            { header: 'Sale Qty', key: 'saleQty', width: 12, type: 'number' },
+            { header: 'Sale Amt', key: 'saleAmount', width: 15, type: 'currency' },
+            { header: 'Current Stock', key: 'currentStock', width: 15, type: 'number' },
+            { header: 'Last Pur. Price', key: 'lastPurchasePrice', width: 15, type: 'currency' },
+            { header: 'Closing Amt', key: 'closingAmount', width: 15, type: 'currency' }
+          ];
+        } else {
+          columns = [
+            { header: 'Product Name', key: 'name', width: 40 },
+            { header: 'SKU', key: 'sku', width: 15 },
+            { header: 'Category', key: 'categoryName', width: 20 },
+            { header: 'Stock', key: 'stockQuantity', width: 12, type: 'number' },
+            { header: 'Cost Price', key: 'costPrice', width: 15, type: 'currency' },
+            { header: 'Valuation', key: 'valuation', width: 15, type: 'currency' }
+          ];
+        }
+        break;
+      case 'financial':
+        if (reportType === 'trial-balance') {
+          columns = [
+            { header: 'Account Name', key: 'accountName', width: 35 },
+            { header: 'Category', key: 'category', width: 20 },
+            { header: 'Debit', key: 'debitBalance', width: 20, type: 'currency' },
+            { header: 'Credit', key: 'creditBalance', width: 20, type: 'currency' }
+          ];
+        } else {
+          columns = [
+            { header: 'Account Name', key: 'accountName', width: 35 },
+            { header: 'Category', key: 'category', width: 20 },
+            { header: 'Amount/Balance', key: 'amount', width: 20, type: 'currency' }
+          ];
+          if (reportType === 'balance-sheet') {
+            columns[2].key = 'balance';
+          }
+        }
+        break;
+       case 'bank-cash':
+         columns = [
+           { header: 'Bank Name', key: 'bankName', width: 30 },
+           { header: 'Account', key: 'accountNumber', width: 25 },
+           { header: 'Opening', key: 'openingBalance', width: 15, type: 'currency' },
+           { header: 'Receipts', key: 'totalReceipts', width: 15, type: 'currency' },
+           { header: 'Payments', key: 'totalPayments', width: 15, type: 'currency' },
+           { header: 'Balance', key: 'balance', width: 20, type: 'currency' }
+         ];
+         break;
+    }
+
+    return {
+      title: reportTitle,
+      filename: `${reportTitle.replace(/ /g, '_')}_${new Date().toLocaleDateString()}.xlsx`,
+      columns,
+      data: data.map(item => ({
+          ...item,
+          name: item.businessName || item.name || item.accountName || item.productName || item.bankName
+      })),
+      summary: (() => {
+          if (activeTab === 'inventory' && inventoryType === 'stock-summary') {
+              return {
+                  rows: [
+                      {
+                          label: 'GRAND TOTAL:',
+                          name: `${data.length} Items`,
+                          openingQty: inventoryReportData?.summary?.totalOpeningQty || 0,
+                          openingAmount: inventoryReportData?.summary?.totalOpeningAmount || 0,
+                          purchaseQty: inventoryReportData?.summary?.totalPurchaseQty || 0,
+                          purchaseAmount: inventoryReportData?.summary?.totalPurchaseAmount || 0,
+                          purchaseReturnQty: inventoryReportData?.summary?.totalPurchaseReturnQty || 0,
+                          purchaseReturnAmount: inventoryReportData?.summary?.totalPurchaseReturnAmount || 0,
+                          saleQty: inventoryReportData?.summary?.totalSaleQty || 0,
+                          saleAmount: inventoryReportData?.summary?.totalSaleAmount || 0,
+                          saleReturnQty: inventoryReportData?.summary?.totalSaleReturnQty || 0,
+                          saleReturnAmount: inventoryReportData?.summary?.totalSaleReturnAmount || 0,
+                          damageQty: inventoryReportData?.summary?.totalDamageQty || 0,
+                          damageAmount: inventoryReportData?.summary?.totalDamageAmount || 0,
+                          closingQty: inventoryReportData?.summary?.totalClosingQty || 0,
+                          closingAmount: inventoryReportData?.summary?.totalCost || 0,
+                          currentStock: inventoryReportData?.summary?.totalCurrentStock || 0
+                      }
+                  ]
+              };
+          }
+          if (activeTab === 'party-balance') {
+              return {
+                  rows: [
+                      {
+                          label: 'GRAND TOTAL:',
+                          openingBalance: partyReportData?.summary?.totalOpeningBalance || 0,
+                          totalDebit: partyReportData?.summary?.totalDebit || 0,
+                          totalCredit: partyReportData?.summary?.totalCredit || 0,
+                          balance: (partyType === 'customer' ? partyReportData?.totalCustomerBalance : partyReportData?.totalSupplierBalance) || 0
+                      }
+                  ]
+              };
+          }
+          return null;
+      })()
+    };
   };
 
   return (
@@ -710,20 +725,18 @@ export const Reports = () => {
             <RefreshCcw className={`h-5 w-5 ${(summaryLoading || partyLoading || salesLoading || inventoryLoading || financialLoading || bankCashLoading) ? 'animate-spin' : ''}`} />
           </button>
           
-          <Button
+          <ExcelExportButton 
+            getData={getExportData} 
+            label="Export Report"
+            className="border-indigo-200 bg-white text-indigo-700 hover:border-indigo-500 hover:bg-indigo-50 transition-all font-semibold"
+          />
+          <button
             onClick={() => setIsPrintModalOpen(true)}
-            variant="secondary"
-            className="flex items-center gap-2"
-            title="Open PDF/Print preview"
+            className="flex items-center gap-2 px-4 py-2 border border-blue-200 bg-white text-blue-700 hover:border-blue-500 hover:bg-blue-50 transition-all font-semibold rounded-lg text-sm h-9"
           >
             <Printer className="h-4 w-4" />
-            <span className="hidden sm:inline">PDF</span>
-          </Button>
-
-          <Button onClick={handleExport} variant="default" className="flex items-center gap-2">
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Export</span>
-          </Button>
+            Print Report
+          </button>
         </div>
       </div>
 
@@ -1211,17 +1224,62 @@ export const Reports = () => {
                       <tr>
                         <td colSpan={getColumns().length} className="px-6 py-10 text-center text-gray-500">No financial data found for the selected period</td>
                       </tr>
-                    ) : (
-                      financialReportData?.data?.map((row, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                          {getColumns().map((col, colIdx) => (
-                            <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                              {col.render ? col.render(row) : row[col.key]}
-                            </td>
+                      ) : (
+                        <>
+                          {financialReportData?.data?.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                              {getColumns().map((col, colIdx) => (
+                                <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
+                                  {col.render ? col.render(row) : row[col.key]}
+                                </td>
+                              ))}
+                            </tr>
                           ))}
-                        </tr>
-                      ))
-                    )}
+                          {financialReportData?.summary && (
+                            <>
+                              {financialType === 'trial-balance' && (
+                                <tr className="bg-gray-900 border-t-2 border-gray-800">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white uppercase">Grand Total</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white text-right"></td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
+                                    {(financialReportData.summary.totalDebit || 0).toLocaleString()}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
+                                    {(financialReportData.summary.totalCredit || 0).toLocaleString()}
+                                  </td>
+                                </tr>
+                              )}
+                              {financialType === 'pl-statement' && (
+                                <tr className="bg-gray-900 border-t-2 border-gray-800">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white uppercase">Net Profit / Loss</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white text-right"></td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
+                                    {(financialReportData.summary.netProfit || 0).toLocaleString()}
+                                  </td>
+                                </tr>
+                              )}
+                              {financialType === 'balance-sheet' && (
+                                <>
+                                  <tr className="bg-gray-900 border-t-2 border-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white uppercase">Total Assets</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white text-right"></td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
+                                      {(financialReportData.summary.totalAssets || 0).toLocaleString()}
+                                    </td>
+                                  </tr>
+                                  <tr className="bg-gray-900 border-t border-gray-800">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white uppercase">Total Liabilities + Equity</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white text-right"></td>
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
+                                      {((financialReportData.summary.totalLiabilities || 0) + (financialReportData.summary.totalEquity || 0)).toLocaleString()}
+                                    </td>
+                                  </tr>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </>
+                      )}
                   </tbody>
                 </table>
               </div>

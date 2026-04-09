@@ -22,11 +22,7 @@ import {
 import {
   useCreatePurchaseInvoiceMutation,
   useUpdatePurchaseInvoiceMutation,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useDownloadFileMutation,
+
 } from '../store/services/purchaseInvoicesApi';
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import { toast } from 'sonner';
@@ -64,13 +60,8 @@ import {
 } from '../utils/dualUnitUtils';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { getLocalDateString } from '../utils/dateUtils';
-import {
-  presentPdfExportBlob,
-  presentNonPdfExportDownload,
-  unwrapExportDownloadBlob,
-  notifyExportDownloadCatchError,
-} from '../utils/exportReportPresentation';
-import ExportReportModal from '../components/ExportReportModal';
+
+
 import AsyncErrorBoundary from '../components/AsyncErrorBoundary';
 import { useResponsive } from '../components/ResponsiveContainer';
 import { ProductSearch as SharedSalesProductSearch } from '../components/sales/ProductSearch';
@@ -282,8 +273,6 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove, o
                 onUpdateQuantity(item.product?._id, newQuantity, ppb ? { boxes, pieces } : undefined);
               }}
               min={1}
-              max={product.inventory?.currentStock || 999999}
-              stockPiecesForRemaining={product.inventory?.currentStock ?? 0}
               showRemainingAfterSale={false}
               showPiecesUnitLabel={false}
               showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
@@ -347,9 +336,10 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
       selectedCustomer={null}
       showCostPrice={false}
       hasCostPricePermission={false}
-      priceType="wholesale"
+      priceType="cost"
       dualUnitShowBoxInput={dualUnitShowBoxInputEnabled}
       dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
+      allowOutOfStock
       onRefetchReady={onRefetchReady}
     />
   );
@@ -406,33 +396,11 @@ export const Purchase = ({ tabId, editData }) => {
   const [showReceiptLabelPrinter, setShowReceiptLabelPrinter] = useState(false);
   const [receiptLabelProducts, setReceiptLabelProducts] = useState([]);
 
-  // Export modal state
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [exportFormat, setExportFormat] = useState('pdf');
-  const [isExporting, setIsExporting] = useState(false);
 
-  // Calculate default date range (one month ago to today)
-  const getDefaultDateRange = () => {
-    const today = new Date();
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(today.getMonth() - 1);
 
-    const formatDate = (date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    };
 
-    return {
-      from: formatDate(oneMonthAgo),
-      to: formatDate(today)
-    };
-  };
 
-  const defaultDateRange = getDefaultDateRange();
-  const [exportDateFrom, setExportDateFrom] = useState(defaultDateRange.from);
-  const [exportDateTo, setExportDateTo] = useState(defaultDateRange.to);
+
 
   const { updateTabTitle, getActiveTab, openTab } = useTab();
 
@@ -443,11 +411,7 @@ export const Purchase = ({ tabId, editData }) => {
   const [searchSuppliers, { data: suppliersSearchResult, isLoading: suppliersLoading, refetch: refetchSuppliers }] = useLazySearchSuppliersQuery();
   const [createPurchaseInvoice] = useCreatePurchaseInvoiceMutation();
   const [updatePurchaseInvoice] = useUpdatePurchaseInvoiceMutation();
-  const [exportExcel] = useExportExcelMutation();
-  const [exportCSV] = useExportCSVMutation();
-  const [exportPDF] = useExportPDFMutation();
-  const [exportJSON] = useExportJSONMutation();
-  const [downloadFile] = useDownloadFileMutation();
+
 
   // Focus on supplier selection field when component mounts
   useEffect(() => {
@@ -912,14 +876,6 @@ export const Purchase = ({ tabId, editData }) => {
       const pieces =
         cartItem.pieces != null ? cartItem.pieces : piecesToBoxesAndPieces(cartItem.quantity, ppb).pieces;
       const total = computeTotalPieces(boxes, pieces, ppb);
-      const availableStock = cartItem.product.inventory?.currentStock || 0;
-
-      if (total > availableStock) {
-        toast.error(
-          `Cannot set quantity to ${total} pcs. Only ${availableStock} units available in stock.`
-        );
-        return prevItems;
-      }
 
       if (total <= 0) {
         return prevItems.filter((item) => item.product?._id !== productId);
@@ -970,77 +926,7 @@ export const Purchase = ({ tabId, editData }) => {
     });
   };
 
-  const handleExport = () => {
-    setShowExportModal(true);
-  };
 
-  const handleExportConfirm = async () => {
-    setIsExporting(true);
-    try {
-      // Build filters based on current view (if any filters exist)
-      const filters = {
-        // Include supplier filter if a supplier is selected
-        ...(selectedSupplier?._id && { supplier: selectedSupplier._id }),
-        // Include date range if selected
-        ...(exportDateFrom && { dateFrom: exportDateFrom }),
-        ...(exportDateTo && { dateTo: exportDateTo }),
-      };
-
-      let response;
-      if (exportFormat === 'excel') {
-        response = await exportExcel(filters).unwrap();
-      } else if (exportFormat === 'csv') {
-        response = await exportCSV(filters).unwrap();
-      } else if (exportFormat === 'json') {
-        response = await exportJSON(filters).unwrap();
-      } else if (exportFormat === 'pdf') {
-        response = await exportPDF(filters).unwrap();
-      }
-
-      if (response?.filename || response?.data?.filename) {
-        const filename = response.filename || response.data.filename;
-
-        try {
-          // Add a small delay to ensure file is written (PDF generation is async)
-          if (exportFormat === 'pdf') {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-
-          // Download the file
-          let downloadResponse;
-          try {
-            downloadResponse = await downloadFile(filename).unwrap();
-          } catch (downloadErr) {
-            notifyExportDownloadCatchError(downloadErr, (m) => toast.error(m));
-            return;
-          }
-
-          if (downloadResponse == null) {
-            toast.error('Download failed: No data received from server');
-            return;
-          }
-
-          const notifyPdf = { error: (m) => toast.error(m), success: (m) => toast.success(m) };
-
-          if (exportFormat === 'pdf') {
-            presentPdfExportBlob(unwrapExportDownloadBlob(downloadResponse), filename, notifyPdf);
-          } else {
-            presentNonPdfExportDownload(downloadResponse, exportFormat, filename, (msg) => toast.success(msg));
-          }
-
-          setShowExportModal(false);
-        } catch (downloadError) {
-          notifyExportDownloadCatchError(downloadError, (m) => toast.error(m));
-        }
-      } else {
-        toast.error('Export failed: No filename received');
-      }
-    } catch (error) {
-      toast.error('Failed to export purchase data: ' + (error?.data?.message || error?.message || 'Unknown error'));
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   const handleProcessPurchase = useCallback(() => {
     if (purchaseItems.length === 0) {
@@ -1135,15 +1021,7 @@ export const Purchase = ({ tabId, editData }) => {
             <p className="text-gray-600">Process purchase transactions</p>
           </div>
           <div className="flex items-center space-x-2">
-            <Button
-              onClick={handleExport}
-              variant="secondary"
-              size="default"
-              title="Export Purchase Report"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export Purchase Report
-            </Button>
+
             <Button
               onClick={() => {
                 const componentInfo = getComponentInfo('/purchase');
@@ -1315,7 +1193,13 @@ export const Purchase = ({ tabId, editData }) => {
               </Button>
             ) : null
           }
-          searchSection={<ProductSearch onAddProduct={addToPurchase} onRefetchReady={setRefetchProducts} />}
+          searchSection={
+            <ProductSearch
+              onAddProduct={addToPurchase}
+              onRefetchReady={setRefetchProducts}
+              allowOutOfStock
+            />
+          }
           isEmpty={purchaseItems.length === 0}
           emptyIcon={Package}
           emptyText="No items in cart"
@@ -1943,30 +1827,7 @@ export const Purchase = ({ tabId, editData }) => {
           />
         )}
 
-        <ExportReportModal
-          isOpen={showExportModal}
-          onClose={() => {
-            setShowExportModal(false);
-            setExportDateFrom('');
-            setExportDateTo('');
-          }}
-          title="Export Purchase Report"
-          format={exportFormat}
-          onFormatChange={setExportFormat}
-          dateFrom={exportDateFrom}
-          dateTo={exportDateTo}
-          onDateFromChange={setExportDateFrom}
-          onDateToChange={setExportDateTo}
-          onResetDates={() => {
-            setExportDateFrom('');
-            setExportDateTo('');
-          }}
-          showDateResetLink={Boolean(exportDateFrom || exportDateTo)}
-          dateResetLinkLabel="Clear dates"
-          onConfirm={handleExportConfirm}
-          isExporting={isExporting}
-          namePrefix="purchase-export-format"
-        />
+
       </div>
     </AsyncErrorBoundary>
   );

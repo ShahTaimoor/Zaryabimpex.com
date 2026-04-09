@@ -219,6 +219,11 @@ export const useProductOperations = (products, refetch) => {
     }
   };
 
+  const handleAdd = () => {
+    setSelectedProduct(null);
+    setIsModalOpen(true);
+  };
+
   return {
     selectedProduct,
     isModalOpen,
@@ -231,6 +236,7 @@ export const useProductOperations = (products, refetch) => {
     setIsModalOpen,
     setSelectedProductForInvestors,
     setIsInvestorsModalOpen,
+    handleAdd,
     handleEdit,
     handleEditExisting,
     handleCloseModal,

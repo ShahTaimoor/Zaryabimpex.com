@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { Search, Download, RefreshCw } from 'lucide-react';
+import { Search, RefreshCw } from 'lucide-react';
 import { useGetDebugDashboardQuery, useGetLedgerIntegrityQuery, useGetChartOfAccountsDebugQuery, useGetAccountLedgerDebugQuery, useGetCustomerBalanceDebugQuery, useGetSupplierBalanceDebugQuery, useGetSalesOrderDebugQuery, useGetSaleTransactionDebugQuery, useGetPurchaseOrderDebugQuery, useGetPurchaseTransactionDebugQuery, useGetCashReceiptDebugQuery, useGetCashPaymentDebugQuery, useGetBankReceiptDebugQuery, useGetBankPaymentDebugQuery, useGetBalanceSheetDebugQuery, useGetPostingLogQuery, useGetAuditResultsQuery, useGetDebitCreditValidationQuery } from '../../store/services/accountingDebugApi';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 
@@ -74,32 +74,7 @@ export default function AccountingDebugPage() {
     refetchDebitCredit();
   };
 
-  const exportJson = () => {
-    let obj = {};
-    if (effectiveSection === 'dashboard' && dashboardData?.data?.data) obj = dashboardData.data.data;
-    if (effectiveSection === 'ledger-integrity' && integrityData?.data?.data) obj = integrityData.data.data;
-    if (effectiveSection === 'chart-of-accounts' && coaData?.data?.data) obj = coaData.data.data;
-    if (effectiveSection === 'account-ledger' && ledgerData?.data?.data) obj = ledgerData.data.data;
-    if (effectiveSection === 'customer-balance' && customerData?.data?.data) obj = customerData.data.data;
-    if (effectiveSection === 'supplier-balance' && supplierData?.data?.data) obj = supplierData.data.data;
-    if (effectiveSection === 'sales-order' && salesOrderData?.data?.data) obj = salesOrderData.data.data;
-    if (effectiveSection === 'sale-transaction' && saleTxnData?.data?.data) obj = saleTxnData.data.data;
-    if (effectiveSection === 'purchase-order' && purchaseOrderData?.data?.data) obj = purchaseOrderData.data.data;
-    if (effectiveSection === 'purchase-transaction' && purchaseTxnData?.data?.data) obj = purchaseTxnData.data.data;
-    if (effectiveSection === 'cash-receipt' && cashReceiptData?.data?.data) obj = cashReceiptData.data.data;
-    if (effectiveSection === 'cash-payment' && cashPaymentData?.data?.data) obj = cashPaymentData.data.data;
-    if (effectiveSection === 'bank-receipt' && bankReceiptData?.data?.data) obj = bankReceiptData.data.data;
-    if (effectiveSection === 'bank-payment' && bankPaymentData?.data?.data) obj = bankPaymentData.data.data;
-    if (effectiveSection === 'balance-sheet' && balanceSheetData?.data?.data) obj = balanceSheetData.data.data;
-    if (effectiveSection === 'posting-log' && postingLogData?.data?.data) obj = postingLogData.data.data;
-    if (effectiveSection === 'audit-results' && auditData?.data?.data) obj = auditData.data.data;
-    if (effectiveSection === 'debit-credit-validation' && debitCreditData?.data?.data) obj = debitCreditData.data.data;
-    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `debug-${effectiveSection}-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-  };
+
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -109,10 +84,6 @@ export default function AccountingDebugPage() {
           <button onClick={refetchAll} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2">
             <RefreshCw className="h-4 w-4" />
             Refresh All
-          </button>
-          <button onClick={exportJson} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-2">
-            <Download className="h-4 w-4" />
-            Export JSON
           </button>
         </div>
       </div>

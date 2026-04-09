@@ -217,41 +217,6 @@ export const purchaseInvoicesApi = api.injectEndpoints({
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
     }),
-    exportExcel: builder.mutation({
-      query: (filters) => ({
-        url: 'purchase-invoices/export/excel',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    exportCSV: builder.mutation({
-      query: (filters) => ({
-        url: 'purchase-invoices/export/csv',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    exportPDF: builder.mutation({
-      query: (filters) => ({
-        url: 'purchase-invoices/export/pdf',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    exportJSON: builder.mutation({
-      query: (filters) => ({
-        url: 'purchase-invoices/export/json',
-        method: 'post',
-        data: { filters },
-      }),
-    }),
-    downloadFile: builder.mutation({
-      query: (filename) => ({
-        url: `purchase-invoices/download/${filename}`,
-        method: 'get',
-        responseType: 'blob',
-      }),
-    }),
     syncPurchaseInvoicesLedger: builder.mutation({
       query: (params = {}) => ({
         url: 'purchase-invoices/sync-ledger',
@@ -291,11 +256,6 @@ export const {
   useDeletePurchaseInvoiceMutation,
   useConfirmPurchaseInvoiceMutation,
   useCancelPurchaseInvoiceMutation,
-  useExportExcelMutation,
-  useExportCSVMutation,
-  useExportPDFMutation,
-  useExportJSONMutation,
-  useDownloadFileMutation,
   useSyncPurchaseInvoicesLedgerMutation,
 } = purchaseInvoicesApi;
 

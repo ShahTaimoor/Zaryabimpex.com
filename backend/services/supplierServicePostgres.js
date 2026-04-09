@@ -7,20 +7,26 @@ const chartOfAccountsRepository = require('../repositories/postgres/ChartOfAccou
  */
 function mapSupplierForResponse(supplier) {
   if (!supplier) return supplier;
-  const contactPersonValue = supplier.contact_person || supplier.contactPerson?.name;
-  const companyName = supplier.company_name ?? supplier.companyName;
-  const businessName = supplier.business_name ?? supplier.businessName;
-  const name = supplier.name;
-  const displayName = businessName || companyName || name || 'Unknown Supplier';
+  const contactPersonValue = supplier.contact_person || (supplier.contactPerson && supplier.contactPerson.name) || '';
+  const companyName = supplier.company_name ?? supplier.companyName ?? '';
+  const businessName = supplier.business_name ?? supplier.businessName ?? '';
+  const name = supplier.name || '';
+  const displayName = companyName || businessName || name || 'Unknown Supplier';
+  
   return {
     ...supplier,
     companyName,
     businessName,
     displayName,
-    contactPerson: contactPersonValue ? { name: contactPersonValue } : (supplier.contactPerson || {}),
+    email: supplier.email || '',
+    phone: supplier.phone || '',
+    openingBalance: supplier.opening_balance ?? supplier.openingBalance ?? 0,
+    contactPerson: { name: contactPersonValue },
     status: supplier.status ?? (supplier.is_active ? 'active' : 'inactive'),
     businessType: supplier.businessType ?? supplier.supplier_type ?? 'other',
-    rating: supplier.rating != null ? Number(supplier.rating) : 3
+    rating: supplier.rating != null ? Number(supplier.rating) : 3,
+    // Add extra aliasing for Excel matching
+    contactPersonName: contactPersonValue
   };
 }
 
@@ -125,6 +131,20 @@ class SupplierService {
     } catch (chartError) {
       console.error('Failed to create Chart of Accounts entry for supplier:', chartError);
       // Don't fail the supplier creation if chart account creation fails
+    }
+
+    // Post opening balance to ledger
+    try {
+      const openingBalance = parseFloat(supplierData.openingBalance || 0);
+      if (openingBalance !== 0) {
+        await AccountingService.postSupplierOpeningBalance(supplier.id, openingBalance, {
+          createdBy: userId,
+          transactionDate: supplier.created_at || new Date()
+        });
+      }
+    } catch (openingBalanceError) {
+      console.error('Failed to post supplier opening balance to ledger:', openingBalanceError);
+      // Don't fail supplier creation if ledger posting fails
     }
 
     return mapSupplierForResponse(supplier);
@@ -244,6 +264,45 @@ class SupplierService {
   async checkCompanyNameExists(companyName, excludeId = null) {
     const row = await supplierRepository.findByCompanyName(companyName, excludeId);
     return !!row;
+  }
+
+  /**
+   * Bulk create suppliers from imported data
+   */
+  async bulkCreateSuppliers(suppliersData, userId) {
+    let created = 0;
+    let failed = 0;
+    const errors = [];
+
+    for (const supplier of suppliersData) {
+      try {
+        // Map user-friendly Excel headers to DB fields
+        const mappedData = {
+          companyName: supplier.company_name || supplier.companyName || '',
+          contactPerson: {
+            name: supplier.contact_person || (supplier.contactPerson && supplier.contactPerson.name) || '',
+            title: supplier.contact_person_title || (supplier.contactPerson && supplier.contactPerson.title) || ''
+          },
+          email: supplier.email || '',
+          phone: supplier.phone || '',
+          openingBalance: parseFloat(supplier.opening_balance || supplier.openingBalance || supplier.balance || 0),
+          businessType: (supplier.business_type || supplier.type || 'wholesaler').toLowerCase(),
+          status: 'active'
+        };
+
+        if (!mappedData.companyName) {
+          throw new Error('Supplier company name is required');
+        }
+
+        await this.createSupplier(mappedData, userId);
+        created++;
+      } catch (err) {
+        failed++;
+        errors.push({ supplier: supplier.companyName || 'Row', error: err.message });
+      }
+    }
+
+    return { created, failed, errors };
   }
 }
 

@@ -104,14 +104,6 @@ export const plStatementsApi = api.injectEndpoints({
       }),
       providesTags: (_r, _e, { id }) => [{ type: 'Reports', id: `COMPARISON_${id}` }],
     }),
-    exportStatement: builder.mutation({
-      query: ({ id, ...data }) => ({
-        url: `pl-statements/${id}/export`,
-        method: 'post',
-        data,
-        responseType: 'blob',
-      }),
-    }),
     getLatestStatement: builder.query({
       query: (params) => ({
         url: 'pl-statements/latest',
@@ -134,7 +126,6 @@ export const {
   useGetSummaryQuery,
   useGetTrendsQuery,
   useGetComparisonQuery,
-  useExportStatementMutation,
   useGetLatestStatementQuery,
 } = plStatementsApi;
 
