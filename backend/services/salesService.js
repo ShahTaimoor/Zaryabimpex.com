@@ -12,6 +12,8 @@ const AccountingService = require('./accountingService');
 const profitDistributionService = require('./profitDistributionService');
 const discountService = require('./discountService');
 const paymentRepository = require('../repositories/postgres/PaymentRepository');
+const settingsService = require('./settingsService');
+const purchaseInvoiceRepository = require('../repositories/postgres/PurchaseInvoiceRepository');
 
 // Helper function to parse date string as local date (not UTC)
 const parseLocalDate = (dateString) => {
@@ -590,8 +592,33 @@ class SalesService {
       }
     }
 
-    // Generate order number if not provided (sales/invoices use INV-, not SO- which is for sales orders only)
-    const orderNumber = data.orderNumber || `INV-${Date.now()}`;
+    // Generate order number if not provided
+    let orderNumber = data.orderNumber;
+    const settings = await settingsService.getCompanySettings();
+    const orderSettings = settings?.orderSettings || {};
+
+    if (orderSettings.invoiceSequenceEnabled) {
+      const prefix = orderSettings.invoiceSequencePrefix || 'INV-';
+      const nextNum = orderSettings.invoiceSequenceNext || 1;
+      const padding = orderSettings.invoiceSequencePadding || 3;
+      
+      // If no orderNumber provided by frontend, use the one from settings
+      if (!orderNumber) {
+        orderNumber = `${prefix}${String(nextNum).padStart(padding, '0')}`;
+      }
+
+      // Always increment next number in settings if it's a NEW sale
+      await settingsService.updateCompanySettings({
+        orderSettings: {
+          ...orderSettings,
+          invoiceSequenceNext: nextNum + 1
+        }
+      });
+    }
+
+    if (!orderNumber) {
+      orderNumber = `INV-${Date.now()}`;
+    }
 
     // Prepare sale data for PostgreSQL (include applied discount codes when provided from POS)
     const amountPaidAtCreate = parseFloat(payment?.amount ?? 0) || 0;

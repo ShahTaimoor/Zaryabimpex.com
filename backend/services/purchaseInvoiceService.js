@@ -1,8 +1,47 @@
 const purchaseInvoiceRepository = require('../repositories/PurchaseInvoiceRepository');
 const supplierRepository = require('../repositories/SupplierRepository');
 const AccountingService = require('./accountingService');
+const settingsService = require('./settingsService');
 
 class PurchaseInvoiceService {
+  /**
+   * Create purchase invoice with sequential numbering Support
+   */
+  async createPurchaseInvoice(data, user) {
+    let invoiceNumber = data.invoiceNumber;
+    const settings = await settingsService.getCompanySettings();
+    const orderSettings = settings?.orderSettings || {};
+
+    if (orderSettings.purchaseSequenceEnabled) {
+      const prefix = orderSettings.purchaseSequencePrefix || 'PUR-';
+      const nextNum = orderSettings.purchaseSequenceNext || 1;
+      const padding = orderSettings.purchaseSequencePadding || 3;
+      
+      if (!invoiceNumber) {
+        invoiceNumber = `${prefix}${String(nextNum).padStart(padding, '0')}`;
+      }
+
+      // Always increment next number
+      await settingsService.updateCompanySettings({
+        orderSettings: {
+          ...orderSettings,
+          purchaseSequenceNext: nextNum + 1
+        }
+      });
+    }
+
+    if (!invoiceNumber) {
+      invoiceNumber = `PI-${Date.now()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+    }
+
+    const invoiceData = {
+      ...data,
+      invoiceNumber,
+      createdBy: user?.id || user?._id
+    };
+
+    return await purchaseInvoiceRepository.create(invoiceData);
+  }
   /**
    * Transform supplier names to uppercase
    * @param {object} supplier - Supplier to transform

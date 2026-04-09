@@ -575,6 +575,15 @@ export const Purchase = ({ tabId, editData }) => {
   const generateInvoiceNumber = (supplier) => {
     if (!supplier) return '';
 
+    // Check if sequential numbering is enabled
+    const orderSettings = companySettings.orderSettings || {};
+    if (orderSettings.purchaseSequenceEnabled) {
+      const prefix = orderSettings.purchaseSequencePrefix || 'PUR-';
+      const nextNum = orderSettings.purchaseSequenceNext || 1;
+      const padding = orderSettings.purchaseSequencePadding || 3;
+      return `${prefix}${String(nextNum).padStart(padding, '0')}`;
+    }
+
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');

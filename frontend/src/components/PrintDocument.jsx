@@ -43,8 +43,14 @@ const PrintDocument = ({
         (typeof window !== 'undefined' && window.innerWidth <= 768);
     const isSale = (partyLabel?.toLowerCase() || '').includes('customer');
     const isPurchase = (partyLabel?.toLowerCase() || '').includes('supplier');
-    const saleOrPurchaseClass = invoiceLayout !== 'receipt' ? (isSale ? ' print-document--sale' : isPurchase ? ' print-document--purchase' : '') : '';
-    const printClassName = `print-document${invoiceLayout === 'layout2' ? ' print-document--layout2' : ''}${invoiceLayout === 'receipt' ? ' print-document--receipt' : ''}${isMobileLayout ? ' print-document--mobile' : ''}${saleOrPurchaseClass}`;
+    const isReceipt = invoiceLayout === 'receipt';
+    const isBank = (documentTitle?.toLowerCase() || resolvedDocumentTitle?.toLowerCase() || '').includes('bank');
+    const isCash = (documentTitle?.toLowerCase() || resolvedDocumentTitle?.toLowerCase() || '').includes('cash');
+
+    const saleOrPurchaseClass = !isReceipt ? (isSale ? ' print-document--sale' : isPurchase ? ' print-document--purchase' : '') : '';
+    const receiptTypeClass = isReceipt ? (isBank ? ' print-document--bank' : isCash ? ' print-document--cash' : '') : '';
+
+    const printClassName = `print-document${invoiceLayout === 'layout2' ? ' print-document--layout2' : ''}${isReceipt ? ' print-document--receipt' : ''}${isMobileLayout ? ' print-document--mobile' : ''}${saleOrPurchaseClass}${receiptTypeClass}`;
 
     const formatDate = (date) =>
         new Date(date || new Date()).toLocaleDateString('en-GB', {

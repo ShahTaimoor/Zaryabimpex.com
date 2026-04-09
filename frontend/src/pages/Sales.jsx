@@ -176,6 +176,15 @@ export const Sales = ({ tabId, editData }) => {
     const customerId = customer?.id || customer?._id;
     if (!customerId) return '';
 
+    // Check if sequential numbering is enabled
+    const orderSettings = companySettings.orderSettings || {};
+    if (orderSettings.invoiceSequenceEnabled) {
+      const prefix = orderSettings.invoiceSequencePrefix || 'INV-';
+      const nextNum = orderSettings.invoiceSequenceNext || 1;
+      const padding = orderSettings.invoiceSequencePadding || 3;
+      return `${prefix}${String(nextNum).padStart(padding, '0')}`;
+    }
+
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');

@@ -16,6 +16,18 @@ export function OrderItemWiseConfirmationSettings() {
   const dualUnitShowPiecesInput = orderSettings.dualUnitShowPiecesInput !== false;
   const showSalesDiscountCode = orderSettings.showSalesDiscountCode === true;
 
+  // Invoice Numbering Settings
+  const invoiceSequenceEnabled = orderSettings.invoiceSequenceEnabled === true;
+  const invoiceSequencePrefix = orderSettings.invoiceSequencePrefix || 'INV-';
+  const invoiceSequenceNext = orderSettings.invoiceSequenceNext || 1;
+  const invoiceSequencePadding = orderSettings.invoiceSequencePadding || 3;
+
+  // Purchase Numbering Settings
+  const purchaseSequenceEnabled = orderSettings.purchaseSequenceEnabled === true;
+  const purchaseSequencePrefix = orderSettings.purchaseSequencePrefix || 'PUR-';
+  const purchaseSequenceNext = orderSettings.purchaseSequenceNext || 1;
+  const purchaseSequencePadding = orderSettings.purchaseSequencePadding || 3;
+
   const handleSalesChange = async (checked) => {
     try {
       await updateCompanySettings({
@@ -179,6 +191,176 @@ export function OrderItemWiseConfirmationSettings() {
           </div>
         </div>
       </label>
+
+      {/* Invoice Numbering Settings */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Sales Invoice Numbering</h3>
+            <p className="text-xs text-gray-500">Use custom sequential numbering for sales invoices instead of timestamp-based ones.</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={invoiceSequenceEnabled}
+            onChange={async (e) => {
+              try {
+                await updateCompanySettings({
+                  orderSettings: { ...orderSettings, invoiceSequenceEnabled: e.target.checked },
+                }).unwrap();
+                toast.success(`Sequential invoice numbering ${e.target.checked ? 'enabled' : 'disabled'}`);
+              } catch (err) {
+                handleApiError(err, 'Failed to update numbering setting');
+              }
+            }}
+            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+          />
+        </div>
+
+        {invoiceSequenceEnabled && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-gray-100">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Prefix</label>
+              <input
+                type="text"
+                value={invoiceSequencePrefix}
+                onChange={async (e) => {
+                  try {
+                    await updateCompanySettings({
+                      orderSettings: { ...orderSettings, invoiceSequencePrefix: e.target.value },
+                    }).unwrap();
+                  } catch (err) { /* silent */ }
+                }}
+                placeholder="INV-"
+                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Next Number</label>
+              <input
+                type="number"
+                min="1"
+                value={invoiceSequenceNext}
+                onChange={async (e) => {
+                  const val = parseInt(e.target.value) || 1;
+                  try {
+                    await updateCompanySettings({
+                      orderSettings: { ...orderSettings, invoiceSequenceNext: val },
+                    }).unwrap();
+                  } catch (err) { /* silent */ }
+                }}
+                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Padding (Digits)</label>
+              <select
+                value={invoiceSequencePadding}
+                onChange={async (e) => {
+                  const val = parseInt(e.target.value);
+                  try {
+                    await updateCompanySettings({
+                      orderSettings: { ...orderSettings, invoiceSequencePadding: val },
+                    }).unwrap();
+                  } catch (err) { /* silent */ }
+                }}
+                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none"
+              >
+                <option value={1}>1 (1)</option>
+                <option value={2}>2 (01)</option>
+                <option value={3}>3 (001)</option>
+                <option value={4}>4 (0001)</option>
+                <option value={5}>5 (00001)</option>
+                <option value={6}>6 (000001)</option>
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Purchase Numbering Settings */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Purchase Invoice Numbering</h3>
+            <p className="text-xs text-gray-500">Use custom sequential numbering for purchase invoices.</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={purchaseSequenceEnabled}
+            onChange={async (e) => {
+              try {
+                await updateCompanySettings({
+                  orderSettings: { ...orderSettings, purchaseSequenceEnabled: e.target.checked },
+                }).unwrap();
+                toast.success(`Sequential purchase numbering ${e.target.checked ? 'enabled' : 'disabled'}`);
+              } catch (err) {
+                handleApiError(err, 'Failed to update numbering setting');
+              }
+            }}
+            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+          />
+        </div>
+
+        {purchaseSequenceEnabled && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-gray-100">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Prefix</label>
+              <input
+                type="text"
+                value={purchaseSequencePrefix}
+                onChange={async (e) => {
+                  try {
+                    await updateCompanySettings({
+                      orderSettings: { ...orderSettings, purchaseSequencePrefix: e.target.value },
+                    }).unwrap();
+                  } catch (err) { /* silent */ }
+                }}
+                placeholder="PUR-"
+                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Next Number</label>
+              <input
+                type="number"
+                min="1"
+                value={purchaseSequenceNext}
+                onChange={async (e) => {
+                  const val = parseInt(e.target.value) || 1;
+                  try {
+                    await updateCompanySettings({
+                      orderSettings: { ...orderSettings, purchaseSequenceNext: val },
+                    }).unwrap();
+                  } catch (err) { /* silent */ }
+                }}
+                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Padding (Digits)</label>
+              <select
+                value={purchaseSequencePadding}
+                onChange={async (e) => {
+                  const val = parseInt(e.target.value);
+                  try {
+                    await updateCompanySettings({
+                      orderSettings: { ...orderSettings, purchaseSequencePadding: val },
+                    }).unwrap();
+                  } catch (err) { /* silent */ }
+                }}
+                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none"
+              >
+                <option value={1}>1 (1)</option>
+                <option value={2}>2 (01)</option>
+                <option value={3}>3 (001)</option>
+                <option value={4}>4 (0001)</option>
+                <option value={5}>5 (00001)</option>
+                <option value={6}>6 (000001)</option>
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
     </>
   );
 }

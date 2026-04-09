@@ -2201,16 +2201,16 @@ const SalesOrders = ({ tabId }) => {
               )}
               <CartTableHeader
                 className={`hidden md:grid gap-x-1 items-center pb-2 border-b border-gray-300 mb-2 ${dualUnitShowBoxInputEnabled
-                    ? (
-                      showCostPrice && canViewCostPrice
-                        ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
-                        : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                    )
-                    : (
-                      showCostPrice && canViewCostPrice
-                        ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
-                        : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                    )
+                  ? (
+                    showCostPrice && canViewCostPrice
+                      ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                      : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                  )
+                  : (
+                    showCostPrice && canViewCostPrice
+                      ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                      : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                  )
                   }`}
                 columns={[
                   { key: 'sno', label: 'S.NO', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-left' },
@@ -2234,16 +2234,16 @@ const SalesOrders = ({ tabId }) => {
                     {/* Desktop Grid Layout */}
                     <div
                       className={`hidden md:grid gap-x-1 items-center ${dualUnitShowBoxInputEnabled
-                          ? (
-                            showCostPrice && canViewCostPrice
-                              ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
-                              : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                          )
-                          : (
-                            showCostPrice && canViewCostPrice
-                              ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
-                              : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                          )
+                        ? (
+                          showCostPrice && canViewCostPrice
+                            ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                            : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                        )
+                        : (
+                          showCostPrice && canViewCostPrice
+                            ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                            : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                        )
                         }`}
                     >
                       {/* Serial Number - 1 column */}
@@ -2256,7 +2256,7 @@ const SalesOrders = ({ tabId }) => {
                       {/* Product Name - reduced width to keep row alignment */}
                       <div className="min-w-0 flex items-center h-8 gap-2">
                         {product?.imageUrl && showProductImages && (
-                          <div 
+                          <div
                             className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
                             onClick={() => setPreviewImageProduct(product)}
                             title="Click to view full size"
@@ -2341,10 +2341,10 @@ const SalesOrders = ({ tabId }) => {
                                     }));
                                   }}
                                   className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(product?.inventory?.currentStock || 0) === 0
-                                      ? 'text-red-700 bg-red-50 border-red-200'
-                                      : (product?.inventory?.currentStock || 0) <= (product?.inventory?.reorderPoint || 0)
-                                        ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                                        : 'text-gray-700 bg-gray-100 border-gray-200'
+                                    ? 'text-red-700 bg-red-50 border-red-200'
+                                    : (product?.inventory?.currentStock || 0) <= (product?.inventory?.reorderPoint || 0)
+                                      ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                                      : 'text-gray-700 bg-gray-100 border-gray-200'
                                     }`}
                                   title="Full boxes"
                                 />
@@ -2492,7 +2492,7 @@ const SalesOrders = ({ tabId }) => {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0 flex items-center gap-2">
                           {product?.imageUrl && showProductImages && (
-                            <div 
+                            <div
                               className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
                               onClick={() => setPreviewImageProduct(product)}
                               title="Click to view full size"
@@ -3627,9 +3627,9 @@ const SalesOrders = ({ tabId }) => {
       >
         <div className="flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden min-h-[300px] p-4">
           {previewImageProduct?.imageUrl ? (
-            <img 
-              src={previewImageProduct.imageUrl} 
-              alt="Product Preview" 
+            <img
+              src={previewImageProduct.imageUrl}
+              alt="Product Preview"
               className="max-w-full max-h-[70vh] object-contain"
             />
           ) : (

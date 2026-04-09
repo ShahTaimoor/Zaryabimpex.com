@@ -183,7 +183,6 @@ router.post('/', [
       invoiceDate
     } = req.body;
 
-    const genInvoiceNumber = () => `PI-${Date.now()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
     // Ensure supplierInfo has address - fetch from supplier record if missing
     let enrichedSupplierInfo = supplierInfo || {};
     if (supplier && (!enrichedSupplierInfo.address || (typeof enrichedSupplierInfo.address === 'string' && !enrichedSupplierInfo.address.trim()))) {
@@ -211,15 +210,14 @@ router.post('/', [
         paidAmount: payment?.amount || payment?.paidAmount || 0,
         isPartialPayment: payment?.isPartialPayment || false
       },
-      invoiceNumber: invoiceNumber && String(invoiceNumber).trim() ? invoiceNumber : genInvoiceNumber(),
+      invoiceNumber: invoiceNumber && String(invoiceNumber).trim() ? invoiceNumber : undefined,
       expectedDelivery,
       notes,
       terms,
-      invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
-      createdBy: req.user?.id || req.user?._id
+      invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date()
     };
 
-    let invoice = await purchaseInvoiceRepository.create(invoiceData);
+    let invoice = await purchaseInvoiceService.createPurchaseInvoice(invoiceData, req.user);
 
     // IMMEDIATE INVENTORY UPDATE - No confirmation required
     const inventoryService = require('../services/inventoryService');
