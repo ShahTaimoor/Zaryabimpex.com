@@ -13,8 +13,10 @@ import {
   Mail,
   MapPin,
   ArrowUpDown,
-  Download
+  Download,
+  Camera
 } from 'lucide-react';
+import BaseModal from '../components/BaseModal';
 import {
   useGetSupplierQuery,
   useLazySearchSuppliersQuery,
@@ -87,12 +89,25 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove, o
       {/* Mobile Card Layout */}
       <div className="md:hidden space-y-3 p-3 border border-gray-200 rounded-lg">
         <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
-              {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low Stock</span>}
-            </div>
-            <p className="font-medium text-sm truncate">{displayName}</p>
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            {product?.imageUrl && showProductImages && (
+              <div 
+                className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                onClick={() => setPreviewImageProduct(product)}
+                title="Click to view full size"
+              >
+                <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                  <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
+                {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low Stock</span>}
+              </div>
+              <p className="font-medium text-sm truncate">{displayName}</p>
             {product.isVariant && (
               <p className="text-xs text-gray-500 mt-0.5">
                 {product.variantType}: {product.variantValue}
@@ -105,6 +120,7 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove, o
               if (s) return <p className="text-xs text-gray-600 font-mono mt-0.5">SKU: {s}</p>;
               return null;
             })()}
+          </div>
           </div>
           <Button
             onClick={() => onRemove(item.product?._id)}
@@ -192,7 +208,19 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove, o
             </span>
           </div>
 
-          <div className="min-w-0 flex items-center h-8">
+          <div className="min-w-0 flex items-center h-8 gap-2">
+            {product?.imageUrl && showProductImages && (
+              <div 
+                className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                onClick={() => setPreviewImageProduct(product)}
+                title="Click to view full size"
+              >
+                <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                  <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </div>
+            )}
             <div className="flex flex-col min-w-0 w-full">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="font-medium text-sm truncate min-w-0">{displayName}</span>
@@ -356,6 +384,17 @@ export const Purchase = ({ tabId, editData }) => {
   const [notes, setNotes] = useState('');
   const [taxExempt, setTaxExempt] = useState(true);
   const [showPurchaseDetailsFields, setShowPurchaseDetailsFields] = useState(false);
+  const [showProductImages, setShowProductImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
+
+  useEffect(() => {
+    const handleConfigChange = () => {
+      setShowProductImages(localStorage.getItem('showProductImagesUI') !== 'false');
+    };
+    window.addEventListener('productImagesConfigChanged', handleConfigChange);
+    return () => window.removeEventListener('productImagesConfigChanged', handleConfigChange);
+  }, []);
+
+  const [previewImageProduct, setPreviewImageProduct] = useState(null);
 
   const { isMobile } = useResponsive();
   const { companyInfo: companySettings } = useCompanyInfo();
@@ -1817,16 +1856,33 @@ export const Purchase = ({ tabId, editData }) => {
 
         {showReceiptLabelPrinter && (
           <BarcodeLabelPrinter
-            products={receiptLabelProducts}
-            quantityMode
-            modalTitle="Print labels — purchase invoice receipt"
+            isOpen={showReceiptLabelPrinter}
             onClose={() => {
               setShowReceiptLabelPrinter(false);
               setReceiptLabelProducts([]);
             }}
+            preSelectedProducts={receiptLabelProducts}
           />
         )}
 
+        {/* Product Image Preview Modal */}
+        <BaseModal
+          isOpen={!!previewImageProduct}
+          onClose={() => setPreviewImageProduct(null)}
+          title={previewImageProduct?.displayName || previewImageProduct?.variantName || previewImageProduct?.name || 'Product Image'}
+        >
+          <div className="flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden min-h-[300px] p-4">
+            {previewImageProduct?.imageUrl ? (
+              <img 
+                src={previewImageProduct.imageUrl} 
+                alt="Product Preview" 
+                className="max-w-full max-h-[70vh] object-contain"
+              />
+            ) : (
+              <div className="text-gray-400">No image available</div>
+            )}
+          </div>
+        </BaseModal>
 
       </div>
     </AsyncErrorBoundary>

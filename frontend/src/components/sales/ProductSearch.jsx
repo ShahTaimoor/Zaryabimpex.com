@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { LoadingButton } from '@/components/LoadingSpinner';
 import BarcodeScanner from '@/components/BarcodeScanner';
+import BaseModal from '@/components/BaseModal';
 
 /** Max rows in the product search dropdown (type more to narrow results) */
 const PRODUCT_DROPDOWN_LIMIT = 20;
@@ -37,7 +38,17 @@ function ProductSearchComponent({
   const [searchKey, setSearchKey] = useState(0); // Key to force re-render
   const [lastPurchasePrice, setLastPurchasePrice] = useState(null);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  const [showProductImages, setShowProductImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
   const productSearchRef = useRef(null);
+
+  useEffect(() => {
+    const handleConfigChange = () => {
+      setShowProductImages(localStorage.getItem('showProductImagesUI') !== 'false');
+    };
+    window.addEventListener('productImagesConfigChanged', handleConfigChange);
+    return () => window.removeEventListener('productImagesConfigChanged', handleConfigChange);
+  }, []);
 
   // Fetch all products (or a larger set) for client-side fuzzy search
   const [getLastPurchasePrice] = useLazyGetLastPurchasePriceQuery();
@@ -370,10 +381,17 @@ function ProductSearchComponent({
       : null;
 
     return (
-      <div className="flex items-center justify-between w-full">
-        <div className="flex flex-col">
-          <div className="font-medium">{displayName}</div>
-          {variantInfo && <div className="text-xs text-gray-500">{variantInfo}</div>}
+      <div className="flex items-center justify-between w-full gap-3">
+        <div className="flex items-center gap-3">
+          {product?.imageUrl && showProductImages && (
+            <div className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200">
+              <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
+            </div>
+          )}
+          <div className="flex flex-col">
+            <div className="font-medium">{displayName}</div>
+            {variantInfo && <div className="text-xs text-gray-500">{variantInfo}</div>}
+          </div>
         </div>
         <div className="flex items-center space-x-4">
           <div className={`text-sm ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-orange-600' : 'text-gray-600'}`}>
@@ -440,6 +458,18 @@ function ProductSearchComponent({
               >
                 <Camera className="h-5 w-5 text-gray-600" />
               </button>
+              {selectedProduct?.imageUrl && showProductImages && (
+                <div 
+                  className="h-10 w-10 flex-shrink-0 bg-gray-50 rounded-md overflow-hidden border border-gray-300 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                  onClick={() => setShowImagePreview(true)}
+                  title="Click to view full size"
+                >
+                  <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="h-full w-full object-cover" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                    <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -639,11 +669,23 @@ function ProductSearchComponent({
               <button
                 type="button"
                 onClick={() => setShowBarcodeScanner(true)}
-                className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center"
+                className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center flex-shrink-0"
                 title="Scan barcode to search product"
               >
                 <Camera className="h-5 w-5 text-gray-600" />
               </button>
+              {selectedProduct?.imageUrl && showProductImages && (
+                <div 
+                  className="h-10 w-10 flex-shrink-0 bg-gray-50 rounded-md overflow-hidden border border-gray-300 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                  onClick={() => setShowImagePreview(true)}
+                  title="Click to view full size"
+                >
+                  <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="h-full w-full object-cover" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                    <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -838,8 +880,26 @@ function ProductSearchComponent({
           }
           setShowBarcodeScanner(false);
         }}
-        scanMode="both"
       />
+
+      {/* Product Image Preview Modal */}
+      <BaseModal
+        isOpen={showImagePreview}
+        onClose={() => setShowImagePreview(false)}
+        title={selectedProduct?.displayName || selectedProduct?.variantName || selectedProduct?.name || 'Product Image'}
+      >
+        <div className="flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden min-h-[300px] p-4">
+          {selectedProduct?.imageUrl ? (
+            <img 
+              src={selectedProduct.imageUrl} 
+              alt="Product Preview" 
+              className="max-w-full max-h-[70vh] object-contain"
+            />
+          ) : (
+            <div className="text-gray-400">No image available</div>
+          )}
+        </div>
+      </BaseModal>
     </div>
   );
 }

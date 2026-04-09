@@ -23,8 +23,10 @@ import {
   Phone,
   Receipt,
   Printer,
-  ArrowUpDown
+  ArrowUpDown,
+  Camera
 } from 'lucide-react';
+import BaseModal from '../components/BaseModal';
 import { useGetSuppliersQuery, useGetSupplierQuery } from '../store/services/suppliersApi';
 import { useGetProductsQuery } from '../store/services/productsApi';
 import { useGetVariantsQuery } from '../store/services/productVariantsApi';
@@ -381,6 +383,17 @@ export const PurchaseOrders = ({ tabId }) => {
   // Current order for operations
   const [currentOrder, setCurrentOrder] = useState(null);
   const [showPurchaseOrderDetailsFields, setShowPurchaseOrderDetailsFields] = useState(false);
+  const [showProductImages, setShowProductImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
+
+  useEffect(() => {
+    const handleConfigChange = () => {
+      setShowProductImages(localStorage.getItem('showProductImagesUI') !== 'false');
+    };
+    window.addEventListener('productImagesConfigChanged', handleConfigChange);
+    return () => window.removeEventListener('productImagesConfigChanged', handleConfigChange);
+  }, []);
+
+  const [previewImageProduct, setPreviewImageProduct] = useState(null);
 
   // Auto-focus on product search field when component mounts
   useEffect(() => {
@@ -1621,11 +1634,24 @@ export const PurchaseOrders = ({ tabId }) => {
                     {/* Mobile Card View */}
                     <div className="md:hidden mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
                       <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
-                            <span className="font-medium text-sm truncate">
-                              {product?.isVariant
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          {product?.imageUrl && showProductImages && (
+                            <div 
+                              className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                              onClick={() => setPreviewImageProduct(product)}
+                              title="Click to view full size"
+                            >
+                              <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                                <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
+                              <span className="font-medium text-sm truncate">
+                                {product?.isVariant
                                 ? safeRender(product?.displayName || product?.variantName || product?.name || 'Unknown Variant')
                                 : safeRender(product?.name || 'Unknown Product')}
                             </span>
@@ -1645,6 +1671,7 @@ export const PurchaseOrders = ({ tabId }) => {
                           <div className="flex flex-wrap items-center gap-2 mt-1">
                             {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low</span>}
                           </div>
+                        </div>
                         </div>
                         <Button
                           onClick={() => handleRemoveItem(index)}
@@ -1757,8 +1784,20 @@ export const PurchaseOrders = ({ tabId }) => {
                         </div>
 
                         {/* Product Name — col-span-4 so Qty can use 3 cols for dual units */}
-                        <div className="col-span-4 flex items-center min-h-8 min-w-0">
-                          <div className="flex flex-col">
+                        <div className="col-span-4 flex items-center gap-2 min-h-8 min-w-0">
+                          {product?.imageUrl && showProductImages && (
+                            <div 
+                              className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                              onClick={() => setPreviewImageProduct(product)}
+                              title="Click to view full size"
+                            >
+                              <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                                <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </div>
+                          )}
+                          <div className="flex flex-col min-w-0">
                             <span className="font-medium text-sm truncate">
                               {product?.isVariant
                                 ? safeRender(product?.displayName || product?.variantName || product?.name || 'Unknown Variant')
@@ -3214,6 +3253,26 @@ export const PurchaseOrders = ({ tabId }) => {
           }}
         />
       )}
+
+      {/* Product Image Preview Modal */}
+      <BaseModal
+        isOpen={!!previewImageProduct}
+        onClose={() => setPreviewImageProduct(null)}
+        title={previewImageProduct?.displayName || previewImageProduct?.variantName || previewImageProduct?.name || 'Product Image'}
+      >
+        <div className="flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden min-h-[300px] p-4">
+          {previewImageProduct?.imageUrl ? (
+            <img 
+              src={previewImageProduct.imageUrl} 
+              alt="Product Preview" 
+              className="max-w-full max-h-[70vh] object-contain"
+            />
+          ) : (
+            <div className="text-gray-400">No image available</div>
+          )}
+        </div>
+      </BaseModal>
+
     </div>
   );
 };

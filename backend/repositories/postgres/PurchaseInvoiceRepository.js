@@ -95,8 +95,14 @@ function applyProductNamesToItems(items, nameMap) {
     const productName = pid ? nameMap[pid] : null;
     if (productName) {
       item.product = typeof item.product === 'object' ? { ...item.product, name: productName } : { _id: pid, name: productName };
-    } else if (!item.name && !(typeof item.product === 'object' && item.product?.name)) {
-      item.name = 'Unknown Product'; // Product may have been deleted
+    } else if (item.productName || item.name) {
+      const fallbackName = item.productName || item.name;
+      item.name = fallbackName;
+      if (typeof item.product !== 'object') {
+        item.product = { _id: pid, id: pid, name: fallbackName };
+      }
+    } else {
+      item.name = 'Unknown Product';
     }
   }
 }
@@ -150,20 +156,20 @@ class PurchaseInvoiceRepository {
       WHERE pi.id = $1 AND pi.deleted_at IS NULL`,
       [id]
     );
-    
+
     if (!result.rows[0]) {
       return null;
     }
-    
+
     const row = result.rows[0];
     const invoice = { ...row };
-    
+
     // Map invoice_number to invoiceNumber for frontend compatibility
     invoice.invoiceNumber = invoice.invoice_number || invoice.invoiceNumber;
-    
+
     // Map invoice_date to invoiceDate for frontend compatibility
     invoice.invoiceDate = invoice.invoice_date || invoice.invoiceDate || invoice.created_at || invoice.createdAt;
-    
+
     // Parse JSONB fields
     if (invoice.items && typeof invoice.items === 'string') {
       try {
@@ -186,29 +192,29 @@ class PurchaseInvoiceRepository {
         invoice.payment = {};
       }
     }
-    
+
     // Build supplierInfo object - prioritize joined supplier data over stored supplier_info JSONB
     if (row.supplier_id != null) {
-        if (row.joined_supplier_id != null && (row.supplier_company_name != null || row.supplier_name != null)) {
-          // Supplier exists and is not deleted - use joined data (include address, phone, email for print)
-          let addr = formatSupplierAddressFromDb(row.supplier_address) || getAddressFromSupplierInfo(invoice.supplier_info);
-          // Last resort: fetch supplier directly if address still empty (e.g. supplier updated address after invoice created)
-          if (!addr && row.supplier_id) {
-            try {
-              const supResult = await query('SELECT address FROM suppliers WHERE id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL)', [row.supplier_id]);
-              if (supResult.rows[0]?.address) addr = formatSupplierAddressFromDb(supResult.rows[0].address);
-            } catch (e) { /* ignore */ }
-          }
-          invoice.supplierInfo = {
-            id: row.supplier_id,
-            _id: row.supplier_id,
-            companyName: row.supplier_company_name,
-            name: row.supplier_name,
-            displayName: row.supplier_company_name || row.supplier_name || 'Unknown Supplier',
-            address: addr || undefined,
-            phone: row.supplier_phone || undefined,
-            email: row.supplier_email || undefined
-          };
+      if (row.joined_supplier_id != null && (row.supplier_company_name != null || row.supplier_name != null)) {
+        // Supplier exists and is not deleted - use joined data (include address, phone, email for print)
+        let addr = formatSupplierAddressFromDb(row.supplier_address) || getAddressFromSupplierInfo(invoice.supplier_info);
+        // Last resort: fetch supplier directly if address still empty (e.g. supplier updated address after invoice created)
+        if (!addr && row.supplier_id) {
+          try {
+            const supResult = await query('SELECT address FROM suppliers WHERE id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL)', [row.supplier_id]);
+            if (supResult.rows[0]?.address) addr = formatSupplierAddressFromDb(supResult.rows[0].address);
+          } catch (e) { /* ignore */ }
+        }
+        invoice.supplierInfo = {
+          id: row.supplier_id,
+          _id: row.supplier_id,
+          companyName: row.supplier_company_name,
+          name: row.supplier_name,
+          displayName: row.supplier_company_name || row.supplier_name || 'Unknown Supplier',
+          address: addr || undefined,
+          phone: row.supplier_phone || undefined,
+          email: row.supplier_email || undefined
+        };
       } else {
         // Try to parse supplier_info JSONB if supplier was deleted
         if (invoice.supplier_info && typeof invoice.supplier_info === 'string') {
@@ -238,7 +244,7 @@ class PurchaseInvoiceRepository {
         }
       }
     }
-    
+
     // Remove duplicate/helper fields
     if (invoice.joined_supplier_id !== undefined) delete invoice.joined_supplier_id;
     if (invoice.supplier_company_name !== undefined) delete invoice.supplier_company_name;
@@ -246,7 +252,7 @@ class PurchaseInvoiceRepository {
     if (invoice.supplier_address !== undefined) delete invoice.supplier_address;
     if (invoice.supplier_phone !== undefined) delete invoice.supplier_phone;
     if (invoice.supplier_email !== undefined) delete invoice.supplier_email;
-    
+
     await enrichItemsWithProductNames(invoice);
     return invoice;
   }
@@ -312,17 +318,17 @@ class PurchaseInvoiceRepository {
     }
 
     const result = await query(sql, params);
-    
+
     // Transform results to include invoiceNumber and supplierInfo
     const invoices = result.rows.map(row => {
       const invoice = { ...row };
-      
+
       // Map invoice_number to invoiceNumber for frontend compatibility
       invoice.invoiceNumber = invoice.invoice_number || invoice.invoiceNumber;
-      
+
       // Map invoice_date to invoiceDate for frontend compatibility
       invoice.invoiceDate = invoice.invoice_date || invoice.invoiceDate || invoice.created_at || invoice.createdAt;
-      
+
       // Parse JSONB fields
       if (invoice.items && typeof invoice.items === 'string') {
         try {
@@ -345,7 +351,7 @@ class PurchaseInvoiceRepository {
           invoice.payment = {};
         }
       }
-      
+
       // Build supplierInfo object - prioritize joined supplier data over stored supplier_info JSONB
       if (row.supplier_id != null) {
         if (row.joined_supplier_id != null && (row.supplier_company_name != null || row.supplier_name != null)) {
@@ -391,7 +397,7 @@ class PurchaseInvoiceRepository {
           }
         }
       }
-      
+
       // Remove duplicate/helper fields
       if (invoice.joined_supplier_id !== undefined) delete invoice.joined_supplier_id;
       if (invoice.supplier_company_name !== undefined) delete invoice.supplier_company_name;
@@ -399,7 +405,7 @@ class PurchaseInvoiceRepository {
       if (invoice.supplier_address !== undefined) delete invoice.supplier_address;
       if (invoice.supplier_phone !== undefined) delete invoice.supplier_phone;
       if (invoice.supplier_email !== undefined) delete invoice.supplier_email;
-      
+
       return invoice;
     });
 

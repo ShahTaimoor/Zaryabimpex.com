@@ -12,7 +12,16 @@ class SalesOrderRepository {
       'SELECT * FROM sales_orders WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
-    return result.rows[0] || null;
+    const order = result.rows[0] || null;
+    if (order) {
+      if (typeof order.items === 'string') {
+        try { order.items = JSON.parse(order.items); } catch (_) { order.items = []; }
+      }
+      if (typeof order.conversions === 'string') {
+        try { order.conversions = JSON.parse(order.conversions); } catch (_) { order.conversions = []; }
+      }
+    }
+    return order;
   }
 
   async findAll(filters = {}, options = {}) {
@@ -71,7 +80,16 @@ class SalesOrderRepository {
     }
 
     const result = await query(sql, params);
-    return result.rows;
+    const rows = result.rows;
+    rows.forEach(order => {
+      if (typeof order.items === 'string') {
+        try { order.items = JSON.parse(order.items); } catch (_) { order.items = []; }
+      }
+      if (typeof order.conversions === 'string') {
+        try { order.conversions = JSON.parse(order.conversions); } catch (_) { order.conversions = []; }
+      }
+    });
+    return rows;
   }
 
   async findOne(filters = {}) {

@@ -30,7 +30,8 @@ import {
   EyeOff,
   Calculator,
   MessageSquare,
-  ChevronDown
+  ChevronDown,
+  Camera
 } from 'lucide-react';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatDate, formatCurrency } from '../utils/formatters';
@@ -235,8 +236,19 @@ const SalesOrders = ({ tabId }) => {
 
   // Cost price state
   const [showCostPrice, setShowCostPrice] = useState(false); // Toggle to show/hide cost prices
+  const [showProductImages, setShowProductImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
+
+  useEffect(() => {
+    const handleConfigChange = () => {
+      setShowProductImages(localStorage.getItem('showProductImagesUI') !== 'false');
+    };
+    window.addEventListener('productImagesConfigChanged', handleConfigChange);
+    return () => window.removeEventListener('productImagesConfigChanged', handleConfigChange);
+  }, []);
+
   const [lastPurchasePrice, setLastPurchasePrice] = useState(null); // Last purchase price for selected product
   const [lastPurchasePrices, setLastPurchasePrices] = useState({}); // Store last purchase prices for products in cart
+  const [previewImageProduct, setPreviewImageProduct] = useState(null);
 
 
 
@@ -1313,6 +1325,8 @@ const SalesOrders = ({ tabId }) => {
       const qty = Math.round(Number(item.quantity) || 1);
       const base = {
         product: item.product,
+        name: item.productData?.name || item.productData?.displayName || item.name || item.displayName || '',
+        sku: item.productData?.sku || item.sku || '',
         quantity: qty,
         unitPrice: item.unitPrice,
         totalPrice: item.total,
@@ -1377,6 +1391,8 @@ const SalesOrders = ({ tabId }) => {
         const qty = Math.max(1, Math.round(Number(item.quantity) || 1));
         const base = {
           product: getProductId(item),
+          name: item.productData?.name || item.productData?.displayName || item.name || item.displayName || '',
+          sku: item.productData?.sku || item.sku || '',
           quantity: qty,
           unitPrice: parseFloat(item.unitPrice) || 0,
           totalPrice: parseFloat(item.total) || parseFloat(item.unitPrice) * qty,
@@ -2238,7 +2254,19 @@ const SalesOrders = ({ tabId }) => {
                       </div>
 
                       {/* Product Name - reduced width to keep row alignment */}
-                      <div className="min-w-0 flex items-center h-8">
+                      <div className="min-w-0 flex items-center h-8 gap-2">
+                        {product?.imageUrl && showProductImages && (
+                          <div 
+                            className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                            onClick={() => setPreviewImageProduct(product)}
+                            title="Click to view full size"
+                          >
+                            <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                              <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </div>
+                        )}
                         <div className="flex flex-col min-w-0 w-full">
                           <span className="font-medium text-sm truncate min-w-0">
                             {product?.isVariant
@@ -2462,11 +2490,25 @@ const SalesOrders = ({ tabId }) => {
                     <div className="md:hidden p-3 bg-white border border-gray-200 rounded-lg space-y-3">
                       {/* Product Name and Delete Button Row */}
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <h5 className="font-medium text-sm text-gray-900 truncate">
-                            {safeRender(product?.name) || 'Unknown Product'}
-                          </h5>
-                          {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low Stock</span>}
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          {product?.imageUrl && showProductImages && (
+                            <div 
+                              className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                              onClick={() => setPreviewImageProduct(product)}
+                              title="Click to view full size"
+                            >
+                              <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                                <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <h5 className="font-medium text-sm text-gray-900 truncate">
+                              {safeRender(product?.name) || 'Unknown Product'}
+                            </h5>
+                            {isLowStock && <span className="text-yellow-600 text-xs text-nowrap">⚠️ Low Stock</span>}
+                          </div>
                           {lastPurchasePrices[item.product?.toString()] !== undefined &&
                             item.unitPrice < lastPurchasePrices[item.product?.toString()] && (
                               <span className="text-xs ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
@@ -3576,6 +3618,26 @@ const SalesOrders = ({ tabId }) => {
           }}
         />
       )}
+
+      {/* Product Image Preview Modal */}
+      <BaseModal
+        isOpen={!!previewImageProduct}
+        onClose={() => setPreviewImageProduct(null)}
+        title={previewImageProduct?.displayName || previewImageProduct?.variantName || previewImageProduct?.name || 'Product Image'}
+      >
+        <div className="flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden min-h-[300px] p-4">
+          {previewImageProduct?.imageUrl ? (
+            <img 
+              src={previewImageProduct.imageUrl} 
+              alt="Product Preview" 
+              className="max-w-full max-h-[70vh] object-contain"
+            />
+          ) : (
+            <div className="text-gray-400">No image available</div>
+          )}
+        </div>
+      </BaseModal>
+
     </div>
   );
 };

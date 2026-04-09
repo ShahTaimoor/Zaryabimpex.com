@@ -20,8 +20,10 @@ import {
   EyeOff,
   XCircle,
   ArrowUpDown,
-  ChevronDown
+  ChevronDown,
+  Camera
 } from 'lucide-react';
+import BaseModal from '../components/BaseModal';
 import { useLazyGetLastPurchasePriceQuery, useGetLastPurchasePricesMutation } from '../store/services/productsApi';
 import { useGetCustomersQuery, useGetCustomerQuery, useLazySearchCustomersQuery } from '../store/services/customersApi';
 import {
@@ -110,9 +112,21 @@ export const Sales = ({ tabId, editData }) => {
   const [isClearingCart, setIsClearingCart] = useState(false);
   const [isRemovingFromCart, setIsRemovingFromCart] = useState({});
   const [originalPrices, setOriginalPrices] = useState({}); // Store original prices before applying last prices
+  const [isApplyingLastPrices, setIsApplyingLastPrices] = useState(false);
   const [isLastPricesApplied, setIsLastPricesApplied] = useState(false);
   const [priceStatus, setPriceStatus] = useState({}); // Track price change status: 'updated', 'not-found', 'unchanged'
+  const [previewImageProduct, setPreviewImageProduct] = useState(null);
   const [showCostPrice, setShowCostPrice] = useState(false); // Toggle to show/hide cost prices
+  const [showProductImages, setShowProductImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
+  
+  useEffect(() => {
+    const handleConfigChange = () => {
+      setShowProductImages(localStorage.getItem('showProductImagesUI') !== 'false');
+    };
+    window.addEventListener('productImagesConfigChanged', handleConfigChange);
+    return () => window.removeEventListener('productImagesConfigChanged', handleConfigChange);
+  }, []);
+
   const [lastPurchasePrices, setLastPurchasePrices] = useState({}); // Store last purchase prices for products
   const [priceType, setPriceType] = useState('wholesale'); // Price type: 'retail' or 'wholesale' or 'custom'
 
@@ -1615,11 +1629,24 @@ export const Sales = ({ tabId, editData }) => {
                   {/* Mobile Card View */}
                   <div className="md:hidden mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
                     <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
-                          <span className="font-medium text-sm truncate">
-                            {item.product.isVariant
+                      <div className="flex-1 min-w-0 flex items-center gap-3">
+                        {item.product?.imageUrl && showProductImages && (
+                          <div 
+                            className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                            onClick={() => setPreviewImageProduct(item.product)}
+                            title="Click to view full size"
+                          >
+                            <img src={item.product.imageUrl} alt="" className="h-full w-full object-cover" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                              <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
+                            <span className="font-medium text-sm truncate">
+                              {item.product.isVariant
                               ? (item.product.displayName || item.product.variantName || item.product.name)
                               : item.product.name}
                           </span>
@@ -1652,6 +1679,7 @@ export const Sales = ({ tabId, editData }) => {
                             </span>
                           )}
                         </div>
+                      </div>
                       </div>
                       <LoadingButton
                         onClick={() => removeFromCart(item.product._id)}
@@ -1784,7 +1812,19 @@ export const Sales = ({ tabId, editData }) => {
                       </div>
 
                       {/* Product Name - mirror Sales Order layout (6 columns normally, 5 when cost column shown) */}
-                      <div className="min-w-0 flex items-center h-8">
+                      <div className="min-w-0 flex items-center h-8 gap-2">
+                        {item.product?.imageUrl && showProductImages && (
+                          <div 
+                            className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                            onClick={() => setPreviewImageProduct(item.product)}
+                            title="Click to view full size"
+                          >
+                            <img src={item.product.imageUrl} alt="" className="h-full w-full object-cover" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                              <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </div>
+                        )}
                         <div className="flex flex-col min-w-0 w-full">
                           <div className="flex items-center gap-2 min-w-0">
                             <span
@@ -2772,6 +2812,24 @@ export const Sales = ({ tabId, editData }) => {
         partyLabel="Customer"
       />
 
+      {/* Product Image Preview Modal */}
+      <BaseModal
+        isOpen={!!previewImageProduct}
+        onClose={() => setPreviewImageProduct(null)}
+        title={previewImageProduct?.displayName || previewImageProduct?.variantName || previewImageProduct?.name || 'Product Image'}
+      >
+        <div className="flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden min-h-[300px] p-4">
+          {previewImageProduct?.imageUrl ? (
+            <img 
+              src={previewImageProduct.imageUrl} 
+              alt="Product Preview" 
+              className="max-w-full max-h-[70vh] object-contain"
+            />
+          ) : (
+            <div className="text-gray-400">No image available</div>
+          )}
+        </div>
+      </BaseModal>
 
     </AsyncErrorBoundary>
   );

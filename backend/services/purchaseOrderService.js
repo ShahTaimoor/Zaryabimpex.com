@@ -172,7 +172,12 @@ class PurchaseOrderService {
                 item.product = { name: p.display_name ?? p.displayName ?? p.variant_name ?? p.variantName ?? 'Product' };
               }
             }
-            if (item.product) item.product = this.transformProductToUppercase(item.product);
+            if (item.product) {
+              item.product = this.transformProductToUppercase(item.product);
+            } else if (item.name || item.displayName || item.productName) {
+              item.product = { _id: id, id: id, name: (item.name || item.displayName || item.productName) };
+              item.product = this.transformProductToUppercase(item.product);
+            }
           } catch (e) {
             // Keep item.product as-is on error
           }
@@ -480,7 +485,7 @@ class PurchaseOrderService {
     };
 
     const invoice = await purchaseInvoiceRepository.create(invoiceData);
-    
+
     // Post to account ledger
     try {
       const AccountingService = require('./accountingService');
@@ -489,7 +494,7 @@ class PurchaseOrderService {
       console.error('Error creating accounting entries for purchase invoice from PO:', error);
       // Don't fail the invoice creation if ledger posting fails
     }
-    
+
     return invoice;
   }
 }

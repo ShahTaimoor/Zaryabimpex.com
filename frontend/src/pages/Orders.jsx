@@ -653,7 +653,7 @@ export const Orders = () => {
                     </div>
 
                     {/* Status */}
-                    <div className="col-span-1 flex flex-col gap-1 items-center">
+                    <div className="col-span-1 flex flex-row flex-wrap gap-1 justify-center items-center">
                       <span className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full ${(order?.status === 'completed' || order?.status === 'delivered')
                           ? 'bg-green-100 text-green-800'
                           : (order?.status === 'pending' || order?.status === 'processing')

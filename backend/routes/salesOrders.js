@@ -83,6 +83,19 @@ const enrichItemsWithProducts = async (items) => {
         p = await productVariantRepository.findById(id, true);
         if (p) {
           item.product = { name: p.display_name ?? p.displayName ?? p.variant_name ?? p.variantName ?? 'Product' };
+        } else {
+          // DEEP RECOVERY: Search history for this product ID
+          const { query } = require('../config/postgres');
+          const recoveryRes = await query(`
+            SELECT name FROM (
+              SELECT (elem->>'name') as name, s.created_at FROM sales s, jsonb_array_elements(CASE WHEN jsonb_typeof(s.items) = 'array' THEN s.items ELSE '[]'::jsonb END) elem WHERE (elem->>'product' = $1 OR elem->>'product_id' = $1) AND elem->>'name' IS NOT NULL
+              UNION ALL
+              SELECT (elem->>'productName') as name, pi.created_at FROM purchase_invoices pi, jsonb_array_elements(CASE WHEN jsonb_typeof(pi.items) = 'array' THEN pi.items ELSE '[]'::jsonb END) elem WHERE (elem->>'product' = $1 OR elem->>'product_id' = $1) AND elem->>'productName' IS NOT NULL
+            ) h ORDER BY created_at DESC LIMIT 1
+          `, [id]);
+
+          const recoveredName = recoveryRes.rows[0]?.name || item.name || item.productName || 'Unknown Product';
+          item.product = { _id: id, id: id, name: recoveredName };
         }
       }
     } catch (e) {
@@ -166,7 +179,15 @@ router.get('/', [
     const customerIds = [...new Set(salesOrders.map(so => so.customer_id).filter(Boolean))];
     const customerMap = {};
     for (const cid of customerIds) {
-      const c = await customerRepository.findById(cid);
+      let c = await customerRepository.findById(cid);
+      if (!c) {
+        // Recovery for deep deleted customers from historical sales
+        const { query } = require('../config/postgres');
+        const rec = await query(`SELECT (customer_info->>'name') as name FROM sales WHERE customer_id = $1 AND customer_info IS NOT NULL LIMIT 1`, [cid]);
+        if (rec.rows[0]) {
+          c = { id: cid, _id: cid, name: rec.rows[0].name, isRecovered: true };
+        }
+      }
       if (c) {
         c.businessName = c.business_name ?? c.businessName;
         c._id = c.id;
@@ -463,8 +484,8 @@ router.patch('/:id/items-confirmation', [
     // Create invoice for newly confirmed items
     const newlyConfirmedIndices = Array.isArray(req.body.itemUpdates)
       ? req.body.itemUpdates
-          .filter((u) => u.confirmationStatus === 'confirmed')
-          .map((u) => u.itemIndex)
+        .filter((u) => u.confirmationStatus === 'confirmed')
+        .map((u) => u.itemIndex)
       : req.body.confirmAll === true
         ? items.map((_, i) => i)
         : [];
@@ -561,7 +582,7 @@ router.get('/:id/stock-status', auth, async (req, res) => {
             p = await productVariantRepository.findById(productId);
             if (p) productName = (p.display_name ?? p.displayName) || (p.variant_name ?? p.variantName) || 'Variant';
           }
-        } catch {}
+        } catch { }
         outOfStock.push({
           productId,
           productName,

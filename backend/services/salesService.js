@@ -71,12 +71,12 @@ class SalesService {
   transformCustomerToUppercase(customer) {
     if (!customer) return customer;
     if (customer.toObject) customer = customer.toObject();
-    
+
     // Postgres uses business_name, frontend uses businessName
     if (customer.business_name && !customer.businessName) {
       customer.businessName = customer.business_name;
     }
-    
+
     if (customer.name) customer.name = customer.name.toUpperCase();
     if (customer.businessName) customer.businessName = customer.businessName.toUpperCase();
     if (customer.business_name) customer.business_name = customer.business_name.toUpperCase();
@@ -145,16 +145,30 @@ class SalesService {
       }
     }
 
-    return items.map(item => {
+    const results = [];
+    for (const item of items) {
       const i = { ...item };
       const p = i.product || i.product_id;
       const id = !p ? null : (typeof p === 'string' ? p : (p._id || p.id || p));
       const sid = id && typeof id === 'string' ? id : (id && id.toString ? id.toString() : null);
+
       if (sid && productMap.has(sid)) {
         i.product = productMap.get(sid);
+      } else if (!i.product || typeof i.product === 'string') {
+        // Fallback: If product not found in DB, use denormalized name/sku from the item itself
+        const fallbackName = i.name || i.productName || i.display_name || 'Unknown Product';
+        i.product = {
+          _id: sid,
+          id: sid,
+          name: fallbackName,
+          sku: i.sku || i.product_sku || null,
+          imageUrl: i.imageUrl || i.image_url || null,
+          isDeleted: true
+        };
       }
-      return i;
-    });
+      results.push(i);
+    }
+    return results;
   }
 
   /**
