@@ -24,7 +24,7 @@ function getCost(inv) {
 const ensureInventoryRecord = async (productId) => {
   let inv = await inventoryRepository.findByProduct(productId);
   if (inv) return inv;
-  const product = await productRepository.findById(productId);
+  const product = await productRepository.findById(productId, true);
   if (!product) throw new Error('Product not found');
   inv = await inventoryRepository.create({
     productId,
@@ -54,7 +54,7 @@ const updateStock = async ({ productId, type, quantity, reason, reference, refer
     }
     const updated = await inventoryRepository.updateByProductId(productId, updatePayload);
 
-    const productRow = await productRepository.findById(productId);
+    const productRow = await productRepository.findById(productId, true);
     if (productRow) {
       await productRepository.update(productId, {
         stockQuantity: newStock,

@@ -78,24 +78,25 @@ const enrichItemsWithProducts = async (items) => {
     try {
       let p = await productRepository.findById(id, true);
       if (p) {
-        item.product = { ...p, name: p.name || p.displayName };
+        item.product = { ...p, name: p.name || p.displayName, sku: p.sku };
       } else {
         p = await productVariantRepository.findById(id, true);
         if (p) {
-          item.product = { name: p.display_name ?? p.displayName ?? p.variant_name ?? p.variantName ?? 'Product' };
+          item.product = { name: p.display_name ?? p.displayName ?? p.variant_name ?? p.variantName ?? 'Product', sku: p.sku };
         } else {
           // DEEP RECOVERY: Search history for this product ID
           const { query } = require('../config/postgres');
           const recoveryRes = await query(`
-            SELECT name FROM (
-              SELECT (elem->>'name') as name, s.created_at FROM sales s, jsonb_array_elements(CASE WHEN jsonb_typeof(s.items) = 'array' THEN s.items ELSE '[]'::jsonb END) elem WHERE (elem->>'product' = $1 OR elem->>'product_id' = $1) AND elem->>'name' IS NOT NULL
+            SELECT name, sku FROM (
+              SELECT (elem->>'name') as name, (elem->>'sku') as sku, s.created_at FROM sales s, jsonb_array_elements(CASE WHEN jsonb_typeof(s.items) = 'array' THEN s.items ELSE '[]'::jsonb END) elem WHERE (elem->>'product' = $1 OR elem->>'product_id' = $1)
               UNION ALL
-              SELECT (elem->>'productName') as name, pi.created_at FROM purchase_invoices pi, jsonb_array_elements(CASE WHEN jsonb_typeof(pi.items) = 'array' THEN pi.items ELSE '[]'::jsonb END) elem WHERE (elem->>'product' = $1 OR elem->>'product_id' = $1) AND elem->>'productName' IS NOT NULL
-            ) h ORDER BY created_at DESC LIMIT 1
+              SELECT (elem->>'productName') as name, (elem->>'sku') as sku, pi.created_at FROM purchase_invoices pi, jsonb_array_elements(CASE WHEN jsonb_typeof(pi.items) = 'array' THEN pi.items ELSE '[]'::jsonb END) elem WHERE (elem->>'product' = $1 OR elem->>'product_id' = $1)
+            ) h WHERE name IS NOT NULL ORDER BY created_at DESC LIMIT 1
           `, [id]);
 
           const recoveredName = recoveryRes.rows[0]?.name || item.name || item.productName || 'Unknown Product';
-          item.product = { _id: id, id: id, name: recoveredName };
+          const recoveredSku = recoveryRes.rows[0]?.sku || item.sku || null;
+          item.product = { _id: id, id: id, name: recoveredName, sku: recoveredSku };
         }
       }
     } catch (e) {
@@ -561,6 +562,9 @@ router.get('/:id/stock-status', auth, async (req, res) => {
       if (!productId || typeof productId !== 'string') continue;
 
       let currentStock = 0;
+      let usedReplacement = false;
+      let replacementId = null;
+
       try {
         const inv = await inventoryRepository.findByProduct(productId);
         if (inv) {
@@ -569,7 +573,37 @@ router.get('/:id/stock-status', auth, async (req, res) => {
           const product = await productRepository.findById(productId, true);
           if (product) currentStock = Number(product.stock_quantity ?? product.stockQuantity ?? 0);
         }
-      } catch {
+
+        // SMART FALLBACK: If current stock is 0/low, check if there's an active product with the same SKU or name
+        const requestedQty = Number(item.quantity) || 0;
+        if (currentStock < requestedQty) {
+          const productName = (item.product && typeof item.product === 'object' && item.product.name) ? item.product.name : (item.name || item.productName);
+          const productSku = (item.product && typeof item.product === 'object') ? item.product.sku : item.sku;
+
+          if (productSku || productName) {
+            const activeProducts = await productRepository.findAll({ 
+              search: productSku || productName,
+              limit: 5,
+              includeDeleted: false 
+            });
+
+            // Find an exact match that is NOT the same deleted ID
+            const replacement = activeProducts.find(p => {
+              if (p.id === productId) return false;
+              const matchSku = productSku && p.sku && p.sku.trim().toLowerCase() === String(productSku).trim().toLowerCase();
+              const matchName = productName && p.name && p.name.trim().toLowerCase() === String(productName).trim().toLowerCase();
+              return matchSku || matchName;
+            });
+
+            if (replacement && replacement.stockQuantity >= requestedQty) {
+              currentStock = replacement.stockQuantity;
+              usedReplacement = true;
+              replacementId = replacement.id;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Stock status lookup failed for item:', productId, err.message);
         currentStock = 0;
       }
 
@@ -617,10 +651,61 @@ router.put('/:id/confirm', [
 
     const userId = req.user?.id || req.user?._id;
     const items = Array.isArray(salesOrder.items) ? salesOrder.items : (typeof salesOrder.items === 'string' ? JSON.parse(salesOrder.items || '[]') : []);
+    await enrichItemsWithProducts(items);
 
     const inventoryUpdates = [];
+    const updatedItemsForOrder = [];
+
     for (const item of items) {
-      const productId = item.product || item.product_id;
+      let productId = item.product || item.product_id;
+      const originalProductId = productId;
+      const requestedQty = Number(item.quantity) || 0;
+
+      // Smart Resolution: Check if product exists and has stock
+      let needsReplacement = false;
+      try {
+        const inv = await inventoryRepository.findByProduct(productId);
+        const stock = Number(inv?.current_stock ?? inv?.currentStock ?? 0);
+        if (stock < requestedQty) needsReplacement = true;
+      } catch {
+        needsReplacement = true;
+      }
+
+      if (needsReplacement) {
+        // Try to find a replacement by SKU or Name
+        try {
+          // Get product info (we already enriched above, but let's be sure)
+          const pName = (item.product?.name || item.name || item.productName || '').trim();
+          const pSku = (item.product?.sku || item.sku || '').trim();
+
+          if (pSku || pName) {
+            const activeProducts = await productRepository.findAll({ 
+              search: pSku || pName,
+              limit: 10,
+              includeDeleted: false 
+            });
+
+            const replacement = activeProducts.find(p => {
+              if (p.id === originalProductId) return false;
+              
+              const matchSku = pSku && p.sku && p.sku.trim().toLowerCase() === pSku.toLowerCase();
+              const matchName = pName && p.name && p.name.trim().toLowerCase() === pName.toLowerCase();
+              
+              return matchSku || matchName;
+            });
+
+            if (replacement && replacement.stockQuantity >= requestedQty) {
+              console.log(`Replacing product ${originalProductId} with ${replacement.id} for SO item due to stock availability`);
+              productId = replacement.id;
+              item.product = replacement.id;
+              item.product_id = replacement.id;
+            }
+          }
+        } catch (recoverErr) {
+          console.error('Failed to resolve replacement product:', recoverErr.message);
+        }
+      }
+
       try {
         const inventoryUpdate = await inventoryService.updateStock({
           productId,
@@ -631,11 +716,12 @@ router.put('/:id/confirm', [
           referenceId: salesOrder.id,
           referenceModel: 'SalesOrder',
           performedBy: userId,
-          notes: `Stock reduced due to sales order confirmation - SO: ${salesOrder.so_number || salesOrder.soNumber}`
+          notes: `Stock reduced due to sales order confirmation - SO: ${salesOrder.so_number || salesOrder.soNumber}${productId !== originalProductId ? ` (Resolved from replacement for ${originalProductId})` : ''}`
         });
 
         inventoryUpdates.push({
           productId,
+          originalProductId,
           quantity: item.quantity,
           newStock: inventoryUpdate.currentStock,
           success: true
@@ -650,14 +736,17 @@ router.put('/:id/confirm', [
         });
 
         return res.status(400).json({
-          message: `Insufficient stock for product ${productId}. Cannot confirm sales order.`,
+          message: inventoryError.message.includes('stock') 
+            ? `Insufficient stock for product ${item.product?.name || item.name || productId}. Cannot confirm sales order.`
+            : `Failed to confirm sales order: ${inventoryError.message}`,
           details: inventoryError.message,
           inventoryUpdates
         });
       }
+      updatedItemsForOrder.push(item);
     }
 
-    const itemsWithConfirmed = items.map((i) => ({
+    const itemsWithConfirmed = updatedItemsForOrder.map((i) => ({
       ...i,
       confirmationStatus: 'confirmed',
       confirmation_status: 'confirmed'
