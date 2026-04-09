@@ -36,6 +36,23 @@ class InventoryBalanceRepository {
     );
     return result.rows[0] || null;
   }
+
+  /**
+   * Directly sync quantity with absolute values.
+   */
+  async syncBalance(productId, quantity, reserved = 0, quarantine = 0, client = null) {
+    const q = client ? client.query.bind(client) : query;
+    await q(
+      `INSERT INTO inventory_balance (product_id, quantity, quantity_reserved, quantity_quarantine, updated_at)
+       VALUES ($1, GREATEST(0, ($2)::decimal), GREATEST(0, ($3)::decimal), GREATEST(0, ($4)::decimal), CURRENT_TIMESTAMP)
+       ON CONFLICT (product_id) DO UPDATE SET
+         quantity = EXCLUDED.quantity,
+         quantity_reserved = EXCLUDED.quantity_reserved,
+         quantity_quarantine = EXCLUDED.quantity_quarantine,
+         updated_at = CURRENT_TIMESTAMP`,
+      [productId, quantity, reserved, quarantine]
+    );
+  }
 }
 
 module.exports = new InventoryBalanceRepository();

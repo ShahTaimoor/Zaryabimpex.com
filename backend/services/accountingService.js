@@ -1,6 +1,13 @@
 const { query, transaction } = require('../config/postgres');
 const { v4: uuidv4 } = require('uuid');
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function isValidUuid(v) {
+  if (!v) return false;
+  return UUID_REGEX.test(String(v).trim());
+}
+
+
 /**
  * Accounting Service - PostgreSQL Implementation
  * Handles all accounting operations with ACID compliance
@@ -136,7 +143,7 @@ class AccountingService {
           metadata.supplierId,
           metadata.currency || 'PKR',
           metadata.status || 'completed',
-          metadata.createdBy
+          isValidUuid(metadata.createdBy) ? metadata.createdBy : null
         ]
       );
 
@@ -616,7 +623,7 @@ class AccountingService {
           referenceNumber: refNum,
           transactionDate: txnDate,
           currency: 'PKR',
-          createdBy
+          createdBy: isValidUuid(createdBy) ? createdBy : null
         },
         clientToUse
       );
@@ -630,6 +637,71 @@ class AccountingService {
       });
     }
   }
+
+  /**
+   * Post manual stock adjustment to the ledger.
+   * If qty delta > 0: Dr Inventory (1200), Cr Retained Earnings (3100)
+   * If qty delta < 0: Dr Retained Earnings (3100), Cr Inventory (1200)
+   *
+   * @param {string} productId - Product UUID
+   * @param {number} deltaQty - Change in quantity (positive for increase, negative for decrease)
+   * @param {number} unitCost - Cost per unit
+   * @param {Object} options - { createdBy, transactionDate, reason, client }
+   */
+  static async recordStockAdjustment(productId, deltaQty, unitCost, options = {}) {
+    const { createdBy, transactionDate, reason, client } = options;
+    const delta = parseFloat(deltaQty) || 0;
+    if (Math.abs(delta) < 0.0001) return;
+
+    const cost = Math.max(0, parseFloat(unitCost) || 0);
+    const amount = Math.abs(Math.round(delta * cost * 100) / 100);
+    const refId = String(productId);
+    const txnDate = transactionDate || new Date();
+    const desc = reason || (delta > 0 ? 'Manual Stock Increase' : 'Manual Stock Decrease');
+
+    const runInTransaction = async (clientToUse) => {
+      if (delta > 0) {
+        // Increase: Debit Inventory, Credit Retained Earnings
+        await this.createTransaction(
+          { accountCode: '1200', debitAmount: amount, description: `${desc} (${delta} units)` },
+          { accountCode: '3100', creditAmount: amount, description: 'Inventory Adjustment Offset' },
+          {
+            referenceType: 'inventory_adjustment',
+            referenceId: refId,
+            referenceNumber: `ADJ-${Date.now()}`,
+            transactionDate: txnDate,
+            currency: 'PKR',
+            createdBy
+          },
+          clientToUse
+        );
+      } else {
+        // Decrease: Debit Retained Earnings, Credit Inventory
+        await this.createTransaction(
+          { accountCode: '3100', debitAmount: amount, description: 'Inventory Adjustment Offset' },
+          { accountCode: '1200', creditAmount: amount, description: `${desc} (${Math.abs(delta)} units)` },
+          {
+            referenceType: 'inventory_adjustment',
+            referenceId: refId,
+            referenceNumber: `ADJ-${Date.now()}`,
+            transactionDate: txnDate,
+            currency: 'PKR',
+            createdBy
+          },
+          clientToUse
+        );
+      }
+    };
+
+    if (client) {
+      await runInTransaction(client);
+    } else {
+      await transaction(async (clientToUse) => {
+        await runInTransaction(clientToUse);
+      });
+    }
+  }
+
 
   /**
    * Reverse product opening stock ledger entries (e.g. when product is deleted).

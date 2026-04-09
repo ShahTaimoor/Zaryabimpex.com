@@ -6,13 +6,15 @@ export const chartOfAccountsApi = api.injectEndpoints({
       query: (params) => ({
         url: 'chart-of-accounts',
         method: 'get',
-        params: {
-          ...params,
-          includeBalances: 'true', // Always include calculated balances
-        },
+        params,
       }),
       transformResponse: (response) => {
-        // Backend returns { success: true, data: accounts } where data is the array directly
+        // If it's the new standard paginated response { success: true, data: [...], pagination: {...} }
+        if (response?.pagination) {
+          return response; // Return full object so pagination can be used
+        }
+        
+        // Backward compatibility: extract the array if it's wrapped or just the array itself
         if (Array.isArray(response)) return response;
         if (Array.isArray(response?.data)) return response.data;
         if (Array.isArray(response?.data?.accounts)) return response.data.accounts;
@@ -20,7 +22,7 @@ export const chartOfAccountsApi = api.injectEndpoints({
         return [];
       },
       providesTags: (result) => {
-        const accounts = Array.isArray(result) ? result : [];
+        const accounts = Array.isArray(result) ? result : (result?.data || []);
         return accounts.length
           ? [
               ...accounts.map(({ _id, id }) => ({ type: 'ChartOfAccounts', id: _id || id })),

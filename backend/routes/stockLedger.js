@@ -92,7 +92,7 @@ router.get('/', [
         if (!items || items.length === 0) continue;
         let customerName = 'Walk-in Customer';
         if (sale.customer_id) {
-          customerCache[sale.customer_id] = customerCache[sale.customer_id] || await CustomerRepository.findById(sale.customer_id);
+          customerCache[sale.customer_id] = customerCache[sale.customer_id] || await CustomerRepository.findById(sale.customer_id, true);
           const c = customerCache[sale.customer_id];
           customerName = c?.business_name || c?.businessName || c?.displayName || c?.name || customerName;
         }
@@ -103,7 +103,7 @@ router.get('/', [
           const productId = item.product || item.product_id;
           if (product && String(productId) !== product) continue;
           if (!productId) continue;
-          const prod = await ProductRepository.findById(productId);
+          const prod = await ProductRepository.findById(productId, true);
           addEntry({
             invoiceDate,
             invoiceNo: orderNum,
@@ -133,7 +133,7 @@ router.get('/', [
         if (!items || items.length === 0) continue;
         let supplierName = 'Unknown Supplier';
         if (purchase.supplier_id) {
-          supplierCache[purchase.supplier_id] = supplierCache[purchase.supplier_id] || await SupplierRepository.findById(purchase.supplier_id);
+          supplierCache[purchase.supplier_id] = supplierCache[purchase.supplier_id] || await SupplierRepository.findById(purchase.supplier_id, true);
           const s = supplierCache[purchase.supplier_id];
           supplierName = s?.company_name || s?.companyName || s?.business_name || s?.displayName || s?.name || supplierName;
         }
@@ -147,7 +147,7 @@ router.get('/', [
           const productId = item.product || item.product_id;
           if (product && String(productId) !== product) continue;
           if (!productId) continue;
-          const prod = await ProductRepository.findById(productId);
+          const prod = await ProductRepository.findById(productId, true);
           addEntry({
             invoiceDate: invDate,
             invoiceNo: invNum,
@@ -178,7 +178,7 @@ router.get('/', [
         const invNo = originalSale?.order_number || originalSale?.orderNumber || returnDoc.return_number || returnDoc.returnNumber || (returnDoc.id || returnDoc._id);
         let customerName = 'Unknown Customer';
         if (returnDoc.customer_id) {
-          const c = await CustomerRepository.findById(returnDoc.customer_id);
+          const c = await CustomerRepository.findById(returnDoc.customer_id, true);
           customerName = c?.business_name || c?.businessName || c?.displayName || c?.name || customerName;
         }
         const retDate = returnDoc.return_date || returnDoc.returnDate || returnDoc.created_at || returnDoc.createdAt;
@@ -186,7 +186,7 @@ router.get('/', [
           const pid = item.product && (typeof item.product === 'object' ? (item.product.id || item.product._id) : item.product) || item.product_id;
           if (product && String(pid) !== product) continue;
           if (!pid) continue;
-          const prod = await ProductRepository.findById(pid);
+          const prod = await ProductRepository.findById(pid, true);
           addEntry({
             invoiceDate: retDate,
             invoiceNo: invNo,
@@ -214,7 +214,7 @@ router.get('/', [
         if (!items || items.length === 0) continue;
         let supplierName = 'Unknown Supplier';
         if (returnDoc.supplier_id) {
-          const s = await SupplierRepository.findById(returnDoc.supplier_id);
+          const s = await SupplierRepository.findById(returnDoc.supplier_id, true);
           supplierName = s?.company_name || s?.companyName || s?.business_name || s?.displayName || s?.name || supplierName;
         }
         const refId = returnDoc.reference_id || returnDoc.originalOrder;
@@ -225,7 +225,7 @@ router.get('/', [
           const pid = item.product && (typeof item.product === 'object' ? (item.product.id || item.product._id) : item.product) || item.product_id;
           if (product && String(pid) !== product) continue;
           if (!pid) continue;
-          const prod = await ProductRepository.findById(pid);
+          const prod = await ProductRepository.findById(pid, true);
           addEntry({
             invoiceDate: retDate,
             invoiceNo: invNo,
@@ -252,13 +252,13 @@ router.get('/', [
         if (invoiceNo && damage.reference_number && !String(damage.reference_number).includes(String(invoiceNo))) continue;
         let customerSupplier = 'N/A';
         if (damage.customer_id) {
-          const c = await CustomerRepository.findById(damage.customer_id);
+          const c = await CustomerRepository.findById(damage.customer_id, true);
           customerSupplier = c?.business_name || c?.businessName || c?.displayName || c?.name || 'Unknown Customer';
         } else if (damage.supplier_id) {
-          const s = await SupplierRepository.findById(damage.supplier_id);
+          const s = await SupplierRepository.findById(damage.supplier_id, true);
           customerSupplier = s?.company_name || s?.companyName || s?.business_name || s?.displayName || s?.name || 'Unknown Supplier';
         }
-        const prod = productId ? await ProductRepository.findById(productId) : null;
+        const prod = productId ? await ProductRepository.findById(productId, true) : null;
         addEntry({
           invoiceDate: damage.created_at || damage.movementDate || damage.createdAt,
           invoiceNo: damage.reference_number || damage.referenceNumber || `DMG-${damage.id || damage._id}`,
@@ -314,7 +314,7 @@ router.get('/', [
       Array.from(productMap.values()).map(async (productData) => {
         let qtyLeft = 0;
         try {
-          const inv = await InventoryRepository.findByProduct(productData.productId);
+          const inv = await InventoryRepository.findByProduct(productData.productId, { includeDeleted: true });
           if (inv != null) {
             qtyLeft = Number(inv.current_stock ?? inv.currentStock ?? 0);
           } else {

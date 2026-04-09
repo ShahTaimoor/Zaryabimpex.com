@@ -51,6 +51,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ExcelExportButton from '../components/ExcelExportButton';
 import ExcelImportButton from '../components/ExcelImportButton';
+import PdfExportButton from '../components/PdfExportButton';
 
 const LIMIT_OPTIONS = [50, 500, 1000, 5000];
 const DEFAULT_LIMIT = 50;
@@ -348,6 +349,10 @@ export const Products = () => {
           <ExcelExportButton
             getData={getExportData}
             label="Export"
+          />
+          <PdfExportButton
+            getData={getExportData}
+            label="PDF"
           />
           <ExcelImportButton
             onDataImported={handleImportData}

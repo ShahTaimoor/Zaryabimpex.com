@@ -7,13 +7,27 @@ const accountCategoryRepository = require('../repositories/AccountCategoryReposi
 const chartView = requireAnyPermission(['view_chart_of_accounts', 'view_reports']);
 const chartManage = requireAnyPermission(['manage_chart_of_accounts', 'view_reports']);
 
-// GET /api/chart-of-accounts - list accounts (query: accountType, accountCategory, isActive, includeBalances)
+// GET /api/chart-of-accounts - list accounts (query: accountType, accountCategory, isActive, includeBalances, page, limit)
 router.get('/', auth, chartView, async (req, res) => {
   try {
-    const { accountType, accountCategory, includePartyAccounts, isActive, includeBalances } = req.query;
+    const { 
+      accountType, 
+      accountCategory, 
+      isActive, 
+      includeBalances,
+      page = 1,
+      limit = 1000,
+      search
+    } = req.query;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const offset = (pageNum - 1) * limitNum;
+
     const filters = {};
     if (accountType) filters.accountType = accountType;
     if (isActive !== undefined) filters.isActive = isActive === 'true';
+    if (search) filters.search = search;
     if (accountCategory) {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       if (uuidRegex.test(accountCategory)) {
@@ -23,56 +37,65 @@ router.get('/', auth, chartView, async (req, res) => {
         filters.accountCategory = accountCategory;
       }
     }
-    let accounts = await chartOfAccountsRepository.findAll(filters, { limit: 5000 });
+
+    const accounts = await chartOfAccountsRepository.findAll(filters, { limit: limitNum, offset });
+    const total = await chartOfAccountsRepository.count(filters);
     
     // If includeBalances is true, calculate real-time balances for customer/supplier accounts
     if (includeBalances === 'true' || includeBalances === true) {
-      const { query } = require('../config/postgres');
       const AccountingService = require('../services/accountingService');
       
-      // For each account, if it's a customer or supplier account (CUST- or SUPP- prefix), 
-      // calculate balance from ledger
       const accountsWithBalances = await Promise.all(accounts.map(async (account) => {
         try {
-          // Check if this is a customer-specific account (starts with CUST-)
           if (account.accountCode && account.accountCode.startsWith('CUST-')) {
-            // Extract customer ID from account code (format: CUST-{customerId})
             const customerId = account.accountCode.substring(5);
             try {
               const balance = await AccountingService.getCustomerBalance(customerId);
               return { ...account, currentBalance: balance };
             } catch (err) {
-              console.warn(`Could not calculate balance for customer account ${account.accountCode}:`, err.message);
               return account;
             }
           }
           
-          // Check if this is a supplier-specific account (starts with SUPP-)
           if (account.accountCode && account.accountCode.startsWith('SUPP-')) {
             const supplierId = account.accountCode.substring(5);
             try {
               const balance = await AccountingService.getSupplierBalance(supplierId);
               return { ...account, currentBalance: balance };
             } catch (err) {
-              console.warn(`Could not calculate balance for supplier account ${account.accountCode}:`, err.message);
               return account;
             }
           }
           
-          // For regular accounts, use the stored balance or recalculate
           return account;
         } catch (err) {
-          console.error(`Error processing account ${account.accountCode}:`, err);
           return account;
         }
       }));
       
-      const data = accountsWithBalances;
-      return res.json(Array.isArray(data) ? data : { success: true, data: data || accounts });
+      return res.json({ 
+        success: true, 
+        data: accountsWithBalances,
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          pages: Math.ceil(total / limitNum)
+        }
+      });
     }
     
     const data = accounts.map(a => ({ ...a, currentBalance: undefined, openingBalance: undefined }));
-    res.json(Array.isArray(data) ? data : { success: true, data: data || accounts });
+    res.json({ 
+      success: true, 
+      data,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        pages: Math.ceil(total / limitNum)
+      }
+    });
   } catch (error) {
     console.error('Chart of accounts list error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch chart of accounts', error: error.message });

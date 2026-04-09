@@ -12,7 +12,7 @@ function mapSupplierForResponse(supplier) {
   const businessName = supplier.business_name ?? supplier.businessName ?? '';
   const name = supplier.name || '';
   const displayName = companyName || businessName || name || 'Unknown Supplier';
-  
+
   return {
     ...supplier,
     companyName,
@@ -108,7 +108,7 @@ class SupplierService {
     try {
       const accountCode = `SUPP-${supplier.id}`;
       const accountName = supplier.company_name || supplier.business_name || supplier.name || 'Unknown Supplier';
-      
+
       // Check if account already exists
       const existingAccount = await chartOfAccountsRepository.findByAccountCode(accountCode);
       if (!existingAccount) {

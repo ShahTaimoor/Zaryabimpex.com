@@ -4,6 +4,7 @@ import { useGetBalanceSummaryQuery } from '../store/services/customerBalancesApi
 import PrintDocument from './PrintDocument';
 import { PrintModal, PrintWrapper } from './print';
 import { PRINT_PAGE_STYLE } from './print/printPageStyle';
+import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 
 /**
  * DirectPrintInvoice - Triggers print dialog directly without opening the preview modal.
@@ -120,6 +121,7 @@ const InvoicePrintModal = ({
       hasData={!!orderData}
       emptyMessage="No invoice data to print."
       autoPrint={autoPrint}
+      getPdfData={() => getInvoicePdfPayload(orderData, companySettings, resolvedDocumentTitle, partyLabel)}
     >
       <PrintDocument
         companySettings={companySettings || {}}

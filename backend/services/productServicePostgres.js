@@ -426,6 +426,24 @@ class ProductServicePostgres {
           const currentStock =
             hasCurrent ? Number(invData.currentStock) : existingCurrent;
 
+          // If stock changed manually, record in accounting ledger
+          if (hasCurrent && Math.abs(currentStock - existingCurrent) > 0.0001) {
+            try {
+              const delta = currentStock - existingCurrent;
+              // Ensure product has the required field from the repository update result
+              const cost = Number(product.cost_price ?? product.costPrice ?? 0);
+              const validatedUserId = isValidUuid(userId) ? userId : null;
+              
+              await AccountingService.recordStockAdjustment(id, delta, cost, {
+                createdBy: validatedUserId,
+                reason: updateData.reason || 'Manual Adjustment'
+              });
+            } catch (adjErr) {
+              console.error('Failed to record stock adjustment in ledger:', adjErr);
+              // We log but don't rethrow to avoid blocking the physical inventory update below
+            }
+          }
+
           // Determine resulting reorder point.
           const reorderPoint =
             (invData.reorderPoint !== undefined ? invData.reorderPoint : invData.minStock) ??

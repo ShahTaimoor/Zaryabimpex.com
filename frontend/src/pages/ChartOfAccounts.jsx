@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Plus, 
   Edit, 
@@ -28,6 +28,9 @@ import { handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import PaginationControls from '../components/PaginationControls';
+import ExcelExportButton from '../components/ExcelExportButton';
+import PdfExportButton from '../components/PdfExportButton';
 
 const AccountTypeBadge = ({ type }) => {
   const config = {
@@ -857,29 +860,56 @@ export const ChartOfAccounts = () => {
   const [presetCategory, setPresetCategory] = useState(null);
   const [showCategoryManagement, setShowCategoryManagement] = useState(false);
   
-  // Fetch accounts
-  const { data: accountsResponse, isLoading, error, refetch: refetchAccounts } = useGetAccountsQuery(
-    { 
-      search: searchTerm,
-      accountType: filterType || undefined,
-      isActive: !showInactive ? 'true' : undefined
-    },
-    {
-      onError: () => {
-        // Error handled by RTK Query
-      }
-    }
-  );
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
 
-  // Extract accounts array from response (RTK Query transformResponse normalizes it)
+  // Fetch accounts with pagination
+  const { 
+    data: accountsResponse, 
+    isLoading, 
+    error, 
+    refetch: refetchAccounts 
+  } = useGetAccountsQuery({
+    accountType: filterType || undefined,
+    isActive: !showInactive ? 'true' : undefined,
+    search: searchTerm || undefined,
+    page: currentPage,
+    limit: itemsPerPage,
+    includeBalances: 'true'
+  });
+
+  // Extract accounts array from response
   const accounts = React.useMemo(() => {
-    if (Array.isArray(accountsResponse)) return accountsResponse;
-    // Fallback in case transformResponse doesn't work
-    if (Array.isArray(accountsResponse?.data)) return accountsResponse.data;
-    if (Array.isArray(accountsResponse?.data?.accounts)) return accountsResponse.data.accounts;
-    if (Array.isArray(accountsResponse?.accounts)) return accountsResponse.accounts;
-    return [];
+    const rawData = accountsResponse?.data || accountsResponse || [];
+    return Array.isArray(rawData) ? rawData : [];
   }, [accountsResponse]);
+
+  const getExportData = () => {
+    return {
+      title: 'Chart of Accounts',
+      filename: 'Chart_of_Accounts.xlsx',
+      columns: [
+        { header: 'Code', key: 'accountCode', width: 15 },
+        { header: 'Account Name', key: 'accountName', width: 40 },
+        { header: 'Type', key: 'accountType', width: 15 },
+        { header: 'Category', key: 'accountCategory', width: 25 },
+        { header: 'Balance', key: 'currentBalance', width: 15, type: 'currency' },
+        { header: 'Normal', key: 'normalBalance', width: 10 }
+      ],
+      data: accounts.map(acc => ({
+        ...acc,
+        accountCategory: (typeof acc.accountCategory === 'string' ? acc.accountCategory : (acc.accountCategory?.name ?? acc.accountCategory?.label ?? acc.accountCategory?.value ?? '')).replace(/_/g, ' ') || '—'
+      }))
+    };
+  };
+
+  const pagination = useMemo(() => accountsResponse?.pagination || null, [accountsResponse]);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterType, showInactive, searchTerm]);
 
   // Fetch account categories
   const { data: categories, isLoading: categoriesLoading } = useGetCategoriesGroupedQuery(undefined, {
@@ -992,6 +1022,14 @@ export const ChartOfAccounts = () => {
             <span className="hidden sm:inline">{showCategoryManagement ? 'Hide Categories' : 'Manage Categories'}</span>
             <span className="sm:hidden">Categories</span>
           </Button>
+          <ExcelExportButton 
+            getData={getExportData}
+            label="Export"
+          />
+          <PdfExportButton 
+            getData={getExportData}
+            label="PDF"
+          />
           <Button
             onClick={handleAddNew}
             variant="default"
@@ -1285,6 +1323,17 @@ export const ChartOfAccounts = () => {
             </tbody>
           </table>
         </div>
+        {pagination && pagination.pages > 1 && (
+          <div className="border-t border-gray-200">
+            <PaginationControls
+              page={currentPage}
+              totalPages={pagination.pages}
+              onPageChange={setCurrentPage}
+              totalItems={pagination.total}
+              limit={itemsPerPage}
+            />
+          </div>
+        )}
       </div>
 
       {/* Account Form Modal */}

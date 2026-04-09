@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import ExcelExportButton from '../components/ExcelExportButton';
+import PdfExportButton from '../components/PdfExportButton';
 import ExcelImportButton from '../components/ExcelImportButton';
 import { exportTemplate } from '../utils/excelExport';
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
@@ -955,6 +956,7 @@ export const Suppliers = () => {
             <span className="uppercase">ADD SUPPLIER</span>
           </Button>
           <ExcelExportButton getData={getExportData} label="Export" />
+          <PdfExportButton getData={getExportData} label="PDF" />
           <ExcelImportButton onDataImported={handleImportData} label="Import" />
           <Button
             onClick={handleDownloadTemplate}

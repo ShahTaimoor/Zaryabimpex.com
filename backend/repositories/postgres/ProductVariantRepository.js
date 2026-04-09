@@ -1,8 +1,11 @@
 const { query } = require('../../config/postgres');
 
 class ProductVariantRepository {
-  async findById(id) {
-    const result = await query('SELECT * FROM product_variants WHERE id = $1 AND deleted_at IS NULL', [id]);
+  async findById(id, includeDeleted = false) {
+    const sql = includeDeleted
+      ? 'SELECT * FROM product_variants WHERE id = $1'
+      : 'SELECT * FROM product_variants WHERE id = $1 AND deleted_at IS NULL';
+    const result = await query(sql, [id]);
     return result.rows[0] || null;
   }
 

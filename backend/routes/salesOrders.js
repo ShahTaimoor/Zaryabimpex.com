@@ -76,11 +76,11 @@ const enrichItemsWithProducts = async (items) => {
     if (typeof id !== 'string') continue;
     if (typeof item.product === 'object' && item.product && (item.product.name || item.product.displayName)) continue; // Already populated
     try {
-      let p = await productRepository.findById(id);
+      let p = await productRepository.findById(id, true);
       if (p) {
         item.product = { ...p, name: p.name || p.displayName };
       } else {
-        p = await productVariantRepository.findById(id);
+        p = await productVariantRepository.findById(id, true);
         if (p) {
           item.product = { name: p.display_name ?? p.displayName ?? p.variant_name ?? p.variantName ?? 'Product' };
         }

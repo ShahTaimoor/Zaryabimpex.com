@@ -22,6 +22,7 @@ import {
 } from '../store/services/purchaseInvoicesApi';
 import { useLazyGetSupplierQuery } from '../store/services/suppliersApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
+import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
@@ -30,6 +31,8 @@ import { Button } from '@/components/ui/button';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
 import ExcelExportButton from '../components/ExcelExportButton';
+import PdfExportButton from '../components/PdfExportButton';
+import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 
 
 // Edit allowed only within 1 month of invoice date
@@ -88,7 +91,7 @@ const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onP
             </div>
 
             <div className="text-sm text-gray-500">
-              {invoice.invoiceDate || invoice.invoice_date || invoice.createdAt 
+              {invoice.invoiceDate || invoice.invoice_date || invoice.createdAt
                 ? new Date(invoice.invoiceDate || invoice.invoice_date || invoice.createdAt).toLocaleDateString()
                 : 'Invalid Date'}
             </div>
@@ -139,6 +142,7 @@ const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onP
 );
 
 export const PurchaseInvoices = () => {
+  const { companyInfo: companySettings } = useCompanyInfo();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const today = getCurrentDatePakistan();
@@ -251,7 +255,7 @@ export const PurchaseInvoices = () => {
         <div>
           <div className="font-medium text-gray-900">{value}</div>
           <div className="text-sm text-gray-500">
-            {item.invoiceDate || item.invoice_date || item.createdAt 
+            {item.invoiceDate || item.invoice_date || item.createdAt
               ? new Date(item.invoiceDate || item.invoice_date || item.createdAt).toLocaleDateString()
               : 'Invalid Date'}
           </div>
@@ -430,8 +434,14 @@ export const PurchaseInvoices = () => {
     return {
       title: 'Purchase Invoices Report',
       filename: `Purchase_Invoices_${dateFrom}_to_${dateTo}.xlsx`,
+      company: {
+        name: companySettings?.companyName || 'ZARYAB IMPEX',
+        address: companySettings?.address || companySettings?.billingAddress || '',
+        contact: `${companySettings?.contactNumber || ''} ${companySettings?.email ? '| ' + companySettings.email : ''}`.trim()
+      },
       columns: [
         { header: 'S.No', key: 'sno', width: 8, type: 'number' },
+        { header: 'Image', key: 'imageUrl', width: 12, type: 'image' },
         { header: 'Invoice #', key: 'invoiceNumber', width: 15 },
         { header: 'Supplier', key: 'supplierName', width: 35 },
         { header: 'Date', key: 'date', width: 15 },
@@ -442,9 +452,10 @@ export const PurchaseInvoices = () => {
       ],
       data: invoices.map((invoice, i) => ({
         sno: i + 1,
+        imageUrl: invoice.items?.[0]?.product?.imageUrl ?? invoice.items?.[0]?.productData?.imageUrl ?? null,
         invoiceNumber: invoice.invoiceNumber ?? '—',
         supplierName: invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || invoice.supplier?.companyName || invoice.supplier?.name || 'Unknown',
-        date: invoice.invoiceDate || invoice.invoice_date || invoice.createdAt 
+        date: invoice.invoiceDate || invoice.invoice_date || invoice.createdAt
           ? new Date(invoice.invoiceDate || invoice.invoice_date || invoice.createdAt).toLocaleDateString()
           : 'Invalid Date',
         itemsCount: invoice.items?.length ?? 0,
@@ -453,13 +464,13 @@ export const PurchaseInvoices = () => {
         notes: invoice.notes?.trim() || ''
       })),
       summary: {
-          rows: [
-              {
-                  label: 'GRAND TOTAL:',
-                  invoiceNumber: `${invoices.length} Invoices`,
-                  total: invoices.reduce((sum, o) => sum + Number(o.pricing?.total || 0), 0)
-              }
-          ]
+        rows: [
+          {
+            label: 'GRAND TOTAL:',
+            invoiceNumber: `${invoices.length} Invoices`,
+            total: invoices.reduce((sum, o) => sum + Number(o.pricing?.total || 0), 0)
+          }
+        ]
       }
     };
   };
@@ -488,9 +499,13 @@ export const PurchaseInvoices = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto items-stretch sm:items-center">
-          <ExcelExportButton 
+          <ExcelExportButton
             getData={getExportData}
             label="Export"
+          />
+          <PdfExportButton
+            getData={getExportData}
+            label="PDF"
           />
           <div className="w-full sm:w-auto">
             <DateFilter
@@ -584,7 +599,7 @@ export const PurchaseInvoices = () => {
                         {invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}
                       </p>
                       <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
-                        <span>{invoice.invoiceDate || invoice.invoice_date || invoice.createdAt 
+                        <span>{invoice.invoiceDate || invoice.invoice_date || invoice.createdAt
                           ? new Date(invoice.invoiceDate || invoice.invoice_date || invoice.createdAt).toLocaleDateString()
                           : 'Invalid Date'}</span>
                         <span>•</span>
@@ -656,24 +671,24 @@ export const PurchaseInvoices = () => {
                     {idx + 1}
                   </div>
 
-            {/* Invoice Number */}
-            <div className="col-span-1 min-w-0">
-              <div className="font-medium text-sm text-gray-900 truncate">
-                {invoice.invoiceNumber}
-              </div>
-            </div>
+                  {/* Invoice Number */}
+                  <div className="col-span-1 min-w-0">
+                    <div className="font-medium text-sm text-gray-900 truncate">
+                      {invoice.invoiceNumber}
+                    </div>
+                  </div>
 
-            {/* Supplier */}
-            <div className="col-span-2 min-w-0">
-              <div className="text-sm text-gray-900 truncate" title={invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}>
-                {invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}
-              </div>
-            </div>
+                  {/* Supplier */}
+                  <div className="col-span-2 min-w-0">
+                    <div className="text-sm text-gray-900 truncate" title={invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}>
+                      {invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}
+                    </div>
+                  </div>
 
                   {/* Date */}
                   <div className="col-span-1">
                     <span className="text-xs sm:text-sm text-gray-600">
-                      {invoice.invoiceDate || invoice.invoice_date || invoice.createdAt 
+                      {invoice.invoiceDate || invoice.invoice_date || invoice.createdAt
                         ? new Date(invoice.invoiceDate || invoice.invoice_date || invoice.createdAt).toLocaleDateString()
                         : 'Invalid Date'}
                     </span>
@@ -736,6 +751,22 @@ export const PurchaseInvoices = () => {
                       >
                         <Printer className="h-4 w-4" />
                       </button>
+                      <ExcelExportButton
+                        getData={() => {
+                          const payload = getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier');
+                          return {
+                            ...payload,
+                            filename: `Purchase_Invoice_${invoice.invoiceNumber}.xlsx`
+                          };
+                        }}
+                        label=""
+                        className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-green-600 hover:text-green-800 px-1 py-1"
+                      />
+                      <PdfExportButton
+                        getData={() => getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier')}
+                        label=""
+                        className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-red-600 hover:text-red-800 px-1 py-1"
+                      />
 
                       {canEditByDate(invoice) && (
                         <button

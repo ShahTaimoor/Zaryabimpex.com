@@ -125,6 +125,11 @@ class ChartOfAccountsRepository {
       sql += ` AND reconciliation_status = $${paramCount++}`;
       params.push(filters.reconciliationStatus ?? filters.reconciliation_status);
     }
+    if (filters.search) {
+      sql += ` AND (account_name ILIKE $${paramCount} OR account_code ILIKE $${paramCount} OR description ILIKE $${paramCount})`;
+      params.push(`%${filters.search}%`);
+      paramCount++;
+    }
     sql += ' ORDER BY account_code';
     if (options.limit) { sql += ` LIMIT $${paramCount++}`; params.push(options.limit); }
     if (options.offset) { sql += ` OFFSET $${paramCount++}`; params.push(options.offset); }
@@ -136,18 +141,33 @@ class ChartOfAccountsRepository {
     let sql = 'SELECT COUNT(*) FROM chart_of_accounts WHERE deleted_at IS NULL';
     const params = [];
     let paramCount = 1;
-    if (filters.accountCategory) {
-      const accountCategoryRepository = require('./AccountCategoryRepository');
-      const cat = await accountCategoryRepository.findById(filters.accountCategory);
-      const name = cat ? (cat.name || cat.account_name) : null;
-      if (!name) return 0;
-      sql += ` AND account_category = $${paramCount++}`;
-      params.push(name);
+    
+    if (filters.accountCode) {
+      sql += ` AND account_code = $${paramCount++}`;
+      params.push(filters.accountCode);
     }
+    
+    if (filters.accountCategory) {
+      sql += ` AND account_category = $${paramCount++}`;
+      params.push(filters.accountCategory);
+    }
+    
     if (filters.accountType) {
       sql += ` AND account_type = $${paramCount++}`;
       params.push(filters.accountType);
     }
+    
+    if (filters.isActive !== undefined) {
+      sql += ` AND is_active = $${paramCount++}`;
+      params.push(filters.isActive);
+    }
+    
+    if (filters.search) {
+      sql += ` AND (account_name ILIKE $${paramCount} OR account_code ILIKE $${paramCount} OR description ILIKE $${paramCount})`;
+      params.push(`%${filters.search}%`);
+      paramCount++;
+    }
+    
     const result = await query(sql, params);
     return parseInt(result.rows[0].count, 10);
   }

@@ -1,4 +1,6 @@
 const { query } = require('../../config/postgres');
+const inventoryBalanceRepository = require('./InventoryBalanceRepository');
+
 
 function rowToProduct(row) {
   if (!row) return null;
@@ -30,16 +32,19 @@ function rowToProduct(row) {
  * PostgreSQL Product repository - use for product data when migrating off MongoDB.
  */
 class ProductRepository {
-  async findById(id) {
-    const result = await query(
-      'SELECT * FROM products WHERE id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL)',
-      [id]
-    );
+  async findById(id, includeDeleted = false) {
+    const sql = includeDeleted
+      ? 'SELECT * FROM products WHERE id = $1'
+      : 'SELECT * FROM products WHERE id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL)';
+    const result = await query(sql, [id]);
     return rowToProduct(result.rows[0]);
   }
 
   async findAll(filters = {}, options = {}) {
-    let sql = 'SELECT * FROM products WHERE (is_deleted = FALSE OR is_deleted IS NULL)';
+    let sql = 'SELECT * FROM products WHERE 1=1';
+    if (!filters.includeDeleted) {
+      sql += ' AND (is_deleted = FALSE OR is_deleted IS NULL)';
+    }
     const params = [];
     let paramCount = 1;
 
@@ -128,10 +133,25 @@ class ProductRepository {
         data.invoiceRef ?? data.invoice_ref ?? null
       ]
     );
-    return result.rows[0];
+    const created = rowToProduct(result.rows[0]);
+    if (created && created.stockQuantity !== undefined) {
+      try {
+        await inventoryBalanceRepository.syncBalance(
+          created.id,
+          created.stockQuantity,
+          0,
+          0,
+          client
+        );
+      } catch (err) {
+        console.error('Error syncing inventory_balance in ProductRepository.create:', err);
+      }
+    }
+    return created;
   }
 
-  async update(id, data) {
+  async update(id, data, client = null) {
+
     const fields = [];
     const values = [];
     let n = 1;
@@ -180,11 +200,27 @@ class ProductRepository {
     }
     if (fields.length === 0) return this.findById(id);
     values.push(id);
-    const result = await query(
+    const q = client ? client.query.bind(client) : query;
+    const result = await q(
       `UPDATE products SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${n} RETURNING *`,
       values
     );
-    return result.rows[0] || null;
+
+    const updated = result.rows[0] || null;
+    if (updated && (data.stockQuantity !== undefined || data.stock_quantity !== undefined)) {
+      try {
+        await inventoryBalanceRepository.syncBalance(
+          updated.id,
+          parseFloat(updated.stock_quantity || 0),
+          0,
+          0,
+          client
+        );
+      } catch (err) {
+        console.error('Error syncing inventory_balance in ProductRepository.update:', err);
+      }
+    }
+    return updated;
   }
 
   async delete(id, client = null) {
@@ -457,16 +493,29 @@ class ProductRepository {
    */
   async deleteAllPermanently() {
     const { transaction } = require('../../config/postgres');
+    const AccountingService = require('../../services/accountingService');
+    
     return transaction(async (client) => {
+      // Clear product-related tables
       await client.query('DELETE FROM product_transformations');
       await client.query('DELETE FROM inventory_balance');
-      // Use DELETE (not TRUNCATE) to avoid FK constraint failures on related movement tables.
       await client.query('DELETE FROM stock_movements');
       await client.query('DELETE FROM batches');
       await client.query('DELETE FROM profit_shares');
       await client.query('DELETE FROM inventory');
       await client.query('DELETE FROM product_investors');
+      
+      // Clear associated ledger entries for Inventory (1200) to keep Balance Sheet clean
+      await client.query(
+        "DELETE FROM account_ledger WHERE account_code = '1200' OR (reference_type IN ('product_opening_stock', 'inventory_adjustment', 'inventory_reconciliation'))"
+      );
+      
       const r = await client.query('DELETE FROM products');
+      
+      // Refresh balances so Balance Sheet shows 0
+      await AccountingService.updateAccountBalance(client, '1200');
+      await AccountingService.updateAccountBalance(client, '3100');
+      
       return r.rowCount;
     });
   }

@@ -65,7 +65,12 @@ const generateStyledExcel = async ({
     summary = {}
 }) => {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet(title);
+    // Excel worksheet names cannot exceed 31 chars and cannot contain certain characters
+    const safeTitle = title
+        .replace(/[\\\/\?\*\[\]\:\n\r]/g, ' ') // Remove invalid chars and newlines
+        .substring(0, 31)                      // Limit to 31 chars
+        .trim() || 'Report';                   // Fallback
+    const worksheet = workbook.addWorksheet(safeTitle);
 
     // 1. Company Header (Merged Cells)
     worksheet.mergeCells('A1:D1');
@@ -138,12 +143,12 @@ const generateStyledExcel = async ({
             // Try different variants: Original, snake_case, camelCase, lowercase
             const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             const camelKey = key.replace(/([-_][a-z])/g, group => group.toUpperCase().replace('-', '').replace('_', ''));
-            
+
             let value = item[key];
             if (value === undefined || value === null) value = item[snakeKey];
             if (value === undefined || value === null) value = item[camelKey];
             if (value === undefined || value === null) value = item[key.toLowerCase()];
-            
+
             // Final Cleanup: Convert null/undefined to empty string
             if (value === null || value === undefined) {
                 value = '';
@@ -153,7 +158,7 @@ const generateStyledExcel = async ({
                     value = '';
                 }
             }
-            
+
             return value;
         });
 
@@ -178,7 +183,7 @@ const generateStyledExcel = async ({
                         buffer,
                         extension: value.split('.').pop() || 'png',
                     });
-                    
+
                     // Set row height to accommodate image
                     row.height = 60;
                     hasImage = true;
@@ -188,14 +193,14 @@ const generateStyledExcel = async ({
                         ext: { width: 50, height: 50 },
                         editAs: 'oneCell'
                     });
-                    
+
                     cell.value = ''; // Clear the URL text so it doesn't overlap
                 } catch (e) {
                     console.error('Excel Image Error:', e.message);
                     cell.value = 'No Image';
                 }
             }
-            
+
             cell.border = {
                 top: { style: 'thin' },
                 left: { style: 'thin' },
@@ -227,7 +232,7 @@ const generateStyledExcel = async ({
             const lastCell = worksheet.getCell(`D${row.number}`);
             lastCell.numFmt = '#,##0.00';
         }
-        
+
         // Handle dynamic summaryRows (preferred for complex reports)
         const rowsToProcess = summary.rows || [];
         if (summary.total !== undefined && !summary.rows) {
@@ -237,7 +242,7 @@ const generateStyledExcel = async ({
 
         rowsToProcess.forEach(summaryRow => {
             const rowData = columns.map(col => summaryRow[col.key] ?? '');
-            
+
             // Find a place for the label (usually first empty cell before the first value)
             const firstValueIdx = columns.findIndex(col => summaryRow[col.key] !== undefined);
             if (firstValueIdx > 0) {
@@ -246,7 +251,7 @@ const generateStyledExcel = async ({
 
             const row = worksheet.addRow(rowData);
             row.height = summaryRow.label?.includes('GRAND') ? 25 : 20;
-            
+
             row.eachCell((cell, colNumber) => {
                 const colDef = columns[colNumber - 1];
                 const isValue = summaryRow[colDef.key] !== undefined;

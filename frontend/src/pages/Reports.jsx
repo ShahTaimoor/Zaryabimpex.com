@@ -18,6 +18,7 @@ import {
   Building2
 } from 'lucide-react';
 import ExcelExportButton from '../components/ExcelExportButton';
+import PdfExportButton from '../components/PdfExportButton';
 import {
   useGetSalesReportQuery,
   useGetProductReportQuery,
@@ -753,6 +754,11 @@ export const Reports = () => {
           <ExcelExportButton 
             getData={getExportData} 
             label="Export Report"
+            className="border-indigo-200 bg-white text-indigo-700 hover:border-indigo-500 hover:bg-indigo-50 transition-all font-semibold"
+          />
+          <PdfExportButton 
+            getData={getExportData} 
+            label="PDF Report"
             className="border-indigo-200 bg-white text-indigo-700 hover:border-indigo-500 hover:bg-indigo-50 transition-all font-semibold"
           />
           <button

@@ -2,6 +2,14 @@ const inventoryRepository = require('../repositories/InventoryRepository');
 const stockAdjustmentRepository = require('../repositories/StockAdjustmentRepository');
 const productRepository = require('../repositories/ProductRepository');
 const productVariantRepository = require('../repositories/ProductVariantRepository');
+const AccountingService = require('./accountingService');
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function isValidUuid(v) {
+  if (!v) return false;
+  return UUID_REGEX.test(String(v));
+}
+
 
 function getCurrentStock(inv) {
   return Number(inv?.current_stock ?? inv?.currentStock ?? 0);
@@ -52,6 +60,20 @@ const updateStock = async ({ productId, type, quantity, reason, reference, refer
         stockQuantity: newStock,
         ...(cost !== undefined && cost !== null && isIn ? { costPrice: cost } : {})
       });
+
+      // Update Accounting Ledger
+      try {
+        const delta = isIn ? quantity : -quantity;
+        const unitCost = cost || parseFloat(productRow.cost_price || productRow.costPrice) || 0;
+        const validatedUserId = isValidUuid(performedBy) ? performedBy : null;
+
+        await AccountingService.recordStockAdjustment(productId, delta, unitCost, {
+          createdBy: validatedUserId,
+          reason: reason || `Inventory ${type}`
+        });
+      } catch (accErr) {
+        console.error('Failed to update ledger for inventory movement:', accErr);
+      }
     } else {
       await productVariantRepository.updateById(productId, {
         inventory: { currentStock: newStock }

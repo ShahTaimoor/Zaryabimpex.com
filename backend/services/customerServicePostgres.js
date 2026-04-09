@@ -112,12 +112,12 @@ class CustomerService {
     const data = { ...customerData, createdBy: userId };
     if (options.openingBalance != null) data.openingBalance = options.openingBalance;
     const customer = await customerRepository.create(data);
-    
+
     // Auto-create Chart of Accounts entry for this customer
     try {
       const accountCode = `CUST-${customer.id}`;
       const accountName = customer.business_name || customer.name || 'Unknown Customer';
-      
+
       // Check if account already exists
       const existingAccount = await chartOfAccountsRepository.findByAccountCode(accountCode);
       if (!existingAccount) {
@@ -153,7 +153,7 @@ class CustomerService {
       console.error('Failed to post customer opening balance to ledger:', openingBalanceError);
       // Don't fail customer creation if ledger posting fails
     }
-    
+
     const withBalance = await this.getCustomerById(customer.id);
     return { customer: withBalance, message: 'Customer created successfully' };
   }
@@ -244,7 +244,7 @@ class CustomerService {
             addr = null;
           }
         }
-        
+
         // Handle both array and object formats for address
         let customerCity = null;
         if (Array.isArray(addr) && addr.length > 0) {
@@ -316,7 +316,7 @@ class CustomerService {
 
   async searchCustomers(searchTerm, limit = 10) {
     const customers = await customerRepository.search(searchTerm, { limit });
-    
+
     const customerIds = customers.map(c => c.id);
     const balanceMap = await AccountingService.getBulkCustomerBalances(customerIds);
 

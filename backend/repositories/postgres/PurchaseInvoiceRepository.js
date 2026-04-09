@@ -115,11 +115,11 @@ async function enrichItemsWithProductNames(invoiceOrInvoices) {
     if (productIds.length === 0) return;
 
     const prodResult = await query(
-      `SELECT id, name FROM products WHERE id = ANY($1::uuid[]) AND (is_deleted = FALSE OR is_deleted IS NULL)`,
+      `SELECT id, name FROM products WHERE id = ANY($1::uuid[])`,
       [productIds]
     );
     const varResult = await query(
-      `SELECT id, COALESCE(display_name, variant_name) as name FROM product_variants WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+      `SELECT id, COALESCE(display_name, variant_name) as name FROM product_variants WHERE id = ANY($1::uuid[])`,
       [productIds]
     );
     const nameMap = {};

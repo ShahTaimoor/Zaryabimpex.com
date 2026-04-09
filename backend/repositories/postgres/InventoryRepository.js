@@ -1,24 +1,26 @@
 const { query } = require('../../config/postgres');
+const inventoryBalanceRepository = require('./InventoryBalanceRepository');
+
 
 class InventoryRepository {
-  async findById(id) {
-    const result = await query(
-      'SELECT * FROM inventory WHERE id = $1 AND deleted_at IS NULL',
-      [id]
-    );
+  async findById(id, includeDeleted = false) {
+    const sql = includeDeleted
+      ? 'SELECT * FROM inventory WHERE id = $1'
+      : 'SELECT * FROM inventory WHERE id = $1 AND deleted_at IS NULL';
+    const result = await query(sql, [id]);
     return result.rows[0] || null;
   }
 
-  async findOne(filters = {}, client = null) {
+  async findOne(filters = {}, client = null, includeDeleted = false) {
     const q = client ? client.query.bind(client) : query;
     if (filters.product || filters.productId) {
-      const result = await q(
-        'SELECT * FROM inventory WHERE product_id = $1 AND deleted_at IS NULL LIMIT 1',
-        [filters.product || filters.productId]
-      );
+      const sql = includeDeleted
+        ? 'SELECT * FROM inventory WHERE product_id = $1 LIMIT 1'
+        : 'SELECT * FROM inventory WHERE product_id = $1 AND deleted_at IS NULL LIMIT 1';
+      const result = await q(sql, [filters.product || filters.productId]);
       return result.rows[0] || null;
     }
-    if (filters._id || filters.id) return this.findById(filters._id || filters.id);
+    if (filters._id || filters.id) return this.findById(filters._id || filters.id, includeDeleted);
     return null;
   }
 
@@ -51,7 +53,7 @@ class InventoryRepository {
   }
 
   async findByProduct(productId, options = {}) {
-    return this.findOne({ product: productId, productId });
+    return this.findOne({ product: productId, productId }, null, options.includeDeleted);
   }
 
   async findByProductIds(productIds, options = {}) {
@@ -103,7 +105,21 @@ class InventoryRepository {
         data.movements ? JSON.stringify(data.movements) : '[]'
       ]
     );
-    return result.rows[0];
+    const created = result.rows[0];
+    if (created) {
+      try {
+        await inventoryBalanceRepository.syncBalance(
+          created.product_id,
+          created.current_stock,
+          created.reserved_stock,
+          0,
+          client
+        );
+      } catch (err) {
+        console.error('Error syncing inventory_balance in create:', err);
+      }
+    }
+    return created;
   }
 
   async updateById(id, data, client = null) {
@@ -130,13 +146,28 @@ class InventoryRepository {
       `UPDATE inventory SET ${updates.join(', ')} WHERE id = $${paramCount} AND deleted_at IS NULL RETURNING *`,
       params
     );
-    return result.rows[0] || null;
+    
+    const updated = result.rows[0] || null;
+    if (updated && (data.currentStock !== undefined || data.reservedStock !== undefined)) {
+      try {
+        await inventoryBalanceRepository.syncBalance(
+          updated.product_id,
+          updated.current_stock,
+          updated.reserved_stock,
+          0,
+          client
+        );
+      } catch (err) {
+        console.error('Error syncing inventory_balance in updateById:', err);
+      }
+    }
+    return updated;
   }
 
-  async updateByProductId(productId, data) {
-    const row = await this.findByProduct(productId);
+  async updateByProductId(productId, data, client = null) {
+    const row = await this.findOne({ productId }, client);
     if (!row) return null;
-    return this.updateById(row.id, data);
+    return this.updateById(row.id, data, client);
   }
 
   async softDelete(id) {

@@ -71,8 +71,15 @@ class SalesService {
   transformCustomerToUppercase(customer) {
     if (!customer) return customer;
     if (customer.toObject) customer = customer.toObject();
+    
+    // Postgres uses business_name, frontend uses businessName
+    if (customer.business_name && !customer.businessName) {
+      customer.businessName = customer.business_name;
+    }
+    
     if (customer.name) customer.name = customer.name.toUpperCase();
     if (customer.businessName) customer.businessName = customer.businessName.toUpperCase();
+    if (customer.business_name) customer.business_name = customer.business_name.toUpperCase();
     if (customer.firstName) customer.firstName = customer.firstName.toUpperCase();
     if (customer.lastName) customer.lastName = customer.lastName.toUpperCase();
     return customer;
@@ -94,7 +101,7 @@ class SalesService {
     if (productIds.length === 0) return items;
 
     const [products, invRows] = await Promise.all([
-      productRepository.findAll({ ids: productIds }, { limit: 1000 }),
+      productRepository.findAll({ ids: productIds, includeDeleted: true }, { limit: 1000 }),
       inventoryRepository.findByProductIds(productIds)
     ]);
     const invByProduct = new Map((invRows || []).map(inv => [String(inv.product_id), inv]));
@@ -117,7 +124,7 @@ class SalesService {
     }
     for (const id of productIds) {
       if (productMap.has(id)) continue;
-      const v = await productVariantRepository.findById(id);
+      const v = await productVariantRepository.findById(id, true);
       if (v) {
         const inv = invByProduct.get(id);
         const invData = v.inventory_data || v.inventory || {};
@@ -503,6 +510,8 @@ class SalesService {
 
       orderItems.push({
         product: productId,
+        name: product.name || product.displayName || 'Product',
+        sku: product.sku || null,
         quantity: item.quantity,
         unitCost,
         unitPrice,

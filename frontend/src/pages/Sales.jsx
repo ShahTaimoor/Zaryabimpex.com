@@ -159,7 +159,8 @@ export const Sales = ({ tabId, editData }) => {
 
   // Generate invoice number
   const generateInvoiceNumber = (customer) => {
-    if (!customer) return '';
+    const customerId = customer?.id || customer?._id;
+    if (!customerId) return '';
 
     const now = new Date();
     const year = now.getFullYear();
@@ -433,11 +434,15 @@ export const Sales = ({ tabId, editData }) => {
   // Map businessType to orderType
   // businessType: ['retail', 'wholesale', 'distributor', 'individual']
   // orderType: ['retail', 'wholesale', 'return', 'exchange']
-  const mapBusinessTypeToOrderType = (businessType) => {
+  const mapBusinessTypeToOrderType = (bt) => {
+    // If bt is not provided, use selectedCustomer's type as fallback
+    const businessType = bt || selectedCustomer?.business_type || selectedCustomer?.businessType;
     if (!businessType) return 'retail';
-    if (businessType === 'retail' || businessType === 'wholesale') return businessType;
-    if (businessType === 'distributor') return 'wholesale'; // Distributors are wholesale customers
-    if (businessType === 'individual') return 'retail'; // Individuals are retail customers
+    
+    const type = String(businessType).toLowerCase();
+    if (type === 'retail' || type === 'wholesale') return type;
+    if (type === 'distributor') return 'wholesale'; // Distributors are wholesale customers
+    if (type === 'individual') return 'retail'; // Individuals are retail customers
     return 'retail'; // Default fallback
   };
 
@@ -1149,7 +1154,7 @@ export const Sales = ({ tabId, editData }) => {
 
     const orderData = {
       orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
-      customer: selectedCustomer?._id,
+      customer: selectedCustomer?.id || selectedCustomer?._id,
       items: cart.map(item => {
         const base = { product: item.product._id, quantity: Math.round(item.quantity), unitPrice: item.unitPrice };
         if (item.boxes != null || item.pieces != null) {
@@ -1187,7 +1192,7 @@ export const Sales = ({ tabId, editData }) => {
       // For updates, send items with all required fields according to orderItemSchema
       const updateData = {
         orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
-        customer: selectedCustomer?._id,
+        customer: selectedCustomer?.id || selectedCustomer?._id,
         items: cart.map(item => {
           const itemSubtotal = item.quantity * item.unitPrice;
           const itemDiscountAmount = 0; // Can be calculated if needed

@@ -54,8 +54,15 @@ const formatCustomerAddress = (customerData) => {
 const transformCustomerToUppercase = (customer) => {
   if (!customer) return customer;
   if (customer.toObject) customer = customer.toObject();
+
+  // Postgres uses business_name, frontend uses businessName
+  if (customer.business_name && !customer.businessName) {
+    customer.businessName = customer.business_name;
+  }
+
   if (customer.name) customer.name = customer.name.toUpperCase();
   if (customer.businessName) customer.businessName = customer.businessName.toUpperCase();
+  if (customer.business_name) customer.business_name = customer.business_name.toUpperCase();
   if (customer.firstName) customer.firstName = customer.firstName.toUpperCase();
   if (customer.lastName) customer.lastName = customer.lastName.toUpperCase();
   return customer;

@@ -1,11 +1,11 @@
 const { query } = require('../../config/postgres');
 
 class SupplierRepository {
-  async findById(id) {
-    const result = await query(
-      'SELECT * FROM suppliers WHERE id = $1 AND is_deleted = FALSE',
-      [id]
-    );
+  async findById(id, includeDeleted = false) {
+    const sql = includeDeleted
+      ? 'SELECT * FROM suppliers WHERE id = $1'
+      : 'SELECT * FROM suppliers WHERE id = $1 AND is_deleted = FALSE';
+    const result = await query(sql, [id]);
     return result.rows[0] || null;
   }
 

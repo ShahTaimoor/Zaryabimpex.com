@@ -13,6 +13,7 @@
     "seed:data": "node scripts/seedData.js",
     "seed:accounting": "node scripts/seedAccounting.js",
     "seed:suppliers": "node scripts/seedSuppliers.js",
+    "seed:product-stock": "node scripts/seedProductStock.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"

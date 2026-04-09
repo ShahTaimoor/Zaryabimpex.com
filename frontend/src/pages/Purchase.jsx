@@ -952,7 +952,7 @@ export const Purchase = ({ tabId, editData }) => {
 
     // Create purchase invoice data
     const invoiceData = {
-      supplier: selectedSupplier._id,
+      supplier: selectedSupplier.id || selectedSupplier._id,
       supplierInfo: {
         name: selectedSupplier.name,
         email: selectedSupplier.email,
@@ -972,7 +972,7 @@ export const Purchase = ({ tabId, editData }) => {
         })()
       },
       items: purchaseItems.map(item => ({
-        product: item.product?._id,
+        product: item.product?.id || item.product?._id,
         quantity: item.quantity,
         unitCost: item.costPerUnit,
         totalCost: item.quantity * item.costPerUnit
@@ -1084,7 +1084,7 @@ export const Purchase = ({ tabId, editData }) => {
                         /* ignore */
                       }
                     }
-                    if (selectedSupplier?._id && refetchSupplier) {
+                    if ((selectedSupplier?.id || selectedSupplier?._id) && refetchSupplier) {
                       try {
                         const result = await refetchSupplier();
                         const s =

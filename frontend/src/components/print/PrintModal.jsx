@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import PrintWrapper from './PrintWrapper';
 import PrintTrigger from './PrintTrigger';
 import { PRINT_PAGE_STYLE } from './printPageStyle';
+import PdfExportButton from '../PdfExportButton';
 
 /**
  * PrintModal - Unified print preview modal using BaseModal + react-to-print.
@@ -25,7 +26,8 @@ const PrintModal = ({
   emptyMessage = 'No data to print.',
   hasData = true,
   autoPrint = false,
-  zIndex = 50
+  zIndex = 50,
+  getPdfData
 }) => {
   const printRef = useRef(null);
 
@@ -44,6 +46,13 @@ const PrintModal = ({
 
   const footer = (
     <div className="flex justify-end gap-3 no-print">
+      {getPdfData && (
+        <PdfExportButton 
+          getData={getPdfData} 
+          label="Download PDF" 
+          className="bg-red-600 text-white hover:bg-red-700 hover:text-white border-red-600"
+        />
+      )}
       <PrintTrigger
         onPrint={handlePrint}
         disabled={!hasData}

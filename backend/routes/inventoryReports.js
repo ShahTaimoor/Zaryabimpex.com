@@ -546,24 +546,27 @@ router.get('/quick/summary', [
     const summarySql = `
       SELECT
         COUNT(*) as "totalProducts",
-        SUM(COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * COALESCE(p.cost_price, 0)) as "totalStockValue",
         SUM(
-          COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) *
-          COALESCE(p.wholesale_price, p.selling_price, 0)
+          COALESCE(NULLIF(ib.quantity, 'NaN'), NULLIF(i.current_stock, 'NaN'), NULLIF(p.stock_quantity, 'NaN'), 0) * 
+          COALESCE(NULLIF(p.cost_price, 'NaN'), 0)
+        ) as "totalStockValue",
+        SUM(
+          COALESCE(NULLIF(ib.quantity, 'NaN'), NULLIF(i.current_stock, 'NaN'), NULLIF(p.stock_quantity, 'NaN'), 0) *
+          COALESCE(NULLIF(p.wholesale_price, 'NaN'), NULLIF(p.selling_price, 'NaN'), 0)
         ) as "totalWholesaleValue",
         SUM(
-          COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) *
-          COALESCE(p.selling_price, p.wholesale_price, 0)
+          COALESCE(NULLIF(ib.quantity, 'NaN'), NULLIF(i.current_stock, 'NaN'), NULLIF(p.stock_quantity, 'NaN'), 0) *
+          COALESCE(NULLIF(p.selling_price, 'NaN'), NULLIF(p.wholesale_price, 'NaN'), 0)
         ) as "totalRetailValue",
         COUNT(*) FILTER (
-          WHERE COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) > 0
-            AND COALESCE(p.min_stock_level, 0) > 0
-            AND COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) <= COALESCE(p.min_stock_level, 0)
+          WHERE COALESCE(NULLIF(ib.quantity, 'NaN'), NULLIF(i.current_stock, 'NaN'), NULLIF(p.stock_quantity, 'NaN'), 0) > 0
+            AND COALESCE(NULLIF(p.min_stock_level, 'NaN'), 0) > 0
+            AND COALESCE(NULLIF(ib.quantity, 'NaN'), NULLIF(i.current_stock, 'NaN'), NULLIF(p.stock_quantity, 'NaN'), 0) <= COALESCE(NULLIF(p.min_stock_level, 'NaN'), 0)
         ) as "lowStockProducts",
-        COUNT(*) FILTER (WHERE COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) = 0) as "outOfStockProducts",
+        COUNT(*) FILTER (WHERE COALESCE(NULLIF(ib.quantity, 'NaN'), NULLIF(i.current_stock, 'NaN'), NULLIF(p.stock_quantity, 'NaN'), 0) = 0) as "outOfStockProducts",
         COUNT(*) FILTER (
-          WHERE COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) >
-            (COALESCE(p.min_stock_level, 0) * 3)
+          WHERE COALESCE(NULLIF(ib.quantity, 'NaN'), NULLIF(i.current_stock, 'NaN'), NULLIF(p.stock_quantity, 'NaN'), 0) >
+            (COALESCE(NULLIF(p.min_stock_level, 'NaN'), 0) * 3)
         ) as "overstockedProducts"
       FROM products p
       LEFT JOIN inventory_balance ib ON ib.product_id = p.id
