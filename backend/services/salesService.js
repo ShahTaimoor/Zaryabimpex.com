@@ -152,21 +152,46 @@ class SalesService {
       const i = { ...item };
       const p = i.product || i.product_id;
       const id = !p ? null : (typeof p === 'string' ? p : (p._id || p.id || p));
-      const sid = id && typeof id === 'string' ? id : (id && id.toString ? id.toString() : null);
+      const sid = (id && typeof id === 'string') ? id : (id && id.toString ? id.toString() : null);
 
       if (sid && productMap.has(sid)) {
         i.product = productMap.get(sid);
-      } else if (!i.product || typeof i.product === 'string') {
+      } else if (sid) {
         // Fallback: If product not found in DB, use denormalized name/sku from the item itself
-        const fallbackName = i.name || i.productName || i.display_name || 'Unknown Product';
+        let fallbackName = i.name || i.productName || i.display_name;
+        let fallbackSku = i.sku || i.product_sku || i.productSku;
+
+        // Try Deep recovery if name is still unknown
+        if (!fallbackName || fallbackName === 'Unknown Product') {
+          try {
+            const { query } = require('../config/postgres');
+            const recoveryRes = await query(`
+              SELECT name, sku FROM (
+                SELECT (elem->>'name') as name, (elem->>'sku') as sku, s.created_at FROM sales s, jsonb_array_elements(CASE WHEN jsonb_typeof(s.items) = 'array' THEN s.items ELSE '[]'::jsonb END) elem WHERE (elem->>'product' = $1 OR elem->>'product_id' = $1)
+                UNION ALL
+                SELECT (elem->>'productName') as name, (elem->>'sku') as sku, pi.created_at FROM purchase_invoices pi, jsonb_array_elements(CASE WHEN jsonb_typeof(pi.items) = 'array' THEN pi.items ELSE '[]'::jsonb END) elem WHERE (elem->>'product' = $1 OR elem->>'product_id' = $1)
+                UNION ALL
+                SELECT (elem->>'name') as name, (elem->>'sku') as sku, so.created_at FROM sales_orders so, jsonb_array_elements(CASE WHEN jsonb_typeof(so.items) = 'array' THEN so.items ELSE '[]'::jsonb END) elem WHERE (elem->>'product' = $1 OR elem->>'product_id' = $1)
+              ) h WHERE name IS NOT NULL AND name != 'Unknown Product' ORDER BY created_at DESC LIMIT 1
+            `, [sid]);
+
+            if (recoveryRes.rows[0]) {
+              fallbackName = recoveryRes.rows[0].name;
+              fallbackSku = recoveryRes.rows[0].sku || fallbackSku;
+            }
+          } catch (e) { /* ignore */ }
+        }
+
         i.product = {
           _id: sid,
           id: sid,
-          name: fallbackName,
-          sku: i.sku || i.product_sku || null,
+          name: fallbackName || 'Unknown Product',
+          sku: fallbackSku || null,
           imageUrl: i.imageUrl || i.image_url || null,
           isDeleted: true
         };
+      } else {
+        i.product = { name: 'Unknown Product', isDeleted: true };
       }
       results.push(i);
     }

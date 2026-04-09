@@ -73,34 +73,53 @@ const enrichItemsWithProducts = async (items) => {
     const productId = item.product || item.product_id;
     if (!productId) continue;
     const id = typeof productId === 'object' ? (productId.id || productId._id) : productId;
-    if (typeof id !== 'string') continue;
-    if (typeof item.product === 'object' && item.product && (item.product.name || item.product.displayName)) continue; // Already populated
+    if (typeof id !== 'string' && !(id && id.toString)) continue;
+    const sid = String(id);
+
+    // If already populated with a name, we can skip lookup but check if it's 'Unknown Product'
+    if (typeof item.product === 'object' && item.product && item.product.name && item.product.name !== 'Unknown Product') continue;
+    if (item.name && item.name !== 'Unknown Product') {
+       if (typeof item.product !== 'object') {
+         item.product = { _id: sid, id: sid, name: item.name, sku: item.sku || item.productSku };
+       }
+       continue;
+    }
+
     try {
-      let p = await productRepository.findById(id, true);
+      let p = await productRepository.findById(sid, true);
       if (p) {
-        item.product = { ...p, name: p.name || p.displayName, sku: p.sku };
+        item.product = { ...p, id: sid, _id: sid, name: p.name || p.displayName, sku: p.sku };
+        item.name = p.name || p.displayName;
+        item.sku = p.sku;
       } else {
-        p = await productVariantRepository.findById(id, true);
+        p = await productVariantRepository.findById(sid, true);
         if (p) {
-          item.product = { name: p.display_name ?? p.displayName ?? p.variant_name ?? p.variantName ?? 'Product', sku: p.sku };
+          const vname = p.display_name ?? p.displayName ?? p.variant_name ?? p.variantName ?? 'Product';
+          item.product = { ...p, id: sid, _id: sid, name: vname, sku: p.sku };
+          item.name = vname;
+          item.sku = p.sku;
         } else {
-          // DEEP RECOVERY: Search history for this product ID
+          // DEEP RECOVERY: Search history for this product ID in sales or purchase invoices
           const { query } = require('../config/postgres');
           const recoveryRes = await query(`
             SELECT name, sku FROM (
               SELECT (elem->>'name') as name, (elem->>'sku') as sku, s.created_at FROM sales s, jsonb_array_elements(CASE WHEN jsonb_typeof(s.items) = 'array' THEN s.items ELSE '[]'::jsonb END) elem WHERE (elem->>'product' = $1 OR elem->>'product_id' = $1)
               UNION ALL
               SELECT (elem->>'productName') as name, (elem->>'sku') as sku, pi.created_at FROM purchase_invoices pi, jsonb_array_elements(CASE WHEN jsonb_typeof(pi.items) = 'array' THEN pi.items ELSE '[]'::jsonb END) elem WHERE (elem->>'product' = $1 OR elem->>'product_id' = $1)
-            ) h WHERE name IS NOT NULL ORDER BY created_at DESC LIMIT 1
-          `, [id]);
+              UNION ALL
+              SELECT (elem->>'name') as name, (elem->>'sku') as sku, so.created_at FROM sales_orders so, jsonb_array_elements(CASE WHEN jsonb_typeof(so.items) = 'array' THEN so.items ELSE '[]'::jsonb END) elem WHERE (elem->>'product' = $1 OR elem->>'product_id' = $1)
+            ) h WHERE name IS NOT NULL AND name != 'Unknown Product' ORDER BY created_at DESC LIMIT 1
+          `, [sid]);
 
           const recoveredName = recoveryRes.rows[0]?.name || item.name || item.productName || 'Unknown Product';
-          const recoveredSku = recoveryRes.rows[0]?.sku || item.sku || null;
-          item.product = { _id: id, id: id, name: recoveredName, sku: recoveredSku };
+          const recoveredSku = recoveryRes.rows[0]?.sku || item.sku || item.productSku || null;
+          item.product = { _id: sid, id: sid, name: recoveredName, sku: recoveredSku };
+          item.name = recoveredName;
+          item.sku = recoveredSku;
         }
       }
     } catch (e) {
-      // Keep item.product as-is on error
+      console.error('Error in enrichItemsWithProducts:', e);
     }
   }
 };
@@ -297,6 +316,11 @@ router.post('/', [
       return res.status(400).json({ errors: errors.array() });
     }
 
+    // Enrich items with product names before saving
+    if (req.body.items && Array.isArray(req.body.items)) {
+      await enrichItemsWithProducts(req.body.items);
+    }
+
     const soData = {
       ...req.body,
       soNumber: salesOrderRepository.generateSONumber(),
@@ -358,6 +382,11 @@ router.put('/:id', [
       return res.status(400).json({
         message: 'Cannot edit sales order that has been confirmed or invoiced'
       });
+    }
+
+    // Enrich items with product names before saving
+    if (req.body.items && Array.isArray(req.body.items)) {
+      await enrichItemsWithProducts(req.body.items);
     }
 
     const updateData = {

@@ -684,6 +684,9 @@ router.put('/:id', [
 
         newOrderItems.push({
           product: item.product,
+          product_id: item.product,
+          name: item.name || item.productName || (isVariantForTax ? (productForTax?.display_name || productForTax?.variantName) : productForTax?.name) || 'Product',
+          sku: item.sku || productForTax?.sku || null,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           unitCost,
@@ -769,6 +772,8 @@ router.put('/:id', [
       updateData.items = order.items.map(it => ({
         product_id: it.product_id || it.product,
         product: it.product_id || it.product,
+        name: it.name || it.productName || 'Product',
+        sku: it.sku || null,
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         unitCost: it.unitCost ?? it.cost_price ?? 0,
