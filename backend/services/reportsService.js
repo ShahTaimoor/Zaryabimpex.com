@@ -466,6 +466,7 @@ class ReportsService {
                COALESCE(p.selling_price, 0) as selling_price,
                COALESCE(p.wholesale_price, p.selling_price, 0) as wholesale_price,
                COALESCE(p.min_stock_level, 0) as min_stock_level,
+               p.image_url,
                COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0)::decimal as "currentStock"
         FROM products p
         LEFT JOIN categories cat ON p.category_id = cat.id
@@ -507,6 +508,7 @@ class ReportsService {
         pb.id, pb.name, pb.sku, pb.unit, pb."categoryName", pb.cost_price, pb.selling_price, pb.wholesale_price,
         pb."currentStock",
         pb.min_stock_level,
+        pb.image_url as "imageUrl",
         (pb."currentStock" - COALESCE(pa.net_qty, 0))::decimal as "openingQty",
         COALESCE(pa.net_qty, 0)::decimal as "netQty",
         COALESCE(pa.purchase_qty, 0)::decimal as "purchaseQty",
@@ -563,6 +565,7 @@ class ReportsService {
         sku: r.sku,
         unit: r.unit,
         categoryName: r.categoryName,
+        imageUrl: r.imageUrl,
         minStockLevel,
         lastPurchasePrice,
         currentStock,
@@ -689,6 +692,7 @@ class ReportsService {
         p.name,
         p.sku,
         p.barcode,
+        p.image_url as "imageUrl",
         cat.name as "categoryName",
         COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) as "stockQuantity",
         p.min_stock_level as "minStockLevel",

@@ -31,10 +31,10 @@ import { useTab } from '../contexts/TabContext';
 import { useBulkOperations } from '../hooks/useBulkOperations';
 import BulkOperationsBar from '../components/BulkOperationsBar';
 import BulkUpdateModal from '../components/BulkUpdateModal';
-import { 
-  exportToExcel, 
+import {
+  exportToExcel,
   importExcelFile,
-  exportTemplate 
+  exportTemplate
 } from '../utils/excelExport';
 import { getComponentInfo } from '../utils/componentUtils';
 import BarcodeScanner from '../components/BarcodeScanner';
@@ -70,7 +70,7 @@ export const Products = () => {
   const [notesEntity, setNotesEntity] = useState(null);
   const { openTab } = useTab();
 
-  const queryParams = { 
+  const queryParams = {
     search: searchTerm || undefined,
     page: currentPage,
     limit: itemsPerPage,
@@ -166,17 +166,20 @@ export const Products = () => {
     title: 'Product Catalog',
     filename: `Products_${new Date().toLocaleDateString()}.xlsx`,
     columns: [
+      { header: 'S.No', key: 'sno', width: 8, type: 'number' },
+      { header: 'Image', key: 'imageUrl', width: 12, type: 'image' },
       { header: 'Product Name', key: 'displayName', width: 40 },
       { header: 'Category', key: 'categoryName', width: 25 },
       { header: 'Cost Price', key: 'costPrice', width: 15, type: 'currency' },
       { header: 'Retail Price', key: 'retailPrice', width: 15, type: 'currency' },
       { header: 'Wholesale Price', key: 'wholesalePrice', width: 15, type: 'currency' },
-      { header: 'Stock', key: 'stock', width: 12, type: 'number' },
-      { header: 'Status', key: 'status', width: 15 }
+      { header: 'Stock', key: 'stock', width: 12, type: 'number' }
     ],
-    data: allProducts.map(p => ({
+    data: allProducts.map((p, i) => ({
       ...p,
+      sno: i + 1,
       displayName: p.name || 'N/A',
+      imageUrl: p.imageUrl || null,
       categoryName: p.categoryName || p.category?.name || (typeof p.category === 'string' ? p.category : '-'),
       costPrice: p.pricing?.cost || 0,
       retailPrice: p.pricing?.retail || 0,
@@ -235,7 +238,7 @@ export const Products = () => {
         const msg = err.msg || err.message || 'Invalid value';
         return field ? `${field}: ${msg}` : msg;
       });
-      errorMessage = errorDetails.length > 0 
+      errorMessage = errorDetails.length > 0
         ? errorDetails.join(', ')
         : (error.response.data.message || 'Invalid request parameters');
     } else if (error?.response?.data?.details) {
@@ -329,8 +332,8 @@ export const Products = () => {
             title="Print barcode labels"
           >
             <Printer className="h-4 w-4 text-purple-600" />
-            <span className="hidden sm:inline font-semibold">Print</span>
-            <span className="sm:hidden font-semibold">Print</span>
+            <span className="hidden sm:inline font-semibold">Print Barcode</span>
+            <span className="sm:hidden font-semibold">Print Barcode</span>
           </Button>
           <Button
             onClick={() => productOps.handleAdd()}
@@ -342,11 +345,11 @@ export const Products = () => {
             <span className="hidden sm:inline uppercase">ADD PRODUCT</span>
             <span className="sm:hidden uppercase">ADD</span>
           </Button>
-          <ExcelExportButton 
-            getData={getExportData} 
+          <ExcelExportButton
+            getData={getExportData}
             label="Export"
           />
-          <ExcelImportButton 
+          <ExcelImportButton
             onDataImported={handleImportData}
             label="Import"
           />
@@ -392,7 +395,7 @@ export const Products = () => {
 
 
 
-      <ProductFilters 
+      <ProductFilters
         filters={filters}
         onFiltersChange={handleFiltersChange}
         onClearFilters={handleClearFilters}
@@ -517,7 +520,7 @@ export const Products = () => {
         onEditExisting={productOps.handleEditExisting}
         categories={categoriesData || []}
       />
-      
+
       <DeleteConfirmationDialog
         isOpen={confirmation.isOpen}
         onClose={handleCancel}

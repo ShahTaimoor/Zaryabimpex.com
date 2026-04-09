@@ -431,16 +431,17 @@ export const PurchaseInvoices = () => {
       title: 'Purchase Invoices Report',
       filename: `Purchase_Invoices_${dateFrom}_to_${dateTo}.xlsx`,
       columns: [
+        { header: 'S.No', key: 'sno', width: 8, type: 'number' },
         { header: 'Invoice #', key: 'invoiceNumber', width: 15 },
         { header: 'Supplier', key: 'supplierName', width: 35 },
         { header: 'Date', key: 'date', width: 15 },
         { header: 'Items', key: 'itemsCount', width: 10, type: 'number' },
         { header: 'Total', key: 'total', width: 20, type: 'currency' },
-        { header: 'Status', key: 'status', width: 15 },
         { header: 'Payment', key: 'paymentStatus', width: 15 },
         { header: 'Notes', key: 'notes', width: 40 }
       ],
-      data: invoices.map(invoice => ({
+      data: invoices.map((invoice, i) => ({
+        sno: i + 1,
         invoiceNumber: invoice.invoiceNumber ?? '—',
         supplierName: invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || invoice.supplier?.companyName || invoice.supplier?.name || 'Unknown',
         date: invoice.invoiceDate || invoice.invoice_date || invoice.createdAt 
@@ -448,7 +449,6 @@ export const PurchaseInvoices = () => {
           : 'Invalid Date',
         itemsCount: invoice.items?.length ?? 0,
         total: Number(invoice.pricing?.total || 0),
-        status: (invoice.status || '—').toUpperCase(),
         paymentStatus: (invoice.payment?.status || 'pending').toUpperCase(),
         notes: invoice.notes?.trim() || ''
       })),
@@ -554,8 +554,9 @@ export const PurchaseInvoices = () => {
           {/* Table Header - Desktop Only */}
           <div className="hidden md:block bg-gray-50 px-4 lg:px-6 py-3 border-b border-gray-200">
             <div className="grid grid-cols-12 gap-3 lg:gap-4 text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <div className="col-span-1">S.No</div>
               <div className="col-span-1">Invoice #</div>
-              <div className="col-span-3">Supplier</div>
+              <div className="col-span-2">Supplier</div>
               <div className="col-span-1">Date</div>
               <div className="col-span-1">Items</div>
               <div className="col-span-1">Total</div>
@@ -568,13 +569,14 @@ export const PurchaseInvoices = () => {
 
           {/* Table Body */}
           <div className="divide-y divide-gray-200">
-            {invoices.map((invoice) => (
-              <div key={invoice._id} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 hover:bg-gray-50 transition-colors">
+            {invoices.map((invoice, idx) => (
+              <div key={invoice._id || idx} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 hover:bg-gray-50 transition-colors">
                 {/* Mobile Card Layout */}
                 <div className="md:hidden space-y-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{idx + 1}</span>
                         <h3 className="font-semibold text-sm text-gray-900 truncate">{invoice.invoiceNumber}</h3>
                         <StatusBadge status={invoice.status} />
                       </div>
@@ -648,21 +650,25 @@ export const PurchaseInvoices = () => {
                   )}
                 </div>
 
-                {/* Desktop Table Layout */}
                 <div className="hidden md:grid grid-cols-12 gap-3 lg:gap-4 items-center">
-                  {/* Invoice Number */}
-                  <div className="col-span-1 min-w-0">
-                    <div className="font-medium text-sm text-gray-900 truncate">
-                      {invoice.invoiceNumber}
-                    </div>
+                  {/* S.No */}
+                  <div className="col-span-1 text-xs text-gray-500 font-medium">
+                    {idx + 1}
                   </div>
 
-                  {/* Supplier */}
-                  <div className="col-span-3 min-w-0">
-                    <div className="text-sm text-gray-900 truncate" title={invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}>
-                      {invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}
-                    </div>
-                  </div>
+            {/* Invoice Number */}
+            <div className="col-span-1 min-w-0">
+              <div className="font-medium text-sm text-gray-900 truncate">
+                {invoice.invoiceNumber}
+              </div>
+            </div>
+
+            {/* Supplier */}
+            <div className="col-span-2 min-w-0">
+              <div className="text-sm text-gray-900 truncate" title={invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}>
+                {invoice.supplierInfo?.businessName || invoice.supplierInfo?.business_name || invoice.supplierInfo?.companyName || invoice.supplierInfo?.name || 'Unknown Supplier'}
+              </div>
+            </div>
 
                   {/* Date */}
                   <div className="col-span-1">

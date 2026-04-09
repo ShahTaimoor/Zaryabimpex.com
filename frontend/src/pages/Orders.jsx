@@ -448,23 +448,23 @@ export const Orders = () => {
       title: 'Sales Invoices Report',
       filename: `Sales_Invoices_${fromDate}_to_${toDate}.xlsx`,
       columns: [
+        { header: 'S.No', key: 'sno', width: 8, type: 'number' },
         { header: 'Invoice #', key: 'orderNumber', width: 15 },
         { header: 'Customer', key: 'customerName', width: 35 },
         { header: 'Date', key: 'date', width: 15 },
         { header: 'Items', key: 'itemsCount', width: 10, type: 'number' },
         { header: 'Total', key: 'total', width: 20, type: 'currency' },
-        { header: 'Status', key: 'status', width: 15 },
         { header: 'Payment', key: 'paymentStatus', width: 15 },
         { header: 'Type', key: 'orderType', width: 15 },
         { header: 'Notes', key: 'notes', width: 40 }
       ],
-      data: orders.map(order => ({
+      data: orders.map((order, i) => ({
+        sno: i + 1,
         orderNumber: order.order_number ?? order.orderNumber ?? '—',
         customerName: order.customer?.businessName ?? order.customer?.business_name ?? order.customer?.displayName ?? order.customer?.name ?? order.customerInfo?.businessName ?? order.customerInfo?.business_name ?? order.customerInfo?.name ?? 'Walk-in Customer',
         date: formatOrderDate(order),
         itemsCount: order.items?.length ?? 0,
         total: Number(order.pricing?.total ?? order.total ?? 0),
-        status: (order?.status ?? '—').toUpperCase(),
         paymentStatus: getDerivedPaymentStatus(order).toUpperCase(),
         orderType: (order.orderType ?? order.order_type ?? '—').toUpperCase(),
         notes: order.notes?.trim() || ''
@@ -496,8 +496,6 @@ export const Orders = () => {
       </div>
     );
   }
-
-  // orders already defined above via useMemo
 
   return (
     <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden px-2 sm:px-0">
@@ -580,16 +578,17 @@ export const Orders = () => {
           {/* Desktop Table Header */}
           <div className="hidden lg:block bg-gray-50 border-b border-gray-200">
             <div className="px-4 xl:px-6 py-3">
-              <div className="grid grid-cols-12 gap-3 xl:gap-4 text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <div className="grid grid-cols-[3rem_7rem_1fr_6rem_4rem_6rem_1fr_5.5rem_1fr_6rem] gap-3 xl:gap-4 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <div className="col-span-1">S.No</div>
                 <div className="col-span-1">Order #</div>
-                <div className="col-span-3">Customer</div>
+                <div className="col-span-1">Customer</div>
                 <div className="col-span-1">Date</div>
-                <div className="col-span-1">Items</div>
-                <div className="col-span-1">Total</div>
-                <div className="col-span-2">Status</div>
-                <div className="col-span-1">Type</div>
+                <div className="col-span-1 text-center">Items</div>
+                <div className="col-span-1 text-center">Total</div>
+                <div className="col-span-1 text-center">Status</div>
+                <div className="col-span-1 text-center">Type</div>
                 <div className="col-span-1">Notes</div>
-                <div className="col-span-1 min-w-[100px] text-right">Actions</div>
+                <div className="col-span-1 text-right">Actions</div>
               </div>
             </div>
           </div>
@@ -605,230 +604,110 @@ export const Orders = () => {
               <div key={order?.id ?? order?._id ?? order?.order_number ?? order?.orderNumber ?? `order-${idx}`}>
                 {/* Desktop Table Row */}
                 <div className="hidden lg:block px-4 xl:px-6 py-3 xl:py-4 hover:bg-gray-50 transition-colors">
-                  <div className="grid grid-cols-12 gap-3 xl:gap-4 items-center">
+                  <div className="grid grid-cols-[3rem_7rem_1fr_6rem_4rem_6rem_1fr_5.5rem_1fr_6rem] gap-3 xl:gap-4 items-center text-sm">
+                    {/* S.No */}
+                    <div className="col-span-1 text-gray-500 font-medium">
+                      {idx + 1}
+                    </div>
+
                     {/* Order Number */}
                     <div className="col-span-1 min-w-0">
-                      <div className="font-medium text-gray-900 truncate text-sm">
+                      <div className="font-medium text-gray-900 truncate">
                         #{order.order_number ?? order.orderNumber ?? '—'}
                       </div>
                     </div>
 
                     {/* Customer */}
-                    <div className="col-span-3 min-w-0">
-                      <div className="text-sm text-gray-900 truncate" title={order.customer?.businessName ?? order.customer?.business_name ?? order.customer?.displayName ?? order.customer?.name ?? order.customerInfo?.businessName ?? order.customerInfo?.business_name ?? order.customerInfo?.name ?? 'Walk-in Customer'}>
-                        {order.customer?.businessName ?? order.customer?.business_name ?? order.customer?.displayName ?? order.customer?.name ?? order.customerInfo?.businessName ?? order.customerInfo?.business_name ?? order.customerInfo?.name ?? 'Walk-in Customer'}
+                    <div className="col-span-1 min-w-0">
+                      <div className="text-gray-900 truncate" title={order.customer?.businessName ?? order.customerInfo?.businessName ?? 'Walk-in'}>
+                        {order.customer?.businessName ?? order.customerInfo?.businessName ?? 'Walk-in Customer'}
                       </div>
                     </div>
 
                     {/* Date */}
-                    <div className="col-span-1">
-                      <span className="text-xs xl:text-sm text-gray-600">
-                        {formatOrderDate(order)}
-                      </span>
+                    <div className="col-span-1 text-gray-600">
+                      {formatOrderDate(order)}
                     </div>
 
                     {/* Items */}
-                    <div className="col-span-1">
-                      <span className="text-xs xl:text-sm text-gray-600">
-                        {order.items?.length ?? 0}
-                      </span>
+                    <div className="col-span-1 text-center text-gray-600">
+                      {order.items?.length ?? 0}
                     </div>
 
                     {/* Total */}
-                    <div className="col-span-1">
-                      <span className="font-semibold text-gray-900 text-sm xl:text-base">
-                        {Math.round(order.pricing?.total ?? order.total ?? 0)}
-                      </span>
+                    <div className="col-span-1 text-center font-semibold text-gray-900">
+                      {Math.round(order.pricing?.total ?? order.total ?? 0)}
                     </div>
 
                     {/* Status */}
-                    <div className="col-span-2">
-                      <div className="flex flex-wrap gap-1">
-                        <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${(order?.status === 'completed' || order?.status === 'delivered')
+                    <div className="col-span-1 flex flex-col gap-1 items-center">
+                        <span className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                          (order?.status === 'completed' || order?.status === 'delivered')
                             ? 'bg-green-100 text-green-800'
                             : (order?.status === 'pending' || order?.status === 'processing')
                               ? 'bg-yellow-100 text-yellow-800'
-                              : order?.status === 'cancelled'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-gray-100 text-gray-800'
-                          } `}>
+                              : 'bg-gray-100 text-gray-800'
+                        }`}>
                           {order?.status ?? '—'}
                         </span>
-                        <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${getDerivedPaymentStatus(order) === 'paid'
+                        <span className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                          getDerivedPaymentStatus(order) === 'paid'
                             ? 'bg-green-100 text-green-800'
-                            : getDerivedPaymentStatus(order) === 'partial'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-gray-100 text-gray-800'
-                          } `}>
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
                           {getDerivedPaymentStatus(order)}
                         </span>
-                      </div>
                     </div>
 
                     {/* Type */}
-                    <div className="col-span-1">
-                      <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                    <div className="col-span-1 text-center">
+                      <span className="text-[10px] text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full uppercase">
                         {order.orderType ?? order.order_type ?? '—'}
                       </span>
                     </div>
 
                     {/* Notes */}
                     <div className="col-span-1 min-w-0">
-                      <span
-                        className="text-xs text-gray-600 block truncate"
-                        title={order.notes?.trim() || 'No notes'}
-                      >
+                      <span className="text-xs text-gray-500 block truncate" title={order.notes?.trim() || '—'}>
                         {order.notes?.trim() || '—'}
                       </span>
                     </div>
 
                     {/* Actions */}
-                    <div className="col-span-1 flex justify-end">
-                      <div className="flex items-center flex-nowrap gap-1">
-                        <button
-                          onClick={() => handleView(order)}
-                          className="shrink-0 text-primary-600 hover:text-primary-800 p-1"
-                          title="View Invoice"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handlePrint(order)}
-                          className="shrink-0 text-green-600 hover:text-green-800 p-1"
-                          title="Print Invoice"
-                        >
-                          <Printer className="h-4 w-4" />
-                        </button>
-                        {canEditInvoice(order) && (
-                          <button
-                            onClick={() => handleEdit(order)}
-                            className="shrink-0 text-blue-600 hover:text-blue-800 p-1"
-                            title="Edit Invoice"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                        )}
-                        {canDeleteInvoice(order) && (
-                          <button
-                            onClick={() => handleDelete(order)}
-                            className="shrink-0 text-red-600 hover:text-red-800 p-1"
-                            title="Delete Invoice"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
+                    <div className="col-span-1 flex justify-end gap-0.5">
+                        <button onClick={() => handleView(order)} className="p-1 text-primary-600 hover:text-primary-800" title="View"><Eye className="h-4 w-4" /></button>
+                        <button onClick={() => handlePrint(order)} className="p-1 text-green-600 hover:text-green-800" title="Print"><Printer className="h-4 w-4" /></button>
+                        {canEditInvoice(order) && <button onClick={() => handleEdit(order)} className="p-1 text-blue-600 hover:text-blue-800" title="Edit"><Edit className="h-4 w-4" /></button>}
+                        {canDeleteInvoice(order) && <button onClick={() => handleDelete(order)} className="p-1 text-red-600 hover:text-red-800" title="Delete"><Trash2 className="h-4 w-4" /></button>}
                     </div>
                   </div>
                 </div>
 
-                {/* Mobile/Tablet Card View */}
+                {/* Mobile View */}
                 <div className="lg:hidden px-4 py-4 hover:bg-gray-50 transition-colors">
                   <div className="space-y-3">
-                    {/* Header Row */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-semibold text-gray-900 truncate">
-                          #{order.order_number ?? order.orderNumber ?? '—'}
-                        </h3>
-                        <p className="text-sm text-gray-600 mt-1 truncate">
-                          {order.customer?.businessName ?? order.customer?.business_name ?? order.customer?.displayName ?? order.customer?.name ?? order.customerInfo?.businessName ?? order.customerInfo?.business_name ?? order.customerInfo?.name ?? 'Walk-in Customer'}
-                        </p>
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{idx + 1}</span>
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-900 truncate">#{order.order_number ?? '—'}</h3>
+                          <p className="text-xs text-gray-500">{order.customer?.businessName ?? 'Walk-in'}</p>
+                        </div>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-lg font-semibold text-gray-900">
-                          {Math.round(order.pricing?.total ?? order.total ?? 0)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {order.items?.length ?? 0} item{(order.items?.length ?? 0) !== 1 ? 's' : ''}
-                        </p>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-gray-900">{Math.round(order.pricing?.total ?? 0)}</p>
+                        <p className="text-[10px] text-gray-500">{formatOrderDate(order)}</p>
                       </div>
                     </div>
-
-                    {/* Details Grid */}
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <p className="text-xs text-gray-500">Date</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {formatOrderDate(order)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Type</p>
-                        <span className="inline-flex text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
-                          {order.orderType ?? order.order_type ?? '—'}
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                       <span className="inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-50 text-blue-700 uppercase">{order.orderType ?? '—'}</span>
+                       <span className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full ${order?.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-gray-100'}`}>{order?.status ?? '—'}</span>
                     </div>
-
-                    {/* Status Badges */}
-                    <div className="flex flex-wrap gap-2">
-                      <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${(order?.status === 'completed' || order?.status === 'delivered')
-                          ? 'bg-green-100 text-green-800'
-                          : (order?.status === 'pending' || order?.status === 'processing')
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : order?.status === 'cancelled'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-gray-100 text-gray-800'
-                        } `}>
-                        {order?.status ?? '—'}
-                      </span>
-                      <span className={`inline - flex px - 2 py - 1 text - xs font - medium rounded - full ${getDerivedPaymentStatus(order) === 'paid'
-                          ? 'bg-green-100 text-green-800'
-                          : getDerivedPaymentStatus(order) === 'partial'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-gray-100 text-gray-800'
-                        } `}>
-                        {getDerivedPaymentStatus(order)}
-                      </span>
-                    </div>
-
-                    {/* Notes */}
-                    {order.notes?.trim() && (
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Notes</p>
-                        <p className="text-sm text-gray-700 line-clamp-2">
-                          {order.notes.trim()}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="pt-3 border-t border-gray-200">
-                      <div className="flex items-center flex-nowrap gap-1">
-                        <button
-                          onClick={() => handleView(order)}
-                          className="shrink-0 text-primary-600 hover:text-primary-800 p-2 rounded hover:bg-primary-50 transition-colors"
-                          title="View Invoice"
-                        >
-                          <Eye className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={() => handlePrint(order)}
-                          className="shrink-0 text-green-600 hover:text-green-800 p-2 rounded hover:bg-green-50 transition-colors"
-                          title="Print Invoice"
-                        >
-                          <Printer className="h-5 w-5" />
-                        </button>
-                        {canEditInvoice(order) && (
-                          <button
-                            onClick={() => handleEdit(order)}
-                            className="shrink-0 text-blue-600 hover:text-blue-800 p-2 rounded hover:bg-blue-50 transition-colors"
-                            title="Edit Invoice"
-                          >
-                            <Edit className="h-5 w-5" />
-                          </button>
-                        )}
-                        {canDeleteInvoice(order) && (
-                          <button
-                            onClick={() => handleDelete(order)}
-                            className="shrink-0 text-red-600 hover:text-red-800 p-2 rounded hover:bg-red-50 transition-colors"
-                            title="Delete Invoice"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        )}
-                      </div>
+                    <div className="flex justify-start gap-1 pt-2 border-t border-gray-100">
+                      <button onClick={() => handleView(order)} className="p-2 text-primary-600"><Eye className="h-5 w-5" /></button>
+                      <button onClick={() => handlePrint(order)} className="p-2 text-green-600"><Printer className="h-5 w-5" /></button>
+                      {canEditInvoice(order) && <button onClick={() => handleEdit(order)} className="p-2 text-blue-600"><Edit className="h-5 w-5" /></button>}
+                      {canDeleteInvoice(order) && <button onClick={() => handleDelete(order)} className="p-2 text-red-600"><Trash2 className="h-5 w-5" /></button>}
                     </div>
                   </div>
                 </div>
@@ -1029,7 +908,7 @@ export const Orders = () => {
                 </div>
               </div>
 
-              {/* Totals - use top-level subtotal/tax/discount/total (sales from API) and fall back to sum from items when 0 */}
+              {/* Totals */}
               {(() => {
                 const items = Array.isArray(selectedOrder?.items) ? selectedOrder.items : [];
                 const sumFromItems = items.reduce((s, i) => {
@@ -1077,8 +956,6 @@ export const Orders = () => {
           </>
         )}
       </BaseModal>
-
-      {/* Edit Modal removed: editing opens Sales page in new tab (same as Purchase Invoice) */}
 
       {/* Print Modal */}
       <PrintModal

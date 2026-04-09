@@ -103,7 +103,7 @@ const ResponsiveTable = ({
                   {column.header}:
                 </span>
                 <span className="text-sm text-gray-900">
-                  {column.render ? column.render(value, item) : value}
+                  {column.render ? column.render(value, item, index) : value}
                 </span>
               </div>
             );
@@ -145,7 +145,7 @@ const ResponsiveTable = ({
                         {column.header}:
                       </span>
                       <span className="text-sm text-gray-900">
-                        {column.render ? column.render(value, item) : value}
+                        {column.render ? column.render(value, item, index) : value}
                       </span>
                     </div>
                   );
@@ -244,7 +244,7 @@ const ResponsiveTable = ({
                 
                 return (
                   <td key={column.key} className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-900">
-                    {column.render ? column.render(value, item) : value}
+                    {column.render ? column.render(value, item, index) : value}
                   </td>
                 );
               })}

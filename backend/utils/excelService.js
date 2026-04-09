@@ -1,4 +1,45 @@
 const ExcelJS = require('exceljs');
+const https = require('https');
+const http = require('http');
+const path = require('path');
+const fs = require('fs');
+
+/**
+ * Fetches image buffer from URL or local file path
+ * @param {string} url - Image URL or relative path
+ * @returns {Promise<Buffer>}
+ */
+const getImageBuffer = (url) => {
+    return new Promise((resolve, reject) => {
+        // Handle relative API paths for local images
+        if (url.startsWith('/api/images/')) {
+            const fileName = url.replace('/api/images/', '');
+            const localPath = path.join(__dirname, '..', 'uploads', 'images', 'optimized', fileName);
+            if (fs.existsSync(localPath)) {
+                return resolve(fs.readFileSync(localPath));
+            }
+        }
+
+        // Handle full URLs
+        if (url.startsWith('http')) {
+            const client = url.startsWith('https') ? https : http;
+            client.get(url, (res) => {
+                if (res.statusCode !== 200) {
+                    reject(new Error(`Failed to fetch image: ${res.statusCode}`));
+                    return;
+                }
+                const chunks = [];
+                res.on('data', (chunk) => chunks.push(chunk));
+                res.on('end', () => resolve(Buffer.concat(chunks)));
+            }).on('error', reject);
+        } else if (fs.existsSync(url)) {
+            // Handle absolute or other relative local paths
+            resolve(fs.readFileSync(url));
+        } else {
+            reject(new Error('Invalid image source'));
+        }
+    });
+};
 
 /**
  * Generates a professionally styled Excel report/invoice
@@ -91,7 +132,7 @@ const generateStyledExcel = async ({
     });
 
     // 5. Data Rows
-    data.forEach(item => {
+    for (const item of data) {
         const rowData = columns.map(col => {
             const key = col.key;
             // Try different variants: Original, snake_case, camelCase, lowercase
@@ -104,7 +145,6 @@ const generateStyledExcel = async ({
             if (value === undefined || value === null) value = item[key.toLowerCase()];
             
             // Final Cleanup: Convert null/undefined to empty string
-            // Also strip "UNKNOWN", "N/A", "UNDEFINED" which might be in the database
             if (value === null || value === undefined) {
                 value = '';
             } else if (typeof value === 'string') {
@@ -116,15 +156,44 @@ const generateStyledExcel = async ({
             
             return value;
         });
+
         const row = worksheet.addRow(rowData);
-        row.eachCell((cell, colNumber) => {
-            const colDef = columns[colNumber - 1];
+        let hasImage = false;
+
+        for (let i = 0; i < columns.length; i++) {
+            const colDef = columns[i];
+            const cell = row.getCell(i + 1);
+            const value = rowData[i];
+
             // Formatting based on column type
             if (colDef.type === 'currency') {
                 cell.numFmt = '#,##0.00';
                 cell.alignment = { horizontal: 'right' };
             } else if (colDef.type === 'number') {
                 cell.alignment = { horizontal: 'center' };
+            } else if (colDef.type === 'image' && value) {
+                try {
+                    const buffer = await getImageBuffer(value);
+                    const imageId = workbook.addImage({
+                        buffer,
+                        extension: value.split('.').pop() || 'png',
+                    });
+                    
+                    // Set row height to accommodate image
+                    row.height = 60;
+                    hasImage = true;
+
+                    worksheet.addImage(imageId, {
+                        tl: { col: i, row: row.number - 1 },
+                        ext: { width: 50, height: 50 },
+                        editAs: 'oneCell'
+                    });
+                    
+                    cell.value = ''; // Clear the URL text so it doesn't overlap
+                } catch (e) {
+                    console.error('Excel Image Error:', e.message);
+                    cell.value = 'No Image';
+                }
             }
             
             cell.border = {
@@ -133,12 +202,14 @@ const generateStyledExcel = async ({
                 bottom: { style: 'thin' },
                 right: { style: 'thin' }
             };
-        });
-    });
+            cell.alignment = cell.alignment || { vertical: 'middle' };
+        }
 
-    // 6. Summary Section
-    worksheet.addRow([]); // Space
-    
+        if (!hasImage) {
+            row.height = 20;
+        }
+    }
+
     // 6. Summary Section
     worksheet.addRow([]); // Space
 
@@ -147,12 +218,14 @@ const generateStyledExcel = async ({
         if (summary.subtotal !== undefined) {
             const row = worksheet.addRow(['', '', 'Subtotal:', summary.subtotal]);
             row.font = { bold: true };
-            worksheet.getCell(`D${row.number}`).numFmt = '#,##0.00';
+            const lastCell = worksheet.getCell(`D${row.number}`);
+            lastCell.numFmt = '#,##0.00';
         }
         if (summary.discount !== undefined) {
             const row = worksheet.addRow(['', '', 'Discount:', summary.discount]);
             row.font = { color: { argb: 'FFFF0000' } };
-            worksheet.getCell(`D${row.number}`).numFmt = '#,##0.00';
+            const lastCell = worksheet.getCell(`D${row.number}`);
+            lastCell.numFmt = '#,##0.00';
         }
         
         // Handle dynamic summaryRows (preferred for complex reports)
@@ -169,9 +242,6 @@ const generateStyledExcel = async ({
             const firstValueIdx = columns.findIndex(col => summaryRow[col.key] !== undefined);
             if (firstValueIdx > 0) {
                 rowData[firstValueIdx - 1] = summaryRow.label || 'TOTAL:';
-            } else if (firstValueIdx === 0) {
-                // If the first column has a value, just prepend label if there's space elsewhere?
-                // For now, let's just use the label if provided
             }
 
             const row = worksheet.addRow(rowData);
@@ -180,7 +250,6 @@ const generateStyledExcel = async ({
             row.eachCell((cell, colNumber) => {
                 const colDef = columns[colNumber - 1];
                 const isValue = summaryRow[colDef.key] !== undefined;
-                const isLabel = (colNumber === firstValueIdx); // simplified
 
                 if (isValue || cell.value === summaryRow.label) {
                     cell.font = { bold: true, size: 11 };
@@ -219,3 +288,4 @@ const generateStyledExcel = async ({
 };
 
 module.exports = { generateStyledExcel };
+

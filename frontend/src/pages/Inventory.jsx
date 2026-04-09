@@ -141,6 +141,11 @@ export const Inventory = () => {
   // Table columns configuration
   const columns = [
     {
+      key: 'sno',
+      header: 'S.NO',
+      render: (value, item, index) => (currentPage - 1) * itemsPerPage + index + 1,
+    },
+    {
       key: 'product',
       header: 'Product',
       accessor: (item) => item.product?.name || 'N/A',

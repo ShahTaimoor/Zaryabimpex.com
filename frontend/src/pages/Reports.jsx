@@ -245,6 +245,7 @@ export const Reports = () => {
     switch (activeTab) {
       case 'party-balance':
         return [
+          { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
           { 
             header: 'Party Name', 
             render: (row) => (
@@ -282,6 +283,7 @@ export const Reports = () => {
       case 'sales':
         if (salesGroupBy === 'daily') {
           return [
+            { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'Date', render: (row) => new Date(row.date).toLocaleDateString() },
             { header: 'Orders', key: 'totalOrders', align: 'right' },
             { header: 'Subtotal', render: (row) => (row.subtotal || 0).toLocaleString(), align: 'right' },
@@ -291,6 +293,7 @@ export const Reports = () => {
         }
         if (salesGroupBy === 'monthly') {
           return [
+            { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'Month', key: 'month' },
             { header: 'Orders', key: 'totalOrders', align: 'right' },
             { header: 'Revenue', render: (row) => (row.total || 0).toLocaleString(), align: 'right', bold: true },
@@ -298,6 +301,7 @@ export const Reports = () => {
         }
         if (salesGroupBy === 'product') {
           return [
+            { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'Product', key: 'productName' },
             { header: 'SKU', key: 'sku' },
             { header: 'Qty Sold', render: (row) => (row.totalQuantity || 0).toLocaleString(), align: 'right' },
@@ -306,6 +310,7 @@ export const Reports = () => {
         }
         if (salesGroupBy === 'category') {
           return [
+            { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'Category', key: 'categoryName' },
             { header: 'Items Sold', render: (row) => (row.itemCount || 0).toLocaleString(), align: 'right' },
             { header: 'Revenue', render: (row) => (row.totalRevenue || 0).toLocaleString(), align: 'right', bold: true },
@@ -313,6 +318,7 @@ export const Reports = () => {
         }
         if (salesGroupBy === 'city') {
           return [
+            { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'City', key: 'city' },
             { header: 'Orders', key: 'totalOrders', align: 'right' },
             { header: 'Revenue', render: (row) => (row.totalRevenue || 0).toLocaleString(), align: 'right', bold: true },
@@ -320,6 +326,7 @@ export const Reports = () => {
         }
         if (salesGroupBy === 'invoice') {
           return [
+            { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'Invoice #', key: 'invoiceNo' },
             { header: 'Date', render: (row) => new Date(row.date).toLocaleDateString() },
             { header: 'Customer', render: (row) => row.customerName || row.name || 'N/A' },
@@ -364,6 +371,7 @@ export const Reports = () => {
           ];
         }
         const baseCols = [
+          { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
           { header: 'Product Name', key: 'name' },
           { header: 'SKU', key: 'sku' },
           { header: 'Category', key: 'categoryName' },
@@ -393,6 +401,7 @@ export const Reports = () => {
       case 'financial':
         if (financialType === 'trial-balance') {
           return [
+            { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'Code', key: 'accountCode' },
             { header: 'Account Name', key: 'accountName' },
             { header: 'Debit Balance', render: (row) => row.debitBalance > 0 ? row.debitBalance.toLocaleString() : '-', align: 'right' },
@@ -401,6 +410,7 @@ export const Reports = () => {
         }
         if (financialType === 'pl-statement') {
           return [
+            { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'Category', key: 'category' },
             { header: 'Account', key: 'accountName' },
             { header: 'Type', key: 'accountType', render: (row) => <span className="capitalize">{row.accountType}</span> },
@@ -409,6 +419,7 @@ export const Reports = () => {
         }
         if (financialType === 'balance-sheet') {
           return [
+            { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'Type', key: 'accountType', render: (row) => <span className="capitalize font-bold">{row.accountType}</span> },
             { header: 'Category', key: 'category' },
             { header: 'Account', key: 'accountName' },
@@ -418,6 +429,7 @@ export const Reports = () => {
         return [];
       case 'bank-cash':
         return [
+          { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
           { header: 'Bank', render: (row) => row.bankName || 'N/A' },
           { header: 'Account', render: (row) => row.accountNumber || row.accountName || '-' },
           { header: 'Opening', render: (row) => (row.openingBalance || 0).toLocaleString(), align: 'right' },
@@ -553,6 +565,7 @@ export const Reports = () => {
     switch (activeTab) {
       case 'party-balance':
         columns = [
+          { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
           { header: 'Party Name', key: 'businessName', width: 35 },
           { header: 'City', key: 'city', width: 15 },
           { header: 'Opening Bal.', key: 'openingBalance', width: 15, type: 'currency' },
@@ -564,6 +577,7 @@ export const Reports = () => {
       case 'sales':
         if (salesGroupBy === 'daily') {
           columns = [
+            { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
             { header: 'Date', key: 'date', width: 15 },
             { header: 'Orders', key: 'totalOrders', width: 10, type: 'number' },
             { header: 'Subtotal', key: 'subtotal', width: 15, type: 'currency' },
@@ -572,6 +586,8 @@ export const Reports = () => {
           ];
         } else if (salesGroupBy === 'product') {
           columns = [
+            { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
+            { header: 'Image', key: 'imageUrl', width: 12, type: 'image' },
             { header: 'Product', key: 'productName', width: 40 },
             { header: 'SKU', key: 'sku', width: 15 },
             { header: 'Qty Sold', key: 'totalQuantity', width: 12, type: 'number' },
@@ -579,6 +595,7 @@ export const Reports = () => {
           ];
         } else {
             columns = [
+                { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
                 { header: 'Group', key: salesGroupBy === 'monthly' ? 'month' : salesGroupBy === 'category' ? 'categoryName' : 'name', width: 25 },
                 { header: 'Orders/Items', key: 'totalOrders', width: 15, type: 'number' },
                 { header: 'Revenue', key: 'totalRevenue', width: 20, type: 'currency' }
@@ -588,6 +605,8 @@ export const Reports = () => {
       case 'inventory':
         if (inventoryType === 'stock-summary') {
           columns = [
+            { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
+            { header: 'Image', key: 'imageUrl', width: 12, type: 'image' },
             { header: 'Product Name', key: 'name', width: 40 },
             { header: 'SKU', key: 'sku', width: 15 },
             { header: 'Category', key: 'categoryName', width: 20 },
@@ -603,6 +622,8 @@ export const Reports = () => {
           ];
         } else {
           columns = [
+            { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
+            { header: 'Image', key: 'imageUrl', width: 12, type: 'image' },
             { header: 'Product Name', key: 'name', width: 40 },
             { header: 'SKU', key: 'sku', width: 15 },
             { header: 'Category', key: 'categoryName', width: 20 },
@@ -613,8 +634,9 @@ export const Reports = () => {
         }
         break;
       case 'financial':
-        if (reportType === 'trial-balance') {
+        if (financialType === 'trial-balance') {
           columns = [
+            { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
             { header: 'Account Name', key: 'accountName', width: 35 },
             { header: 'Category', key: 'category', width: 20 },
             { header: 'Debit', key: 'debitBalance', width: 20, type: 'currency' },
@@ -622,17 +644,19 @@ export const Reports = () => {
           ];
         } else {
           columns = [
+            { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
             { header: 'Account Name', key: 'accountName', width: 35 },
             { header: 'Category', key: 'category', width: 20 },
             { header: 'Amount/Balance', key: 'amount', width: 20, type: 'currency' }
           ];
-          if (reportType === 'balance-sheet') {
-            columns[2].key = 'balance';
+          if (financialType === 'balance-sheet') {
+            columns[3].key = 'balance';
           }
         }
         break;
        case 'bank-cash':
          columns = [
+           { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
            { header: 'Bank Name', key: 'bankName', width: 30 },
            { header: 'Account', key: 'accountNumber', width: 25 },
            { header: 'Opening', key: 'openingBalance', width: 15, type: 'currency' },
@@ -647,8 +671,9 @@ export const Reports = () => {
       title: reportTitle,
       filename: `${reportTitle.replace(/ /g, '_')}_${new Date().toLocaleDateString()}.xlsx`,
       columns,
-      data: data.map(item => ({
+      data: data.map((item, i) => ({
           ...item,
+          sno: i + 1,
           name: item.businessName || item.name || item.accountName || item.productName || item.bankName
       })),
       summary: (() => {

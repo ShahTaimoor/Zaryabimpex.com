@@ -1576,16 +1576,16 @@ export const Sales = ({ tabId, editData }) => {
             desktopHeader={(
               <CartTableHeader
                 className={`hidden md:grid gap-x-1 items-center pb-2 border-b border-gray-300 mb-2 ${dualUnitShowBoxInputEnabled
-                    ? (
-                      showCostPrice && hasPermission('view_cost_prices')
-                        ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
-                        : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                    )
-                    : (
-                      showCostPrice && hasPermission('view_cost_prices')
-                        ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
-                        : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                    )
+                  ? (
+                    showCostPrice && hasPermission('view_cost_prices')
+                      ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                      : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                  )
+                  : (
+                    showCostPrice && hasPermission('view_cost_prices')
+                      ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                      : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                  )
                   }`}
                 columns={[
                   { key: 'sno', label: 'S.NO', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-left' },
@@ -1680,11 +1680,11 @@ export const Sales = ({ tabId, editData }) => {
                                   updateCartBoxCount(item.product._id, e.target.value)
                                 }
                                 className={`text-sm font-semibold w-full rounded border px-2 py-1 text-center focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(item.product.inventory?.currentStock || 0) === 0
-                                    ? 'text-red-700 bg-red-50 border-red-200'
-                                    : (item.product.inventory?.currentStock || 0) <=
-                                      (item.product.inventory?.reorderPoint || 0)
-                                      ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                                      : 'text-gray-700 bg-gray-100 border-gray-200'
+                                  ? 'text-red-700 bg-red-50 border-red-200'
+                                  : (item.product.inventory?.currentStock || 0) <=
+                                    (item.product.inventory?.reorderPoint || 0)
+                                    ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                                    : 'text-gray-700 bg-gray-100 border-gray-200'
                                   }`}
                                 title="Full boxes"
                               />
@@ -1759,16 +1759,16 @@ export const Sales = ({ tabId, editData }) => {
                   <div className={`hidden md:block py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                     <div
                       className={`grid gap-x-1 items-center ${dualUnitShowBoxInputEnabled
-                          ? (
-                            showCostPrice && hasPermission('view_cost_prices')
-                              ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
-                              : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                          )
-                          : (
-                            showCostPrice && hasPermission('view_cost_prices')
-                              ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
-                              : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                          )
+                        ? (
+                          showCostPrice && hasPermission('view_cost_prices')
+                            ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                            : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                        )
+                        : (
+                          showCostPrice && hasPermission('view_cost_prices')
+                            ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                            : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                        )
                         }`}
                     >
                       {/* Serial Number - 1 column */}
@@ -1844,11 +1844,11 @@ export const Sales = ({ tabId, editData }) => {
                                     updateCartBoxCount(item.product._id, e.target.value)
                                   }
                                   className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(item.product.inventory?.currentStock || 0) === 0
-                                      ? 'text-red-700 bg-red-50 border-red-200'
-                                      : (item.product.inventory?.currentStock || 0) <=
-                                        (item.product.inventory?.reorderPoint || 0)
-                                        ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                                        : 'text-gray-700 bg-gray-100 border-gray-200'
+                                    ? 'text-red-700 bg-red-50 border-red-200'
+                                    : (item.product.inventory?.currentStock || 0) <=
+                                      (item.product.inventory?.reorderPoint || 0)
+                                      ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                                      : 'text-gray-700 bg-gray-100 border-gray-200'
                                     }`}
                                   title="Full boxes"
                                 />

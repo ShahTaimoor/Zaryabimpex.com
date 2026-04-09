@@ -52,13 +52,16 @@ export const ProductList = ({
           <div className="px-3 py-2 xl:px-4 xl:py-3 2xl:px-6 2xl:py-4">
             <div className="grid grid-cols-12 gap-2 xl:gap-3 2xl:gap-4 items-center">
               <div className="col-span-1">
+                <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-700">S.No</h3>
+              </div>
+              <div className="col-span-1">
                 <Checkbox
                   checked={bulkOps.isSelectAll}
                   onChange={() => bulkOps.toggleSelectAll(products)}
                 />
               </div>
               <div
-                className={`min-w-0 ${showHsCodeColumn ? 'col-span-3 xl:col-span-2' : 'col-span-4 xl:col-span-3'}`}
+                className={`min-w-0 ${showHsCodeColumn ? 'col-span-2 xl:col-span-2' : 'col-span-3 xl:col-span-3'}`}
               >
                 <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-700">Product Name</h3>
               </div>
@@ -105,66 +108,69 @@ export const ProductList = ({
         </div>
 
         <div className="divide-y divide-gray-200">
-          {products.map((product) => (
-            <div key={product._id}>
-              {/* Desktop Table Row - Responsive scaling */}
-              <div className="hidden lg:block px-3 py-2 xl:px-4 xl:py-3 2xl:px-6 2xl:py-4 hover:bg-gray-50 transition-colors min-w-[960px]">
-                <div className="grid grid-cols-12 gap-2 xl:gap-3 2xl:gap-4 items-center">
-                  <div className="col-span-1">
-                    <Checkbox
-                      checked={bulkOps.isSelected(product._id)}
-                      onChange={() => bulkOps.toggleSelection(product._id)}
-                    />
-                  </div>
-                  <div
-                    className={`min-w-0 ${showHsCodeColumn ? 'col-span-3 xl:col-span-2' : 'col-span-4 xl:col-span-3'}`}
-                  >
-                    <div className="flex items-center space-x-1.5 xl:space-x-2 2xl:space-x-3">
-                      {showImages ? (
-                        product.imageUrl ? (
-                          <img 
-                            src={product.imageUrl} 
-                            alt={product.name} 
-                            className="h-6 w-6 xl:h-8 xl:w-8 2xl:h-10 2xl:w-10 object-cover rounded-md flex-shrink-0 border border-gray-200" 
-                          />
-                        ) : (
-                          <Package className="h-4 w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-gray-400 flex-shrink-0" />
-                        )
-                      ) : null}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1 xl:gap-1.5 2xl:gap-2 flex-wrap">
-                          <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-900 truncate">
-                            {product.name}
-                          </h3>
-                          {product.expiryDate && (() => {
-                            const expiryStatus = getExpiryStatus(product);
-                            if (expiryStatus?.status === 'expired') {
-                              return (
-                                <span className="inline-flex items-center px-1 xl:px-1.5 py-0.5 rounded text-[10px] xl:text-xs font-medium bg-red-100 text-red-800 flex-shrink-0" title={`Expired ${expiryStatus.days} day${expiryStatus.days > 1 ? 's' : ''} ago`}>
-                                  Expired
-                                </span>
-                              );
-                            } else if (expiryStatus?.status === 'expiring_soon') {
-                              return (
-                                <span className="inline-flex items-center px-1 xl:px-1.5 py-0.5 rounded text-[10px] xl:text-xs font-medium bg-yellow-100 text-yellow-800 flex-shrink-0" title={`Expires in ${expiryStatus.days} day${expiryStatus.days > 1 ? 's' : ''}`}>
-                                  Soon
-                                </span>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </div>
-                        {(product.importRefNo || product.gdNumber || product.invoiceRef) && (
-                          <p className="text-[10px] xl:text-xs text-gray-500 truncate mt-0.5">
-                            {product.importRefNo ? `IMP: ${product.importRefNo}` : ''}
-                            {product.gdNumber ? `${product.importRefNo ? ' | ' : ''}GD: ${product.gdNumber}` : ''}
-                            {product.invoiceRef ? `${(product.importRefNo || product.gdNumber) ? ' | ' : ''}INV: ${product.invoiceRef}` : ''}
-                          </p>
-                        )}
+            {products.map((product, idx) => (
+              <div key={product._id}>
+                {/* Desktop Table Row - Responsive scaling */}
+                <div className="hidden lg:block px-3 py-2 xl:px-4 xl:py-3 2xl:px-6 2xl:py-4 hover:bg-gray-50 transition-colors min-w-[960px]">
+                  <div className="grid grid-cols-12 gap-2 xl:gap-3 2xl:gap-4 items-center">
+                    <div className="col-span-1 text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-500">
+                      {idx + 1}
+                    </div>
+                    <div className="col-span-1">
+                      <Checkbox
+                        checked={bulkOps.isSelected(product._id)}
+                        onChange={() => bulkOps.toggleSelection(product._id)}
+                      />
+                    </div>
+                    <div
+                      className={`min-w-0 ${showHsCodeColumn ? 'col-span-2 xl:col-span-2' : 'col-span-3 xl:col-span-3'}`}
+                    >
+                      <div className="flex items-center space-x-1.5 xl:space-x-2 2xl:space-x-3">
+                        {showImages ? (
+                          product.imageUrl ? (
+                            <img 
+                              src={product.imageUrl} 
+                              alt={product.name} 
+                              className="h-6 w-6 xl:h-8 xl:w-8 2xl:h-10 2xl:w-10 object-cover rounded-md flex-shrink-0 border border-gray-200" 
+                            />
+                          ) : (
+                            <Package className="h-4 w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-gray-400 flex-shrink-0" />
+                          )
+                        ) : null}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1 xl:gap-1.5 2xl:gap-2 flex-wrap">
+                            <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-900 truncate">
+                              {product.name}
+                            </h3>
+                            {product.expiryDate && (() => {
+                              const expiryStatus = getExpiryStatus(product);
+                              if (expiryStatus?.status === 'expired') {
+                                return (
+                                  <span className="inline-flex items-center px-1 xl:px-1.5 py-0.5 rounded text-[10px] xl:text-xs font-medium bg-red-100 text-red-800 flex-shrink-0" title={`Expired ${expiryStatus.days} day${expiryStatus.days > 1 ? 's' : ''} ago`}>
+                                    Expired
+                                  </span>
+                                );
+                              } else if (expiryStatus?.status === 'expiring_soon') {
+                                return (
+                                  <span className="inline-flex items-center px-1 xl:px-1.5 py-0.5 rounded text-[10px] xl:text-xs font-medium bg-yellow-100 text-yellow-800 flex-shrink-0" title={`Expires in ${expiryStatus.days} day${expiryStatus.days > 1 ? 's' : ''}`}>
+                                    Soon
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
+                          {(product.importRefNo || product.gdNumber || product.invoiceRef) && (
+                            <p className="text-[10px] xl:text-xs text-gray-500 truncate mt-0.5">
+                              {product.importRefNo ? `IMP: ${product.importRefNo}` : ''}
+                              {product.gdNumber ? `${product.importRefNo ? ' | ' : ''}GD: ${product.gdNumber}` : ''}
+                              {product.invoiceRef ? `${(product.importRefNo || product.gdNumber) ? ' | ' : ''}INV: ${product.invoiceRef}` : ''}
+                            </p>
+                          )}
 
+                        </div>
                       </div>
                     </div>
-                  </div>
 
                   {showHsCodeColumn && (
                     <div className="col-span-1 min-w-0">
@@ -280,9 +286,12 @@ export const ProductList = ({
                         {/* Product Name and Status */}
                         <div className="flex items-start justify-between gap-1.5 xl:gap-2 mb-1.5 xl:mb-2">
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-sm xl:text-base font-medium text-gray-900 truncate">
-                              {product.name}
-                            </h3>
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded flex-shrink-0">#{idx + 1}</span>
+                              <h3 className="text-sm xl:text-base font-medium text-gray-900 truncate">
+                                {product.name}
+                              </h3>
+                            </div>
 
                           </div>
                           <span className={`badge badge-sm flex-shrink-0 ${product.status === 'active' ? 'badge-success' : 'badge-gray'
