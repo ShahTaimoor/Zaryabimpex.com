@@ -553,11 +553,12 @@ router.get('/:id/stock-status', auth, async (req, res) => {
       return res.status(404).json({ message: 'Sales order not found' });
     }
     const items = Array.isArray(salesOrder.items) ? salesOrder.items : (typeof salesOrder.items === 'string' ? JSON.parse(salesOrder.items || '[]') : []);
+    await enrichItemsWithProducts(items);
     const outOfStock = [];
 
     for (const item of items) {
-      const productId = item.product || item.product_id;
-      if (!productId) continue;
+      const productId = (item.product && typeof item.product === 'object') ? (item.product.id || item.product._id) : (item.product || item.product_id);
+      if (!productId || typeof productId !== 'string') continue;
 
       let currentStock = 0;
       try {
@@ -565,7 +566,7 @@ router.get('/:id/stock-status', auth, async (req, res) => {
         if (inv) {
           currentStock = Number(inv.current_stock ?? inv.currentStock ?? 0);
         } else {
-          const product = await productRepository.findById(productId);
+          const product = await productRepository.findById(productId, true);
           if (product) currentStock = Number(product.stock_quantity ?? product.stockQuantity ?? 0);
         }
       } catch {
@@ -574,15 +575,8 @@ router.get('/:id/stock-status', auth, async (req, res) => {
 
       const requestedQty = Number(item.quantity) || 0;
       if (requestedQty > 0 && currentStock < requestedQty) {
-        let productName = 'Unknown';
-        try {
-          let p = await productRepository.findById(productId);
-          if (p) productName = p.name || p.displayName || 'Product';
-          else {
-            p = await productVariantRepository.findById(productId);
-            if (p) productName = (p.display_name ?? p.displayName) || (p.variant_name ?? p.variantName) || 'Variant';
-          }
-        } catch { }
+        const productName = (item.product && typeof item.product === 'object' && item.product.name) ? item.product.name : (item.name || item.productName || 'Unknown');
+        
         outOfStock.push({
           productId,
           productName,

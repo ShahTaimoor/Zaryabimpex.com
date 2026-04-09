@@ -480,11 +480,11 @@ class SalesService {
 
     for (const item of items) {
       // Try to find as product first, then as variant
-      let product = await productRepository.findById(item.product);
+      let product = await productRepository.findById(item.product, true);
       let isVariant = false;
 
       if (!product) {
-        product = await productVariantRepository.findById(item.product);
+        product = await productVariantRepository.findById(item.product, true);
         if (product) isVariant = true;
       }
 
@@ -664,8 +664,14 @@ class SalesService {
         const productIds = orderItems.map(item => item.product);
         const productMap = new Map();
         for (const id of productIds) {
-          const p = await productRepository.findById(id);
-          if (p) productMap.set((id && id.toString ? id.toString() : id), p.name || p.displayName || 'Product');
+          const p = await productRepository.findById(id, true);
+          if (!p) {
+            // Check variants if not found in base products
+            const v = await productVariantRepository.findById(id, true);
+            if (v) productMap.set((id && id.toString ? id.toString() : id), v.display_name || v.variant_name || 'Variant');
+          } else {
+            productMap.set((id && id.toString ? id.toString() : id), p.name || p.displayName || 'Product');
+          }
         }
 
         const lineItems = orderItems.map(item => ({

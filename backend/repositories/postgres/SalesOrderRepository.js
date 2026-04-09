@@ -272,7 +272,16 @@ class SalesOrderRepository {
       `UPDATE sales_orders SET ${updates.join(', ')} WHERE id = $${paramCount} AND deleted_at IS NULL RETURNING *`,
       params
     );
-    return result.rows[0] || null;
+    const order = result.rows[0] || null;
+    if (order) {
+      if (typeof order.items === 'string') {
+        try { order.items = JSON.parse(order.items); } catch (_) { order.items = []; }
+      }
+      if (typeof order.conversions === 'string') {
+        try { order.conversions = JSON.parse(order.conversions); } catch (_) { order.conversions = []; }
+      }
+    }
+    return order;
   }
 
   async softDelete(id) {
