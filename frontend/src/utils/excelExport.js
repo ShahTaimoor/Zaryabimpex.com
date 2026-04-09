@@ -14,8 +14,15 @@ export const exportToExcel = async (payload) => {
     const toastId = toast.loading(`Preparing ${payload.filename || 'Excel file'}...`);
     
     try {
-        const response = await axios.post('/api/export-excel', payload, {
-            responseType: 'blob', // Critical for binary data
+        const storedToken = localStorage.getItem('authToken');
+        const apiBase = import.meta.env.VITE_API_URL 
+            ? import.meta.env.VITE_API_URL.replace(/\/$/, '') 
+            : 'http://localhost:5000/api';
+            
+        const response = await axios.post(`${apiBase}/excel-manager/generate`, payload, {
+            responseType: 'blob',
+            withCredentials: true,
+            headers: storedToken ? { 'Authorization': `Bearer ${storedToken}` } : {}
         });
 
         // Create a download link for the blob
@@ -77,8 +84,17 @@ export const importExcelFile = async (file) => {
 
     const toastId = toast.loading('Parsing Excel file...');
     try {
-        const response = await axios.post('/api/export-excel/import', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
+        const storedToken = localStorage.getItem('authToken');
+        const apiBase = import.meta.env.VITE_API_URL 
+            ? import.meta.env.VITE_API_URL.replace(/\/$/, '') 
+            : 'http://localhost:5000/api';
+
+        const response = await axios.post(`${apiBase}/excel-manager/import`, formData, {
+            headers: { 
+                'Content-Type': 'multipart/form-data',
+                ...(storedToken ? { 'Authorization': `Bearer ${storedToken}` } : {})
+            },
+            withCredentials: true
         });
         toast.success(`Successfully parsed ${response.data.length} rows`, { id: toastId });
         return response.data;

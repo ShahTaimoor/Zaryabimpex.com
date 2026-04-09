@@ -6,12 +6,14 @@ const logger = require('../utils/logger');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
+const { auth } = require('../middleware/auth');
+
 /**
- * @route   POST /api/export-excel
+ * @route   POST /api/excel-manager/generate
  * @desc    Export data to a professionally styled Excel file
  * @access  Private (Assume auth middleware is applied globally or here)
  */
-router.post('/', async (req, res) => {
+router.post('/generate', auth, async (req, res) => {
     try {
         const { 
             title = 'Report', 
@@ -114,7 +116,7 @@ router.get('/sample', async (req, res) => {
     }
 });
 
-router.post('/import', upload.single('excelFile'), async (req, res) => {
+router.post('/import', auth, upload.single('excelFile'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ message: 'No file uploaded' });
