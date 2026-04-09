@@ -68,7 +68,7 @@ import AsyncErrorBoundary from '../components/AsyncErrorBoundary';
 import { useResponsive } from '../components/ResponsiveContainer';
 import { ProductSearch as SharedSalesProductSearch } from '../components/sales/ProductSearch';
 
-const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove, onUpdateCartBoxCount }) => {
+const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove, onUpdateCartBoxCount, showProductImages, setPreviewImageProduct }) => {
   const { companyInfo: companySettings } = useCompanyInfo();
   const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
@@ -231,6 +231,13 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove, o
                   {product.variantType}: {product.variantValue}
                 </span>
               )}
+              {(() => {
+                const b = (product.barcode ?? '').toString().trim();
+                if (b) return <span className="text-xs text-gray-600 font-mono truncate">Barcode: {b}</span>;
+                const s = (product.sku ?? '').toString().trim();
+                if (s) return <span className="text-xs text-gray-600 font-mono truncate">SKU: {s}</span>;
+                return null;
+              })()}
             </div>
           </div>
 
@@ -1273,6 +1280,8 @@ export const Purchase = ({ tabId, editData }) => {
                 onUpdateCost={updateCost}
                 onRemove={removeFromPurchase}
                 onUpdateCartBoxCount={updateCartBoxCount}
+                showProductImages={showProductImages}
+                setPreviewImageProduct={setPreviewImageProduct}
               />
             ))}
           </CartItemsTableSection>
@@ -1856,12 +1865,12 @@ export const Purchase = ({ tabId, editData }) => {
 
         {showReceiptLabelPrinter && (
           <BarcodeLabelPrinter
-            isOpen={showReceiptLabelPrinter}
+            products={receiptLabelProducts}
+            quantityMode={true}
             onClose={() => {
               setShowReceiptLabelPrinter(false);
               setReceiptLabelProducts([]);
             }}
-            preSelectedProducts={receiptLabelProducts}
           />
         )}
 
