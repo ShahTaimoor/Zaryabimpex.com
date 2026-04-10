@@ -379,23 +379,7 @@ export const Settings2 = () => {
             { key: 'security_settings', name: 'Security Settings' }
           ]
         },
-        {
-          key: 'view_backups',
-          name: 'View Backups',
-          subcategories: [
-            { key: 'view_backup_list', name: 'Backup List' },
-            { key: 'view_backup_logs', name: 'Backup Logs' }
-          ]
-        },
-        {
-          key: 'manage_backups',
-          name: 'Manage Backups',
-          subcategories: [
-            { key: 'create_backups', name: 'Create Backups' },
-            { key: 'restore_backups', name: 'Restore Backups' },
-            { key: 'delete_backups', name: 'Delete Backups' }
-          ]
-        },
+
         // System Operations
         { key: 'view_audit_logs', name: 'View Audit Logs' },
 
@@ -564,10 +548,9 @@ export const Settings2 = () => {
       // Investor Management
       view_investors: true, manage_investors: true, create_investors: true, edit_investors: true, payout_investors: true,
       // Administration
-      manage_users: true, manage_settings: true, view_backups: true, manage_backups: true,
+      manage_users: true, manage_settings: true,
       create_users: true, edit_users: true, delete_users: true, assign_roles: true,
       company_settings: true, system_settings: true, print_settings: true, security_settings: true,
-      view_backup_list: true, view_backup_logs: true, create_backups: true, restore_backups: true, delete_backups: true,
       view_audit_logs: true, import_data: true,
       manage_integrations: true, configure_notifications: true
     },

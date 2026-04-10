@@ -168,7 +168,7 @@ app.use('/api/notes', require('./routes/notes'));
 app.use('/api/migration', require('./routes/migration'));
 app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/recommendations', require('./routes/recommendations'));
-app.use('/api/backups', require('./routes/backups'));
+
 app.use('/api/pl-statements', require('./routes/plStatements')); // New P&L statements routes
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/payments', require('./routes/payments'));
@@ -267,10 +267,7 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
       financialValidationService.scheduleValidation();
       logger.info('Financial validation scheduler started');
 
-      // Backup verification (daily at 3 AM)
-      const backupVerificationService = require('./services/backupVerificationService');
-      backupVerificationService.scheduleVerification();
-      logger.info('Backup verification scheduler started');
+
 
       // Performance monitoring
       const perfMonitoringService = require('./services/performanceMonitoringService');
@@ -338,9 +335,7 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
     }
   });
 
-  // Start backup scheduler (only in non-serverless environments)
-  const backupScheduler = require('./services/backupScheduler');
-  backupScheduler.start();
+
 
   // Start reconciliation jobs
   const { startReconciliationJobs } = require('./jobs/reconciliationJobs');
@@ -373,10 +368,7 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
     financialValidationService.scheduleValidation();
     logger.info('Financial validation scheduler started');
 
-    // Backup verification (daily at 3 AM)
-    const backupVerificationService = require('./services/backupVerificationService');
-    backupVerificationService.scheduleVerification();
-    logger.info('Backup verification scheduler started');
+
 
     // Performance monitoring
     const performanceMonitoringService = require('./services/performanceMonitoringService');
