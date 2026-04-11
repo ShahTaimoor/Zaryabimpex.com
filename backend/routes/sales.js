@@ -332,7 +332,15 @@ router.post('/', [
   body('orderType').isIn(['retail', 'wholesale', 'return', 'exchange']).withMessage('Invalid order type'),
   body('customer').optional().isUUID(4).withMessage('Invalid customer ID'),
   body('items').isArray({ min: 1 }).withMessage('Order must have at least one item'),
-  body('items.*.product').isUUID(4).withMessage('Invalid product ID'),
+  body('items.*.product').custom((val) => {
+    if (!val) return false;
+    // Allow UUID v4
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+    if (isUuid) return true;
+    // Allow manual IDs
+    if (typeof val === 'string' && val.startsWith('manual_')) return true;
+    return false;
+  }).withMessage('Invalid product ID'),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('payment.method').isIn(['cash', 'credit_card', 'debit_card', 'check', 'account', 'split', 'bank']).withMessage('Invalid payment method'),
   body('payment.amount').optional().isFloat({ min: 0 }).withMessage('Payment amount must be a positive number'),
@@ -501,7 +509,13 @@ router.put('/:id', [
   body('orderType').optional().isIn(['retail', 'wholesale', 'return', 'exchange']).withMessage('Invalid order type'),
   body('notes').optional().trim().isLength({ max: 1000 }).withMessage('Notes too long'),
   body('items').optional().isArray({ min: 1 }).withMessage('At least one item is required'),
-  body('items.*.product').optional().isUUID(4).withMessage('Valid product is required'),
+  body('items.*.product').optional().custom((val) => {
+    if (!val) return true; // optional
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+    if (isUuid) return true;
+    if (typeof val === 'string' && val.startsWith('manual_')) return true;
+    return false;
+  }).withMessage('Valid product is required'),
   body('items.*.quantity').optional().isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('items.*.unitPrice').optional().isFloat({ min: 0 }).withMessage('Unit price must be positive'),
   body('billDate').optional().isISO8601().withMessage('Valid bill date required (ISO 8601 format)'),

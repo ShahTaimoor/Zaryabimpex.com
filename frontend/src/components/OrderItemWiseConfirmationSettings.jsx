@@ -15,6 +15,9 @@ export function OrderItemWiseConfirmationSettings() {
   const dualUnitShowBoxInput = orderSettings.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInput = orderSettings.dualUnitShowPiecesInput !== false;
   const showSalesDiscountCode = orderSettings.showSalesDiscountCode === true;
+  const allowSaleWithoutProduct = orderSettings.allowSaleWithoutProduct === true;
+  const showCostPrice = orderSettings.showCostPrice === true;
+  const allowManualCostPrice = orderSettings.allowManualCostPrice === true;
 
   // Invoice Numbering Settings
   const invoiceSequenceEnabled = orderSettings.invoiceSequenceEnabled === true;
@@ -98,8 +101,90 @@ export function OrderItemWiseConfirmationSettings() {
     }
   };
 
+  const handleAllowSaleWithoutProductChange = async (checked) => {
+    try {
+      await updateCompanySettings({
+        orderSettings: { ...orderSettings, allowSaleWithoutProduct: checked },
+      }).unwrap();
+      toast.success(checked ? 'Manual item entry for sales enabled' : 'Manual item entry for sales disabled');
+    } catch (err) {
+      handleApiError(err, 'Failed to update setting');
+    }
+  };
+
+  const handleShowCostPriceChange = async (checked) => {
+    try {
+      await updateCompanySettings({
+        orderSettings: { ...orderSettings, showCostPrice: checked },
+      }).unwrap();
+      toast.success(checked ? 'Cost price visibility enabled' : 'Cost price visibility disabled');
+    } catch (err) {
+      handleApiError(err, 'Failed to update setting');
+    }
+  };
+  const handleAllowManualCostPriceChange = async (checked) => {
+    try {
+      // Use the freshest settings from the response
+      const currentOrderSettings = (settingsResponse?.data?.orderSettings || settingsResponse?.orderSettings || {});
+      await updateCompanySettings({
+        orderSettings: { ...currentOrderSettings, allowManualCostPrice: checked },
+      }).unwrap();
+      toast.success(checked ? 'Manual cost price entry enabled' : 'Manual cost price entry disabled');
+    } catch (err) {
+      handleApiError(err, 'Failed to update setting');
+    }
+  };
+
   return (
     <>
+      <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+        <input
+          type="checkbox"
+          checked={allowSaleWithoutProduct}
+          onChange={(e) => handleAllowSaleWithoutProductChange(e.target.checked)}
+          disabled={updating}
+          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+        />
+        <div>
+          <div className="text-sm font-medium text-gray-900">Allow Sale Without Product</div>
+          <div className="text-xs text-gray-500">Allow manual item entry (name, price, quantity) even if product doesn&apos;t exist in database.</div>
+        </div>
+      </label>
+
+      {allowSaleWithoutProduct && (
+        <label
+          htmlFor="allowManualCostPrice"
+          className="flex items-center space-x-3 p-4 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-50/50 ml-6 bg-blue-50/20"
+        >
+          <input
+            id="allowManualCostPrice"
+            type="checkbox"
+            checked={!!orderSettings.allowManualCostPrice}
+            onChange={(e) => handleAllowManualCostPriceChange(e.target.checked)}
+            disabled={updating}
+            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+          />
+          <div>
+            <div className="text-sm font-semibold text-blue-900">Enable Cost Price for Manual Items</div>
+            <div className="text-xs text-blue-700">Allow entering cost price for items added manually (visible only to users with cost price permission).</div>
+          </div>
+        </label>
+      )}
+
+      <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+        <input
+          type="checkbox"
+          checked={showCostPrice}
+          onChange={(e) => handleShowCostPriceChange(e.target.checked)}
+          disabled={updating}
+          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+        />
+        <div>
+          <div className="text-sm font-medium text-gray-900">Show Cost Price</div>
+          <div className="text-xs text-gray-500">Display cost price in product list, sale screen, and reports.</div>
+        </div>
+      </label>
+
       <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
         <input
           type="checkbox"

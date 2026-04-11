@@ -647,6 +647,7 @@ export const Dashboard = () => {
               <img
                 src={companyLogo}
                 alt={companyName || 'Company logo'}
+                crossOrigin="anonymous"
                 className="max-h-[400px] md:max-h-[500px] w-auto max-w-full object-contain transition-all duration-500 hover:scale-105"
               />
             ) : (

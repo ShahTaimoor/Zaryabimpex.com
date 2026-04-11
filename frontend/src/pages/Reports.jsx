@@ -35,7 +35,11 @@ import DateFilter from '../components/DateFilter';
 import PrintReportModal from '../components/PrintReportModal';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 
+import { useCompanyInfo } from '../hooks/useCompanyInfo';
+
 export const Reports = () => {
+  const { companyInfo: companySettings } = useCompanyInfo();
+  const showCostPrice = companySettings.orderSettings?.showCostPrice !== false;
   const [activeTab, setActiveTab] = useState('party-balance');
   const [partyType, setPartyType] = useState('customer');
   const [salesGroupBy, setSalesGroupBy] = useState('daily');
@@ -341,19 +345,22 @@ export const Reports = () => {
           return [
             { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'Product Name', key: 'name' },
-            { header: 'Last Purchase Price', render: (row) => (row.lastPurchasePrice || 0).toLocaleString(), align: 'right' },
+            ...(showCostPrice ? [
+              { header: 'Last Purchase Price', render: (row) => (row.lastPurchasePrice || 0).toLocaleString(), align: 'right' },
+              { header: 'Op. Amount', render: (row) => (row.openingAmount || 0).toLocaleString(), align: 'right' },
+              { header: 'Purchase Amt', render: (row) => (row.purchaseAmount || 0).toLocaleString(), align: 'right' },
+              { header: 'Pur.Ret Amt', render: (row) => (row.purchaseReturnAmount || 0).toLocaleString(), align: 'right' },
+              { header: 'Sale Amt', render: (row) => (row.saleAmount || 0).toLocaleString(), align: 'right' },
+              { header: 'Sale Ret Amt', render: (row) => (row.saleReturnAmount || 0).toLocaleString(), align: 'right' },
+              { header: 'Damage Amt', render: (row) => (row.damageAmount || 0).toLocaleString(), align: 'right' },
+              { header: 'Closing Amt', render: (row) => (row.closingAmount || 0).toLocaleString(), align: 'right', bold: true },
+            ] : []),
             { header: 'Op. Qty', render: (row) => (row.openingQty || 0).toLocaleString(), align: 'right' },
-            { header: 'Op. Amount', render: (row) => (row.openingAmount || 0).toLocaleString(), align: 'right' },
             { header: 'Purchase Qty', render: (row) => (row.purchaseQty || 0).toLocaleString(), align: 'right' },
-            { header: 'Purchase Amt', render: (row) => (row.purchaseAmount || 0).toLocaleString(), align: 'right' },
             { header: 'Pur.Ret Qty', render: (row) => (row.purchaseReturnQty || 0).toLocaleString(), align: 'right' },
-            { header: 'Pur.Ret Amt', render: (row) => (row.purchaseReturnAmount || 0).toLocaleString(), align: 'right' },
             { header: 'Sale Qty', render: (row) => (row.saleQty || 0).toLocaleString(), align: 'right' },
-            { header: 'Sale Amt', render: (row) => (row.saleAmount || 0).toLocaleString(), align: 'right' },
             { header: 'Sale Ret Qty', render: (row) => (row.saleReturnQty || 0).toLocaleString(), align: 'right' },
-            { header: 'Sale Ret Amt', render: (row) => (row.saleReturnAmount || 0).toLocaleString(), align: 'right' },
             { header: 'Damage Qty', render: (row) => (row.damageQty || 0).toLocaleString(), align: 'right' },
-            { header: 'Damage Amt', render: (row) => (row.damageAmount || 0).toLocaleString(), align: 'right' },
             { header: 'Closing Qty', render: (row) => (row.closingQty || 0).toLocaleString(), align: 'right', bold: true },
             { header: 'Current Stock', render: (row) => (row.currentStock || 0).toLocaleString(), align: 'right', bold: true },
             {
@@ -366,7 +373,6 @@ export const Reports = () => {
               align: 'right',
               bold: true
             },
-            { header: 'Closing Amt', render: (row) => (row.closingAmount || 0).toLocaleString(), align: 'right', bold: true },
             { header: 'Retail Val.', render: (row) => (row.retailValuation || 0).toLocaleString(), align: 'right', bold: true },
             { header: 'Sale Price1', render: (row) => (row.salePrice1 || 0).toLocaleString(), align: 'right' },
           ];
@@ -381,8 +387,10 @@ export const Reports = () => {
         if (inventoryType === 'valuation') {
           return [
             ...baseCols,
-            { header: 'Cost Price', render: (row) => (row.costPrice || 0).toLocaleString(), align: 'right' },
-            { header: 'Valuation', render: (row) => (row.valuation || 0).toLocaleString(), align: 'right', bold: true },
+            ...(showCostPrice ? [
+              { header: 'Cost Price', render: (row) => (row.costPrice || 0).toLocaleString(), align: 'right' },
+              { header: 'Valuation', render: (row) => (row.valuation || 0).toLocaleString(), align: 'right', bold: true },
+            ] : []),
             { header: 'Retail Val.', render: (row) => (row.retailValuation || 0).toLocaleString(), align: 'right', bold: true },
           ];
         }
@@ -499,12 +507,16 @@ export const Reports = () => {
         'Out of Stock': inventoryReportData?.summary?.outOfStockCount || 0
       };
       if (inventoryType === 'stock-summary') {
-        return {
+        const valData = {
           ...base,
-          'Wholesale Valuation': inventoryReportData?.summary?.totalWholesaleValuation ?? 0,
           'Retail Valuation': inventoryReportData?.summary?.totalRetailValuation ?? 0,
           'Reconcile Delta': inventoryReportData?.summary?.totalReconciliationDelta ?? 0
         };
+        if (showCostPrice) {
+          valData['Wholesale Valuation'] = inventoryReportData?.summary?.totalWholesaleValuation ?? 0;
+          valData['Total Cost'] = inventoryReportData?.summary?.totalCost || 0;
+        }
+        return valData;
       }
       return {
         ...base,
@@ -612,14 +624,16 @@ export const Reports = () => {
             { header: 'SKU', key: 'sku', width: 15 },
             { header: 'Category', key: 'categoryName', width: 20 },
             { header: 'Op. Qty', key: 'openingQty', width: 12, type: 'number' },
-            { header: 'Op. Amount', key: 'openingAmount', width: 15, type: 'currency' },
             { header: 'Purchase Qty', key: 'purchaseQty', width: 12, type: 'number' },
-            { header: 'Purchase Amt', key: 'purchaseAmount', width: 15, type: 'currency' },
             { header: 'Sale Qty', key: 'saleQty', width: 12, type: 'number' },
             { header: 'Sale Amt', key: 'saleAmount', width: 15, type: 'currency' },
             { header: 'Current Stock', key: 'currentStock', width: 15, type: 'number' },
-            { header: 'Last Pur. Price', key: 'lastPurchasePrice', width: 15, type: 'currency' },
-            { header: 'Closing Amt', key: 'closingAmount', width: 15, type: 'currency' }
+            ...(showCostPrice ? [
+              { header: 'Op. Amount', key: 'openingAmount', width: 15, type: 'currency' },
+              { header: 'Purchase Amt', key: 'purchaseAmount', width: 15, type: 'currency' },
+              { header: 'Last Pur. Price', key: 'lastPurchasePrice', width: 15, type: 'currency' },
+              { header: 'Closing Amt', key: 'closingAmount', width: 15, type: 'currency' }
+            ] : [])
           ];
         } else {
           columns = [

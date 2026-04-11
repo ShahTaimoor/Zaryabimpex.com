@@ -27,6 +27,8 @@ function ProductSearchComponent({
   dualUnitShowBoxInput = true,
   dualUnitShowPiecesInput = true,
   allowOutOfStock = false,
+  allowSaleWithoutProduct = false,
+  allowManualCostPrice = false,
 }) {
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -40,7 +42,11 @@ function ProductSearchComponent({
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [showProductImages, setShowProductImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
+  const [isManualMode, setIsManualMode] = useState(false); // New state for manual entry
+  const [manualName, setManualName] = useState(''); // New state for manual name
+  const [manualCost, setManualCost] = useState(''); // New state for manual cost
   const productSearchRef = useRef(null);
+  const manualNameRef = useRef(null);
 
   useEffect(() => {
     const handleConfigChange = () => {
@@ -235,10 +241,66 @@ function ProductSearchComponent({
   }, [priceType, selectedProduct]);
 
   const handleAddToCart = async () => {
+    if (isManualMode) {
+      if (!manualName.trim()) {
+        toast.error('Please enter a product name');
+        if (manualNameRef.current) manualNameRef.current.focus();
+        return;
+      }
+      if (quantity <= 0) {
+        toast.error('Please enter a valid quantity');
+        return;
+      }
+      if (!customRate || parseInt(customRate) < 0) {
+        toast.error('Please enter a valid rate');
+        return;
+      }
+
+      setIsAddingToCart(true);
+      try {
+        const unitPrice = parseInt(customRate) || 0;
+        const unitCost = (allowManualCostPrice && manualCost) ? parseInt(manualCost) : 0;
+
+        const manualProduct = {
+          _id: `manual_${Date.now()}`,
+          id: `manual_${Date.now()}`,
+          name: manualName.trim(),
+          isManual: true,
+          inventory: { currentStock: 999999, reorderPoint: 0 },
+          pricing: { 
+            retail: unitPrice, 
+            wholesale: unitPrice, 
+            cost: unitCost,
+            cost_price: unitCost
+          }
+        };
+
+        onAddProduct({
+          product: manualProduct,
+          quantity: quantity,
+          unitPrice: unitPrice
+        });
+
+        // Reset manual form but keep mode enabled if user wants multiple manual items
+        setManualName('');
+        setQuantity(0);
+        setCustomRate('');
+        setManualCost('');
+        
+        if (manualNameRef.current) {
+          manualNameRef.current.focus();
+        }
+        toast.success(`Manual item ${manualProduct.name} added to cart`);
+      } finally {
+        setIsAddingToCart(false);
+      }
+      return;
+    }
+
     if (!selectedProduct) return;
 
     // Validate that rate is filled
-    if (!customRate || parseInt(customRate) <= 0) {
+    if (!customRate || parseInt(customRate) < 0) {
       toast.error('Please enter a valid rate');
       return;
     }
@@ -334,16 +396,27 @@ function ProductSearchComponent({
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && isAddingProduct) {
-      e.preventDefault();
-      handleAddToCart();
-    } else if (e.key === 'Escape' && isAddingProduct) {
-      e.preventDefault();
-      setSelectedProduct(null);
-      setQuantity(0);
-      setCustomRate('');
-      setCalculatedRate(0);
-      setIsAddingProduct(false);
+    if (e.key === 'Enter') {
+      if (isManualMode || isAddingProduct) {
+        e.preventDefault();
+        handleAddToCart();
+      }
+    } else if (e.key === 'Escape') {
+      if (isManualMode) {
+        e.preventDefault();
+        setIsManualMode(false);
+        setManualName('');
+        setQuantity(0);
+        setCustomRate('');
+        setTimeout(() => productSearchRef.current?.focus(), 100);
+      } else if (isAddingProduct) {
+        e.preventDefault();
+        setSelectedProduct(null);
+        setQuantity(0);
+        setCustomRate('');
+        setCalculatedRate(0);
+        setIsAddingProduct(false);
+      }
     }
   };
 
@@ -432,33 +505,76 @@ function ProductSearchComponent({
           {/* Product Search */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Product Search
+              {isManualMode ? 'Manual Item Details' : 'Product Search'}
             </label>
             <div className="relative flex space-x-2">
-              <div className="flex-1">
-                <SearchableDropdown
-                  key={searchKey}
-                  ref={productSearchRef}
-                  placeholder="Search or select product..."
-                  items={products || []}
-                  onSelect={handleProductSelect}
-                  onSearch={setProductSearchTerm}
-                  displayKey={productDisplayKey}
-                  selectedItem={selectedProduct}
-                  loading={productsLoading || variantsLoading}
-                  emptyMessage={productSearchTerm.length > 0 ? "No products found" : "Start typing to search products..."}
-                  value={productSearchTerm}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowBarcodeScanner(true)}
-                className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center flex-shrink-0"
-                title="Scan barcode to search product"
-              >
-                <Camera className="h-5 w-5 text-gray-600" />
-              </button>
-              {selectedProduct?.imageUrl && showProductImages && (
+              {!isManualMode ? (
+                <>
+                  <div className="flex-1">
+                    <SearchableDropdown
+                      key={searchKey}
+                      ref={productSearchRef}
+                      placeholder="Search or select product..."
+                      items={products || []}
+                      onSelect={handleProductSelect}
+                      onSearch={setProductSearchTerm}
+                      displayKey={productDisplayKey}
+                      selectedItem={selectedProduct}
+                      loading={productsLoading || variantsLoading}
+                      emptyMessage={productSearchTerm.length > 0 ? "No products found" : "Start typing to search products..."}
+                      value={productSearchTerm}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowBarcodeScanner(true)}
+                    className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center flex-shrink-0"
+                    title="Scan barcode to search product"
+                  >
+                    <Camera className="h-5 w-5 text-gray-600" />
+                  </button>
+                  {allowSaleWithoutProduct && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsManualMode(true);
+                        setIsAddingProduct(true);
+                        setSelectedProduct(null);
+                        setCalculatedRate(0);
+                        setTimeout(() => manualNameRef.current?.focus(), 100);
+                      }}
+                      className="px-3 py-2 border border-blue-300 text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors flex items-center justify-center flex-shrink-0 text-sm font-medium"
+                      title="Add manual item"
+                    >
+                      <span>Manual</span>
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="flex-1 flex space-x-2">
+                  <Input
+                    ref={manualNameRef}
+                    placeholder="Enter manual product name..."
+                    value={manualName}
+                    onChange={(e) => setManualName(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsManualMode(false);
+                      setIsAddingProduct(false);
+                      setManualName('');
+                      setTimeout(() => productSearchRef.current?.focus(), 100);
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-xs"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              {selectedProduct?.imageUrl && !isManualMode && showProductImages && (
                 <div 
                   className="h-10 w-10 flex-shrink-0 bg-gray-50 rounded-md overflow-hidden border border-gray-300 cursor-pointer hover:border-primary-500 transition-colors group relative"
                   onClick={() => setShowImagePreview(true)}
@@ -476,31 +592,33 @@ function ProductSearchComponent({
           {/* Fields Grid - 2 columns on mobile */}
           <div className="grid grid-cols-2 gap-3">
             {/* Stock */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Stock
-              </label>
-              <span
-                className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center min-h-[2.5rem] flex flex-col items-center justify-center gap-0.5 leading-tight"
-                title={selectedProduct ? `Available stock (pieces)` : ''}
-              >
-                {selectedProduct ? (
-                  hasDualUnit(selectedProduct) ? (
-                    <>
-                      <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
+            {!isManualMode && (
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Stock
+                </label>
+                <span
+                  className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center min-h-[2.5rem] flex flex-col items-center justify-center gap-0.5 leading-tight"
+                  title={selectedProduct ? `Available stock (pieces)` : ''}
+                >
+                  {selectedProduct ? (
+                    hasDualUnit(selectedProduct) ? (
+                      <>
+                        <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
 
-                    </>
+                      </>
+                    ) : (
+                      <span>{selectedProduct.inventory?.currentStock ?? 0} pcs</span>
+                    )
                   ) : (
-                    <span>{selectedProduct.inventory?.currentStock ?? 0} pcs</span>
-                  )
-                ) : (
-                  '0'
-                )}
-              </span>
-            </div>
+                    '0'
+                  )}
+                </span>
+              </div>
+            )}
 
             {/* Amount */}
-            <div>
+            <div className={isManualMode ? 'col-span-1' : ''}>
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Amount
               </label>
@@ -510,13 +628,13 @@ function ProductSearchComponent({
             </div>
 
             {/* Box + Qty (dual unit): no parent "Quantity" label — matches cart columns */}
-            <div className={dualUnit ? 'col-span-2' : ''}>
-              {!dualUnit && (
+            <div className={(!isManualMode && dualUnit) ? 'col-span-2' : ''}>
+              {(!isManualMode && !dualUnit) || isManualMode ? (
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Quantity
                 </label>
-              )}
-              {dualUnit ? (
+              ) : null}
+              {!isManualMode && dualUnit ? (
                 (dualUnitShowBoxInput || dualUnitShowPiecesInput) ? (
                   <div className={`grid ${dualUnitShowBoxInput && dualUnitShowPiecesInput ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                     {dualUnitShowBoxInput && (
@@ -574,18 +692,13 @@ function ProductSearchComponent({
                   />
                 )
               ) : (
-                <DualUnitQuantityInput
-                  product={selectedProduct}
-                  quantity={quantity}
-                  onChange={(q) => setQuantity(q)}
-                  max={quantityInputMax}
-                  showRemainingAfterSale={false}
-                  showPiecesUnitLabel={false}
-                  showBoxInput={dualUnitShowBoxInput}
-                  showPiecesInput={dualUnitShowPiecesInput}
+                <Input
+                  type="number"
+                  min="1"
+                  value={quantity || ''}
+                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 0))}
                   onKeyDown={handleKeyDown}
-                  inputClassName="text-center h-10 border border-gray-300 rounded px-2 w-full"
-                  compact
+                  className="text-center h-10"
                 />
               )}
             </div>
@@ -615,13 +728,27 @@ function ProductSearchComponent({
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Cost
                 </label>
-                <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-2 rounded border border-red-200 block text-center h-10 flex items-center justify-center" title="Cost Price">
-                  {lastPurchasePrice !== null
-                    ? `${Math.round(lastPurchasePrice)}`
-                    : (selectedProduct?.pricing?.cost !== undefined && selectedProduct?.pricing?.cost !== null)
-                      ? `${Math.round(selectedProduct.pricing.cost)}`
-                      : selectedProduct ? 'N/A' : '0'}
-                </span>
+                {isManualMode && allowManualCostPrice ? (
+                  <Input
+                    type="number"
+                    step="1"
+                    autoComplete="off"
+                    value={manualCost}
+                    onChange={(e) => setManualCost(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onFocus={(e) => e.target.select()}
+                    className="text-center h-10 bg-red-50 border-red-200 text-red-700 font-semibold"
+                    placeholder="0"
+                  />
+                ) : (
+                  <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-2 rounded border border-red-200 block text-center h-10 flex items-center justify-center" title="Cost Price">
+                    {lastPurchasePrice !== null
+                      ? `${Math.round(lastPurchasePrice)}`
+                      : (selectedProduct?.pricing?.cost !== undefined && selectedProduct?.pricing?.cost !== null)
+                        ? `${Math.round(selectedProduct.pricing.cost)}`
+                        : selectedProduct ? 'N/A' : '0'}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -634,7 +761,7 @@ function ProductSearchComponent({
               isLoading={isAddingToCart}
               variant="default"
               className="w-full flex items-center justify-center px-4 py-2.5 h-11"
-              disabled={!selectedProduct || isAddingToCart}
+              disabled={(!selectedProduct && !isManualMode) || isAddingToCart}
               title="Add to cart (or press Enter in Quantity/Rate fields - focus returns to search)"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -646,35 +773,79 @@ function ProductSearchComponent({
         {/* Desktop Layout — items-start for quantity column alignment */}
         <div className="hidden md:grid grid-cols-12 gap-x-3 gap-y-3 items-start">
           {/* Product Search - 7 columns */}
-          <div className={searchColClass}>
+          <div className={isManualMode ? 'col-span-7' : searchColClass}>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Product Search
+              {isManualMode ? 'Manual Item Details' : 'Product Search'}
             </label>
             <div className="relative flex space-x-2">
-              <div className="flex-1">
-                <SearchableDropdown
-                  key={searchKey}
-                  ref={productSearchRef}
-                  placeholder="Search or select product..."
-                  items={products || []}
-                  onSelect={handleProductSelect}
-                  onSearch={setProductSearchTerm}
-                  displayKey={productDisplayKey}
-                  selectedItem={selectedProduct}
-                  loading={productsLoading || variantsLoading}
-                  emptyMessage={productSearchTerm.length > 0 ? "No products found" : "Start typing to search products..."}
-                  value={productSearchTerm}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowBarcodeScanner(true)}
-                className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center flex-shrink-0"
-                title="Scan barcode to search product"
-              >
-                <Camera className="h-5 w-5 text-gray-600" />
-              </button>
-              {selectedProduct?.imageUrl && showProductImages && (
+              {!isManualMode ? (
+                <>
+                  <div className="flex-1">
+                    <SearchableDropdown
+                      key={searchKey}
+                      ref={productSearchRef}
+                      placeholder="Search or select product..."
+                      items={products || []}
+                      onSelect={handleProductSelect}
+                      onSearch={setProductSearchTerm}
+                      displayKey={productDisplayKey}
+                      selectedItem={selectedProduct}
+                      loading={productsLoading || variantsLoading}
+                      emptyMessage={productSearchTerm.length > 0 ? "No products found" : "Start typing to search products..."}
+                      value={productSearchTerm}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowBarcodeScanner(true)}
+                    className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center flex-shrink-0"
+                    title="Scan barcode to search product"
+                  >
+                    <Camera className="h-5 w-5 text-gray-600" />
+                  </button>
+                  {allowSaleWithoutProduct && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsManualMode(true);
+                        setIsAddingProduct(true);
+                        setSelectedProduct(null);
+                        setCalculatedRate(0);
+                        setTimeout(() => manualNameRef.current?.focus(), 100);
+                      }}
+                      className="px-3 py-2 border border-blue-300 text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors flex items-center justify-center flex-shrink-0 text-sm font-medium"
+                      title="Add manual item"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      <span>Manual</span>
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="flex-1 flex space-x-2">
+                  <Input
+                    ref={manualNameRef}
+                    placeholder="Enter manual product name..."
+                    value={manualName}
+                    onChange={(e) => setManualName(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsManualMode(false);
+                      setIsAddingProduct(false);
+                      setManualName('');
+                      setTimeout(() => productSearchRef.current?.focus(), 100);
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-xs"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              {selectedProduct?.imageUrl && !isManualMode && showProductImages && (
                 <div 
                   className="h-10 w-10 flex-shrink-0 bg-gray-50 rounded-md overflow-hidden border border-gray-300 cursor-pointer hover:border-primary-500 transition-colors group relative"
                   onClick={() => setShowImagePreview(true)}
@@ -689,38 +860,60 @@ function ProductSearchComponent({
             </div>
           </div>
 
+          {/* Manual Mode Cost Field (Desktop specific if needed, but it currently shares responsive logic) */}
+          {isManualMode && allowManualCostPrice && hasCostPricePermission && showCostPrice && (
+            <div className="col-span-1 min-w-0">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Cost
+              </label>
+              <Input
+                type="number"
+                step="1"
+                autoComplete="off"
+                value={manualCost}
+                onChange={(e) => setManualCost(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onFocus={(e) => e.target.select()}
+                className="text-center h-10 bg-red-50 border-red-200 text-red-700 font-semibold"
+                placeholder="0"
+              />
+            </div>
+          )}
+
           {/* Stock - 1 column */}
-          <div className="col-span-1 min-w-0">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Stock
-            </label>
-            <span
-              className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center min-h-[2.75rem] flex flex-col items-center justify-center gap-0.5 leading-snug"
-              title={selectedProduct ? 'Available stock (pieces)' : ''}
-            >
-              {selectedProduct ? (
-                dualUnit ? (
-                  <>
-                    <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
-                   
-                  </>
+          {!isManualMode && (
+            <div className="col-span-1 min-w-0">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Stock
+              </label>
+              <span
+                className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center min-h-[2.75rem] flex flex-col items-center justify-center gap-0.5 leading-snug"
+                title={selectedProduct ? 'Available stock (pieces)' : ''}
+              >
+                {selectedProduct ? (
+                  dualUnit ? (
+                    <>
+                      <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
+                     
+                    </>
+                  ) : (
+                    <span>{selectedProduct.inventory?.currentStock ?? 0} pcs</span>
+                  )
                 ) : (
-                  <span>{selectedProduct.inventory?.currentStock ?? 0} pcs</span>
-                )
-              ) : (
-                '0'
-              )}
-            </span>
-          </div>
+                  '0'
+                )}
+              </span>
+            </div>
+          )}
 
           {/* Box + Qty (dual unit): no parent "Quantity" label — matches cart columns */}
-          <div className={`${quantityColClass} min-w-0`}>
-            {!dualUnit && (
+          <div className={`${isManualMode ? 'col-span-1' : quantityColClass} min-w-0`}>
+            {(!isManualMode && !dualUnit) || isManualMode ? (
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Quantity
               </label>
-            )}
-            {dualUnit ? (
+            ) : null}
+            {!isManualMode && dualUnit ? (
               (dualUnitShowBoxInput || dualUnitShowPiecesInput) ? (
                 <div className={`grid ${dualUnitShowBoxInput && dualUnitShowPiecesInput ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                   {dualUnitShowBoxInput && (
@@ -778,29 +971,24 @@ function ProductSearchComponent({
                 />
               )
             ) : (
-              <DualUnitQuantityInput
-                product={selectedProduct}
-                quantity={quantity}
-                onChange={(q) => setQuantity(q)}
-                max={quantityInputMax}
-                showRemainingAfterSale={false}
-                showPiecesUnitLabel={false}
-                showBoxInput={dualUnitShowBoxInput}
-                showPiecesInput={dualUnitShowPiecesInput}
+              <Input
+                type="number"
+                min="1"
+                value={quantity || ''}
+                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 0))}
                 onKeyDown={handleKeyDown}
-                inputClassName="text-center border border-gray-300 rounded px-2 h-10"
-                compact
+                className="text-center h-10"
               />
             )}
           </div>
 
           {/* Purchase Price - 1 column (conditional) - Between Quantity and Rate */}
-          {showCostPrice && hasCostPricePermission && (
+          {!isManualMode && showCostPrice && hasCostPricePermission && (
             <div className="col-span-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Cost
               </label>
-              <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-10 flex items-center justify-center" title="Cost Price">
+              <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-2 rounded border border-red-200 block text-center min-h-[2.75rem] flex items-center justify-center" title="Cost Price">
                 {lastPurchasePrice !== null
                   ? `${Math.round(lastPurchasePrice)}`
                   : (selectedProduct?.pricing?.cost !== undefined && selectedProduct?.pricing?.cost !== null)
@@ -810,8 +998,8 @@ function ProductSearchComponent({
             </div>
           )}
 
-          {/* Rate - 1 column (reduced from 2) */}
-          <div className="col-span-1">
+          {/* Rate - 1 column */}
+          <div className="col-span-1 min-w-0">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Rate
             </label>
@@ -830,31 +1018,30 @@ function ProductSearchComponent({
           </div>
 
           {/* Amount - 1 column */}
-          <div className="col-span-1">
+          <div className="col-span-1 min-w-0">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Amount
             </label>
-            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
+            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
               {isAddingProduct ? Math.round(quantity * parseInt(customRate || 0)) : 0}
             </span>
           </div>
 
-          {/* Add Button - 1 column (spacer label aligns row with fields that have labels) */}
+          {/* Add Button - 1 column */}
           <div className="col-span-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2 invisible select-none" aria-hidden="true">
-              Add
+            <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
+              Action
             </label>
             <LoadingButton
               type="button"
               onClick={handleAddToCart}
               isLoading={isAddingToCart}
               variant="default"
-              className="w-full flex items-center justify-center px-3 py-2 h-10"
-              disabled={!selectedProduct || isAddingToCart}
+              className="w-full flex items-center justify-center px-4 h-10"
+              disabled={(!selectedProduct && !isManualMode) || isAddingToCart}
               title="Add to cart (or press Enter in Quantity/Rate fields - focus returns to search)"
             >
-              <Plus className="h-4 w-4 mr-2" />
-              Add
+              <Plus className="h-4 w-4" />
             </LoadingButton>
           </div>
         </div>

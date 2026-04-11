@@ -58,9 +58,17 @@ class InventoryRepository {
 
   async findByProductIds(productIds, options = {}) {
     if (!productIds || productIds.length === 0) return [];
+    
+    // Filter to only include valid UUIDs to avoid Postgres casting errors (manual items are not in inventory)
+    const validUuids = productIds.filter(id => 
+      typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+    );
+    
+    if (validUuids.length === 0) return [];
+
     const result = await query(
       'SELECT * FROM inventory WHERE deleted_at IS NULL AND product_id = ANY($1::uuid[])',
-      [productIds]
+      [validUuids]
     );
     return result.rows;
   }

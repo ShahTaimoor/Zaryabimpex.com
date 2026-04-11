@@ -33,6 +33,9 @@ function rowToProduct(row) {
  */
 class ProductRepository {
   async findById(id, includeDeleted = false) {
+    if (!id || typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+      return null;
+    }
     const sql = includeDeleted
       ? 'SELECT * FROM products WHERE id = $1'
       : 'SELECT * FROM products WHERE id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL)';
@@ -53,8 +56,18 @@ class ProductRepository {
       params.push(filters.isActive);
     }
     if (filters.ids || filters.productIds) {
-      sql += ` AND id = ANY($${paramCount++}::uuid[])`;
-      params.push(filters.ids || filters.productIds);
+      const ids = filters.ids || filters.productIds;
+      const validUuids = Array.isArray(ids) ? ids.filter(id => 
+        typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+      ) : [];
+      
+      if (validUuids.length > 0) {
+        sql += ` AND id = ANY($${paramCount++}::uuid[])`;
+        params.push(validUuids);
+      } else if (Array.isArray(ids) && ids.length > 0) {
+        // If they provided IDs but none are valid UUIDs, force empty result
+        sql += ' AND 1=0';
+      }
     }
     if (filters.categoryId) {
       sql += ` AND category_id = $${paramCount++}`;
@@ -390,13 +403,20 @@ class ProductRepository {
    */
   async findInvestorsByProductIds(productIds) {
     if (!productIds?.length) return new Map();
+    
+    const validUuids = productIds.filter(id => 
+      typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+    );
+    
+    if (validUuids.length === 0) return new Map();
+
     const result = await query(
       `SELECT pi.product_id, pi.investor_id, pi.share_percentage, pi.added_at,
               i.name AS investor_name, i.email AS investor_email
        FROM product_investors pi
        INNER JOIN investors i ON i.id = pi.investor_id AND i.deleted_at IS NULL
        WHERE pi.product_id = ANY($1::uuid[])`,
-      [productIds]
+      [validUuids]
     );
     const map = new Map();
     for (const row of result.rows) {

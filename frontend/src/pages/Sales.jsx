@@ -138,10 +138,22 @@ export const Sales = ({ tabId, editData }) => {
   const { updateTabTitle, getActiveTab, openTab } = useTab();
   const { hasPermission, user } = useAuth();
   const { companyInfo: companySettings } = useCompanyInfo();
+  
+  const allowSaleWithoutProductEnabled = companySettings.orderSettings?.allowSaleWithoutProduct === true;
+  const allowManualCostPriceEnabled = companySettings.orderSettings?.allowManualCostPrice === true;
+  const globalShowCostPriceAllowed = companySettings.orderSettings?.showCostPrice !== false; // Default to true if not set
+
   const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const showSalesDiscountCodeEnabled = companySettings.orderSettings?.showSalesDiscountCode === true;
   const [showProfit, setShowProfit] = useState(false);
+
+  // Sync state with global setting if it changes
+  useEffect(() => {
+    if (!globalShowCostPriceAllowed) {
+      setShowCostPrice(false);
+    }
+  }, [globalShowCostPriceAllowed]);
   const totalProfit = useMemo(() => {
     if (!Array.isArray(cart) || cart.length === 0) return 0;
 
@@ -1179,7 +1191,13 @@ export const Sales = ({ tabId, editData }) => {
       orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
       customer: selectedCustomer?.id || selectedCustomer?._id,
       items: cart.map(item => {
-        const base = { product: item.product._id, quantity: Math.round(item.quantity), unitPrice: item.unitPrice };
+        const base = {
+          product: item.product._id,
+          quantity: Math.round(item.quantity),
+          unitPrice: item.unitPrice,
+          isManual: item.product.isManual || false,
+          name: item.product.name
+        };
         if (item.boxes != null || item.pieces != null) {
           base.boxes = item.boxes;
           base.pieces = item.pieces;
@@ -1226,6 +1244,8 @@ export const Sales = ({ tabId, editData }) => {
             product: item.product._id,
             quantity: Math.round(item.quantity),
             unitPrice: item.unitPrice,
+            isManual: item.product.isManual || false,
+            name: item.product.name,
             discountPercent: 0,
             taxRate: 0,
             subtotal: itemSubtotal,
@@ -1486,26 +1506,28 @@ export const Sales = ({ tabId, editData }) => {
                   </Button>
                 )}
                 <div className="flex items-center space-x-2">
-                  <Button
-                    type="button"
-                    onClick={() => setShowCostPrice(!showCostPrice)}
-                    variant="secondary"
-                    size="sm"
-                    className="flex items-center space-x-2"
-                    title={showCostPrice ? 'Hide purchase cost prices' : 'Show purchase cost prices'}
-                  >
-                    {showCostPrice ? (
-                      <>
-                        <EyeOff className="h-4 w-4" />
-                        <span>Hide Cost</span>
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="h-4 w-4" />
-                        <span>Show Cost</span>
-                      </>
-                    )}
-                  </Button>
+                  {globalShowCostPriceAllowed && (
+                    <Button
+                      type="button"
+                      onClick={() => setShowCostPrice((prev) => !prev)}
+                      variant="secondary"
+                      size="sm"
+                      className="flex items-center space-x-2"
+                      title={showCostPrice ? "Hide buying price (cost)" : "Show buying price (cost)"}
+                    >
+                      {showCostPrice ? (
+                        <>
+                          <EyeOff className="h-4 w-4" />
+                          <span>Hide Cost</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="h-4 w-4" />
+                          <span>Show Cost</span>
+                        </>
+                      )}
+                    </Button>
+                  )}
                   {user?.role === 'admin' && (
                     <>
                       <Button
@@ -1565,12 +1587,14 @@ export const Sales = ({ tabId, editData }) => {
             <ProductSearch
               onAddProduct={addToCart}
               selectedCustomer={selectedCustomer}
-              showCostPrice={showCostPrice}
+              showCostPrice={showCostPrice && globalShowCostPriceAllowed}
               hasCostPricePermission={hasPermission('view_cost_prices')}
               priceType={priceType}
               dualUnitShowBoxInput={dualUnitShowBoxInputEnabled}
               dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
               onRefetchReady={setRefetchProducts}
+              allowSaleWithoutProduct={allowSaleWithoutProductEnabled}
+              allowManualCostPrice={allowManualCostPriceEnabled}
               onLastPurchasePriceFetched={(productId, price) => {
                 setLastPurchasePrices(prev => ({
                   ...prev,
@@ -1645,7 +1669,7 @@ export const Sales = ({ tabId, editData }) => {
                             onClick={() => setPreviewImageProduct(item.product)}
                             title="Click to view full size"
                           >
-                            <img src={item.product.imageUrl} alt="" className="h-full w-full object-cover" />
+                            <img src={item.product.imageUrl} alt="" crossOrigin="anonymous" className="h-full w-full object-cover" />
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
                               <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                             </div>
@@ -1828,7 +1852,7 @@ export const Sales = ({ tabId, editData }) => {
                             onClick={() => setPreviewImageProduct(item.product)}
                             title="Click to view full size"
                           >
-                            <img src={item.product.imageUrl} alt="" className="h-full w-full object-cover" />
+                            <img src={item.product.imageUrl} alt="" crossOrigin="anonymous" className="h-full w-full object-cover shadow-sm" />
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
                               <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                             </div>

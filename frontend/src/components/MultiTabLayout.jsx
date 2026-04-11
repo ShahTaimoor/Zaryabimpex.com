@@ -263,9 +263,9 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
   // If group, check if any child is visible/permitted
   if (hasChildren) {
     const hasVisibleChild = item.children.some(child => {
-        const childVisible = sidebarConfig?.[child.name] !== false;
-        const childPermitted = !child.permission || user?.role === 'admin' || hasPermission(child.permission);
-        return childVisible && childPermitted;
+      const childVisible = sidebarConfig?.[child.name] !== false;
+      const childPermitted = !child.permission || user?.role === 'admin' || hasPermission(child.permission);
+      return childVisible && childPermitted;
     });
     if (!hasVisibleChild) return null;
   }
@@ -279,22 +279,21 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
           {(() => {
             const colors = getHeaderColors(item.name);
             return (
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className={`w-full group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 ${
-              isOpen ? `text-gray-900 ${colors.bg}` : `text-gray-600 ${colors.bg} ${colors.hover} hover:text-gray-900`
-            }`}
-          >
-            <div className="flex items-center">
-              {item.icon && <item.icon className="mr-3 h-4 w-4 text-gray-400" />}
-              <span>{item.name}</span>
-            </div>
-            {isOpen ? (
-              <ChevronDown className="h-4 w-4 text-gray-400" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-gray-400" />
-            )}
-          </button>
+              <button
+                onClick={() => setIsOpen(!isOpen)}
+                className={`w-full group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 ${isOpen ? `text-gray-900 ${colors.bg}` : `text-gray-600 ${colors.bg} ${colors.hover} hover:text-gray-900`
+                  }`}
+              >
+                <div className="flex items-center">
+                  {item.icon && <item.icon className="mr-3 h-4 w-4 text-gray-400" />}
+                  <span>{item.name}</span>
+                </div>
+                {isOpen ? (
+                  <ChevronDown className="h-4 w-4 text-gray-400" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                )}
+              </button>
             );
           })()}
           {isOpen && (
@@ -317,13 +316,12 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
       ) : (
         <button
           onClick={() => onNavigate(item)}
-          className={`w-full group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 ${
-            isActive
+          className={`w-full group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 ${isActive
               ? 'bg-primary-50 text-primary-700'
               : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-          }`}
+            }`}
         >
-           {item.icon && <item.icon className={`mr-3 h-4 w-4 ${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'}`} />}
+          {item.icon && <item.icon className={`mr-3 h-4 w-4 ${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'}`} />}
           <span>{item.name}</span>
         </button>
       )}
@@ -411,12 +409,12 @@ export const MultiTabLayout = ({ children }) => {
   const flattenedNavigation = React.useMemo(() => {
     const flat = [];
     const traverse = (items) => {
-        items.forEach(item => {
-            flat.push(item);
-            if (item.children) {
-                traverse(item.children);
-            }
-        });
+      items.forEach(item => {
+        flat.push(item);
+        if (item.children) {
+          traverse(item.children);
+        }
+      });
     };
     traverse(navigation);
     return flat;
@@ -447,11 +445,11 @@ export const MultiTabLayout = ({ children }) => {
       if (!isVisible || !isPermitted) {
         // Find the first visible and permitted page
         const firstVisiblePage = flattenedNavigation.find(item => {
-            if (!item.href || !item.name) return false;
-            if (item.children && item.children.length > 0) return false; // Skip groups
-            const v = sidebarConfig[item.name] !== false;
-            const p = !item.permission || user?.role === 'admin' || hasPermission(item.permission);
-            return v && p;
+          if (!item.href || !item.name) return false;
+          if (item.children && item.children.length > 0) return false; // Skip groups
+          const v = sidebarConfig[item.name] !== false;
+          const p = !item.permission || user?.role === 'admin' || hasPermission(item.permission);
+          return v && p;
         });
 
         if (firstVisiblePage && firstVisiblePage.href !== currentPath) {
@@ -516,12 +514,12 @@ export const MultiTabLayout = ({ children }) => {
     const normalizedPathname = location.pathname.replace(/\/$/, '') || '/';
     const normalizedHref = href.replace(/\/$/, '') || '/';
     const componentInfo = getComponentInfo(href);
-    
+
     if (componentInfo) {
-        const activeTab = tabs.find(tab => tab.id === activeTabId);
-        const isActiveByTab = activeTab && activeTab.path === href;
-        const isActiveByLocation = normalizedPathname === normalizedHref;
-        return isActiveByTab || isActiveByLocation;
+      const activeTab = tabs.find(tab => tab.id === activeTabId);
+      const isActiveByTab = activeTab && activeTab.path === href;
+      const isActiveByLocation = normalizedPathname === normalizedHref;
+      return isActiveByTab || isActiveByLocation;
     }
     return normalizedPathname === normalizedHref;
   };
@@ -571,8 +569,8 @@ export const MultiTabLayout = ({ children }) => {
                 user={user}
                 hasPermission={hasPermission}
                 onNavigate={(item) => {
-                    handleNavigationClick(item);
-                    setSidebarOpen(false);
+                  handleNavigationClick(item);
+                  setSidebarOpen(false);
                 }}
               />
             ))}
@@ -803,11 +801,10 @@ export const MultiTabLayout = ({ children }) => {
           {sidebarConfig['Cash Receipts'] !== false && (
             <button
               onClick={() => handleNavigationClick({ href: '/cash-receipts', name: 'Cash Receipts' })}
-              className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${
-                isActivePath('/cash-receipts')
+              className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${isActivePath('/cash-receipts')
                   ? 'bg-emerald-100 text-emerald-700 border-emerald-200 ring-2 ring-emerald-400/60'
                   : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-              }`}
+                }`}
               title="Cash Receipt"
             >
               Cash R.
@@ -816,11 +813,10 @@ export const MultiTabLayout = ({ children }) => {
           {sidebarConfig['Bank Receipts'] !== false && (
             <button
               onClick={() => handleNavigationClick({ href: '/bank-receipts', name: 'Bank Receipts' })}
-              className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${
-                isActivePath('/bank-receipts')
+              className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${isActivePath('/bank-receipts')
                   ? 'bg-emerald-100 text-emerald-700 border-emerald-200 ring-2 ring-emerald-400/60'
                   : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-              }`}
+                }`}
               title="Bank Receipt"
             >
               Bank R.
@@ -830,11 +826,10 @@ export const MultiTabLayout = ({ children }) => {
           {sidebarConfig['Cash Payments'] !== false && (
             <button
               onClick={() => handleNavigationClick({ href: '/cash-payments', name: 'Cash Payments' })}
-              className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${
-                isActivePath('/cash-payments')
+              className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${isActivePath('/cash-payments')
                   ? 'bg-blue-100 text-blue-700 border-blue-200 ring-2 ring-blue-400/60'
                   : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-              }`}
+                }`}
               title="Cash Payment"
             >
               Cash P.
@@ -843,11 +838,10 @@ export const MultiTabLayout = ({ children }) => {
           {sidebarConfig['Bank Payments'] !== false && (
             <button
               onClick={() => handleNavigationClick({ href: '/bank-payments', name: 'Bank Payments' })}
-              className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${
-                isActivePath('/bank-payments')
+              className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${isActivePath('/bank-payments')
                   ? 'bg-blue-100 text-blue-700 border-blue-200 ring-2 ring-blue-400/60'
                   : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-              }`}
+                }`}
               title="Bank Payment"
             >
               Bank P.

@@ -163,45 +163,54 @@ export const Products = () => {
 
   const [bulkCreateProducts] = useBulkCreateProductsMutation();
 
-  const getExportData = () => ({
-    title: 'Product Catalog',
-    filename: `Products_${new Date().toLocaleDateString()}.xlsx`,
-    columns: [
+  const { companyInfo: companySettings } = useCompanyInfo();
+  const showCostPrice = companySettings.orderSettings?.showCostPrice !== false;
+
+  const getExportData = () => {
+    const columns = [
       { header: 'S.No', key: 'sno', width: 8, type: 'number' },
       { header: 'Image', key: 'imageUrl', width: 12, type: 'image' },
       { header: 'Product Name', key: 'displayName', width: 40 },
       { header: 'Category', key: 'categoryName', width: 25 },
-      { header: 'Cost Price', key: 'costPrice', width: 15, type: 'currency' },
+      ...(showCostPrice ? [{ header: 'Cost Price', key: 'costPrice', width: 15, type: 'currency' }] : []),
       { header: 'Retail Price', key: 'retailPrice', width: 15, type: 'currency' },
       { header: 'Wholesale Price', key: 'wholesalePrice', width: 15, type: 'currency' },
       { header: 'Stock', key: 'stock', width: 12, type: 'number' }
-    ],
-    data: allProducts.map((p, i) => ({
-      ...p,
-      sno: i + 1,
-      displayName: p.name || 'N/A',
-      imageUrl: p.imageUrl || null,
-      categoryName: p.categoryName || p.category?.name || (typeof p.category === 'string' ? p.category : '-'),
-      costPrice: p.pricing?.cost || 0,
-      retailPrice: p.pricing?.retail || 0,
-      wholesalePrice: p.pricing?.wholesale || 0,
-      stock: p.inventory?.currentStock || p.stockQuantity || 0
-    }))
-  });
+    ];
+
+    return {
+      title: 'Product Catalog',
+      filename: `Products_${new Date().toLocaleDateString()}.xlsx`,
+      columns: columns,
+      data: allProducts.map((p, i) => ({
+        ...p,
+        sno: i + 1,
+        displayName: p.name || 'N/A',
+        imageUrl: p.imageUrl || null,
+        categoryName: p.categoryName || p.category?.name || (typeof p.category === 'string' ? p.category : '-'),
+        costPrice: p.pricing?.cost || 0,
+        retailPrice: p.pricing?.retail || 0,
+        wholesalePrice: p.pricing?.wholesale || 0,
+        stock: p.inventory?.currentStock || p.stockQuantity || 0
+      }))
+    };
+  };
 
   const handleDownloadTemplate = () => {
+    const columns = [
+      { header: 'Product Name', key: 'name', width: 35 },
+      { header: 'Category', key: 'category', width: 20 },
+      { header: 'Status', key: 'status', width: 15 },
+      ...(showCostPrice ? [{ header: 'Cost Price', key: 'costPrice', width: 15, type: 'currency' }] : []),
+      { header: 'Retail Price', key: 'retailPrice', width: 15, type: 'currency' },
+      { header: 'Wholesale Price', key: 'wholesalePrice', width: 20, type: 'currency' },
+      { header: 'Opening Stock', key: 'stock', width: 15, type: 'number' }
+    ];
+
     exportTemplate({
       title: 'Product Import Template',
       filename: 'Product_Template.xlsx',
-      columns: [
-        { header: 'Product Name', key: 'name', width: 35 },
-        { header: 'Category', key: 'category', width: 20 },
-        { header: 'Status', key: 'status', width: 15 },
-        { header: 'Cost Price', key: 'costPrice', width: 15, type: 'currency' },
-        { header: 'Retail Price', key: 'retailPrice', width: 15, type: 'currency' },
-        { header: 'Wholesale Price', key: 'wholesalePrice', width: 20, type: 'currency' },
-        { header: 'Opening Stock', key: 'stock', width: 15, type: 'number' }
-      ]
+      columns: columns
     });
   };
 
@@ -471,6 +480,7 @@ export const Products = () => {
           productOps.setSelectedProduct(product);
           setShowBarcodeGenerator(true);
         }}
+        showCostPrice={showCostPrice}
       />
 
       {/* Pagination */}

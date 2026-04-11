@@ -24,7 +24,13 @@ router.post('/generate', [
   body('algorithm').optional().isIn(['collaborative', 'content_based', 'hybrid', 'trending', 'frequently_bought', 'similar_products', 'seasonal', 'price_based']),
   body('context').optional().isObject(),
   body('context.page').optional().isIn(['home', 'product', 'cart', 'checkout', 'search', 'category', 'sales']),
-  body('context.currentProduct').optional().isUUID(4),
+  body('context.currentProduct').optional().custom((val) => {
+    if (!val) return true;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+    if (isUuid) return true;
+    if (typeof val === 'string' && val.startsWith('manual_')) return true;
+    return false;
+  }).withMessage('Invalid product ID'),
   body('context.currentProducts').optional().isArray(),
   body('context.category').optional().isUUID(4),
   body('context.searchQuery').optional().trim(),

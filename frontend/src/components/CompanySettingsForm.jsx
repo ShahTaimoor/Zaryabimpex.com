@@ -224,6 +224,7 @@ export function CompanySettingsForm() {
                 <img
                   src={displayPreview}
                   alt="Company logo preview"
+                  crossOrigin="anonymous"
                   className="max-h-full max-w-full object-contain"
                 />
               </div>

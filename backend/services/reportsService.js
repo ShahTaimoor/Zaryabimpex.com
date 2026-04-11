@@ -92,7 +92,7 @@ class ReportsService {
         sql = `
           WITH sale_items AS (
             SELECT 
-              COALESCE(elem->>'product', elem->>'product_id')::uuid as product_id,
+              COALESCE(elem->>'product', elem->>'product_id') as product_id,
               (elem->>'quantity')::numeric as quantity,
               (elem->>'total')::numeric as line_total,
               s.customer_id,
@@ -108,7 +108,7 @@ class ReportsService {
             COALESCE(SUM(si.line_total), 0) as "totalRevenue",
             COUNT(*) as "saleCount"
           FROM sale_items si
-          JOIN products p ON si.product_id = p.id
+          JOIN products p ON si.product_id = p.id::text
           LEFT JOIN customers c ON si.customer_id = c.id
           WHERE 1=1 ${cityFilter}
           GROUP BY p.id, p.name, p.sku
@@ -120,7 +120,7 @@ class ReportsService {
         sql = `
           WITH sale_items AS (
             SELECT 
-              COALESCE(elem->>'product', elem->>'product_id')::uuid as product_id,
+              COALESCE(elem->>'product', elem->>'product_id') as product_id,
               (elem->>'total')::numeric as line_total,
               s.customer_id
             FROM sales s,
@@ -132,7 +132,7 @@ class ReportsService {
             COALESCE(SUM(si.line_total), 0) as "totalRevenue",
             COUNT(*) as "itemCount"
           FROM sale_items si
-          JOIN products p ON si.product_id = p.id
+          JOIN products p ON si.product_id = p.id::text
           JOIN categories cat ON p.category_id = cat.id
           LEFT JOIN customers c ON si.customer_id = c.id
           WHERE 1=1 ${cityFilter}
@@ -1269,10 +1269,10 @@ class ReportsService {
           pi.invoice_date,
           pi.created_at,
           COALESCE(
-            (elem->'product'->>'id')::uuid,
-            (elem->'product'->>'_id')::uuid,
-            (elem->>'product')::uuid,
-            (elem->>'product_id')::uuid
+            elem->'product'->>'id',
+            elem->'product'->>'_id',
+            elem->>'product',
+            elem->>'product_id'
           ) AS product_id,
           (COALESCE((elem->>'quantity')::numeric, (elem->>'qty')::numeric, 0)) AS qty,
           (COALESCE((elem->>'unitCost')::numeric, (elem->>'unit_cost')::numeric, (elem->>'price')::numeric, 0)) AS unit_cost
@@ -1296,8 +1296,8 @@ class ReportsService {
       SUM(ir.qty) AS "totalQuantity",
       SUM(ir.qty * ir.unit_cost) AS "totalAmount"
     FROM item_rows ir
-    LEFT JOIN products p ON p.id = ir.product_id AND (p.is_deleted = FALSE OR p.is_deleted IS NULL)
-    LEFT JOIN product_variants pv ON pv.id = ir.product_id AND pv.deleted_at IS NULL
+    LEFT JOIN products p ON p.id::text = ir.product_id AND (p.is_deleted = FALSE OR p.is_deleted IS NULL)
+    LEFT JOIN product_variants pv ON pv.id::text = ir.product_id AND pv.deleted_at IS NULL
     LEFT JOIN suppliers s ON s.id = ir.supplier_id AND (s.is_deleted = FALSE OR s.is_deleted IS NULL)
     WHERE ir.product_id IS NOT NULL AND ir.supplier_id IS NOT NULL
   `;
@@ -1339,10 +1339,10 @@ class ReportsService {
       const salesSql = `
         SELECT
           COALESCE(
-            (elem->>'product')::uuid,
-            (elem->>'product_id')::uuid,
-            (elem->'product'->>'id')::uuid,
-            (elem->'product'->>'_id')::uuid
+            elem->>'product',
+            elem->>'product_id',
+            elem->'product'->>'id',
+            elem->'product'->>'_id'
           ) AS product_id,
           s.customer_id,
           TRIM(COALESCE(c.name, c.business_name, 'Unknown')) AS customer_name,
@@ -1351,16 +1351,16 @@ class ReportsService {
         CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(COALESCE(s.items, '[]')::jsonb) = 'array' THEN COALESCE(s.items, '[]')::jsonb ELSE '[]'::jsonb END) AS elem
         LEFT JOIN customers c ON c.id = s.customer_id AND (c.is_deleted = FALSE OR c.is_deleted IS NULL)
         WHERE s.deleted_at IS NULL AND s.status != 'cancelled'
-          AND COALESCE((elem->>'product')::uuid, (elem->>'product_id')::uuid, (elem->'product'->>'id')::uuid, (elem->'product'->>'_id')::uuid) IN (${placeholders})
+          AND COALESCE(elem->>'product', elem->>'product_id', elem->'product'->>'id', elem->'product'->>'_id') IN (${placeholders})
         GROUP BY 1, 2, 3
       `;
       const soSql = `
         SELECT
           COALESCE(
-            (elem->>'product')::uuid,
-            (elem->>'product_id')::uuid,
-            (elem->'product'->>'id')::uuid,
-            (elem->'product'->>'_id')::uuid
+            elem->>'product',
+            elem->>'product_id',
+            elem->'product'->>'id',
+            elem->'product'->>'_id'
           ) AS product_id,
           so.customer_id,
           TRIM(COALESCE(c.name, c.business_name, 'Unknown')) AS customer_name,
@@ -1369,7 +1369,7 @@ class ReportsService {
         CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(COALESCE(so.items, '[]'::jsonb)) = 'array' THEN COALESCE(so.items, '[]'::jsonb) ELSE '[]'::jsonb END) AS elem
         LEFT JOIN customers c ON c.id = so.customer_id AND (c.is_deleted = FALSE OR c.is_deleted IS NULL)
         WHERE so.deleted_at IS NULL AND so.status NOT IN ('cancelled', 'draft')
-          AND COALESCE((elem->>'product')::uuid, (elem->>'product_id')::uuid, (elem->'product'->>'id')::uuid, (elem->'product'->>'_id')::uuid) IN (${placeholders})
+          AND COALESCE(elem->>'product', elem->>'product_id', elem->'product'->>'id', elem->'product'->>'_id') IN (${placeholders})
         GROUP BY 1, 2, 3
       `;
       try {

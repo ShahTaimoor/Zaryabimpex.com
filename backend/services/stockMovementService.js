@@ -36,6 +36,10 @@ class StockMovementService {
       // Get product details
       const product = await ProductRepository.findById(productId);
       if (!product) {
+        // For manual items, we don't track stock movements
+        if (typeof productId === 'string' && productId.startsWith('manual_')) {
+          return null;
+        }
         throw new Error('Product not found');
       }
 
@@ -172,6 +176,11 @@ class StockMovementService {
       const location = salesOrder.shippingLocation || salesOrder.location || 'main_warehouse';
       
       for (const item of salesOrder.items) {
+        // Skip stock tracking for manual items
+        if (item.isManual === true || (typeof item.product === 'string' && item.product.startsWith('manual_'))) {
+          continue;
+        }
+
         await this.createMovement({
           productId: item.product,
           movementType: 'sale',

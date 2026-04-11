@@ -16,18 +16,21 @@ class SettingsService {
    * @returns {Promise<object>}
    */
   async updateCompanySettings(updateData) {
-    // Accept both camelCase and snake_case for robustness; allow empty values for print settings
-    const companyName = updateData.companyName ?? updateData.company_name ?? '';
-    const contactNumber = updateData.contactNumber ?? updateData.contact_number ?? '';
-    const address = updateData.address ?? '';
-
-    // Ensure we send the data in the format the repository expects (camelCase)
-    const dataToUpdate = {
-      ...updateData,
-      companyName,
-      contactNumber,
-      address
-    };
+    // Collect only the fields provided in the updateData to avoid overwriting with defaults
+    const dataToUpdate = { ...updateData };
+    
+    // Explicitly handle mapping for required fields if they are provided
+    if (updateData.companyName !== undefined || updateData.company_name !== undefined) {
+      dataToUpdate.companyName = updateData.companyName ?? updateData.company_name;
+    }
+    if (updateData.contactNumber !== undefined || updateData.contact_number !== undefined) {
+      dataToUpdate.contactNumber = updateData.contactNumber ?? updateData.contact_number;
+    }
+    
+    // Address is usually just 'address'
+    if (updateData.address !== undefined) {
+      dataToUpdate.address = updateData.address;
+    }
 
     return await SettingsRepository.updateSettings(dataToUpdate);
   }

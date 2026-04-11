@@ -512,7 +512,7 @@ class SalesRepository {
   async getProductTurnoverStats(dateFrom, dateTo, limit = 10) {
     const sql = `
       SELECT 
-        COALESCE(elem->>'product', elem->>'product_id')::uuid as "productId",
+        COALESCE(elem->>'product', elem->>'product_id') as "productId",
         SUM((elem->>'quantity')::numeric) as "totalSold"
       FROM sales s,
       jsonb_array_elements(CASE WHEN jsonb_typeof(COALESCE(items, '[]')::jsonb) = 'array' THEN items::jsonb ELSE '[]'::jsonb END) AS elem
@@ -537,16 +537,16 @@ class SalesRepository {
     if (!productIds || productIds.length === 0) return [];
     const sql = `
       SELECT 
-        COALESCE(elem->>'product', elem->>'product_id')::uuid as "productId",
+        COALESCE(elem->>'product', elem->>'product_id') as "productId",
         MAX(s.created_at) as "lastSoldDate"
       FROM sales s,
       jsonb_array_elements(CASE WHEN jsonb_typeof(COALESCE(items, '[]')::jsonb) = 'array' THEN items::jsonb ELSE '[]'::jsonb END) AS elem
       WHERE s.status IN ('completed', 'delivered')
         AND s.deleted_at IS NULL
-        AND COALESCE(elem->>'product', elem->>'product_id')::uuid = ANY($1::uuid[])
+        AND COALESCE(elem->>'product', elem->>'product_id') = ANY($1::text[])
       GROUP BY "productId"
     `;
-    const result = await query(sql, [productIds]);
+    const result = await query(sql, [productIds.map(id => String(id))]);
     return result.rows;
   }
 
@@ -556,7 +556,7 @@ class SalesRepository {
   async getTopProductsPerformance(dateFrom, dateTo, limit = 10) {
     const sql = `
       SELECT 
-        COALESCE(elem->>'product', elem->>'product_id')::uuid as "productId",
+        COALESCE(elem->>'product', elem->>'product_id') as "productId",
         SUM((elem->>'quantity')::numeric * (elem->>'unitPrice')::numeric) as "totalRevenue",
         SUM((elem->>'quantity')::numeric) as "totalQuantity",
         COUNT(DISTINCT s.id) as "totalOrders"

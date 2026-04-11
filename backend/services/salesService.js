@@ -490,6 +490,11 @@ class SalesService {
     const { skipInventoryUpdate = false } = options;
     const { customer, items, orderType, payment, notes, isTaxExempt, billDate, billStartTime, salesOrderId, appliedDiscounts: payloadDiscounts, discountAmount: payloadDiscountAmount, subtotal: payloadSubtotal, total: payloadTotal, tax: payloadTax } = data;
 
+    // Generate order number if not provided
+    const settings = await settingsService.getCompanySettings();
+    const orderSettings = settings?.orderSettings || {};
+    const allowSaleWithoutProduct = orderSettings.allowSaleWithoutProduct === true;
+
     // Validate customer if provided
     let customerData = null;
     if (customer) {
@@ -507,16 +512,24 @@ class SalesService {
 
     for (const item of items) {
       // Try to find as product first, then as variant
-      let product = await productRepository.findById(item.product, true);
+      let product = null;
       let isVariant = false;
+      const isManual = item.isManual === true;
 
-      if (!product) {
-        product = await productVariantRepository.findById(item.product, true);
-        if (product) isVariant = true;
-      }
+      if (!isManual) {
+        product = await productRepository.findById(item.product, true);
+        if (!product) {
+          product = await productVariantRepository.findById(item.product, true);
+          if (product) isVariant = true;
+        }
 
-      if (!product) {
-        throw new Error(`Product or variant ${item.product} not found`);
+        if (!product) {
+          if (allowSaleWithoutProduct && item.name) {
+            // Fallback to manual if not found but setting allows
+          } else {
+            throw new Error(`Product or variant ${item.product} not found`);
+          }
+        }
       }
 
       // pricing logic (same as in sales.js)
@@ -537,22 +550,30 @@ class SalesService {
       const itemSubtotal = item.quantity * unitPrice;
       const itemDiscount = itemSubtotal * (itemDiscountPercent / 100);
       const itemTaxable = itemSubtotal - itemDiscount;
-      const taxRate = isVariant ? (product.baseProduct?.taxSettings?.taxRate ?? 0) : (product.tax_settings?.tax_rate ?? product.taxSettings?.taxRate ?? 0);
+      const taxRate = isManual ? 0 : (isVariant ? (product.baseProduct?.taxSettings?.taxRate ?? 0) : (product.tax_settings?.tax_rate ?? product.taxSettings?.taxRate ?? 0));
       const itemTax = isTaxExempt ? 0 : itemTaxable * taxRate;
 
       let unitCost = 0;
-      const productId = product.id || product._id;
-      const inv = await inventoryRepository.findByProduct(productId);
-      if (inv && inv.cost) {
-        const costObj = typeof inv.cost === 'string' ? JSON.parse(inv.cost) : inv.cost;
-        unitCost = costObj.average ?? costObj.lastPurchase ?? 0;
+      let productId = null;
+      if (product) {
+        productId = product.id || product._id;
+        const inv = await inventoryRepository.findByProduct(productId);
+        if (inv && inv.cost) {
+          const costObj = typeof inv.cost === 'string' ? JSON.parse(inv.cost) : inv.cost;
+          unitCost = costObj.average ?? costObj.lastPurchase ?? 0;
+        }
+        if (unitCost === 0) unitCost = product.pricing?.cost ?? product.cost_price ?? 0;
+      } else {
+        // Manual item
+        productId = item.product || `manual_${Date.now()}`;
+        unitCost = 0; // Cost is unknown for manual items
       }
-      if (unitCost === 0) unitCost = product.pricing?.cost ?? product.cost_price ?? 0;
 
       orderItems.push({
         product: productId,
-        name: product.name || product.displayName || 'Product',
-        sku: product.sku || null,
+        name: product ? (product.name || product.displayName || 'Product') : (item.name || 'Manual Item'),
+        sku: product ? (product.sku || null) : (item.sku || null),
+        isManual: !!isManual || !product,
         quantity: item.quantity,
         unitCost,
         unitPrice,
@@ -604,7 +625,10 @@ class SalesService {
 
     // Inventory Updates (unless skipped)
     if (!skipInventoryUpdate) {
-      for (const item of items) {
+      for (const item of orderItems) {
+        // Skip stock movement for manual items
+        if (item.isManual) continue;
+
         await inventoryService.updateStock({
           productId: item.product,
           type: 'out',
@@ -617,10 +641,8 @@ class SalesService {
       }
     }
 
-    // Generate order number if not provided
     let orderNumber = data.orderNumber;
-    const settings = await settingsService.getCompanySettings();
-    const orderSettings = settings?.orderSettings || {};
+    // Settings already fetched at top
 
     if (orderSettings.invoiceSequenceEnabled) {
       const prefix = orderSettings.invoiceSequencePrefix || 'INV-';
@@ -716,6 +738,13 @@ class SalesService {
         const productIds = orderItems.map(item => item.product);
         const productMap = new Map();
         for (const id of productIds) {
+          // Skip if product is manual
+          if (typeof id === 'string' && id.startsWith('manual_')) {
+            const manualItem = orderItems.find(i => i.product === id);
+            productMap.set(id, manualItem?.name || 'Manual Item');
+            continue;
+          }
+
           const p = await productRepository.findById(id, true);
           if (!p) {
             // Check variants if not found in base products

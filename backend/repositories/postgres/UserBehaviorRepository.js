@@ -80,6 +80,10 @@ class UserBehaviorRepository {
   }
 
   async getFrequentlyBoughtTogether(productId, limit = 10) {
+    if (!productId || typeof productId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(productId)) {
+      return [];
+    }
+
     const sessionsResult = await query(
       `SELECT DISTINCT session_id FROM user_behaviors
        WHERE action = 'purchase' AND entity_type = 'product' AND entity_id = $1`,

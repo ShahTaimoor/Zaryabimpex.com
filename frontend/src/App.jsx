@@ -101,7 +101,7 @@ function App() {
                       <Route path="/anomaly-detection" element={<Suspense fallback={<LoadingPage />}><AnomalyDetection /></Suspense>} />
                       <Route path="/warehouses" element={<Suspense fallback={<LoadingPage />}><Warehouses /></Suspense>} />
                       <Route path="/stock-movements" element={<Suspense fallback={<LoadingPage />}><StockMovements /></Suspense>} />
-                      
+
                       <Route path="/pl-statements" element={<Suspense fallback={<LoadingPage />}><PLStatements /></Suspense>} />
                       <Route path="/balance-sheet-statement" element={<Suspense fallback={<LoadingPage />}><BalanceSheetStatement /></Suspense>} />
                       <Route path="/sale-returns" element={<Suspense fallback={<LoadingPage />}><SaleReturns /></Suspense>} />

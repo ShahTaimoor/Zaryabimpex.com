@@ -10,7 +10,8 @@ export const ProductList = ({
   onEdit,
   onDelete,
   onManageInvestors,
-  onGenerateBarcode
+  onGenerateBarcode,
+  showCostPrice = true // New prop
 }) => {
   const [showImages, setShowImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
   const [showHsCodeColumn, setShowHsCodeColumn] = useState(
@@ -73,9 +74,11 @@ export const ProductList = ({
               <div className="col-span-1">
                 <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-700">Stock</h3>
               </div>
-              <div className="col-span-1">
-                <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-700">Cost</h3>
-              </div>
+              {showCostPrice && (
+                <div className="col-span-1">
+                  <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-700">Cost</h3>
+                </div>
+              )}
               <div className="col-span-1">
                 <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-700">Retail</h3>
               </div>
@@ -131,6 +134,7 @@ export const ProductList = ({
                             <img 
                               src={product.imageUrl} 
                               alt={product.name} 
+                              crossOrigin="anonymous"
                               className="h-6 w-6 xl:h-8 xl:w-8 2xl:h-10 2xl:w-10 object-cover rounded-md flex-shrink-0 border border-gray-200" 
                             />
                           ) : (
@@ -193,9 +197,11 @@ export const ProductList = ({
                     )}
                   </div>
 
-                  <div className="col-span-1">
-                    <p className="text-[10px] xl:text-xs 2xl:text-sm text-gray-600">{Math.round(product.pricing?.cost || 0)}</p>
-                  </div>
+                  {showCostPrice && (
+                    <div className="col-span-1">
+                      <p className="text-[10px] xl:text-xs 2xl:text-sm text-gray-600">{Math.round(product.pricing?.cost || 0)}</p>
+                    </div>
+                  )}
 
                   <div className="col-span-1">
                     <p className="text-[10px] xl:text-xs 2xl:text-sm text-gray-600">{Math.round(product.pricing?.retail || 0)}</p>
@@ -276,6 +282,7 @@ export const ProductList = ({
                           <img 
                             src={product.imageUrl} 
                             alt={product.name} 
+                            crossOrigin="anonymous"
                             className="h-8 w-8 xl:h-10 xl:w-10 object-cover rounded-md flex-shrink-0 border border-gray-200 mt-0.5" 
                           />
                         ) : (
@@ -323,12 +330,14 @@ export const ProductList = ({
                               )}
                             </p>
                           </div>
-                          <div>
-                            <p className="text-[10px] xl:text-xs text-gray-500 mb-0.5">Cost</p>
-                            <p className="text-xs xl:text-sm font-semibold text-gray-900">
-                              {Math.round(product.pricing?.cost || 0)}
-                            </p>
-                          </div>
+                          {showCostPrice && (
+                            <div>
+                              <p className="text-[10px] xl:text-xs text-gray-500 mb-0.5">Cost</p>
+                              <p className="text-xs xl:text-sm font-semibold text-gray-900">
+                                {Math.round(product.pricing?.cost || 0)}
+                              </p>
+                            </div>
+                          )}
                           <div>
                             <p className="text-[10px] xl:text-xs text-gray-500 mb-0.5">Retail</p>
                             <p className="text-xs xl:text-sm font-semibold text-gray-900">
