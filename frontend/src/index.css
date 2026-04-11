@@ -351,8 +351,6 @@
 }
 
 .print-document__logo-img {
-  max-height: 80px;
-  max-width: 250px;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -361,8 +359,7 @@
 
 @media print {
   .print-document__logo-img {
-    max-height: 72px;
-    max-width: 220px;
+    /* Logo size controlled by JS inline styles */
   }
 }
 

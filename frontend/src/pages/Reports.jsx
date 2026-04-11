@@ -81,20 +81,20 @@ export const Reports = () => {
 
 
   // Fetch Summary Cards
-  const { 
-    data: summaryData, 
+  const {
+    data: summaryData,
     isLoading: summaryLoading,
-    refetch: refetchSummary 
+    refetch: refetchSummary
   } = useGetSummaryCardsQuery({
     dateFrom: dateRange.from,
     dateTo: dateRange.to
   });
 
   // Fetch Party Balance Report
-  const { 
-    data: partyReportData, 
+  const {
+    data: partyReportData,
     isLoading: partyLoading,
-    refetch: refetchParty 
+    refetch: refetchParty
   } = useGetPartyBalanceReportQuery({
     partyType
   }, {
@@ -251,8 +251,8 @@ export const Reports = () => {
       case 'party-balance':
         return [
           { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
-          { 
-            header: 'Party Name', 
+          {
+            header: 'Party Name',
             render: (row) => (
               <div>
                 <div className="font-medium">{row.businessName || row.name}</div>
@@ -607,12 +607,12 @@ export const Reports = () => {
             { header: 'Revenue', key: 'totalRevenue', width: 15, type: 'currency' }
           ];
         } else {
-            columns = [
-                { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
-                { header: 'Group', key: salesGroupBy === 'monthly' ? 'month' : salesGroupBy === 'category' ? 'categoryName' : 'name', width: 25 },
-                { header: 'Orders/Items', key: 'totalOrders', width: 15, type: 'number' },
-                { header: 'Revenue', key: 'totalRevenue', width: 20, type: 'currency' }
-            ];
+          columns = [
+            { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
+            { header: 'Group', key: salesGroupBy === 'monthly' ? 'month' : salesGroupBy === 'category' ? 'categoryName' : 'name', width: 25 },
+            { header: 'Orders/Items', key: 'totalOrders', width: 15, type: 'number' },
+            { header: 'Revenue', key: 'totalRevenue', width: 20, type: 'currency' }
+          ];
         }
         break;
       case 'inventory':
@@ -669,17 +669,17 @@ export const Reports = () => {
           }
         }
         break;
-       case 'bank-cash':
-         columns = [
-           { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
-           { header: 'Bank Name', key: 'bankName', width: 30 },
-           { header: 'Account', key: 'accountNumber', width: 25 },
-           { header: 'Opening', key: 'openingBalance', width: 15, type: 'currency' },
-           { header: 'Receipts', key: 'totalReceipts', width: 15, type: 'currency' },
-           { header: 'Payments', key: 'totalPayments', width: 15, type: 'currency' },
-           { header: 'Balance', key: 'balance', width: 20, type: 'currency' }
-         ];
-         break;
+      case 'bank-cash':
+        columns = [
+          { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
+          { header: 'Bank Name', key: 'bankName', width: 30 },
+          { header: 'Account', key: 'accountNumber', width: 25 },
+          { header: 'Opening', key: 'openingBalance', width: 15, type: 'currency' },
+          { header: 'Receipts', key: 'totalReceipts', width: 15, type: 'currency' },
+          { header: 'Payments', key: 'totalPayments', width: 15, type: 'currency' },
+          { header: 'Balance', key: 'balance', width: 20, type: 'currency' }
+        ];
+        break;
     }
 
     return {
@@ -687,50 +687,50 @@ export const Reports = () => {
       filename: `${reportTitle.replace(/ /g, '_')}_${new Date().toLocaleDateString()}.xlsx`,
       columns,
       data: data.map((item, i) => ({
-          ...item,
-          sno: i + 1,
-          name: item.businessName || item.name || item.accountName || item.productName || item.bankName
+        ...item,
+        sno: i + 1,
+        name: item.businessName || item.name || item.accountName || item.productName || item.bankName
       })),
       summary: (() => {
-          if (activeTab === 'inventory' && inventoryType === 'stock-summary') {
-              return {
-                  rows: [
-                      {
-                          label: 'GRAND TOTAL:',
-                          name: `${data.length} Items`,
-                          openingQty: inventoryReportData?.summary?.totalOpeningQty || 0,
-                          openingAmount: inventoryReportData?.summary?.totalOpeningAmount || 0,
-                          purchaseQty: inventoryReportData?.summary?.totalPurchaseQty || 0,
-                          purchaseAmount: inventoryReportData?.summary?.totalPurchaseAmount || 0,
-                          purchaseReturnQty: inventoryReportData?.summary?.totalPurchaseReturnQty || 0,
-                          purchaseReturnAmount: inventoryReportData?.summary?.totalPurchaseReturnAmount || 0,
-                          saleQty: inventoryReportData?.summary?.totalSaleQty || 0,
-                          saleAmount: inventoryReportData?.summary?.totalSaleAmount || 0,
-                          saleReturnQty: inventoryReportData?.summary?.totalSaleReturnQty || 0,
-                          saleReturnAmount: inventoryReportData?.summary?.totalSaleReturnAmount || 0,
-                          damageQty: inventoryReportData?.summary?.totalDamageQty || 0,
-                          damageAmount: inventoryReportData?.summary?.totalDamageAmount || 0,
-                          closingQty: inventoryReportData?.summary?.totalClosingQty || 0,
-                          closingAmount: inventoryReportData?.summary?.totalCost || 0,
-                          currentStock: inventoryReportData?.summary?.totalCurrentStock || 0
-                      }
-                  ]
-              };
-          }
-          if (activeTab === 'party-balance') {
-              return {
-                  rows: [
-                      {
-                          label: 'GRAND TOTAL:',
-                          openingBalance: partyReportData?.summary?.totalOpeningBalance || 0,
-                          totalDebit: partyReportData?.summary?.totalDebit || 0,
-                          totalCredit: partyReportData?.summary?.totalCredit || 0,
-                          balance: (partyType === 'customer' ? partyReportData?.totalCustomerBalance : partyReportData?.totalSupplierBalance) || 0
-                      }
-                  ]
-              };
-          }
-          return null;
+        if (activeTab === 'inventory' && inventoryType === 'stock-summary') {
+          return {
+            rows: [
+              {
+                label: 'GRAND TOTAL:',
+                name: `${data.length} Items`,
+                openingQty: inventoryReportData?.summary?.totalOpeningQty || 0,
+                openingAmount: inventoryReportData?.summary?.totalOpeningAmount || 0,
+                purchaseQty: inventoryReportData?.summary?.totalPurchaseQty || 0,
+                purchaseAmount: inventoryReportData?.summary?.totalPurchaseAmount || 0,
+                purchaseReturnQty: inventoryReportData?.summary?.totalPurchaseReturnQty || 0,
+                purchaseReturnAmount: inventoryReportData?.summary?.totalPurchaseReturnAmount || 0,
+                saleQty: inventoryReportData?.summary?.totalSaleQty || 0,
+                saleAmount: inventoryReportData?.summary?.totalSaleAmount || 0,
+                saleReturnQty: inventoryReportData?.summary?.totalSaleReturnQty || 0,
+                saleReturnAmount: inventoryReportData?.summary?.totalSaleReturnAmount || 0,
+                damageQty: inventoryReportData?.summary?.totalDamageQty || 0,
+                damageAmount: inventoryReportData?.summary?.totalDamageAmount || 0,
+                closingQty: inventoryReportData?.summary?.totalClosingQty || 0,
+                closingAmount: inventoryReportData?.summary?.totalCost || 0,
+                currentStock: inventoryReportData?.summary?.totalCurrentStock || 0
+              }
+            ]
+          };
+        }
+        if (activeTab === 'party-balance') {
+          return {
+            rows: [
+              {
+                label: 'GRAND TOTAL:',
+                openingBalance: partyReportData?.summary?.totalOpeningBalance || 0,
+                totalDebit: partyReportData?.summary?.totalDebit || 0,
+                totalCredit: partyReportData?.summary?.totalCredit || 0,
+                balance: (partyType === 'customer' ? partyReportData?.totalCustomerBalance : partyReportData?.totalSupplierBalance) || 0
+              }
+            ]
+          };
+        }
+        return null;
       })()
     };
   };
@@ -743,7 +743,7 @@ export const Reports = () => {
           <h1 className="text-2xl font-bold text-gray-900">Reporting Dashboard</h1>
           <p className="text-gray-500 text-sm">Real-time business analytics & financial reports</p>
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-3">
           {(activeTab !== 'bank-cash') && (activeTab !== 'inventory' || inventoryType === 'stock-summary') && (
             <DateFilter
@@ -756,22 +756,22 @@ export const Reports = () => {
               showPresets={true}
             />
           )}
-          
-          <button 
+
+          <button
             onClick={handleRefresh}
             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             title="Refresh Data"
           >
             <RefreshCcw className={`h-5 w-5 ${(summaryLoading || partyLoading || salesLoading || inventoryLoading || financialLoading || bankCashLoading) ? 'animate-spin' : ''}`} />
           </button>
-          
-          <ExcelExportButton 
-            getData={getExportData} 
+
+          <ExcelExportButton
+            getData={getExportData}
             label="Export Report"
             className="border-indigo-200 bg-white text-indigo-700 hover:border-indigo-500 hover:bg-indigo-50 transition-all font-semibold"
           />
-          <PdfExportButton 
-            getData={getExportData} 
+          <PdfExportButton
+            getData={getExportData}
             label="PDF Report"
             className="border-indigo-200 bg-white text-indigo-700 hover:border-indigo-500 hover:bg-indigo-50 transition-all font-semibold"
           />
@@ -795,7 +795,7 @@ export const Reports = () => {
             if (title === 'Out of Stock') return <XCircle className="h-6 w-6 text-red-600" />;
             return idx === 0 ? <Users className="h-6 w-6 text-blue-600" /> :
               idx === 1 ? <TrendingUp className="h-6 w-6 text-purple-600" /> :
-              <Package className="h-6 w-6 text-gray-600" />;
+                <Package className="h-6 w-6 text-gray-600" />;
           };
           const getBgColor = () => {
             if (title === 'Wholesale Valuation') return "bg-amber-50";
@@ -804,7 +804,7 @@ export const Reports = () => {
             if (title === 'Out of Stock') return "bg-red-50";
             return idx === 0 ? "bg-blue-50" :
               idx === 1 ? "bg-purple-50" :
-              "bg-gray-50";
+                "bg-gray-50";
           };
           return (
             <SummaryCard
@@ -824,28 +824,28 @@ export const Reports = () => {
         {/* Tabs */}
         <div className="border-b border-gray-100">
           <nav className="flex overflow-x-auto">
-            <TabButton 
-              active={activeTab === 'party-balance'} 
+            <TabButton
+              active={activeTab === 'party-balance'}
               onClick={() => setActiveTab('party-balance')}
               label="Party Balances"
             />
-            <TabButton 
-              active={activeTab === 'sales'} 
+            <TabButton
+              active={activeTab === 'sales'}
               onClick={() => setActiveTab('sales')}
               label="Sales Analysis"
             />
-            <TabButton 
-              active={activeTab === 'inventory'} 
+            <TabButton
+              active={activeTab === 'inventory'}
               onClick={() => setActiveTab('inventory')}
               label="Inventory"
             />
-            <TabButton 
-              active={activeTab === 'financial'} 
+            <TabButton
+              active={activeTab === 'financial'}
               onClick={() => setActiveTab('financial')}
               label="Financials"
             />
-            <TabButton 
-              active={activeTab === 'bank-cash'} 
+            <TabButton
+              active={activeTab === 'bank-cash'}
               onClick={() => setActiveTab('bank-cash')}
               label="Bank & Cash"
             />
@@ -859,17 +859,15 @@ export const Reports = () => {
                 <div className="flex bg-gray-100 p-1 rounded-lg">
                   <button
                     onClick={() => setPartyType('customer')}
-                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                      partyType === 'customer' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${partyType === 'customer' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                      }`}
                   >
                     Customers
                   </button>
                   <button
                     onClick={() => setPartyType('supplier')}
-                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                      partyType === 'supplier' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${partyType === 'supplier' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                      }`}
                   >
                     Suppliers
                   </button>
@@ -988,9 +986,8 @@ export const Reports = () => {
                     <button
                       key={group.id}
                       onClick={() => setSalesGroupBy(group.id)}
-                      className={`px-4 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-all ${
-                        salesGroupBy === group.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                      }`}
+                      className={`px-4 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-all ${salesGroupBy === group.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
                     >
                       {group.label}
                     </button>
@@ -1053,9 +1050,8 @@ export const Reports = () => {
                     <button
                       key={type.id}
                       onClick={() => setInventoryType(type.id)}
-                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                        inventoryType === type.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                      }`}
+                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${inventoryType === type.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
                     >
                       {type.label}
                     </button>
@@ -1128,11 +1124,11 @@ export const Reports = () => {
                               <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
                                 {col.render
                                   ? col.render(
-                                      row,
-                                      isInventoryPaginated
-                                        ? (stockSummaryPage - 1) * stockSummaryPageSize + idx
-                                        : idx
-                                    )
+                                    row,
+                                    isInventoryPaginated
+                                      ? (stockSummaryPage - 1) * stockSummaryPageSize + idx
+                                      : idx
+                                  )
                                   : row[col.key]}
                               </td>
                             ))}
@@ -1155,13 +1151,12 @@ export const Reports = () => {
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.damageAmount || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.closingQty || 0).toLocaleString()}</td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.totalCurrentStock || 0).toLocaleString()}</td>
-                            <td className={`px-6 py-3 text-sm text-right ${
-                              Number(inventoryReportData.summary.totalReconciliationDelta || 0) === 0
+                            <td className={`px-6 py-3 text-sm text-right ${Number(inventoryReportData.summary.totalReconciliationDelta || 0) === 0
                                 ? 'text-green-700'
                                 : Number(inventoryReportData.summary.totalReconciliationDelta || 0) > 0
                                   ? 'text-red-700'
                                   : 'text-amber-700'
-                            }`}>
+                              }`}>
                               {(inventoryReportData.summary.totalReconciliationDelta || 0).toLocaleString()}
                             </td>
                             <td className="px-6 py-3 text-sm text-right">{(inventoryReportData.summary.closingAmount || 0).toLocaleString()}</td>
@@ -1234,9 +1229,8 @@ export const Reports = () => {
                     <button
                       key={type.id}
                       onClick={() => setFinancialType(type.id)}
-                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                        financialType === type.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                      }`}
+                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${financialType === type.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
                     >
                       {type.label}
                     </button>
@@ -1269,62 +1263,62 @@ export const Reports = () => {
                       <tr>
                         <td colSpan={getColumns().length} className="px-6 py-10 text-center text-gray-500">No financial data found for the selected period</td>
                       </tr>
-                      ) : (
-                        <>
-                          {financialReportData?.data?.map((row, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                              {getColumns().map((col, colIdx) => (
-                                <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                                  {col.render ? col.render(row) : row[col.key]}
+                    ) : (
+                      <>
+                        {financialReportData?.data?.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                            {getColumns().map((col, colIdx) => (
+                              <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
+                                {col.render ? col.render(row) : row[col.key]}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                        {financialReportData?.summary && (
+                          <>
+                            {financialType === 'trial-balance' && (
+                              <tr className="bg-gray-900 border-t-2 border-gray-800">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white uppercase">Grand Total</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white text-right"></td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
+                                  {(financialReportData.summary.totalDebit || 0).toLocaleString()}
                                 </td>
-                              ))}
-                            </tr>
-                          ))}
-                          {financialReportData?.summary && (
-                            <>
-                              {financialType === 'trial-balance' && (
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
+                                  {(financialReportData.summary.totalCredit || 0).toLocaleString()}
+                                </td>
+                              </tr>
+                            )}
+                            {financialType === 'pl-statement' && (
+                              <tr className="bg-gray-900 border-t-2 border-gray-800">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white uppercase">Net Profit / Loss</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white text-right"></td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
+                                  {(financialReportData.summary.netProfit || 0).toLocaleString()}
+                                </td>
+                              </tr>
+                            )}
+                            {financialType === 'balance-sheet' && (
+                              <>
                                 <tr className="bg-gray-900 border-t-2 border-gray-800">
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white uppercase">Grand Total</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white uppercase">Total Assets</td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white text-right"></td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
-                                    {(financialReportData.summary.totalDebit || 0).toLocaleString()}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
-                                    {(financialReportData.summary.totalCredit || 0).toLocaleString()}
+                                    {(financialReportData.summary.totalAssets || 0).toLocaleString()}
                                   </td>
                                 </tr>
-                              )}
-                              {financialType === 'pl-statement' && (
-                                <tr className="bg-gray-900 border-t-2 border-gray-800">
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white uppercase">Net Profit / Loss</td>
+                                <tr className="bg-gray-900 border-t border-gray-800">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white uppercase">Total Liabilities + Equity</td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white text-right"></td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
-                                    {(financialReportData.summary.netProfit || 0).toLocaleString()}
+                                  <td className="px-4 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
+                                    {((financialReportData.summary.totalLiabilities || 0) + (financialReportData.summary.totalEquity || 0)).toLocaleString()}
                                   </td>
                                 </tr>
-                              )}
-                              {financialType === 'balance-sheet' && (
-                                <>
-                                  <tr className="bg-gray-900 border-t-2 border-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white uppercase">Total Assets</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white text-right"></td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
-                                      {(financialReportData.summary.totalAssets || 0).toLocaleString()}
-                                    </td>
-                                  </tr>
-                                  <tr className="bg-gray-900 border-t border-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white uppercase">Total Liabilities + Equity</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white text-right"></td>
-                                    <td className="px-4 py-4 whitespace-nowrap text-sm font-bold text-green-400 text-right">
-                                      {((financialReportData.summary.totalLiabilities || 0) + (financialReportData.summary.totalEquity || 0)).toLocaleString()}
-                                    </td>
-                                  </tr>
-                                </>
-                              )}
-                            </>
-                          )}
-                        </>
-                      )}
+                              </>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1338,17 +1332,15 @@ export const Reports = () => {
                   <div className="flex bg-gray-100 p-1 rounded-lg">
                     <button
                       onClick={() => setBankCashFilterMode('month')}
-                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                        bankCashFilterMode === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                      }`}
+                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${bankCashFilterMode === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
                     >
                       Month
                     </button>
                     <button
                       onClick={() => setBankCashFilterMode('custom')}
-                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                        bankCashFilterMode === 'custom' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                      }`}
+                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${bankCashFilterMode === 'custom' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
                     >
                       Custom Range
                     </button>
@@ -1563,11 +1555,10 @@ const SummaryCard = ({ title, value, icon, bgColor, trend }) => (
 const TabButton = ({ active, onClick, label }) => (
   <button
     onClick={onClick}
-    className={`px-6 py-4 text-sm font-semibold whitespace-nowrap border-b-2 transition-all ${
-      active 
-        ? 'border-blue-600 text-blue-600 bg-blue-50/30' 
+    className={`px-6 py-4 text-sm font-semibold whitespace-nowrap border-b-2 transition-all ${active
+        ? 'border-blue-600 text-blue-600 bg-blue-50/30'
         : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-    }`}
+      }`}
   >
     {label}
   </button>

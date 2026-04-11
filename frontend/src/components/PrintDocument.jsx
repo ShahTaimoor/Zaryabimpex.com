@@ -35,7 +35,8 @@ const PrintDocument = ({
         showPrintPaymentAmount = true,
         headerText = '',
         footerText = '',
-        invoiceLayout = 'standard'
+        invoiceLayout = 'standard',
+        logoSize = 100
     } = printSettings || {};
 
     const isMobileLayout =
@@ -409,7 +410,12 @@ const PrintDocument = ({
                     {/* Company Header */}
                     <div className="receipt-voucher__header text-center mb-6">
                         {showLogo && safeCompanySettings.logo && (
-                            <img src={safeCompanySettings.logo} alt="Logo" className="receipt-voucher__logo max-h-16 mx-auto mb-2" />
+                            <img
+                                src={safeCompanySettings.logo}
+                                alt="Logo"
+                                className="receipt-voucher__logo mx-auto mb-2"
+                                style={{ height: `${logoSize}px`, width: 'auto', objectFit: 'contain' }}
+                            />
                         )}
                         <h1 className="receipt-voucher__company-name font-bold text-xl">{resolvedCompanyName}</h1>
                         {resolvedCompanyAddress && <p className="receipt-voucher__company-address text-sm text-gray-600">{resolvedCompanyAddress}</p>}
@@ -478,16 +484,17 @@ const PrintDocument = ({
                 {/* Header Section */}
                 <div className="layout2-header">
                     <div className="grid grid-cols-12 gap-4 items-center mb-2">
-                        <div className="col-span-2">
+                        <div className="col-span-3">
                             {showLogo && safeCompanySettings.logo && (
                                 <img
                                     src={safeCompanySettings.logo}
                                     alt="Logo"
-                                    className="max-h-20 w-auto object-contain"
+                                    className="w-auto object-contain"
+                                    style={{ height: `${logoSize}px`, width: 'auto', objectFit: 'contain' }}
                                 />
                             )}
                         </div>
-                        <div className="col-span-8 text-center">
+                        <div className="col-span-7 text-center">
                             <h1 className="layout2-company-name italic font-bold text-4xl mb-1">
                                 {resolvedCompanyName}
                             </h1>
@@ -644,6 +651,7 @@ const PrintDocument = ({
                                 src={safeCompanySettings.logo}
                                 alt="Company Logo"
                                 className="print-document__logo-img"
+                                style={{ height: `${logoSize}px`, width: 'auto', objectFit: 'contain' }}
                             />
                         ) : (
                             <div className="print-document__logo-placeholder" aria-hidden>

@@ -317,8 +317,8 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
         <button
           onClick={() => onNavigate(item)}
           className={`w-full group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 ${isActive
-              ? 'bg-primary-50 text-primary-700'
-              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            ? 'bg-primary-50 text-primary-700'
+            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
             }`}
         >
           {item.icon && <item.icon className={`mr-3 h-4 w-4 ${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'}`} />}
@@ -802,8 +802,8 @@ export const MultiTabLayout = ({ children }) => {
             <button
               onClick={() => handleNavigationClick({ href: '/cash-receipts', name: 'Cash Receipts' })}
               className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${isActivePath('/cash-receipts')
-                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200 ring-2 ring-emerald-400/60'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                ? 'bg-emerald-100 text-emerald-700 border-emerald-200 ring-2 ring-emerald-400/60'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                 }`}
               title="Cash Receipt"
             >
@@ -814,8 +814,8 @@ export const MultiTabLayout = ({ children }) => {
             <button
               onClick={() => handleNavigationClick({ href: '/bank-receipts', name: 'Bank Receipts' })}
               className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${isActivePath('/bank-receipts')
-                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200 ring-2 ring-emerald-400/60'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                ? 'bg-emerald-100 text-emerald-700 border-emerald-200 ring-2 ring-emerald-400/60'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                 }`}
               title="Bank Receipt"
             >
@@ -827,8 +827,8 @@ export const MultiTabLayout = ({ children }) => {
             <button
               onClick={() => handleNavigationClick({ href: '/cash-payments', name: 'Cash Payments' })}
               className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${isActivePath('/cash-payments')
-                  ? 'bg-blue-100 text-blue-700 border-blue-200 ring-2 ring-blue-400/60'
-                  : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                ? 'bg-blue-100 text-blue-700 border-blue-200 ring-2 ring-blue-400/60'
+                : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
                 }`}
               title="Cash Payment"
             >
@@ -839,8 +839,8 @@ export const MultiTabLayout = ({ children }) => {
             <button
               onClick={() => handleNavigationClick({ href: '/bank-payments', name: 'Bank Payments' })}
               className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${isActivePath('/bank-payments')
-                  ? 'bg-blue-100 text-blue-700 border-blue-200 ring-2 ring-blue-400/60'
-                  : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                ? 'bg-blue-100 text-blue-700 border-blue-200 ring-2 ring-blue-400/60'
+                : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
                 }`}
               title="Bank Payment"
             >

@@ -1,7 +1,26 @@
 import React from 'react';
 import { toast } from 'sonner';
+import { 
+  CheckSquare, 
+  ShoppingCart, 
+  Truck, 
+  Database, 
+  Package, 
+  Layers, 
+  Tag, 
+  Eye, 
+  DollarSign, 
+  Hash, 
+  Search,
+  Settings,
+  ShieldCheck,
+  Layout
+} from 'lucide-react';
 import { useGetCompanySettingsQuery, useUpdateCompanySettingsMutation } from '../store/services/settingsApi';
 import { handleApiError } from '../utils/errorHandler';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 
 export function OrderItemWiseConfirmationSettings() {
   const { data: settingsResponse } = useGetCompanySettingsQuery();
@@ -9,443 +28,320 @@ export function OrderItemWiseConfirmationSettings() {
 
   const settings = settingsResponse?.data || settingsResponse;
   const orderSettings = settings?.orderSettings || {};
-  const salesEnabled = orderSettings.salesOrderItemWiseConfirmation !== false;
-  const purchaseEnabled = orderSettings.purchaseOrderItemWiseConfirmation !== false;
-  const showRemainingStockAfterSale = orderSettings.showRemainingStockAfterSale !== false;
-  const dualUnitShowBoxInput = orderSettings.dualUnitShowBoxInput !== false;
-  const dualUnitShowPiecesInput = orderSettings.dualUnitShowPiecesInput !== false;
-  const showSalesDiscountCode = orderSettings.showSalesDiscountCode === true;
-  const allowSaleWithoutProduct = orderSettings.allowSaleWithoutProduct === true;
-  const showCostPrice = orderSettings.showCostPrice === true;
-  const allowManualCostPrice = orderSettings.allowManualCostPrice === true;
+  
+  const [localSettings, setLocalSettings] = React.useState({});
+
+  // Sync local state when settings change
+  React.useEffect(() => {
+    if (orderSettings) {
+      setLocalSettings(orderSettings);
+    }
+  }, [orderSettings]);
+
+  // Use local state for immediate feedback
+  const salesEnabled = localSettings.salesOrderItemWiseConfirmation !== false;
+  const purchaseEnabled = localSettings.purchaseOrderItemWiseConfirmation !== false;
+  const showRemainingStockAfterSale = localSettings.showRemainingStockAfterSale !== false;
+  const dualUnitShowBoxInput = localSettings.dualUnitShowBoxInput !== false;
+  const dualUnitShowPiecesInput = localSettings.dualUnitShowPiecesInput !== false;
+  const showSalesDiscountCode = localSettings.showSalesDiscountCode === true;
+  const allowSaleWithoutProduct = localSettings.allowSaleWithoutProduct === true;
+  const showCostPrice = localSettings.showCostPrice === true;
+  const allowManualCostPrice = localSettings.allowManualCostPrice === true;
 
   // Invoice Numbering Settings
-  const invoiceSequenceEnabled = orderSettings.invoiceSequenceEnabled === true;
-  const invoiceSequencePrefix = orderSettings.invoiceSequencePrefix || 'INV-';
-  const invoiceSequenceNext = orderSettings.invoiceSequenceNext || 1;
-  const invoiceSequencePadding = orderSettings.invoiceSequencePadding || 3;
+  const invoiceSequenceEnabled = localSettings.invoiceSequenceEnabled === true;
+  const invoiceSequencePrefix = localSettings.invoiceSequencePrefix || 'INV-';
+  const invoiceSequenceNext = localSettings.invoiceSequenceNext || 1;
+  const invoiceSequencePadding = localSettings.invoiceSequencePadding || 3;
 
   // Purchase Numbering Settings
-  const purchaseSequenceEnabled = orderSettings.purchaseSequenceEnabled === true;
-  const purchaseSequencePrefix = orderSettings.purchaseSequencePrefix || 'PUR-';
-  const purchaseSequenceNext = orderSettings.purchaseSequenceNext || 1;
-  const purchaseSequencePadding = orderSettings.purchaseSequencePadding || 3;
+  const purchaseSequenceEnabled = localSettings.purchaseSequenceEnabled === true;
+  const purchaseSequencePrefix = localSettings.purchaseSequencePrefix || 'PUR-';
+  const purchaseSequenceNext = localSettings.purchaseSequenceNext || 1;
+  const purchaseSequencePadding = localSettings.purchaseSequencePadding || 3;
 
-  const handleSalesChange = async (checked) => {
+  const updateSetting = async (key, value, toastMsg) => {
+    // Optimistically update local state
+    setLocalSettings(prev => ({ ...prev, [key]: value }));
+    
     try {
-      await updateCompanySettings({
-        orderSettings: { ...orderSettings, salesOrderItemWiseConfirmation: checked },
-      }).unwrap();
-      toast.success(checked ? 'Sales Order item-wise confirmation enabled' : 'Sales Order item-wise confirmation disabled');
-    } catch (err) {
-      handleApiError(err, 'Failed to update setting');
-    }
-  };
-
-  const handlePurchaseChange = async (checked) => {
-    try {
-      await updateCompanySettings({
-        orderSettings: { ...orderSettings, purchaseOrderItemWiseConfirmation: checked },
-      }).unwrap();
-      toast.success(checked ? 'Purchase Order item-wise confirmation enabled' : 'Purchase Order item-wise confirmation disabled');
-    } catch (err) {
-      handleApiError(err, 'Failed to update setting');
-    }
-  };
-
-  const handleRemainingStockChange = async (checked) => {
-    try {
-      await updateCompanySettings({
-        orderSettings: { ...orderSettings, showRemainingStockAfterSale: checked },
-      }).unwrap();
-      toast.success(
-        checked
-          ? '"After sale" stock hint enabled on Sales & Sales Orders'
-          : '"After sale" stock hint disabled'
-      );
-    } catch (err) {
-      handleApiError(err, 'Failed to update setting');
-    }
-  };
-
-  const handleDualBoxChange = async (checked) => {
-    try {
-      await updateCompanySettings({
-        orderSettings: { ...orderSettings, dualUnitShowBoxInput: checked },
-      }).unwrap();
-      toast.success(checked ? 'Box column shown for dual-unit products' : 'Box column hidden for dual-unit products');
-    } catch (err) {
-      handleApiError(err, 'Failed to update setting');
-    }
-  };
-
-  const handleDualPiecesChange = async (checked) => {
-    try {
-      await updateCompanySettings({
-        orderSettings: { ...orderSettings, dualUnitShowPiecesInput: checked },
-      }).unwrap();
-      toast.success(checked ? 'Pieces column shown for dual-unit products' : 'Pieces column hidden for dual-unit products');
-    } catch (err) {
-      handleApiError(err, 'Failed to update setting');
-    }
-  };
-
-  const handleShowSalesDiscountCodeChange = async (checked) => {
-    try {
-      await updateCompanySettings({
-        orderSettings: { ...orderSettings, showSalesDiscountCode: checked },
-      }).unwrap();
-      toast.success(checked ? 'Sales discount code dropdown shown' : 'Sales discount code dropdown hidden');
-    } catch (err) {
-      handleApiError(err, 'Failed to update setting');
-    }
-  };
-
-  const handleAllowSaleWithoutProductChange = async (checked) => {
-    try {
-      await updateCompanySettings({
-        orderSettings: { ...orderSettings, allowSaleWithoutProduct: checked },
-      }).unwrap();
-      toast.success(checked ? 'Manual item entry for sales enabled' : 'Manual item entry for sales disabled');
-    } catch (err) {
-      handleApiError(err, 'Failed to update setting');
-    }
-  };
-
-  const handleShowCostPriceChange = async (checked) => {
-    try {
-      await updateCompanySettings({
-        orderSettings: { ...orderSettings, showCostPrice: checked },
-      }).unwrap();
-      toast.success(checked ? 'Cost price visibility enabled' : 'Cost price visibility disabled');
-    } catch (err) {
-      handleApiError(err, 'Failed to update setting');
-    }
-  };
-  const handleAllowManualCostPriceChange = async (checked) => {
-    try {
-      // Use the freshest settings from the response
       const currentOrderSettings = (settingsResponse?.data?.orderSettings || settingsResponse?.orderSettings || {});
       await updateCompanySettings({
-        orderSettings: { ...currentOrderSettings, allowManualCostPrice: checked },
+        orderSettings: { ...currentOrderSettings, [key]: value },
       }).unwrap();
-      toast.success(checked ? 'Manual cost price entry enabled' : 'Manual cost price entry disabled');
+      if (toastMsg) toast.success(toastMsg);
     } catch (err) {
+      // Revert local state on error
+      setLocalSettings(orderSettings);
       handleApiError(err, 'Failed to update setting');
     }
   };
 
+  const SettingCard = ({ icon: Icon, title, description, checked, onChange, id, color="blue", disabled=false }) => (
+    <div className={`flex items-start space-x-3 p-4 border rounded-xl bg-white shadow-sm hover:border-${color}-300 hover:shadow-md transition-all duration-300 group ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div className="pt-1">
+        <Checkbox 
+          id={id} 
+          checked={checked} 
+          onCheckedChange={onChange}
+          disabled={updating || disabled}
+          className={`w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-${color}-600 data-[state=checked]:border-${color}-600`}
+        />
+      </div>
+      <Label htmlFor={id} className="flex flex-col cursor-pointer flex-1 space-y-1">
+        <div className="flex items-center space-x-2">
+          {Icon && <Icon className={`h-4 w-4 text-${color}-500`} />}
+          <span className="text-sm font-bold text-gray-900 group-hover:text-blue-700">{title}</span>
+        </div>
+        <span className="text-[11px] text-gray-500 leading-relaxed font-medium">{description}</span>
+      </Label>
+    </div>
+  );
+
   return (
-    <>
-      <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-        <input
-          type="checkbox"
-          checked={allowSaleWithoutProduct}
-          onChange={(e) => handleAllowSaleWithoutProductChange(e.target.checked)}
-          disabled={updating}
-          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-        />
-        <div>
-          <div className="text-sm font-medium text-gray-900">Allow Sale Without Product</div>
-          <div className="text-xs text-gray-500">Allow manual item entry (name, price, quantity) even if product doesn&apos;t exist in database.</div>
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+      {/* Core Logic Toggles */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-gray-200"></div>
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Order System Operations</h3>
+          <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-gray-200"></div>
         </div>
-      </label>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <SettingCard 
+            id="allowSaleWithoutProduct"
+            icon={Package}
+            title="Manual Item Sales"
+            description="Allow selling items not in catalog (Manual entry)"
+            checked={allowSaleWithoutProduct}
+            onChange={(val) => updateSetting('allowSaleWithoutProduct', val, val ? 'Manual item entry enabled' : 'Manual item entry disabled')}
+            color="emerald"
+          />
 
-      {allowSaleWithoutProduct && (
-        <label
-          htmlFor="allowManualCostPrice"
-          className="flex items-center space-x-3 p-4 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-50/50 ml-6 bg-blue-50/20"
-        >
-          <input
+          <SettingCard 
             id="allowManualCostPrice"
-            type="checkbox"
-            checked={!!orderSettings.allowManualCostPrice}
-            onChange={(e) => handleAllowManualCostPriceChange(e.target.checked)}
-            disabled={updating}
-            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+            icon={ShieldCheck}
+            title="Manual Item Cost"
+            description="Enable cost price input for manual sale items"
+            checked={allowManualCostPrice}
+            onChange={(val) => updateSetting('allowManualCostPrice', val, val ? 'Manual cost price enabled' : 'Manual cost price disabled')}
+            color="indigo"
+            disabled={!allowSaleWithoutProduct}
           />
-          <div>
-            <div className="text-sm font-semibold text-blue-900">Enable Cost Price for Manual Items</div>
-            <div className="text-xs text-blue-700">Allow entering cost price for items added manually (visible only to users with cost price permission).</div>
-          </div>
-        </label>
-      )}
 
-      <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-        <input
-          type="checkbox"
-          checked={showCostPrice}
-          onChange={(e) => handleShowCostPriceChange(e.target.checked)}
-          disabled={updating}
-          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-        />
-        <div>
-          <div className="text-sm font-medium text-gray-900">Show Cost Price</div>
-          <div className="text-xs text-gray-500">Display cost price in product list, sale screen, and reports.</div>
-        </div>
-      </label>
+          <SettingCard 
+            id="showCostPrice"
+            icon={Eye}
+            title="Cost Visibility"
+            description="Show cost prices in lists, POS, and reports"
+            checked={showCostPrice}
+            onChange={(val) => updateSetting('showCostPrice', val, val ? 'Cost price visibility enabled' : 'Cost price visibility disabled')}
+            color="amber"
+          />
 
-      <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-        <input
-          type="checkbox"
-          checked={salesEnabled}
-          onChange={(e) => handleSalesChange(e.target.checked)}
-          disabled={updating}
-          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-        />
-        <div>
-          <div className="text-sm font-medium text-gray-900">Sales Order Item-wise Confirmation</div>
-          <div className="text-xs text-gray-500">Enable checkbox selection and per-item confirm in Sales Orders view. Confirmed items are converted to invoice.</div>
-        </div>
-      </label>
-      <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-        <input
-          type="checkbox"
-          checked={purchaseEnabled}
-          onChange={(e) => handlePurchaseChange(e.target.checked)}
-          disabled={updating}
-          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-        />
-        <div>
-          <div className="text-sm font-medium text-gray-900">Purchase Order Item-wise Confirmation</div>
-          <div className="text-xs text-gray-500">Enable checkbox selection and per-item confirm in Purchase Orders view.</div>
-        </div>
-      </label>
-      <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-        <input
-          type="checkbox"
-          checked={showRemainingStockAfterSale}
-          onChange={(e) => handleRemainingStockChange(e.target.checked)}
-          disabled={updating}
-          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-        />
-        <div>
-          <div className="text-sm font-medium text-gray-900">Show remaining stock after sale (POS &amp; Sales Orders)</div>
-          <div className="text-xs text-gray-500">
-            When entering quantity, show how much stock will be left (e.g. 1000 in stock, 1 box of 100 pcs → &quot;After sale: 900 pcs&quot;).
-          </div>
-        </div>
-      </label>
+          <SettingCard 
+            id="salesOrderItemWiseConfirmation"
+            icon={ShoppingCart}
+            title="Sales Confirmation"
+            description="Item-wise checklist before converting to Invoice"
+            checked={salesEnabled}
+            onChange={(val) => updateSetting('salesOrderItemWiseConfirmation', val, val ? 'Sales item-wise confirmation enabled' : 'Sales item-wise confirmation disabled')}
+            color="blue"
+          />
 
-      <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50/80 p-3 space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-600 px-1">Dual units (box + pieces)</p>
-        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-white bg-white">
-          <input
-            type="checkbox"
+          <SettingCard 
+            id="purchaseOrderItemWiseConfirmation"
+            icon={Truck}
+            title="Purchase Confirmation"
+            description="Per-item check in Purchase Orders workflow"
+            checked={purchaseEnabled}
+            onChange={(val) => updateSetting('purchaseOrderItemWiseConfirmation', val, val ? 'Purchase item-wise confirmation enabled' : 'Purchase item-wise confirmation disabled')}
+            color="violet"
+          />
+
+          <SettingCard 
+            id="showRemainingStockAfterSale"
+            icon={Database}
+            title="Stock Predictions"
+            description="Show remaining stock hint during sale entry"
+            checked={showRemainingStockAfterSale}
+            onChange={(val) => updateSetting('showRemainingStockAfterSale', val, val ? 'Stock hint enabled' : 'Stock hint disabled')}
+            color="rose"
+          />
+        </div>
+      </div>
+
+      {/* Interface Options */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-gray-200"></div>
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Inventory UI & Financials</h3>
+          <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-gray-200"></div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <SettingCard 
+            id="dualUnitShowBoxInput"
+            icon={Layers}
+            title="Show Box Input"
+            description="Display 'Boxes' column for dual-unit products"
             checked={dualUnitShowBoxInput}
-            onChange={(e) => handleDualBoxChange(e.target.checked)}
-            disabled={updating}
-            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            onChange={(val) => updateSetting('dualUnitShowBoxInput', val, val ? 'Box column enabled' : 'Box column disabled')}
+            color="sky"
           />
-          <div>
-            <div className="text-sm font-medium text-gray-900">Show Box input</div>
-            <div className="text-xs text-gray-500">
-              Quantity fields for products with &quot;pieces per box&quot;: show the Box(es) column (POS, Sales Orders, Purchase Orders).
-            </div>
-          </div>
-        </label>
-        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-white bg-white">
-          <input
-            type="checkbox"
+
+          <SettingCard 
+            id="dualUnitShowPiecesInput"
+            icon={Hash}
+            title="Show Pieces Input"
+            description="Display 'Pieces' column for dual-unit items"
             checked={dualUnitShowPiecesInput}
-            onChange={(e) => handleDualPiecesChange(e.target.checked)}
-            disabled={updating}
-            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            onChange={(val) => updateSetting('dualUnitShowPiecesInput', val, val ? 'Pieces column enabled' : 'Pieces column disabled')}
+            color="cyan"
           />
-          <div>
-            <div className="text-sm font-medium text-gray-900">Show Pieces input</div>
-            <div className="text-xs text-gray-500">
-              Show the loose Pieces column. If both Box and Pieces are off, only a single total (pcs) field is shown.
-            </div>
-          </div>
-        </label>
-      </div>
 
-      <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-        <input
-          type="checkbox"
-          checked={showSalesDiscountCode}
-          onChange={(e) => handleShowSalesDiscountCodeChange(e.target.checked)}
-          disabled={updating}
-          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-        />
-        <div>
-          <div className="text-sm font-medium text-gray-900">Show Discount Code in Sales</div>
-          <div className="text-xs text-gray-500">
-            Show or hide the discount code dropdown in the Sales payment panel.
-          </div>
-        </div>
-      </label>
-
-      {/* Invoice Numbering Settings */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">Sales Invoice Numbering</h3>
-            <p className="text-xs text-gray-500">Use custom sequential numbering for sales invoices instead of timestamp-based ones.</p>
-          </div>
-          <input
-            type="checkbox"
-            checked={invoiceSequenceEnabled}
-            onChange={async (e) => {
-              try {
-                await updateCompanySettings({
-                  orderSettings: { ...orderSettings, invoiceSequenceEnabled: e.target.checked },
-                }).unwrap();
-                toast.success(`Sequential invoice numbering ${e.target.checked ? 'enabled' : 'disabled'}`);
-              } catch (err) {
-                handleApiError(err, 'Failed to update numbering setting');
-              }
-            }}
-            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+          <SettingCard 
+            id="showSalesDiscountCode"
+            icon={Tag}
+            title="Sales Discount"
+            description="Show discount code selector in POS panel"
+            checked={showSalesDiscountCode}
+            onChange={(val) => updateSetting('showSalesDiscountCode', val, val ? 'Discount selector enabled' : 'Discount selector disabled')}
+            color="teal"
           />
         </div>
-
-        {invoiceSequenceEnabled && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-gray-100">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Prefix</label>
-              <input
-                type="text"
-                value={invoiceSequencePrefix}
-                onChange={async (e) => {
-                  try {
-                    await updateCompanySettings({
-                      orderSettings: { ...orderSettings, invoiceSequencePrefix: e.target.value },
-                    }).unwrap();
-                  } catch (err) { /* silent */ }
-                }}
-                placeholder="INV-"
-                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Next Number</label>
-              <input
-                type="number"
-                min="1"
-                value={invoiceSequenceNext}
-                onChange={async (e) => {
-                  const val = parseInt(e.target.value) || 1;
-                  try {
-                    await updateCompanySettings({
-                      orderSettings: { ...orderSettings, invoiceSequenceNext: val },
-                    }).unwrap();
-                  } catch (err) { /* silent */ }
-                }}
-                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Padding (Digits)</label>
-              <select
-                value={invoiceSequencePadding}
-                onChange={async (e) => {
-                  const val = parseInt(e.target.value);
-                  try {
-                    await updateCompanySettings({
-                      orderSettings: { ...orderSettings, invoiceSequencePadding: val },
-                    }).unwrap();
-                  } catch (err) { /* silent */ }
-                }}
-                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none"
-              >
-                <option value={1}>1 (1)</option>
-                <option value={2}>2 (01)</option>
-                <option value={3}>3 (001)</option>
-                <option value={4}>4 (0001)</option>
-                <option value={5}>5 (00001)</option>
-                <option value={6}>6 (000001)</option>
-              </select>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Purchase Numbering Settings */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">Purchase Invoice Numbering</h3>
-            <p className="text-xs text-gray-500">Use custom sequential numbering for purchase invoices.</p>
-          </div>
-          <input
-            type="checkbox"
-            checked={purchaseSequenceEnabled}
-            onChange={async (e) => {
-              try {
-                await updateCompanySettings({
-                  orderSettings: { ...orderSettings, purchaseSequenceEnabled: e.target.checked },
-                }).unwrap();
-                toast.success(`Sequential purchase numbering ${e.target.checked ? 'enabled' : 'disabled'}`);
-              } catch (err) {
-                handleApiError(err, 'Failed to update numbering setting');
-              }
-            }}
-            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-          />
+      {/* Numbering Schemes */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-gray-200"></div>
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Document Numbering</h3>
+          <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-gray-200"></div>
         </div>
 
-        {purchaseSequenceEnabled && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-gray-100">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Prefix</label>
-              <input
-                type="text"
-                value={purchaseSequencePrefix}
-                onChange={async (e) => {
-                  try {
-                    await updateCompanySettings({
-                      orderSettings: { ...orderSettings, purchaseSequencePrefix: e.target.value },
-                    }).unwrap();
-                  } catch (err) { /* silent */ }
-                }}
-                placeholder="PUR-"
-                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none"
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Sales Sequence */}
+          <div className="bg-white border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="bg-blue-50/50 p-4 border-b flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                  <Layout className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900">Sales Invoice Sequence</h4>
+                  <p className="text-[10px] text-gray-500 font-medium caps">Sequential vs Timestamp</p>
+                </div>
+              </div>
+              <Checkbox 
+                id="invoiceSequenceEnabled"
+                checked={invoiceSequenceEnabled}
+                onCheckedChange={(val) => updateSetting('invoiceSequenceEnabled', val, `Sequential Sales numbering ${val ? 'enabled' : 'disabled'}`)}
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Next Number</label>
-              <input
-                type="number"
-                min="1"
-                value={purchaseSequenceNext}
-                onChange={async (e) => {
-                  const val = parseInt(e.target.value) || 1;
-                  try {
-                    await updateCompanySettings({
-                      orderSettings: { ...orderSettings, purchaseSequenceNext: val },
-                    }).unwrap();
-                  } catch (err) { /* silent */ }
-                }}
-                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Padding (Digits)</label>
-              <select
-                value={purchaseSequencePadding}
-                onChange={async (e) => {
-                  const val = parseInt(e.target.value);
-                  try {
-                    await updateCompanySettings({
-                      orderSettings: { ...orderSettings, purchaseSequencePadding: val },
-                    }).unwrap();
-                  } catch (err) { /* silent */ }
-                }}
-                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 outline-none"
-              >
-                <option value={1}>1 (1)</option>
-                <option value={2}>2 (01)</option>
-                <option value={3}>3 (001)</option>
-                <option value={4}>4 (0001)</option>
-                <option value={5}>5 (00001)</option>
-                <option value={6}>6 (000001)</option>
-              </select>
+            
+            <div className={`p-5 space-y-4 transition-all duration-300 ${!invoiceSequenceEnabled ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold text-gray-600">Prefix</Label>
+                  <Input 
+                    value={invoiceSequencePrefix}
+                    onChange={(e) => updateSetting('invoiceSequencePrefix', e.target.value)}
+                    className="h-8 text-xs font-bold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold text-gray-600">Next #</Label>
+                  <Input 
+                    type="number"
+                    value={invoiceSequenceNext}
+                    onChange={(e) => updateSetting('invoiceSequenceNext', parseInt(e.target.value) || 1)}
+                    className="h-8 text-xs font-bold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold text-gray-600">Padding</Label>
+                  <select 
+                    value={String(invoiceSequencePadding)}
+                    onChange={(e) => updateSetting('invoiceSequencePadding', parseInt(e.target.value))}
+                    className="w-full h-8 text-xs font-bold border border-gray-200 rounded px-2 outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                  >
+                    {[1,2,3,4,5,6].map(v => (
+                      <option key={v} value={String(v)}>
+                        {v} {v > 1 ? `Digits` : '(No padding)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <p className="text-[10px] text-blue-600 bg-blue-50 px-2.5 py-1.5 rounded-lg font-bold border border-blue-100/50">
+                Preview: <span className="underline">{invoiceSequencePrefix}{String(invoiceSequenceNext).padStart(invoiceSequencePadding, '0')}</span>
+              </p>
             </div>
           </div>
-        )}
+
+          {/* Purchase Sequence */}
+          <div className="bg-white border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="bg-indigo-50/50 p-4 border-b flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
+                  <Settings className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900">Purchase Order Sequence</h4>
+                  <p className="text-[10px] text-gray-500 font-medium caps">Document ID format</p>
+                </div>
+              </div>
+              <Checkbox 
+                id="purchaseSequenceEnabled"
+                checked={purchaseSequenceEnabled}
+                onCheckedChange={(val) => updateSetting('purchaseSequenceEnabled', val, `Sequential Purchase numbering ${val ? 'enabled' : 'disabled'}`)}
+              />
+            </div>
+            
+            <div className={`p-5 space-y-4 transition-all duration-300 ${!purchaseSequenceEnabled ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold text-gray-600">Prefix</Label>
+                  <Input 
+                    value={purchaseSequencePrefix}
+                    onChange={(e) => updateSetting('purchaseSequencePrefix', e.target.value)}
+                    className="h-8 text-xs font-bold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold text-gray-600">Next #</Label>
+                  <Input 
+                    type="number"
+                    value={purchaseSequenceNext}
+                    onChange={(e) => updateSetting('purchaseSequenceNext', parseInt(e.target.value) || 1)}
+                    className="h-8 text-xs font-bold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold text-gray-600">Padding</Label>
+                  <select 
+                    value={String(purchaseSequencePadding)}
+                    onChange={(e) => updateSetting('purchaseSequencePadding', parseInt(e.target.value))}
+                    className="w-full h-8 text-xs font-bold border border-gray-200 rounded px-2 outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                  >
+                    {[1,2,3,4,5,6].map(v => (
+                      <option key={v} value={String(v)}>
+                        {v} Digits
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <p className="text-[10px] text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded-lg font-bold border border-indigo-100/50">
+                Preview: <span className="underline">{purchaseSequencePrefix}{String(purchaseSequenceNext).padStart(purchaseSequencePadding, '0')}</span>
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
-    </>
+    </div>
   );
 }

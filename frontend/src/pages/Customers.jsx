@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Plus, 
+import {
+  Plus,
   Search,
   Download,
 } from 'lucide-react';
@@ -36,7 +36,7 @@ export const Customers = () => {
   const [showNotes, setShowNotes] = useState(false);
   const [notesEntity, setNotesEntity] = useState(null);
 
-  const queryParams = { 
+  const queryParams = {
     search: searchTerm || undefined,
     page: currentPage,
     limit: itemsPerPage,
@@ -219,7 +219,7 @@ export const Customers = () => {
 
 
       {/* Advanced Filters */}
-      <CustomerFilters 
+      <CustomerFilters
         filters={filters}
         onFiltersChange={handleFiltersChange}
         onClearFilters={handleClearFilters}

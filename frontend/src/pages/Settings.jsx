@@ -51,6 +51,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 export const Settings2 = () => {
   const { user } = useAuth();
@@ -83,6 +85,7 @@ export const Settings2 = () => {
   const [showNewUserPassword, setShowNewUserPassword] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showMyPasswordModal, setShowMyPasswordModal] = useState(false);
+  const [isSavingPrintSettings, setIsSavingPrintSettings] = useState(false);
   const [passwordResetUser, setPasswordResetUser] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -121,7 +124,8 @@ export const Settings2 = () => {
     mobilePrintPreview: false,
     headerText: '',
     footerText: '',
-    invoiceLayout: 'standard'
+    invoiceLayout: 'standard',
+    logoSize: 100
   });
 
   const sampleOrderData = useMemo(() => ({
@@ -793,7 +797,8 @@ export const Settings2 = () => {
           address: settings.data.data.address || '',
           contactNumber: settings.data.data.contactNumber || '',
           email: settings.data.data.email || '',
-          taxRegistrationNumber: settings.data.data.taxId || ''
+          taxRegistrationNumber: settings.data.data.taxId || '',
+          logo: settings.data.data.logo || ''
         };
 
         // Only update if data has changed
@@ -831,7 +836,8 @@ export const Settings2 = () => {
           mobilePrintPreview: ps.mobilePrintPreview ?? prev.mobilePrintPreview ?? false,
           headerText: ps.headerText || prev.headerText || '',
           footerText: ps.footerText || prev.footerText || '',
-          invoiceLayout: ps.invoiceLayout || prev.invoiceLayout || 'standard'
+          invoiceLayout: ps.invoiceLayout || prev.invoiceLayout || 'standard',
+          logoSize: ps.logoSize ?? prev.logoSize ?? 100
         };
 
         // Only update if changed prevents verify infinite loop
@@ -851,7 +857,8 @@ export const Settings2 = () => {
         address: settings.data.data.address || '',
         contactNumber: settings.data.data.contactNumber || '',
         email: settings.data.data.email || '',
-        taxRegistrationNumber: settings.data.data.taxId || ''
+        taxRegistrationNumber: settings.data.data.taxId || '',
+        logo: settings.data.data.logo || ''
       };
       setCompanyData(newData);
     }
@@ -871,7 +878,8 @@ export const Settings2 = () => {
           address: response.data.address || '',
           contactNumber: response.data.contactNumber || '',
           email: response.data.email || '',
-          taxRegistrationNumber: response.data.taxId || '' // Map taxId back to taxRegistrationNumber
+          taxRegistrationNumber: response.data.taxId || '', // Map taxId back to taxRegistrationNumber
+          logo: response.data.logo || ''
         };
         setCompanyData(updatedData);
       }
@@ -882,6 +890,30 @@ export const Settings2 = () => {
       handleApiError(error, 'Company Information Update');
     } finally {
       setSavingCompanySettings(false);
+    }
+  };
+
+  const handleSavePrintSettings = async () => {
+    setIsSavingPrintSettings(true);
+    try {
+      const dataToSend = {
+        companyName: companyData.companyName,
+        contactNumber: companyData.contactNumber,
+        address: companyData.address,
+        email: companyData.email,
+        taxId: companyData.taxRegistrationNumber,
+        printSettings: printSettings
+      };
+
+      await updateCompanySettings(dataToSend).unwrap();
+      toast.success('Print settings saved successfully!');
+
+      // Refetch to keep state in sync
+      refetchSettings();
+    } catch (error) {
+      handleApiError(error, 'Save Print Settings');
+    } finally {
+      setIsSavingPrintSettings(false);
     }
   };
 
@@ -1126,7 +1158,7 @@ export const Settings2 = () => {
     const { name, value, type, checked } = e.target;
     setPrintSettings(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : (type === 'number' || type === 'range' ? Number(value) : value)
     }));
   };
 
@@ -1977,351 +2009,160 @@ export const Settings2 = () => {
 
                 {/* Display Options - these apply to all print previews and printed documents (Sales/Purchase Invoice, Sales/Purchase Order) */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">
                     Display Options
                   </label>
-                  <p className="text-xs text-gray-500 mb-4">
-                    Control what appears on printed invoices and receipts. Uncheck to hide anywhere print is used.
+                  <p className="text-xs text-gray-500 mb-6">
+                    Control what appears on printed invoices and receipts. Uncheck to hide elements anywhere print is used.
                   </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
-                        type="checkbox"
-                        name="showLogo"
-                        checked={printSettings.showLogo}
-                        onChange={handlePrintSettingsChange}
-                        className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">Show Logo</div>
-                        <div className="text-xs text-gray-500">Display company logo on printed documents</div>
+
+                  <div className="space-y-8">
+                    {/* General Header Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-2 border-b border-gray-100 pb-2">
+                        <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600"><Printer className="h-4 w-4" /></div>
+                        <h4 className="text-sm font-bold text-gray-700">General Header & Layout</h4>
                       </div>
-                    </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* Logo Size Control (Special) */}
+                        <div className="col-span-1 sm:col-span-2 p-4 border border-blue-100 rounded-xl bg-blue-50/20 shadow-sm flex flex-col space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                              Logo Scale
+                            </div>
+                            <div className="text-xs font-black text-blue-700 bg-blue-100 px-2.5 py-1 rounded-full">{printSettings.logoSize || 100}px</div>
+                          </div>
+                          <input
+                            type="range"
+                            name="logoSize"
+                            min="30"
+                            max="350"
+                            step="5"
+                            value={printSettings.logoSize || 100}
+                            onChange={handlePrintSettingsChange}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                          />
+                          <div className="flex justify-between text-[10px] text-gray-400 font-bold uppercase tracking-tighter">
+                            <span>Min</span>
+                            <span>Balanced</span>
+                            <span>Max</span>
+                          </div>
+                        </div>
 
-                    {printSettings.invoiceLayout !== 'layout2' && (
-                      <>
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showCompanyDetails"
-                            checked={printSettings.showCompanyDetails}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Company Details</div>
-                            <div className="text-xs text-gray-500">Display address and phone number</div>
+                        {/* Standard Toggle Boxes */}
+                        {[
+                          { id: 'showLogo', label: 'Display Logo', icon: <Printer className="h-3.5 w-3.5" /> },
+                          { id: 'showCompanyDetails', label: 'Company Header', icon: <Building className="h-3.5 w-3.5" />, hidden: printSettings.invoiceLayout === 'layout2' },
+                          { id: 'showEmail', label: 'Show Email', icon: <Mail className="h-3.5 w-3.5" /> },
+                          { id: 'showFooter', label: 'Show Footer', icon: <FileText className="h-3.5 w-3.5" /> },
+                          { id: 'mobilePrintPreview', label: 'Mobile View', icon: <Eye className="h-3.5 w-3.5" /> },
+                          { id: 'showDate', label: 'Doc Date', icon: <Clock className="h-3.5 w-3.5" /> },
+                        ].map(item => !item.hidden && (
+                          <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                            <Checkbox
+                              id={item.id}
+                              className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                              checked={printSettings[item.id]}
+                              onCheckedChange={(checked) => handlePrintSettingsChange({ target: { name: item.id, type: 'checkbox', checked } })}
+                            />
+                            <Label htmlFor={item.id} className="flex items-center gap-2 text-sm font-semibold text-gray-700 cursor-pointer group-hover:text-blue-700">
+                              <div className="p-1.5 bg-gray-50 rounded-lg text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors">{item.icon}</div>
+                              {item.label}
+                            </Label>
                           </div>
-                        </label>
+                        ))}
+                      </div>
+                    </div>
 
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showDiscount"
-                            checked={printSettings.showDiscount}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Discount</div>
-                            <div className="text-xs text-gray-500">Display discount information on receipts</div>
+                    {/* Table & Financial Details Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-2 border-b border-gray-100 pb-2">
+                        <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600"><BarChart3 className="h-4 w-4" /></div>
+                        <h4 className="text-sm font-bold text-gray-700">Financials & Table Info</h4>
+                      </div>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        {[
+                          { id: 'showTax', label: 'Tax Breakdown' },
+                          { id: 'showDiscount', label: 'Discounts' },
+                          { id: 'showDescription', label: 'Item Desc' },
+                          { id: 'showCameraTime', label: 'Cam Timestamp' },
+                        ].map(item => (
+                          <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-emerald-300 hover:shadow-md transition-all duration-200 group">
+                            <Checkbox
+                              id={item.id}
+                              className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                              checked={printSettings[item.id]}
+                              onCheckedChange={(checked) => handlePrintSettingsChange({ target: { name: item.id, type: 'checkbox', checked } })}
+                            />
+                            <Label htmlFor={item.id} className="text-sm font-semibold text-gray-700 cursor-pointer group-hover:text-emerald-700">
+                              {item.label}
+                            </Label>
                           </div>
-                        </label>
+                        ))}
+                      </div>
+                    </div>
 
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showTax"
-                            checked={printSettings.showTax}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Tax</div>
-                            <div className="text-xs text-gray-500">Display tax calculations on receipts</div>
+                    {/* Party Details Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-2 border-b border-gray-100 pb-2">
+                        <div className="p-1.5 bg-amber-50 rounded-lg text-amber-600"><Users className="h-4 w-4" /></div>
+                        <h4 className="text-sm font-bold text-gray-700">Party / Billing Details</h4>
+                      </div>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        {[
+                          { id: 'showPrintBusinessName', label: 'Business Name' },
+                          { id: 'showPrintContactName', label: 'Contact Name' },
+                          { id: 'showPrintAddress', label: 'Full Address' },
+                          { id: 'showPrintCity', label: 'City' },
+                          { id: 'showPrintState', label: 'State / Prov' },
+                          { id: 'showPrintPostalCode', label: 'Postal Code' },
+                        ].map(item => (
+                          <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-amber-300 hover:shadow-md transition-all duration-200 group">
+                            <Checkbox
+                              id={item.id}
+                              className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-amber-600 data-[state=checked]:border-amber-600"
+                              checked={printSettings[item.id]}
+                              onCheckedChange={(checked) => handlePrintSettingsChange({ target: { name: item.id, type: 'checkbox', checked } })}
+                            />
+                            <Label htmlFor={item.id} className="text-sm font-semibold text-gray-700 cursor-pointer group-hover:text-amber-700">
+                              {item.label}
+                            </Label>
                           </div>
-                        </label>
+                        ))}
+                      </div>
+                    </div>
 
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showDate"
-                            checked={printSettings.showDate}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Date</div>
-                            <div className="text-xs text-gray-500">Display transaction date on receipts</div>
+                    {/* Invoice Meta Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-2 border-b border-gray-100 pb-2">
+                        <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600"><FileText className="h-4 w-4" /></div>
+                        <h4 className="text-sm font-bold text-gray-700">Invoice Meta & Payment</h4>
+                      </div>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        {[
+                          { id: 'showPrintInvoiceNumber', label: 'Invoice #' },
+                          { id: 'showPrintInvoiceDate', label: 'Inv Date' },
+                          { id: 'showPrintInvoiceStatus', label: 'Doc Status' },
+                          { id: 'showPrintInvoiceType', label: 'Doc Type' },
+                          { id: 'showPrintPaymentStatus', label: 'Pay Status' },
+                          { id: 'showPrintPaymentMethod', label: 'Pay Method' },
+                          { id: 'showPrintPaymentAmount', label: 'Pay Amount' },
+                        ].map(item => (
+                          <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-md transition-all duration-200 group">
+                            <Checkbox
+                              id={item.id}
+                              className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                              checked={printSettings[item.id]}
+                              onCheckedChange={(checked) => handlePrintSettingsChange({ target: { name: item.id, type: 'checkbox', checked } })}
+                            />
+                            <Label htmlFor={item.id} className="text-sm font-semibold text-gray-700 cursor-pointer group-hover:text-indigo-700">
+                              {item.label}
+                            </Label>
                           </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showFooter"
-                            checked={printSettings.showFooter}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Footer</div>
-                            <div className="text-xs text-gray-500">Display footer text and generation info</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showCameraTime"
-                            checked={printSettings.showCameraTime}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Camera Time</div>
-                            <div className="text-xs text-gray-500">Display camera interval information</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showEmail"
-                            checked={printSettings.showEmail}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Email</div>
-                            <div className="text-xs text-gray-500">Display customer email address on receipts</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showDescription"
-                            checked={printSettings.showDescription}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Description</div>
-                            <div className="text-xs text-gray-500">Display item descriptions in table</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showProductImages"
-                            checked={printSettings.showProductImages}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Product Images</div>
-                            <div className="text-xs text-gray-500">Display item images in table</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintBusinessName"
-                            checked={printSettings.showPrintBusinessName}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Business Name (Bill To)</div>
-                            <div className="text-xs text-gray-500">Display customer/supplier business name on print</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintContactName"
-                            checked={printSettings.showPrintContactName}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Contact Person Name (Bill To)</div>
-                            <div className="text-xs text-gray-500">Display contact person name on print</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintAddress"
-                            checked={printSettings.showPrintAddress}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Address (Bill To)</div>
-                            <div className="text-xs text-gray-500">Display street address on print</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintCity"
-                            checked={printSettings.showPrintCity}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show City (Bill To)</div>
-                            <div className="text-xs text-gray-500">Display city on print</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintState"
-                            checked={printSettings.showPrintState}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show State (Bill To)</div>
-                            <div className="text-xs text-gray-500">Display state/region on print</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintPostalCode"
-                            checked={printSettings.showPrintPostalCode}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Postal Code (Bill To)</div>
-                            <div className="text-xs text-gray-500">Display postal/zip code on print</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintInvoiceNumber"
-                            checked={printSettings.showPrintInvoiceNumber}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Invoice # (Invoice Details)</div>
-                            <div className="text-xs text-gray-500">Display invoice/order number on print</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintInvoiceDate"
-                            checked={printSettings.showPrintInvoiceDate}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Date (Invoice Details)</div>
-                            <div className="text-xs text-gray-500">Display invoice date on print</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintInvoiceStatus"
-                            checked={printSettings.showPrintInvoiceStatus}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Status (Invoice Details)</div>
-                            <div className="text-xs text-gray-500">Display invoice status on print</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintInvoiceType"
-                            checked={printSettings.showPrintInvoiceType}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Type (Invoice Details)</div>
-                            <div className="text-xs text-gray-500">Display order/invoice type on print</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintPaymentStatus"
-                            checked={printSettings.showPrintPaymentStatus}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Status (Payment)</div>
-                            <div className="text-xs text-gray-500">Display payment status on print</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintPaymentMethod"
-                            checked={printSettings.showPrintPaymentMethod}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Method (Payment)</div>
-                            <div className="text-xs text-gray-500">Display payment method on print</div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="showPrintPaymentAmount"
-                            checked={printSettings.showPrintPaymentAmount}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Show Amount (Payment)</div>
-                            <div className="text-xs text-gray-500">Display payment amount on print</div>
-                          </div>
-                        </label>
-                        <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                            type="checkbox"
-                            name="mobilePrintPreview"
-                            checked={printSettings.mobilePrintPreview}
-                            onChange={handlePrintSettingsChange}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Mobile Print Preview</div>
-                            <div className="text-xs text-gray-500">Use mobile layout for print preview/design</div>
-                          </div>
-                        </label>
-                      </>
-                    )}
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -2336,13 +2177,14 @@ export const Settings2 = () => {
                       <span className="text-orange-600 font-medium"> Please save your company information first to see the preview.</span>
                     )}
                   </p>
-                  <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 overflow-hidden flex justify-center items-start min-h-[600px]">
+                  <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 md:p-8 overflow-auto flex justify-center items-start min-h-[500px] max-h-[800px] shadow-inner">
                     <div
                       style={
                         printSettings.mobilePrintPreview
-                          ? { maxWidth: 420, width: '100%', transform: 'scale(0.85)', transformOrigin: 'top center', marginBottom: '-200px' }
-                          : { transform: 'scale(0.55)', transformOrigin: 'top center', marginBottom: '-500px' }
+                          ? { maxWidth: 420, width: '100%', transform: 'scale(0.9)', transformOrigin: 'top center', marginBottom: '-100px' }
+                          : { transform: 'scale(0.6)', transformOrigin: 'top center', marginBottom: '-400px', width: '900px' }
                       }
+                      className="transition-transform duration-300 ease-in-out"
                     >
                       <PrintDocument
                         companySettings={{ ...companyData, logo: companyProfile.logo || companyData.logo }}
@@ -2358,17 +2200,10 @@ export const Settings2 = () => {
                 <div className="flex justify-end pt-4 border-t">
                   <LoadingButton
                     type="button"
-                    isLoading={savingCompanySettings}
-                    onClick={() => {
-                      const dataToSend = {
-                        companyName: companyData.companyName,
-                        contactNumber: companyData.contactNumber,
-                        address: companyData.address,
-                        email: companyData.email,
-                        taxId: companyData.taxRegistrationNumber,
-                        printSettings: printSettings
-                      };
-                      handleSaveCompanySettings(dataToSend);
+                    isLoading={isSavingPrintSettings}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleSavePrintSettings();
                     }}
                     variant="default"
                   >
@@ -2394,65 +2229,69 @@ export const Settings2 = () => {
               </p>
             </div>
             <div className="card-content">
-              <div className="space-y-4">
-                <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={showProductImagesUI}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setShowProductImagesUI(checked);
-                      localStorage.setItem('showProductImagesUI', String(checked));
-                      toast.success(`Product images ${checked ? 'shown' : 'hidden'} in UI tables`);
-                      window.dispatchEvent(new Event('productImagesConfigChanged'));
-                    }}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">Show Product Images in UI Tables</div>
-                    <div className="text-xs text-gray-500">Display product image thumbnails in lists and POS</div>
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Show Product Images */}
+                  <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                    <Checkbox
+                      id="showProductImagesUI"
+                      className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                      checked={showProductImagesUI}
+                      onCheckedChange={(checked) => {
+                        setShowProductImagesUI(checked);
+                        localStorage.setItem('showProductImagesUI', String(checked));
+                        toast.success(`Product images ${checked ? 'shown' : 'hidden'} in UI tables`);
+                        window.dispatchEvent(new Event('productImagesConfigChanged'));
+                      }}
+                    />
+                    <Label htmlFor="showProductImagesUI" className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                      <span className="text-sm font-semibold">Show Product Images</span>
+                      <span className="text-[10px] text-gray-400">Thumbnails in lists & POS</span>
+                    </Label>
                   </div>
-                </label>
 
-                <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={showProductHsCodeColumn}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setShowProductHsCodeColumn(checked);
-                      localStorage.setItem('showProductHsCodeColumn', String(checked));
-                      toast.success(`HS Code column ${checked ? 'shown' : 'hidden'} on Products list`);
-                      window.dispatchEvent(new Event('productHsCodeColumnConfigChanged'));
-                    }}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">Show HS Code Column on Products</div>
-                    <div className="text-xs text-gray-500">Show or hide HS code on the Products list, mobile cards, and add/edit product modal</div>
+                  {/* Show HS Code */}
+                  <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                    <Checkbox
+                      id="showProductHsCodeColumn"
+                      className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                      checked={showProductHsCodeColumn}
+                      onCheckedChange={(checked) => {
+                        setShowProductHsCodeColumn(checked);
+                        localStorage.setItem('showProductHsCodeColumn', String(checked));
+                        toast.success(`HS Code column ${checked ? 'shown' : 'hidden'} on Products list`);
+                        window.dispatchEvent(new Event('productHsCodeColumnConfigChanged'));
+                      }}
+                    />
+                    <Label htmlFor="showProductHsCodeColumn" className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                      <span className="text-sm font-semibold">Show HS Code Column</span>
+                      <span className="text-[10px] text-gray-400">Include in product lists</span>
+                    </Label>
                   </div>
-                </label>
 
-                <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={accountLedgerShowReturn}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setAccountLedgerShowReturn(checked);
-                      localStorage.setItem('accountLedgerShowReturnColumn', String(checked));
-                      toast.success(`Return column ${checked ? 'shown' : 'hidden'} in Account Ledger Summary`);
-                      window.dispatchEvent(new Event('accountLedgerConfigChanged'));
-                    }}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">Show Return Column in Account Ledger Summary</div>
-                    <div className="text-xs text-gray-500">Display the Return column in the Account Ledger Summary customer ledger table</div>
+                  {/* Show Return Column */}
+                  <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                    <Checkbox
+                      id="accountLedgerShowReturn"
+                      className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                      checked={accountLedgerShowReturn}
+                      onCheckedChange={(checked) => {
+                        setAccountLedgerShowReturn(checked);
+                        localStorage.setItem('accountLedgerShowReturnColumn', String(checked));
+                        toast.success(`Return column ${checked ? 'shown' : 'hidden'} in Account Ledger Summary`);
+                        window.dispatchEvent(new Event('accountLedgerConfigChanged'));
+                      }}
+                    />
+                    <Label htmlFor="accountLedgerShowReturn" className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                      <span className="text-sm font-semibold">Show Ledger Return</span>
+                      <span className="text-[10px] text-gray-400">Column in Ledger Summary</span>
+                    </Label>
                   </div>
-                </label>
+                </div>
 
-                <OrderItemWiseConfirmationSettings />
+                <div className="pt-4 border-t border-gray-100">
+                  <OrderItemWiseConfirmationSettings />
+                </div>
               </div>
             </div>
           </div>
@@ -2460,18 +2299,22 @@ export const Settings2 = () => {
 
         {/* Sidebar Configuration Tab */}
         {activeTab === 'sidebar' && (
-          <div className="card">
-            <div className="card-header">
-              <div className="flex items-center space-x-2">
-                <LayoutDashboard className="h-5 w-5 text-gray-600" />
-                <h2 className="text-lg font-semibold">Sidebar Configuration</h2>
+          <div className="card shadow-lg border-gray-100">
+            <div className="card-header border-b border-gray-50 pb-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-indigo-50 rounded-xl text-indigo-600 shadow-sm">
+                  <LayoutDashboard className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 leading-tight">Sidebar Configuration</h2>
+                  <p className="text-sm text-gray-500 mt-1 font-medium">
+                    Tailor your navigation experience by enabling or disabling specific modules.
+                  </p>
+                </div>
               </div>
-              <p className="text-sm text-gray-600 mt-1">
-                For each section (Sales, Purchase, etc.), choose which individual pages appear in the sidebar. Top-level items like Dashboard use a single toggle.
-              </p>
             </div>
-            <div className="card-content">
-              <div className="space-y-8">
+            <div className="card-content p-6">
+              <div className="space-y-12">
                 {/* Organize by Headings */}
                 {navigation.reduce((acc, current) => {
                   if (current.type === 'heading') {
@@ -2485,78 +2328,90 @@ export const Settings2 = () => {
                   }
                   return acc;
                 }, []).map((section, sIdx) => (
-                  <div key={sIdx} className="space-y-4">
-                    <h3 className={`text-xs font-bold uppercase tracking-wider px-3 py-2 mt-3 mb-1 rounded-md shadow-sm ${section.heading.color || 'bg-gray-100 text-gray-600'} ${section.heading.color ? 'text-white' : ''}`}>
-                      {section.heading.name}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div key={sIdx} className="space-y-6">
+                    <div className="flex items-center gap-4">
+                      <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] px-4 py-2 rounded-full border shadow-sm ${section.heading.color || 'bg-gray-50 text-gray-500 border-gray-100'} ${section.heading.color ? 'text-white border-transparent' : ''}`}>
+                        {section.heading.name}
+                      </h3>
+                      <div className="h-[1px] flex-1 bg-gradient-to-r from-gray-100 to-transparent"></div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       {section.items.map((item) => {
                         const hasChildren = item.children && item.children.length > 0;
                         if (hasChildren) {
                           return (
                             <div
                               key={item.name}
-                              className="col-span-1 md:col-span-2 lg:col-span-3 rounded-lg border border-gray-200 bg-gray-50/80 p-4 space-y-3"
+                              className="col-span-1 sm:col-span-2 lg:col-span-4 rounded-2xl border border-gray-200/60 bg-gray-50/40 p-6 space-y-5"
                             >
-                              <div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-                                {item.icon && <item.icon className="h-4 w-4 text-gray-500 flex-shrink-0" />}
-                                <span>{item.name}</span>
-                                <span className="text-xs font-normal text-gray-500">— each link below</span>
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                                {item.children.map((child) => (
-                                  <div
-                                    key={child.name}
-                                    className="flex items-center space-x-3 p-2.5 bg-white rounded-md border border-gray-100 hover:bg-gray-50 transition-colors"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      id={`sidebar-${section.heading.name}-${item.name}-${child.name}`.replace(/\s+/g, '-')}
-                                      checked={sidebarConfig[child.name] !== false}
-                                      onChange={(e) => {
-                                        const newConfig = { ...sidebarConfig, [child.name]: e.target.checked };
-                                        setSidebarConfig(newConfig);
-                                        localStorage.setItem('sidebarConfig', JSON.stringify(newConfig));
-                                        toast.success(`${child.name} ${e.target.checked ? 'shown' : 'hidden'} in sidebar`);
-                                        window.dispatchEvent(new Event('sidebarConfigChanged'));
-                                      }}
-                                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer flex-shrink-0"
-                                    />
-                                    <label
-                                      htmlFor={`sidebar-${section.heading.name}-${item.name}-${child.name}`.replace(/\s+/g, '-')}
-                                      className="text-sm font-medium text-gray-700 cursor-pointer flex-1 flex items-center min-w-0"
-                                    >
-                                      {child.icon && <child.icon className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />}
-                                      <span className="truncate">{child.name}</span>
-                                    </label>
+                              <div className="flex items-center justify-between border-b border-gray-200/50 pb-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 bg-white rounded-xl shadow-sm border border-gray-100">
+                                    {item.icon && <item.icon className="h-4 w-4 text-indigo-500 flex-shrink-0" />}
                                   </div>
-                                ))}
+                                  <span className="text-sm font-bold text-gray-800 uppercase tracking-tight">{item.name}</span>
+                                </div>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter bg-gray-100/50 px-2 py-0.5 rounded">Module Links</span>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                {item.children.map((child) => {
+                                  const childId = `sidebar-${section.heading.name}-${item.name}-${child.name}`.replace(/\s+/g, '-');
+                                  return (
+                                    <div
+                                      key={child.name}
+                                      className="flex items-center space-x-3 p-3.5 bg-white rounded-xl border border-gray-100 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all duration-300 group"
+                                    >
+                                      <Checkbox
+                                        id={childId}
+                                        checked={sidebarConfig[child.name] !== false}
+                                        onCheckedChange={(checked) => {
+                                          const newConfig = { ...sidebarConfig, [child.name]: checked };
+                                          setSidebarConfig(newConfig);
+                                          localStorage.setItem('sidebarConfig', JSON.stringify(newConfig));
+                                          toast.success(`${child.name} ${checked ? 'shown' : 'hidden'} in sidebar`);
+                                          window.dispatchEvent(new Event('sidebarConfigChanged'));
+                                        }}
+                                        className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600 transition-colors"
+                                      />
+                                      <Label
+                                        htmlFor={childId}
+                                        className="text-xs font-bold text-gray-600 cursor-pointer flex-1 flex items-center min-w-0 group-hover:text-indigo-800"
+                                      >
+                                        {child.icon && <child.icon className="h-4 w-4 mr-2 text-gray-400 group-hover:text-indigo-500 flex-shrink-0 transition-colors" />}
+                                        <span className="truncate">{child.name}</span>
+                                      </Label>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           );
                         }
+                        const singleId = `sidebar-${item.name}`.replace(/\s+/g, '-');
                         return (
                           <div
                             key={item.name}
-                            className="flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg border border-gray-100 transition-colors"
+                            className="flex items-center space-x-3 p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:border-indigo-400 hover:shadow-lg transition-all duration-300 group"
                           >
-                            <input
-                              type="checkbox"
-                              id={`sidebar-${item.name}`}
+                            <Checkbox
+                              id={singleId}
                               checked={sidebarConfig[item.name] !== false}
-                              onChange={(e) => {
-                                const newConfig = { ...sidebarConfig, [item.name]: e.target.checked };
+                              onCheckedChange={(checked) => {
+                                const newConfig = { ...sidebarConfig, [item.name]: checked };
                                 setSidebarConfig(newConfig);
                                 localStorage.setItem('sidebarConfig', JSON.stringify(newConfig));
-                                toast.success(`${item.name} ${e.target.checked ? 'shown' : 'hidden'} in sidebar`);
+                                toast.success(`${item.name} ${checked ? 'shown' : 'hidden'} in sidebar`);
                                 window.dispatchEvent(new Event('sidebarConfigChanged'));
                               }}
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                              className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600 transition-colors"
                             />
-                            <label htmlFor={`sidebar-${item.name}`} className="text-sm font-medium text-gray-700 cursor-pointer flex-1 flex items-center">
-                              {item.icon && <item.icon className="h-4 w-4 mr-2 text-gray-400" />}
+                            <Label htmlFor={singleId} className="flex items-center gap-3 text-sm font-bold text-gray-700 cursor-pointer group-hover:text-indigo-800">
+                              <div className="p-2 bg-gray-50 rounded-xl text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all duration-300">
+                                {item.icon && <item.icon className="h-4.5 w-4.5" />}
+                              </div>
                               {item.name}
-                            </label>
+                            </Label>
                           </div>
                         );
                       })}

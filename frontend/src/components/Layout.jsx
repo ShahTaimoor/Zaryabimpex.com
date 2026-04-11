@@ -49,7 +49,7 @@ import { useGetCategoriesQuery } from '../store/services/categoriesApi';
 // Revised Navigation Structure
 export const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  
+
   {
     name: 'Sales',
     icon: ShoppingCart,
@@ -192,7 +192,7 @@ const defaultOpenSections = ['Sales', 'Purchase', 'Operations'];
 const SidebarItem = ({ item, isActivePath, sidebarConfig, level = 0, categoryTree, categoriesLoading, refetchCategories, user }) => {
   const hasChildren = item.children && item.children.length > 0;
   const [isOpen, setIsOpen] = useState(hasChildren && defaultOpenSections.includes(item.name));
-  
+
   // Auto-expand if child is active
   useEffect(() => {
     if (hasChildren) {
@@ -203,7 +203,7 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, level = 0, categoryTre
 
   // Check visibility based on config
   if (sidebarConfig && sidebarConfig[item.name] === false) return null;
-  
+
   // If group, check if any child is visible
   if (hasChildren) {
     const hasVisibleChild = item.children.some(child => sidebarConfig?.[child.name] !== false);
@@ -219,31 +219,30 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, level = 0, categoryTre
           {(() => {
             const colors = getHeaderColors(item.name);
             return (
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className={`w-full group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 ${
-              isOpen ? `text-gray-900 ${colors.bg}` : `text-gray-600 ${colors.bg} ${colors.hover} hover:text-gray-900`
-            }`}
-          >
-            <div className="flex items-center">
-              {item.icon && <item.icon className="mr-3 h-4 w-4 text-gray-400" />}
-              <span>{item.name}</span>
-            </div>
-            {isOpen ? (
-              <ChevronDown className="h-4 w-4 text-gray-400" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-gray-400" />
-            )}
-          </button>
+              <button
+                onClick={() => setIsOpen(!isOpen)}
+                className={`w-full group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 ${isOpen ? `text-gray-900 ${colors.bg}` : `text-gray-600 ${colors.bg} ${colors.hover} hover:text-gray-900`
+                  }`}
+              >
+                <div className="flex items-center">
+                  {item.icon && <item.icon className="mr-3 h-4 w-4 text-gray-400" />}
+                  <span>{item.name}</span>
+                </div>
+                {isOpen ? (
+                  <ChevronDown className="h-4 w-4 text-gray-400" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                )}
+              </button>
             );
           })()}
           {isOpen && (
             <div className="mt-1 ml-4 space-y-1 border-l-2 border-gray-100 pl-2">
               {item.children.map((child) => (
-                <SidebarItem 
-                  key={child.name} 
-                  item={child} 
-                  isActivePath={isActivePath} 
+                <SidebarItem
+                  key={child.name}
+                  item={child}
+                  isActivePath={isActivePath}
                   sidebarConfig={sidebarConfig}
                   level={level + 1}
                   categoryTree={categoryTree}
@@ -259,42 +258,41 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, level = 0, categoryTre
         <div className="relative">
           <Link
             to={item.href}
-            className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 ${
-              isActive
+            className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 ${isActive
                 ? 'bg-primary-50 text-primary-700'
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
+              }`}
           >
-             {item.icon && <item.icon className={`mr-3 h-4 w-4 ${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'}`} />}
+            {item.icon && <item.icon className={`mr-3 h-4 w-4 ${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'}`} />}
             <span>{item.name}</span>
           </Link>
-          
+
           {/* Special handling for Categories tree inside the menu */}
           {item.name === 'Categories' && (
-             <div className="mt-1 ml-6">
-                {categoriesLoading ? (
-                  <div className="px-2 py-1 text-xs text-gray-500 italic flex items-center">
-                    <RefreshCw className="h-3 w-3 animate-spin mr-1" />
-                    Loading...
-                  </div>
-                ) : categoryTree && categoryTree.length > 0 ? (
-                  categoryTree.map((treeItem) => (
-                    <CategoryTreeItem
-                      key={treeItem.category._id}
-                      category={treeItem.category}
-                      subcategories={treeItem.subcategories}
-                      isActive={false}
-                    />
-                  ))
-                ) : user ? (
-                  <div className="px-2 py-1 text-xs text-gray-500 italic flex items-center justify-between">
-                     <span>No categories</span>
-                     <button onClick={() => refetchCategories()} className="text-gray-400 hover:text-gray-600">
-                        <RefreshCw className="h-3 w-3" />
-                     </button>
-                  </div>
-                ) : null}
-             </div>
+            <div className="mt-1 ml-6">
+              {categoriesLoading ? (
+                <div className="px-2 py-1 text-xs text-gray-500 italic flex items-center">
+                  <RefreshCw className="h-3 w-3 animate-spin mr-1" />
+                  Loading...
+                </div>
+              ) : categoryTree && categoryTree.length > 0 ? (
+                categoryTree.map((treeItem) => (
+                  <CategoryTreeItem
+                    key={treeItem.category._id}
+                    category={treeItem.category}
+                    subcategories={treeItem.subcategories}
+                    isActive={false}
+                  />
+                ))
+              ) : user ? (
+                <div className="px-2 py-1 text-xs text-gray-500 italic flex items-center justify-between">
+                  <span>No categories</span>
+                  <button onClick={() => refetchCategories()} className="text-gray-400 hover:text-gray-600">
+                    <RefreshCw className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : null}
+            </div>
           )}
         </div>
       )}
@@ -332,7 +330,7 @@ const CategoryTreeItem = ({ category, subcategories, isActive, level = 0 }) => {
             )}
           </button>
         ) : (
-           <span className="w-4 mr-1" />
+          <span className="w-4 mr-1" />
         )}
         <span className="truncate">{category.name}</span>
       </Link>
@@ -360,7 +358,7 @@ export const Layout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
-  
+
   // Sidebar visibility state (keys align with MultiTabLayout / Settings; migration in loadSidebarConfig)
   const [sidebarConfig, setSidebarConfig] = useState(() => loadSidebarConfig());
 
@@ -418,7 +416,7 @@ export const Layout = ({ children }) => {
     logout();
     toast.success('Logged out successfully');
   };
-  
+
   const isActivePath = (path) => location.pathname === path;
 
   return (
@@ -441,10 +439,10 @@ export const Layout = ({ children }) => {
           </div>
           <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto max-h-[calc(100vh-4rem)] scrollbar-thin scrollbar-thumb-gray-200">
             {navigation.map((item) => (
-              <SidebarItem 
-                key={item.name} 
-                item={item} 
-                isActivePath={isActivePath} 
+              <SidebarItem
+                key={item.name}
+                item={item}
+                isActivePath={isActivePath}
                 sidebarConfig={sidebarConfig}
                 categoryTree={categoryTree}
                 categoriesLoading={categoriesLoading}
@@ -464,10 +462,10 @@ export const Layout = ({ children }) => {
           </div>
           <nav className="flex-1 space-y-1 px-3 py-6 overflow-y-auto max-h-[calc(100vh-4rem)] scrollbar-thin scrollbar-thumb-gray-200">
             {navigation.map((item) => (
-              <SidebarItem 
-                key={item.name} 
-                item={item} 
-                isActivePath={isActivePath} 
+              <SidebarItem
+                key={item.name}
+                item={item}
+                isActivePath={isActivePath}
                 sidebarConfig={sidebarConfig}
                 categoryTree={categoryTree}
                 categoriesLoading={categoriesLoading}

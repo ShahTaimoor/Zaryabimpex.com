@@ -655,16 +655,16 @@ export const Orders = () => {
                     {/* Status */}
                     <div className="col-span-1 flex flex-row flex-wrap gap-1 justify-center items-center">
                       <span className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full ${(order?.status === 'completed' || order?.status === 'delivered')
-                          ? 'bg-green-100 text-green-800'
-                          : (order?.status === 'pending' || order?.status === 'processing')
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-gray-100 text-gray-800'
+                        ? 'bg-green-100 text-green-800'
+                        : (order?.status === 'pending' || order?.status === 'processing')
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-gray-100 text-gray-800'
                         }`}>
                         {order?.status ?? '—'}
                       </span>
                       <span className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full ${getDerivedPaymentStatus(order) === 'paid'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-yellow-100 text-yellow-800'
                         }`}>
                         {getDerivedPaymentStatus(order)}
                       </span>

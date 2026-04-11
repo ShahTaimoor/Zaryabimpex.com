@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { 
-  Filter, 
-  X, 
-  ChevronDown, 
+import {
+  Filter,
+  X,
+  ChevronDown,
   ChevronUp,
   Search,
   Package,
@@ -33,12 +33,12 @@ const ProductFilters = ({ filters, onFiltersChange, categories = [], onClearFilt
     if (onClearFilters) onClearFilters();
   };
 
-  const hasActiveFilters = Object.keys(filters).some(key => 
+  const hasActiveFilters = Object.keys(filters).some(key =>
     filters[key] !== '' && filters[key] !== null && filters[key] !== undefined
   );
 
   const getActiveFiltersCount = () => {
-    return Object.keys(filters).filter(key => 
+    return Object.keys(filters).filter(key =>
       filters[key] !== '' && filters[key] !== null && filters[key] !== undefined
     ).length;
   };
@@ -46,7 +46,7 @@ const ProductFilters = ({ filters, onFiltersChange, categories = [], onClearFilt
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       {/* Filter Header */}
-      <div 
+      <div
         className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 p-4 cursor-pointer hover:bg-gray-50"
         onClick={() => setIsExpanded(!isExpanded)}
       >
@@ -85,7 +85,7 @@ const ProductFilters = ({ filters, onFiltersChange, categories = [], onClearFilt
       {isExpanded && (
         <div className="border-t border-gray-200 p-4 space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            
+
             {/* Search Filter */}
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
@@ -177,10 +177,10 @@ const ProductFilters = ({ filters, onFiltersChange, categories = [], onClearFilt
               <div className="flex flex-wrap gap-2">
                 {Object.entries(filters).map(([key, value]) => {
                   if (!value || value === '') return null;
-                  
+
                   let displayValue = value;
                   let label = key;
-                  
+
                   // Format display values
                   switch (key) {
                     case 'status':
@@ -194,9 +194,9 @@ const ProductFilters = ({ filters, onFiltersChange, categories = [], onClearFilt
                       break;
                     case 'stockStatus':
                       label = 'Stock';
-                      displayValue = value === 'lowStock' ? 'Low Stock' : 
-                                   value === 'outOfStock' ? 'Out of Stock' : 
-                                   value === 'inStock' ? 'In Stock' : value;
+                      displayValue = value === 'lowStock' ? 'Low Stock' :
+                        value === 'outOfStock' ? 'Out of Stock' :
+                          value === 'inStock' ? 'In Stock' : value;
                       break;
                     case 'search':
                       label = 'Search';
@@ -205,7 +205,7 @@ const ProductFilters = ({ filters, onFiltersChange, categories = [], onClearFilt
                     default:
                       label = key.charAt(0).toUpperCase() + key.slice(1);
                   }
-                  
+
                   return (
                     <span
                       key={key}

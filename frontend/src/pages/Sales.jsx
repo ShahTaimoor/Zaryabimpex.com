@@ -118,7 +118,7 @@ export const Sales = ({ tabId, editData }) => {
   const [previewImageProduct, setPreviewImageProduct] = useState(null);
   const [showCostPrice, setShowCostPrice] = useState(false); // Toggle to show/hide cost prices
   const [showProductImages, setShowProductImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
-  
+
   useEffect(() => {
     const handleConfigChange = () => {
       setShowProductImages(localStorage.getItem('showProductImagesUI') !== 'false');
@@ -138,7 +138,7 @@ export const Sales = ({ tabId, editData }) => {
   const { updateTabTitle, getActiveTab, openTab } = useTab();
   const { hasPermission, user } = useAuth();
   const { companyInfo: companySettings } = useCompanyInfo();
-  
+
   const allowSaleWithoutProductEnabled = companySettings.orderSettings?.allowSaleWithoutProduct === true;
   const allowManualCostPriceEnabled = companySettings.orderSettings?.allowManualCostPrice === true;
   const globalShowCostPriceAllowed = companySettings.orderSettings?.showCostPrice !== false; // Default to true if not set
@@ -473,7 +473,7 @@ export const Sales = ({ tabId, editData }) => {
     // If bt is not provided, use selectedCustomer's type as fallback
     const businessType = bt || selectedCustomer?.business_type || selectedCustomer?.businessType;
     if (!businessType) return 'retail';
-    
+
     const type = String(businessType).toLowerCase();
     if (type === 'retail' || type === 'wholesale') return type;
     if (type === 'distributor') return 'wholesale'; // Distributors are wholesale customers
@@ -1664,7 +1664,7 @@ export const Sales = ({ tabId, editData }) => {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1 min-w-0 flex items-center gap-3">
                         {item.product?.imageUrl && showProductImages && (
-                          <div 
+                          <div
                             className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
                             onClick={() => setPreviewImageProduct(item.product)}
                             title="Click to view full size"
@@ -1680,39 +1680,39 @@ export const Sales = ({ tabId, editData }) => {
                             <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
                             <span className="font-medium text-sm truncate">
                               {item.product.isVariant
-                              ? (item.product.displayName || item.product.variantName || item.product.name)
-                              : item.product.name}
-                          </span>
-                        </div>
-                        {item.product.isVariant && (
-                          <span className="text-xs text-gray-500 block">
-                            {item.product.variantType}: {item.product.variantValue}
-                          </span>
-                        )}
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                          {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low Stock</span>}
-                          {lastPurchasePrices[item.product._id] !== undefined &&
-                            item.unitPrice < lastPurchasePrices[item.product._id] && (
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
-                                ⚠️ Loss
-                              </span>
-                            )}
-                          {isLastPricesApplied && priceStatus[item.product._id] && (
-                            <span className={`text-xs px-1.5 py-0.5 rounded ${priceStatus[item.product._id] === 'updated'
-                              ? 'bg-green-100 text-green-700'
-                              : priceStatus[item.product._id] === 'unchanged'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-yellow-100 text-yellow-700'
-                              }`}>
-                              {priceStatus[item.product._id] === 'updated'
-                                ? 'Updated'
-                                : priceStatus[item.product._id] === 'unchanged'
-                                  ? 'Same Price'
-                                  : 'Not in Last Order'}
+                                ? (item.product.displayName || item.product.variantName || item.product.name)
+                                : item.product.name}
+                            </span>
+                          </div>
+                          {item.product.isVariant && (
+                            <span className="text-xs text-gray-500 block">
+                              {item.product.variantType}: {item.product.variantValue}
                             </span>
                           )}
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low Stock</span>}
+                            {lastPurchasePrices[item.product._id] !== undefined &&
+                              item.unitPrice < lastPurchasePrices[item.product._id] && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
+                                  ⚠️ Loss
+                                </span>
+                              )}
+                            {isLastPricesApplied && priceStatus[item.product._id] && (
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${priceStatus[item.product._id] === 'updated'
+                                ? 'bg-green-100 text-green-700'
+                                : priceStatus[item.product._id] === 'unchanged'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-yellow-100 text-yellow-700'
+                                }`}>
+                                {priceStatus[item.product._id] === 'updated'
+                                  ? 'Updated'
+                                  : priceStatus[item.product._id] === 'unchanged'
+                                    ? 'Same Price'
+                                    : 'Not in Last Order'}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
                       </div>
                       <LoadingButton
                         onClick={() => removeFromCart(item.product._id)}
@@ -1847,7 +1847,7 @@ export const Sales = ({ tabId, editData }) => {
                       {/* Product Name - mirror Sales Order layout (6 columns normally, 5 when cost column shown) */}
                       <div className="min-w-0 flex items-center h-8 gap-2">
                         {item.product?.imageUrl && showProductImages && (
-                          <div 
+                          <div
                             className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
                             onClick={() => setPreviewImageProduct(item.product)}
                             title="Click to view full size"
@@ -2853,9 +2853,9 @@ export const Sales = ({ tabId, editData }) => {
       >
         <div className="flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden min-h-[300px] p-4">
           {previewImageProduct?.imageUrl ? (
-            <img 
-              src={previewImageProduct.imageUrl} 
-              alt="Product Preview" 
+            <img
+              src={previewImageProduct.imageUrl}
+              alt="Product Preview"
               className="max-w-full max-h-[70vh] object-contain"
             />
           ) : (

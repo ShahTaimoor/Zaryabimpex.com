@@ -103,7 +103,7 @@ export const Dashboard = () => {
     setDashboardHidden(next);
     try {
       localStorage.setItem(DASHBOARD_HIDDEN_KEY, String(next));
-    } catch (_) {}
+    } catch (_) { }
   };
 
   // Listen for dashboard visibility changes from MultiTabLayout
@@ -663,627 +663,627 @@ export const Dashboard = () => {
       ) : (
         <>
 
-      {upcomingRecurringExpenses.length > 0 && (
-        <div className="card">
-          <div className="card-header flex items-center justify-between">
-            <div>
-              <h2 className="text-base sm:text-lg font-medium text-gray-900 flex items-center space-x-2">
-                <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-primary-600" />
-                <span>Upcoming Monthly Obligations</span>
-              </h2>
-              <p className="text-xs sm:text-sm text-gray-600">
-                Stay ahead of salaries, rent, and other committed expenses.
-              </p>
-            </div>
-          </div>
-          <div className="card-content">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-              {upcomingRecurringExpenses.slice(0, 4).map((expense) => {
-                const daysLeft = calculateDaysUntilDue(expense.nextDueDate);
-                const isOverdue = typeof daysLeft === 'number' && daysLeft < 0;
-                return (
-                  <div
-                    key={expense._id}
-                    className={`border rounded-lg p-4 shadow-sm ${isOverdue ? 'border-danger-200 bg-danger-50/60' : 'border-gray-200 bg-white'
-                      }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        {expense.defaultPaymentType === 'bank' ? 'Bank Payment' : 'Cash Payment'}
-                      </span>
-                    </div>
-                    <h3 className="text-base font-semibold text-gray-900">{expense.name}</h3>
-                    <p className="text-sm text-gray-600">{getRecurringPayeeName(expense)}</p>
-                    <p className="text-lg font-bold text-gray-900 mt-2">
-                      {formatCurrency(expense.amount)}
-                    </p>
-                    <div className="mt-2 text-sm text-gray-600 flex items-center space-x-2">
-                      <Calendar className="h-4 w-4 text-gray-400" />
-                      <span>Due {formatDate(expense.nextDueDate)}</span>
-                    </div>
-                    <div className="mt-2">
-                      <span
-                        className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${isOverdue
-                            ? 'bg-danger-100 text-danger-700'
-                            : 'bg-primary-100 text-primary-700'
+          {upcomingRecurringExpenses.length > 0 && (
+            <div className="card">
+              <div className="card-header flex items-center justify-between">
+                <div>
+                  <h2 className="text-base sm:text-lg font-medium text-gray-900 flex items-center space-x-2">
+                    <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-primary-600" />
+                    <span>Upcoming Monthly Obligations</span>
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    Stay ahead of salaries, rent, and other committed expenses.
+                  </p>
+                </div>
+              </div>
+              <div className="card-content">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                  {upcomingRecurringExpenses.slice(0, 4).map((expense) => {
+                    const daysLeft = calculateDaysUntilDue(expense.nextDueDate);
+                    const isOverdue = typeof daysLeft === 'number' && daysLeft < 0;
+                    return (
+                      <div
+                        key={expense._id}
+                        className={`border rounded-lg p-4 shadow-sm ${isOverdue ? 'border-danger-200 bg-danger-50/60' : 'border-gray-200 bg-white'
                           }`}
                       >
-                        {isOverdue ? `${Math.abs(daysLeft)} day(s) overdue` : `${daysLeft} day(s) left`}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {upcomingRecurringExpenses.length > 4 && (
-              <p className="text-xs text-gray-500 mt-3">
-                Showing first 4 reminders. Review all recurring expenses from the Cash Payments page.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Financial Dashboard */}
-      <div className="card">
-        <div className="card-header">
-          <div className="flex flex-col items-center space-y-2 sm:space-y-4">
-            <h2 className="text-sm sm:text-lg font-medium text-gray-900">Financial Overview</h2>
-            {/* Date Filter - Mobile only */}
-            <div className="flex flex-row items-center space-x-1.5 sm:space-x-4 w-full sm:w-auto lg:hidden">
-              <div className="w-full sm:w-auto">
-                <DateFilter
-                  startDate={startDate}
-                  endDate={endDate}
-                  onDateChange={handleDateChange}
-                  compact={true}
-                  showPresets={true}
-                  className="w-full"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="card-content space-y-6">
-
-          {/* REVENUE, COST & DISCOUNT SECTION - Responsive scaling */}
-          <div>
-            <h3 className="text-[10px] sm:text-xs xl:text-sm font-semibold text-gray-700 mb-2 xl:mb-3 uppercase tracking-wide">Revenue, Cost & Discounts</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 sm:gap-2 xl:gap-3 2xl:gap-4">
-
-              {/* Sales */}
-              <div
-                className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
-                onClick={() => setShowSalesInvoicesModal(true)}
-              >
-                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            {expense.defaultPaymentType === 'bank' ? 'Bank Payment' : 'Cash Payment'}
+                          </span>
+                        </div>
+                        <h3 className="text-base font-semibold text-gray-900">{expense.name}</h3>
+                        <p className="text-sm text-gray-600">{getRecurringPayeeName(expense)}</p>
+                        <p className="text-lg font-bold text-gray-900 mt-2">
+                          {formatCurrency(expense.amount)}
+                        </p>
+                        <div className="mt-2 text-sm text-gray-600 flex items-center space-x-2">
+                          <Calendar className="h-4 w-4 text-gray-400" />
+                          <span>Due {formatDate(expense.nextDueDate)}</span>
+                        </div>
+                        <div className="mt-2">
+                          <span
+                            className={`inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full ${isOverdue
+                              ? 'bg-danger-100 text-danger-700'
+                              : 'bg-primary-100 text-primary-700'
+                              }`}
+                          >
+                            {isOverdue ? `${Math.abs(daysLeft)} day(s) overdue` : `${daysLeft} day(s) left`}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-green-500 rounded-full">
-                    <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Sales (Revenue)</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{Math.round(totalSales).toLocaleString()}</p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">SO: {Math.round(salesOrdersTotal)} | SI: {Math.round(salesInvoicesTotal)}</p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-primary-600 font-medium mt-0.5">Net: {Math.round(netRevenue).toLocaleString()}</p>
-              </div>
-
-              {/* Purchase (COGS) */}
-              <div
-                className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
-                onClick={() => setShowPurchaseInvoicesModal(true)}
-              >
-                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
-                </div>
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-purple-500 rounded-full">
-                    <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Purchase (COGS)</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{Math.round(totalPurchases).toLocaleString()}</p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">PO: {Math.round(purchaseOrdersTotal)} | PI: {Math.round(purchaseInvoicesTotal)}</p>
-              </div>
-
-              {/* Discount */}
-              <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-red-500 rounded-full">
-                    <Tag className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Discount Given</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{Math.round(totalDiscounts).toLocaleString()}</p>
-              </div>
-
-              {/* Pending Sales Orders */}
-              <div
-                className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm min-w-0"
-                onClick={() => navigate('/sales-orders')}
-              >
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-cyan-500 rounded-full">
-                    <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Pending Sales Orders</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{pendingSalesOrdersCount}</p>
-              </div>
-
-              {/* Pending Purchase Orders */}
-              <div
-                className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm min-w-0"
-                onClick={() => navigate('/purchase-orders')}
-              >
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-indigo-500 rounded-full">
-                    <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Pending Purchase Orders</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{pendingPurchaseOrdersCount}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* PROFITABILITY & CASH FLOW SECTION - Responsive scaling */}
-          <div>
-            <h3 className="text-[10px] sm:text-xs xl:text-sm font-semibold text-gray-700 mb-2 xl:mb-3 uppercase tracking-wide">Profitability & Cash Flow</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2 xl:gap-3 2xl:gap-4">
-
-              {/* Gross Profit */}
-              <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-blue-500 rounded-full">
-                    <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Gross Profit</p>
-                <p className={`text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold break-words ${grossProfit >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                  {Math.round(grossProfit).toLocaleString()}
-                </p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">Revenue - COGS</p>
-              </div>
-
-              {/* Total Receipts */}
-              <div
-                className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
-                onClick={() => setShowAllReceiptsModal(true)}
-              >
-                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
-                </div>
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-emerald-500 rounded-full">
-                    <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Receipts</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">
-                  {isNaN(totalReceipts) ? '0' : Math.round(totalReceipts).toLocaleString()}
-                </p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">
-                  Cash: {isNaN(totalCashReceipts) ? '0' : Math.round(totalCashReceipts)} | Bank: {isNaN(totalBankReceipts) ? '0' : Math.round(totalBankReceipts)} | Sales: {isNaN(salesInvoicePayments) ? '0' : Math.round(salesInvoicePayments)}
-                </p>
-              </div>
-
-              {/* Total Payments */}
-              <div
-                className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
-                onClick={() => setShowAllPaymentsModal(true)}
-              >
-                <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
-                </div>
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-orange-500 rounded-full">
-                    <Banknote className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Payments</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">
-                  {isNaN(totalPayments) ? '0' : Math.round(totalPayments).toLocaleString()}
-                </p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">
-                  Cash: {isNaN(totalCashPayments) ? '0' : Math.round(totalCashPayments)} | Bank: {isNaN(totalBankPayments) ? '0' : Math.round(totalBankPayments)}
-                </p>
-              </div>
-
-              {/* Net Cash Flow */}
-              <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className={`p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 rounded-full ${netCashFlow >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
-                    <Wallet className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Net Cash Flow</p>
-                <p className={`text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold break-words ${(isNaN(netCashFlow) ? 0 : netCashFlow) >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                  {isNaN(netCashFlow) ? '0' : Math.round(netCashFlow).toLocaleString()}
-                </p>
-                <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">Receipts - Payments</p>
-              </div>
-
-              {/* Total Orders */}
-              <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
-                <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                  <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-yellow-500 rounded-full">
-                    <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
-                  </div>
-                </div>
-                <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Transactions</p>
-                <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{summary.totalOrders || 0}</p>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Grid - Single Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
-        <StatCard
-          title="Today's Revenue"
-          value={`${summary.totalRevenue?.toFixed(2) || '0.00'}`}
-          icon={TrendingUp}
-          color="bg-success-500"
-          change="12%"
-          changeType="positive"
-        />
-        <StatCard
-          title="Orders Today"
-          value={summary.totalOrders || 0}
-          icon={ShoppingCart}
-          color="bg-primary-500"
-          change="8%"
-          changeType="positive"
-        />
-        <StatCard
-          title="Total Products"
-          value={inventorySummary.totalProducts || 0}
-          icon={Package}
-          color="bg-warning-500"
-        />
-        <StatCard
-          title="Active Customers"
-          value={activeCustomersCount.toLocaleString()}
-          icon={Users}
-          color="bg-purple-500"
-          change="5%"
-          changeType="positive"
-        />
-        <StatCard
-          title="Items Sold Today"
-          value={summary.totalItems || 0}
-          icon={TrendingUp}
-          color="bg-blue-500"
-        />
-        <StatCard
-          title="Average Order Value"
-          value={`${summary.averageOrderValue?.toFixed(2) || '0.00'}`}
-          icon={BarChart3}
-          color="bg-indigo-500"
-        />
-        <StatCard
-          title="Low Stock Items"
-          value={lowStockCount}
-          icon={AlertTriangle}
-          color="bg-danger-500"
-        />
-      </div>
-
-      {/* Period Comparison Section – graphs & cards */}
-      <div className="card">
-        <div className="card-content pt-4">
-          <PeriodComparisonSection
-            title="Sales Performance Comparison"
-            metrics={[
-          {
-            title: 'Total Revenue',
-            fetchFunction: (params) => fetchPeriodSummary(params).then(res => ({
-              data: res.data?.data?.totalRevenue || 0
-            })),
-            format: 'currency',
-            icon: TrendingUp,
-            iconColor: 'bg-green-500'
-          },
-          {
-            title: 'Total Orders',
-            fetchFunction: (params) => fetchPeriodSummary(params).then(res => ({
-              data: res.data?.data?.totalOrders || 0
-            })),
-            format: 'number',
-            icon: ShoppingCart,
-            iconColor: 'bg-blue-500'
-          },
-          {
-            title: 'Average Order Value',
-            fetchFunction: (params) => fetchPeriodSummary(params).then(res => ({
-              data: res.data?.data?.averageOrderValue || 0
-            })),
-            format: 'currency',
-            icon: TrendingUp,
-            iconColor: 'bg-purple-500'
-          },
-          {
-            title: 'Total Items Sold',
-            fetchFunction: (params) => fetchPeriodSummary(params).then(res => ({
-              data: res.data?.data?.totalItems || 0
-            })),
-            format: 'number',
-            icon: Package,
-            iconColor: 'bg-orange-500'
-          }
-        ]}
-            fetchFunction={fetchPeriodSummary}
-          />
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-        {/* Recent Orders */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900">Today's Orders</h3>
-          </div>
-          <div className="card-content">
-            {summary.orderTypes ? (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Retail Orders</span>
-                  <span className="font-medium">{summary.orderTypes.retail || 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Wholesale Orders</span>
-                  <span className="font-medium">{summary.orderTypes.wholesale || 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Returns</span>
-                  <span className="font-medium">{summary.orderTypes.return || 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Exchanges</span>
-                  <span className="font-medium">{summary.orderTypes.exchange || 0}</span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-gray-500">No orders today</p>
-            )}
-          </div>
-        </div>
-
-        {/* Low Stock Alert */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900">Low Stock Alert</h3>
-          </div>
-          <div className="card-content">
-            {lowStockCount > 0 ? (
-              <div className="space-y-2">
-                <p className="text-sm text-gray-600">
-                  {lowStockCount} products are running low on stock
-                </p>
-                <div className="space-y-1">
-                  {lowStockData?.data?.products?.slice(0, 3).map((product) => (
-                    <div key={product._id} className="flex justify-between items-center text-sm">
-                      <span className="truncate">{product.name}</span>
-                      <span className="text-danger-600 font-medium">
-                        {product.inventory.currentStock} left
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {lowStockCount > 3 && (
-                  <p className="text-xs text-gray-500">
-                    And {lowStockCount - 3} more...
+                {upcomingRecurringExpenses.length > 4 && (
+                  <p className="text-xs text-gray-500 mt-3">
+                    Showing first 4 reminders. Review all recurring expenses from the Cash Payments page.
                   </p>
                 )}
               </div>
-            ) : (
-              <p className="text-success-600">All products are well stocked!</p>
-            )}
-          </div>
-        </div>
-      </div>
+            </div>
+          )}
 
-      {/* Payment Methods */}
-      {summary.paymentMethods && (
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900">Payment Methods Today</h3>
-          </div>
-          <div className="card-content">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-              {Object.entries(summary.paymentMethods).map(([method, count]) => (
-                <div key={method} className="text-center">
-                  <p className="text-2xl font-semibold text-gray-900">{count}</p>
-                  <p className="text-sm text-gray-600 capitalize">
-                    {method.replace('_', ' ')}
-                  </p>
+          {/* Financial Dashboard */}
+          <div className="card">
+            <div className="card-header">
+              <div className="flex flex-col items-center space-y-2 sm:space-y-4">
+                <h2 className="text-sm sm:text-lg font-medium text-gray-900">Financial Overview</h2>
+                {/* Date Filter - Mobile only */}
+                <div className="flex flex-row items-center space-x-1.5 sm:space-x-4 w-full sm:w-auto lg:hidden">
+                  <div className="w-full sm:w-auto">
+                    <DateFilter
+                      startDate={startDate}
+                      endDate={endDate}
+                      onDateChange={handleDateChange}
+                      compact={true}
+                      showPresets={true}
+                      className="w-full"
+                    />
+                  </div>
                 </div>
-              ))}
+              </div>
+            </div>
+            <div className="card-content space-y-6">
+
+              {/* REVENUE, COST & DISCOUNT SECTION - Responsive scaling */}
+              <div>
+                <h3 className="text-[10px] sm:text-xs xl:text-sm font-semibold text-gray-700 mb-2 xl:mb-3 uppercase tracking-wide">Revenue, Cost & Discounts</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 sm:gap-2 xl:gap-3 2xl:gap-4">
+
+                  {/* Sales */}
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                    onClick={() => setShowSalesInvoicesModal(true)}
+                  >
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                    </div>
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-green-500 rounded-full">
+                        <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Sales (Revenue)</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{Math.round(totalSales).toLocaleString()}</p>
+                    <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">SO: {Math.round(salesOrdersTotal)} | SI: {Math.round(salesInvoicesTotal)}</p>
+                    <p className="text-[9px] sm:text-[10px] xl:text-xs text-primary-600 font-medium mt-0.5">Net: {Math.round(netRevenue).toLocaleString()}</p>
+                  </div>
+
+                  {/* Purchase (COGS) */}
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                    onClick={() => setShowPurchaseInvoicesModal(true)}
+                  >
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                    </div>
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-purple-500 rounded-full">
+                        <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Purchase (COGS)</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{Math.round(totalPurchases).toLocaleString()}</p>
+                    <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">PO: {Math.round(purchaseOrdersTotal)} | PI: {Math.round(purchaseInvoicesTotal)}</p>
+                  </div>
+
+                  {/* Discount */}
+                  <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-red-500 rounded-full">
+                        <Tag className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Discount Given</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{Math.round(totalDiscounts).toLocaleString()}</p>
+                  </div>
+
+                  {/* Pending Sales Orders */}
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm min-w-0"
+                    onClick={() => navigate('/sales-orders')}
+                  >
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-cyan-500 rounded-full">
+                        <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Pending Sales Orders</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{pendingSalesOrdersCount}</p>
+                  </div>
+
+                  {/* Pending Purchase Orders */}
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm min-w-0"
+                    onClick={() => navigate('/purchase-orders')}
+                  >
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-indigo-500 rounded-full">
+                        <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Pending Purchase Orders</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{pendingPurchaseOrdersCount}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* PROFITABILITY & CASH FLOW SECTION - Responsive scaling */}
+              <div>
+                <h3 className="text-[10px] sm:text-xs xl:text-sm font-semibold text-gray-700 mb-2 xl:mb-3 uppercase tracking-wide">Profitability & Cash Flow</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2 xl:gap-3 2xl:gap-4">
+
+                  {/* Gross Profit */}
+                  <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-blue-500 rounded-full">
+                        <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Gross Profit</p>
+                    <p className={`text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold break-words ${grossProfit >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                      {Math.round(grossProfit).toLocaleString()}
+                    </p>
+                    <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">Revenue - COGS</p>
+                  </div>
+
+                  {/* Total Receipts */}
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                    onClick={() => setShowAllReceiptsModal(true)}
+                  >
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                    </div>
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-emerald-500 rounded-full">
+                        <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Receipts</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">
+                      {isNaN(totalReceipts) ? '0' : Math.round(totalReceipts).toLocaleString()}
+                    </p>
+                    <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">
+                      Cash: {isNaN(totalCashReceipts) ? '0' : Math.round(totalCashReceipts)} | Bank: {isNaN(totalBankReceipts) ? '0' : Math.round(totalBankReceipts)} | Sales: {isNaN(salesInvoicePayments) ? '0' : Math.round(salesInvoicePayments)}
+                    </p>
+                  </div>
+
+                  {/* Total Payments */}
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                    onClick={() => setShowAllPaymentsModal(true)}
+                  >
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                    </div>
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-orange-500 rounded-full">
+                        <Banknote className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Payments</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">
+                      {isNaN(totalPayments) ? '0' : Math.round(totalPayments).toLocaleString()}
+                    </p>
+                    <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">
+                      Cash: {isNaN(totalCashPayments) ? '0' : Math.round(totalCashPayments)} | Bank: {isNaN(totalBankPayments) ? '0' : Math.round(totalBankPayments)}
+                    </p>
+                  </div>
+
+                  {/* Net Cash Flow */}
+                  <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className={`p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 rounded-full ${netCashFlow >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
+                        <Wallet className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Net Cash Flow</p>
+                    <p className={`text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold break-words ${(isNaN(netCashFlow) ? 0 : netCashFlow) >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                      {isNaN(netCashFlow) ? '0' : Math.round(netCashFlow).toLocaleString()}
+                    </p>
+                    <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">Receipts - Payments</p>
+                  </div>
+
+                  {/* Total Orders */}
+                  <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-yellow-500 rounded-full">
+                        <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Transactions</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{summary.totalOrders || 0}</p>
+                  </div>
+
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Financial Metrics Legend */}
-      <div className="card bg-gray-50 border-gray-200">
-        <div className="card-content">
-          <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3">📊 Financial Metrics Explained</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 text-xs text-gray-700">
-            <div><strong>Sales:</strong> Total revenue from Sales Orders + Sales Invoices</div>
-            <div><strong>Net Revenue:</strong> Sales minus discounts given</div>
-            <div><strong>Purchase (COGS):</strong> Cost of goods purchased from suppliers</div>
-            <div><strong>Gross Profit:</strong> Net Revenue - COGS (your margin)</div>
-            <div><strong>Receipts:</strong> Total money received (Cash Receipts + Bank Receipts + Sales Invoice Payments)</div>
-            <div><strong>Payments:</strong> Cash/Bank money paid (includes supplier payments + expenses)</div>
-            <div><strong>Net Cash Flow:</strong> Total receipts minus total payments (cash position)</div>
-            <div className="md:col-span-2 lg:col-span-3 mt-2 p-2 bg-yellow-100 border border-yellow-300 rounded">
-              <strong>⚠️ Note:</strong> Receipts/Payments may include both sales/purchases AND separate cash/bank transactions. For accurate accounting, check individual transaction pages.
+          {/* Stats Grid - Single Row */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
+            <StatCard
+              title="Today's Revenue"
+              value={`${summary.totalRevenue?.toFixed(2) || '0.00'}`}
+              icon={TrendingUp}
+              color="bg-success-500"
+              change="12%"
+              changeType="positive"
+            />
+            <StatCard
+              title="Orders Today"
+              value={summary.totalOrders || 0}
+              icon={ShoppingCart}
+              color="bg-primary-500"
+              change="8%"
+              changeType="positive"
+            />
+            <StatCard
+              title="Total Products"
+              value={inventorySummary.totalProducts || 0}
+              icon={Package}
+              color="bg-warning-500"
+            />
+            <StatCard
+              title="Active Customers"
+              value={activeCustomersCount.toLocaleString()}
+              icon={Users}
+              color="bg-purple-500"
+              change="5%"
+              changeType="positive"
+            />
+            <StatCard
+              title="Items Sold Today"
+              value={summary.totalItems || 0}
+              icon={TrendingUp}
+              color="bg-blue-500"
+            />
+            <StatCard
+              title="Average Order Value"
+              value={`${summary.averageOrderValue?.toFixed(2) || '0.00'}`}
+              icon={BarChart3}
+              color="bg-indigo-500"
+            />
+            <StatCard
+              title="Low Stock Items"
+              value={lowStockCount}
+              icon={AlertTriangle}
+              color="bg-danger-500"
+            />
+          </div>
+
+          {/* Period Comparison Section – graphs & cards */}
+          <div className="card">
+            <div className="card-content pt-4">
+              <PeriodComparisonSection
+                title="Sales Performance Comparison"
+                metrics={[
+                  {
+                    title: 'Total Revenue',
+                    fetchFunction: (params) => fetchPeriodSummary(params).then(res => ({
+                      data: res.data?.data?.totalRevenue || 0
+                    })),
+                    format: 'currency',
+                    icon: TrendingUp,
+                    iconColor: 'bg-green-500'
+                  },
+                  {
+                    title: 'Total Orders',
+                    fetchFunction: (params) => fetchPeriodSummary(params).then(res => ({
+                      data: res.data?.data?.totalOrders || 0
+                    })),
+                    format: 'number',
+                    icon: ShoppingCart,
+                    iconColor: 'bg-blue-500'
+                  },
+                  {
+                    title: 'Average Order Value',
+                    fetchFunction: (params) => fetchPeriodSummary(params).then(res => ({
+                      data: res.data?.data?.averageOrderValue || 0
+                    })),
+                    format: 'currency',
+                    icon: TrendingUp,
+                    iconColor: 'bg-purple-500'
+                  },
+                  {
+                    title: 'Total Items Sold',
+                    fetchFunction: (params) => fetchPeriodSummary(params).then(res => ({
+                      data: res.data?.data?.totalItems || 0
+                    })),
+                    format: 'number',
+                    icon: Package,
+                    iconColor: 'bg-orange-500'
+                  }
+                ]}
+                fetchFunction={fetchPeriodSummary}
+              />
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Modals */}
-      <DashboardReportModal
-        isOpen={showSalesOrdersModal}
-        onClose={() => setShowSalesOrdersModal(false)}
-        title="Sales Orders"
-        columns={salesOrdersColumns}
-        data={salesOrdersModalData}
-        isLoading={salesOrdersLoading}
-        dateFrom={startDate}
-        dateTo={endDate}
-        onDateChange={(from, to) => {
-          setStartDate(from);
-          setEndDate(to);
-        }}
-      />
+          {/* Quick Actions */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+            {/* Recent Orders */}
+            <div className="card">
+              <div className="card-header">
+                <h3 className="text-base sm:text-lg font-medium text-gray-900">Today's Orders</h3>
+              </div>
+              <div className="card-content">
+                {summary.orderTypes ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Retail Orders</span>
+                      <span className="font-medium">{summary.orderTypes.retail || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Wholesale Orders</span>
+                      <span className="font-medium">{summary.orderTypes.wholesale || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Returns</span>
+                      <span className="font-medium">{summary.orderTypes.return || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Exchanges</span>
+                      <span className="font-medium">{summary.orderTypes.exchange || 0}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500">No orders today</p>
+                )}
+              </div>
+            </div>
 
-      <DashboardReportModal
-        isOpen={showPurchaseOrdersModal}
-        onClose={() => setShowPurchaseOrdersModal(false)}
-        title="Purchase Orders"
-        columns={purchaseOrdersColumns}
-        data={purchaseOrdersModalData}
-        isLoading={purchaseOrdersLoading}
-        dateFrom={startDate}
-        dateTo={endDate}
-        onDateChange={(from, to) => {
-          setStartDate(from);
-          setEndDate(to);
-        }}
-      />
+            {/* Low Stock Alert */}
+            <div className="card">
+              <div className="card-header">
+                <h3 className="text-base sm:text-lg font-medium text-gray-900">Low Stock Alert</h3>
+              </div>
+              <div className="card-content">
+                {lowStockCount > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-600">
+                      {lowStockCount} products are running low on stock
+                    </p>
+                    <div className="space-y-1">
+                      {lowStockData?.data?.products?.slice(0, 3).map((product) => (
+                        <div key={product._id} className="flex justify-between items-center text-sm">
+                          <span className="truncate">{product.name}</span>
+                          <span className="text-danger-600 font-medium">
+                            {product.inventory.currentStock} left
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {lowStockCount > 3 && (
+                      <p className="text-xs text-gray-500">
+                        And {lowStockCount - 3} more...
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-success-600">All products are well stocked!</p>
+                )}
+              </div>
+            </div>
+          </div>
 
-      <DashboardReportModal
-        isOpen={showSalesInvoicesModal}
-        onClose={() => setShowSalesInvoicesModal(false)}
-        title="Sales Invoices"
-        columns={salesInvoicesColumns}
-        data={salesInvoicesModalData}
-        isLoading={salesInvoicesLoading}
-        dateFrom={startDate}
-        dateTo={endDate}
-        onDateChange={(from, to) => {
-          setStartDate(from);
-          setEndDate(to);
-        }}
-        summary={[
-          { label: 'Sales Revenue', value: salesRevenue },
-          { label: 'Sales Returns', value: totalSalesReturns },
-          { label: 'Net Total', value: totalSales - totalSalesReturns - totalDiscounts }
-        ]}
-      />
+          {/* Payment Methods */}
+          {summary.paymentMethods && (
+            <div className="card">
+              <div className="card-header">
+                <h3 className="text-base sm:text-lg font-medium text-gray-900">Payment Methods Today</h3>
+              </div>
+              <div className="card-content">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+                  {Object.entries(summary.paymentMethods).map(([method, count]) => (
+                    <div key={method} className="text-center">
+                      <p className="text-2xl font-semibold text-gray-900">{count}</p>
+                      <p className="text-sm text-gray-600 capitalize">
+                        {method.replace('_', ' ')}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
-      <DashboardReportModal
-        isOpen={showPurchaseInvoicesModal}
-        onClose={() => setShowPurchaseInvoicesModal(false)}
-        title="Purchase Invoices"
-        columns={purchaseInvoicesColumns}
-        data={purchaseInvoicesDataArray}
-        isLoading={purchaseInvoicesLoading}
-        dateFrom={startDate}
-        dateTo={endDate}
-        onDateChange={(from, to) => {
-          setStartDate(from);
-          setEndDate(to);
-        }}
-      />
+          {/* Financial Metrics Legend */}
+          <div className="card bg-gray-50 border-gray-200">
+            <div className="card-content">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3">📊 Financial Metrics Explained</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 text-xs text-gray-700">
+                <div><strong>Sales:</strong> Total revenue from Sales Orders + Sales Invoices</div>
+                <div><strong>Net Revenue:</strong> Sales minus discounts given</div>
+                <div><strong>Purchase (COGS):</strong> Cost of goods purchased from suppliers</div>
+                <div><strong>Gross Profit:</strong> Net Revenue - COGS (your margin)</div>
+                <div><strong>Receipts:</strong> Total money received (Cash Receipts + Bank Receipts + Sales Invoice Payments)</div>
+                <div><strong>Payments:</strong> Cash/Bank money paid (includes supplier payments + expenses)</div>
+                <div><strong>Net Cash Flow:</strong> Total receipts minus total payments (cash position)</div>
+                <div className="md:col-span-2 lg:col-span-3 mt-2 p-2 bg-yellow-100 border border-yellow-300 rounded">
+                  <strong>⚠️ Note:</strong> Receipts/Payments may include both sales/purchases AND separate cash/bank transactions. For accurate accounting, check individual transaction pages.
+                </div>
+              </div>
+            </div>
+          </div>
 
-      <DashboardReportModal
-        isOpen={showCashReceiptsModal}
-        onClose={() => setShowCashReceiptsModal(false)}
-        title="Cash Receipts"
-        columns={cashReceiptsColumns}
-        data={cashReceiptsDataArray}
-        isLoading={cashReceiptsLoading}
-        dateFrom={startDate}
-        dateTo={endDate}
-        onDateChange={(from, to) => {
-          setStartDate(from);
-          setEndDate(to);
-        }}
-      />
+          {/* Modals */}
+          <DashboardReportModal
+            isOpen={showSalesOrdersModal}
+            onClose={() => setShowSalesOrdersModal(false)}
+            title="Sales Orders"
+            columns={salesOrdersColumns}
+            data={salesOrdersModalData}
+            isLoading={salesOrdersLoading}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+          />
 
-      <DashboardReportModal
-        isOpen={showCashPaymentsModal}
-        onClose={() => setShowCashPaymentsModal(false)}
-        title="Cash Payments"
-        columns={cashPaymentsColumns}
-        data={cashPaymentsDataArray}
-        isLoading={cashPaymentsLoading}
-        dateFrom={startDate}
-        dateTo={endDate}
-        onDateChange={(from, to) => {
-          setStartDate(from);
-          setEndDate(to);
-        }}
-      />
+          <DashboardReportModal
+            isOpen={showPurchaseOrdersModal}
+            onClose={() => setShowPurchaseOrdersModal(false)}
+            title="Purchase Orders"
+            columns={purchaseOrdersColumns}
+            data={purchaseOrdersModalData}
+            isLoading={purchaseOrdersLoading}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+          />
 
-      <DashboardReportModal
-        isOpen={showBankReceiptsModal}
-        onClose={() => setShowBankReceiptsModal(false)}
-        title="Bank Receipts"
-        columns={bankReceiptsColumns}
-        data={bankReceiptsDataArray}
-        isLoading={bankReceiptsLoading}
-        dateFrom={startDate}
-        dateTo={endDate}
-        onDateChange={(from, to) => {
-          setStartDate(from);
-          setEndDate(to);
-        }}
-      />
+          <DashboardReportModal
+            isOpen={showSalesInvoicesModal}
+            onClose={() => setShowSalesInvoicesModal(false)}
+            title="Sales Invoices"
+            columns={salesInvoicesColumns}
+            data={salesInvoicesModalData}
+            isLoading={salesInvoicesLoading}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+            summary={[
+              { label: 'Sales Revenue', value: salesRevenue },
+              { label: 'Sales Returns', value: totalSalesReturns },
+              { label: 'Net Total', value: totalSales - totalSalesReturns - totalDiscounts }
+            ]}
+          />
 
-      <DashboardReportModal
-        isOpen={showBankPaymentsModal}
-        onClose={() => setShowBankPaymentsModal(false)}
-        title="Bank Payments"
-        columns={bankPaymentsColumns}
-        data={bankPaymentsDataArray}
-        isLoading={bankPaymentsLoading}
-        dateFrom={startDate}
-        dateTo={endDate}
-        onDateChange={(from, to) => {
-          setStartDate(from);
-          setEndDate(to);
-        }}
-      />
+          <DashboardReportModal
+            isOpen={showPurchaseInvoicesModal}
+            onClose={() => setShowPurchaseInvoicesModal(false)}
+            title="Purchase Invoices"
+            columns={purchaseInvoicesColumns}
+            data={purchaseInvoicesDataArray}
+            isLoading={purchaseInvoicesLoading}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+          />
 
-      <DashboardReportModal
-        isOpen={showAllReceiptsModal}
-        onClose={() => setShowAllReceiptsModal(false)}
-        title="All Receipts (Cash + Bank + Sales)"
-        columns={allReceiptsColumns}
-        data={allReceiptsDataArray}
-        isLoading={cashReceiptsLoading || bankReceiptsLoading || salesInvoicesLoading}
-        dateFrom={startDate}
-        dateTo={endDate}
-        onDateChange={(from, to) => {
-          setStartDate(from);
-          setEndDate(to);
-        }}
-      />
+          <DashboardReportModal
+            isOpen={showCashReceiptsModal}
+            onClose={() => setShowCashReceiptsModal(false)}
+            title="Cash Receipts"
+            columns={cashReceiptsColumns}
+            data={cashReceiptsDataArray}
+            isLoading={cashReceiptsLoading}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+          />
 
-      <DashboardReportModal
-        isOpen={showAllPaymentsModal}
-        onClose={() => setShowAllPaymentsModal(false)}
-        title="All Payments (Cash + Bank)"
-        columns={allPaymentsColumns}
-        data={allPaymentsDataArray}
-        isLoading={cashPaymentsLoading || bankPaymentsLoading}
-        dateFrom={startDate}
-        dateTo={endDate}
-        onDateChange={(from, to) => {
-          setStartDate(from);
-          setEndDate(to);
-        }}
-      />
+          <DashboardReportModal
+            isOpen={showCashPaymentsModal}
+            onClose={() => setShowCashPaymentsModal(false)}
+            title="Cash Payments"
+            columns={cashPaymentsColumns}
+            data={cashPaymentsDataArray}
+            isLoading={cashPaymentsLoading}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+          />
+
+          <DashboardReportModal
+            isOpen={showBankReceiptsModal}
+            onClose={() => setShowBankReceiptsModal(false)}
+            title="Bank Receipts"
+            columns={bankReceiptsColumns}
+            data={bankReceiptsDataArray}
+            isLoading={bankReceiptsLoading}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+          />
+
+          <DashboardReportModal
+            isOpen={showBankPaymentsModal}
+            onClose={() => setShowBankPaymentsModal(false)}
+            title="Bank Payments"
+            columns={bankPaymentsColumns}
+            data={bankPaymentsDataArray}
+            isLoading={bankPaymentsLoading}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+          />
+
+          <DashboardReportModal
+            isOpen={showAllReceiptsModal}
+            onClose={() => setShowAllReceiptsModal(false)}
+            title="All Receipts (Cash + Bank + Sales)"
+            columns={allReceiptsColumns}
+            data={allReceiptsDataArray}
+            isLoading={cashReceiptsLoading || bankReceiptsLoading || salesInvoicesLoading}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+          />
+
+          <DashboardReportModal
+            isOpen={showAllPaymentsModal}
+            onClose={() => setShowAllPaymentsModal(false)}
+            title="All Payments (Cash + Bank)"
+            columns={allPaymentsColumns}
+            data={allPaymentsDataArray}
+            isLoading={cashPaymentsLoading || bankPaymentsLoading}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+          />
         </>
       )}
     </div>

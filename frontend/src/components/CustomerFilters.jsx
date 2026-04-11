@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { 
-  Filter, 
-  X, 
-  ChevronDown, 
+import {
+  Filter,
+  X,
+  ChevronDown,
   ChevronUp,
   Search,
   User,
@@ -31,12 +31,12 @@ const CustomerFilters = ({ filters, onFiltersChange, onClearFilters }) => {
     if (onClearFilters) onClearFilters();
   };
 
-  const hasActiveFilters = Object.keys(filters).some(key => 
+  const hasActiveFilters = Object.keys(filters).some(key =>
     filters[key] !== '' && filters[key] !== null && filters[key] !== undefined
   );
 
   const getActiveFiltersCount = () => {
-    return Object.keys(filters).filter(key => 
+    return Object.keys(filters).filter(key =>
       filters[key] !== '' && filters[key] !== null && filters[key] !== undefined
     ).length;
   };
@@ -44,7 +44,7 @@ const CustomerFilters = ({ filters, onFiltersChange, onClearFilters }) => {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       {/* Filter Header */}
-      <div 
+      <div
         className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
         onClick={() => setIsExpanded(!isExpanded)}
       >
@@ -82,76 +82,76 @@ const CustomerFilters = ({ filters, onFiltersChange, onClearFilters }) => {
         <div className="border-t border-gray-200 p-4">
           {/* Filter Fields in One Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          
-          {/* Search Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Search className="h-4 w-4 inline mr-1" />
-              Search Customers
-            </label>
-            <input
-              type="text"
-              placeholder="Name, email, or phone..."
-              value={filters.search || ''}
-              onChange={(e) => handleFilterChange('search', e.target.value)}
-              className="input text-sm"
-            />
-          </div>
 
-          {/* Status Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <User className="h-4 w-4 inline mr-1" />
-              Status
-            </label>
-            <select
-              value={filters.status || ''}
-              onChange={(e) => handleFilterChange('status', e.target.value)}
-              className="input text-sm"
-            >
-              <option value="">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
+            {/* Search Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Search className="h-4 w-4 inline mr-1" />
+                Search Customers
+              </label>
+              <input
+                type="text"
+                placeholder="Name, email, or phone..."
+                value={filters.search || ''}
+                onChange={(e) => handleFilterChange('search', e.target.value)}
+                className="input text-sm"
+              />
+            </div>
 
-          {/* Email Status Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Mail className="h-4 w-4 inline mr-1" />
-              Email Status
-            </label>
-            <select
-              value={filters.emailStatus || ''}
-              onChange={(e) => handleFilterChange('emailStatus', e.target.value)}
-              className="input text-sm"
-            >
-              <option value="">All Email Statuses</option>
-              <option value="verified">Verified</option>
-              <option value="unverified">Unverified</option>
-              <option value="no-email">No Email</option>
-            </select>
-          </div>
+            {/* Status Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <User className="h-4 w-4 inline mr-1" />
+                Status
+              </label>
+              <select
+                value={filters.status || ''}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
+                className="input text-sm"
+              >
+                <option value="">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
 
-          {/* Phone Status Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Phone className="h-4 w-4 inline mr-1" />
-              Phone Status
-            </label>
-            <select
-              value={filters.phoneStatus || ''}
-              onChange={(e) => handleFilterChange('phoneStatus', e.target.value)}
-              className="input text-sm"
-            >
-              <option value="">All Phone Statuses</option>
-              <option value="verified">Verified</option>
-              <option value="unverified">Unverified</option>
-              <option value="no-phone">No Phone</option>
-            </select>
-          </div>
+            {/* Email Status Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Mail className="h-4 w-4 inline mr-1" />
+                Email Status
+              </label>
+              <select
+                value={filters.emailStatus || ''}
+                onChange={(e) => handleFilterChange('emailStatus', e.target.value)}
+                className="input text-sm"
+              >
+                <option value="">All Email Statuses</option>
+                <option value="verified">Verified</option>
+                <option value="unverified">Unverified</option>
+                <option value="no-email">No Email</option>
+              </select>
+            </div>
 
-        </div>
+            {/* Phone Status Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Phone className="h-4 w-4 inline mr-1" />
+                Phone Status
+              </label>
+              <select
+                value={filters.phoneStatus || ''}
+                onChange={(e) => handleFilterChange('phoneStatus', e.target.value)}
+                className="input text-sm"
+              >
+                <option value="">All Phone Statuses</option>
+                <option value="verified">Verified</option>
+                <option value="unverified">Unverified</option>
+                <option value="no-phone">No Phone</option>
+              </select>
+            </div>
+
+          </div>
 
           {/* Active Filters Display */}
           {hasActiveFilters && (
@@ -160,7 +160,7 @@ const CustomerFilters = ({ filters, onFiltersChange, onClearFilters }) => {
               <div className="flex flex-wrap gap-2">
                 {Object.entries(filters).map(([key, value]) => {
                   if (!value || value === '') return null;
-                  
+
                   let label, displayValue;
                   switch (key) {
                     case 'search':
@@ -173,21 +173,21 @@ const CustomerFilters = ({ filters, onFiltersChange, onClearFilters }) => {
                       break;
                     case 'emailStatus':
                       label = 'Email';
-                      displayValue = value === 'verified' ? 'Verified' : 
-                                   value === 'unverified' ? 'Unverified' : 
-                                   value === 'no-email' ? 'No Email' : value;
+                      displayValue = value === 'verified' ? 'Verified' :
+                        value === 'unverified' ? 'Unverified' :
+                          value === 'no-email' ? 'No Email' : value;
                       break;
                     case 'phoneStatus':
                       label = 'Phone';
-                      displayValue = value === 'verified' ? 'Verified' : 
-                                   value === 'unverified' ? 'Unverified' : 
-                                   value === 'no-phone' ? 'No Phone' : value;
+                      displayValue = value === 'verified' ? 'Verified' :
+                        value === 'unverified' ? 'Unverified' :
+                          value === 'no-phone' ? 'No Phone' : value;
                       break;
                     default:
                       label = key.charAt(0).toUpperCase() + key.slice(1);
                       displayValue = value;
                   }
-                  
+
                   return (
                     <span
                       key={key}
