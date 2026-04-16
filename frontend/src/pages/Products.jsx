@@ -47,6 +47,7 @@ import { ProductList } from '../components/ProductList';
 import { useAppDispatch } from '../store/hooks';
 import { api } from '../store/api';
 import { useProductOperations } from '../hooks/useProductOperations';
+import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ExcelExportButton from '../components/ExcelExportButton';
