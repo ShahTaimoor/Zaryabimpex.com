@@ -200,7 +200,7 @@ export const componentRegistry = {
     component: () => import('../pages/Cities').then(m => m.default || m.Cities)
   },
   '/banks': {
-    title: 'Banks',
+    title: 'Bank & cash opening',
     icon: 'Building',
     component: () => import('../pages/Banks').then(m => m.default || m.Banks)
   },

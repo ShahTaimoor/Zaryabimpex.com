@@ -3,6 +3,7 @@ const productRepository = require('../repositories/ProductRepository');
 const customerRepository = require('../repositories/CustomerRepository');
 const salesService = require('./salesService');
 const ReturnRepository = require('../repositories/postgres/ReturnRepository');
+const AccountingService = require('./accountingService');
 
 class ReportsService {
   /**
@@ -1119,14 +1120,16 @@ class ReportsService {
 
     const cashSummarySql = `
       SELECT 
-        COALESCE((SELECT opening_balance FROM chart_of_accounts WHERE account_code = '1000' AND deleted_at IS NULL LIMIT 1), 0) as "openingBalance",
         COALESCE((SELECT SUM(amount) FROM cash_receipts WHERE deleted_at IS NULL ${dateClause}), 0) as "totalReceipts",
         COALESCE((SELECT SUM(amount) FROM cash_payments WHERE deleted_at IS NULL ${dateClause}), 0) as "totalPayments"
     `;
-    const cashResult = await query(cashSummarySql, dateParams);
+    const [cashResult, cashOpeningDisplay] = await Promise.all([
+      query(cashSummarySql, dateParams),
+      AccountingService.getCashOpeningBalanceForDisplay()
+    ]);
     const cashRow = cashResult.rows[0] || {};
     const cash = {
-      openingBalance: parseFloat(cashRow.openingBalance || 0),
+      openingBalance: cashOpeningDisplay,
       totalReceipts: parseFloat(cashRow.totalReceipts || 0),
       totalPayments: parseFloat(cashRow.totalPayments || 0),
     };

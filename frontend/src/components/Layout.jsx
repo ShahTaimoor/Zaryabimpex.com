@@ -102,7 +102,7 @@ export const navigation = [
       { name: 'Categories', href: '/categories', icon: Tag },
       { name: 'Customers', href: '/customers', icon: Users },
       { name: 'Suppliers', href: '/suppliers', icon: Building },
-      { name: 'Banks', href: '/banks', icon: Building2 },
+      { name: 'Bank & cash opening', href: '/banks', icon: Building2 },
       { name: 'Investors', href: '/investors', icon: TrendingUp },
       { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight },
     ]

@@ -83,7 +83,7 @@ const MobileNavigation = ({ user, onLogout }) => {
     { path: '/products', icon: Package, label: 'Products', badge: null, permission: 'view_products' },
     { path: '/customers', icon: Users, label: 'Customers', badge: null, permission: 'view_customers' },
     { path: '/suppliers', icon: Truck, label: 'Suppliers', badge: null, permission: 'view_suppliers' },
-    { path: '/banks', icon: Building2, label: 'Banks', badge: null, permission: null },
+    { path: '/banks', icon: Building2, label: 'Bank & cash opening', badge: null, permission: null },
     { path: '/investors', icon: TrendingUp, label: 'Investors', badge: null, permission: 'view_investors' },
     { path: '/drop-shipping', icon: ArrowRight, label: 'Drop Shipping', badge: null, permission: 'create_drop_shipping' },
     { path: '/inventory', icon: Package, label: 'Inventory', badge: null, permission: 'view_inventory' },

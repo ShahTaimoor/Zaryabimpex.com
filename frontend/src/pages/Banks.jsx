@@ -11,7 +11,8 @@ import {
   Phone,
   MapPin,
   TrendingUp,
-  CheckCircle
+  CheckCircle,
+  Wallet,
 } from 'lucide-react';
 import {
   useGetBanksQuery,
@@ -19,6 +20,7 @@ import {
   useUpdateBankMutation,
   useDeleteBankMutation,
 } from '../store/services/banksApi';
+import { useCheckAccountQuery, useUpdateAccountMutation } from '../store/services/chartOfAccountsApi';
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { toast } from 'sonner';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
@@ -343,7 +345,26 @@ const Banks = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingBank, setEditingBank] = useState(null);
+  const [cashOpeningInput, setCashOpeningInput] = useState('');
+  const [savingCashOpening, setSavingCashOpening] = useState(false);
   const { confirmation, confirmDelete, handleConfirm, handleCancel } = useDeleteConfirmation();
+
+  const {
+    data: cashCheckResponse,
+    error: cashCheckError,
+    refetch: refetchCashGl,
+    isFetching: cashGlFetching,
+  } = useCheckAccountQuery('1000');
+
+  const cashGl = cashCheckResponse?.data ?? null;
+
+  useEffect(() => {
+    if (cashGl && cashGl.openingBalance !== undefined && cashGl.openingBalance !== null) {
+      setCashOpeningInput(String(cashGl.openingBalance));
+    }
+  }, [cashGl?.openingBalance]);
+
+  const [updateCoaAccount] = useUpdateAccountMutation();
 
   // Fetch banks
   const { data: banksResponse, isLoading, error, refetch } = useGetBanksQuery(undefined);
@@ -402,6 +423,36 @@ const Banks = () => {
   const handleAddNew = () => {
     setEditingBank(null);
     setShowModal(true);
+  };
+
+  const handleSaveCashOpening = async () => {
+    if (!cashGl?.id) {
+      toast.error('Cash account (1000) was not found in Chart of Accounts.');
+      return;
+    }
+    const amount = parseFloat(String(cashOpeningInput).replace(/,/g, ''));
+    if (Number.isNaN(amount)) {
+      toast.error('Enter a valid opening amount.');
+      return;
+    }
+    setSavingCashOpening(true);
+    try {
+      await updateCoaAccount({
+        id: cashGl.id,
+        openingBalance: amount,
+      }).unwrap();
+      toast.success('Cash opening balance saved');
+      await refetchCashGl();
+    } catch (err) {
+      const msg =
+        err?.data?.message ||
+        err?.data?.errors?.[0]?.msg ||
+        (typeof err?.data === 'string' ? err.data : null) ||
+        'Failed to save cash opening';
+      toast.error(msg);
+    } finally {
+      setSavingCashOpening(false);
+    }
   };
 
   const handleEdit = (bank) => {
@@ -466,6 +517,86 @@ const Banks = () => {
           Add Bank Account
         </Button>
       </div>
+
+      {/* Cash opening balance (GL) — account 1000 */}
+      {cashCheckError?.status === 404 ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Cash account (1000) is missing from Chart of Accounts. Add it under Chart of Accounts to enable cash opening.
+        </div>
+      ) : cashCheckError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+          Could not load cash account (1000). You need permission to view Chart of Accounts, or the server returned an
+          error.
+        </div>
+      ) : (
+        <div className="flex flex-col lg:flex-row lg:items-stretch gap-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex shrink-0 items-center justify-center bg-emerald-50 px-4 py-5 lg:w-20">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800">
+              <Wallet className="h-6 w-6" aria-hidden />
+            </div>
+          </div>
+          <div className="flex flex-1 flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0 flex-1 space-y-2">
+              <h2 className="text-base font-semibold text-gray-900">Cash opening balance (GL)</h2>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                Starting cash on hand for account 1000. This updates Chart of Accounts and posts a double-entry journal
+                (cash vs retained earnings), like bank opening. Use zero to clear the posted opening.
+              </p>
+              <p className="text-xs text-gray-500">
+                Current GL balance (after movements):{' '}
+                <span className="font-semibold text-gray-800">
+                  {cashGlFetching && !cashGl
+                    ? '…'
+                    : `${Number(cashGl?.calculatedBalance ?? 0).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`}
+                </span>
+                {cashGl?.accountName ? ` — ${cashGl.accountName}` : ''}
+              </p>
+            </div>
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end lg:w-auto lg:min-w-[320px]">
+              <div className="flex-1 space-y-1">
+                <label htmlFor="cash-opening-amount" className="text-xs font-medium text-gray-600">
+                  Opening amount
+                </label>
+                <Input
+                  id="cash-opening-amount"
+                  type="text"
+                  inputMode="decimal"
+                  value={cashOpeningInput}
+                  onChange={(e) => setCashOpeningInput(e.target.value)}
+                  disabled={!cashGl?.id || cashGlFetching}
+                  className="w-full"
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="flex gap-2 sm:pb-0.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="default"
+                  onClick={() => refetchCashGl()}
+                  disabled={cashGlFetching}
+                >
+                  Refresh
+                </Button>
+                <LoadingButton
+                  type="button"
+                  variant="default"
+                  size="default"
+                  isLoading={savingCashOpening}
+                  onClick={handleSaveCashOpening}
+                  disabled={!cashGl?.id || cashGlFetching}
+                  className="whitespace-nowrap"
+                >
+                  Save cash opening
+                </LoadingButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="flex items-center space-x-4">

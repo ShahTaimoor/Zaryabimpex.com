@@ -3,6 +3,7 @@ const router = express.Router();
 const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
 const chartOfAccountsRepository = require('../repositories/ChartOfAccountsRepository');
 const accountCategoryRepository = require('../repositories/AccountCategoryRepository');
+const AccountingService = require('../services/accountingService');
 
 const chartView = requireAnyPermission(['view_chart_of_accounts', 'view_reports']);
 const chartManage = requireAnyPermission(['manage_chart_of_accounts', 'view_reports']);
@@ -43,8 +44,6 @@ router.get('/', auth, chartView, async (req, res) => {
     
     // If includeBalances is true, calculate real-time balances for customer/supplier accounts
     if (includeBalances === 'true' || includeBalances === true) {
-      const AccountingService = require('../services/accountingService');
-      
       const accountsWithBalances = await Promise.all(accounts.map(async (account) => {
         try {
           if (account.accountCode && account.accountCode.startsWith('CUST-')) {
@@ -139,8 +138,12 @@ router.get('/stats/summary', auth, chartView, async (req, res) => {
 // GET /api/chart-of-accounts/:id
 router.get('/:id', auth, chartView, async (req, res) => {
   try {
-    const account = await chartOfAccountsRepository.findById(req.params.id);
+    let account = await chartOfAccountsRepository.findById(req.params.id);
     if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
+    if (String(account.accountCode) === '1000') {
+      const displayOpening = await AccountingService.getCashOpeningBalanceForDisplay();
+      account = { ...account, openingBalance: displayOpening };
+    }
     res.json(account);
   } catch (error) {
     console.error('Chart of accounts get error:', error);
@@ -205,7 +208,24 @@ router.post('/', auth, chartManage, async (req, res) => {
 // PUT /api/chart-of-accounts/:id
 router.put('/:id', auth, chartManage, async (req, res) => {
   try {
+    const existing = await chartOfAccountsRepository.findById(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, message: 'Account not found' });
+
     const data = { ...req.body, updatedBy: req.user?.id || req.user?._id };
+
+    if (String(existing.accountCode) === '1000' && data.openingBalance !== undefined) {
+      await AccountingService.postCashOpeningBalance(data.openingBalance, {
+        createdBy: req.user?.id || req.user?._id,
+        transactionDate: new Date()
+      });
+      const { openingBalance: _ob, ...rest } = data;
+      let account = await chartOfAccountsRepository.updateById(req.params.id, rest);
+      if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
+      const displayOpening = await AccountingService.getCashOpeningBalanceForDisplay();
+      account = { ...account, openingBalance: displayOpening };
+      return res.json(account);
+    }
+
     const account = await chartOfAccountsRepository.updateById(req.params.id, data);
     if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
     res.json(account);
@@ -237,7 +257,6 @@ router.delete('/:id', auth, chartManage, async (req, res) => {
 router.post('/recalculate-balances', auth, chartManage, async (req, res) => {
   try {
     const { query } = require('../config/postgres');
-    const AccountingService = require('../services/accountingService');
     
     // Get all active accounts
     const accounts = await chartOfAccountsRepository.findAll({ isActive: true }, { limit: 5000 });
@@ -402,7 +421,6 @@ router.post('/sync-party-accounts', auth, chartManage, async (req, res) => {
 router.get('/check/:accountCode', auth, chartView, async (req, res) => {
   try {
     const { query } = require('../config/postgres');
-    const AccountingService = require('../services/accountingService');
     const accountCode = req.params.accountCode.toUpperCase();
     
     // Get account details
@@ -416,6 +434,11 @@ router.get('/check/:accountCode', auth, chartView, async (req, res) => {
 
     // Get calculated balance
     const calculatedBalance = await AccountingService.getAccountBalance(accountCode);
+
+    const displayOpening =
+      accountCode === '1000'
+        ? await AccountingService.getCashOpeningBalanceForDisplay()
+        : parseFloat(account.openingBalance || 0);
     
     // Get ledger entries count
     const ledgerCount = await query(
@@ -427,12 +450,13 @@ router.get('/check/:accountCode', auth, chartView, async (req, res) => {
     res.json({
       success: true,
       data: {
+        id: account.id,
         accountCode: account.accountCode,
         accountName: account.accountName,
         accountType: account.accountType,
         normalBalance: account.normalBalance,
         isActive: account.isActive,
-        openingBalance: account.openingBalance,
+        openingBalance: displayOpening,
         currentBalance: account.currentBalance,
         calculatedBalance: calculatedBalance,
         difference: calculatedBalance - (account.currentBalance || 0),

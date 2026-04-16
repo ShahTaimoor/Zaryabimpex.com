@@ -38,6 +38,15 @@ export const chartOfAccountsApi = api.injectEndpoints({
       }),
       providesTags: (_r, _e, id) => [{ type: 'ChartOfAccounts', id }],
     }),
+    checkAccount: builder.query({
+      query: (accountCode) => ({
+        url: `chart-of-accounts/check/${encodeURIComponent(accountCode)}`,
+        method: 'get',
+      }),
+      providesTags: (_r, _e, accountCode) => [
+        { type: 'ChartOfAccounts', id: `CHECK-${String(accountCode).toUpperCase()}` },
+      ],
+    }),
     createAccount: builder.mutation({
       query: (data) => ({
         url: 'chart-of-accounts',
@@ -67,6 +76,7 @@ export const chartOfAccountsApi = api.injectEndpoints({
       }),
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'ChartOfAccounts', id },
+        { type: 'ChartOfAccounts', id: 'CHECK-1000' },
         { type: 'ChartOfAccounts', id: 'LIST' },
         { type: 'ChartOfAccounts', id: 'HIERARCHY' },
         { type: 'ChartOfAccounts', id: 'STATS' },
@@ -150,6 +160,7 @@ export const chartOfAccountsApi = api.injectEndpoints({
 export const {
   useGetAccountsQuery,
   useGetAccountQuery,
+  useCheckAccountQuery,
   useCreateAccountMutation,
   useUpdateAccountMutation,
   useDeleteAccountMutation,

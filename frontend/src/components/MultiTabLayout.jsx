@@ -134,7 +134,7 @@ export const navigation = [
       { name: 'Customers', href: '/customers', icon: Users, permission: 'view_customers' },
       { name: 'Customer Analytics', href: '/customer-analytics', icon: BarChart3, permission: 'view_customer_analytics' },
       { name: 'Suppliers', href: '/suppliers', icon: Building, permission: 'view_suppliers' },
-      { name: 'Banks', href: '/banks', icon: Building2, permission: null },
+      { name: 'Bank & cash opening', href: '/banks', icon: Building2, permission: null },
       { name: 'Investors', href: '/investors', icon: TrendingUp, permission: 'view_investors' },
       { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight, permission: 'create_drop_shipping' },
       { name: 'Cities', href: '/cities', icon: MapPin, permission: 'manage_users' },
