@@ -1,15 +1,15 @@
 const { query } = require('../config/postgres');
 const AccountingService = require('./accountingService');
+const { getEndOfDayPakistan } = require('../utils/dateFilter');
 
 /**
- * Normalize date to end-of-day (23:59:59.999) so all transactions on that calendar day are included.
- * The ledger filter uses transaction_date <= asOfDate; if asOfDate is midnight, today's entries are excluded.
+ * Ledger "as of" cutoff for balance sheet accounts.
+ * Use Pakistan end-of-day boundaries (same as other reporting queries) so server timezone
+ * does not accidentally exclude same-day ledger rows (which can make calculated balances look 0).
  */
-function endOfDay(d) {
-  const date = d instanceof Date ? d : new Date(d);
-  const out = new Date(date);
-  out.setHours(23, 59, 59, 999);
-  return out;
+function asOfCutoff(statementDate) {
+  if (!statementDate) return null;
+  return getEndOfDayPakistan(statementDate);
 }
 
 /**
@@ -22,7 +22,7 @@ class BalanceSheetCalculationService {
    * @param {object} opts - { useDbFallback } passed to getAccountBalance for equity accounts with ledger/DB mismatch
    */
   async calculateAccountBalance(accountCode, statementDate, opts = {}) {
-    const asOf = statementDate ? endOfDay(statementDate) : null;
+    const asOf = asOfCutoff(statementDate);
     return await AccountingService.getAccountBalance(accountCode, asOf, opts);
   }
 
@@ -166,7 +166,7 @@ class BalanceSheetCalculationService {
     const date = statementDate || new Date();
     const startOfYear = new Date(date.getFullYear(), 0, 1);
     const plService = require('./plCalculationService');
-    const asOf = endOfDay(date);
+    const asOf = asOfCutoff(date);
 
     // Individual account balances (ledger-based, as of statement date)
     const cash = await this.calculateAccountBalance('1000', date);

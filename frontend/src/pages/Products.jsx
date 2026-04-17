@@ -163,6 +163,7 @@ export const Products = () => {
   };
 
   const [bulkCreateProducts] = useBulkCreateProductsMutation();
+  const [autoCreateImportCategories, setAutoCreateImportCategories] = useState(true);
 
   const { companyInfo: companySettings } = useCompanyInfo();
   const showCostPrice = companySettings.orderSettings?.showCostPrice !== false;
@@ -220,7 +221,10 @@ export const Products = () => {
 
     const toastId = toast.loading(`Saving ${data.length} products to database...`);
     try {
-      const response = await bulkCreateProducts(data).unwrap();
+      const response = await bulkCreateProducts({
+        products: data,
+        autoCreateCategories: autoCreateImportCategories
+      }).unwrap();
       if (response.created > 0) {
         toast.success(`Successfully imported ${response.created} products!`, { id: toastId });
         if (response.failed > 0) {
@@ -368,6 +372,15 @@ export const Products = () => {
             onDataImported={handleImportData}
             label="Import"
           />
+          <label className="inline-flex items-center gap-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
+            <input
+              type="checkbox"
+              checked={autoCreateImportCategories}
+              onChange={(e) => setAutoCreateImportCategories(e.target.checked)}
+              className="h-4 w-4"
+            />
+            Auto-create category
+          </label>
           <Button
             onClick={handleDownloadTemplate}
             variant="outline"

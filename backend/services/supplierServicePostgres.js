@@ -1,6 +1,7 @@
 const supplierRepository = require('../repositories/postgres/SupplierRepository');
 const AccountingService = require('./accountingService');
 const chartOfAccountsRepository = require('../repositories/postgres/ChartOfAccountsRepository');
+const cityRepository = require('../repositories/postgres/CityRepository');
 
 /**
  * Map DB supplier row to API response format (contactPerson, status, businessType, rating)
@@ -34,6 +35,26 @@ function mapSupplierForResponse(supplier) {
  * Supplier Service - PostgreSQL Implementation
  */
 class SupplierService {
+  async resolveOrCreateCityName(cityName, userId) {
+    const normalized = String(cityName || '').trim();
+    if (!normalized) return '';
+    const existingCity = await cityRepository.findByName(normalized);
+    if (existingCity) return existingCity.name;
+    try {
+      const createdCity = await cityRepository.create({
+        name: normalized,
+        createdBy: userId
+      });
+      return createdCity?.name || normalized;
+    } catch (error) {
+      if (error && error.code === '23505') {
+        const winner = await cityRepository.findByName(normalized);
+        if (winner) return winner.name;
+      }
+      throw error;
+    }
+  }
+
   /**
    * Get suppliers with filtering and pagination
    */
@@ -269,10 +290,11 @@ class SupplierService {
   /**
    * Bulk create suppliers from imported data (Excel keys: snake_case headers from /excel-manager/import)
    */
-  async bulkCreateSuppliers(suppliersData, userId) {
+  async bulkCreateSuppliers(suppliersData, userId, options = {}) {
     let created = 0;
     let failed = 0;
     const errors = [];
+    const autoCreateCities = options.autoCreateCities !== false;
 
     const str = (v) => {
       if (v === null || v === undefined) return '';
@@ -288,22 +310,58 @@ class SupplierService {
       return Number.isFinite(n) ? n : 0;
     };
 
+    const normalizeKey = (k) => String(k || '').toLowerCase().replace(/[\s_\-]+/g, '');
+    const pick = (obj, aliases = []) => {
+      if (!obj || typeof obj !== 'object') return undefined;
+      for (const alias of aliases) {
+        if (Object.prototype.hasOwnProperty.call(obj, alias) && obj[alias] !== undefined && obj[alias] !== null && obj[alias] !== '') {
+          return obj[alias];
+        }
+      }
+      const normalized = new Map(Object.keys(obj).map((k) => [normalizeKey(k), k]));
+      for (const alias of aliases) {
+        const key = normalized.get(normalizeKey(alias));
+        if (key && obj[key] !== undefined && obj[key] !== null && obj[key] !== '') {
+          return obj[key];
+        }
+      }
+      return undefined;
+    };
+
     for (const supplier of suppliersData) {
       try {
+        const cityRaw = supplier.city || supplier.City || '';
+        const cityName = autoCreateCities
+          ? await this.resolveOrCreateCityName(cityRaw, userId)
+          : String(cityRaw || '').trim();
+
         const companyName = str(
-          supplier.company_name
-          || supplier.companyName
-          || supplier.company
-          || supplier.supplier_name
-          || supplier.supplier
-          || supplier.vendor
+          pick(supplier, [
+            'company_name',
+            'companyName',
+            'company',
+            'business_name',
+            'businessName',
+            'name',
+            'supplier_name',
+            'supplierName',
+            'supplier',
+            'vendor_name',
+            'vendorName',
+            'vendor'
+          ])
         );
 
         const contactName = str(
-          supplier.contact_person
-          || supplier.contactperson
-          || (supplier.contactPerson && supplier.contactPerson.name)
-          || supplier.contact
+          pick(supplier, [
+            'contact_person',
+            'contactperson',
+            'contact_person_name',
+            'contact_name',
+            'contactPerson',
+            'contact',
+            'person_name'
+          ]) || (supplier.contactPerson && supplier.contactPerson.name)
         );
 
         const mappedData = {
@@ -314,6 +372,7 @@ class SupplierService {
           },
           email: str(supplier.email),
           phone: str(supplier.phone || supplier.mobile || supplier.contact_phone),
+          address: cityName ? { city: cityName } : undefined,
           openingBalance: num(supplier.opening_balance ?? supplier.openingBalance ?? supplier.balance ?? supplier.opening),
           businessType: str(supplier.business_type || supplier.type || supplier.businessType || 'wholesaler').toLowerCase() || 'wholesaler',
           status: 'active'
@@ -328,10 +387,20 @@ class SupplierService {
       } catch (err) {
         failed++;
         const label = str(
-          supplier.company_name
-          || supplier.companyName
-          || supplier.company
-          || supplier.supplier_name
+          pick(supplier, [
+            'company_name',
+            'companyName',
+            'company',
+            'business_name',
+            'businessName',
+            'name',
+            'supplier_name',
+            'supplierName',
+            'supplier',
+            'vendor_name',
+            'vendorName',
+            'vendor'
+          ])
           || 'Row'
         );
         errors.push({ supplier: label || 'Row', error: err.message });

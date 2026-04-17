@@ -238,7 +238,7 @@ router.post('/', [
           referenceModel: 'PurchaseInvoice',
           performedBy: req.user._id,
           notes: `Stock increased due to purchase invoice creation - Invoice: ${invoiceNumber}`
-        });
+        }, { skipAccountingEntry: true });
 
         inventoryUpdates.push({
           productId: item.product,
@@ -495,7 +495,7 @@ router.put('/:id', [
                 referenceModel: 'PurchaseInvoice',
                 performedBy: req.user?.id || req.user?._id,
                 notes: `Inventory increased due to purchase invoice ${updatedInvoice.invoice_number || updatedInvoice.invoiceNumber} update - quantity increased by ${quantityChange}`
-              });
+              }, { skipAccountingEntry: true });
             } else {
               // Quantity decreased - reduce inventory
               const productId = newItem.product?.id || newItem.product?._id || newItem.product;
@@ -509,7 +509,7 @@ router.put('/:id', [
                 referenceModel: 'PurchaseInvoice',
                 performedBy: req.user?.id || req.user?._id,
                 notes: `Inventory reduced due to purchase invoice ${updatedInvoice.invoice_number || updatedInvoice.invoiceNumber} update - quantity decreased by ${Math.abs(quantityChange)}`
-              });
+              }, { skipAccountingEntry: true });
             }
           }
         }
@@ -531,7 +531,7 @@ router.put('/:id', [
               referenceModel: 'PurchaseInvoice',
               performedBy: req.user?.id || req.user?._id,
               notes: `Inventory reduced due to purchase invoice ${updatedInvoice.invoice_number || updatedInvoice.invoiceNumber} update - item removed`
-            });
+            }, { skipAccountingEntry: true });
           }
         }
       } catch (error) {
@@ -615,7 +615,7 @@ router.delete('/:id', [
             referenceModel: 'PurchaseInvoice',
             performedBy: req.user?.id || req.user?._id,
             notes: `Inventory rolled back due to deletion of purchase invoice ${invoice.invoice_number || invoice.invoiceNumber}`
-          });
+          }, { skipAccountingEntry: true });
 
           inventoryRollbacks.push({
             productId,

@@ -133,10 +133,10 @@ export const suppliersApi = api.injectEndpoints({
       providesTags: [{ type: 'Suppliers', id: 'SEARCH' }],
     }),
     bulkCreateSuppliers: builder.mutation({
-      query: (suppliers) => ({
+      query: ({ suppliers, autoCreateCities = true }) => ({
         url: 'suppliers/bulk-create',
         method: 'post',
-        data: { suppliers },
+        data: { suppliers, autoCreateCities },
       }),
       invalidatesTags: [
         { type: 'Suppliers', id: 'LIST' },

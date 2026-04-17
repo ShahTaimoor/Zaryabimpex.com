@@ -1440,6 +1440,7 @@ export const PurchaseOrders = ({ tabId }) => {
                       step="1"
                       value={customCost}
                       onChange={(e) => setCustomCost(e.target.value)}
+                      onFocus={(e) => e.target.select()}
                       onKeyDown={handleInputKeyDown}
                       className="text-center h-10 w-full"
                       placeholder="0"
@@ -1534,6 +1535,7 @@ export const PurchaseOrders = ({ tabId }) => {
                     step="1"
                     value={customCost}
                     onChange={(e) => setCustomCost(e.target.value)}
+                    onFocus={(e) => e.target.select()}
                     onKeyDown={handleInputKeyDown}
                     className="text-center h-10"
                     placeholder="0 (Enter to add & focus search)"
@@ -1746,6 +1748,7 @@ export const PurchaseOrders = ({ tabId }) => {
                                   )
                                 }));
                               }}
+                              onFocus={(e) => e.target.select()}
                               className="text-center h-8 w-full"
                               min="1"
                             />
@@ -1766,6 +1769,7 @@ export const PurchaseOrders = ({ tabId }) => {
                                 )
                               }));
                             }}
+                            onFocus={(e) => e.target.select()}
                             className="text-center h-8 w-full"
                             min="0"
                           />
@@ -1868,6 +1872,7 @@ export const PurchaseOrders = ({ tabId }) => {
                                 )
                               }));
                             }}
+                            onFocus={(e) => e.target.select()}
                             className="text-center h-8"
                             min="0"
                           />
@@ -2476,6 +2481,7 @@ export const PurchaseOrders = ({ tabId }) => {
                           autoComplete="off"
                           value={editProductQuantity}
                           onChange={(e) => setEditProductQuantity(parseInt(e.target.value) || 1)}
+                          onFocus={(e) => e.target.select()}
                           className="modal-quantity-input w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="1"
                         />
@@ -2492,6 +2498,7 @@ export const PurchaseOrders = ({ tabId }) => {
                           autoComplete="off"
                           value={editProductCost}
                           onChange={(e) => setEditProductCost(parseFloat(e.target.value) || 0)}
+                          onFocus={(e) => e.target.select()}
                           className="modal-cost-input w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="0.00"
                         />
@@ -2586,6 +2593,7 @@ export const PurchaseOrders = ({ tabId }) => {
                                   newItems[index].totalCost = newItems[index].quantity * newCost;
                                   setFormData(prev => ({ ...prev, items: newItems }));
                                 }}
+                                onFocus={(e) => e.target.select()}
                                 className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
                             </div>

@@ -7,22 +7,38 @@ async function reconcile() {
   try {
     // 1. Find all active products and calculate physical vs ledger values
     const sql = `
-      SELECT 
-        p.id, 
-        p.name, 
+      WITH ib_agg AS (
+        SELECT product_id, SUM(COALESCE(quantity, 0))::numeric AS quantity
+        FROM inventory_balance
+        GROUP BY product_id
+      ),
+      inv_agg AS (
+        SELECT product_id, SUM(COALESCE(current_stock, 0))::numeric AS current_stock
+        FROM inventory
+        WHERE deleted_at IS NULL
+        GROUP BY product_id
+      ),
+      ledger_agg AS (
+        SELECT reference_id::text AS product_id,
+               SUM(COALESCE(debit_amount, 0) - COALESCE(credit_amount, 0))::numeric AS ledger_value
+        FROM account_ledger
+        WHERE account_code = '1200'
+          AND status = 'completed'
+          AND reversed_at IS NULL
+        GROUP BY reference_id::text
+      )
+      SELECT
+        p.id,
+        p.name,
         p.cost_price,
-        COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) as stock_quantity,
-        (COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * COALESCE(p.cost_price, 0)) as physical_value,
-        COALESCE(SUM(al.debit_amount - al.credit_amount), 0) as ledger_value
+        COALESCE(ib.quantity, inv.current_stock, p.stock_quantity, 0) AS stock_quantity,
+        (COALESCE(ib.quantity, inv.current_stock, p.stock_quantity, 0) * COALESCE(p.cost_price, 0)) AS physical_value,
+        COALESCE(l.ledger_value, 0) AS ledger_value
       FROM products p
-      LEFT JOIN inventory_balance ib ON ib.product_id = p.id
-      LEFT JOIN inventory i ON i.product_id = p.id AND i.deleted_at IS NULL
-      LEFT JOIN account_ledger al ON al.reference_id::text = p.id::text 
-        AND al.account_code = '1200' 
-        AND al.status = 'completed' 
-        AND al.reversed_at IS NULL
+      LEFT JOIN ib_agg ib ON ib.product_id = p.id
+      LEFT JOIN inv_agg inv ON inv.product_id = p.id
+      LEFT JOIN ledger_agg l ON l.product_id = p.id::text
       WHERE p.is_active = TRUE AND p.is_deleted = FALSE
-      GROUP BY p.id, p.name, p.cost_price, ib.quantity, i.current_stock, p.stock_quantity
     `;
 
     const result = await query(sql);

@@ -173,6 +173,7 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove, o
                 autoComplete="off"
                 value={item.quantity}
                 onChange={(e) => onUpdateQuantity(item.product?._id, parseInt(e.target.value) || 1)}
+                onFocus={(e) => e.target.select()}
                 className="input text-center text-sm h-8"
                 min="1"
               />
@@ -186,6 +187,7 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove, o
               autoComplete="off"
               value={item.costPerUnit}
               onChange={(e) => onUpdateCost(item.product?._id, parseFloat(e.target.value) || 0)}
+              onFocus={(e) => e.target.select()}
               className="input text-center text-sm h-8"
               min="0"
             />
@@ -258,6 +260,7 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove, o
                       min={0}
                       value={item.quantity === 0 ? '' : boxVal}
                       onChange={(e) => onUpdateCartBoxCount(item.product?._id, e.target.value)}
+                      onFocus={(e) => e.target.select()}
                       className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${
                         (product.inventory?.currentStock || 0) === 0
                           ? 'text-red-700 bg-red-50 border-red-200'
@@ -324,6 +327,7 @@ const PurchaseItem = ({ item, index, onUpdateQuantity, onUpdateCost, onRemove, o
               autoComplete="off"
               value={item.costPerUnit}
               onChange={(e) => onUpdateCost(item.product?._id, parseFloat(e.target.value) || 0)}
+              onFocus={(e) => e.target.select()}
               className="text-center h-8"
               min="0"
             />
@@ -1595,6 +1599,7 @@ export const Purchase = ({ tabId, editData }) => {
                             const value = parseFloat(e.target.value) || 0;
                             setDirectDiscount({ ...directDiscount, value });
                           }}
+                          onFocus={(e) => e.target.select()}
                           className="flex-1 h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
                           min="0"
                           step={directDiscount.type === 'percentage' ? '0.1' : '0.01'}

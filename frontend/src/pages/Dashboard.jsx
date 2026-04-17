@@ -570,10 +570,14 @@ export const Dashboard = () => {
     ...bankPaymentsArray.map(p => ({ ...p, paymentType: 'Bank' }))
   ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const companyInfo = companySettingsData?.data || {};
+  const companyInfo = companySettingsData?.data?.data ?? companySettingsData?.data ?? {};
   const companyFromApi = companyData?.data || companyData || {};
   const companyLogo = companyFromApi.logo || companyInfo.logo;
   const companyName = companyInfo.companyName || companyInfo.businessName || companyFromApi.companyName || '';
+  const dashboardLogoSizeRaw = Number(companyInfo?.orderSettings?.dashboardLogoSize);
+  const dashboardLogoSize = Number.isFinite(dashboardLogoSizeRaw)
+    ? Math.min(900, Math.max(120, dashboardLogoSizeRaw))
+    : 500;
 
   return (
     <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
@@ -648,7 +652,8 @@ export const Dashboard = () => {
                 src={companyLogo}
                 alt={companyName || 'Company logo'}
                 crossOrigin="anonymous"
-                className="max-h-[400px] md:max-h-[500px] w-auto max-w-full object-contain transition-all duration-500 hover:scale-105"
+                className="w-auto max-w-full object-contain transition-all duration-500 hover:scale-105"
+                style={{ height: `${dashboardLogoSize}px` }}
               />
             ) : (
               <div className="w-60 h-60 rounded-2xl bg-gray-100 flex items-center justify-center">

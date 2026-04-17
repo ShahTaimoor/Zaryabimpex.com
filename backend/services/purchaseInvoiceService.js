@@ -12,6 +12,7 @@ class PurchaseInvoiceService {
     const settings = await settingsService.getCompanySettings();
     const orderSettings = settings?.orderSettings || {};
 
+    let nextPurchaseSequence = null;
     if (orderSettings.purchaseSequenceEnabled) {
       const prefix = orderSettings.purchaseSequencePrefix || 'PUR-';
       const nextNum = orderSettings.purchaseSequenceNext || 1;
@@ -20,14 +21,7 @@ class PurchaseInvoiceService {
       if (!invoiceNumber) {
         invoiceNumber = `${prefix}${String(nextNum).padStart(padding, '0')}`;
       }
-
-      // Always increment next number
-      await settingsService.updateCompanySettings({
-        orderSettings: {
-          ...orderSettings,
-          purchaseSequenceNext: nextNum + 1
-        }
-      });
+      nextPurchaseSequence = nextNum + 1;
     }
 
     if (!invoiceNumber) {
@@ -40,7 +34,23 @@ class PurchaseInvoiceService {
       createdBy: user?.id || user?._id
     };
 
-    return await purchaseInvoiceRepository.create(invoiceData);
+    const createdInvoice = await purchaseInvoiceRepository.create(invoiceData);
+
+    // Advance sequence only after invoice is created successfully.
+    if (nextPurchaseSequence !== null) {
+      try {
+        await settingsService.updateCompanySettings({
+          orderSettings: {
+            ...orderSettings,
+            purchaseSequenceNext: nextPurchaseSequence
+          }
+        });
+      } catch (seqErr) {
+        console.error('Failed to update purchase invoice sequence after creation:', seqErr?.message || seqErr);
+      }
+    }
+
+    return createdInvoice;
   }
   /**
    * Transform supplier names to uppercase

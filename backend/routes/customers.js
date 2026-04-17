@@ -805,16 +805,23 @@ router.get('/:id/credit-score', [
 // @access  Private
 router.post('/bulk-create', [
   auth,
-  requirePermission('create_customers'),
-  body('customers').isArray().withMessage('Customers array is required')
+  requirePermission('create_customers')
 ], async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    const customersPayload = Array.isArray(req.body)
+      ? req.body
+      : (req.body?.customers || req.body?.data || req.body?.rows);
+    if (!Array.isArray(customersPayload)) {
+      return res.status(400).json({
+        message: 'Customers array is required',
+        expected: 'Send an array body or { customers: [...] }',
+      });
     }
-    
-    const result = await customerService.bulkCreateCustomers(req.body.customers, req.user?.id || req.user?._id);
+    const result = await customerService.bulkCreateCustomers(
+      customersPayload,
+      req.user?.id || req.user?._id,
+      { autoCreateCities: req.body?.autoCreateCities !== false }
+    );
     res.status(201).json(result);
   } catch (error) {
     console.error('Bulk create customers error:', error);

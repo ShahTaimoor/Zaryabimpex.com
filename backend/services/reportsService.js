@@ -461,7 +461,18 @@ class ReportsService {
     const stockOutTypes = "'sale','return_out','adjustment_out','transfer_out','damage','expiry','theft','consumption'";
 
     const sql = `
-      WITH products_base AS (
+      WITH ib_agg AS (
+        SELECT product_id, SUM(COALESCE(quantity, 0))::decimal AS quantity
+        FROM inventory_balance
+        GROUP BY product_id
+      ),
+      inv_agg AS (
+        SELECT product_id, SUM(COALESCE(current_stock, 0))::decimal AS current_stock
+        FROM inventory
+        WHERE deleted_at IS NULL
+        GROUP BY product_id
+      ),
+      products_base AS (
         SELECT p.id, p.name, p.sku, p.unit, cat.name as "categoryName",
                COALESCE(p.cost_price, 0) as cost_price,
                COALESCE(p.selling_price, 0) as selling_price,
@@ -471,8 +482,8 @@ class ReportsService {
                COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0)::decimal as "currentStock"
         FROM products p
         LEFT JOIN categories cat ON p.category_id = cat.id
-        LEFT JOIN inventory_balance ib ON ib.product_id = p.id
-        LEFT JOIN inventory i ON i.product_id = p.id AND i.deleted_at IS NULL
+        LEFT JOIN ib_agg ib ON ib.product_id = p.id
+        LEFT JOIN inv_agg i ON i.product_id = p.id
         WHERE p.is_deleted = FALSE AND p.is_active = TRUE ${prodFilter}
       ),
       period_act AS (
@@ -688,6 +699,17 @@ class ReportsService {
     }
 
     sql = `
+      WITH ib_agg AS (
+        SELECT product_id, SUM(COALESCE(quantity, 0))::decimal AS quantity
+        FROM inventory_balance
+        GROUP BY product_id
+      ),
+      inv_agg AS (
+        SELECT product_id, SUM(COALESCE(current_stock, 0))::decimal AS current_stock
+        FROM inventory
+        WHERE deleted_at IS NULL
+        GROUP BY product_id
+      )
       SELECT 
         p.id,
         p.name,
@@ -704,8 +726,8 @@ class ReportsService {
         p.unit
       FROM products p
       LEFT JOIN categories cat ON p.category_id = cat.id
-      LEFT JOIN inventory_balance ib ON ib.product_id = p.id
-      LEFT JOIN inventory i ON i.product_id = p.id AND i.deleted_at IS NULL
+      LEFT JOIN ib_agg ib ON ib.product_id = p.id
+      LEFT JOIN inv_agg i ON i.product_id = p.id
       ${whereClause}
       ORDER BY p.name ASC
     `;
@@ -714,6 +736,17 @@ class ReportsService {
 
     // Calculate summary using correct stock source (inventory_balance > inventory > products.stock_quantity)
     const summarySql = `
+      WITH ib_agg AS (
+        SELECT product_id, SUM(COALESCE(quantity, 0))::decimal AS quantity
+        FROM inventory_balance
+        GROUP BY product_id
+      ),
+      inv_agg AS (
+        SELECT product_id, SUM(COALESCE(current_stock, 0))::decimal AS current_stock
+        FROM inventory
+        WHERE deleted_at IS NULL
+        GROUP BY product_id
+      )
       SELECT 
         COUNT(*) as "totalItems",
         SUM(COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * COALESCE(p.cost_price, 0)) as "totalCost",
@@ -724,8 +757,8 @@ class ReportsService {
                          AND COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) <= p.min_stock_level) as "lowStockCount",
         COUNT(*) FILTER (WHERE COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) > 0) as "inStockCount"
       FROM products p
-      LEFT JOIN inventory_balance ib ON ib.product_id = p.id
-      LEFT JOIN inventory i ON i.product_id = p.id AND i.deleted_at IS NULL
+      LEFT JOIN ib_agg ib ON ib.product_id = p.id
+      LEFT JOIN inv_agg i ON i.product_id = p.id
       WHERE p.is_deleted = FALSE AND p.is_active = TRUE
       ${categoryId ? ` AND p.category_id = $1` : ''}
       ${searchTerm ? ` AND (p.name ILIKE $${categoryId ? 2 : 1} OR p.sku ILIKE $${categoryId ? 2 : 1} OR p.barcode ILIKE $${categoryId ? 2 : 1})` : ''}

@@ -27,6 +27,7 @@ export function CompanySettingsForm() {
   });
   const [logoPreview, setLogoPreview] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [dashboardLogoSize, setDashboardLogoSize] = useState(500);
 
   const { data: companyResponse, isLoading: loadingCompany } = useFetchCompanyQuery();
   const { data: settingsResponse } = useGetCompanySettingsQuery();
@@ -36,6 +37,7 @@ export function CompanySettingsForm() {
 
   const company = companyResponse?.data || {};
   const settings = settingsResponse?.data?.data ?? settingsResponse?.data ?? {};
+  const orderSettings = settings.orderSettings || {};
   const savedLogo = company.logo || '';
 
   useEffect(() => {
@@ -48,6 +50,15 @@ export function CompanySettingsForm() {
       taxRegistrationNumber: settings.taxId ?? '',
     }));
   }, [company.companyName, company.phone, company.address, settings.companyName, settings.contactNumber, settings.address, settings.email, settings.taxId]);
+
+  useEffect(() => {
+    const size = Number(orderSettings.dashboardLogoSize);
+    if (Number.isFinite(size) && size >= 120 && size <= 900) {
+      setDashboardLogoSize(Math.round(size));
+    } else {
+      setDashboardLogoSize(500);
+    }
+  }, [orderSettings.dashboardLogoSize]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -87,6 +98,10 @@ export function CompanySettingsForm() {
         address: form.address,
         email: form.email,
         taxId: form.taxRegistrationNumber,
+        orderSettings: {
+          ...orderSettings,
+          dashboardLogoSize: dashboardLogoSize,
+        },
       }).unwrap();
       if (selectedFile) {
         const formData = new FormData();
@@ -253,6 +268,40 @@ export function CompanySettingsForm() {
         {savedLogo && !selectedFile && (
           <p className="text-xs text-gray-500">Logo shown above is the saved logo. Choose a new file to replace it.</p>
         )}
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <label className="block text-sm font-medium text-gray-700">
+          Dashboard logo size
+        </label>
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min="120"
+            max="900"
+            step="10"
+            value={dashboardLogoSize}
+            onChange={(e) => setDashboardLogoSize(parseInt(e.target.value, 10) || 500)}
+            className="w-full"
+          />
+          <input
+            type="number"
+            min="120"
+            max="900"
+            step="10"
+            value={dashboardLogoSize}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (!Number.isFinite(v)) return;
+              setDashboardLogoSize(Math.min(900, Math.max(120, v)));
+            }}
+            className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          />
+          <span className="text-xs text-gray-500">px</span>
+        </div>
+        <p className="text-xs text-gray-500">
+          Controls the large logo size shown when dashboard data is hidden.
+        </p>
       </div>
 
       <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">

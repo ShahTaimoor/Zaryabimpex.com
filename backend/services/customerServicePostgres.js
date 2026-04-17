@@ -1,6 +1,7 @@
 const customerRepository = require('../repositories/postgres/CustomerRepository');
 const AccountingService = require('./accountingService');
 const chartOfAccountsRepository = require('../repositories/postgres/ChartOfAccountsRepository');
+const cityRepository = require('../repositories/postgres/CityRepository');
 
 /** Normalize customer row: add camelCase aliases for businessType, customerTier (frontend expects these) */
 function normalizeCustomer(c) {
@@ -24,6 +25,26 @@ function normalizeCustomer(c) {
  * Customer Service - PostgreSQL Implementation
  */
 class CustomerService {
+  async resolveOrCreateCityName(cityName, userId) {
+    const normalized = String(cityName || '').trim();
+    if (!normalized) return '';
+    const existingCity = await cityRepository.findByName(normalized);
+    if (existingCity) return existingCity.name;
+    try {
+      const createdCity = await cityRepository.create({
+        name: normalized,
+        createdBy: userId
+      });
+      return createdCity?.name || normalized;
+    } catch (error) {
+      if (error && error.code === '23505') {
+        const winner = await cityRepository.findByName(normalized);
+        if (winner) return winner.name;
+      }
+      throw error;
+    }
+  }
+
   /**
    * Get customers with filtering and pagination
    */
@@ -336,19 +357,26 @@ class CustomerService {
   /**
    * Bulk create customers from imported data
    */
-  async bulkCreateCustomers(customersData, userId) {
+  async bulkCreateCustomers(customersData, userId, options = {}) {
     let created = 0;
     let failed = 0;
     const errors = [];
+    const autoCreateCities = options.autoCreateCities !== false;
 
     for (const customer of customersData) {
       try {
+        const cityRaw = customer.city || customer.City || '';
+        const cityName = autoCreateCities
+          ? await this.resolveOrCreateCityName(cityRaw, userId)
+          : String(cityRaw || '').trim();
+
         // Map user-friendly Excel headers to DB fields
         const mappedData = {
           businessName: customer.business_name || customer.businessName || customer.business_name || '',
           name: customer.name || customer.contact_person || '',
           email: customer.email || '',
           phone: customer.phone || '',
+          address: cityName ? { city: cityName } : undefined,
           openingBalance: parseFloat(customer.opening_balance || customer.openingBalance || customer.balance || 0),
           businessType: (customer.business_type || customer.businessType || 'wholesale').toLowerCase(),
           customerTier: (customer.customer_tier || customer.customerTier || 'bronze').toLowerCase(),

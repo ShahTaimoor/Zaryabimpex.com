@@ -402,16 +402,23 @@ router.post('/:id/restore', [
 // @access  Private
 router.post('/bulk-create', [
   auth,
-  requirePermission('create_suppliers'),
-  body('suppliers').isArray().withMessage('Suppliers array is required')
+  requirePermission('create_suppliers')
 ], async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    const suppliersPayload = Array.isArray(req.body)
+      ? req.body
+      : (req.body?.suppliers || req.body?.data || req.body?.rows);
+    if (!Array.isArray(suppliersPayload)) {
+      return res.status(400).json({
+        message: 'Suppliers array is required',
+        expected: 'Send an array body or { suppliers: [...] }',
+      });
     }
-    
-    const result = await supplierService.bulkCreateSuppliers(req.body.suppliers, req.user?.id || req.user?._id);
+    const result = await supplierService.bulkCreateSuppliers(
+      suppliersPayload,
+      req.user?.id || req.user?._id,
+      { autoCreateCities: req.body?.autoCreateCities !== false }
+    );
     res.status(201).json(result);
   } catch (error) {
     console.error('Bulk create suppliers error:', error);

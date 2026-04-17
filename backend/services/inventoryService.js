@@ -21,8 +21,8 @@ function getCost(inv) {
 }
 
 // Ensure an inventory record exists for the product (create from product stock if missing)
-const ensureInventoryRecord = async (productId) => {
-  let inv = await inventoryRepository.findByProduct(productId);
+const ensureInventoryRecord = async (productId, client = null) => {
+  let inv = await inventoryRepository.findOne({ product: productId, productId }, client);
   if (inv) return inv;
   const product = await productRepository.findById(productId, true);
   if (!product) throw new Error('Product not found');
@@ -34,14 +34,15 @@ const ensureInventoryRecord = async (productId) => {
     reorderPoint: product.min_stock_level ?? product.inventory?.reorderPoint ?? 10,
     reorderQuantity: product.inventory?.reorderQuantity ?? 50,
     status: 'active'
-  });
+  }, client);
   return inv;
 };
 
 // Update stock levels
-const updateStock = async ({ productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes }) => {
+const updateStock = async ({ productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes }, options = {}) => {
+  const { client = null, skipAccountingEntry = false } = options;
   try {
-    const inv = await ensureInventoryRecord(productId);
+    const inv = await ensureInventoryRecord(productId, client);
     const current = getCurrentStock(inv);
     const isIn = ['in', 'return'].includes(type);
     const newStock = isIn ? current + quantity : current - quantity;
@@ -52,32 +53,37 @@ const updateStock = async ({ productId, type, quantity, reason, reference, refer
       if (costObj.average !== undefined) updatePayload.cost = { ...costObj, average: cost };
       else updatePayload.cost = { ...costObj, average: cost, lastPurchase: cost };
     }
-    const updated = await inventoryRepository.updateByProductId(productId, updatePayload);
+    const updated = await inventoryRepository.updateByProductId(productId, updatePayload, client);
 
     const productRow = await productRepository.findById(productId, true);
     if (productRow) {
       await productRepository.update(productId, {
         stockQuantity: newStock,
         ...(cost !== undefined && cost !== null && isIn ? { costPrice: cost } : {})
-      });
+      }, client);
 
-      // Update Accounting Ledger
-      try {
-        const delta = isIn ? quantity : -quantity;
-        const unitCost = cost || parseFloat(productRow.cost_price || productRow.costPrice) || 0;
-        const validatedUserId = isValidUuid(performedBy) ? performedBy : null;
+      // Update Accounting Ledger (optional skip for flows that post dedicated financial entries)
+      if (!skipAccountingEntry) {
+        try {
+          const delta = isIn ? quantity : -quantity;
+          const unitCost = cost || parseFloat(productRow.cost_price || productRow.costPrice) || 0;
+          const validatedUserId = isValidUuid(performedBy) ? performedBy : null;
 
-        await AccountingService.recordStockAdjustment(productId, delta, unitCost, {
-          createdBy: validatedUserId,
-          reason: reason || `Inventory ${type}`
-        });
-      } catch (accErr) {
-        console.error('Failed to update ledger for inventory movement:', accErr);
+          await AccountingService.recordStockAdjustment(productId, delta, unitCost, {
+            client,
+            createdBy: validatedUserId,
+            reason: reason || `Inventory ${type}`
+          });
+        } catch (accErr) {
+          // When called inside an explicit transaction, fail fast to preserve atomicity.
+          if (client) throw accErr;
+          console.error('Failed to update ledger for inventory movement:', accErr);
+        }
       }
     } else {
       await productVariantRepository.updateById(productId, {
         inventory: { currentStock: newStock }
-      });
+      }, client);
     }
 
     return updated || inv;

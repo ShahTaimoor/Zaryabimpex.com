@@ -6,6 +6,7 @@ const { validateDateParams, processDateFilter } = require('../middleware/dateFil
 const salesPerformanceService = require('../services/salesPerformanceService');
 const salesPerformanceRepository = require('../repositories/postgres/SalesPerformanceRepository');
 const salesRepository = require('../repositories/postgres/SalesRepository');
+const productRepository = require('../repositories/postgres/ProductRepository');
 
 const router = express.Router();
 

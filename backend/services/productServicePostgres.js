@@ -35,6 +35,29 @@ async function resolveCategoryId(categoryOrName) {
   return cat ? cat.id : null;
 }
 
+async function resolveOrCreateCategoryId(categoryOrName) {
+  if (categoryOrName == null || categoryOrName === '') return null;
+  const s = String(categoryOrName).trim();
+  if (!s) return null;
+  if (UUID_REGEX.test(s)) return s;
+
+  const existing = await categoryRepository.findByName(s);
+  if (existing) return existing.id;
+
+  try {
+    const created = await categoryRepository.create({
+      name: s,
+      isActive: true
+    });
+    return created?.id || null;
+  } catch (err) {
+    // Handle concurrent imports creating the same category.
+    const retry = await categoryRepository.findByName(s);
+    if (retry) return retry.id;
+    throw err;
+  }
+}
+
 function toApiProduct(row, categoryMap = null) {
   if (!row) return null;
   const id = row.id;
@@ -692,7 +715,8 @@ class ProductServicePostgres {
     const categoryMap = await getCategoryMap(categoryIds);
     return rows.map(p => toApiProduct(p, categoryMap));
   }
-  async bulkCreateProducts(productsData, userId, req = null) {
+  async bulkCreateProducts(productsData, userId, req = null, options = {}) {
+    const { autoCreateCategories = true } = options;
     const results = { created: 0, failed: 0, errors: [] };
     
     for (const item of productsData) {
@@ -717,6 +741,14 @@ class ProductServicePostgres {
 
         if (!formattedProduct.name) {
           throw new Error('Product name is missing');
+        }
+
+        // Import behavior toggle: create missing category names only when enabled.
+        if (formattedProduct.category) {
+          const resolvedCategoryId = autoCreateCategories
+            ? await resolveOrCreateCategoryId(formattedProduct.category)
+            : await resolveCategoryId(formattedProduct.category);
+          formattedProduct.category = resolvedCategoryId || formattedProduct.category;
         }
 
         await this.createProduct(formattedProduct, userId, req);

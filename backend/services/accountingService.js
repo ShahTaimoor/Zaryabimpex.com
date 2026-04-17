@@ -1485,7 +1485,8 @@ class AccountingService {
    * Record sale transaction (posts to account_ledger: AR, Revenue, and COGS/Inventory when applicable).
    * Sale object may use snake_case (from DB) or camelCase; items may have unitCost or cost_price.
    */
-  static async recordSale(sale) {
+  static async recordSale(sale, options = {}) {
+    const { client = null } = options;
     const customerId = sale.customer_id || sale.customerId;
     const total = Number(sale.total);
     if (total !== total || total < 0) {
@@ -1506,7 +1507,7 @@ class AccountingService {
     const txnDate = sale.sale_date || sale.saleDate || sale.created_at || sale.createdAt || new Date();
     const createdBy = sale.created_by || sale.createdBy;
 
-    return await transaction(async (client) => {
+    const runInTransaction = async (clientToUse) => {
       // 1. Debit: Accounts Receivable, Credit: Sales Revenue (only if total > 0)
       if (total > 0) {
         await this.createTransaction(
@@ -1530,7 +1531,8 @@ class AccountingService {
             currency: 'PKR',
             transactionDate: txnDate,
             createdBy: createdBy
-          }
+          },
+          clientToUse
         );
       }
 
@@ -1556,10 +1558,16 @@ class AccountingService {
             currency: 'PKR',
             transactionDate: txnDate,
             createdBy: createdBy
-          }
+          },
+          clientToUse
         );
       }
       return { ok: true };
+    };
+
+    if (client) return await runInTransaction(client);
+    return await transaction(async (newClient) => {
+      return await runInTransaction(newClient);
     });
   }
 
@@ -1570,7 +1578,8 @@ class AccountingService {
    * - Delta < 0: Dr AR, Cr Cash/Bank (reversal)
    * @param {Object} params - { saleId, orderNumber, customerId, oldAmountPaid, newAmountPaid, paymentMethod, createdBy }
    */
-  static async recordSalePaymentAdjustment(params) {
+  static async recordSalePaymentAdjustment(params, options = {}) {
+    const { client = null } = options;
     const { saleId, orderNumber, customerId, oldAmountPaid, newAmountPaid, paymentMethod = 'cash', createdBy } = params;
     const oldAmt = parseFloat(oldAmountPaid) || 0;
     const newAmt = parseFloat(newAmountPaid) || 0;
@@ -1586,7 +1595,8 @@ class AccountingService {
       return await this.createTransaction(
         { accountCode: debitAccount, debitAmount: delta, creditAmount: 0, description: `Sale payment (edit): ${refNum}` },
         { accountCode: creditAccount, debitAmount: 0, creditAmount: delta, description: `Payment for sale: ${refNum}` },
-        { referenceType: 'sale_payment', referenceId: saleId, referenceNumber: refNum, customerId: customerId || null, currency: 'PKR', createdBy }
+        { referenceType: 'sale_payment', referenceId: saleId, referenceNumber: refNum, customerId: customerId || null, currency: 'PKR', createdBy },
+        client
       );
     } else {
       // Reversal: Dr AR, Cr Cash/Bank
@@ -1594,7 +1604,8 @@ class AccountingService {
       return await this.createTransaction(
         { accountCode: creditAccount, debitAmount: absDelta, creditAmount: 0, description: `Sale payment reversal (edit): ${refNum}` },
         { accountCode: debitAccount, debitAmount: 0, creditAmount: absDelta, description: `Reversal for sale: ${refNum}` },
-        { referenceType: 'sale_payment', referenceId: saleId, referenceNumber: refNum, customerId: customerId || null, currency: 'PKR', createdBy }
+        { referenceType: 'sale_payment', referenceId: saleId, referenceNumber: refNum, customerId: customerId || null, currency: 'PKR', createdBy },
+        client
       );
     }
   }

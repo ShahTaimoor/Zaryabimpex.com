@@ -289,7 +289,7 @@ class SalesRepository {
   /**
    * Update a sale
    */
-  async update(id, updateData) {
+  async update(id, updateData, client = null) {
     const fields = [];
     const values = [];
     let paramCount = 1;
@@ -381,7 +381,8 @@ class SalesRepository {
       RETURNING *
     `;
 
-    const result = await query(sql, values);
+    const q = client ? client.query.bind(client) : query;
+    const result = await q(sql, values);
     const sale = result.rows[0];
     if (sale && sale.items && typeof sale.items === 'string') {
       sale.items = JSON.parse(sale.items);

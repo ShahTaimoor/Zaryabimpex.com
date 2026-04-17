@@ -712,7 +712,12 @@ router.post('/bulk-create', [
       return res.status(400).json({ errors: errors.array() });
     }
     
-    const result = await productService.bulkCreateProducts(req.body.products, req.user?.id || req.user?._id, req);
+    const result = await productService.bulkCreateProducts(
+      req.body.products,
+      req.user?.id || req.user?._id,
+      req,
+      { autoCreateCategories: req.body.autoCreateCategories !== false }
+    );
     res.status(201).json(result);
   } catch (error) {
     console.error('Bulk create products error:', error);

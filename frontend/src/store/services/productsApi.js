@@ -148,10 +148,10 @@ export const productsApi = api.injectEndpoints({
       ],
     }),
     bulkCreateProducts: builder.mutation({
-      query: (products) => ({
+      query: ({ products, autoCreateCategories = true }) => ({
         url: 'products/bulk-create',
         method: 'post',
-        data: { products },
+        data: { products, autoCreateCategories },
       }),
       invalidatesTags: [
         { type: 'Products', id: 'LIST' },

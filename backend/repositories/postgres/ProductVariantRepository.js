@@ -101,7 +101,7 @@ class ProductVariantRepository {
     return result.rows[0];
   }
 
-  async updateById(id, data) {
+  async updateById(id, data, client = null) {
     const updates = [];
     const params = [];
     let paramCount = 1;
@@ -115,7 +115,8 @@ class ProductVariantRepository {
     if (updates.length === 0) return this.findById(id);
     updates.push('updated_at = CURRENT_TIMESTAMP');
     params.push(id);
-    const result = await query(`UPDATE product_variants SET ${updates.join(', ')} WHERE id = $${paramCount} AND deleted_at IS NULL RETURNING *`, params);
+    const q = client ? client.query.bind(client) : query;
+    const result = await q(`UPDATE product_variants SET ${updates.join(', ')} WHERE id = $${paramCount} AND deleted_at IS NULL RETURNING *`, params);
     return result.rows[0] || null;
   }
 

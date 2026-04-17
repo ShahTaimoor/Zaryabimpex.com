@@ -126,7 +126,7 @@ export function DualUnitQuantityInput({
 
   /** Always merge so callers can override sizing — never drop w-full/min-w-0 (prevents grid overflow into Rate, etc.) */
   const baseInput = cn(
-    'w-full min-w-0 text-center border border-gray-300 rounded-md px-2 h-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500',
+    'w-full min-w-0 text-center border border-gray-300 rounded-md px-2 h-10 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500',
     inputClassName
   );
 
@@ -164,9 +164,12 @@ export function DualUnitQuantityInput({
             max={max != null ? max : undefined}
             value={quantity || ''}
             onChange={handleSingleChange}
+            onFocus={(e) => e.target.select()}
             onKeyDown={onKeyDown}
             disabled={disabled}
             placeholder={placeholder}
+            inputMode="numeric"
+            pattern="[0-9]*"
             className={baseInput}
           />
           {!compact && showPiecesUnitLabel && (
@@ -196,9 +199,12 @@ export function DualUnitQuantityInput({
             max={max != null ? max : undefined}
             value={quantity || ''}
             onChange={handleDualTotalPiecesOnlyChange}
+            onFocus={(e) => e.target.select()}
             onKeyDown={onKeyDown}
             disabled={disabled}
             placeholder={placeholder}
+            inputMode="numeric"
+            pattern="[0-9]*"
             className={baseInput}
           />
           {!compact && showPiecesUnitLabel && (
@@ -213,7 +219,7 @@ export function DualUnitQuantityInput({
   if (compact || variant === 'compact') {
     /** Input row (h-8): Box/Pieces inputs only (no trailing Total box, no caption row). */
     const segmentInputClass =
-      'min-w-0 flex-1 border-0 bg-transparent p-0 text-center text-sm tabular-nums text-gray-900 shadow-none ring-0 placeholder:text-gray-400 focus:outline-none focus:ring-0 h-full';
+      'min-w-0 flex-1 border-0 bg-transparent p-0 text-center text-base md:text-sm tabular-nums text-gray-900 shadow-none ring-0 placeholder:text-gray-400 focus:outline-none focus:ring-0 h-full';
 
     return (
       <div className={`flex w-full min-w-0 flex-col gap-0.5 ${className}`} {...props}>
@@ -229,9 +235,12 @@ export function DualUnitQuantityInput({
                 min={0}
                 value={quantity === 0 ? '' : (boxes !== undefined ? boxes : '')}
                 onChange={handleBoxesChange}
+                onFocus={(e) => e.target.select()}
                 onKeyDown={onKeyDown}
                 disabled={disabled}
                 placeholder="0"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 className={segmentInputClass}
                 title="Full boxes"
               />
@@ -244,9 +253,12 @@ export function DualUnitQuantityInput({
                 min={0}
                 value={quantity === 0 ? '' : (pieces !== undefined ? pieces : '')}
                 onChange={handlePiecesChange}
+                onFocus={(e) => e.target.select()}
                 onKeyDown={onKeyDown}
                 disabled={disabled}
                 placeholder="0"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 className={segmentInputClass}
                 title="Loose pieces"
               />
@@ -269,9 +281,12 @@ export function DualUnitQuantityInput({
               min={0}
               value={quantity === 0 ? '' : (boxes !== undefined ? boxes : '')}
               onChange={handleBoxesChange}
+              onFocus={(e) => e.target.select()}
               onKeyDown={onKeyDown}
               disabled={disabled}
               placeholder="0"
+              inputMode="numeric"
+              pattern="[0-9]*"
               className={baseInput}
               title="Full boxes"
             />
@@ -285,9 +300,12 @@ export function DualUnitQuantityInput({
               min={0}
               value={quantity === 0 ? '' : (pieces !== undefined ? pieces : '')}
               onChange={handlePiecesChange}
+              onFocus={(e) => e.target.select()}
               onKeyDown={onKeyDown}
               disabled={disabled}
               placeholder="0"
+              inputMode="numeric"
+              pattern="[0-9]*"
               className={baseInput}
               title="Loose pieces"
             />

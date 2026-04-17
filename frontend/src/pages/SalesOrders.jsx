@@ -2340,6 +2340,7 @@ const SalesOrders = ({ tabId }) => {
                                       ))
                                     }));
                                   }}
+                                  onFocus={(e) => e.target.select()}
                                   className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(product?.inventory?.currentStock || 0) === 0
                                     ? 'text-red-700 bg-red-50 border-red-200'
                                     : (product?.inventory?.currentStock || 0) <= (product?.inventory?.reorderPoint || 0)
@@ -2450,6 +2451,7 @@ const SalesOrders = ({ tabId }) => {
                               )
                             }));
                           }}
+                          onFocus={(e) => e.target.select()}
                           className={`input text-center h-8 ${lastPurchasePrices[item.product?.toString()] !== undefined &&
                             item.unitPrice < lastPurchasePrices[item.product?.toString()]
                             ? 'border-red-500 bg-red-50'
@@ -2601,6 +2603,7 @@ const SalesOrders = ({ tabId }) => {
                                 )
                               }));
                             }}
+                            onFocus={(e) => e.target.select()}
                             className={`input text-center h-8 text-sm w-full ${lastPurchasePrices[item.product?.toString()] !== undefined &&
                               item.unitPrice < lastPurchasePrices[item.product?.toString()]
                               ? 'border-red-500 bg-red-50'

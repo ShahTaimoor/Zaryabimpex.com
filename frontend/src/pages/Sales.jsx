@@ -1745,6 +1745,7 @@ export const Sales = ({ tabId, editData }) => {
                                 onChange={(e) =>
                                   updateCartBoxCount(item.product._id, e.target.value)
                                 }
+                                onFocus={(e) => e.target.select()}
                                 className={`text-sm font-semibold w-full rounded border px-2 py-1 text-center focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(item.product.inventory?.currentStock || 0) === 0
                                   ? 'text-red-700 bg-red-50 border-red-200'
                                   : (item.product.inventory?.currentStock || 0) <=
@@ -1800,6 +1801,7 @@ export const Sales = ({ tabId, editData }) => {
                           autoComplete="off"
                           value={Math.round(item.unitPrice)}
                           onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
+                          onFocus={(e) => e.target.select()}
                           className={`text-center h-8 w-full ${(lastPurchasePrices[item.product._id] !== undefined &&
                             item.unitPrice < lastPurchasePrices[item.product._id])
                             ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
@@ -1921,6 +1923,7 @@ export const Sales = ({ tabId, editData }) => {
                                   onChange={(e) =>
                                     updateCartBoxCount(item.product._id, e.target.value)
                                   }
+                                  onFocus={(e) => e.target.select()}
                                   className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(item.product.inventory?.currentStock || 0) === 0
                                     ? 'text-red-700 bg-red-50 border-red-200'
                                     : (item.product.inventory?.currentStock || 0) <=
@@ -2001,6 +2004,7 @@ export const Sales = ({ tabId, editData }) => {
                               autoComplete="off"
                               value={Math.round(item.unitPrice)}
                               onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
+                              onFocus={(e) => e.target.select()}
                               className={`text-center h-8 ${
                                 // Check if sale price is less than cost price - highest priority styling (always check)
                                 isBelowCost
@@ -2546,6 +2550,7 @@ export const Sales = ({ tabId, editData }) => {
                               : Math.min(Math.max(raw, 0), Math.max(0, Math.round(subtotal)));
                             setDirectDiscount((prev) => ({ ...prev, value }));
                           }}
+                          onFocus={(e) => e.target.select()}
                           className="flex-1 h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
                           min="0"
                           step={directDiscount.type === 'percentage' ? '1' : '1'}

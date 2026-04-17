@@ -450,7 +450,7 @@ router.put('/:id/confirm', [
           referenceModel: 'PurchaseOrder',
           performedBy: req.user?.id || req.user?._id,
           notes: `Stock increased due to purchase order confirmation - PO: ${poNumber}`
-        });
+        }, { skipAccountingEntry: true });
 
         inventoryUpdates.push({
           productId,
@@ -708,7 +708,7 @@ router.post('/:id/convert', [
           referenceModel: 'PurchaseOrder',
           performedBy: userId,
           notes: `Stock increased from purchase order: ${poNumber}`
-        });
+        }, { skipAccountingEntry: true });
 
         const poItem = purchaseOrder.items.find(pi =>
           (pi.product_id || pi.product || '').toString() === (item.product || '').toString()

@@ -622,9 +622,13 @@ function ProductSearchComponent({
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Amount
               </label>
-              <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
-                {isAddingProduct ? Math.round(quantity * parseInt(customRate || 0)) : 0}
-              </span>
+              <Input
+                type="text"
+                readOnly
+                value={isAddingProduct ? Math.round(quantity * parseInt(customRate || 0)) : 0}
+                onFocus={(e) => e.target.select()}
+                className="text-center h-10 bg-gray-100 font-semibold text-gray-700"
+              />
             </div>
 
             {/* Box + Qty (dual unit): no parent "Quantity" label — matches cart columns */}
@@ -653,6 +657,7 @@ function ProductSearchComponent({
                             const capped = allowOutOfStock ? raw : Math.min(raw, selectedStockPieces);
                             setQuantity(Math.max(1, capped || 0));
                           }}
+                          onFocus={(e) => e.target.select()}
                           onKeyDown={handleKeyDown}
                           className="text-center h-10"
                         />
@@ -670,6 +675,7 @@ function ProductSearchComponent({
                             const capped = allowOutOfStock ? raw : Math.min(raw, selectedStockPieces);
                             setQuantity(Math.max(1, capped || 0));
                           }}
+                          onFocus={(e) => e.target.select()}
                           onKeyDown={handleKeyDown}
                           className="text-center h-10"
                         />
@@ -697,6 +703,7 @@ function ProductSearchComponent({
                   min="1"
                   value={quantity || ''}
                   onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 0))}
+                  onFocus={(e) => e.target.select()}
                   onKeyDown={handleKeyDown}
                   className="text-center h-10"
                 />
@@ -932,6 +939,7 @@ function ProductSearchComponent({
                           const capped = allowOutOfStock ? raw : Math.min(raw, selectedStockPieces);
                           setQuantity(Math.max(1, capped || 0));
                         }}
+                        onFocus={(e) => e.target.select()}
                         onKeyDown={handleKeyDown}
                         className="text-center h-10"
                       />
@@ -949,6 +957,7 @@ function ProductSearchComponent({
                           const capped = allowOutOfStock ? raw : Math.min(raw, selectedStockPieces);
                           setQuantity(Math.max(1, capped || 0));
                         }}
+                        onFocus={(e) => e.target.select()}
                         onKeyDown={handleKeyDown}
                         className="text-center h-10"
                       />
@@ -976,6 +985,7 @@ function ProductSearchComponent({
                 min="1"
                 value={quantity || ''}
                 onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 0))}
+                onFocus={(e) => e.target.select()}
                 onKeyDown={handleKeyDown}
                 className="text-center h-10"
               />
@@ -1022,9 +1032,13 @@ function ProductSearchComponent({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Amount
             </label>
-            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
-              {isAddingProduct ? Math.round(quantity * parseInt(customRate || 0)) : 0}
-            </span>
+            <Input
+              type="text"
+              readOnly
+              value={isAddingProduct ? Math.round(quantity * parseInt(customRate || 0)) : 0}
+              onFocus={(e) => e.target.select()}
+              className="text-center h-10 bg-gray-100 font-semibold text-gray-700"
+            />
           </div>
 
           {/* Add Button - 1 column */}

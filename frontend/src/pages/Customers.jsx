@@ -123,13 +123,17 @@ export const Customers = () => {
   };
 
   const [bulkCreateCustomers] = useBulkCreateCustomersMutation();
+  const [autoCreateImportCities, setAutoCreateImportCities] = useState(true);
 
   const handleImportData = async (data) => {
     if (!data || data.length === 0) return;
 
     const toastId = toast.loading(`Saving ${data.length} customers to database...`);
     try {
-      const response = await bulkCreateCustomers(data).unwrap();
+      const response = await bulkCreateCustomers({
+        customers: data,
+        autoCreateCities: autoCreateImportCities
+      }).unwrap();
       if (response.created > 0) {
         toast.success(`Successfully imported ${response.created} customers!`, { id: toastId });
         if (response.failed > 0) {
@@ -177,6 +181,15 @@ export const Customers = () => {
           <ExcelExportButton getData={getExportData} label="Export" />
           <PdfExportButton getData={getExportData} label="PDF" />
           <ExcelImportButton onDataImported={handleImportData} label="Import" />
+          <label className="inline-flex items-center gap-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
+            <input
+              type="checkbox"
+              checked={autoCreateImportCities}
+              onChange={(e) => setAutoCreateImportCities(e.target.checked)}
+              className="h-4 w-4"
+            />
+            Auto-create city
+          </label>
           <Button
             onClick={handleDownloadTemplate}
             variant="outline"
