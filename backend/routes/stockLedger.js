@@ -12,6 +12,72 @@ const ProductRepository = require('../repositories/postgres/ProductRepository');
 const CustomerRepository = require('../repositories/postgres/CustomerRepository');
 const SupplierRepository = require('../repositories/postgres/SupplierRepository');
 const InventoryRepository = require('../repositories/InventoryRepository');
+const inventoryBalanceRepository = require('../repositories/postgres/InventoryBalanceRepository');
+const ProductVariantRepository = require('../repositories/postgres/ProductVariantRepository');
+
+/** UUID from purchase/sale line items (product may be string id or populated object). */
+function lineItemProductId(item) {
+  if (!item) return null;
+  const fromObj = (o) => {
+    if (!o || typeof o !== 'object') return null;
+    return o.id ?? o._id ?? null;
+  };
+  const raw =
+    item.product_id ??
+    item.productId ??
+    (typeof item.product === 'object' ? fromObj(item.product) : item.product);
+  if (raw == null || raw === '') return null;
+  const s = String(raw).trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s) ? s : null;
+}
+
+function lineItemNameFallback(item) {
+  if (!item) return null;
+  const n =
+    (typeof item.product === 'object' &&
+      item.product &&
+      (item.product.name || item.product.displayName || item.product.display_name)) ||
+    item.name ||
+    item.productName ||
+    item.product_name;
+  const t = n != null ? String(n).trim() : '';
+  return t && t !== 'Unknown Product' ? t : null;
+}
+
+async function resolveLedgerProductName(productId, item) {
+  const fb = lineItemNameFallback(item);
+  if (fb) return fb;
+  if (!productId) return 'Unknown Product';
+  const prod = await ProductRepository.findById(productId, true);
+  if (prod?.name) return prod.name;
+  const variant = await ProductVariantRepository.findById(productId, true);
+  if (variant) {
+    const vn = variant.display_name || variant.displayName || variant.variant_name || variant.variantName;
+    if (vn) return vn;
+  }
+  return 'Unknown Product';
+}
+
+async function resolveQtyLeft(productId) {
+  let qtyLeft = 0;
+  try {
+    const inv = await InventoryRepository.findByProduct(productId, { includeDeleted: true });
+    if (inv != null) {
+      qtyLeft = Number(inv.current_stock ?? inv.currentStock ?? 0);
+      return qtyLeft;
+    }
+    const bal = await inventoryBalanceRepository.findByProduct(productId);
+    if (bal != null) {
+      qtyLeft = Number(bal.quantity ?? 0);
+      return qtyLeft;
+    }
+    const prod = await ProductRepository.findById(productId);
+    if (prod) qtyLeft = Number(prod.stock_quantity ?? prod.stockQuantity ?? 0);
+  } catch (err) {
+    console.warn('Stock ledger: could not get qty left for product', productId, err.message);
+  }
+  return qtyLeft;
+}
 
 /**
  * @route   GET /api/stock-ledger
@@ -100,17 +166,17 @@ router.get('/', [
         const invoiceDate = sale.sale_date || sale.created_at || sale.createdAt;
         const orderNum = sale.order_number || sale.orderNumber || saleId;
         for (const item of items) {
-          const productId = item.product || item.product_id;
+          const productId = lineItemProductId(item);
           if (product && String(productId) !== product) continue;
           if (!productId) continue;
-          const prod = await ProductRepository.findById(productId, true);
+          const productName = await resolveLedgerProductName(productId, item);
           addEntry({
             invoiceDate,
             invoiceNo: orderNum,
             invoiceType: 'SALE',
             customerSupplier: customerName,
             productId: productId,
-            productName: prod?.name || 'Unknown Product',
+            productName,
             price: item.unit_price || item.unitPrice || 0,
             quantity: -(item.quantity || 0),
             amount: -((item.total || item.subtotal || (item.quantity || 0) * (item.unit_price || item.unitPrice || 0))),
@@ -144,17 +210,17 @@ router.get('/', [
         if (dateFrom && new Date(invDate) < dateFrom) continue;
         if (dateTo && new Date(invDate) > dateTo) continue;
         for (const item of items) {
-          const productId = item.product || item.product_id;
+          const productId = lineItemProductId(item);
           if (product && String(productId) !== product) continue;
           if (!productId) continue;
-          const prod = await ProductRepository.findById(productId, true);
+          const productName = await resolveLedgerProductName(productId, item);
           addEntry({
             invoiceDate: invDate,
             invoiceNo: invNum,
             invoiceType: 'PURCHASE',
             customerSupplier: supplierName,
             productId,
-            productName: prod?.name || 'Unknown Product',
+            productName,
             price: item.unit_cost || item.unitCost || 0,
             quantity: item.quantity || 0,
             amount: item.total_cost || item.totalCost || (item.quantity || 0) * (item.unit_cost || item.unitCost || 0),
@@ -183,17 +249,17 @@ router.get('/', [
         }
         const retDate = returnDoc.return_date || returnDoc.returnDate || returnDoc.created_at || returnDoc.createdAt;
         for (const item of items) {
-          const pid = item.product && (typeof item.product === 'object' ? (item.product.id || item.product._id) : item.product) || item.product_id;
+          const pid = lineItemProductId(item);
           if (product && String(pid) !== product) continue;
           if (!pid) continue;
-          const prod = await ProductRepository.findById(pid, true);
+          const productName = await resolveLedgerProductName(pid, item);
           addEntry({
             invoiceDate: retDate,
             invoiceNo: invNo,
             invoiceType: 'SALE RETURN',
             customerSupplier: customerName,
             productId: pid,
-            productName: prod?.name || 'Unknown Product',
+            productName,
             price: item.originalPrice || item.original_price || 0,
             quantity: item.quantity || 0,
             amount: item.refundAmount || item.refund_amount || (item.originalPrice || item.original_price || 0) * (item.quantity || 0),
@@ -222,17 +288,17 @@ router.get('/', [
         const invNo = originalPurchase?.invoice_number || originalPurchase?.invoiceNumber || returnDoc.return_number || returnDoc.returnNumber || (returnDoc.id || returnDoc._id);
         const retDate = returnDoc.return_date || returnDoc.returnDate || returnDoc.created_at || returnDoc.createdAt;
         for (const item of items) {
-          const pid = item.product && (typeof item.product === 'object' ? (item.product.id || item.product._id) : item.product) || item.product_id;
+          const pid = lineItemProductId(item);
           if (product && String(pid) !== product) continue;
           if (!pid) continue;
-          const prod = await ProductRepository.findById(pid, true);
+          const productName = await resolveLedgerProductName(pid, item);
           addEntry({
             invoiceDate: retDate,
             invoiceNo: invNo,
             invoiceType: 'PURCHASE RETURN',
             customerSupplier: supplierName,
             productId: pid,
-            productName: prod?.name || 'Unknown Product',
+            productName,
             price: item.originalPrice || item.original_price || 0,
             quantity: -(item.quantity || 0),
             amount: -((item.refundAmount || item.refund_amount) || (item.originalPrice || item.original_price || 0) * (item.quantity || 0)),
@@ -247,7 +313,7 @@ router.get('/', [
       const damageFilter = { movementType: 'damage', dateFrom, dateTo, productId: product, product };
       const damages = await StockMovementRepository.findAll(damageFilter);
       for (const damage of damages || []) {
-        const productId = damage.product_id || damage.product;
+        const productId = lineItemProductId({ product_id: damage.product_id, product: damage.product });
         if (product && String(productId) !== product) continue;
         if (invoiceNo && damage.reference_number && !String(damage.reference_number).includes(String(invoiceNo))) continue;
         let customerSupplier = 'N/A';
@@ -258,14 +324,17 @@ router.get('/', [
           const s = await SupplierRepository.findById(damage.supplier_id, true);
           customerSupplier = s?.company_name || s?.companyName || s?.business_name || s?.displayName || s?.name || 'Unknown Supplier';
         }
-        const prod = productId ? await ProductRepository.findById(productId, true) : null;
+        const productName = await resolveLedgerProductName(productId, {
+          name: damage.product_name,
+          product: damage.product_name ? { name: damage.product_name } : null,
+        });
         addEntry({
           invoiceDate: damage.created_at || damage.movementDate || damage.createdAt,
           invoiceNo: damage.reference_number || damage.referenceNumber || `DMG-${damage.id || damage._id}`,
           invoiceType: 'DEMAGE',
           customerSupplier,
           productId: productId,
-          productName: damage.product_name || prod?.name || 'Unknown Product',
+          productName,
           price: damage.unit_cost || damage.unitCost || 0,
           quantity: -(damage.quantity || 0),
           amount: -(damage.total_value ?? damage.totalValue ?? 0),
@@ -312,25 +381,14 @@ router.get('/', [
     // Convert to array format and attach current stock (qty left) per product
     const productTotals = await Promise.all(
       Array.from(productMap.values()).map(async (productData) => {
-        let qtyLeft = 0;
-        try {
-          const inv = await InventoryRepository.findByProduct(productData.productId, { includeDeleted: true });
-          if (inv != null) {
-            qtyLeft = Number(inv.current_stock ?? inv.currentStock ?? 0);
-          } else {
-            const prod = await ProductRepository.findById(productData.productId);
-            if (prod) qtyLeft = Number(prod.stock_quantity ?? prod.stockQuantity ?? 0);
-          }
-        } catch (err) {
-          console.warn('Stock ledger: could not get qty left for product', productData.productId, err.message);
-        }
+        const qtyLeft = await resolveQtyLeft(productData.productId);
         return {
           productId: productData.productId,
           productName: productData.productName,
           entries: productData.entries,
           totalQuantity: productData.totalQuantity,
           totalAmount: productData.totalAmount,
-          qtyLeft
+          qtyLeft,
         };
       })
     );

@@ -19,9 +19,16 @@ import { handleApiError } from '../utils/errorHandler';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo, formatDateForInput } from '../utils/dateUtils';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
-/** Max rows per filter dropdown (type to search for different matches) */
-const ENTITY_DROPDOWN_LIMIT = 20;
+/** Initial rows when opening customer/supplier dropdown (no search yet) */
+const ENTITY_DROPDOWN_INITIAL_LIMIT = 20;
+/** When user types a search, request enough rows to return all server matches (API max ~999999) */
+const ENTITY_DROPDOWN_SEARCH_LIMIT = 100000;
+
+/** Postgres APIs return `id`; legacy Mongo-style responses may use `_id` */
+const entityId = (row) => (row?.id != null ? row.id : row?._id);
 
 export const StockLedger = () => {
   const defaultDateTo = getCurrentDatePakistan();
@@ -91,9 +98,13 @@ export const StockLedger = () => {
     }
   );
 
+  const customerListLimit = customerSearchQuery.trim()
+    ? ENTITY_DROPDOWN_SEARCH_LIMIT
+    : ENTITY_DROPDOWN_INITIAL_LIMIT;
+
   const { data: customersData } = useGetCustomersQuery(
     {
-      limit: ENTITY_DROPDOWN_LIMIT,
+      limit: customerListLimit,
       page: 1,
       ...(customerSearchQuery.trim() ? { search: customerSearchQuery.trim() } : {}),
     },
@@ -104,9 +115,13 @@ export const StockLedger = () => {
     return customersData?.data?.customers || customersData?.customers || customersData?.data || [];
   }, [customersData]);
 
+  const supplierListLimit = supplierSearchQuery.trim()
+    ? ENTITY_DROPDOWN_SEARCH_LIMIT
+    : ENTITY_DROPDOWN_INITIAL_LIMIT;
+
   const { data: suppliersData } = useGetSuppliersQuery(
     {
-      limit: ENTITY_DROPDOWN_LIMIT,
+      limit: supplierListLimit,
       page: 1,
       ...(supplierSearchQuery.trim() ? { search: supplierSearchQuery.trim() } : {}),
     },
@@ -117,10 +132,13 @@ export const StockLedger = () => {
     return suppliersData?.data?.suppliers || suppliersData?.suppliers || suppliersData?.data || [];
   }, [suppliersData]);
 
-  // Product dropdown: at most ENTITY_DROPDOWN_LIMIT rows; optional server search while typing
+  const productListLimit = productSearchQuery.trim()
+    ? ENTITY_DROPDOWN_SEARCH_LIMIT
+    : ENTITY_DROPDOWN_INITIAL_LIMIT;
+
   const { data: productsData } = useGetProductsQuery(
     {
-      limit: ENTITY_DROPDOWN_LIMIT,
+      limit: productListLimit,
       page: 1,
       ...(productSearchQuery.trim() ? { search: productSearchQuery.trim() } : {}),
     },
@@ -131,52 +149,52 @@ export const StockLedger = () => {
     return productsData?.data?.products || productsData?.products || productsData?.data || [];
   }, [productsData]);
 
-  const filteredCustomers = useMemo(
-    () => allCustomers.slice(0, ENTITY_DROPDOWN_LIMIT),
-    [allCustomers]
-  );
+  const filteredCustomers = useMemo(() => {
+    if (customerSearchQuery.trim()) return allCustomers;
+    return allCustomers.slice(0, ENTITY_DROPDOWN_INITIAL_LIMIT);
+  }, [allCustomers, customerSearchQuery]);
 
-  const filteredSuppliers = useMemo(
-    () => allSuppliers.slice(0, ENTITY_DROPDOWN_LIMIT),
-    [allSuppliers]
-  );
+  const filteredSuppliers = useMemo(() => {
+    if (supplierSearchQuery.trim()) return allSuppliers;
+    return allSuppliers.slice(0, ENTITY_DROPDOWN_INITIAL_LIMIT);
+  }, [allSuppliers, supplierSearchQuery]);
 
-  const filteredProducts = useMemo(
-    () => allProducts.slice(0, ENTITY_DROPDOWN_LIMIT),
-    [allProducts]
-  );
+  const filteredProducts = useMemo(() => {
+    if (productSearchQuery.trim()) return allProducts;
+    return allProducts.slice(0, ENTITY_DROPDOWN_INITIAL_LIMIT);
+  }, [allProducts, productSearchQuery]);
 
   const handleFilterChange = (field, value) => {
     setFilters({ ...filters, [field]: value });
     if (field === 'customer') {
-      const c = allCustomers.find(x => x._id === value);
+      const c = allCustomers.find((x) => String(entityId(x)) === String(value));
       setCustomerSearchQuery(value && c ? (c.businessName || c.business_name || c.displayName || c.name || '') : '');
     }
     if (field === 'supplier') {
-      const s = allSuppliers.find(x => x._id === value);
+      const s = allSuppliers.find((x) => String(entityId(x)) === String(value));
       setSupplierSearchQuery(value && s ? (s.companyName || s.company_name || s.businessName || s.business_name || s.displayName || s.name || '') : '');
     }
     if (field === 'product') {
-      setProductSearchQuery(value ? (allProducts.find(p => p._id === value)?.name || '') : '');
+      setProductSearchQuery(value ? (allProducts.find((p) => String(entityId(p)) === String(value))?.name || '') : '');
     }
   };
 
   const handleCustomerSelect = (customer) => {
-    setFilters({ ...filters, customer: customer._id, supplier: '' });
+    setFilters({ ...filters, customer: entityId(customer), supplier: '' });
     setCustomerSearchQuery(customer.businessName || customer.business_name || customer.displayName || customer.name || '');
     setShowCustomerDropdown(false);
     setSupplierSearchQuery('');
   };
 
   const handleSupplierSelect = (supplier) => {
-    setFilters({ ...filters, supplier: supplier._id, customer: '' });
+    setFilters({ ...filters, supplier: entityId(supplier), customer: '' });
     setSupplierSearchQuery(supplier.companyName || supplier.company_name || supplier.businessName || supplier.business_name || supplier.displayName || supplier.name || '');
     setShowSupplierDropdown(false);
     setCustomerSearchQuery('');
   };
 
   const handleProductSelect = (product) => {
-    setFilters({ ...filters, product: product._id });
+    setFilters({ ...filters, product: entityId(product) });
     setProductSearchQuery(product.name || '');
     setShowProductDropdown(false);
   };
@@ -228,36 +246,43 @@ export const StockLedger = () => {
   const pagination = ledgerData?.data?.pagination || { current: 1, pages: 1, total: 0 };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <FileText className="h-6 w-6 text-blue-600" />
+    <div className="min-h-screen bg-slate-50/90 print:bg-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 print:px-4 print:py-4">
+        {/* Page header — hidden when printing */}
+        <header className="mb-8 print:hidden">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 shadow-md shadow-blue-600/20">
+              <FileText className="h-6 w-6 text-white" aria-hidden />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">Stock Ledger</h1>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Stock Ledger</h1>
+              <p className="mt-1.5 text-sm text-slate-500 leading-relaxed max-w-2xl">
+                View stock movement history with detailed filters and comprehensive reporting.
+              </p>
+            </div>
           </div>
-          <p className="ml-14 text-sm text-gray-600">View stock movement history with detailed filters and comprehensive reporting</p>
-        </div>
+        </header>
 
-        {/* Filter Section */}
-        <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-6 mb-6">
-          <div className="flex items-center gap-2 mb-6 pb-4 border-b border-gray-200">
-            <Search className="h-5 w-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Filter Options</h2>
+        {/* Filter card — hidden when printing */}
+        <section className="mb-6 rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm print:hidden">
+          <div className="flex items-center gap-2.5 border-b border-slate-100 pb-4 mb-5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100">
+              <Search className="h-4 w-4 text-slate-600" />
+            </div>
+            <h2 className="text-base font-semibold text-slate-900">Filter Options</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
             {/* Invoice Type */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2.5 flex items-center gap-2">
-                <FileText className="h-4 w-4 text-gray-500" />
+              <label className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <FileText className="h-3.5 w-3.5 text-slate-400" />
                 Invoice Type
               </label>
               <select
                 value={filters.invoiceType}
                 onChange={(e) => handleFilterChange('invoiceType', e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm hover:border-gray-400"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 hover:border-slate-300"
               >
                 <option value="--All--">--All--</option>
                 <option value="SALE">SALE</option>
@@ -270,8 +295,8 @@ export const StockLedger = () => {
 
             {/* Customer / Supplier */}
             <div className="relative" ref={customerDropdownRef}>
-              <label className="block text-sm font-semibold text-gray-700 mb-2.5 flex items-center gap-2">
-                <User className="h-4 w-4 text-gray-500" />
+              <label className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <User className="h-3.5 w-3.5 text-slate-400" />
                 Customer / Supplier
               </label>
               <div className="relative">
@@ -309,15 +334,15 @@ export const StockLedger = () => {
                       setShowSupplierDropdown(true);
                     }
                   }}
-                  className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm hover:border-gray-400"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 pr-10 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 hover:border-slate-300"
                 />
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 {/* When a customer is already selected: show only customer list for re-search */}
                 {showCustomerDropdown && filters.customer && filteredCustomers.length > 0 && (
-                  <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
                     {filteredCustomers.map((customer) => (
                       <button
-                        key={customer._id}
+                        key={customer.id || customer._id}
                         onClick={() => handleCustomerSelect(customer)}
                         className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
                       >
@@ -333,10 +358,10 @@ export const StockLedger = () => {
                 )}
                 {/* When a supplier is already selected: show only supplier list for re-search */}
                 {showSupplierDropdown && filters.supplier && filteredSuppliers.length > 0 && (
-                  <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
                     {filteredSuppliers.map((supplier) => (
                       <button
-                        key={supplier._id}
+                        key={supplier.id || supplier._id}
                         onClick={() => handleSupplierSelect(supplier)}
                         className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
                       >
@@ -352,7 +377,7 @@ export const StockLedger = () => {
                 )}
                 {/* When neither selected: one combined dropdown with customers + suppliers filtered by search */}
                 {!filters.customer && !filters.supplier && (showCustomerDropdown || showSupplierDropdown) && (filteredCustomers.length > 0 || filteredSuppliers.length > 0) && (
-                  <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
                     {filteredCustomers.length > 0 && (
                       <>
                         <div className="px-3 py-2 bg-gray-100 text-xs font-semibold text-gray-600 uppercase tracking-wider sticky top-0">
@@ -360,7 +385,7 @@ export const StockLedger = () => {
                         </div>
                         {filteredCustomers.map((customer) => (
                           <button
-                            key={`c-${customer._id}`}
+                            key={`c-${customer.id || customer._id}`}
                             onClick={() => handleCustomerSelect(customer)}
                             className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
                           >
@@ -381,7 +406,7 @@ export const StockLedger = () => {
                         </div>
                         {filteredSuppliers.map((supplier) => (
                           <button
-                            key={`s-${supplier._id}`}
+                            key={`s-${supplier.id || supplier._id}`}
                             onClick={() => handleSupplierSelect(supplier)}
                             className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
                           >
@@ -416,8 +441,8 @@ export const StockLedger = () => {
 
             {/* Invoice No */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2.5 flex items-center gap-2">
-                <FileText className="h-4 w-4 text-gray-500" />
+              <label className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <FileText className="h-3.5 w-3.5 text-slate-400" />
                 Invoice No
               </label>
               <input
@@ -425,14 +450,14 @@ export const StockLedger = () => {
                 placeholder="Enter invoice number..."
                 value={filters.invoiceNo}
                 onChange={(e) => handleFilterChange('invoiceNo', e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm hover:border-gray-400"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 hover:border-slate-300"
               />
             </div>
 
             {/* Product */}
             <div className="relative" ref={productDropdownRef}>
-              <label className="block text-sm font-semibold text-gray-700 mb-2.5 flex items-center gap-2">
-                <Package className="h-4 w-4 text-gray-500" />
+              <label className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <Package className="h-3.5 w-3.5 text-slate-400" />
                 Product
               </label>
               <div className="relative">
@@ -445,14 +470,14 @@ export const StockLedger = () => {
                     setShowProductDropdown(true);
                   }}
                   onFocus={() => setShowProductDropdown(true)}
-                  className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm hover:border-gray-400"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 pr-10 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 hover:border-slate-300"
                 />
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 {showProductDropdown && filteredProducts.length > 0 && (
-                  <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
                     {filteredProducts.map((product) => (
                       <button
-                        key={product._id}
+                        key={product.id || product._id}
                         onClick={() => handleProductSelect(product)}
                         className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
                       >
@@ -479,254 +504,250 @@ export const StockLedger = () => {
               )}
             </div>
 
-            {/* Date Range */}
-            <div className="lg:col-span-2">
-              <label className="block text-sm font-semibold text-gray-700 mb-2.5 flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-500" />
-                Date Range
-              </label>
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <DateFilter
-                  startDate={filters.dateFrom}
-                  endDate={filters.dateTo}
-                  onDateChange={(startDate, endDate) => {
-                    setFilters({ ...filters, dateFrom: startDate, dateTo: endDate });
-                  }}
-                  compact={false}
-                  showPresets={true}
-                />
-              </div>
-            </div>
+          </div>
 
-            {/* View Button */}
-            <div className="flex items-end">
-              <button
-                onClick={handleView}
-                disabled={isLoading || isFetching}
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg flex items-center justify-center gap-2 transform hover:scale-[1.02] active:scale-[0.98]"
-              >
-                <Eye className="h-5 w-5" />
-                {isLoading || isFetching ? 'Loading...' : 'View Report'}
-              </button>
+          {/* Date range + Clear + View Report: one row, shared card, aligned centers */}
+          <div className="mt-5">
+            <label className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <Calendar className="h-3.5 w-3.5 text-slate-400" />
+              Date Range
+            </label>
+            <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3 sm:p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+                <div className="min-w-0 flex-1">
+                  <DateFilter
+                    startDate={filters.dateFrom}
+                    endDate={filters.dateTo}
+                    onDateChange={(startDate, endDate) => {
+                      setFilters({ ...filters, dateFrom: startDate, dateTo: endDate });
+                    }}
+                    compact={false}
+                    showPresets={false}
+                    showLabel={false}
+                    className="!space-y-0"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleView}
+                  disabled={isLoading || isFetching}
+                  className="h-11 min-w-[160px] shrink-0 gap-2 rounded-lg bg-blue-600 px-6 text-sm font-semibold text-white shadow-md shadow-blue-600/25 hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Eye className="h-4 w-4" />
+                  {isLoading || isFetching ? 'Loading…' : 'View Report'}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Report Section */}
+        {/* Report */}
         {showReport && (
-          <div className="bg-white rounded-xl shadow-xl border border-gray-200 print:shadow-none print:border-none overflow-hidden">
-            {/* Report Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 print:bg-white print:from-white print:to-white">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold text-white print:text-gray-900 flex items-center gap-3">
-                    <FileText className="h-6 w-6" />
-                    Stock Ledger Report
-                  </h2>
-                  <p className="text-sm text-blue-100 print:text-gray-600 mt-2 flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
+          <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm print:rounded-none print:border-0 print:shadow-none">
+            {/* Print-only title (screen uses page header + blue bar below) */}
+            <div className="hidden print:block print:px-2 print:pb-3 print:mb-2 print:border-b print:border-slate-300">
+              <h1 className="text-center text-xl font-bold tracking-tight text-slate-900">Stock Ledger</h1>
+            </div>
+            {/* Report header bar — hidden on print (replaced by simple title above) */}
+            <div className="flex items-start justify-between gap-4 bg-blue-600 px-5 py-4 sm:px-6 sm:py-5 print:hidden">
+              <div className="min-w-0">
+                <h2 className="flex items-center gap-2.5 text-lg font-bold tracking-tight text-white print:text-slate-900 sm:text-xl">
+                  <FileText className="h-5 w-5 shrink-0 text-white/95 print:text-slate-800" />
+                  Stock Ledger Report
+                </h2>
+                <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-blue-100 print:text-slate-600">
+                  <Calendar className="h-4 w-4 shrink-0 opacity-90" />
+                  <span>
                     From: {formatDateForReport(filters.dateFrom)} To: {formatDateForReport(filters.dateTo)}
-                  </p>
-                </div>
-                <div className="flex gap-2 print:hidden">
-                  <button
-                    onClick={handlePrint}
-                    className="p-3 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-all hover:scale-105 shadow-lg"
-                    title="Print"
-                  >
-                    <Printer className="h-5 w-5" />
-                  </button>
-                </div>
+                  </span>
+                </p>
               </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                onClick={handlePrint}
+                className="h-10 w-10 shrink-0 rounded-lg border border-white/25 bg-blue-700 text-white hover:bg-blue-800 print:hidden"
+                title="Print"
+              >
+                <Printer className="h-4 w-4" />
+              </Button>
             </div>
 
             {/* Report Content */}
             {isLoading || isFetching ? (
-              <div className="p-16 text-center bg-gray-50">
-                <div className="inline-block p-4 bg-blue-100 rounded-full mb-4">
+              <div className="bg-slate-50/50 px-6 py-16 text-center">
+                <div className="mx-auto mb-4 inline-flex rounded-full bg-blue-50 p-4">
                   <LoadingSpinner />
                 </div>
-                <p className="text-gray-600 font-medium">Loading stock ledger data...</p>
+                <p className="text-sm font-medium text-slate-600">Loading stock ledger data…</p>
               </div>
             ) : ledger.length === 0 ? (
-              <div className="p-16 text-center bg-gradient-to-br from-gray-50 to-blue-50">
-                <div className="inline-block p-4 bg-gray-100 rounded-full mb-4">
-                  <FileText className="h-12 w-12 text-gray-400" />
+              <div className="px-6 py-16 text-center">
+                <div className="mx-auto mb-4 inline-flex rounded-full bg-slate-100 p-4">
+                  <FileText className="h-10 w-10 text-slate-400" />
                 </div>
-                <p className="text-gray-600 font-semibold text-lg mb-2">No data found</p>
-                <p className="text-gray-500">Try adjusting your filters to see results.</p>
+                <p className="text-base font-semibold text-slate-800">No data found</p>
+                <p className="mt-1 text-sm text-slate-500">Try adjusting your filters to see results.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border-b-2 border-gray-300">
-                        S.No
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border-b-2 border-gray-300">
-                        Invoice Date
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border-b-2 border-gray-300">
-                        Invoice No
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border-b-2 border-gray-300">
-                        Invoice Type
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border-b-2 border-gray-300">
-                        Customer / Supplier
-                      </th>
-                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border-b-2 border-gray-300">
-                        Price
-                      </th>
-                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border-b-2 border-gray-300">
-                        QTY
-                      </th>
-                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border-b-2 border-gray-300">
-                        Amount
-                      </th>
-                      <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border-b-2 border-gray-300">
-                        Qty Left
-                      </th>
+              <div className="overflow-x-auto border-t border-slate-100">
+                <table className="min-w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50/95">
+                      {['S.No', 'Invoice Date', 'Invoice No', 'Invoice Type', 'Customer / Supplier', 'Price', 'Qty', 'Amount', 'Qty Left'].map((h) => (
+                        <th
+                          key={h}
+                          className={cn(
+                            'whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500',
+                            ['Price', 'Qty', 'Amount', 'Qty Left'].includes(h) ? 'text-right' : 'text-left'
+                          )}
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="divide-y divide-slate-100">
                     {ledger.map((productGroup, groupIndex) => (
                       <React.Fragment key={productGroup.productId || groupIndex}>
-                        {/* Product Header */}
-                        <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 font-bold border-t-2 border-blue-200">
-                          <td colSpan="8" className="px-6 py-3 text-sm text-blue-900">
-                            <div className="flex items-center gap-2">
-                              <Package className="h-4 w-4" />
+                        <tr className="border-l-4 border-sky-400 bg-sky-50/90">
+                          <td colSpan={8} className="px-4 py-2.5">
+                            <div className="flex items-center gap-2 font-semibold text-sky-950">
+                              <Package className="h-4 w-4 text-sky-700" />
                               {productGroup.productName}
                             </div>
                           </td>
-                          <td className="px-6 py-3 text-sm text-right text-blue-900 font-semibold">
+                          <td className="px-4 py-2.5 text-right text-sm font-bold tabular-nums text-sky-950">
                             {productGroup.qtyLeft ?? '—'}
                           </td>
                         </tr>
-                        {/* Product Entries */}
                         {productGroup.entries.map((entry, entryIndex) => (
-                          <tr key={`${entry.referenceId}-${entryIndex}`} className="hover:bg-blue-50/50 transition-colors border-b border-gray-100">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-700">
+                          <tr
+                            key={`${entry.referenceId}-${entryIndex}`}
+                            className="bg-white transition-colors hover:bg-slate-50/90"
+                          >
+                            <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-600 tabular-nums">
                               {entryIndex + 1}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <td className="whitespace-nowrap px-4 py-3 text-slate-800">
                               {formatDate(entry.invoiceDate)}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                            <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">
                               {entry.invoiceNo}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                entry.invoiceType === 'SALE' ? 'bg-green-100 text-green-800' :
-                                entry.invoiceType === 'PURCHASE' ? 'bg-blue-100 text-blue-800' :
-                                entry.invoiceType.includes('RETURN') ? 'bg-orange-100 text-orange-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
+                            <td className="whitespace-nowrap px-4 py-3">
+                              <span
+                                className={cn(
+                                  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                                  (() => {
+                                    const t = String(entry.invoiceType || '');
+                                    if (t.includes('RETURN')) return 'bg-amber-100 text-amber-900';
+                                    if (t === 'SALE') return 'bg-emerald-100 text-emerald-800';
+                                    if (t === 'PURCHASE') return 'bg-blue-100 text-blue-800';
+                                    return 'bg-slate-100 text-slate-700';
+                                  })()
+                                )}
+                              >
                                 {entry.invoiceType}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-sm text-gray-900">
+                            <td className="max-w-[200px] truncate px-4 py-3 text-slate-800" title={entry.customerSupplier}>
                               {entry.customerSupplier}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
+                            <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-slate-800">
                               {formatCurrency(entry.price)}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-900">
+                            <td className="whitespace-nowrap px-4 py-3 text-right font-medium tabular-nums">
                               {entry.quantity < 0 ? (
                                 <span className="text-red-600">({Math.abs(entry.quantity)})</span>
                               ) : (
-                                <span className="text-green-600">{entry.quantity}</span>
+                                <span className="text-slate-900">{entry.quantity}</span>
                               )}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-900">
+                            <td className="whitespace-nowrap px-4 py-3 text-right font-medium tabular-nums">
                               {entry.amount < 0 ? (
                                 <span className="text-red-600">({formatCurrency(Math.abs(entry.amount))})</span>
                               ) : (
-                                <span className="text-green-600">{formatCurrency(entry.amount)}</span>
+                                <span className="text-slate-900">{formatCurrency(entry.amount)}</span>
                               )}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">
-                              —
+                            <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-slate-800">
+                              {productGroup.qtyLeft != null ? productGroup.qtyLeft : '—'}
                             </td>
                           </tr>
                         ))}
-                        {/* Product Total */}
-                        <tr className="bg-gradient-to-r from-blue-100 to-indigo-100 font-bold border-t-2 border-blue-300">
-                          <td colSpan="5" className="px-6 py-3 text-sm text-blue-900">
+                        <tr className="bg-sky-100/80 font-semibold text-sky-950">
+                          <td colSpan={5} className="px-4 py-2.5">
                             Total of {productGroup.productName}
                           </td>
-                          <td className="px-6 py-3 text-sm text-right text-blue-900"></td>
-                          <td className="px-6 py-3 text-sm text-right text-blue-900">
+                          <td className="px-4 py-2.5 text-right" />
+                          <td className="px-4 py-2.5 text-right tabular-nums">
                             {productGroup.totalQuantity < 0 ? (
                               <span className="text-red-700">({Math.abs(productGroup.totalQuantity)})</span>
                             ) : (
-                              <span className="text-green-700">{productGroup.totalQuantity}</span>
+                              <span>{productGroup.totalQuantity}</span>
                             )}
                           </td>
-                          <td className="px-6 py-3 text-sm text-right text-blue-900">
+                          <td className="px-4 py-2.5 text-right tabular-nums">
                             {productGroup.totalAmount < 0 ? (
                               <span className="text-red-700">({formatCurrency(Math.abs(productGroup.totalAmount))})</span>
                             ) : (
-                              <span className="text-green-700">{formatCurrency(productGroup.totalAmount)}</span>
+                              <span>{formatCurrency(productGroup.totalAmount)}</span>
                             )}
                           </td>
-                          <td className="px-6 py-3 text-sm text-right text-blue-900 font-semibold">
+                          <td className="px-4 py-2.5 text-right text-sm font-bold tabular-nums text-blue-800">
                             {productGroup.qtyLeft ?? '—'}
                           </td>
                         </tr>
                       </React.Fragment>
                     ))}
-                    {/* Grand Total */}
-                    <tr className="bg-gradient-to-r from-gray-800 to-gray-900 font-bold text-white border-t-4 border-gray-700">
-                      <td colSpan="5" className="px-6 py-4 text-sm">
+                    <tr className="bg-slate-900 text-sm font-bold text-white">
+                      <td colSpan={5} className="px-4 py-3.5">
                         Grand Total
                       </td>
-                      <td className="px-6 py-4 text-sm text-right"></td>
-                      <td className="px-6 py-4 text-sm text-right">
+                      <td className="px-4 py-3.5 text-right" />
+                      <td className="px-4 py-3.5 text-right tabular-nums">
                         {grandTotal.totalQuantity < 0 ? (
                           <span className="text-red-300">({Math.abs(grandTotal.totalQuantity)})</span>
                         ) : (
-                          <span className="text-green-300">{grandTotal.totalQuantity}</span>
+                          <span className="text-emerald-200">{grandTotal.totalQuantity}</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-sm text-right">
+                      <td className="px-4 py-3.5 text-right tabular-nums">
                         {grandTotal.totalAmount < 0 ? (
                           <span className="text-red-300">({formatCurrency(Math.abs(grandTotal.totalAmount))})</span>
                         ) : (
-                          <span className="text-green-300">{formatCurrency(grandTotal.totalAmount)}</span>
+                          <span className="text-emerald-200">{formatCurrency(grandTotal.totalAmount)}</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-sm text-right"></td>
+                      <td className="px-4 py-3.5 text-right" />
                     </tr>
                   </tbody>
                 </table>
               </div>
             )}
 
-            {/* Report Footer */}
             {ledger.length > 0 && (
-              <div className="p-4 border-t border-gray-200 text-sm text-gray-600 print:border-t-2">
-                <div className="flex justify-between items-center">
-                  <div>
-                    Print Date: {new Date().toLocaleString('en-GB', { 
-                      day: '2-digit', 
-                      month: 'short', 
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit',
-                      hour12: true
-                    })}
-                  </div>
-                  <div>
-                    Page: {pagination.current} of {pagination.pages}
-                  </div>
-                </div>
-              </div>
+              <footer className="flex flex-col gap-1 border-t border-slate-200 bg-slate-50/50 px-5 py-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 print:border-slate-300">
+                <span>
+                  Print Date:{' '}
+                  {new Date().toLocaleString('en-GB', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true,
+                  })}
+                </span>
+                <span className="tabular-nums">
+                  Page: {pagination.current} of {pagination.pages}
+                </span>
+              </footer>
             )}
-          </div>
+          </section>
         )}
       </div>
     </div>

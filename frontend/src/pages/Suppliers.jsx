@@ -917,7 +917,10 @@ export const Suppliers = () => {
   const [bulkCreateSuppliers] = useBulkCreateSuppliersMutation();
 
   const handleImportData = async (data) => {
-    if (!data || data.length === 0) return;
+    if (!data || data.length === 0) {
+      toast.error('No data rows found. Download Template, add at least one row with Company Name, and re-import.');
+      return;
+    }
 
     const toastId = toast.loading(`Saving ${data.length} suppliers to database...`);
     try {
@@ -929,7 +932,15 @@ export const Suppliers = () => {
           console.warn('Import failures:', response.errors);
         }
       } else {
-        toast.error('Failed to import suppliers. Check file format.', { id: toastId });
+        const errs = Array.isArray(response.errors) ? response.errors : [];
+        const detail = errs.length
+          ? errs.slice(0, 5).map((e) => e.error || e.message || String(e)).join(' · ')
+          : 'Each row needs a Company Name. Use the Template button for the correct columns.';
+        toast.error(
+          errs.length ? `Import failed: ${detail}` : 'Failed to import suppliers. Check file format.',
+          { id: toastId, duration: 8000 }
+        );
+        if (errs.length) console.warn('Supplier import errors:', response.errors);
       }
     } catch (error) {
       console.error('Bulk Import Error:', error);

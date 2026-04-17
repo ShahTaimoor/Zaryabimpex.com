@@ -11,7 +11,9 @@ export const ProductList = ({
   onDelete,
   onManageInvestors,
   onGenerateBarcode,
-  showCostPrice = true // New prop
+  showCostPrice = true,
+  /** When false, per-row delete (trash) is hidden — e.g. Products page policy */
+  showDeleteButton = true,
 }) => {
   const [showImages, setShowImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
   const [showHsCodeColumn, setShowHsCodeColumn] = useState(
@@ -248,14 +250,16 @@ export const ProductList = ({
                       >
                         <Edit className="h-3.5 w-3.5 xl:h-4 xl:w-4 2xl:h-5 2xl:w-5" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(product)}
-                        className="text-danger-600 hover:text-danger-800 p-0.5 xl:p-1 shrink-0 rounded"
-                        title="Delete Product"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 xl:h-4 xl:w-4 2xl:h-5 2xl:w-5" />
-                      </button>
+                      {showDeleteButton && (
+                        <button
+                          type="button"
+                          onClick={() => onDelete(product)}
+                          className="text-danger-600 hover:text-danger-800 p-0.5 xl:p-1 shrink-0 rounded"
+                          title="Delete Product"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 xl:h-4 xl:w-4 2xl:h-5 2xl:w-5" />
+                        </button>
+                      )}
                     </div>
                     {product.hasInvestors && (
                       <span className="inline-flex items-center px-1 xl:px-1.5 py-0.5 rounded-full text-[10px] xl:text-xs font-medium bg-blue-100 text-blue-800 mt-0.5 xl:mt-1">
@@ -423,13 +427,15 @@ export const ProductList = ({
                             >
                               <Edit className="h-4 w-4 xl:h-5 xl:w-5" />
                             </button>
-                            <button
-                              onClick={() => onDelete(product)}
-                              className="text-danger-600 hover:text-danger-800 p-1.5 xl:p-2 rounded hover:bg-red-50 transition-colors"
-                              title="Delete Product"
-                            >
-                              <Trash2 className="h-4 w-4 xl:h-5 xl:w-5" />
-                            </button>
+                            {showDeleteButton && (
+                              <button
+                                onClick={() => onDelete(product)}
+                                className="text-danger-600 hover:text-danger-800 p-1.5 xl:p-2 rounded hover:bg-red-50 transition-colors"
+                                title="Delete Product"
+                              >
+                                <Trash2 className="h-4 w-4 xl:h-5 xl:w-5" />
+                              </button>
+                            )}
                           </div>
                           {product.hasInvestors && (
                             <span className="inline-flex items-center px-1.5 xl:px-2 py-0.5 xl:py-1 rounded-full text-[10px] xl:text-xs font-medium bg-blue-100 text-blue-800">

@@ -446,7 +446,7 @@ export const Products = () => {
         }}
         onUndo={bulkOps.undoLastOperation}
         onClearSelection={bulkOps.deselectAll}
-        availableActions={['update', 'delete', 'status', 'category', 'price', 'stock']}
+        availableActions={['update', 'status', 'category', 'price', 'stock']}
       />
 
       <BulkUpdateModal
@@ -472,6 +472,7 @@ export const Products = () => {
         searchTerm={searchTerm}
         bulkOps={bulkOps}
         onEdit={productOps.handleEdit}
+        showDeleteButton={false}
         onDelete={(product) => productOps.handleDelete(product, confirmDelete)}
         onManageInvestors={(product) => {
           productOps.setSelectedProductForInvestors(product);

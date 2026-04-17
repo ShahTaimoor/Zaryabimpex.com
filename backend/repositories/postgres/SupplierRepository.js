@@ -31,7 +31,7 @@ class SupplierRepository {
     }
 
     if (filters.search) {
-      sql += ` AND (company_name ILIKE $${paramCount} OR business_name ILIKE $${paramCount} OR name ILIKE $${paramCount} OR email ILIKE $${paramCount})`;
+      sql += ` AND (company_name ILIKE $${paramCount} OR business_name ILIKE $${paramCount} OR name ILIKE $${paramCount} OR email ILIKE $${paramCount} OR COALESCE(contact_person,'') ILIKE $${paramCount} OR COALESCE(phone,'') ILIKE $${paramCount})`;
       params.push(`%${filters.search}%`);
       paramCount++;
     }
@@ -64,7 +64,7 @@ class SupplierRepository {
     const countParams = [];
     let paramCount = 1;
     if (filters.isActive !== undefined) { countSql += ` AND is_active = $${paramCount++}`; countParams.push(filters.isActive); }
-    if (filters.search) { countSql += ` AND (company_name ILIKE $${paramCount} OR business_name ILIKE $${paramCount} OR name ILIKE $${paramCount} OR email ILIKE $${paramCount})`; countParams.push(`%${filters.search}%`); paramCount++; }
+    if (filters.search) { countSql += ` AND (company_name ILIKE $${paramCount} OR business_name ILIKE $${paramCount} OR name ILIKE $${paramCount} OR email ILIKE $${paramCount} OR COALESCE(contact_person,'') ILIKE $${paramCount} OR COALESCE(phone,'') ILIKE $${paramCount})`; countParams.push(`%${filters.search}%`); paramCount++; }
     const countResult = await query(countSql, countParams);
     const total = parseInt(countResult.rows[0].count, 10);
 

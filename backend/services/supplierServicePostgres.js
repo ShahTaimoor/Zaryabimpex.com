@@ -267,26 +267,55 @@ class SupplierService {
   }
 
   /**
-   * Bulk create suppliers from imported data
+   * Bulk create suppliers from imported data (Excel keys: snake_case headers from /excel-manager/import)
    */
   async bulkCreateSuppliers(suppliersData, userId) {
     let created = 0;
     let failed = 0;
     const errors = [];
 
+    const str = (v) => {
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'object' && v !== null && !(v instanceof Date)) {
+        if (v.name) return String(v.name).trim();
+        return String(v).trim();
+      }
+      return String(v).trim();
+    };
+
+    const num = (v) => {
+      const n = parseFloat(String(v).replace(/,/g, '').trim());
+      return Number.isFinite(n) ? n : 0;
+    };
+
     for (const supplier of suppliersData) {
       try {
-        // Map user-friendly Excel headers to DB fields
+        const companyName = str(
+          supplier.company_name
+          || supplier.companyName
+          || supplier.company
+          || supplier.supplier_name
+          || supplier.supplier
+          || supplier.vendor
+        );
+
+        const contactName = str(
+          supplier.contact_person
+          || supplier.contactperson
+          || (supplier.contactPerson && supplier.contactPerson.name)
+          || supplier.contact
+        );
+
         const mappedData = {
-          companyName: supplier.company_name || supplier.companyName || '',
+          companyName,
           contactPerson: {
-            name: supplier.contact_person || (supplier.contactPerson && supplier.contactPerson.name) || '',
-            title: supplier.contact_person_title || (supplier.contactPerson && supplier.contactPerson.title) || ''
+            name: contactName,
+            title: str(supplier.contact_person_title || (supplier.contactPerson && supplier.contactPerson.title))
           },
-          email: supplier.email || '',
-          phone: supplier.phone || '',
-          openingBalance: parseFloat(supplier.opening_balance || supplier.openingBalance || supplier.balance || 0),
-          businessType: (supplier.business_type || supplier.type || 'wholesaler').toLowerCase(),
+          email: str(supplier.email),
+          phone: str(supplier.phone || supplier.mobile || supplier.contact_phone),
+          openingBalance: num(supplier.opening_balance ?? supplier.openingBalance ?? supplier.balance ?? supplier.opening),
+          businessType: str(supplier.business_type || supplier.type || supplier.businessType || 'wholesaler').toLowerCase() || 'wholesaler',
           status: 'active'
         };
 
@@ -298,7 +327,14 @@ class SupplierService {
         created++;
       } catch (err) {
         failed++;
-        errors.push({ supplier: supplier.companyName || 'Row', error: err.message });
+        const label = str(
+          supplier.company_name
+          || supplier.companyName
+          || supplier.company
+          || supplier.supplier_name
+          || 'Row'
+        );
+        errors.push({ supplier: label || 'Row', error: err.message });
       }
     }
 

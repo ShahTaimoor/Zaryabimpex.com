@@ -8,6 +8,21 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const { auth } = require('../middleware/auth');
 
+/** Normalize ExcelJS cell values for JSON (strings, numbers, dates; rich text & formula results). */
+function cellValueToPlain(cell) {
+    if (!cell || cell.value === null || cell.value === undefined) return null;
+    const v = cell.value;
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return v;
+    if (v instanceof Date) return v;
+    if (typeof v === 'object') {
+        if (Object.prototype.hasOwnProperty.call(v, 'result')) return v.result;
+        if (Array.isArray(v.richText)) return v.richText.map((p) => p.text || '').join('');
+        if (v.hyperlink !== undefined) return v.text != null ? v.text : v.hyperlink;
+    }
+    if (typeof cell.text === 'string' && cell.text.length) return cell.text;
+    return String(v);
+}
+
 /**
  * @route   POST /api/excel-manager/generate
  * @desc    Export data to a professionally styled Excel file
@@ -135,8 +150,10 @@ router.post('/import', auth, upload.single('excelFile'), async (req, res) => {
             const row = worksheet.getRow(i);
             let isHeader = false;
             row.eachCell((cell) => {
-                const val = cell.value?.toString().toLowerCase();
-                if (val && (val.includes('product') || val.includes('name') || val.includes('business') || val.includes('company'))) {
+                const raw = cellValueToPlain(cell);
+                const val = raw != null ? String(raw).toLowerCase() : '';
+                if (val && (val.includes('product') || val.includes('name') || val.includes('business') || val.includes('company')
+                    || val.includes('supplier') || val.includes('vendor') || val.includes('contact'))) {
                     isHeader = true;
                 }
             });
@@ -148,10 +165,11 @@ router.post('/import', auth, upload.single('excelFile'), async (req, res) => {
 
         // Identify headers from the detected header row
         worksheet.getRow(headerRowNumber).eachCell((cell, colNumber) => {
-            const val = cell.value?.toString().toLowerCase().trim()
+            const raw = cellValueToPlain(cell);
+            const val = raw != null ? String(raw).toLowerCase().trim()
                 .replace(/ /g, '_')
                 .replace(/\*/g, '')
-                .replace(/\(.*\)/g, ''); // Remove parentheticals like (Required)
+                .replace(/\(.*\)/g, '') : '';
             headers[colNumber] = val || `col_${colNumber}`;
         });
 
@@ -164,8 +182,9 @@ router.post('/import', auth, upload.single('excelFile'), async (req, res) => {
             row.eachCell((cell, colNumber) => {
                 const header = headers[colNumber];
                 if (header) {
-                    rowData[header] = cell.value;
-                    if (cell.value !== null && cell.value !== undefined) hasData = true;
+                    const plain = cellValueToPlain(cell);
+                    rowData[header] = plain;
+                    if (plain !== null && plain !== undefined && plain !== '') hasData = true;
                 }
             });
             if (hasData) data.push(rowData);

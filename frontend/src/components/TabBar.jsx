@@ -20,7 +20,7 @@ const TabBar = () => {
   }
 
   return (
-    <div className="bg-white border-b border-gray-200 shadow-sm overflow-x-hidden">
+    <div className="bg-white border-b border-gray-200 shadow-sm overflow-x-hidden print:hidden">
       <div className="flex flex-col">
         <div className="flex items-center justify-between px-2 sm:px-4 py-2 gap-2 min-w-0">
           {/* Tabs */}
