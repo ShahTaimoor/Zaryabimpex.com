@@ -15,7 +15,6 @@ export const salesPerformanceApi = api.injectEndpoints({
         { type: 'Reports', id: 'SALES_PERFORMANCE_TOP_CUSTOMERS' },
         { type: 'Reports', id: 'SALES_PERFORMANCE_TOP_SALES_REPS' },
         { type: 'Reports', id: 'SALES_PERFORMANCE_QUICK_SUMMARY' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     getReports: builder.query({
@@ -55,7 +54,6 @@ export const salesPerformanceApi = api.injectEndpoints({
         { type: 'Reports', id: 'SALES_PERFORMANCE_TOP_CUSTOMERS' },
         { type: 'Reports', id: 'SALES_PERFORMANCE_TOP_SALES_REPS' },
         { type: 'Reports', id: 'SALES_PERFORMANCE_QUICK_SUMMARY' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     toggleFavorite: builder.mutation({
@@ -67,7 +65,6 @@ export const salesPerformanceApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Reports', id },
         { type: 'Reports', id: 'SALES_PERFORMANCE' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateTags: builder.mutation({
@@ -79,7 +76,6 @@ export const salesPerformanceApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Reports', id },
         { type: 'Reports', id: 'SALES_PERFORMANCE' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateNotes: builder.mutation({
@@ -91,7 +87,6 @@ export const salesPerformanceApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: 'Reports', id },
         { type: 'Reports', id: 'SALES_PERFORMANCE' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     getReportStats: builder.query({

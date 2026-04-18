@@ -57,7 +57,6 @@ export const customersApi = api.injectEndpoints({
         { type: 'Reports', id: 'CUSTOMER_ANALYTICS' },
         { type: 'Reports', id: 'CUSTOMER_ANALYTICS_SUMMARY' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateCustomer: builder.mutation({
@@ -80,7 +79,6 @@ export const customersApi = api.injectEndpoints({
         { type: 'Reports', id: 'CUSTOMER_ANALYTICS_SUMMARY' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'SALES_REPORT' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     deleteCustomer: builder.mutation({
@@ -102,7 +100,6 @@ export const customersApi = api.injectEndpoints({
         { type: 'Reports', id: 'CUSTOMER_ANALYTICS_SUMMARY' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'SALES_REPORT' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     searchCustomers: builder.query({
@@ -153,7 +150,6 @@ export const customersApi = api.injectEndpoints({
         { type: 'Customers', id: 'LIST' },
         { type: 'Customers', id: 'SEARCH' },
         { type: 'Reports', id: 'CUSTOMER_REPORT' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),

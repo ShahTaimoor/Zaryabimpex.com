@@ -8,6 +8,7 @@ export const salesApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      keepUnusedDataFor: 90,
       providesTags: (result) =>
         result?.items
           ? [
@@ -86,6 +87,7 @@ export const salesApi = api.injectEndpoints({
         url: 'sales/today/summary',
         method: 'get',
       }),
+      keepUnusedDataFor: 60,
       providesTags: [{ type: 'Sales', id: 'TODAY_SUMMARY' }],
     }),
     getPeriodSummary: builder.query({

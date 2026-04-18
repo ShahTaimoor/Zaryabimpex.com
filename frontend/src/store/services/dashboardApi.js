@@ -8,6 +8,7 @@ export const dashboardApi = api.injectEndpoints({
         method: 'get',
         params: { dateFrom, dateTo },
       }),
+      keepUnusedDataFor: 180,
       providesTags: [{ type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' }],
     }),
   }),

@@ -19,8 +19,8 @@ export const productsApi = api.injectEndpoints({
           params: filteredParams,
         };
       },
-      /** Cache identical list queries ~1m; POS search uses lazy triggers + invalidation after sales */
-      keepUnusedDataFor: 60,
+      // Cache list queries to reduce refetch churn when navigating POS (~90s).
+      keepUnusedDataFor: 90,
       providesTags: (result) => {
         const list =
           result?.data?.products ||

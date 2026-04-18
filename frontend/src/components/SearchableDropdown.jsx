@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef, forwardRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Search, ChevronDown, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 const EMPTY_ARRAY = [];
 
 const DEFAULT_INITIAL_LIMIT = 20;
+/** Fixed row height for virtual list (matches py-2 + text-sm). */
+const DROPDOWN_ROW_HEIGHT = 44;
 
 /** Stable id for list deduping when valueKey may not match (e.g. id vs _id). */
 const getItemId = (item, valueKey) => {
@@ -45,8 +48,16 @@ export const SearchableDropdown = forwardRef(({
   const inputRef = useRef(null);
   const containerRef = useRef(null);
   const dropdownRef = useRef(null);
+  const listScrollRef = useRef(null);
   const itemRefs = useRef([]);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+
+  const rowVirtualizer = useVirtualizer({
+    count: filteredItems.length,
+    getScrollElement: () => listScrollRef.current,
+    estimateSize: () => DROPDOWN_ROW_HEIGHT,
+    overscan: 10,
+  });
 
   const valueToDisplayString = (value) => {
     if (value == null) return '';
@@ -309,15 +320,12 @@ export const SearchableDropdown = forwardRef(({
     }
   };
 
-  // Scroll selected item into view
+  // Keep keyboard-selected row visible (virtual list)
   useEffect(() => {
-    if (selectedIndex >= 0 && itemRefs.current[selectedIndex]) {
-      itemRefs.current[selectedIndex].scrollIntoView({
-        block: 'nearest',
-        behavior: 'smooth'
-      });
+    if (selectedIndex >= 0 && selectedIndex < filteredItems.length) {
+      rowVirtualizer.scrollToIndex(selectedIndex, { align: 'auto' });
     }
-  }, [selectedIndex]);
+  }, [selectedIndex, filteredItems.length, rowVirtualizer]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -481,7 +489,7 @@ export const SearchableDropdown = forwardRef(({
       {isOpen && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto"
+          className="fixed z-[9999] max-h-96 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
           style={{
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
@@ -494,33 +502,53 @@ export const SearchableDropdown = forwardRef(({
               <p className="mt-2 text-sm">Loading...</p>
             </div>
           ) : filteredItems.length > 0 ? (
-            <div className="py-1">
-              {filteredItems.map((item, index) => {
-                const isSelected = selectedIndex === index;
-                const isItemSelected =
-                  selectedItem && getItemId(selectedItem, valueKey) === getItemId(item, valueKey);
+            <div
+              ref={listScrollRef}
+              className="max-h-96 overflow-y-auto py-1"
+            >
+              <div
+                className="relative w-full"
+                style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const index = virtualRow.index;
+                  const item = filteredItems[index];
+                  const isSelected = selectedIndex === index;
+                  const isItemSelected =
+                    selectedItem && getItemId(selectedItem, valueKey) === getItemId(item, valueKey);
 
-                return (
-                  <button
-                    key={String(getItemId(item, valueKey) ?? `row-${index}`)}
-                    ref={el => itemRefs.current[index] = el}
-                    type="button"
-                    onClick={() => handleSelect(item)}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none flex items-center justify-between ${isSelected ? 'bg-primary-50 text-primary-700' : 'text-gray-900'
-                      }`}
-                  >
-                    <span className="flex-1">{getDisplayValue(item)}</span>
-                    <span className="flex items-center gap-2">
-                      {getRightContent(item) && (
-                        <span className="text-xs text-gray-500">{getRightContent(item)}</span>
-                      )}
-                      {isItemSelected && (
-                        <Check className="h-4 w-4 text-primary-600" />
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      ref={(el) => {
+                        itemRefs.current[index] = el;
+                      }}
+                      className="absolute left-0 top-0 w-full"
+                      style={{
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleSelect(item)}
+                        className={`flex h-full min-h-[44px] w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${isSelected ? 'bg-primary-50 text-primary-700' : 'text-gray-900'
+                          }`}
+                      >
+                        <span className="flex-1">{getDisplayValue(item)}</span>
+                        <span className="flex items-center gap-2">
+                          {getRightContent(item) && (
+                            <span className="text-xs text-gray-500">{getRightContent(item)}</span>
+                          )}
+                          {isItemSelected && (
+                            <Check className="h-4 w-4 text-primary-600" />
+                          )}
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <div className="p-3 text-center text-gray-500 text-sm">

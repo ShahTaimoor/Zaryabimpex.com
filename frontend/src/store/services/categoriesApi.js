@@ -31,7 +31,6 @@ export const categoriesApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateCategory: builder.mutation({
@@ -49,7 +48,6 @@ export const categoriesApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     deleteCategory: builder.mutation({
@@ -66,7 +64,6 @@ export const categoriesApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),

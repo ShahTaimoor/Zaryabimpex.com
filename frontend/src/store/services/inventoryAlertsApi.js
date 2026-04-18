@@ -64,7 +64,6 @@ export const inventoryAlertsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),

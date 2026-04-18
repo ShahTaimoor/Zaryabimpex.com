@@ -46,7 +46,6 @@ export const productTransformationsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     cancelTransformation: builder.mutation({
@@ -70,7 +69,6 @@ export const productTransformationsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),

@@ -66,7 +66,6 @@ export const chartOfAccountsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateAccount: builder.mutation({
@@ -90,7 +89,6 @@ export const chartOfAccountsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     deleteAccount: builder.mutation({
@@ -112,7 +110,6 @@ export const chartOfAccountsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     getAccountHierarchy: builder.query({
@@ -154,7 +151,6 @@ export const chartOfAccountsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),

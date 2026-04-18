@@ -37,7 +37,6 @@ export const banksApi = api.injectEndpoints({
         { type: 'Accounting' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateBank: builder.mutation({
@@ -52,7 +51,6 @@ export const banksApi = api.injectEndpoints({
         { type: 'Accounting' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     deleteBank: builder.mutation({
@@ -66,7 +64,6 @@ export const banksApi = api.injectEndpoints({
         { type: 'Accounting' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),

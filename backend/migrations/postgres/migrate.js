@@ -70,7 +70,8 @@ const MIGRATIONS = [
   '048_backfill_customer_opening_balance_to_ledger.sql',
   '049_products_name_trgm.sql',
   '050_purchases_list_indexes.sql',
-  '051_purchases_payment_status_index.sql'
+  '051_purchases_payment_status_index.sql',
+  '052_sales_cash_dashboard_partial_indexes.sql'
 ];
 
 async function ensureMigrationsTable() {

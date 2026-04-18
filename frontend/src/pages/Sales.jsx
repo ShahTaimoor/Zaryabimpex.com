@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ShoppingCart,
   Search,
@@ -366,6 +367,14 @@ export const Sales = ({ tabId, editData }) => {
   // Duplicate prevention: use BOTH ref (synchronous check) and state (button disable)
   const isSubmittingRef = useRef(false); // For immediate synchronous checks
   const [isSubmitting, setIsSubmitting] = useState(false); // For button disabled state
+
+  const cartScrollRef = useRef(null);
+  const cartVirtualizer = useVirtualizer({
+    count: cart.length,
+    getScrollElement: () => cartScrollRef.current,
+    estimateSize: () => 96,
+    overscan: 6,
+  });
 
   // Helper function to reset submitting state (ensures both ref and state are reset)
   const resetSubmittingState = useCallback(() => {
@@ -1646,12 +1655,28 @@ export const Sales = ({ tabId, editData }) => {
               />
             )}
           >
-            {cart.map((item, index) => {
+            <div
+              ref={cartScrollRef}
+              className="max-h-[min(70vh,860px)] overflow-y-auto -mx-1 px-1 [scrollbar-gutter:stable]"
+            >
+              <div
+                className="relative w-full"
+                style={{ height: `${cartVirtualizer.getTotalSize()}px` }}
+              >
+                {cartVirtualizer.getVirtualItems().map((virtualRow) => {
+              const item = cart[virtualRow.index];
+              const index = virtualRow.index;
               const totalPrice = item.unitPrice * item.quantity;
               const isLowStock = item.product.inventory?.currentStock <= item.product.inventory?.reorderPoint;
 
               return (
-                <div key={item.product._id}>
+                <div
+                  key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  ref={cartVirtualizer.measureElement}
+                  className="absolute left-0 top-0 w-full"
+                  style={{ transform: `translateY(${virtualRow.start}px)` }}
+                >
                   {/* Mobile Card View */}
                   <div className="md:hidden mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
                     <div className="flex items-start justify-between mb-3">
@@ -2066,7 +2091,9 @@ export const Sales = ({ tabId, editData }) => {
                   </div>
                 </div>
               );
-            })}
+                })}
+              </div>
+            </div>
           </CartItemsTableSection>
         </ProductSelectionCartSection>
 

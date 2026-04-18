@@ -13,7 +13,6 @@ export const plStatementsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
         { type: 'Reports', id: 'PL_STATEMENTS_TRENDS' },
         { type: 'Reports', id: 'PL_STATEMENTS_LATEST' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     getStatements: builder.query({
@@ -52,7 +51,6 @@ export const plStatementsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
         { type: 'Reports', id: 'PL_STATEMENTS_TRENDS' },
         { type: 'Reports', id: 'PL_STATEMENTS_LATEST' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateStatementStatus: builder.mutation({
@@ -67,7 +65,6 @@ export const plStatementsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
         { type: 'Reports', id: 'PL_STATEMENTS_TRENDS' },
         { type: 'Reports', id: 'PL_STATEMENTS_LATEST' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     deleteStatement: builder.mutation({
@@ -81,7 +78,6 @@ export const plStatementsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
         { type: 'Reports', id: 'PL_STATEMENTS_TRENDS' },
         { type: 'Reports', id: 'PL_STATEMENTS_LATEST' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     getSummary: builder.query({

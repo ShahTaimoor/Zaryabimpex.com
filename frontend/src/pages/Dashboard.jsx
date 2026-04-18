@@ -181,7 +181,11 @@ export const Dashboard = () => {
 
   const { data: rangeSummaryRes, isLoading: rangeSummaryLoading } = useGetDashboardRangeSummaryQuery(
     { dateFrom: startDate, dateTo: endDate },
-    { skip: !startDate || !endDate, refetchOnMountOrArgChange: true }
+    {
+      skip: !startDate || !endDate,
+      refetchOnMountOrArgChange: true,
+      pollingInterval: 120000,
+    }
   );
 
   const [fetchSalesOrdersModal, soModalState] = useLazyGetSalesOrdersQuery();

@@ -67,7 +67,6 @@ export const stockMovementsApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     reverseMovement: builder.mutation({
@@ -91,7 +90,6 @@ export const stockMovementsApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
-        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     getStats: builder.query({
