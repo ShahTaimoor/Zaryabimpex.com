@@ -67,6 +67,7 @@ export const returnsApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateReturnStatus: builder.mutation({
@@ -101,6 +102,7 @@ export const returnsApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateInspection: builder.mutation({
@@ -135,6 +137,7 @@ export const returnsApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     addNote: builder.mutation({
@@ -215,6 +218,7 @@ export const returnsApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),

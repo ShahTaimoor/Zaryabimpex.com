@@ -50,6 +50,7 @@ export const cashReceiptsApi = api.injectEndpoints({
           { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
           { type: 'Reports', id: 'SUMMARY_CARDS' },
           { type: 'Reports', id: 'FINANCIAL_REPORT' },
+          { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
         ];
         // Invalidate specific customer/supplier cache if involved
         if (data?.customer) tags.push({ type: 'Customers', id: data.customer });
@@ -82,6 +83,7 @@ export const cashReceiptsApi = api.injectEndpoints({
           { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
           { type: 'Reports', id: 'SUMMARY_CARDS' },
           { type: 'Reports', id: 'FINANCIAL_REPORT' },
+          { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
         ];
         // Invalidate specific customer/supplier cache if involved
         if (data?.customer) tags.push({ type: 'Customers', id: data.customer });
@@ -112,6 +114,7 @@ export const cashReceiptsApi = api.injectEndpoints({
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     createBatchCashReceipts: builder.mutation({
@@ -137,6 +140,7 @@ export const cashReceiptsApi = api.injectEndpoints({
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),
@@ -145,6 +149,7 @@ export const cashReceiptsApi = api.injectEndpoints({
 
 export const {
   useGetCashReceiptsQuery,
+  useLazyGetCashReceiptsQuery,
   useGetCashReceiptByIdQuery,
   useLazyGetCashReceiptByIdQuery,
   useCreateCashReceiptMutation,

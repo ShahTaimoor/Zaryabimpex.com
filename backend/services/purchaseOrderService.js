@@ -118,6 +118,12 @@ class PurchaseOrderService {
     if (filter.supplier) pgFilter.supplierId = filter.supplier;
     if (filter.status) pgFilter.status = filter.status;
     if (filter.poNumber) pgFilter.purchaseOrderNumber = filter.poNumber;
+    if (queryParams.search) {
+      pgFilter.purchaseOrderNumber = queryParams.search;
+    }
+    if (queryParams.paymentStatus) {
+      pgFilter.paymentStatus = queryParams.paymentStatus;
+    }
     if (queryParams.dateFrom) pgFilter.dateFrom = queryParams.dateFrom;
     if (queryParams.dateTo) pgFilter.dateTo = queryParams.dateTo;
     if (filter.dateFilter?.orderDate) {

@@ -112,6 +112,10 @@ class PurchaseRepository {
       countSql += ` AND payment_status = $${paramCount++}`;
       countParams.push(filters.paymentStatus);
     }
+    if (filters.purchaseOrderNumber) {
+      countSql += ` AND purchase_order_number ILIKE $${paramCount++}`;
+      countParams.push(`%${filters.purchaseOrderNumber}%`);
+    }
     if (filters.dateFrom) {
       countSql += ` AND purchase_date::date >= $${paramCount++}::date`;
       countParams.push(filters.dateFrom);

@@ -31,8 +31,11 @@ import {
   useDeleteBankPaymentMutation,
 
 } from '../store/services/bankPaymentsApi';
-import { useGetSuppliersQuery } from '../store/services/suppliersApi';
-import { useGetCustomersQuery } from '../store/services/customersApi';
+import { suppliersApi } from '../store/services/suppliersApi';
+import { customersApi } from '../store/services/customersApi';
+import { useAppDispatch } from '../store/hooks';
+import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
+import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch';
 import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import DateFilter from '../components/DateFilter';
@@ -100,23 +103,23 @@ const BankPayments = () => {
     refetch,
   } = useGetBankPaymentsQuery({ ...filters, ...pagination, sortConfig }, { refetchOnMountOrArgChange: true });
 
-  // Fetch suppliers for dropdown
-  const { data: suppliersData, isLoading: suppliersLoading, error: suppliersError, refetch: refetchSuppliers } = useGetSuppliersQuery(
-    { search: '', limit: 100 },
-    { refetchOnMountOrArgChange: true }
-  );
-  const suppliers = React.useMemo(() => {
-    return suppliersData?.data?.suppliers || suppliersData?.suppliers || (Array.isArray(suppliersData) ? suppliersData : []);
-  }, [suppliersData]);
+  const dispatch = useAppDispatch();
 
-  // Fetch customers for dropdown
-  const { data: customersData, isLoading: customersLoading, error: customersError, refetch: refetchCustomers } = useGetCustomersQuery(
-    { search: '', limit: 999999 },
-    { refetchOnMountOrArgChange: true }
+  const { suppliers, isLoading: suppliersLoading, isFetching: suppliersFetching } = useDebouncedSupplierSearch(
+    supplierSearchTerm,
+    { selectedSupplier }
   );
-  const customers = React.useMemo(() => {
-    return customersData?.data?.customers || customersData?.customers || (Array.isArray(customersData) ? customersData : []);
-  }, [customersData]);
+  const { customers, isLoading: customersLoading, isFetching: customersFetching } = useDebouncedCustomerSearch(
+    customerSearchTerm,
+    { selectedCustomer }
+  );
+
+  const invalidateCustomersList = () => {
+    dispatch(customersApi.util.invalidateTags([{ type: 'Customers', id: 'LIST' }]));
+  };
+  const invalidateSuppliersList = () => {
+    dispatch(suppliersApi.util.invalidateTags([{ type: 'Suppliers', id: 'LIST' }]));
+  };
 
   // Fetch banks for dropdown
   const { data: banksData, isLoading: banksLoading, error: banksError } = useGetBanksQuery(
@@ -140,7 +143,7 @@ const BankPayments = () => {
   // Update selected supplier when suppliers data changes
   useEffect(() => {
     if (selectedSupplier && suppliers.length > 0) {
-      const updatedSupplier = suppliers.find(s => s._id === selectedSupplier._id);
+      const updatedSupplier = suppliers.find(s => (s.id || s._id) === (selectedSupplier.id || selectedSupplier._id));
       if (updatedSupplier && (
         updatedSupplier.pendingBalance !== selectedSupplier.pendingBalance ||
         updatedSupplier.advanceBalance !== selectedSupplier.advanceBalance ||
@@ -157,7 +160,7 @@ const BankPayments = () => {
   // Update selected customer when customers data changes
   useEffect(() => {
     if (selectedCustomer && customers) {
-      const updatedCustomer = customers.find(c => c._id === selectedCustomer._id);
+      const updatedCustomer = customers.find(c => (c.id || c._id) === (selectedCustomer.id || selectedCustomer._id));
       if (updatedCustomer && (
         updatedCustomer.pendingBalance !== selectedCustomer.pendingBalance ||
         updatedCustomer.advanceBalance !== selectedCustomer.advanceBalance ||
@@ -169,7 +172,7 @@ const BankPayments = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // Note: selectedCustomer is intentionally excluded from deps to prevent infinite loops.
     // We only want to sync when the customers list updates, not when selectedCustomer changes.
-  }, [customersData]);
+  }, [customers]);
 
   // Mutations
   const [createBankPayment, { isLoading: creating }] = useCreateBankPaymentMutation();
@@ -295,11 +298,7 @@ const BankPayments = () => {
   };
 
   const handleSupplierKeyDown = (e) => {
-    const filteredSuppliers = suppliers.filter(supplier =>
-      (supplier.companyName || supplier.name || supplier.displayName || '').toLowerCase().includes(supplierSearchTerm.toLowerCase()) ||
-      (supplier.phone || '').includes(supplierSearchTerm) ||
-      (supplier.email || '').toLowerCase().includes(supplierSearchTerm.toLowerCase())
-    );
+    const filteredSuppliers = suppliers || [];
 
     if (!supplierSearchTerm || filteredSuppliers.length === 0) {
       return;
@@ -324,7 +323,7 @@ const BankPayments = () => {
         e.preventDefault();
         if (supplierDropdownIndex >= 0 && supplierDropdownIndex < filteredSuppliers.length) {
           const supplier = filteredSuppliers[supplierDropdownIndex];
-          handleSupplierSelect(supplier._id);
+          handleSupplierSelect(supplier.id || supplier._id);
           setSupplierSearchTerm(supplier.displayName || supplier.companyName || supplier.name || '');
           setSupplierDropdownIndex(-1);
         }
@@ -339,15 +338,7 @@ const BankPayments = () => {
   };
 
   const handleCustomerKeyDown = (e) => {
-    const filteredCustomers = (customers || []).filter(customer => {
-      const displayName = customer.businessName || customer.business_name || customer.displayName || customer.name ||
-        `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || '';
-      return (
-        displayName.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-        (customer.phone || '').includes(customerSearchTerm) ||
-        (customer.email || '').toLowerCase().includes(customerSearchTerm.toLowerCase())
-      );
-    }) || [];
+    const filteredCustomers = customers || [];
 
     if (!customerSearchTerm || filteredCustomers.length === 0) {
       return;
@@ -457,9 +448,9 @@ const BankPayments = () => {
         refetch();
         // Refetch customer/supplier data to update balances immediately
         if (paymentType === 'customer' && formData.customer) {
-          refetchCustomers();
+          invalidateCustomersList();
         } else if (paymentType === 'supplier' && formData.supplier) {
-          refetchSuppliers();
+          invalidateSuppliersList();
         }
       })
       .catch((error) => {
@@ -491,9 +482,9 @@ const BankPayments = () => {
         refetch();
         // Refetch customer/supplier data to update balances immediately
         if (paymentType === 'customer' && formData.customer) {
-          refetchCustomers();
+          invalidateCustomersList();
         } else if (paymentType === 'supplier' && formData.supplier) {
-          refetchSuppliers();
+          invalidateSuppliersList();
         }
       })
       .catch((error) => {
@@ -510,9 +501,9 @@ const BankPayments = () => {
           refetch();
           // Refetch customer/supplier data to update balances immediately
           if (payment.customer) {
-            refetchCustomers();
+            invalidateCustomersList();
           } else if (payment.supplier) {
-            refetchSuppliers();
+            invalidateSuppliersList();
           }
         })
         .catch((error) => {
@@ -678,15 +669,11 @@ const BankPayments = () => {
                   </div>
                   {supplierSearchTerm && (
                     <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {suppliers.filter(supplier =>
-                        (supplier.companyName || supplier.name || supplier.displayName || '').toLowerCase().includes(supplierSearchTerm.toLowerCase()) ||
-                        (supplier.phone || '').includes(supplierSearchTerm) ||
-                        (supplier.email || '').toLowerCase().includes(supplierSearchTerm.toLowerCase())
-                      ).map((supplier, index) => (
+                      {(suppliers || []).map((supplier, index) => (
                         <div
                           key={supplier._id}
                           onClick={() => {
-                            handleSupplierSelect(supplier._id);
+                            handleSupplierSelect(supplier.id || supplier._id);
                             setSupplierSearchTerm(supplier.displayName || supplier.companyName || supplier.name || '');
                             setSupplierDropdownIndex(-1);
                           }}
@@ -794,15 +781,7 @@ const BankPayments = () => {
                   </div>
                   {customerSearchTerm && (
                     <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {(customers || []).filter(customer => {
-                        const displayName = customer.businessName || customer.business_name || customer.displayName || customer.name ||
-                          `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || '';
-                        return (
-                          displayName.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-                          (customer.phone || '').includes(customerSearchTerm) ||
-                          (customer.email || '').toLowerCase().includes(customerSearchTerm.toLowerCase())
-                        );
-                      }).map((customer, index) => {
+                      {(customers || []).map((customer, index) => {
                         const receivables = customer.pendingBalance || 0;
                         const advance = customer.advanceBalance || 0;
                         const netBalance = receivables - advance;
@@ -1509,14 +1488,11 @@ const BankPayments = () => {
                     </div>
                     {supplierSearchTerm && (
                       <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                        {suppliers.filter(supplier =>
-                          (supplier.companyName || supplier.name || '').toLowerCase().includes(supplierSearchTerm.toLowerCase()) ||
-                          (supplier.phone || '').includes(supplierSearchTerm)
-                        ).map((supplier) => (
+                        {(suppliers || []).map((supplier) => (
                           <div
                             key={supplier._id}
                             onClick={() => {
-                              handleSupplierSelect(supplier._id);
+                              handleSupplierSelect(supplier.id || supplier._id);
                               setSupplierSearchTerm(supplier.companyName || supplier.name || '');
                             }}
                             className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
@@ -1550,10 +1526,7 @@ const BankPayments = () => {
                     </div>
                     {customerSearchTerm && (
                       <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                        {(customers || []).filter(customer =>
-                          (customer.businessName || customer.business_name || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-                          (customer.phone || '').includes(customerSearchTerm)
-                        ).map((customer) => (
+                        {(customers || []).map((customer) => (
                           <div
                             key={customer.id || customer._id}
                             onClick={() => {

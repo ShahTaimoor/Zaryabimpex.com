@@ -102,6 +102,7 @@ export const discountsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     removeDiscount: builder.mutation({
@@ -128,6 +129,7 @@ export const discountsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     checkApplicableDiscounts: builder.mutation({

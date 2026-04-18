@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useCreateTransactionMutation } from '../store/services/dropShippingApi';
 import { useLazySearchSuppliersQuery, useGetActiveSuppliersQuery } from '../store/services/suppliersApi';
-import { useGetCustomersQuery } from '../store/services/customersApi';
+import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
 import { useGetProductsQuery } from '../store/services/productsApi';
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import { Button } from '@/components/ui/button';
@@ -73,13 +73,11 @@ const DropShipping = () => {
     }
   }, [supplierSearchTerm, activeSuppliersData, searchSuppliers]);
 
-  const { data: customersData } = useGetCustomersQuery(
-    { search: customerSearchTerm, limit: 100 },
-    { keepPreviousData: true }
-  );
-  const customers = React.useMemo(() => {
-    return customersData?.data?.customers || customersData?.customers || [];
-  }, [customersData]);
+  const {
+    customers,
+    isLoading: customersLoading,
+    isFetching: customersFetching,
+  } = useDebouncedCustomerSearch(customerSearchTerm, { selectedCustomer: customer });
 
   const { data: productsData } = useGetProductsQuery(
     { search: productSearchTerm, limit: 50 },
@@ -114,6 +112,13 @@ const DropShipping = () => {
 
   const handleCustomerSelect = (selectedCustomer) => {
     setCustomer(selectedCustomer);
+    setCustomerSearchTerm(
+      selectedCustomer?.displayName ||
+        selectedCustomer?.businessName ||
+        selectedCustomer?.business_name ||
+        selectedCustomer?.name ||
+        ''
+    );
     // Calculate net balance like in Sales page: receivables - advance
     const receivables = selectedCustomer.pendingBalance || 0;
     const advance = selectedCustomer.advanceBalance || 0;
@@ -488,6 +493,9 @@ const DropShipping = () => {
                 items={customers}
                 onSelect={handleCustomerSelect}
                 onSearch={setCustomerSearchTerm}
+                value={customerSearchTerm}
+                loading={customersLoading || customersFetching}
+                emptyMessage="No customers found"
                 displayKey={(customer) => customer.displayName || customer.name}
                 selectedItem={customer}
               />

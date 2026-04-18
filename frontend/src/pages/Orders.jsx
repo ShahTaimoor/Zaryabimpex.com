@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShoppingCart,
   Search,
@@ -31,6 +31,9 @@ import { formatDateForInput, getCurrentDatePakistan, getLocalDateString } from '
 import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
+import PaginationControls from '../components/PaginationControls';
+
+const INVOICE_PAGE_SIZE = 50;
 
 // Safe date display: avoid "Invalid Date" when value is missing or invalid (PostgreSQL may send sale_date, created_at)
 const formatOrderDate = (order) => {
@@ -187,6 +190,7 @@ const OrderCard = ({ order, onView, onEdit, onPrint }) => {
 export const Orders = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [invoicePage, setInvoicePage] = useState(1);
   const today = getLocalDateString();
   const [fromDate, setFromDate] = useState(today); // Today
   const [toDate, setToDate] = useState(today); // Today
@@ -215,9 +219,14 @@ export const Orders = () => {
       status: statusFilter || undefined,
       dateFrom: fromDate || undefined,
       dateTo: toDate || undefined,
-      limit: 999999 // Get all orders without pagination
+      page: invoicePage,
+      limit: INVOICE_PAGE_SIZE
     }
   );
+
+  useEffect(() => {
+    setInvoicePage(1);
+  }, [searchTerm, statusFilter, fromDate, toDate]);
 
   // Extract orders from response
   const orders = React.useMemo(() => {
@@ -228,6 +237,9 @@ export const Orders = () => {
     if (Array.isArray(ordersResponse)) return ordersResponse;
     return [];
   }, [ordersResponse]);
+
+  const ordersPagination = ordersResponse?.data?.pagination ?? ordersResponse?.pagination ?? {};
+  const invoiceRowOffset = (invoicePage - 1) * INVOICE_PAGE_SIZE;
 
   // Fetch company settings
   const { data: companySettingsData } = useGetCompanySettingsQuery(undefined, {
@@ -608,7 +620,9 @@ export const Orders = () => {
 
           {/* Mobile Header */}
           <div className="lg:hidden bg-gray-50 border-b border-gray-200 px-4 py-3">
-            <h3 className="text-sm font-medium text-gray-700">Sales Invoices ({orders.length})</h3>
+            <h3 className="text-sm font-medium text-gray-700">
+              Sales Invoices ({ordersPagination.total ?? orders.length})
+            </h3>
           </div>
 
           {/* Table Body / Cards */}
@@ -620,7 +634,7 @@ export const Orders = () => {
                   <div className="grid grid-cols-[3rem_7rem_1fr_6rem_4rem_6rem_1fr_5.5rem_1fr_6rem] gap-3 xl:gap-4 items-center text-sm">
                     {/* S.No */}
                     <div className="col-span-1 text-gray-500 font-medium">
-                      {idx + 1}
+                      {invoiceRowOffset + idx + 1}
                     </div>
 
                     {/* Order Number */}
@@ -741,6 +755,13 @@ export const Orders = () => {
               </div>
             ))}
           </div>
+          <PaginationControls
+            page={Number(ordersPagination.page ?? invoicePage) || 1}
+            totalPages={Math.max(1, Number(ordersPagination.pages) || 1)}
+            onPageChange={setInvoicePage}
+            totalItems={ordersPagination.total}
+            limit={ordersPagination.limit ?? INVOICE_PAGE_SIZE}
+          />
         </div>
       )}
 

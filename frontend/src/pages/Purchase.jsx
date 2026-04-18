@@ -526,8 +526,8 @@ export const Purchase = ({ tabId, editData }) => {
     selectedSupplier?._id,
     {
       skip: !selectedSupplier?._id,
-      staleTime: 0, // Always consider data stale to get fresh balance information
-      refetchOnMountOrArgChange: true, // Refetch when component mounts or params change
+      staleTime: 60_000,
+      refetchOnMountOrArgChange: true,
     }
   );
 

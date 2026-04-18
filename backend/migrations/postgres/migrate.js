@@ -67,7 +67,10 @@ const MIGRATIONS = [
   '046_add_order_type_to_sales_orders.sql',
   '046_products_customs_fields.sql',
   '047_products_import_refs.sql',
-  '048_backfill_customer_opening_balance_to_ledger.sql'
+  '048_backfill_customer_opening_balance_to_ledger.sql',
+  '049_products_name_trgm.sql',
+  '050_purchases_list_indexes.sql',
+  '051_purchases_payment_status_index.sql'
 ];
 
 async function ensureMigrationsTable() {
@@ -106,6 +109,13 @@ async function runMigration(fileName) {
       return;
     }
     console.error(`❌ ${fileName} failed:`, error.message);
+    if (error.code === '53100' || /no space left on device/i.test(String(error.message))) {
+      console.error(
+        '\n💡 PostgreSQL could not extend data files (disk full).\n' +
+          '   Free several GB on the drive that holds your PostgreSQL data directory (check SHOW data_directory; in psql), empty Recycle Bin, then run: npm run migrate:postgres\n' +
+          '   Migration 050 now creates only one index; 051 adds the payment_status index separately so you can succeed in two steps if needed.\n'
+      );
+    }
     throw error;
   }
 }

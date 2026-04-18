@@ -140,7 +140,14 @@ async function getCategoryMap(categoryIds) {
 class ProductServicePostgres {
   buildFilter(queryParams) {
     const filters = {};
-    if (queryParams.search) filters.search = queryParams.search;
+    const code = queryParams.code != null && String(queryParams.code).trim() !== ''
+      ? String(queryParams.code).trim()
+      : null;
+    if (code) {
+      filters.exactCode = code;
+    } else if (queryParams.search) {
+      filters.search = queryParams.search;
+    }
     if (queryParams.category) filters.categoryId = queryParams.category;
     else if (queryParams.categories) {
       try {
@@ -156,10 +163,15 @@ class ProductServicePostgres {
   }
 
   async getProducts(queryParams) {
+    const MAX_PAGE = 200;
+    const MAX_EXPORT = 10000;
     const getAll = queryParams.all === 'true' || queryParams.all === true ||
-      (queryParams.limit && parseInt(queryParams.limit) >= 999999);
-    const page = getAll ? 1 : (parseInt(queryParams.page) || 1);
-    const limit = getAll ? 999999 : (parseInt(queryParams.limit) || 20);
+      (queryParams.limit && parseInt(queryParams.limit, 10) >= 999999);
+    const page = getAll ? 1 : (parseInt(queryParams.page, 10) || 1);
+    let limit = getAll
+      ? Math.min(parseInt(queryParams.limit, 10) || MAX_EXPORT, MAX_EXPORT)
+      : Math.min(parseInt(queryParams.limit, 10) || 20, MAX_PAGE);
+    if (!getAll && (!Number.isFinite(limit) || limit < 1)) limit = 20;
 
     const filters = this.buildFilter(queryParams);
     const result = await productRepository.findWithPagination(filters, { page, limit });

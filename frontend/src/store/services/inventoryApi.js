@@ -61,6 +61,7 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateStock: builder.mutation({
@@ -83,6 +84,7 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     // Inventory Alerts
@@ -135,6 +137,7 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     // Stock Ledger
@@ -216,6 +219,7 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     createStockMovementAdjustment: builder.mutation({
@@ -238,6 +242,7 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     reverseStockMovement: builder.mutation({
@@ -260,6 +265,7 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     // Inventory Reports

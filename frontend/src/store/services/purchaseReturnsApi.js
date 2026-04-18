@@ -74,6 +74,7 @@ export const purchaseReturnsApi = api.injectEndpoints({
           { type: 'Reports', id: 'INVENTORY_REPORT' },
           { type: 'Reports', id: 'SUMMARY_CARDS' },
           { type: 'Reports', id: 'FINANCIAL_REPORT' },
+          { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
         ];
         if (arg?.supplierId) {
           tags.push({ type: 'PurchaseReturns', id: `SUPPLIER_PRODUCTS_${arg.supplierId}` });
@@ -140,6 +141,7 @@ export const purchaseReturnsApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
 
@@ -177,6 +179,7 @@ export const purchaseReturnsApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
 
@@ -216,6 +219,7 @@ export const purchaseReturnsApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
 

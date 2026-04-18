@@ -56,9 +56,10 @@ router.get('/', [
   sanitizeRequest,
   auth,
   query('page').optional({ checkFalsy: true }).isInt({ min: 1 }),
-  query('limit').optional({ checkFalsy: true }).isInt({ min: 1, max: 999999 }),
+  query('limit').optional({ checkFalsy: true }).isInt({ min: 1, max: 10000 }),
   query('all').optional({ checkFalsy: true }).isBoolean(),
   query('search').optional({ checkFalsy: true }).trim(),
+  query('code').optional({ checkFalsy: true }).trim(),
   query('category').optional({ checkFalsy: true }).isUUID().withMessage('Category must be a valid UUID'),
   query('categories').optional({ checkFalsy: true }).custom((value) => {
     if (typeof value === 'string') {

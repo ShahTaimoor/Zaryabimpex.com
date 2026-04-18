@@ -28,18 +28,19 @@ import {
 import DashboardReportModal from '../components/DashboardReportModal';
 import {
   useGetTodaySummaryQuery,
-  useGetOrdersQuery,
+  useLazyGetOrdersQuery,
   useLazyGetPeriodSummaryQuery,
 } from '../store/services/salesApi';
 import { useGetLowStockItemsQuery, useGetInventorySummaryQuery } from '../store/services/inventoryApi';
 import { useGetCustomersQuery } from '../store/services/customersApi';
-import { useGetSalesOrdersQuery } from '../store/services/salesOrdersApi';
-import { useGetPurchaseOrdersQuery } from '../store/services/purchaseOrdersApi';
-import { useGetPurchaseInvoicesQuery } from '../store/services/purchaseInvoicesApi';
-import { useGetCashReceiptsQuery } from '../store/services/cashReceiptsApi';
-import { useGetCashPaymentsQuery } from '../store/services/cashPaymentsApi';
-import { useGetBankReceiptsQuery } from '../store/services/bankReceiptsApi';
-import { useGetBankPaymentsQuery } from '../store/services/bankPaymentsApi';
+import { useLazyGetSalesOrdersQuery } from '../store/services/salesOrdersApi';
+import { useLazyGetPurchaseOrdersQuery } from '../store/services/purchaseOrdersApi';
+import { useLazyGetPurchaseInvoicesQuery } from '../store/services/purchaseInvoicesApi';
+import { useLazyGetCashReceiptsQuery } from '../store/services/cashReceiptsApi';
+import { useLazyGetCashPaymentsQuery } from '../store/services/cashPaymentsApi';
+import { useLazyGetBankReceiptsQuery } from '../store/services/bankReceiptsApi';
+import { useLazyGetBankPaymentsQuery } from '../store/services/bankPaymentsApi';
+import { useGetDashboardRangeSummaryQuery } from '../store/services/dashboardApi';
 import { useGetUpcomingExpensesQuery } from '../store/services/expensesApi';
 import { useGetCompanySettingsQuery } from '../store/services/settingsApi';
 import { useGetSummaryQuery } from '../store/services/plStatementsApi';
@@ -163,10 +164,8 @@ export const Dashboard = () => {
   };
 
   const { data: todaySummary, isLoading: summaryLoading, error: todaySummaryError } = useGetTodaySummaryQuery(undefined, {
-    pollingInterval: 30000, // Refetch every 30 seconds
+    pollingInterval: 60000,
   });
-
-  // Debug: Log the summary data to see what we're getting
 
   if (todaySummaryError) {
     console.error('Today Summary Error:', todaySummaryError);
@@ -177,72 +176,67 @@ export const Dashboard = () => {
   const { data: inventoryData, isLoading: inventoryLoading } = useGetInventorySummaryQuery();
 
   const { data: customersData, isLoading: customersLoading } = useGetCustomersQuery(
-    { status: 'active' }
+    { status: 'active', limit: 1, page: 1 }
   );
 
-  // Pending Sales Orders data (draft status only)
-  const { data: pendingSalesOrdersData, isLoading: pendingSalesOrdersLoading } = useGetSalesOrdersQuery(
-    { status: 'draft' }
-  );
-
-  // All Sales Orders data (for total value calculation)
-  // Use 'all' parameter to get all orders without pagination
-  const { data: salesOrdersData, isLoading: salesOrdersLoading } = useGetSalesOrdersQuery(
-    { dateFrom: startDate, dateTo: endDate, all: true },
-    { skip: !startDate || !endDate }
-  );
-
-  // Pending Purchase Orders data (draft status only)
-  const { data: pendingPurchaseOrdersData, isLoading: pendingPurchaseOrdersLoading } = useGetPurchaseOrdersQuery(
-    { status: 'draft' }
-  );
-
-  // All Purchase Orders data (for total value calculation)
-  const { data: purchaseOrdersData, isLoading: purchaseOrdersLoading } = useGetPurchaseOrdersQuery(
+  const { data: rangeSummaryRes, isLoading: rangeSummaryLoading } = useGetDashboardRangeSummaryQuery(
     { dateFrom: startDate, dateTo: endDate },
-    { skip: !startDate || !endDate }
+    { skip: !startDate || !endDate, refetchOnMountOrArgChange: true }
   );
 
-  // Sales Invoices (from Sales page) - actual completed sales
-  // Use 'all' parameter to get all orders without pagination
-  const { data: salesInvoicesData, isLoading: salesInvoicesLoading } = useGetOrdersQuery(
-    { dateFrom: startDate, dateTo: endDate, all: true },
-    { skip: !startDate || !endDate }
-  );
+  const [fetchSalesOrdersModal, soModalState] = useLazyGetSalesOrdersQuery();
+  const [fetchPurchaseOrdersModal, poModalState] = useLazyGetPurchaseOrdersQuery();
+  const [fetchSalesInvoicesModal, siModalState] = useLazyGetOrdersQuery();
+  const [fetchPurchaseInvoicesModal, piModalState] = useLazyGetPurchaseInvoicesQuery();
+  const [fetchCashReceiptsModal, crModalState] = useLazyGetCashReceiptsQuery();
+  const [fetchCashPaymentsModal, cpModalState] = useLazyGetCashPaymentsQuery();
+  const [fetchBankReceiptsModal, brModalState] = useLazyGetBankReceiptsQuery();
+  const [fetchBankPaymentsModal, bpModalState] = useLazyGetBankPaymentsQuery();
 
-  // Purchase Invoices (from Purchase page) - use all: true for accurate totals in date range
-  const { data: purchaseInvoicesData, isLoading: purchaseInvoicesLoading } = useGetPurchaseInvoicesQuery(
-    { dateFrom: startDate, dateTo: endDate, all: true },
-    { skip: !startDate || !endDate }
-  );
+  const rangeParams = { dateFrom: startDate, dateTo: endDate, all: true };
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    if (showSalesOrdersModal) fetchSalesOrdersModal(rangeParams);
+  }, [showSalesOrdersModal, startDate, endDate, fetchSalesOrdersModal]);
 
-  // Cash Receipts data - use all: true to fetch all records in date range for accurate totals
-  const { data: cashReceiptsData, isLoading: cashReceiptsLoading } = useGetCashReceiptsQuery(
-    { dateFrom: startDate, dateTo: endDate, all: true },
-    { skip: !startDate || !endDate }
-  );
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    if (showPurchaseOrdersModal) fetchPurchaseOrdersModal(rangeParams);
+  }, [showPurchaseOrdersModal, startDate, endDate, fetchPurchaseOrdersModal]);
 
-  // Cash Payments data - use all: true to fetch all records in date range for accurate totals
-  const { data: cashPaymentsData, isLoading: cashPaymentsLoading } = useGetCashPaymentsQuery(
-    { dateFrom: startDate, dateTo: endDate, all: true },
-    { skip: !startDate || !endDate }
-  );
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    if (showSalesInvoicesModal || showAllReceiptsModal) fetchSalesInvoicesModal(rangeParams);
+  }, [showSalesInvoicesModal, showAllReceiptsModal, startDate, endDate, fetchSalesInvoicesModal]);
 
-  // Bank Receipts data - use all: true to fetch all records in date range for accurate totals
-  const { data: bankReceiptsData, isLoading: bankReceiptsLoading } = useGetBankReceiptsQuery(
-    { dateFrom: startDate, dateTo: endDate, all: true },
-    { skip: !startDate || !endDate }
-  );
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    if (showPurchaseInvoicesModal) fetchPurchaseInvoicesModal(rangeParams);
+  }, [showPurchaseInvoicesModal, startDate, endDate, fetchPurchaseInvoicesModal]);
 
-  // Bank Payments data - use all: true to fetch all records in date range for accurate totals
-  const { data: bankPaymentsData, isLoading: bankPaymentsLoading } = useGetBankPaymentsQuery(
-    { dateFrom: startDate, dateTo: endDate, all: true },
-    { skip: !startDate || !endDate }
-  );
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    if (showCashReceiptsModal || showAllReceiptsModal) fetchCashReceiptsModal(rangeParams);
+  }, [showCashReceiptsModal, showAllReceiptsModal, startDate, endDate, fetchCashReceiptsModal]);
+
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    if (showCashPaymentsModal || showAllPaymentsModal) fetchCashPaymentsModal(rangeParams);
+  }, [showCashPaymentsModal, showAllPaymentsModal, startDate, endDate, fetchCashPaymentsModal]);
+
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    if (showBankReceiptsModal || showAllReceiptsModal) fetchBankReceiptsModal(rangeParams);
+  }, [showBankReceiptsModal, showAllReceiptsModal, startDate, endDate, fetchBankReceiptsModal]);
+
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    if (showBankPaymentsModal || showAllPaymentsModal) fetchBankPaymentsModal(rangeParams);
+  }, [showBankPaymentsModal, showAllPaymentsModal, startDate, endDate, fetchBankPaymentsModal]);
 
   const { data: recurringExpensesData, isLoading: recurringExpensesLoading } = useGetUpcomingExpensesQuery(
     { days: 14 },
-    { pollingInterval: 60000 }
+    { pollingInterval: 120000 }
   );
 
   const { data: plSummaryData } = useGetSummaryQuery(
@@ -253,10 +247,7 @@ export const Dashboard = () => {
   const { data: companySettingsData } = useGetCompanySettingsQuery();
   const { data: companyData } = useFetchCompanyQuery();
 
-  if (summaryLoading || lowStockLoading || inventoryLoading || customersLoading ||
-    salesOrdersLoading || pendingSalesOrdersLoading || purchaseOrdersLoading || pendingPurchaseOrdersLoading ||
-    salesInvoicesLoading || purchaseInvoicesLoading || cashReceiptsLoading ||
-    cashPaymentsLoading || bankReceiptsLoading || bankPaymentsLoading || recurringExpensesLoading) {
+  if (summaryLoading || lowStockLoading || inventoryLoading || customersLoading || rangeSummaryLoading || recurringExpensesLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -270,15 +261,33 @@ export const Dashboard = () => {
   const lowStockCount = lowStockData?.data?.products?.length || lowStockData?.products?.length || 0;
   const inventorySummary = inventoryData?.data?.summary ?? inventoryData?.data ?? inventoryData?.summary ?? {};
 
-  const activeCustomersCount = customersData?.data?.customers?.length || customersData?.customers?.length || 0;
+  const customersPagination = customersData?.pagination ?? customersData?.data?.pagination;
+  const activeCustomersCount =
+    customersPagination?.total ??
+    customersData?.data?.customers?.length ??
+    customersData?.customers?.length ??
+    0;
 
-  // Extract counts from API responses
-  const pendingSalesOrdersCount = pendingSalesOrdersData?.data?.salesOrders?.length || pendingSalesOrdersData?.salesOrders?.length || 0;
-  const pendingPurchaseOrdersCount = pendingPurchaseOrdersData?.data?.purchaseOrders?.length || pendingPurchaseOrdersData?.purchaseOrders?.length || 0;
-  const cashReceiptsCount = cashReceiptsData?.data?.cashReceipts?.length || 0;
-  const cashPaymentsCount = cashPaymentsData?.data?.cashPayments?.length || 0;
-  const bankReceiptsCount = bankReceiptsData?.data?.bankReceipts?.length || 0;
-  const bankPaymentsCount = bankPaymentsData?.data?.bankPayments?.length || 0;
+  const agg = rangeSummaryRes?.data ?? rangeSummaryRes ?? {};
+
+  const pickList = (payload, keys) => {
+    if (!payload) return [];
+    const inner = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+      ? payload.data
+      : payload;
+    for (const k of keys) {
+      const v = inner[k];
+      if (Array.isArray(v)) return v;
+    }
+    return [];
+  };
+
+  const pendingSalesOrdersCount = agg.pendingSalesOrdersCount ?? 0;
+  const pendingPurchaseOrdersCount = agg.pendingPurchaseOrdersCount ?? 0;
+  const cashReceiptsCount = agg.cashReceipts?.count ?? 0;
+  const cashPaymentsCount = agg.cashPayments?.count ?? 0;
+  const bankReceiptsCount = agg.bankReceipts?.count ?? 0;
+  const bankPaymentsCount = agg.bankPayments?.count ?? 0;
 
   const upcomingRecurringExpenses = recurringExpensesData?.data || recurringExpensesData?.expenses || [];
 
@@ -312,67 +321,23 @@ export const Dashboard = () => {
     return 'General Expense';
   };
 
-  // Calculate totals for financial metrics
-  // RTK Query wraps axios response in 'data', so structure is: { data: { salesOrders: [...], pagination: {...} } }
-  // Sales Orders use `total` directly, not `pricing.total`
-  const salesOrdersArray = salesOrdersData?.data?.salesOrders || salesOrdersData?.salesOrders || [];
-  const salesOrdersTotal = salesOrdersArray.reduce((sum, order) => {
-    const orderTotal = order.total || order.pricing?.total || 0;
-    return sum + Number(orderTotal);
-  }, 0);
+  const salesOrdersTotal = Number(agg.salesOrdersInRange?.sumTotal) || 0;
+  const purchaseOrdersTotal = Number(agg.purchaseOrdersInRange?.sumTotal) || 0;
+  const salesInvoicesTotal = Number(agg.salesInvoicesInRange?.sumTotal) || 0;
+  const salesInvoicesCOGS = Number(agg.salesInvoicesInRange?.sumCogs) || 0;
+  const purchaseInvoicesTotal = Number(agg.purchaseInvoicesInRange?.sumTotal) || 0;
 
-  const purchaseOrdersTotal = (purchaseOrdersData?.data?.purchaseOrders || purchaseOrdersData?.purchaseOrders || []).reduce((sum, order) => {
-    return sum + Number(order.pricing?.total || order.total || 0);
-  }, 0);
+  const cashReceiptsTotal = Number(agg.cashReceipts?.sumAmount) || 0;
+  const cashPaymentsTotal = Number(agg.cashPayments?.sumAmount) || 0;
+  const bankReceiptsTotal = Number(agg.bankReceipts?.sumAmount) || 0;
+  const bankPaymentsTotal = Number(agg.bankPayments?.sumAmount) || 0;
 
-  // Sales Invoices (from Sales/POS page) - use `pricing.total`
-  // RTK Query wraps axios response in 'data', so structure is: { data: { orders: [...], pagination: {...} } }
-  // Also handle direct response structure (no data wrapper)
-  const salesInvoicesArray = salesInvoicesData?.data?.orders || salesInvoicesData?.orders || [];
-  const salesInvoicesTotal = salesInvoicesArray.reduce((sum, order) => {
-    const orderTotal = order.pricing?.total || order.total || 0;
-    return sum + Number(orderTotal);
-  }, 0);
-
-  // COGS for sales invoices (from items: quantity * unitCost/cost_price)
-  const salesInvoicesCOGS = salesInvoicesArray.reduce((sum, order) => {
-    const items = Array.isArray(order.items) ? order.items : (typeof order.items === 'string' ? (() => { try { return JSON.parse(order.items || '[]'); } catch { return []; } })() : []);
-    const orderCOGS = items.reduce((s, it) => {
-      const qty = Number(it.quantity) || 0;
-      const cost = Number(it.unitCost ?? it.cost_price ?? it.costPrice ?? 0);
-      return s + qty * cost;
-    }, 0);
-    return sum + orderCOGS;
-  }, 0);
-
-  // Purchase Invoices (from Purchase page)
-  const purchaseInvoicesTotal = purchaseInvoicesData?.data?.invoices?.reduce((sum, invoice) => sum + (invoice.pricing?.total || 0), 0) ||
-    purchaseInvoicesData?.invoices?.reduce((sum, invoice) => sum + (invoice.pricing?.total || 0), 0) || 0;
-
-  // Safely calculate totals with proper number conversion and NaN handling
-  const cashReceiptsArray = cashReceiptsData?.data?.cashReceipts || [];
-  const cashReceiptsTotal = cashReceiptsArray.reduce((sum, receipt) => {
-    const amount = Number(receipt?.amount) || 0;
-    return sum + (isNaN(amount) ? 0 : amount);
-  }, 0);
-
-  const cashPaymentsArray = cashPaymentsData?.data?.cashPayments || [];
-  const cashPaymentsTotal = cashPaymentsArray.reduce((sum, payment) => {
-    const amount = Number(payment?.amount) || 0;
-    return sum + (isNaN(amount) ? 0 : amount);
-  }, 0);
-
-  const bankReceiptsArray = bankReceiptsData?.data?.bankReceipts || [];
-  const bankReceiptsTotal = bankReceiptsArray.reduce((sum, receipt) => {
-    const amount = Number(receipt?.amount) || 0;
-    return sum + (isNaN(amount) ? 0 : amount);
-  }, 0);
-
-  const bankPaymentsArray = bankPaymentsData?.data?.bankPayments || [];
-  const bankPaymentsTotal = bankPaymentsArray.reduce((sum, payment) => {
-    const amount = Number(payment?.amount) || 0;
-    return sum + (isNaN(amount) ? 0 : amount);
-  }, 0);
+  const cashReceiptsArray = pickList(crModalState.data, ['cashReceipts']);
+  const cashPaymentsArray = pickList(cpModalState.data, ['cashPayments']);
+  const bankReceiptsArray = pickList(brModalState.data, ['bankReceipts']);
+  const bankPaymentsArray = pickList(bpModalState.data, ['bankPayments']);
+  const salesInvoicesArray = pickList(siModalState.data, ['orders']);
+  const salesOrdersArray = pickList(soModalState.data, ['salesOrders']);
 
   // Calculate total sales (Sales Orders + Sales Invoices)
   const totalSales = salesOrdersTotal + salesInvoicesTotal;
@@ -380,10 +345,8 @@ export const Dashboard = () => {
   // Calculate total purchases (Purchase Orders + Purchase Invoices) - COGS
   const totalPurchases = purchaseOrdersTotal + purchaseInvoicesTotal;
 
-  // Calculate total discounts from sales orders and sales invoices
-  const salesOrdersDiscounts = salesOrdersData?.data?.salesOrders?.reduce((sum, order) => sum + (order.pricing?.discountAmount || 0), 0) || 0;
-  const salesInvoicesDiscounts = salesInvoicesData?.data?.orders?.reduce((sum, order) => sum + (order.discountAmount || 0), 0) ||
-    salesInvoicesData?.orders?.reduce((sum, order) => sum + (order.discountAmount || 0), 0) || 0;
+  const salesOrdersDiscounts = Number(agg.salesOrdersInRange?.sumDiscount) || 0;
+  const salesInvoicesDiscounts = Number(agg.salesInvoicesInRange?.sumDiscount) || 0;
   const totalDiscounts = salesOrdersDiscounts + salesInvoicesDiscounts;
 
   // Sales Returns from P&L (account 4100)
@@ -396,33 +359,14 @@ export const Dashboard = () => {
   // Total Sale Net Profit = Total Revenue - COGS (matches P&L; must subtract returns before COGS)
   const salesInvoicesNetProfit = totalRevenue - salesInvoicesCOGS;
 
-  // Separate Cash/Bank Payments into Supplier Payments vs Operating Expenses
-  // Operating expenses are payments that don't have a supplier or customer (general expenses)
-  const cashOperatingExpenses = cashPaymentsArray
-    .filter(payment => !payment?.supplier && !payment?.customer)
-    .reduce((sum, payment) => {
-      const amount = Number(payment?.amount) || 0;
-      return sum + (isNaN(amount) ? 0 : amount);
-    }, 0);
-
-  const bankOperatingExpenses = bankPaymentsArray
-    .filter(payment => !payment?.supplier && !payment?.customer)
-    .reduce((sum, payment) => {
-      const amount = Number(payment?.amount) || 0;
-      return sum + (isNaN(amount) ? 0 : amount);
-    }, 0);
-
-  const operatingExpenses = cashOperatingExpenses + bankOperatingExpenses;
+  const operatingExpenses =
+    (Number(agg.cashPayments?.sumOperating) || 0) + (Number(agg.bankPayments?.sumOperating) || 0);
 
   const totalCashPayments = cashPaymentsTotal;
   const totalBankPayments = bankPaymentsTotal;
   const totalPayments = totalCashPayments + totalBankPayments; // Includes both supplier payments and expenses
 
-  // Calculate payments received from Sales Invoices (amount_paid field)
-  const salesInvoicePayments = salesInvoicesArray.reduce((sum, order) => {
-    const amountPaid = Number(order.amount_paid || order.amountPaid || 0);
-    return sum + (isNaN(amountPaid) ? 0 : amountPaid);
-  }, 0);
+  const salesInvoicePayments = Number(agg.salesInvoicesInRange?.sumAmountPaid) || 0;
 
   // Cash Flow Calculations
   const totalCashReceipts = cashReceiptsTotal;
@@ -534,14 +478,13 @@ export const Dashboard = () => {
     { key: 'amount', label: 'Amount', sortable: true, format: 'currency' }
   ];
 
-  // Prepare data arrays for modals
+  const purchaseInvoicesDataArray = pickList(piModalState.data, ['invoices']);
   const salesOrdersModalData = salesOrdersArray;
-  const purchaseOrdersModalData = purchaseOrdersData?.data?.purchaseOrders || purchaseOrdersData?.purchaseOrders || [];
+  const purchaseOrdersModalData = pickList(poModalState.data, ['purchaseOrders']);
   const salesInvoicesModalData = salesInvoicesArray;
-  const purchaseInvoicesDataArray = purchaseInvoicesData?.data?.invoices || purchaseInvoicesData?.invoices || [];
   const cashReceiptsDataArray = cashReceiptsArray;
   const cashPaymentsDataArray = cashPaymentsArray;
-  const bankReceiptsDataArray = bankReceiptsData?.data?.bankReceipts || [];
+  const bankReceiptsDataArray = bankReceiptsArray;
   const bankPaymentsDataArray = bankPaymentsArray;
 
   // Combined receipts and payments data (cash + bank + sales invoice payments)
@@ -1141,7 +1084,7 @@ export const Dashboard = () => {
             title="Sales Orders"
             columns={salesOrdersColumns}
             data={salesOrdersModalData}
-            isLoading={salesOrdersLoading}
+            isLoading={soModalState.isFetching}
             dateFrom={startDate}
             dateTo={endDate}
             onDateChange={(from, to) => {
@@ -1156,7 +1099,7 @@ export const Dashboard = () => {
             title="Purchase Orders"
             columns={purchaseOrdersColumns}
             data={purchaseOrdersModalData}
-            isLoading={purchaseOrdersLoading}
+            isLoading={poModalState.isFetching}
             dateFrom={startDate}
             dateTo={endDate}
             onDateChange={(from, to) => {
@@ -1171,7 +1114,7 @@ export const Dashboard = () => {
             title="Sales Invoices"
             columns={salesInvoicesColumns}
             data={salesInvoicesModalData}
-            isLoading={salesInvoicesLoading}
+            isLoading={siModalState.isFetching}
             dateFrom={startDate}
             dateTo={endDate}
             onDateChange={(from, to) => {
@@ -1191,7 +1134,7 @@ export const Dashboard = () => {
             title="Purchase Invoices"
             columns={purchaseInvoicesColumns}
             data={purchaseInvoicesDataArray}
-            isLoading={purchaseInvoicesLoading}
+            isLoading={piModalState.isFetching}
             dateFrom={startDate}
             dateTo={endDate}
             onDateChange={(from, to) => {
@@ -1206,7 +1149,7 @@ export const Dashboard = () => {
             title="Cash Receipts"
             columns={cashReceiptsColumns}
             data={cashReceiptsDataArray}
-            isLoading={cashReceiptsLoading}
+            isLoading={crModalState.isFetching}
             dateFrom={startDate}
             dateTo={endDate}
             onDateChange={(from, to) => {
@@ -1221,7 +1164,7 @@ export const Dashboard = () => {
             title="Cash Payments"
             columns={cashPaymentsColumns}
             data={cashPaymentsDataArray}
-            isLoading={cashPaymentsLoading}
+            isLoading={cpModalState.isFetching}
             dateFrom={startDate}
             dateTo={endDate}
             onDateChange={(from, to) => {
@@ -1236,7 +1179,7 @@ export const Dashboard = () => {
             title="Bank Receipts"
             columns={bankReceiptsColumns}
             data={bankReceiptsDataArray}
-            isLoading={bankReceiptsLoading}
+            isLoading={brModalState.isFetching}
             dateFrom={startDate}
             dateTo={endDate}
             onDateChange={(from, to) => {
@@ -1251,7 +1194,7 @@ export const Dashboard = () => {
             title="Bank Payments"
             columns={bankPaymentsColumns}
             data={bankPaymentsDataArray}
-            isLoading={bankPaymentsLoading}
+            isLoading={bpModalState.isFetching}
             dateFrom={startDate}
             dateTo={endDate}
             onDateChange={(from, to) => {
@@ -1266,7 +1209,7 @@ export const Dashboard = () => {
             title="All Receipts (Cash + Bank + Sales)"
             columns={allReceiptsColumns}
             data={allReceiptsDataArray}
-            isLoading={cashReceiptsLoading || bankReceiptsLoading || salesInvoicesLoading}
+            isLoading={crModalState.isFetching || brModalState.isFetching || siModalState.isFetching}
             dateFrom={startDate}
             dateTo={endDate}
             onDateChange={(from, to) => {
@@ -1281,7 +1224,7 @@ export const Dashboard = () => {
             title="All Payments (Cash + Bank)"
             columns={allPaymentsColumns}
             data={allPaymentsDataArray}
-            isLoading={cashPaymentsLoading || bankPaymentsLoading}
+            isLoading={cpModalState.isFetching || bpModalState.isFetching}
             dateFrom={startDate}
             dateTo={endDate}
             onDateChange={(from, to) => {

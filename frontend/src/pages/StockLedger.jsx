@@ -24,8 +24,8 @@ import { Button } from '@/components/ui/button';
 
 /** Initial rows when opening customer/supplier dropdown (no search yet) */
 const ENTITY_DROPDOWN_INITIAL_LIMIT = 20;
-/** When user types a search, request enough rows to return all server matches (API max ~999999) */
-const ENTITY_DROPDOWN_SEARCH_LIMIT = 100000;
+/** Server-side search; cap rows to avoid huge payloads (refine search if needed). */
+const ENTITY_DROPDOWN_SEARCH_LIMIT = 500;
 
 /** Postgres APIs return `id`; legacy Mongo-style responses may use `_id` */
 const entityId = (row) => (row?.id != null ? row.id : row?._id);

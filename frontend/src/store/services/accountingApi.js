@@ -24,6 +24,7 @@ export const accountingApi = api.injectEndpoints({
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     getTrialBalance: builder.query({

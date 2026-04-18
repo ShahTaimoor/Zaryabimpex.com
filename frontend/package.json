@@ -4,6 +4,9 @@
     "description": "Wholesale & Retail POS System Frontend",
     "private": true,
     "dependencies": {
+        "@date-fns/tz": "^1.4.1",
+        "@emotion/cache": "^11.14.0",
+        "@emotion/react": "^11.14.0",
         "@headlessui/react": "^1.7.17",
         "@hookform/resolvers": "^5.2.2",
         "@radix-ui/react-avatar": "^1.1.11",
@@ -14,6 +17,7 @@
         "@radix-ui/react-separator": "^1.1.8",
         "@radix-ui/react-slot": "^1.2.4",
         "@reduxjs/toolkit": "^2.11.2",
+        "@tanstack/react-virtual": "^3.13.24",
         "autoprefixer": "^10.4.16",
         "axios": "^1.6.2",
         "class-variance-authority": "^0.7.1",

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import {
   Calendar,
@@ -18,6 +18,7 @@ import { useGetCategoriesQuery } from '../store/services/categoriesApi';
 import { useGetSuppliersQuery } from '../store/services/suppliersApi';
 import { handleApiError } from '../utils/errorHandler';
 import BaseModal from './BaseModal';
+import { Input } from '@/components/ui/input';
 
 const CreateInventoryReportModal = ({ onClose, onSuccess }) => {
   const [activeTab, setActiveTab] = useState('basic');
@@ -52,10 +53,40 @@ const CreateInventoryReportModal = ({ onClose, onSuccess }) => {
     }
   });
 
-  // Fetch categories and suppliers for filters
-  const { data: categoriesData } = useGetCategoriesQuery({ limit: 1000 });
-  const { data: suppliersData } = useGetSuppliersQuery({ limit: 1000 });
-  
+  const [categoryFilterSearch, setCategoryFilterSearch] = useState('');
+  const [supplierFilterSearch, setSupplierFilterSearch] = useState('');
+  const [debouncedCategoryQ, setDebouncedCategoryQ] = useState('');
+  const [debouncedSupplierQ, setDebouncedSupplierQ] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedCategoryQ(categoryFilterSearch.trim()), 280);
+    return () => clearTimeout(t);
+  }, [categoryFilterSearch]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSupplierQ(supplierFilterSearch.trim()), 280);
+    return () => clearTimeout(t);
+  }, [supplierFilterSearch]);
+
+  const categoryQueryParams = useMemo(
+    () => ({
+      limit: 300,
+      page: 1,
+      ...(debouncedCategoryQ ? { search: debouncedCategoryQ } : {}),
+    }),
+    [debouncedCategoryQ]
+  );
+  const supplierQueryParams = useMemo(
+    () => ({
+      limit: 300,
+      page: 1,
+      ...(debouncedSupplierQ ? { search: debouncedSupplierQ } : {}),
+    }),
+    [debouncedSupplierQ]
+  );
+
+  const { data: categoriesData, isFetching: categoriesFetching } = useGetCategoriesQuery(categoryQueryParams);
+  const { data: suppliersData, isFetching: suppliersFetching } = useGetSuppliersQuery(supplierQueryParams);
+
   const categories = categoriesData?.data?.categories || categoriesData?.categories || [];
   const suppliers = suppliersData?.data?.suppliers || suppliersData?.suppliers || [];
   
@@ -355,13 +386,23 @@ const CreateInventoryReportModal = ({ onClose, onSuccess }) => {
             <div className="space-y-6">
               <div>
                 <h4 className="text-sm font-medium text-gray-900 mb-4">Categories</h4>
+                <Input
+                  type="search"
+                  placeholder="Search categories..."
+                  value={categoryFilterSearch}
+                  onChange={(e) => setCategoryFilterSearch(e.target.value)}
+                  className="mb-2"
+                />
+                {categoriesFetching ? (
+                  <p className="text-xs text-gray-500 mb-2">Loading categories…</p>
+                ) : null}
                 <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md p-3">
-                  {categories?.categories?.map((category) => (
-                    <div key={category._id} className="flex items-center">
+                  {categories.map((category) => (
+                    <div key={category._id || category.id} className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={formData.filters.categories.includes(category._id)}
-                        onChange={(e) => handleArrayChange('filters', 'categories', category._id, e.target.checked)}
+                        checked={formData.filters.categories.includes(category._id || category.id)}
+                        onChange={(e) => handleArrayChange('filters', 'categories', category._id || category.id, e.target.checked)}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
                       <label className="ml-2 text-sm text-gray-700">{category.name}</label>
@@ -372,16 +413,28 @@ const CreateInventoryReportModal = ({ onClose, onSuccess }) => {
 
               <div>
                 <h4 className="text-sm font-medium text-gray-900 mb-4">Suppliers</h4>
+                <Input
+                  type="search"
+                  placeholder="Search suppliers..."
+                  value={supplierFilterSearch}
+                  onChange={(e) => setSupplierFilterSearch(e.target.value)}
+                  className="mb-2"
+                />
+                {suppliersFetching ? (
+                  <p className="text-xs text-gray-500 mb-2">Loading suppliers…</p>
+                ) : null}
                 <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md p-3">
-                  {suppliers?.suppliers?.map((supplier) => (
-                    <div key={supplier._id} className="flex items-center">
+                  {suppliers.map((supplier) => (
+                    <div key={supplier._id || supplier.id} className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={formData.filters.suppliers.includes(supplier._id)}
-                        onChange={(e) => handleArrayChange('filters', 'suppliers', supplier._id, e.target.checked)}
+                        checked={formData.filters.suppliers.includes(supplier._id || supplier.id)}
+                        onChange={(e) => handleArrayChange('filters', 'suppliers', supplier._id || supplier.id, e.target.checked)}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
-                      <label className="ml-2 text-sm text-gray-700">{supplier.name}</label>
+                      <label className="ml-2 text-sm text-gray-700">
+                        {supplier.companyName || supplier.company_name || supplier.name || 'Supplier'}
+                      </label>
                     </div>
                   ))}
                 </div>

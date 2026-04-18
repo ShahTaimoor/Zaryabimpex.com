@@ -24,7 +24,7 @@ import {
   useGetPurchaseReturnStatsQuery,
   useLazySearchSupplierProductsQuery,
 } from '../store/services/purchaseReturnsApi';
-import { useGetSuppliersQuery } from '../store/services/suppliersApi';
+import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { LoadingSpinner, LoadingCard, LoadingTable, LoadingButton } from '../components/LoadingSpinner';
 import { useResponsive } from '../components/ResponsiveContainer';
@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/button';
 const PurchaseReturns = () => {
   const today = getCurrentDatePakistan();
   const [selectedSupplier, setSelectedSupplier] = useState(null);
+  const [supplierSearchTerm, setSupplierSearchTerm] = useState('');
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -84,13 +85,11 @@ const PurchaseReturns = () => {
 
   const { isMobile } = useResponsive();
 
-  // Fetch suppliers for selection
-  const { data: suppliersData, isLoading: suppliersLoading } = useGetSuppliersQuery(
-    { limit: 100 },
-    { skip: false }
-  );
-
-  const suppliers = suppliersData?.data?.suppliers || suppliersData?.suppliers || suppliersData?.items || [];
+  const {
+    suppliers,
+    isLoading: suppliersLoading,
+    isFetching: suppliersFetching,
+  } = useDebouncedSupplierSearch(supplierSearchTerm, { selectedSupplier });
 
   // Search products for supplier
   const [searchSupplierProducts, {
@@ -235,6 +234,9 @@ const PurchaseReturns = () => {
   // Handle supplier selection
   const handleSupplierSelect = (supplier) => {
     setSelectedSupplier(supplier);
+    setSupplierSearchTerm(
+      supplier?.companyName || supplier?.businessName || supplier?.name || ''
+    );
     setProductSearchTerm('');
   };
 
@@ -395,6 +397,7 @@ const PurchaseReturns = () => {
     setShowCreateModal(false);
     setSelectedPurchase(null);
     setSelectedSupplier(null);
+    setSupplierSearchTerm('');
     showSuccessToast('Purchase return created successfully');
   };
 
@@ -407,11 +410,13 @@ const PurchaseReturns = () => {
   // Handle back to supplier selection
   const handleBackToSupplier = () => {
     setSelectedSupplier(null);
+    setSupplierSearchTerm('');
     setProductSearchTerm('');
   };
 
   const handleNewReturn = () => {
     setSelectedSupplier(null);
+    setSupplierSearchTerm('');
     setProductSearchTerm('');
   };
 
@@ -556,6 +561,10 @@ const PurchaseReturns = () => {
               placeholder="Search supplier by name, phone, or email..."
               items={suppliers}
               onSelect={handleSupplierSelect}
+              onSearch={setSupplierSearchTerm}
+              value={supplierSearchTerm}
+              loading={suppliersLoading || suppliersFetching}
+              emptyMessage="No suppliers found"
               displayKey={(supplier) => {
                 const name = supplier.companyName || supplier.businessName || supplier.name || 'Unknown';
                 return (

@@ -53,6 +53,7 @@ router.get('/', [
   query('search').optional().trim(),
   query('status').optional().isIn(['draft', 'confirmed', 'partially_received', 'fully_received', 'cancelled', 'closed']),
   query('supplier').optional().isUUID(4),
+  query('paymentStatus').optional().isIn(['pending', 'paid', 'partial', 'refunded']),
   ...validateDateParams,
   handleValidationErrors,
   processDateFilter('createdAt'),

@@ -24,7 +24,7 @@ import {
   useGetSaleReturnStatsQuery,
   useLazySearchCustomerProductsQuery,
 } from '../store/services/saleReturnsApi';
-import { useGetCustomersQuery } from '../store/services/customersApi';
+import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingTable } from '../components/LoadingSpinner';
 import { useResponsive } from '../components/ResponsiveContainer';
@@ -44,6 +44,7 @@ const SaleReturns = () => {
   const today = getCurrentDatePakistan();
   const [step, setStep] = useState('customer'); // used for API skip optimization
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -89,13 +90,11 @@ const SaleReturns = () => {
   const { isMobile } = useResponsive();
   const { openTab, getActiveTab, updateTabTitle } = useTab();
 
-  // Fetch customers for selection
-  const { data: customersData, isLoading: customersLoading } = useGetCustomersQuery(
-    { limit: 100 },
-    { skip: false }
-  );
-
-  const customers = customersData?.data?.customers || customersData?.customers || customersData?.items || [];
+  const {
+    customers,
+    isLoading: customersLoading,
+    isFetching: customersFetching,
+  } = useDebouncedCustomerSearch(customerSearchTerm, { selectedCustomer });
 
   // Search products for customer
   const [searchCustomerProducts, {
@@ -241,6 +240,13 @@ const SaleReturns = () => {
   // Handle customer selection
   const handleCustomerSelect = (customer) => {
     setSelectedCustomer(customer);
+    setCustomerSearchTerm(
+      customer?.businessName ||
+        customer?.business_name ||
+        customer?.displayName ||
+        customer?.name ||
+        ''
+    );
     setStep('product-search');
     setProductSearchTerm('');
   };
@@ -457,6 +463,7 @@ const SaleReturns = () => {
     setShowCreateModal(false);
     setSelectedSale(null);
     setSelectedCustomer(null);
+    setCustomerSearchTerm('');
     setStep('customer');
     showSuccessToast('Sale return created successfully');
   };
@@ -470,6 +477,7 @@ const SaleReturns = () => {
   // Handle back to customer selection
   const handleBackToCustomer = () => {
     setSelectedCustomer(null);
+    setCustomerSearchTerm('');
     setProductSearchTerm('');
     setStep('customer');
   };
@@ -531,6 +539,7 @@ const SaleReturns = () => {
 
   const handleNewReturn = () => {
     setSelectedCustomer(null);
+    setCustomerSearchTerm('');
     setProductSearchTerm('');
     setStep('customer');
   };
@@ -635,6 +644,10 @@ const SaleReturns = () => {
               placeholder="Search customer by name, phone, or email..."
               items={customers}
               onSelect={handleCustomerSelect}
+              onSearch={setCustomerSearchTerm}
+              value={customerSearchTerm}
+              loading={customersLoading || customersFetching}
+              emptyMessage="No customers found"
               displayKey={(customer) => {
                 const name = customer.businessName || customer.business_name || customer.displayName || customer.name ||
                   `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unknown';

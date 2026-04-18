@@ -15,8 +15,11 @@ import {
 } from 'lucide-react';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatDate } from '../utils/formatters';
-import { useGetCustomersQuery } from '../store/services/customersApi';
-import { useGetSuppliersQuery } from '../store/services/suppliersApi';
+import { customersApi } from '../store/services/customersApi';
+import { suppliersApi } from '../store/services/suppliersApi';
+import { useAppDispatch } from '../store/hooks';
+import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
+import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import {
   useGetBankReceiptsQuery,
@@ -91,23 +94,23 @@ const BankReceipts = () => {
     refetch,
   } = useGetBankReceiptsQuery({ ...filters, ...pagination, sortConfig }, { refetchOnMountOrArgChange: true });
 
-  // Fetch customers for dropdown
-  const { data: customersData, isLoading: customersLoading, error: customersError, refetch: refetchCustomers } = useGetCustomersQuery(
-    { search: '', limit: 999999 },
-    { refetchOnMountOrArgChange: true }
-  );
-  const customers = React.useMemo(() => {
-    return customersData?.data?.customers || customersData?.customers || [];
-  }, [customersData]);
+  const dispatch = useAppDispatch();
 
-  // Fetch suppliers for dropdown
-  const { data: suppliersData, isLoading: suppliersLoading, error: suppliersError, refetch: refetchSuppliers } = useGetSuppliersQuery(
-    { search: '', limit: 100 },
-    { skip: false }
+  const { customers, isLoading: customersLoading, isFetching: customersFetching } = useDebouncedCustomerSearch(
+    customerSearchTerm,
+    { selectedCustomer }
   );
-  const suppliers = React.useMemo(() => {
-    return suppliersData?.data?.suppliers || suppliersData?.suppliers || [];
-  }, [suppliersData]);
+  const { suppliers, isLoading: suppliersLoading, isFetching: suppliersFetching } = useDebouncedSupplierSearch(
+    supplierSearchTerm,
+    { selectedSupplier }
+  );
+
+  const invalidateCustomersList = () => {
+    dispatch(customersApi.util.invalidateTags([{ type: 'Customers', id: 'LIST' }]));
+  };
+  const invalidateSuppliersList = () => {
+    dispatch(suppliersApi.util.invalidateTags([{ type: 'Suppliers', id: 'LIST' }]));
+  };
 
   // Fetch banks for dropdown
   const { data: banksData, isLoading: banksLoading, error: banksError } = useGetBanksQuery(
@@ -163,7 +166,7 @@ const BankReceipts = () => {
   };
 
   const handleSupplierSelect = (supplierId) => {
-    const supplier = suppliers?.find(s => s._id === supplierId);
+    const supplier = suppliers?.find(s => (s.id || s._id) === supplierId);
     setSelectedSupplier(supplier);
     setFormData(prev => ({ ...prev, supplier: supplierId, customer: '' }));
     setSelectedCustomer(null);
@@ -237,9 +240,9 @@ const BankReceipts = () => {
         refetch();
         // Refetch customer/supplier data to update balances immediately
         if (paymentType === 'customer' && formData.customer) {
-          refetchCustomers();
+          invalidateCustomersList();
         } else if (paymentType === 'supplier' && formData.supplier) {
-          refetchSuppliers();
+          invalidateSuppliersList();
         }
       })
       .catch((error) => {
@@ -270,9 +273,9 @@ const BankReceipts = () => {
         refetch();
         // Refetch customer/supplier data to update balances immediately
         if (paymentType === 'customer' && formData.customer) {
-          refetchCustomers();
+          invalidateCustomersList();
         } else if (paymentType === 'supplier' && formData.supplier) {
-          refetchSuppliers();
+          invalidateSuppliersList();
         }
       })
       .catch((error) => {
@@ -289,9 +292,9 @@ const BankReceipts = () => {
           refetch();
           // Refetch customer/supplier data to update balances immediately
           if (receipt.customer) {
-            refetchCustomers();
+            invalidateCustomersList();
           } else if (receipt.supplier) {
-            refetchSuppliers();
+            invalidateSuppliersList();
           }
         })
         .catch((error) => {
@@ -447,10 +450,7 @@ const BankReceipts = () => {
                   </div>
                   {customerSearchTerm && (
                     <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {customers?.filter(customer =>
-                        (customer.businessName || customer.business_name || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-                        (customer.phone || '').includes(customerSearchTerm)
-                      ).map((customer) => {
+                      {(customers || []).map((customer) => {
                         const receivables = customer.pendingBalance || 0;
                         const advance = customer.advanceBalance || 0;
                         const netBalance = receivables - advance;
@@ -535,14 +535,11 @@ const BankReceipts = () => {
                   </div>
                   {supplierSearchTerm && (
                     <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {suppliers?.filter(supplier =>
-                        (supplier.companyName || supplier.name || '').toLowerCase().includes(supplierSearchTerm.toLowerCase()) ||
-                        (supplier.phone || '').includes(supplierSearchTerm)
-                      ).map((supplier) => (
+                      {(suppliers || []).map((supplier) => (
                         <div
-                          key={supplier._id}
+                          key={supplier.id || supplier._id}
                           onClick={() => {
-                            handleSupplierSelect(supplier._id);
+                            handleSupplierSelect(supplier.id || supplier._id);
                             setSupplierSearchTerm(supplier.companyName || supplier.name || '');
                           }}
                           className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
@@ -1029,10 +1026,7 @@ const BankReceipts = () => {
                   </div>
                   {customerSearchTerm && (
                     <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {customers?.filter(customer =>
-                        (customer.businessName || customer.business_name || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-                        (customer.phone || '').includes(customerSearchTerm)
-                      ).map((customer) => {
+                      {(customers || []).map((customer) => {
                         const receivables = customer.pendingBalance || 0;
                         const advance = customer.advanceBalance || 0;
                         const netBalance = receivables - advance;

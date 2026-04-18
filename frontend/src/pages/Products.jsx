@@ -19,7 +19,8 @@ import {
   useLinkInvestorsMutation,
   useBulkCreateProductsMutation,
 } from '../store/services/productsApi';
-import { useGetCategoriesQuery } from '../store/services/categoriesApi';
+import { useGetCategoryTreeQuery } from '../store/services/categoriesApi';
+import { flattenCategoryApiTree } from '../utils/categoryTree';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { toast } from 'sonner';
 import { LoadingPage } from '../components/LoadingSpinner';
@@ -83,18 +84,14 @@ export const Products = () => {
     refetchOnMountOrArgChange: true,
   });
 
-  const { data: categoriesDataRaw } = useGetCategoriesQuery({ limit: 999999 }, {
+  const { data: categoryTreeRaw } = useGetCategoryTreeQuery(undefined, {
     refetchOnMountOrArgChange: true,
   });
 
   const categoriesData = useMemo(() => {
-    if (!categoriesDataRaw) return [];
-    if (Array.isArray(categoriesDataRaw)) return categoriesDataRaw;
-    if (categoriesDataRaw?.data?.categories) return categoriesDataRaw.data.categories;
-    if (categoriesDataRaw?.categories) return categoriesDataRaw.categories;
-    if (categoriesDataRaw?.data?.data?.categories) return categoriesDataRaw.data.data.categories;
-    return [];
-  }, [categoriesDataRaw]);
+    const roots = Array.isArray(categoryTreeRaw) ? categoryTreeRaw : [];
+    return flattenCategoryApiTree(roots);
+  }, [categoryTreeRaw]);
 
   const allProducts = useMemo(() => {
     if (!data) return [];

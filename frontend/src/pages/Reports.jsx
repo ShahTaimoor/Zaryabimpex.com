@@ -30,7 +30,6 @@ import {
   useGetBankCashSummaryQuery,
 } from '../store/services/reportsApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
-import { useGetCategoriesQuery } from '../store/services/categoriesApi';
 import DateFilter from '../components/DateFilter';
 import PrintReportModal from '../components/PrintReportModal';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
@@ -45,7 +44,6 @@ export const Reports = () => {
   const [salesGroupBy, setSalesGroupBy] = useState('daily');
   const [inventoryType, setInventoryType] = useState('stock-summary');
   const [financialType, setFinancialType] = useState('trial-balance');
-  const [selectedCategory, setSelectedCategory] = useState('all');
   const [inventoryProductSearch, setInventoryProductSearch] = useState('');
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   /** Party Balances table: client-side paging */
@@ -187,7 +185,7 @@ export const Reports = () => {
     skip: activeTab !== 'bank-cash'
   });
 
-  const { data: banksData } = useGetBanksQuery({ limit: 999999 }, { skip: activeTab !== 'bank-cash' });
+  const { data: banksData } = useGetBanksQuery({ limit: 500 }, { skip: activeTab !== 'bank-cash' });
   const availableBanks = banksData?.data?.banks || banksData?.banks || [];
 
   const isInventoryPaginated = INVENTORY_PAGINATED_TYPES.includes(inventoryType);
@@ -231,12 +229,6 @@ export const Reports = () => {
     stockSummaryTotal === 0
       ? 0
       : Math.min(stockRangeStart + stockSummaryPaginatedRows.length - 1, stockSummaryTotal);
-
-  // Fetch Categories for Filter
-  const { data: categoriesData } = useGetCategoriesQuery({ limit: 999999 });
-  const categories = categoriesData?.categories || [];
-
-
 
   const summary = summaryData || {};
   const handleToggleBank = (bankId) => {

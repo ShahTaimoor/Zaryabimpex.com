@@ -63,7 +63,17 @@ class ProductVariantRepository {
       if (filter.status === 'active') sql += ' AND is_active = TRUE';
       else if (filter.status === 'inactive') sql += ' AND is_active = FALSE';
     }
-    if (filter.search || (filter.$or && filter.$or.length)) {
+    if (filter.exactCode) {
+      const code = String(filter.exactCode).trim();
+      if (code) {
+        sql += ` AND (
+          LOWER(TRIM(COALESCE(barcode, ''))) = LOWER($${paramCount})
+          OR LOWER(TRIM(COALESCE(sku, ''))) = LOWER($${paramCount})
+        )`;
+        params.push(code);
+        paramCount++;
+      }
+    } else if (filter.search || (filter.$or && filter.$or.length)) {
       const term = filter.search || (filter.$or && filter.$or[0] && (filter.$or[0].variantName || filter.$or[0].displayName || filter.$or[0].variantValue));
       if (term && typeof term === 'string') {
         const like = `%${term}%`;

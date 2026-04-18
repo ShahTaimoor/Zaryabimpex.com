@@ -15,7 +15,9 @@ router.get('/', [
   query('baseProduct').optional().isUUID(4),
   query('variantType').optional().isIn(['color', 'warranty', 'size', 'finish', 'custom']),
   query('status').optional().isIn(['active', 'inactive', 'discontinued']),
-  query('search').optional().isString().trim()
+  query('search').optional().isString().trim(),
+  query('code').optional().isString().trim(),
+  query('limit').optional({ checkFalsy: true }).isInt({ min: 1, max: 200 })
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -23,15 +25,21 @@ router.get('/', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { baseProduct, variantType, status, search } = req.query;
+    const { baseProduct, variantType, status, search, code } = req.query;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200);
     const filter = {};
     if (baseProduct) filter.baseProduct = baseProduct;
     if (variantType) filter.variantType = variantType;
     if (status) filter.status = status;
-    if (search) filter.search = search;
+    if (code && String(code).trim()) {
+      filter.exactCode = String(code).trim();
+    } else if (search) {
+      filter.search = search;
+    }
 
     const variants = await productVariantRepository.findWithFilter(filter, {
-      sort: { createdAt: -1 }
+      sort: { createdAt: -1 },
+      limit
     });
 
     res.json({

@@ -66,6 +66,7 @@ export const purchaseInvoicesApi = api.injectEndpoints({
           { type: 'Reports', id: 'INVENTORY_REPORT' },
           { type: 'Reports', id: 'SUMMARY_CARDS' },
           { type: 'Reports', id: 'FINANCIAL_REPORT' },
+          { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
         ];
         const sid =
           supplierTagId(arg?.supplier) ||
@@ -110,6 +111,7 @@ export const purchaseInvoicesApi = api.injectEndpoints({
           { type: 'Reports', id: 'INVENTORY_REPORT' },
           { type: 'Reports', id: 'SUMMARY_CARDS' },
           { type: 'Reports', id: 'FINANCIAL_REPORT' },
+          { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
         ];
         const sid =
           supplierTagId(supplier) ||
@@ -151,6 +153,7 @@ export const purchaseInvoicesApi = api.injectEndpoints({
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     confirmPurchaseInvoice: builder.mutation({
@@ -183,6 +186,7 @@ export const purchaseInvoicesApi = api.injectEndpoints({
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     cancelPurchaseInvoice: builder.mutation({
@@ -215,6 +219,7 @@ export const purchaseInvoicesApi = api.injectEndpoints({
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     syncPurchaseInvoicesLedger: builder.mutation({
@@ -241,6 +246,7 @@ export const purchaseInvoicesApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),
@@ -249,6 +255,7 @@ export const purchaseInvoicesApi = api.injectEndpoints({
 
 export const {
   useGetPurchaseInvoicesQuery,
+  useLazyGetPurchaseInvoicesQuery,
   useGetPurchaseInvoiceQuery,
   useLazyGetPurchaseInvoiceQuery,
   useCreatePurchaseInvoiceMutation,

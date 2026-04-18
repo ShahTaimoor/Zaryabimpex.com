@@ -189,6 +189,7 @@ app.use('/api/bank-payments', require('./routes/bankPayments'));
 app.use('/api/banks', require('./routes/banks'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/company', require('./routes/company'));
+app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/images', require('./routes/images'));
 app.use('/api/backdate-report', require('./routes/backdateReport'));
 app.use('/api/stock-movements', require('./routes/stockMovements'));

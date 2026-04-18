@@ -31,8 +31,10 @@ import {
   useDeleteCashPaymentMutation,
 
 } from '../store/services/cashPaymentsApi';
-import { useGetSuppliersQuery } from '../store/services/suppliersApi';
-import { useGetCustomersQuery } from '../store/services/customersApi';
+import { suppliersApi } from '../store/services/suppliersApi';
+import { customersApi } from '../store/services/customersApi';
+import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
+import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch';
 import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useAppDispatch } from '../store/hooks';
 import { api } from '../store/api';
@@ -101,17 +103,24 @@ const CashPayments = () => {
     refetch,
   } = useGetCashPaymentsQuery({ ...filters, ...pagination, sortConfig }, { refetchOnMountOrArgChange: true });
 
-  // Fetch suppliers for dropdown
-  const { data: suppliersData, isLoading: suppliersLoading, error: suppliersError, refetch: refetchSuppliers } = useGetSuppliersQuery(
-    { search: '', limit: 100 },
-    { refetchOnMountOrArgChange: true }
+  const dispatch = useAppDispatch();
+
+  const { suppliers, isLoading: suppliersLoading, isFetching: suppliersFetching } = useDebouncedSupplierSearch(
+    supplierSearchTerm,
+    { selectedSupplier }
   );
 
-  // Fetch customers for dropdown
-  const { data: customersData, isLoading: customersLoading, error: customersError, refetch: refetchCustomers } = useGetCustomersQuery(
-    { search: '', limit: 999999 },
-    { refetchOnMountOrArgChange: true }
+  const { customers, isLoading: customersLoading, isFetching: customersFetching } = useDebouncedCustomerSearch(
+    customerSearchTerm,
+    { selectedCustomer }
   );
+
+  const invalidateCustomersList = () => {
+    dispatch(customersApi.util.invalidateTags([{ type: 'Customers', id: 'LIST' }]));
+  };
+  const invalidateSuppliersList = () => {
+    dispatch(suppliersApi.util.invalidateTags([{ type: 'Suppliers', id: 'LIST' }]));
+  };
 
   // Fetch expense accounts from Chart of Accounts
   const { data: expenseAccountsData, isLoading: expenseAccountsLoading } = useGetAccountsQuery(
@@ -119,10 +128,6 @@ const CashPayments = () => {
     { refetchOnMountOrArgChange: true }
   );
 
-  const suppliers = React.useMemo(() => {
-    return suppliersData?.data?.suppliers || suppliersData?.suppliers || (Array.isArray(suppliersData) ? suppliersData : []);
-  }, [suppliersData]);
-  const customers = customersData?.data?.customers || customersData?.customers || (Array.isArray(customersData) ? customersData : []);
   const expenseAccounts =
     expenseAccountsData?.data ||
     expenseAccountsData?.accounts ||
@@ -166,8 +171,6 @@ const CashPayments = () => {
   const [updateCashPayment, { isLoading: updating }] = useUpdateCashPaymentMutation();
   const [deleteCashPayment, { isLoading: deleting }] = useDeleteCashPaymentMutation();
 
-
-  const dispatch = useAppDispatch();
 
   // Helper functions
   const resetForm = () => {
@@ -284,11 +287,7 @@ const CashPayments = () => {
   };
 
   const handleSupplierKeyDown = (e) => {
-    const filteredSuppliers = suppliers.filter(supplier =>
-      (supplier.companyName || supplier.name || supplier.displayName || '').toLowerCase().includes(supplierSearchTerm.toLowerCase()) ||
-      (supplier.phone || '').includes(supplierSearchTerm) ||
-      (supplier.email || '').toLowerCase().includes(supplierSearchTerm.toLowerCase())
-    );
+    const filteredSuppliers = suppliers || [];
 
     if (!supplierSearchTerm || filteredSuppliers.length === 0) {
       return;
@@ -328,15 +327,7 @@ const CashPayments = () => {
   };
 
   const handleCustomerKeyDown = (e) => {
-    const filteredCustomers = (customers || []).filter(customer => {
-      const displayName = customer.businessName || customer.business_name || customer.displayName || customer.name ||
-        `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || '';
-      return (
-        displayName.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-        (customer.phone || '').includes(customerSearchTerm) ||
-        (customer.email || '').toLowerCase().includes(customerSearchTerm.toLowerCase())
-      );
-    }) || [];
+    const filteredCustomers = customers || [];
 
     if (!customerSearchTerm || filteredCustomers.length === 0) {
       return;
@@ -430,9 +421,9 @@ const CashPayments = () => {
         refetch();
         // Refetch customer/supplier data to update balances immediately
         if (paymentType === 'customer' && formData.customer) {
-          refetchCustomers();
+          invalidateCustomersList();
         } else if (paymentType === 'supplier' && formData.supplier) {
-          refetchSuppliers();
+          invalidateSuppliersList();
         }
       })
       .catch((error) => {
@@ -461,9 +452,9 @@ const CashPayments = () => {
         refetch();
         // Refetch customer/supplier data to update balances immediately
         if (paymentType === 'customer' && formData.customer) {
-          refetchCustomers();
+          invalidateCustomersList();
         } else if (paymentType === 'supplier' && formData.supplier) {
-          refetchSuppliers();
+          invalidateSuppliersList();
         }
       })
       .catch((error) => {
@@ -480,9 +471,9 @@ const CashPayments = () => {
           refetch();
           // Refetch customer/supplier data to update balances immediately
           if (payment.customer) {
-            refetchCustomers();
+            invalidateCustomersList();
           } else if (payment.supplier) {
-            refetchSuppliers();
+            invalidateSuppliersList();
           }
         })
         .catch((error) => {
@@ -641,11 +632,7 @@ const CashPayments = () => {
                   </div>
                   {supplierSearchTerm && (
                     <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {suppliers.filter(supplier =>
-                        (supplier.companyName || supplier.name || supplier.displayName || '').toLowerCase().includes(supplierSearchTerm.toLowerCase()) ||
-                        (supplier.phone || '').includes(supplierSearchTerm) ||
-                        (supplier.email || '').toLowerCase().includes(supplierSearchTerm.toLowerCase())
-                      ).map((supplier, index) => {
+                      {(suppliers || []).map((supplier, index) => {
                         const supplierId = supplier.id || supplier._id;
                         return (
                           <div
@@ -755,15 +742,7 @@ const CashPayments = () => {
                   </div>
                   {customerSearchTerm && (
                     <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {(customers || []).filter(customer => {
-                        const displayName = customer.businessName || customer.business_name || customer.displayName || customer.name ||
-                          `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || '';
-                        return (
-                          displayName.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-                          (customer.phone || '').includes(customerSearchTerm) ||
-                          (customer.email || '').toLowerCase().includes(customerSearchTerm.toLowerCase())
-                        );
-                      }).map((customer, index) => {
+                      {(customers || []).map((customer, index) => {
                         const customerId = customer.id || customer._id;
                         const currentBalance = customer.currentBalance !== undefined
                           ? customer.currentBalance

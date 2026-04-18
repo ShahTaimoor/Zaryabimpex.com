@@ -51,6 +51,7 @@ export const dropShippingApi = api.injectEndpoints({
         { type: 'Reports', id: 'SALES_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateTransaction: builder.mutation({
@@ -80,6 +81,7 @@ export const dropShippingApi = api.injectEndpoints({
         { type: 'Reports', id: 'SALES_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     deleteTransaction: builder.mutation({
@@ -108,6 +110,7 @@ export const dropShippingApi = api.injectEndpoints({
         { type: 'Reports', id: 'SALES_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateStatus: builder.mutation({
@@ -137,6 +140,7 @@ export const dropShippingApi = api.injectEndpoints({
         { type: 'Reports', id: 'SALES_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     getStats: builder.query({

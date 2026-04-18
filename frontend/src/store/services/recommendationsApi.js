@@ -8,7 +8,10 @@ export const recommendationsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Reports', id: 'RECOMMENDATIONS_PERFORMANCE' }],
+      invalidatesTags: [
+        { type: 'Reports', id: 'RECOMMENDATIONS_PERFORMANCE' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
+      ],
     }),
     getRecommendation: builder.query({
       query: (id) => ({
@@ -35,7 +38,10 @@ export const recommendationsApi = api.injectEndpoints({
         method: 'post',
         data,
       }),
-      invalidatesTags: [{ type: 'Reports', id: 'RECOMMENDATIONS_PERFORMANCE' }],
+      invalidatesTags: [
+        { type: 'Reports', id: 'RECOMMENDATIONS_PERFORMANCE' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
+      ],
     }),
     getPerformance: builder.query({
       query: (params) => ({

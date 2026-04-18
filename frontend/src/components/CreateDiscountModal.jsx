@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import BaseModal from './BaseModal';
 import { 
   Tag, 
@@ -23,6 +23,7 @@ import { useGetCategoriesQuery } from '../store/services/categoriesApi';
 import { useGetCustomersQuery } from '../store/services/customersApi';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { Input } from '@/components/ui/input';
 
 const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -64,11 +65,61 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
   const [codeSuggestions, setCodeSuggestions] = useState([]);
   const [showCodeSuggestions, setShowCodeSuggestions] = useState(false);
 
-  // Fetch data for dropdowns
-  const { data: productsData } = useGetProductsQuery({ limit: 1000 });
-  const { data: categoriesData } = useGetCategoriesQuery({ limit: 1000 });
-  const { data: customersData } = useGetCustomersQuery({ limit: 1000 });
-  
+  const [productListSearch, setProductListSearch] = useState('');
+  const [categoryListSearch, setCategoryListSearch] = useState('');
+  const [customerListSearch, setCustomerListSearch] = useState('');
+  const [debouncedProductQ, setDebouncedProductQ] = useState('');
+  const [debouncedCategoryQ, setDebouncedCategoryQ] = useState('');
+  const [debouncedCustomerQ, setDebouncedCustomerQ] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedProductQ(productListSearch.trim()), 280);
+    return () => clearTimeout(t);
+  }, [productListSearch]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedCategoryQ(categoryListSearch.trim()), 280);
+    return () => clearTimeout(t);
+  }, [categoryListSearch]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedCustomerQ(customerListSearch.trim()), 280);
+    return () => clearTimeout(t);
+  }, [customerListSearch]);
+
+  const productQueryParams = useMemo(
+    () => ({
+      limit: 250,
+      page: 1,
+      ...(debouncedProductQ ? { search: debouncedProductQ } : {}),
+    }),
+    [debouncedProductQ]
+  );
+  const categoryQueryParams = useMemo(
+    () => ({
+      limit: 250,
+      page: 1,
+      ...(debouncedCategoryQ ? { search: debouncedCategoryQ } : {}),
+    }),
+    [debouncedCategoryQ]
+  );
+  const customerQueryParams = useMemo(
+    () => ({
+      limit: 250,
+      page: 1,
+      ...(debouncedCustomerQ ? { search: debouncedCustomerQ } : {}),
+    }),
+    [debouncedCustomerQ]
+  );
+
+  const { data: productsData, isFetching: productsListFetching } = useGetProductsQuery(productQueryParams, {
+    skip: formData.applicableTo !== 'products' || !isOpen,
+  });
+  const { data: categoriesData, isFetching: categoriesListFetching } = useGetCategoriesQuery(categoryQueryParams, {
+    skip: formData.applicableTo !== 'categories' || !isOpen,
+  });
+  const { data: customersData, isFetching: customersListFetching } = useGetCustomersQuery(customerQueryParams, {
+    skip: formData.applicableTo !== 'customers' || !isOpen,
+  });
+
   const products = productsData?.data?.products || productsData?.products || [];
   const categories = categoriesData?.data?.categories || categoriesData?.categories || [];
   const customers = customersData?.data?.customers || customersData?.customers || [];
@@ -780,13 +831,24 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Select Products
                   </label>
+                  <Input
+                    type="search"
+                    placeholder="Search products by name or SKU..."
+                    value={productListSearch}
+                    onChange={(e) => setProductListSearch(e.target.value)}
+                    className="mb-2"
+                    disabled={isCreating}
+                  />
+                  {productsListFetching ? (
+                    <p className="text-xs text-gray-500 mb-2">Loading products…</p>
+                  ) : null}
                   <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3">
-                    {products?.data?.products?.map((product) => (
-                      <label key={product._id} className="flex items-center space-x-2 py-1">
+                    {products.map((product) => (
+                      <label key={product._id || product.id} className="flex items-center space-x-2 py-1">
                         <input
                           type="checkbox"
-                          checked={formData.applicableProducts.includes(product._id)}
-                          onChange={(e) => handleArrayChange('applicableProducts', product._id, e.target.checked)}
+                          checked={formData.applicableProducts.includes(product._id || product.id)}
+                          onChange={(e) => handleArrayChange('applicableProducts', product._id || product.id, e.target.checked)}
                           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                           disabled={isCreating}
                         />
@@ -811,13 +873,24 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Select Categories
                   </label>
+                  <Input
+                    type="search"
+                    placeholder="Search categories..."
+                    value={categoryListSearch}
+                    onChange={(e) => setCategoryListSearch(e.target.value)}
+                    className="mb-2"
+                    disabled={isCreating}
+                  />
+                  {categoriesListFetching ? (
+                    <p className="text-xs text-gray-500 mb-2">Loading categories…</p>
+                  ) : null}
                   <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3">
-                    {categories?.data?.categories?.map((category) => (
-                      <label key={category._id} className="flex items-center space-x-2 py-1">
+                    {categories.map((category) => (
+                      <label key={category._id || category.id} className="flex items-center space-x-2 py-1">
                         <input
                           type="checkbox"
-                          checked={formData.applicableCategories.includes(category._id)}
-                          onChange={(e) => handleArrayChange('applicableCategories', category._id, e.target.checked)}
+                          checked={formData.applicableCategories.includes(category._id || category.id)}
+                          onChange={(e) => handleArrayChange('applicableCategories', category._id || category.id, e.target.checked)}
                           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                           disabled={isCreating}
                         />
@@ -840,13 +913,24 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Select Customers
                   </label>
+                  <Input
+                    type="search"
+                    placeholder="Search customers by name, phone, email..."
+                    value={customerListSearch}
+                    onChange={(e) => setCustomerListSearch(e.target.value)}
+                    className="mb-2"
+                    disabled={isCreating}
+                  />
+                  {customersListFetching ? (
+                    <p className="text-xs text-gray-500 mb-2">Loading customers…</p>
+                  ) : null}
                   <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3">
-                    {customers?.data?.customers?.map((customer) => (
-                      <label key={customer._id} className="flex items-center space-x-2 py-1">
+                    {customers.map((customer) => (
+                      <label key={customer._id || customer.id} className="flex items-center space-x-2 py-1">
                         <input
                           type="checkbox"
-                          checked={formData.applicableCustomers.includes(customer._id)}
-                          onChange={(e) => handleArrayChange('applicableCustomers', customer._id, e.target.checked)}
+                          checked={formData.applicableCustomers.includes(customer._id || customer.id)}
+                          onChange={(e) => handleArrayChange('applicableCustomers', customer._id || customer.id, e.target.checked)}
                           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                           disabled={isCreating}
                         />

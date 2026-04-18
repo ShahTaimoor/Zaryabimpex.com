@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Plus, 
@@ -18,10 +18,13 @@ import { useDeleteConfirmation } from '../hooks/useConfirmation';
 
 import {
   useGetCategoriesQuery,
+  useGetCategoryTreeQuery,
   useCreateCategoryMutation,
   useUpdateCategoryMutation,
   useDeleteCategoryMutation,
 } from '../store/services/categoriesApi';
+import PaginationControls from '../components/PaginationControls';
+import { flattenCategoryApiTree } from '../utils/categoryTree';
 
 const CategoryModal = ({ category, isOpen, onClose, onSave, isSubmitting, categories = [], categoryType = 'parent' }) => {
   const [formData, setFormData] = useState({
@@ -288,6 +291,7 @@ const CategoryModal = ({ category, isOpen, onClose, onSave, isSubmitting, catego
 
 export const Categories = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [categoryType, setCategoryType] = useState('parent'); // 'parent' or 'child'
@@ -304,10 +308,24 @@ export const Categories = () => {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm]);
+
   const { data, isLoading, error, refetch } = useGetCategoriesQuery(
-    { search: searchTerm, limit: 999999 },
+    { search: searchTerm, page, limit: 50 },
     { refetchOnMountOrArgChange: true }
   );
+
+  const { data: modalTree } = useGetCategoryTreeQuery(undefined, {
+    skip: !isModalOpen,
+    refetchOnMountOrArgChange: true,
+  });
+
+  const modalCategoryList = useMemo(() => {
+    const roots = Array.isArray(modalTree) ? modalTree : [];
+    return flattenCategoryApiTree(roots);
+  }, [modalTree]);
 
   const [createCategory, { isLoading: creating }] = useCreateCategoryMutation();
   const [updateCategory, { isLoading: updating }] = useUpdateCategoryMutation();
@@ -379,10 +397,6 @@ export const Categories = () => {
     setCategoryType('parent'); // Reset to default
   };
 
-  if (isLoading) {
-    return <LoadingPage />;
-  }
-
   if (error) {
     return (
       <div className="text-center py-12">
@@ -392,10 +406,12 @@ export const Categories = () => {
   }
 
   // Backend returns: { categories: [], pagination: {} }
-  // Axios wraps: { data: { categories: [], pagination: {} } }
-  // react-query unwraps axios, so data is: { categories: [], pagination: {} }
   const categories = data?.categories || data?.data?.categories || [];
   const pagination = data?.pagination || data?.data?.pagination || {};
+
+  if (isLoading && !data) {
+    return <LoadingPage />;
+  }
 
   return (
     <div className="space-y-6 w-full">
@@ -596,6 +612,14 @@ export const Categories = () => {
               </div>
             ))}
           </div>
+          <PaginationControls
+            page={page}
+            totalPages={Math.max(1, pagination?.pages || 1)}
+            onPageChange={setPage}
+            totalItems={pagination?.total}
+            limit={pagination?.limit || 50}
+            className="rounded-b-lg"
+          />
         </div>
       )}
 
@@ -606,7 +630,7 @@ export const Categories = () => {
         onClose={handleCloseModal}
         onSave={handleSave}
         isSubmitting={creating || updating}
-        categories={categories}
+        categories={modalCategoryList}
         categoryType={categoryType}
       />
       

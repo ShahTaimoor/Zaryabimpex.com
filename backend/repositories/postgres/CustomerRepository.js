@@ -76,7 +76,7 @@ class CustomerRepository {
       params.push(filters.customerTier || filters.customer_tier);
     }
     if (filters.search) {
-      sql += ` AND (business_name ILIKE $${paramCount} OR name ILIKE $${paramCount} OR email ILIKE $${paramCount})`;
+      sql += ` AND (business_name ILIKE $${paramCount} OR name ILIKE $${paramCount} OR email ILIKE $${paramCount} OR COALESCE(phone,'') ILIKE $${paramCount})`;
       params.push(`%${filters.search}%`);
       paramCount++;
     }

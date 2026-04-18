@@ -19,6 +19,7 @@ export const suppliersApi = api.injectEndpoints({
           params: filteredParams,
         };
       },
+      keepUnusedDataFor: 60,
       providesTags: (result) =>
         result?.data?.suppliers
           ? [
@@ -46,6 +47,7 @@ export const suppliersApi = api.injectEndpoints({
         { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateSupplier: builder.mutation({
@@ -67,6 +69,7 @@ export const suppliersApi = api.injectEndpoints({
         { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     deleteSupplier: builder.mutation({
@@ -85,6 +88,7 @@ export const suppliersApi = api.injectEndpoints({
         { type: 'Orders', id: 'PI_LIST' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     checkEmail: builder.query({
@@ -142,6 +146,7 @@ export const suppliersApi = api.injectEndpoints({
         { type: 'Suppliers', id: 'LIST' },
         { type: 'Suppliers', id: 'ACTIVE' },
         { type: 'Suppliers', id: 'SEARCH' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),
@@ -150,6 +155,7 @@ export const suppliersApi = api.injectEndpoints({
 
 export const {
   useGetSuppliersQuery,
+  useLazyGetSuppliersQuery,
   useCreateSupplierMutation,
   useUpdateSupplierMutation,
   useDeleteSupplierMutation,

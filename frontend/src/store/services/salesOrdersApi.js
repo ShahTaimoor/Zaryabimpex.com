@@ -51,6 +51,7 @@ export const salesOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateSalesOrder: builder.mutation({
@@ -72,6 +73,7 @@ export const salesOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     deleteSalesOrder: builder.mutation({
@@ -94,6 +96,7 @@ export const salesOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateSalesOrderItemsConfirmation: builder.mutation({
@@ -129,6 +132,7 @@ export const salesOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     confirmSalesOrder: builder.mutation({
@@ -163,6 +167,7 @@ export const salesOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     cancelSalesOrder: builder.mutation({
@@ -195,6 +200,7 @@ export const salesOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     closeSalesOrder: builder.mutation({
@@ -226,6 +232,7 @@ export const salesOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     getConversionData: builder.query({
@@ -241,6 +248,7 @@ export const salesOrdersApi = api.injectEndpoints({
 
 export const {
   useGetSalesOrdersQuery,
+  useLazyGetSalesOrdersQuery,
   useGetSalesOrderQuery,
   useLazyGetStockStatusQuery,
   useCreateSalesOrderMutation,

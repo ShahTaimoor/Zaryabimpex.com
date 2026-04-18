@@ -47,6 +47,7 @@ export const purchaseOrdersApi = api.injectEndpoints({
           { type: 'Reports', id: 'INVENTORY_REPORT' },
           { type: 'Reports', id: 'PRODUCT_REPORT' },
           { type: 'Reports', id: 'SUMMARY_CARDS' },
+          { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
         ];
         if (arg?.supplier) {
           tags.push({ type: 'Suppliers', id: arg.supplier });
@@ -75,6 +76,7 @@ export const purchaseOrdersApi = api.injectEndpoints({
           { type: 'Reports', id: 'INVENTORY_REPORT' },
           { type: 'Reports', id: 'PRODUCT_REPORT' },
           { type: 'Reports', id: 'SUMMARY_CARDS' },
+          { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
         ];
         if (supplier) {
           tags.push({ type: 'Suppliers', id: supplier });
@@ -101,6 +103,7 @@ export const purchaseOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updatePurchaseOrderItemsConfirmation: builder.mutation({
@@ -133,6 +136,7 @@ export const purchaseOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     confirmPurchaseOrder: builder.mutation({
@@ -152,6 +156,7 @@ export const purchaseOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
         { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     cancelPurchaseOrder: builder.mutation({
@@ -173,6 +178,7 @@ export const purchaseOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     closePurchaseOrder: builder.mutation({
@@ -201,6 +207,7 @@ export const purchaseOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     getConversionData: builder.query({
@@ -241,6 +248,7 @@ export const purchaseOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),
@@ -249,6 +257,7 @@ export const purchaseOrdersApi = api.injectEndpoints({
 
 export const {
   useGetPurchaseOrdersQuery,
+  useLazyGetPurchaseOrdersQuery,
   useGetPurchaseOrderQuery,
   useLazyGetPurchaseOrderQuery,
   useCreatePurchaseOrderMutation,

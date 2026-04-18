@@ -29,6 +29,7 @@ export const shopsApi = api.injectEndpoints({
         { type: 'Shops', id: 'LIST' },
         { type: 'Reports', id: 'SALES_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateShop: builder.mutation({
@@ -44,6 +45,7 @@ export const shopsApi = api.injectEndpoints({
         { type: 'Shops', id: `PRODUCTS_${shopId}` },
         { type: 'Reports', id: 'SALES_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateShopStatus: builder.mutation({
@@ -58,6 +60,7 @@ export const shopsApi = api.injectEndpoints({
         { type: 'Shops', id: shopId },
         { type: 'Reports', id: 'SALES_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     getAllAdmins: builder.query({

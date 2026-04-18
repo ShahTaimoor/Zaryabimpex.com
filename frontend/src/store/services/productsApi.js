@@ -19,6 +19,8 @@ export const productsApi = api.injectEndpoints({
           params: filteredParams,
         };
       },
+      /** Cache identical list queries ~1m; POS search uses lazy triggers + invalidation after sales */
+      keepUnusedDataFor: 60,
       providesTags: (result) => {
         const list =
           result?.data?.products ||
@@ -165,6 +167,7 @@ export const productsApi = api.injectEndpoints({
 
 export const {
   useGetProductsQuery,
+  useLazyGetProductsQuery,
   useGetProductQuery,
   useCreateProductMutation,
   useUpdateProductMutation,

@@ -25,7 +25,8 @@ import {
 } from 'lucide-react';
 import BaseModal from '../components/BaseModal';
 import { useLazyGetLastPurchasePriceQuery, useGetLastPurchasePricesMutation } from '../store/services/productsApi';
-import { useGetCustomersQuery, useGetCustomerQuery, useLazySearchCustomersQuery } from '../store/services/customersApi';
+import { useGetCustomerQuery, useLazySearchCustomersQuery } from '../store/services/customersApi';
+import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
 import {
   useCreateSaleMutation,
   useUpdateOrderMutation,
@@ -345,12 +346,9 @@ export const Sales = ({ tabId, editData }) => {
     { staleTime: 5 * 60_000 }
   );
 
-  const { data: customersData, isLoading: customersLoading, refetch: refetchCustomers } = useGetCustomersQuery(
-    { limit: 999999 },
-    {
-      staleTime: 0, // Always consider data stale to get fresh credit information
-      refetchOnMountOrArgChange: true // Refetch when component mounts or params change
-    }
+  const { customers, isLoading: customersLoading, isFetching: customersFetching } = useDebouncedCustomerSearch(
+    customerSearchTerm,
+    { selectedCustomer }
   );
 
   // Lazy query hooks for fetching last purchase prices
@@ -374,11 +372,6 @@ export const Sales = ({ tabId, editData }) => {
     isSubmittingRef.current = false;
     setIsSubmitting(false);
   }, []);
-
-  // Extract customers array from RTK Query response
-  const customers = useMemo(() => {
-    return customersData?.data?.customers || customersData?.customers || customersData?.data || customersData || [];
-  }, [customersData]);
 
   const selectedCustomerId = selectedCustomer?.id ?? selectedCustomer?._id ?? null;
   const { data: selectedCustomerDetail } = useGetCustomerQuery(selectedCustomerId, {
@@ -1403,7 +1396,7 @@ export const Sales = ({ tabId, editData }) => {
                   </div>
                 );
               }}
-              loading={customersLoading}
+              loading={customersLoading || customersFetching}
               emptyMessage="No customers found"
             />
           </div>

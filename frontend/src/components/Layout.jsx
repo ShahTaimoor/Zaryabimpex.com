@@ -44,7 +44,8 @@ import MobileNavigation from './MobileNavigation';
 import { loadSidebarConfig } from './MultiTabLayout';
 import { useResponsive } from './ResponsiveContainer';
 import { WhatsAppFloat } from './WhatsAppFloat';
-import { useGetCategoriesQuery } from '../store/services/categoriesApi';
+import { useGetCategoryTreeQuery } from '../store/services/categoriesApi';
+import { adaptApiCategoryTreeForSidebar } from '../utils/categoryTree';
 
 // Revised Navigation Structure
 export const navigation = [
@@ -353,7 +354,6 @@ const CategoryTreeItem = ({ category, subcategories, isActive, level = 0 }) => {
 
 export const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [categoryTree, setCategoryTree] = useState([]);
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -372,45 +372,15 @@ export const Layout = ({ children }) => {
     return () => window.removeEventListener('sidebarConfigChanged', handleSidebarChange);
   }, []);
 
-  // Fetch categories using Redux
-  const { data: categoriesData, isLoading: categoriesLoading, refetch: refetchCategories } = useGetCategoriesQuery(
-    { limit: 999999 },
+  const { data: categoryTreeRaw, isLoading: categoriesLoading, refetch: refetchCategories } = useGetCategoryTreeQuery(
+    undefined,
     { skip: !user }
   );
 
-  const categories = categoriesData?.data?.categories || categoriesData?.categories || [];
-
-  // Build category tree when categories change
-  useEffect(() => {
-    if (categories.length > 0) {
-      const tree = buildCategoryTree(categories);
-      setCategoryTree(tree);
-    } else {
-      setCategoryTree([]);
-    }
-  }, [categories]);
-
-  // Build hierarchical category tree
-  const buildCategoryTree = (categories) => {
-    const categoryMap = {};
-    const tree = [];
-
-    // Create a map of categories by ID
-    categories.forEach(cat => {
-      categoryMap[cat._id] = { category: cat, subcategories: [] };
-    });
-
-    // Build the tree structure
-    categories.forEach(cat => {
-      if (cat.parentCategory && categoryMap[cat.parentCategory]) {
-        categoryMap[cat.parentCategory].subcategories.push(categoryMap[cat._id]);
-      } else {
-        tree.push(categoryMap[cat._id]);
-      }
-    });
-
-    return tree;
-  };
+  const categoryTree = React.useMemo(() => {
+    const roots = Array.isArray(categoryTreeRaw) ? categoryTreeRaw : [];
+    return adaptApiCategoryTreeForSidebar(roots);
+  }, [categoryTreeRaw]);
 
   const handleLogout = () => {
     logout();

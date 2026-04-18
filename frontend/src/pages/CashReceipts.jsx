@@ -20,7 +20,7 @@ import { DetailRow } from '@/components/ui/detail-row';
 import BaseModal from '../components/BaseModal';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDate, formatCurrency } from '../utils/formatters';
-import { useLazyGetCustomerQuery } from '../store/services/customersApi';
+import { useLazyGetCustomerQuery, customersApi } from '../store/services/customersApi';
 import {
   useGetCashReceiptsQuery,
   useCreateCashReceiptMutation,
@@ -28,8 +28,9 @@ import {
   useDeleteCashReceiptMutation,
 
 } from '../store/services/cashReceiptsApi';
-import { useGetSuppliersQuery } from '../store/services/suppliersApi';
-import { useGetCustomersQuery } from '../store/services/customersApi';
+import { suppliersApi } from '../store/services/suppliersApi';
+import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
+import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch';
 import { useAppDispatch } from '../store/hooks';
 import { api } from '../store/api';
 import ReceiptPaymentPrintModal from '../components/ReceiptPaymentPrintModal';
@@ -97,23 +98,21 @@ const CashReceipts = () => {
   const [getCustomer] = useLazyGetCustomerQuery();
   const dispatch = useAppDispatch();
 
-  // Fetch customers for dropdown
-  const { data: customersData, isLoading: customersLoading, error: customersError, refetch: refetchCustomers } = useGetCustomersQuery(
-    { search: '', limit: 999999 },
-    { refetchOnMountOrArgChange: true }
+  const { customers, isLoading: customersLoading, isFetching: customersFetching } = useDebouncedCustomerSearch(
+    customerSearchTerm,
+    { selectedCustomer }
   );
-  const customers = React.useMemo(() => {
-    return customersData?.data?.customers || customersData?.customers || (Array.isArray(customersData) ? customersData : []);
-  }, [customersData]);
+  const { suppliers, isLoading: suppliersLoading, isFetching: suppliersFetching } = useDebouncedSupplierSearch(
+    supplierSearchTerm,
+    { selectedSupplier }
+  );
 
-  // Fetch suppliers for dropdown
-  const { data: suppliersData, isLoading: suppliersLoading, error: suppliersError, refetch: refetchSuppliers } = useGetSuppliersQuery(
-    { search: '', limit: 100 },
-    { refetchOnMountOrArgChange: true }
-  );
-  const suppliers = React.useMemo(() => {
-    return suppliersData?.data?.suppliers || suppliersData?.suppliers || (Array.isArray(suppliersData) ? suppliersData : []);
-  }, [suppliersData]);
+  const invalidateCustomersList = () => {
+    dispatch(customersApi.util.invalidateTags([{ type: 'Customers', id: 'LIST' }]));
+  };
+  const invalidateSuppliersList = () => {
+    dispatch(suppliersApi.util.invalidateTags([{ type: 'Suppliers', id: 'LIST' }]));
+  };
 
   const viewModalCustomerId = showViewModal && selectedReceipt?.customer ? (selectedReceipt.customer.id || selectedReceipt.customer._id) : null;
   const viewModalSupplierId = showViewModal && selectedReceipt?.supplier ? (selectedReceipt.supplier.id || selectedReceipt.supplier._id) : null;
@@ -153,7 +152,7 @@ const CashReceipts = () => {
         }
       }
     }
-  }, [customersData, selectedCustomer?.id, selectedCustomer?._id]);
+  }, [customers, selectedCustomer?.id, selectedCustomer?._id]);
 
   // Mutations
   const [createCashReceipt, { isLoading: creating }] = useCreateCashReceiptMutation();
@@ -233,29 +232,6 @@ const CashReceipts = () => {
             console.log('Customer selection changed, skipping update');
             return prev;
           });
-
-          // Update the customersData cache for this specific customer
-          if (api.util?.setQueryData) {
-            try {
-              dispatch(api.util.setQueryData(['getCustomers', { search: '', limit: 999999 }], (oldData) => {
-                if (!oldData) return oldData;
-                const customers = oldData?.data?.customers || oldData?.customers || oldData?.data || [];
-                const updatedCustomers = customers.map(c =>
-                  (c.id || c._id) === customerId ? freshCustomer : c
-                );
-                return {
-                  ...oldData,
-                  data: {
-                    ...oldData.data,
-                    customers: updatedCustomers
-                  },
-                  customers: updatedCustomers
-                };
-              }));
-            } catch (error) {
-              console.warn('Failed to update customer cache:', error);
-            }
-          }
         }
       } catch (error) {
         // Silently fail - keep cached data if fetch fails
@@ -273,10 +249,7 @@ const CashReceipts = () => {
   };
 
   const handleCustomerKeyDown = (e) => {
-    const filteredCustomers = (customers || []).filter(customer =>
-      (customer.businessName || customer.business_name || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-      (customer.phone || '').includes(customerSearchTerm)
-    );
+    const filteredCustomers = customers || [];
 
     if (!customerSearchTerm || filteredCustomers.length === 0) {
       return;
@@ -425,31 +398,8 @@ const CashReceipts = () => {
             return { ...prev, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
           });
 
-          // Update customer in cache immediately
           if (api.util?.setQueryData) {
             try {
-              dispatch(api.util.setQueryData(['getCustomers', { search: '', limit: 999999 }], (oldData) => {
-                if (!oldData) return oldData;
-                const customers = oldData?.data?.customers || oldData?.customers || oldData?.data || [];
-                const updatedCustomers = customers.map(c => {
-                  if ((c.id || c._id) === formData.customer) {
-                    const newAdvanceBalance = (c.advanceBalance || 0) + receiptAmount;
-                    const newCurrentBalance = (c.currentBalance || 0) - receiptAmount;
-                    return { ...c, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
-                  }
-                  return c;
-                });
-                return {
-                  ...oldData,
-                  data: {
-                    ...oldData.data,
-                    customers: updatedCustomers
-                  },
-                  customers: updatedCustomers
-                };
-              }));
-
-              // Also update individual customer query cache
               dispatch(api.util.setQueryData(['getCustomer', formData.customer], (oldData) => {
                 if (!oldData) return oldData;
                 const customer = oldData?.data?.customer || oldData?.customer || oldData?.data || oldData;
@@ -469,8 +419,7 @@ const CashReceipts = () => {
             }
           }
 
-          // Refetch to get accurate data from server
-          refetchCustomers();
+          invalidateCustomersList();
         } else if (paymentType === 'supplier' && formData.supplier && selectedSupplier) {
           const receiptAmount = parseFloat(cleanedData.amount) || 0;
           // Update selected supplier balance optimistically
@@ -481,36 +430,7 @@ const CashReceipts = () => {
             return { ...prev, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
           });
 
-          // Update supplier in cache immediately
-          if (api.util?.setQueryData) {
-            try {
-              dispatch(api.util.setQueryData(['getSuppliers', { search: '', limit: 100 }], (oldData) => {
-                if (!oldData) return oldData;
-                const suppliers = oldData?.data?.suppliers || oldData?.suppliers || oldData?.data || [];
-                const updatedSuppliers = suppliers.map(s => {
-                  if ((s.id || s._id) === formData.supplier) {
-                    const newAdvanceBalance = (s.advanceBalance || 0) + receiptAmount;
-                    const newCurrentBalance = (s.currentBalance || 0) + receiptAmount;
-                    return { ...s, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
-                  }
-                  return s;
-                });
-                return {
-                  ...oldData,
-                  data: {
-                    ...oldData.data,
-                    suppliers: updatedSuppliers
-                  },
-                  suppliers: updatedSuppliers
-                };
-              }));
-            } catch (error) {
-              console.warn('Failed to update supplier cache:', error);
-            }
-          }
-
-          // Refetch to get accurate data from server
-          refetchSuppliers();
+          invalidateSuppliersList();
         }
       })
       .catch((error) => {
@@ -557,31 +477,8 @@ const CashReceipts = () => {
             return { ...prev, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
           });
 
-          // Update customer in cache immediately
           if (api.util?.setQueryData) {
             try {
-              dispatch(api.util.setQueryData(['getCustomers', { search: '', limit: 999999 }], (oldData) => {
-                if (!oldData) return oldData;
-                const customers = oldData?.data?.customers || oldData?.customers || oldData?.data || [];
-                const updatedCustomers = customers.map(c => {
-                  if ((c.id || c._id) === formData.customer) {
-                    const newAdvanceBalance = (c.advanceBalance || 0) + amountDifference;
-                    const newCurrentBalance = (c.currentBalance || 0) - amountDifference;
-                    return { ...c, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
-                  }
-                  return c;
-                });
-                return {
-                  ...oldData,
-                  data: {
-                    ...oldData.data,
-                    customers: updatedCustomers
-                  },
-                  customers: updatedCustomers
-                };
-              }));
-
-              // Also update individual customer query cache
               dispatch(api.util.setQueryData(['getCustomer', formData.customer], (oldData) => {
                 if (!oldData) return oldData;
                 const customer = oldData?.data?.customer || oldData?.customer || oldData?.data || oldData;
@@ -601,8 +498,7 @@ const CashReceipts = () => {
             }
           }
 
-          // Refetch to get accurate data from server
-          refetchCustomers();
+          invalidateCustomersList();
         } else if (paymentType === 'supplier' && formData.supplier && selectedSupplier && amountDifference !== 0) {
           // Update selected supplier balance optimistically (add the difference)
           setSelectedSupplier(prev => {
@@ -612,36 +508,7 @@ const CashReceipts = () => {
             return { ...prev, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
           });
 
-          // Update supplier in cache immediately
-          if (api.util?.setQueryData) {
-            try {
-              dispatch(api.util.setQueryData(['getSuppliers', { search: '', limit: 100 }], (oldData) => {
-                if (!oldData) return oldData;
-                const suppliers = oldData?.data?.suppliers || oldData?.suppliers || oldData?.data || [];
-                const updatedSuppliers = suppliers.map(s => {
-                  if ((s.id || s._id) === formData.supplier) {
-                    const newAdvanceBalance = (s.advanceBalance || 0) + amountDifference;
-                    const newCurrentBalance = (s.currentBalance || 0) + amountDifference;
-                    return { ...s, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
-                  }
-                  return s;
-                });
-                return {
-                  ...oldData,
-                  data: {
-                    ...oldData.data,
-                    suppliers: updatedSuppliers
-                  },
-                  suppliers: updatedSuppliers
-                };
-              }));
-            } catch (error) {
-              console.warn('Failed to update supplier cache:', error);
-            }
-          }
-
-          // Refetch to get accurate data from server
-          refetchSuppliers();
+          invalidateSuppliersList();
         }
       })
       .catch((error) => {
@@ -677,31 +544,8 @@ const CashReceipts = () => {
               return prev;
             });
 
-            // Update customer in cache immediately
             if (api.util?.setQueryData) {
               try {
-                dispatch(api.util.setQueryData(['getCustomers', { search: '', limit: 999999 }], (oldData) => {
-                  if (!oldData) return oldData;
-                  const customers = oldData?.data?.customers || oldData?.customers || oldData?.data || [];
-                  const updatedCustomers = customers.map(c => {
-                    if ((c.id || c._id) === receiptCustomer) {
-                      const newAdvanceBalance = Math.max(0, (c.advanceBalance || 0) - receiptAmount);
-                      const newCurrentBalance = (c.currentBalance || 0) + receiptAmount;
-                      return { ...c, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
-                    }
-                    return c;
-                  });
-                  return {
-                    ...oldData,
-                    data: {
-                      ...oldData.data,
-                      customers: updatedCustomers
-                    },
-                    customers: updatedCustomers
-                  };
-                }));
-
-                // Also update individual customer query cache
                 dispatch(api.util.setQueryData(['getCustomer', receiptCustomer], (oldData) => {
                   if (!oldData) return oldData;
                   const customer = oldData?.data?.customer || oldData?.customer || oldData?.data || oldData;
@@ -721,8 +565,7 @@ const CashReceipts = () => {
               }
             }
 
-            // Refetch to get accurate data from server
-            refetchCustomers();
+            invalidateCustomersList();
           } else if (receiptSupplier && receiptAmount > 0) {
             // Subtract the amount from supplier balance
             setSelectedSupplier(prev => {
@@ -735,36 +578,7 @@ const CashReceipts = () => {
               return prev;
             });
 
-            // Update supplier in cache immediately
-            if (api.util?.setQueryData) {
-              try {
-                dispatch(api.util.setQueryData(['getSuppliers', { search: '', limit: 100 }], (oldData) => {
-                  if (!oldData) return oldData;
-                  const suppliers = oldData?.data?.suppliers || oldData?.suppliers || oldData?.data || [];
-                  const updatedSuppliers = suppliers.map(s => {
-                    if ((s.id || s._id) === receiptSupplier) {
-                      const newAdvanceBalance = Math.max(0, (s.advanceBalance || 0) - receiptAmount);
-                      const newCurrentBalance = (s.currentBalance || 0) - receiptAmount;
-                      return { ...s, advanceBalance: newAdvanceBalance, currentBalance: newCurrentBalance };
-                    }
-                    return s;
-                  });
-                  return {
-                    ...oldData,
-                    data: {
-                      ...oldData.data,
-                      suppliers: updatedSuppliers
-                    },
-                    suppliers: updatedSuppliers
-                  };
-                }));
-              } catch (error) {
-                console.warn('Failed to update supplier cache:', error);
-              }
-            }
-
-            // Refetch to get accurate data from server
-            refetchSuppliers();
+            invalidateSuppliersList();
           }
         })
         .catch((error) => {
@@ -916,10 +730,7 @@ const CashReceipts = () => {
                   </div>
                   {customerSearchTerm && (
                     <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {(customers || []).filter(customer =>
-                        (customer.businessName || customer.business_name || customer.name || '').toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-                        (customer.phone || '').includes(customerSearchTerm)
-                      ).map((customer, index) => {
+                      {(customers || []).map((customer, index) => {
                         const customerId = customer.id || customer._id;
                         const currentBalance = customer.currentBalance !== undefined
                           ? parseFloat(customer.currentBalance)
@@ -1502,9 +1313,9 @@ const CashReceipts = () => {
               value={formData.customer}
               onChange={(e) => setFormData(prev => ({ ...prev, customer: e.target.value }))}
               className="input w-full"
-              disabled={customersLoading}
+              disabled={customersLoading || customersFetching}
             >
-              <option value="">{customersLoading ? 'Loading customers...' : 'Select Customer'}</option>
+              <option value="">{customersLoading || customersFetching ? 'Loading customers...' : 'Select Customer'}</option>
               {customers?.map((customer) => {
                 const customerId = customer.id || customer._id;
                 return (

@@ -43,6 +43,7 @@ export const bankPaymentsApi = api.injectEndpoints({
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateBankPayment: builder.mutation({
@@ -70,6 +71,7 @@ export const bankPaymentsApi = api.injectEndpoints({
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     deleteBankPayment: builder.mutation({
@@ -96,6 +98,7 @@ export const bankPaymentsApi = api.injectEndpoints({
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),
@@ -104,6 +107,7 @@ export const bankPaymentsApi = api.injectEndpoints({
 
 export const {
   useGetBankPaymentsQuery,
+  useLazyGetBankPaymentsQuery,
   useCreateBankPaymentMutation,
   useUpdateBankPaymentMutation,
   useDeleteBankPaymentMutation,

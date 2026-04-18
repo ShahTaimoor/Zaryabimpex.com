@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useDispatch } from 'react-redux';
 import { Plus, Camera } from 'lucide-react';
-import { useGetProductsQuery, useLazyGetLastPurchasePriceQuery } from '@/store/services/productsApi';
-import { useGetVariantsQuery } from '@/store/services/productVariantsApi';
-import { useFuzzySearch } from '@/hooks/useFuzzySearch';
+import { productsApi, useLazyGetLastPurchasePriceQuery } from '@/store/services/productsApi';
+import { productVariantsApi } from '@/store/services/productVariantsApi';
+import { useDebouncedPosProductSearch } from '@/hooks/useDebouncedPosProductSearch';
 import { SearchableDropdown } from '@/components/SearchableDropdown';
 import { DualUnitQuantityInput } from '@/components/DualUnitQuantityInput';
 import { hasDualUnit, getPiecesPerBox, piecesToBoxesAndPieces, formatStockDualLabel } from '@/utils/dualUnitUtils';
@@ -13,8 +14,8 @@ import { LoadingButton } from '@/components/LoadingSpinner';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import BaseModal from '@/components/BaseModal';
 
-/** Max rows in the product search dropdown (type more to narrow results) */
-const PRODUCT_DROPDOWN_LIMIT = 20;
+/** Max rows shown in dropdown (server search caps higher; we slice in hook). */
+const PRODUCT_DROPDOWN_LIMIT = 50;
 
 function ProductSearchComponent({
   onAddProduct,
@@ -47,6 +48,25 @@ function ProductSearchComponent({
   const [manualCost, setManualCost] = useState(''); // New state for manual cost
   const productSearchRef = useRef(null);
   const manualNameRef = useRef(null);
+  const dispatch = useDispatch();
+
+  const [getLastPurchasePrice] = useLazyGetLastPurchasePriceQuery();
+
+  const {
+    items: products,
+    isLoading: productsLoading,
+    emptyMessage: emptySearchMessage,
+  } = useDebouncedPosProductSearch(productSearchTerm, { dropdownLimit: PRODUCT_DROPDOWN_LIMIT });
+
+  const refreshProductSearchCache = useCallback(() => {
+    dispatch(
+      productsApi.util.invalidateTags([
+        { type: 'Products', id: 'LIST' },
+        { type: 'Products', id: 'SEARCH' },
+      ])
+    );
+    dispatch(productVariantsApi.util.invalidateTags([{ type: 'Products', id: 'VARIANTS_LIST' }]));
+  }, [dispatch]);
 
   useEffect(() => {
     const handleConfigChange = () => {
@@ -56,92 +76,11 @@ function ProductSearchComponent({
     return () => window.removeEventListener('productImagesConfigChanged', handleConfigChange);
   }, []);
 
-  // Fetch all products (or a larger set) for client-side fuzzy search
-  const [getLastPurchasePrice] = useLazyGetLastPurchasePriceQuery();
-
-  const { data: productsData, isLoading: productsLoading, refetch: refetchProducts } = useGetProductsQuery(
-    { limit: 999999, status: 'active' },
-    {
-      keepPreviousData: true,
-      staleTime: 0, // Always consider data stale to get fresh stock levels
-      refetchOnMountOrArgChange: true, // Refetch when component mounts or params change
-    }
-  );
-
-  // Fetch all variants for search
-  const { data: variantsData, isLoading: variantsLoading } = useGetVariantsQuery(
-    { status: 'active' },
-    {
-      keepPreviousData: true,
-      staleTime: 0,
-      refetchOnMountOrArgChange: true,
-    }
-  );
-
-  // Expose refetch function to parent component via callback
   useEffect(() => {
-    if (onRefetchReady && refetchProducts && typeof refetchProducts === 'function') {
-      onRefetchReady(refetchProducts);
+    if (onRefetchReady && typeof onRefetchReady === 'function') {
+      onRefetchReady(refreshProductSearchCache);
     }
-  }, [onRefetchReady, refetchProducts]);
-
-  // Extract products array from RTK Query response
-  const allProducts = React.useMemo(() => {
-    if (!productsData) return [];
-    if (Array.isArray(productsData)) return productsData;
-    if (productsData?.data?.products) return productsData.data.products;
-    if (productsData?.products) return productsData.products;
-    if (productsData?.data?.data?.products) return productsData.data.data.products;
-    return [];
-  }, [productsData]);
-
-  // Extract variants array from RTK Query response
-  const allVariants = React.useMemo(() => {
-    if (!variantsData) return [];
-    if (Array.isArray(variantsData)) return variantsData;
-    if (variantsData?.data?.variants) return variantsData.data.variants;
-    if (variantsData?.variants) return variantsData.variants;
-    return [];
-  }, [variantsData]);
-
-  // Combine products and variants for search, marking variants with isVariant flag
-  const allItems = React.useMemo(() => {
-    const productsList = allProducts.map(p => ({ ...p, isVariant: false }));
-    const variantsList = allVariants
-      .filter(v => v.status === 'active')
-      .map(v => ({
-        ...v,
-        isVariant: true,
-        // Use variant's display name for search, but keep variant data
-        name: v.displayName || v.variantName || `${v.baseProduct?.name || ''} - ${v.variantValue || ''}`,
-        // Use variant pricing and inventory
-        pricing: v.pricing || { retail: 0, wholesale: 0, cost: 0 },
-        inventory: v.inventory || { currentStock: 0, reorderPoint: 0 },
-        // Keep reference to base product
-        baseProductId: v.baseProduct?._id || v.baseProduct,
-        baseProductName: v.baseProduct?.name || '',
-        variantType: v.variantType,
-        variantValue: v.variantValue,
-        variantName: v.variantName,
-      }));
-    return [...productsList, ...variantsList];
-  }, [allProducts, allVariants]);
-
-  const fuzzyFiltered = useFuzzySearch(
-    allItems,
-    productSearchTerm,
-    ['name', 'description', 'brand', 'displayName', 'variantValue', 'variantName'],
-    {
-      threshold: 0.4,
-      minScore: 0.3,
-      limit: PRODUCT_DROPDOWN_LIMIT,
-    }
-  );
-
-  const products = React.useMemo(() => {
-    if (!productSearchTerm?.trim()) return allItems.slice(0, PRODUCT_DROPDOWN_LIMIT);
-    return fuzzyFiltered;
-  }, [allItems, productSearchTerm, fuzzyFiltered]);
+  }, [onRefetchReady, refreshProductSearchCache]);
 
   const getCostPrice = (product) => {
     if (!product) return 0;
@@ -520,8 +459,8 @@ function ProductSearchComponent({
                       onSearch={setProductSearchTerm}
                       displayKey={productDisplayKey}
                       selectedItem={selectedProduct}
-                      loading={productsLoading || variantsLoading}
-                      emptyMessage={productSearchTerm.length > 0 ? "No products found" : "Start typing to search products..."}
+                      loading={productsLoading}
+                      emptyMessage={emptySearchMessage}
                       value={productSearchTerm}
                     />
                   </div>
@@ -797,8 +736,8 @@ function ProductSearchComponent({
                       onSearch={setProductSearchTerm}
                       displayKey={productDisplayKey}
                       selectedItem={selectedProduct}
-                      loading={productsLoading || variantsLoading}
-                      emptyMessage={productSearchTerm.length > 0 ? "No products found" : "Start typing to search products..."}
+                      loading={productsLoading}
+                      emptyMessage={emptySearchMessage}
                       value={productSearchTerm}
                     />
                   </div>

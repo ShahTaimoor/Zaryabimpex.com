@@ -73,7 +73,17 @@ class ProductRepository {
       sql += ` AND category_id = $${paramCount++}`;
       params.push(filters.categoryId);
     }
-    if (filters.search) {
+    if (filters.exactCode) {
+      const code = String(filters.exactCode).trim();
+      if (code) {
+        sql += ` AND (
+          LOWER(TRIM(COALESCE(barcode, ''))) = LOWER($${paramCount})
+          OR LOWER(TRIM(COALESCE(sku, ''))) = LOWER($${paramCount})
+        )`;
+        params.push(code);
+        paramCount++;
+      }
+    } else if (filters.search) {
       sql += ` AND (
         name ILIKE $${paramCount}
         OR sku ILIKE $${paramCount}
@@ -298,7 +308,17 @@ class ProductRepository {
       countSql += ` AND category_id = $${cn++}`;
       countParams.push(filters.categoryId);
     }
-    if (filters.search) {
+    if (filters.exactCode) {
+      const code = String(filters.exactCode).trim();
+      if (code) {
+        countSql += ` AND (
+          LOWER(TRIM(COALESCE(barcode, ''))) = LOWER($${cn})
+          OR LOWER(TRIM(COALESCE(sku, ''))) = LOWER($${cn})
+        )`;
+        countParams.push(code);
+        cn++;
+      }
+    } else if (filters.search) {
       countSql += ` AND (
         name ILIKE $${cn}
         OR sku ILIKE $${cn}
@@ -309,6 +329,7 @@ class ProductRepository {
         OR invoice_ref ILIKE $${cn}
       )`;
       countParams.push(`%${filters.search}%`);
+      cn++;
     }
     if (filters.lowStock) {
       countSql += ' AND stock_quantity <= min_stock_level';

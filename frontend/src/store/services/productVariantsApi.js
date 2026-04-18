@@ -8,6 +8,7 @@ export const productVariantsApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      keepUnusedDataFor: 60,
       providesTags: (result) => {
         const list = result?.data?.variants || result?.variants || result?.items || [];
         return list.length
@@ -42,6 +43,7 @@ export const productVariantsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     updateVariant: builder.mutation({
@@ -62,6 +64,7 @@ export const productVariantsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     deleteVariant: builder.mutation({
@@ -81,6 +84,7 @@ export const productVariantsApi = api.injectEndpoints({
         { type: 'Reports', id: 'PRODUCT_REPORT' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     getVariantsByBaseProduct: builder.query({

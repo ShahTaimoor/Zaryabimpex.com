@@ -48,11 +48,13 @@ const AccountLedgerSummary = () => {
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [debouncedCustomerQuery, setDebouncedCustomerQuery] = useState('');
   const customerDropdownRef = useRef(null);
 
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
   const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
+  const [debouncedSupplierQuery, setDebouncedSupplierQuery] = useState('');
   const [selectedBankId, setSelectedBankId] = useState('');
   const supplierDropdownRef = useRef(null);
   const printRef = useRef(null);
@@ -132,7 +134,7 @@ const AccountLedgerSummary = () => {
 
   // Fetch suppliers for dropdown
   const { data: suppliersData, isLoading: suppliersLoading } = useGetSuppliersQuery(
-    { search: supplierSearchQuery, limit: 100 },
+    { search: debouncedSupplierQuery, limit: 100 },
     { refetchOnMountOrArgChange: true }
   );
 
@@ -457,28 +459,35 @@ const AccountLedgerSummary = () => {
     });
     setSelectedCustomerId('');
     setCustomerSearchQuery('');
+    setDebouncedCustomerQuery('');
     setSelectedSupplierId('');
     setSupplierSearchQuery('');
+    setDebouncedSupplierQuery('');
     setSelectedBankId('');
   };
 
   const handleCustomerSelect = (customer) => {
     setSelectedCustomerId(getId(customer));
     const businessName = customer.businessName || customer.business_name || customer.companyName || customer.company_name || '';
-    setCustomerSearchQuery(businessName || customer.name || '');
+    const label = businessName || customer.name || '';
+    setCustomerSearchQuery(label);
+    setDebouncedCustomerQuery(label.trim());
     setShowCustomerDropdown(false);
     // Clear supplier selection when customer is selected
     setSelectedSupplierId('');
     setSupplierSearchQuery('');
+    setDebouncedSupplierQuery('');
   };
 
   const handleSupplierSelect = (supplier) => {
     setSelectedSupplierId(getId(supplier));
     setSupplierSearchQuery(supplier.companyName || supplier.name || '');
+    setDebouncedSupplierQuery((supplier.companyName || supplier.name || '').trim());
     setShowSupplierDropdown(false);
     // Clear customer selection when supplier is selected
     setSelectedCustomerId('');
     setCustomerSearchQuery('');
+    setDebouncedCustomerQuery('');
   };
 
   const formatCurrency = (amount) => {
