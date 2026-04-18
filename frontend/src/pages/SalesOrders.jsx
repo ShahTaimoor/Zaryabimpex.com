@@ -131,6 +131,8 @@ const SalesOrders = ({ tabId }) => {
   const showRemainingStockAfterSaleEnabled = companySettings.orderSettings?.showRemainingStockAfterSale !== false;
   const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
+  const allowSaleWithoutProductEnabled = companySettings.orderSettings?.allowSaleWithoutProduct === true;
+  const allowManualCostPriceEnabled = companySettings.orderSettings?.allowManualCostPrice === true;
   const resolvedCompanyAddress = companySettings.address || companySettings.billingAddress || '';
   const resolvedCompanyPhone = companySettings.contactNumber || '';
 
@@ -1279,8 +1281,12 @@ const SalesOrders = ({ tabId }) => {
     // Transform items to match backend expectations (quantity in pieces for stock)
     const transformedItems = formData.items.map(item => {
       const qty = Math.round(Number(item.quantity) || 1);
+      const productId = typeof item.product === 'string' ? item.product : (item.product?.id || item.product?._id);
+      const isManualLine =
+        item.productData?.isManual === true ||
+        (typeof productId === 'string' && productId.startsWith('manual_'));
       const base = {
-        product: item.product,
+        product: productId,
         name: item.productData?.name || item.productData?.displayName || item.name || item.displayName || '',
         sku: item.productData?.sku || item.sku || '',
         quantity: qty,
@@ -1289,6 +1295,22 @@ const SalesOrders = ({ tabId }) => {
         invoicedQuantity: 0,
         remainingQuantity: qty
       };
+      if (isManualLine) {
+        base.isManual = true;
+        const uc = Number(
+          item.productData?.pricing?.cost ??
+            item.productData?.pricing?.cost_price ??
+            item.productData?.cost_price ??
+            item.productData?.costPrice ??
+            0
+        );
+        if (Number.isFinite(uc) && uc >= 0) {
+          base.unitCost = uc;
+        }
+        if (item.productData?.imageUrl) {
+          base.imageUrl = item.productData.imageUrl;
+        }
+      }
       if (item.boxes != null || item.pieces != null) {
         base.boxes = item.boxes;
         base.pieces = item.pieces;
@@ -1345,8 +1367,12 @@ const SalesOrders = ({ tabId }) => {
       customer: customerId || undefined,
       items: formData.items.map(item => {
         const qty = Math.max(1, Math.round(Number(item.quantity) || 1));
+        const pid = getProductId(item);
+        const isManualLine =
+          item.productData?.isManual === true ||
+          (typeof pid === 'string' && pid.startsWith('manual_'));
         const base = {
-          product: getProductId(item),
+          product: pid,
           name: item.productData?.name || item.productData?.displayName || item.name || item.displayName || '',
           sku: item.productData?.sku || item.sku || '',
           quantity: qty,
@@ -1355,6 +1381,22 @@ const SalesOrders = ({ tabId }) => {
           invoicedQuantity: parseInt(item.invoicedQuantity, 10) || 0,
           remainingQuantity: parseInt(item.remainingQuantity, 10) ?? qty
         };
+        if (isManualLine) {
+          base.isManual = true;
+          const uc = Number(
+            item.productData?.pricing?.cost ??
+              item.productData?.pricing?.cost_price ??
+              item.productData?.cost_price ??
+              item.productData?.costPrice ??
+              0
+          );
+          if (Number.isFinite(uc) && uc >= 0) {
+            base.unitCost = uc;
+          }
+          if (item.productData?.imageUrl) {
+            base.imageUrl = item.productData.imageUrl;
+          }
+        }
         if (item.boxes != null || item.pieces != null) {
           base.boxes = item.boxes;
           base.pieces = item.pieces;
@@ -2111,6 +2153,8 @@ const SalesOrders = ({ tabId }) => {
               dualUnitShowBoxInput={dualUnitShowBoxInputEnabled}
               dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
               allowOutOfStock={true}
+              allowSaleWithoutProduct={allowSaleWithoutProductEnabled}
+              allowManualCostPrice={allowManualCostPriceEnabled}
               onLastPurchasePriceFetched={(productId, price) => {
                 setLastPurchasePrices(prev => ({
                   ...prev,

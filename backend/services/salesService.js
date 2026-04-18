@@ -53,6 +53,41 @@ function resolveInvoicePaymentStatus(payment, orderTotal) {
   return 'pending';
 }
 
+/**
+ * Build a createSale line from a sales_order.items row (manual lines need name, unitCost, isManual).
+ */
+function mapSalesOrderItemToCreateSalePayload(i) {
+  const raw = i.product ?? i.product_id;
+  const productId = typeof raw === 'object' && raw != null ? (raw.id ?? raw._id) : raw;
+  const pidStr = productId != null ? String(productId) : '';
+  const isManual =
+    i.isManual === true ||
+    i.is_manual === true ||
+    (pidStr.startsWith('manual_'));
+
+  const line = {
+    product: productId,
+    quantity: i.quantity || 0,
+    unitPrice: parseFloat(i.unitPrice ?? i.unit_price ?? 0) || 0,
+    discountPercent: parseFloat(i.discountPercent ?? i.discount_percent ?? 0) || 0,
+    isManual,
+    name:
+      i.name ||
+      i.productName ||
+      i.product_name ||
+      (typeof i.product === 'object' && i.product?.name ? i.product.name : undefined),
+  };
+
+  const uc = parseFloat(i.unitCost ?? i.unit_cost ?? i.cost_price ?? i.costPrice ?? 0);
+  if (Number.isFinite(uc) && uc >= 0) {
+    line.unitCost = uc;
+  }
+  const img = i.imageUrl ?? i.image_url;
+  if (img) line.imageUrl = img;
+
+  return line;
+}
+
 // Helper to format customer address
 const formatCustomerAddress = (customerData) => {
   if (!customerData) return '';
@@ -853,12 +888,7 @@ class SalesService {
     const soOrderType = salesOrder.orderType ?? salesOrder.order_type ?? salesOrder.orderType ?? 'retail';
     const saleData = {
       customer: customerId,
-      items: items.map(i => ({
-        product: i.product || i.product_id,
-        quantity: i.quantity || 0,
-        unitPrice: i.unitPrice ?? i.unit_price ?? 0,
-        discountPercent: i.discountPercent ?? i.discount_percent ?? 0
-      })),
+      items: items.map(mapSalesOrderItemToCreateSalePayload),
       // Preserve Sales Order pricing mode (e.g. wholesale) when creating the invoice.
       orderType: soOrderType,
       payment: { method: 'account', amount: 0, isPartialPayment: false },
@@ -889,12 +919,7 @@ class SalesService {
     const soRef = (salesOrder.so_number || salesOrder.soNumber || salesOrder.id || '').toString().replace(/^SO-/, '');
     const saleData = {
       customer: salesOrder.customer_id || salesOrder.customer,
-      items: itemsToInvoice.map(i => ({
-        product: i.product || i.product_id,
-        quantity: i.quantity || 0,
-        unitPrice: i.unitPrice ?? i.unit_price ?? 0,
-        discountPercent: i.discountPercent ?? i.discount_percent ?? 0
-      })),
+      items: itemsToInvoice.map(mapSalesOrderItemToCreateSalePayload),
       // Preserve Sales Order pricing mode (e.g. wholesale) when creating the invoice.
       orderType: soOrderType,
       payment: { method: 'account', amount: 0, isPartialPayment: false },

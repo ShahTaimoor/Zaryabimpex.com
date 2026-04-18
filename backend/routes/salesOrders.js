@@ -32,6 +32,15 @@ const transformCustomerToUppercase = (customer) => {
   return customer;
 };
 
+/** UUID or manual_* line id (same rule as POST /sales) */
+const isValidSalesOrderProductId = (val) => {
+  if (val == null || val === '') return false;
+  const s = String(val);
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+  if (isUuid) return true;
+  return s.startsWith('manual_');
+};
+
 const transformProductToUppercase = (product) => {
   if (!product) return product;
   if (product.toObject) product = product.toObject();
@@ -75,6 +84,17 @@ const enrichItemsWithProducts = async (items) => {
     const id = typeof productId === 'object' ? (productId.id || productId._id) : productId;
     if (typeof id !== 'string' && !(id && id.toString)) continue;
     const sid = String(id);
+
+    if (sid.startsWith('manual_')) {
+      const displayName =
+        item.name ||
+        item.productName ||
+        (typeof item.product === 'object' && item.product?.name) ||
+        'Manual Item';
+      item.product = { _id: sid, id: sid, name: displayName, sku: item.sku || null, isManual: true };
+      item.name = displayName;
+      continue;
+    }
 
     // If already populated with a name, we can skip lookup but check if it's 'Unknown Product'
     if (typeof item.product === 'object' && item.product && item.product.name && item.product.name !== 'Unknown Product') continue;
@@ -358,7 +378,7 @@ router.put('/:id', [
   body('customer').optional({ checkFalsy: true }).isUUID(4).withMessage('Valid customer is required'),
   body('orderType').optional().isIn(['retail', 'wholesale', 'return', 'exchange']).withMessage('Invalid order type'),
   body('items').optional().isArray({ min: 1 }).withMessage('At least one item is required'),
-  body('items.*.product').optional({ checkFalsy: true }).isUUID(4).withMessage('Valid product is required'),
+  body('items.*.product').optional({ checkFalsy: true }).custom((val) => !val || isValidSalesOrderProductId(val)).withMessage('Valid product is required'),
   body('items.*.quantity').optional().custom((v) => (Number.isInteger(Number(v)) && Number(v) >= 1)).withMessage('Quantity must be at least 1'),
   body('items.*.unitPrice').optional().custom((v) => !isNaN(parseFloat(v)) && parseFloat(v) >= 0).withMessage('Unit price must be positive'),
   body('expectedDelivery').optional().isISO8601().withMessage('Valid delivery date required'),
@@ -589,6 +609,7 @@ router.get('/:id/stock-status', auth, async (req, res) => {
     for (const item of items) {
       const productId = (item.product && typeof item.product === 'object') ? (item.product.id || item.product._id) : (item.product || item.product_id);
       if (!productId || typeof productId !== 'string') continue;
+      if (productId.startsWith('manual_')) continue;
 
       let currentStock = 0;
       let usedReplacement = false;
@@ -687,8 +708,16 @@ router.put('/:id/confirm', [
 
     for (const item of items) {
       let productId = item.product || item.product_id;
+      if (typeof productId === 'object' && productId !== null) {
+        productId = productId.id || productId._id;
+      }
       const originalProductId = productId;
       const requestedQty = Number(item.quantity) || 0;
+
+      if (productId != null && String(productId).startsWith('manual_')) {
+        updatedItemsForOrder.push(item);
+        continue;
+      }
 
       // Smart Resolution: Check if product exists and has stock
       let needsReplacement = false;
@@ -868,7 +897,13 @@ router.put('/:id/cancel', [
     const inventoryUpdates = [];
     if (salesOrder.status === 'confirmed') {
       for (const item of soItems) {
-        const productId = item.product || item.product_id;
+        let productId = item.product || item.product_id;
+        if (typeof productId === 'object' && productId !== null) {
+          productId = productId.id || productId._id;
+        }
+        if (productId != null && String(productId).startsWith('manual_')) {
+          continue;
+        }
         try {
           const inventoryUpdate = await inventoryService.updateStock({
             productId,
