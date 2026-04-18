@@ -302,21 +302,36 @@ export const Orders = () => {
         items: (freshOrder.items || []).map(item => {
           // Preserve full product object (with name) for cart display; API returns product: { _id, name } from enrichItemsWithProductNames
           const productObj = item.product && typeof item.product === 'object';
+          const rawId = productObj
+            ? (item.product._id || item.product.id)
+            : (item.product_id || item.product);
+          const isManualLine =
+            item.isManual === true ||
+            item.is_manual === true ||
+            (typeof rawId === 'string' && rawId.startsWith('manual_'));
+          const lineUnitCost = Number(item.unitCost ?? item.unit_cost ?? 0) || 0;
           const product = productObj
             ? {
               _id: item.product._id || item.product.id,
               name: item.product.name || item.product.displayName || item.product.variantName || 'Product',
               isVariant: item.product.isVariant,
+              isManual: isManualLine || item.product.isManual === true,
               displayName: item.product.displayName,
               variantName: item.product.variantName,
               inventory: item.product.inventory || { currentStock: 0, reorderPoint: 0 },
-              pricing: item.product.pricing || { cost: 0 }
+              pricing: {
+                ...(item.product.pricing || {}),
+                ...(isManualLine ? { cost: lineUnitCost } : {})
+              },
+              ...(item.product.imageUrl || item.imageUrl ? { imageUrl: item.product.imageUrl || item.imageUrl } : {})
             }
             : {
-              _id: item.product_id || item.product,
-              name: item.productName || 'Unknown Product',
-              inventory: { currentStock: 0, reorderPoint: 0 },
-              pricing: { cost: 0 }
+              _id: rawId,
+              name: item.name || item.productName || 'Unknown Product',
+              isManual: isManualLine,
+              inventory: { currentStock: 999999, reorderPoint: 0 },
+              pricing: { cost: isManualLine ? lineUnitCost : 0 },
+              ...(item.imageUrl ? { imageUrl: item.imageUrl } : {})
             };
           return {
             product,

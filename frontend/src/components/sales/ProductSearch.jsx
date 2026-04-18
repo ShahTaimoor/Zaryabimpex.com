@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
-import { Plus, Camera } from 'lucide-react';
+import { Plus, Camera, X } from 'lucide-react';
 import { productsApi, useLazyGetLastPurchasePriceQuery } from '@/store/services/productsApi';
 import { productVariantsApi } from '@/store/services/productVariantsApi';
 import { useDebouncedPosProductSearch } from '@/hooks/useDebouncedPosProductSearch';
@@ -16,6 +16,8 @@ import BaseModal from '@/components/BaseModal';
 
 /** Max rows shown in dropdown (server search caps higher; we slice in hook). */
 const PRODUCT_DROPDOWN_LIMIT = 50;
+/** Cap manual line images stored as data URLs on sales.items */
+const MAX_MANUAL_IMAGE_BYTES = 5 * 1024 * 1024;
 
 function ProductSearchComponent({
   onAddProduct,
@@ -46,8 +48,11 @@ function ProductSearchComponent({
   const [isManualMode, setIsManualMode] = useState(false); // New state for manual entry
   const [manualName, setManualName] = useState(''); // New state for manual name
   const [manualCost, setManualCost] = useState(''); // New state for manual cost
+  /** Data URL for optional photo on manual line items (stored on sale JSON). */
+  const [manualProductImage, setManualProductImage] = useState(null);
   const productSearchRef = useRef(null);
   const manualNameRef = useRef(null);
+  const manualImageInputRef = useRef(null);
   const dispatch = useDispatch();
 
   const [getLastPurchasePrice] = useLazyGetLastPurchasePriceQuery();
@@ -179,6 +184,28 @@ function ProductSearchComponent({
     // We only want to recalculate when priceType or selectedProduct changes.
   }, [priceType, selectedProduct]);
 
+  const handleManualImageFile = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > MAX_MANUAL_IMAGE_BYTES) {
+      toast.error('Image must be 5 MB or smaller');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const r = reader.result;
+      setManualProductImage(typeof r === 'string' ? r : null);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, []);
+
   const handleAddToCart = async () => {
     if (isManualMode) {
       if (!manualName.trim()) {
@@ -211,7 +238,8 @@ function ProductSearchComponent({
             wholesale: unitPrice, 
             cost: unitCost,
             cost_price: unitCost
-          }
+          },
+          ...(manualProductImage ? { imageUrl: manualProductImage } : {}),
         };
 
         onAddProduct({
@@ -344,7 +372,10 @@ function ProductSearchComponent({
       if (isManualMode) {
         e.preventDefault();
         setIsManualMode(false);
+        setIsAddingProduct(false);
         setManualName('');
+        setManualCost('');
+        setManualProductImage(null);
         setQuantity(0);
         setCustomRate('');
         setTimeout(() => productSearchRef.current?.focus({ preventScroll: true }), 100);
@@ -490,27 +521,61 @@ function ProductSearchComponent({
                   )}
                 </>
               ) : (
-                <div className="flex-1 flex space-x-2">
-                  <Input
-                    ref={manualNameRef}
-                    placeholder="Enter manual product name..."
-                    value={manualName}
-                    onChange={(e) => setManualName(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsManualMode(false);
-                      setIsAddingProduct(false);
-                      setManualName('');
-                      setTimeout(() => productSearchRef.current?.focus({ preventScroll: true }), 100);
-                    }}
-                    className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-xs"
-                  >
-                    Cancel
-                  </button>
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="flex space-x-2">
+                    <Input
+                      ref={manualNameRef}
+                      placeholder="Enter manual product name..."
+                      value={manualName}
+                      onChange={(e) => setManualName(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      className="min-w-0 flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsManualMode(false);
+                        setIsAddingProduct(false);
+                        setManualName('');
+                        setManualCost('');
+                        setManualProductImage(null);
+                        setTimeout(() => productSearchRef.current?.focus({ preventScroll: true }), 100);
+                      }}
+                      className="shrink-0 rounded-md border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      ref={manualImageInputRef}
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+                      className="sr-only"
+                      onChange={handleManualImageFile}
+                    />
+                    {manualProductImage ? (
+                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-gray-200">
+                        <img src={manualProductImage} alt="" className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80"
+                          onClick={() => setManualProductImage(null)}
+                          aria-label="Remove photo"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => manualImageInputRef.current?.click()}
+                      className="rounded-md border border-dashed border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                    >
+                      {manualProductImage ? 'Change photo' : 'Photo (optional)'}
+                    </button>
+                    <span className="text-[10px] text-gray-400">Max 5 MB</span>
+                  </div>
                 </div>
               )}
               {selectedProduct?.imageUrl && !isManualMode && showProductImages && (
@@ -768,27 +833,61 @@ function ProductSearchComponent({
                   )}
                 </>
               ) : (
-                <div className="flex-1 flex space-x-2">
-                  <Input
-                    ref={manualNameRef}
-                    placeholder="Enter manual product name..."
-                    value={manualName}
-                    onChange={(e) => setManualName(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsManualMode(false);
-                      setIsAddingProduct(false);
-                      setManualName('');
-                      setTimeout(() => productSearchRef.current?.focus({ preventScroll: true }), 100);
-                    }}
-                    className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-xs"
-                  >
-                    Cancel
-                  </button>
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="flex space-x-2">
+                    <Input
+                      ref={manualNameRef}
+                      placeholder="Enter manual product name..."
+                      value={manualName}
+                      onChange={(e) => setManualName(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      className="min-w-0 flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsManualMode(false);
+                        setIsAddingProduct(false);
+                        setManualName('');
+                        setManualCost('');
+                        setManualProductImage(null);
+                        setTimeout(() => productSearchRef.current?.focus({ preventScroll: true }), 100);
+                      }}
+                      className="shrink-0 rounded-md border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      ref={manualImageInputRef}
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+                      className="sr-only"
+                      onChange={handleManualImageFile}
+                    />
+                    {manualProductImage ? (
+                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-gray-200">
+                        <img src={manualProductImage} alt="" className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80"
+                          onClick={() => setManualProductImage(null)}
+                          aria-label="Remove photo"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => manualImageInputRef.current?.click()}
+                      className="rounded-md border border-dashed border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                    >
+                      {manualProductImage ? 'Change photo' : 'Photo (optional)'}
+                    </button>
+                    <span className="text-[10px] text-gray-400">Max 5 MB</span>
+                  </div>
                 </div>
               )}
               {selectedProduct?.imageUrl && !isManualMode && showProductImages && (

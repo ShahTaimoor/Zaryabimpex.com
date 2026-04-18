@@ -66,7 +66,7 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
     const qty = item.quantity ?? item.qty ?? 0;
     const price = item.unitPrice ?? item.price ?? item.unitCost ?? 0;
     const total = item.total ?? item.lineTotal ?? (qty * price);
-    const imageUrl = product.imageUrl || null;
+    const imageUrl = product.imageUrl || item.imageUrl || item.image_url || null;
 
     return {
       sno: index + 1,

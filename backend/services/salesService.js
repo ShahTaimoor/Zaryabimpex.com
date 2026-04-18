@@ -515,7 +515,16 @@ class SalesService {
       // Try to find as product first, then as variant
       let product = null;
       let isVariant = false;
-      const isManual = item.isManual === true;
+      const productRef = item.product;
+      const productRefStr =
+        typeof productRef === 'string'
+          ? productRef
+          : productRef != null && (productRef.id != null || productRef._id != null)
+            ? String(productRef.id ?? productRef._id)
+            : '';
+      const isManual =
+        item.isManual === true ||
+        (productRefStr.startsWith('manual_'));
 
       if (!isManual) {
         product = await productRepository.findById(item.product, true);
@@ -551,7 +560,12 @@ class SalesService {
       const itemSubtotal = item.quantity * unitPrice;
       const itemDiscount = itemSubtotal * (itemDiscountPercent / 100);
       const itemTaxable = itemSubtotal - itemDiscount;
-      const taxRate = isManual ? 0 : (isVariant ? (product.baseProduct?.taxSettings?.taxRate ?? 0) : (product.tax_settings?.tax_rate ?? product.taxSettings?.taxRate ?? 0));
+      const taxRate =
+        isManual || !product
+          ? 0
+          : isVariant
+            ? (product.baseProduct?.taxSettings?.taxRate ?? 0)
+            : (product.tax_settings?.tax_rate ?? product.taxSettings?.taxRate ?? 0);
       const itemTax = isTaxExempt ? 0 : itemTaxable * taxRate;
 
       let unitCost = 0;
@@ -565,9 +579,13 @@ class SalesService {
         }
         if (unitCost === 0) unitCost = product.pricing?.cost ?? product.cost_price ?? 0;
       } else {
-        // Manual item
+        // Manual item: COGS/P&L use line unitCost (POS may send cost entered at sale time)
         productId = item.product || `manual_${Date.now()}`;
-        unitCost = 0; // Cost is unknown for manual items
+        const fromPayload = parseFloat(
+          item.unitCost ?? item.unit_cost ?? item.costPrice ?? item.cost_price ?? 0
+        );
+        unitCost =
+          Number.isFinite(fromPayload) && fromPayload >= 0 ? fromPayload : 0;
       }
 
       orderItems.push({
@@ -575,6 +593,7 @@ class SalesService {
         name: product ? (product.name || product.displayName || 'Product') : (item.name || 'Manual Item'),
         sku: product ? (product.sku || null) : (item.sku || null),
         isManual: !!isManual || !product,
+        imageUrl: item.imageUrl || item.image_url || null,
         quantity: item.quantity,
         unitCost,
         unitPrice,

@@ -84,6 +84,28 @@ import { getLocalDateString } from '../utils/dateUtils';
 
 import { ProductSearch } from '../components/sales/ProductSearch';
 
+/** Cart → print payload: names, optional manual photo, dual-unit qty for invoice/PDF. */
+function mapCartItemsForInvoicePrint(cart) {
+  if (!Array.isArray(cart)) return [];
+  return cart.map((item) => {
+    const p = item.product || {};
+    const line = {
+      product: {
+        name: p.name,
+        ...(p.imageUrl ? { imageUrl: p.imageUrl } : {}),
+      },
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      name: p.name,
+    };
+    if (p.imageUrl) line.imageUrl = p.imageUrl;
+    if (item.boxes != null || item.pieces != null) {
+      line.boxes = item.boxes;
+      line.pieces = item.pieces;
+    }
+    return line;
+  });
+}
 
 export const Sales = ({ tabId, editData }) => {
   // Store refetch function from ProductSearch component
@@ -1233,13 +1255,32 @@ export const Sales = ({ tabId, editData }) => {
       orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
       customer: selectedCustomer?.id || selectedCustomer?._id,
       items: cart.map(item => {
+        const productId = item.product?._id ?? item.product?.id;
+        const isManualLine =
+          item.product?.isManual === true ||
+          (typeof productId === 'string' && productId.startsWith('manual_'));
         const base = {
-          product: item.product._id,
+          product: productId,
           quantity: Math.round(item.quantity),
           unitPrice: item.unitPrice,
-          isManual: item.product.isManual || false,
-          name: item.product.name
+          isManual: isManualLine,
+          name: item.product?.name
         };
+        if (isManualLine) {
+          const uc = Number(
+            item.product?.pricing?.cost ??
+              item.product?.pricing?.cost_price ??
+              item.product?.cost_price ??
+              item.product?.costPrice ??
+              0
+          );
+          if (Number.isFinite(uc) && uc >= 0) {
+            base.unitCost = uc;
+          }
+        }
+        if (item.product?.imageUrl) {
+          base.imageUrl = item.product.imageUrl;
+        }
         if (item.boxes != null || item.pieces != null) {
           base.boxes = item.boxes;
           base.pieces = item.pieces;
@@ -1277,17 +1318,21 @@ export const Sales = ({ tabId, editData }) => {
         orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
         customer: selectedCustomer?.id || selectedCustomer?._id,
         items: cart.map(item => {
+          const productId = item.product?._id ?? item.product?.id;
+          const isManualLine =
+            item.product?.isManual === true ||
+            (typeof productId === 'string' && productId.startsWith('manual_'));
           const itemSubtotal = item.quantity * item.unitPrice;
           const itemDiscountAmount = 0; // Can be calculated if needed
           const itemTaxAmount = 0; // Can be calculated if needed
           const itemTotal = itemSubtotal - itemDiscountAmount + itemTaxAmount;
 
           const base = {
-            product: item.product._id,
+            product: productId,
             quantity: Math.round(item.quantity),
             unitPrice: item.unitPrice,
-            isManual: item.product.isManual || false,
-            name: item.product.name,
+            isManual: isManualLine,
+            name: item.product?.name,
             discountPercent: 0,
             taxRate: 0,
             subtotal: itemSubtotal,
@@ -1295,6 +1340,21 @@ export const Sales = ({ tabId, editData }) => {
             taxAmount: itemTaxAmount,
             total: itemTotal
           };
+          if (item.product?.imageUrl) {
+            base.imageUrl = item.product.imageUrl;
+          }
+          if (isManualLine) {
+            const uc = Number(
+              item.product?.pricing?.cost ??
+                item.product?.pricing?.cost_price ??
+                item.product?.cost_price ??
+                item.product?.costPrice ??
+                0
+            );
+            if (Number.isFinite(uc) && uc >= 0) {
+              base.unitCost = uc;
+            }
+          }
           if (item.boxes != null || item.pieces != null) {
             base.boxes = item.boxes;
             base.pieces = item.pieces;
@@ -2759,11 +2819,7 @@ export const Sales = ({ tabId, editData }) => {
                                 pendingBalance: selectedCustomer.pendingBalance,
                                 advanceBalance: selectedCustomer.advanceBalance
                               } : null,
-                              items: cart.map(item => ({
-                                product: { name: item.product.name },
-                                quantity: item.quantity,
-                                unitPrice: item.unitPrice
-                              })),
+                              items: mapCartItemsForInvoicePrint(cart),
                               pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt, total },
                               payment: {
                                 method: paymentMethod,
@@ -2805,11 +2861,7 @@ export const Sales = ({ tabId, editData }) => {
                                 pendingBalance: selectedCustomer.pendingBalance,
                                 advanceBalance: selectedCustomer.advanceBalance
                               } : null,
-                              items: cart.map(item => ({
-                                product: { name: item.product.name },
-                                quantity: item.quantity,
-                                unitPrice: item.unitPrice
-                              })),
+                              items: mapCartItemsForInvoicePrint(cart),
                               pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt, total },
                               payment: {
                                 method: paymentMethod,
