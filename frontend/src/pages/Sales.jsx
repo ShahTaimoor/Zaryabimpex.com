@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ShoppingCart,
@@ -369,12 +369,40 @@ export const Sales = ({ tabId, editData }) => {
   const [isSubmitting, setIsSubmitting] = useState(false); // For button disabled state
 
   const cartScrollRef = useRef(null);
+  /** Row roots for scroll-into-view after add (virtualized lines). */
+  const cartLineElRefs = useRef(new Map());
+  /** Line index (0-based) for green S.NO; cleared when cart empties or after checkout / clear cart. */
+  const [highlightedCartLineIndex, setHighlightedCartLineIndex] = useState(null);
+  /** Inner cart scrollbar only after 10 lines; first 10 rows grow with the page. */
+  const cartNeedsInnerScroll = cart.length > 10;
   const cartVirtualizer = useVirtualizer({
     count: cart.length,
     getScrollElement: () => cartScrollRef.current,
     estimateSize: () => 96,
     overscan: 6,
   });
+
+  useLayoutEffect(() => {
+    if (highlightedCartLineIndex === null) return;
+    const idx = highlightedCartLineIndex;
+    cartScrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (cartNeedsInnerScroll) {
+      cartVirtualizer.scrollToIndex(idx, { align: 'center', behavior: 'smooth' });
+    } else {
+      requestAnimationFrame(() => {
+        cartLineElRefs.current.get(idx)?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'nearest',
+        });
+      });
+    }
+  }, [highlightedCartLineIndex, cartNeedsInnerScroll, cart.length, cartVirtualizer]);
+
+  /** Green S.NO stays until the next add highlights another line, or cart is cleared / sold. */
+  useEffect(() => {
+    if (cart.length === 0) setHighlightedCartLineIndex(null);
+  }, [cart.length]);
 
   // Helper function to reset submitting state (ensures both ref and state are reset)
   const resetSubmittingState = useCallback(() => {
@@ -554,12 +582,15 @@ export const Sales = ({ tabId, editData }) => {
     const product = item?.product;
     if (!product) return;
 
+    let highlightLineIndex = null;
+
     setCart(prevCart => {
       // For variants, use variant _id; for products, use product _id
       const itemId = product._id ?? product.id;
       const existingItem = prevCart.find(c => (c.product?._id ?? c.product?.id) === itemId);
 
       if (existingItem) {
+        highlightLineIndex = prevCart.findIndex(c => (c.product?._id ?? c.product?.id) === itemId);
         // Check if combined quantity exceeds available stock
         const combinedQuantity = existingItem.quantity + item.quantity;
         const availableStock = product.inventory?.currentStock || 0;
@@ -582,6 +613,8 @@ export const Sales = ({ tabId, editData }) => {
 
         return updatedCart;
       }
+
+      highlightLineIndex = prevCart.length;
 
       // New item added - fetch its last purchase price (always, for loss alerts)
       // For variants, use base product ID to get purchase price
@@ -609,6 +642,10 @@ export const Sales = ({ tabId, editData }) => {
       // applying last prices, so there's nothing to restore
       return [...prevCart, item];
     });
+
+    if (highlightLineIndex !== null && highlightLineIndex >= 0) {
+      setHighlightedCartLineIndex(highlightLineIndex);
+    }
   };
 
   const updateCartBoxCount = (productId, newBoxes) => {
@@ -963,6 +1000,7 @@ export const Sales = ({ tabId, editData }) => {
       confirmClear(cart.length, 'items', async () => {
         try {
           setCart([]);
+          setHighlightedCartLineIndex(null);
           setSelectedCustomer(null);
           setCustomerSearchTerm('');
           setAppliedDiscounts([]);
@@ -1015,6 +1053,7 @@ export const Sales = ({ tabId, editData }) => {
 
       // Reset cart and form
       setCart([]);
+      setHighlightedCartLineIndex(null);
       // Don't reset selectedCustomer immediately - let it update from refetched data
       // setSelectedCustomer(null);
       setAmountPaid(0);
@@ -1080,6 +1119,7 @@ export const Sales = ({ tabId, editData }) => {
 
       // Reset cart and form
       setCart([]);
+      setHighlightedCartLineIndex(null);
       // Don't reset selectedCustomer immediately - let it update from refetched data
       // setSelectedCustomer(null);
       setAmountPaid(0);
@@ -1657,7 +1697,11 @@ export const Sales = ({ tabId, editData }) => {
           >
             <div
               ref={cartScrollRef}
-              className="max-h-[min(70vh,860px)] overflow-y-auto -mx-1 px-1 [scrollbar-gutter:stable]"
+              className={
+                cartNeedsInnerScroll
+                  ? 'max-h-[min(70vh,860px)] overflow-y-auto -mx-1 px-1 [scrollbar-gutter:stable]'
+                  : 'overflow-visible -mx-1 px-1'
+              }
             >
               <div
                 className="relative w-full"
@@ -1669,11 +1713,17 @@ export const Sales = ({ tabId, editData }) => {
               const totalPrice = item.unitPrice * item.quantity;
               const isLowStock = item.product.inventory?.currentStock <= item.product.inventory?.reorderPoint;
 
+              const serialHighlight = highlightedCartLineIndex === index;
+
               return (
                 <div
                   key={virtualRow.key}
                   data-index={virtualRow.index}
-                  ref={cartVirtualizer.measureElement}
+                  ref={(node) => {
+                    cartVirtualizer.measureElement(node);
+                    if (node) cartLineElRefs.current.set(index, node);
+                    else cartLineElRefs.current.delete(index);
+                  }}
                   className="absolute left-0 top-0 w-full"
                   style={{ transform: `translateY(${virtualRow.start}px)` }}
                 >
@@ -1695,7 +1745,15 @@ export const Sales = ({ tabId, editData }) => {
                         )}
                         <div className="flex flex-col min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
+                            <span
+                              className={`text-xs font-semibold px-2 py-0.5 rounded transition-colors duration-300 ${
+                                serialHighlight
+                                  ? 'bg-green-100 text-green-800 border border-green-400 ring-2 ring-green-300/80'
+                                  : 'text-gray-500 bg-gray-100'
+                              }`}
+                            >
+                              #{index + 1}
+                            </span>
                             <span className="font-medium text-sm truncate">
                               {item.product.isVariant
                                 ? (item.product.displayName || item.product.variantName || item.product.name)
@@ -1859,7 +1917,13 @@ export const Sales = ({ tabId, editData }) => {
                     >
                       {/* Serial Number - 1 column */}
                       <div className="min-w-0 flex justify-start">
-                        <span className="text-sm font-medium text-gray-700 bg-gray-50 px-0.5 py-1 rounded border border-gray-200 block w-8 text-center h-8 flex items-center justify-center">
+                        <span
+                          className={`text-sm font-medium px-0.5 py-1 rounded border block w-8 text-center h-8 flex items-center justify-center transition-colors duration-300 ${
+                            serialHighlight
+                              ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
+                              : 'text-gray-700 bg-gray-50 border-gray-200'
+                          }`}
+                        >
                           {index + 1}
                         </span>
                       </div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   FileText,
@@ -400,10 +400,32 @@ export const PurchaseOrders = ({ tabId }) => {
 
   const [previewImageProduct, setPreviewImageProduct] = useState(null);
 
+  const poCartScrollRef = useRef(null);
+  const poCartLineElRefs = useRef(new Map());
+  const [highlightedPoLineIndex, setHighlightedPoLineIndex] = useState(null);
+  const poCartNeedsInnerScroll = formData.items.length > 10;
+
+  useLayoutEffect(() => {
+    if (highlightedPoLineIndex === null) return;
+    const idx = highlightedPoLineIndex;
+    poCartScrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (poCartNeedsInnerScroll) {
+      poCartLineElRefs.current.get(idx)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    } else {
+      requestAnimationFrame(() => {
+        poCartLineElRefs.current.get(idx)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      });
+    }
+  }, [highlightedPoLineIndex, poCartNeedsInnerScroll, formData.items.length]);
+
+  useEffect(() => {
+    if (formData.items.length === 0) setHighlightedPoLineIndex(null);
+  }, [formData.items.length]);
+
   // Auto-focus on product search field when component mounts
   useEffect(() => {
     if (productSearchRef.current) {
-      productSearchRef.current.focus();
+      productSearchRef.current.focus({ preventScroll: true });
     }
   }, []);
 
@@ -568,6 +590,7 @@ export const PurchaseOrders = ({ tabId }) => {
     setQuantity(1);
     setCustomCost('');
     setSearchKey(prev => prev + 1); // Force re-render of search components
+    setHighlightedPoLineIndex(null);
 
     // Reset tab title to default
     if (updateTabTitle && getActiveTab) {
@@ -721,10 +744,17 @@ export const PurchaseOrders = ({ tabId }) => {
       totalCost
     };
 
-    setFormData(prev => ({
-      ...prev,
-      items: [...prev.items, newItem]
-    }));
+    let addedLineIndex = null;
+    setFormData(prev => {
+      addedLineIndex = prev.items.length;
+      return {
+        ...prev,
+        items: [...prev.items, newItem]
+      };
+    });
+    if (addedLineIndex !== null && addedLineIndex >= 0) {
+      setHighlightedPoLineIndex(addedLineIndex);
+    }
 
     // Reset product selection
     setSelectedProduct(null);
@@ -736,7 +766,7 @@ export const PurchaseOrders = ({ tabId }) => {
     // Focus back to product search input
     setTimeout(() => {
       if (productSearchRef.current) {
-        productSearchRef.current.focus();
+        productSearchRef.current.focus({ preventScroll: true });
       }
     }, 100);
   };
@@ -1603,6 +1633,14 @@ export const PurchaseOrders = ({ tabId }) => {
                 </div>
               </div>
 
+              <div
+                ref={poCartScrollRef}
+                className={
+                  poCartNeedsInnerScroll
+                    ? 'max-h-[min(70vh,860px)] overflow-y-auto -mx-1 px-1 [scrollbar-gutter:stable]'
+                    : 'overflow-visible -mx-1 px-1'
+                }
+              >
               {formData.items.map((item, index) => {
                 const product = item.productData || item.product; // Use stored product/variant data or fallback to product
                 const displayName = product?.isVariant
@@ -1610,9 +1648,16 @@ export const PurchaseOrders = ({ tabId }) => {
                   : (product?.name || 'Unknown Product');
                 const totalPrice = item.costPerUnit * item.quantity;
                 const isLowStock = product?.inventory?.currentStock <= (product?.inventory?.reorderPoint || 0);
+                const serialHighlight = highlightedPoLineIndex === index;
 
                 return (
-                  <div key={index}>
+                  <div
+                    key={index}
+                    ref={(node) => {
+                      if (node) poCartLineElRefs.current.set(index, node);
+                      else poCartLineElRefs.current.delete(index);
+                    }}
+                  >
                     {/* Mobile Card View */}
                     <div className="md:hidden mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
                       <div className="flex items-start justify-between mb-3">
@@ -1631,7 +1676,15 @@ export const PurchaseOrders = ({ tabId }) => {
                           )}
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
+                              <span
+                                className={`text-xs font-semibold px-2 py-0.5 rounded transition-colors duration-300 ${
+                                  serialHighlight
+                                    ? 'bg-green-100 text-green-800 border border-green-400 ring-2 ring-green-300/80'
+                                    : 'text-gray-500 bg-gray-100'
+                                }`}
+                              >
+                                #{index + 1}
+                              </span>
                               <span className="font-medium text-sm truncate">
                                 {product?.isVariant
                                 ? safeRender(product?.displayName || product?.variantName || product?.name || 'Unknown Variant')
@@ -1762,7 +1815,13 @@ export const PurchaseOrders = ({ tabId }) => {
                       <div className="grid grid-cols-12 gap-4 items-center">
                         {/* Serial Number - 1 column (new field) */}
                         <div className="col-span-1 flex justify-center">
-                          <span className="text-sm font-medium text-gray-700 bg-gray-50 px-0.5 py-1 rounded border border-gray-200 block text-center h-8 w-1/2 min-w-[56px] flex items-center justify-center">
+                          <span
+                            className={`text-sm font-medium px-0.5 py-1 rounded border block text-center h-8 w-1/2 min-w-[56px] flex items-center justify-center transition-colors duration-300 ${
+                              serialHighlight
+                                ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
+                                : 'text-gray-700 bg-gray-50 border-gray-200'
+                            }`}
+                          >
                             {index + 1}
                           </span>
                         </div>
@@ -1882,6 +1941,7 @@ export const PurchaseOrders = ({ tabId }) => {
                   </div>
                 );
               })}
+              </div>
             </div>
           )}
 

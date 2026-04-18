@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { useQuery } from 'react-query';
 import {
@@ -253,6 +253,28 @@ const SalesOrders = ({ tabId }) => {
   const [lastPurchasePrices, setLastPurchasePrices] = useState({}); // Store last purchase prices for products in cart
   const [previewImageProduct, setPreviewImageProduct] = useState(null);
 
+  const soCartScrollRef = useRef(null);
+  const soCartLineElRefs = useRef(new Map());
+  const [highlightedSoLineIndex, setHighlightedSoLineIndex] = useState(null);
+  const soCartNeedsInnerScroll = formData.items.length > 10;
+
+  useLayoutEffect(() => {
+    if (highlightedSoLineIndex === null) return;
+    const idx = highlightedSoLineIndex;
+    soCartScrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (soCartNeedsInnerScroll) {
+      soCartLineElRefs.current.get(idx)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    } else {
+      requestAnimationFrame(() => {
+        soCartLineElRefs.current.get(idx)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      });
+    }
+  }, [highlightedSoLineIndex, soCartNeedsInnerScroll, formData.items.length]);
+
+  useEffect(() => {
+    if (formData.items.length === 0) setHighlightedSoLineIndex(null);
+  }, [formData.items.length]);
+
 
 
   // Auth context for permissions
@@ -450,6 +472,7 @@ const SalesOrders = ({ tabId }) => {
     // Reset cost price state
     setLastPurchasePrice(null);
     setLastPurchasePrices({});
+    setHighlightedSoLineIndex(null);
 
     // Reset loading states
     setIsAddingToCart(false);
@@ -822,7 +845,7 @@ const SalesOrders = ({ tabId }) => {
       // Focus back to product search input
       setTimeout(() => {
         if (productSearchRef.current) {
-          productSearchRef.current.focus();
+          productSearchRef.current.focus({ preventScroll: true });
         }
       }, 100);
 
@@ -853,6 +876,8 @@ const SalesOrders = ({ tabId }) => {
     const ppb = getPiecesPerBox(product);
     const derivedDual = ppb ? piecesToBoxesAndPieces(qty, ppb) : {};
 
+    let highlightLineIndex = null;
+
     setFormData((prev) => {
       const productId = product._id.toString();
       const getItemProductId = (item) => (
@@ -861,6 +886,7 @@ const SalesOrders = ({ tabId }) => {
       const existingIndex = prev.items.findIndex((item) => getItemProductId(item) === productId);
 
       if (existingIndex >= 0) {
+        highlightLineIndex = existingIndex;
         const existingItem = prev.items[existingIndex];
         const newQuantity = (Number(existingItem.quantity) || 0) + qty;
         const newSubtotal = newQuantity * unitPrice;
@@ -890,6 +916,8 @@ const SalesOrders = ({ tabId }) => {
         };
       }
 
+      highlightLineIndex = prev.items.length;
+
       const newItem = {
         product: product._id,
         productData: product,
@@ -912,6 +940,10 @@ const SalesOrders = ({ tabId }) => {
         items: [...prev.items, newItem]
       };
     });
+
+    if (highlightLineIndex !== null && highlightLineIndex >= 0) {
+      setHighlightedSoLineIndex(highlightLineIndex);
+    }
   }, [formData.isTaxExempt]);
 
   const handleAddModalItem = async () => {
@@ -2153,13 +2185,29 @@ const SalesOrders = ({ tabId }) => {
                   { key: 'action', label: 'Action', wrapperClassName: 'min-w-0 flex justify-end', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-right' },
                 ]}
               />
+              <div
+                ref={soCartScrollRef}
+                className={
+                  soCartNeedsInnerScroll
+                    ? 'max-h-[min(70vh,860px)] overflow-y-auto -mx-1 px-1 [scrollbar-gutter:stable]'
+                    : 'overflow-visible -mx-1 px-1'
+                }
+              >
               {formData.items.map((item, index) => {
                 const product = item.productData || item.product; // Use stored product data or fallback to product
                 const totalPrice = item.unitPrice * item.quantity;
                 const isLowStock = product?.inventory?.currentStock <= (product?.inventory?.reorderPoint || 0);
+                const serialHighlight = highlightedSoLineIndex === index;
 
                 return (
-                  <div key={index} className={`py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                  <div
+                    key={index}
+                    ref={(node) => {
+                      if (node) soCartLineElRefs.current.set(index, node);
+                      else soCartLineElRefs.current.delete(index);
+                    }}
+                    className={`py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                  >
                     {/* Desktop Grid Layout */}
                     <div
                       className={`hidden md:grid gap-x-1 items-center ${dualUnitShowBoxInputEnabled
@@ -2177,7 +2225,13 @@ const SalesOrders = ({ tabId }) => {
                     >
                       {/* Serial Number - 1 column */}
                       <div className="min-w-0 flex justify-start">
-                        <span className="text-sm font-medium text-gray-700 bg-gray-50 px-0.5 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
+                        <span
+                          className={`text-sm font-medium px-0.5 py-1 rounded border block text-center h-8 flex items-center justify-center transition-colors duration-300 ${
+                            serialHighlight
+                              ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
+                              : 'text-gray-700 bg-gray-50 border-gray-200'
+                          }`}
+                        >
                           {index + 1}
                         </span>
                       </div>
@@ -2435,6 +2489,17 @@ const SalesOrders = ({ tabId }) => {
                             </div>
                           )}
                           <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span
+                                className={`text-xs font-semibold px-2 py-0.5 rounded transition-colors duration-300 ${
+                                  serialHighlight
+                                    ? 'bg-green-100 text-green-800 border border-green-400 ring-2 ring-green-300/80'
+                                    : 'text-gray-500 bg-gray-100'
+                                }`}
+                              >
+                                #{index + 1}
+                              </span>
+                            </div>
                             <h5 className="font-medium text-sm text-gray-900 truncate">
                               {safeRender(product?.name) || 'Unknown Product'}
                             </h5>
@@ -2566,6 +2631,7 @@ const SalesOrders = ({ tabId }) => {
                   </div>
                 );
               })}
+              </div>
             </div>
           )}
         </div>

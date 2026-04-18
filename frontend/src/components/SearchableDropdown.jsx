@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 const EMPTY_ARRAY = [];
 
 const DEFAULT_INITIAL_LIMIT = 20;
-/** Fixed row height for virtual list (matches py-2 + text-sm). */
-const DROPDOWN_ROW_HEIGHT = 44;
+/** Initial estimate before measure; customer rows can be multi-line (name + balance). */
+const DROPDOWN_ROW_ESTIMATE = 72;
 
 /** Stable id for list deduping when valueKey may not match (e.g. id vs _id). */
 const getItemId = (item, valueKey) => {
@@ -55,8 +55,8 @@ export const SearchableDropdown = forwardRef(({
   const rowVirtualizer = useVirtualizer({
     count: filteredItems.length,
     getScrollElement: () => listScrollRef.current,
-    estimateSize: () => DROPDOWN_ROW_HEIGHT,
-    overscan: 10,
+    estimateSize: () => DROPDOWN_ROW_ESTIMATE,
+    overscan: 8,
   });
 
   const valueToDisplayString = (value) => {
@@ -520,28 +520,29 @@ export const SearchableDropdown = forwardRef(({
                   return (
                     <div
                       key={virtualRow.key}
-                      ref={(el) => {
-                        itemRefs.current[index] = el;
+                      data-index={virtualRow.index}
+                      ref={(node) => {
+                        rowVirtualizer.measureElement(node);
+                        itemRefs.current[index] = node;
                       }}
                       className="absolute left-0 top-0 w-full"
                       style={{
-                        height: `${virtualRow.size}px`,
                         transform: `translateY(${virtualRow.start}px)`,
                       }}
                     >
                       <button
                         type="button"
                         onClick={() => handleSelect(item)}
-                        className={`flex h-full min-h-[44px] w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${isSelected ? 'bg-primary-50 text-primary-700' : 'text-gray-900'
+                        className={`flex min-h-[44px] w-full items-start justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${isSelected ? 'bg-primary-50 text-primary-700' : 'text-gray-900'
                           }`}
                       >
-                        <span className="flex-1">{getDisplayValue(item)}</span>
-                        <span className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1">{getDisplayValue(item)}</span>
+                        <span className="flex shrink-0 items-start gap-2 pt-0.5">
                           {getRightContent(item) && (
                             <span className="text-xs text-gray-500">{getRightContent(item)}</span>
                           )}
                           {isItemSelected && (
-                            <Check className="h-4 w-4 text-primary-600" />
+                            <Check className="h-4 w-4 shrink-0 text-primary-600" />
                           )}
                         </span>
                       </button>

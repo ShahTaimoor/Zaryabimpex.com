@@ -183,7 +183,7 @@ function ProductSearchComponent({
     if (isManualMode) {
       if (!manualName.trim()) {
         toast.error('Please enter a product name');
-        if (manualNameRef.current) manualNameRef.current.focus();
+        if (manualNameRef.current) manualNameRef.current.focus({ preventScroll: true });
         return;
       }
       if (quantity <= 0) {
@@ -227,7 +227,7 @@ function ProductSearchComponent({
         setManualCost('');
         
         if (manualNameRef.current) {
-          manualNameRef.current.focus();
+          manualNameRef.current.focus({ preventScroll: true });
         }
         toast.success(`Manual item ${manualProduct.name} added to cart`);
       } finally {
@@ -314,7 +314,7 @@ function ProductSearchComponent({
       // Focus back to product search input
       setTimeout(() => {
         if (productSearchRef.current) {
-          productSearchRef.current.focus();
+          productSearchRef.current.focus({ preventScroll: true });
         }
       }, 100);
 
@@ -347,7 +347,7 @@ function ProductSearchComponent({
         setManualName('');
         setQuantity(0);
         setCustomRate('');
-        setTimeout(() => productSearchRef.current?.focus(), 100);
+        setTimeout(() => productSearchRef.current?.focus({ preventScroll: true }), 100);
       } else if (isAddingProduct) {
         e.preventDefault();
         setSelectedProduct(null);
@@ -480,7 +480,7 @@ function ProductSearchComponent({
                         setIsAddingProduct(true);
                         setSelectedProduct(null);
                         setCalculatedRate(0);
-                        setTimeout(() => manualNameRef.current?.focus(), 100);
+                        setTimeout(() => manualNameRef.current?.focus({ preventScroll: true }), 100);
                       }}
                       className="px-3 py-2 border border-blue-300 text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors flex items-center justify-center flex-shrink-0 text-sm font-medium"
                       title="Add manual item"
@@ -505,7 +505,7 @@ function ProductSearchComponent({
                       setIsManualMode(false);
                       setIsAddingProduct(false);
                       setManualName('');
-                      setTimeout(() => productSearchRef.current?.focus(), 100);
+                      setTimeout(() => productSearchRef.current?.focus({ preventScroll: true }), 100);
                     }}
                     className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-xs"
                   >
@@ -757,7 +757,7 @@ function ProductSearchComponent({
                         setIsAddingProduct(true);
                         setSelectedProduct(null);
                         setCalculatedRate(0);
-                        setTimeout(() => manualNameRef.current?.focus(), 100);
+                        setTimeout(() => manualNameRef.current?.focus({ preventScroll: true }), 100);
                       }}
                       className="px-3 py-2 border border-blue-300 text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors flex items-center justify-center flex-shrink-0 text-sm font-medium"
                       title="Add manual item"
@@ -783,7 +783,7 @@ function ProductSearchComponent({
                       setIsManualMode(false);
                       setIsAddingProduct(false);
                       setManualName('');
-                      setTimeout(() => productSearchRef.current?.focus(), 100);
+                      setTimeout(() => productSearchRef.current?.focus({ preventScroll: true }), 100);
                     }}
                     className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-xs"
                   >
