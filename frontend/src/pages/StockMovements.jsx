@@ -311,10 +311,6 @@ export const StockMovements = () => {
     return d.toLocaleString();
   };
 
-  if (isLoading && !movementsData) {
-    return <LoadingSpinner />;
-  }
-
   const movements = movementsData?.data?.movements || [];
   const rawPagination = movementsData?.data?.pagination || {};
   const pagination = getUiPagination(rawPagination, 20);
@@ -325,6 +321,10 @@ export const StockMovements = () => {
   useEffect(() => {
     updateFromPagination(rawPagination);
   }, [rawPagination, updateFromPagination]);
+
+  if (isLoading && !movementsData) {
+    return <LoadingSpinner />;
+  }
 
   return (
     <div className="space-y-6">

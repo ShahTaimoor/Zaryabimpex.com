@@ -11,8 +11,10 @@ const VARIANT_SEARCH_LIMIT = 50;
 export function looksLikeExactProductCode(raw) {
   const t = String(raw ?? '').trim();
   if (t.length < 4) return false;
+  // Digits only: GTIN-8 or longer barcodes
   if (/^\d+$/.test(t)) return t.length >= 6;
-  if (/^[A-Za-z0-9._-]+$/.test(t)) return t.length >= 4;
+  // Alphanumeric: require 8+ chars to avoid overlapping with common 4-7 char names (e.g. MILK, COCA)
+  if (/^[A-Za-z0-9._-]+$/.test(t)) return t.length >= 8;
   return false;
 }
 

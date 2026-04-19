@@ -309,6 +309,8 @@ export const Categories = () => {
     }
   }, [searchParams]);
 
+  const debouncedSearch = useDebouncedValue(searchTerm, 350);
+
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch]);
