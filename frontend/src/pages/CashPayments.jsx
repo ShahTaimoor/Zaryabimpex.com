@@ -578,8 +578,8 @@ const CashPayments = () => {
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                   Payment Type
                 </label>
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                  <label className="flex items-center">
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer group">
                     <input
                       type="radio"
                       value="supplier"
@@ -590,11 +590,11 @@ const CashPayments = () => {
                         setCustomerSearchTerm('');
                         setFormData(prev => ({ ...prev, customer: '' }));
                       }}
-                      className="mr-2"
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
                     />
-                    <span className="text-xs sm:text-sm text-gray-700">Supplier</span>
+                    <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">Supplier</span>
                   </label>
-                  <label className="flex items-center">
+                  <label className="flex items-center gap-2 cursor-pointer group">
                     <input
                       type="radio"
                       value="customer"
@@ -605,9 +605,9 @@ const CashPayments = () => {
                         setSupplierSearchTerm('');
                         setFormData(prev => ({ ...prev, supplier: '' }));
                       }}
-                      className="mr-2"
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
                     />
-                    <span className="text-xs sm:text-sm text-gray-700">Customer</span>
+                    <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">Customer</span>
                   </label>
                 </div>
               </div>
