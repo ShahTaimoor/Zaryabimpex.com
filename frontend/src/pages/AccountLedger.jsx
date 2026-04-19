@@ -143,40 +143,43 @@ const AccountLedger = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-            <Book className="h-8 w-8 mr-2 text-primary-600" />
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+            <Book className="h-6 w-6 sm:h-8 sm:w-8 mr-2 text-primary-600" />
             Account Ledger
           </h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="mt-1 text-xs sm:text-sm text-gray-600">
             View detailed transaction history for all accounts
           </p>
         </div>
-        <div className="flex space-x-2 no-print">
+        <div className="flex flex-wrap items-center gap-2 no-print">
           <Button
             onClick={() => setShowFilters(!showFilters)}
             variant="secondary"
+            size="sm"
             className="flex items-center"
           >
             <Filter className="h-4 w-4 mr-2" />
-            {showFilters ? 'Hide Filters' : 'Show Filters'}
+            <span className="text-xs sm:text-sm">{showFilters ? 'Hide' : 'Show'} Filters</span>
           </Button>
           <Button
             onClick={handlePrint}
             variant="secondary"
+            size="sm"
             className="flex items-center"
           >
             <Printer className="h-4 w-4 mr-2" />
-            Print
+            <span className="text-xs sm:text-sm">Print</span>
           </Button>
           <Button
             onClick={() => refetchLedger()}
             variant="default"
+            size="sm"
             className="flex items-center"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
+            <span className="text-xs sm:text-sm">Refresh</span>
           </Button>
         </div>
       </div>

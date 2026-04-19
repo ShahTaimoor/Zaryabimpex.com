@@ -3048,29 +3048,37 @@ const SalesOrders = ({ tabId }) => {
       {/* Results */}
       <div className="card">
         <div className="card-header">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium text-gray-900">
-              Sales Orders From: {formatDate(filters.fromDate)} To: {formatDate(filters.toDate)}
-            </h3>
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-500 mr-2">
-                {paginationInfo.totalItems ?? paginationInfo.total ?? salesOrders.length} records
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 leading-tight">
+              Sales Orders
+              <span className="block sm:inline sm:ml-2 text-xs sm:text-sm font-normal text-gray-500 mt-1 sm:mt-0">
+                From: {formatDate(filters.fromDate)} To: {formatDate(filters.toDate)}
               </span>
-              <ExcelExportButton
-                getData={getExportData}
-                label="Export"
-              />
-              <PdfExportButton
-                getData={getExportData}
-                label="PDF"
-              />
-              <button
-                onClick={() => refetch()}
-                className="p-2 text-gray-400 hover:text-gray-600"
-                title="Refresh"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </button>
+            </h3>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="text-xs sm:text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                <span className="font-semibold text-gray-700">
+                  {paginationInfo.totalItems ?? paginationInfo.total ?? salesOrders.length}
+                </span>{' '}
+                records
+              </span>
+              <div className="flex items-center gap-2">
+                <ExcelExportButton
+                  getData={getExportData}
+                  label="Export"
+                />
+                <PdfExportButton
+                  getData={getExportData}
+                  label="PDF"
+                />
+                <button
+                  onClick={() => refetch()}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Refresh"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

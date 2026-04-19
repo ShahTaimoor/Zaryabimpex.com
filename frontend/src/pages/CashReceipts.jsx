@@ -1079,17 +1079,23 @@ const CashReceipts = () => {
       {/* Results */}
       <div className="card">
         <div className="card-header">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium text-gray-900">
-              Cash Receipts From: {formatDate(filters.fromDate)} To: {formatDate(filters.toDate)}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 leading-tight">
+              Cash Receipts
+              <span className="block sm:inline sm:ml-2 text-xs sm:text-sm font-normal text-gray-500 mt-1 sm:mt-0">
+                From: {formatDate(filters.fromDate)} To: {formatDate(filters.toDate)}
+              </span>
             </h3>
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-500">
-                {paginationInfo.totalItems || 0} records
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="text-xs sm:text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                <span className="font-semibold text-gray-700">
+                  {paginationInfo.totalItems || 0}
+                </span>{' '}
+                records
               </span>
               <button
                 onClick={() => refetch()}
-                className="p-2 text-gray-400 hover:text-gray-600"
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
                 title="Refresh"
               >
                 <RefreshCw className="h-4 w-4" />
