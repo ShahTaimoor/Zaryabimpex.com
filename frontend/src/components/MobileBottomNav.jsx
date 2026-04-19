@@ -140,8 +140,8 @@ const MobileBottomNav = () => {
               }`}
             >
               <IconComponent className={`h-5 w-5 ${isActive ? 'mb-0.5' : 'mb-0.5 opacity-80'}`} />
-              <span className="text-[10px] font-bold leading-tight truncate w-full text-center">
-                {item.name.replace('Receipts', 'R.').replace('Payments', 'P.')}
+              <span className="text-[10px] font-bold leading-tight w-full text-center break-words">
+                {item.name.replace('Receipts', 'Receipt').replace('Payments', 'Payment')}
               </span>
             </button>
           );
