@@ -159,7 +159,7 @@ export const Sales = ({ tabId, editData }) => {
 
   const { isMobile, isTablet } = useResponsive();
   const { trackAddToCart, trackProductView, trackPageView } = useBehaviorTracking();
-  const { updateTabTitle, getActiveTab, openTab } = useTab();
+  const { activeTabId, updateTabTitle, getActiveTab, openTab } = useTab();
   const { hasPermission, user } = useAuth();
   const { companyInfo: companySettings } = useCompanyInfo();
 
@@ -420,6 +420,13 @@ export const Sales = ({ tabId, editData }) => {
       });
     }
   }, [highlightedCartLineIndex, cartNeedsInnerScroll, cart.length, cartVirtualizer]);
+
+  useEffect(() => {
+    if (activeTabId === tabId && cartVirtualizer) {
+      // Re-measure when tab becomes active to fix 0-height issues from display:none
+      cartVirtualizer.measure();
+    }
+  }, [activeTabId, tabId, cartVirtualizer]);
 
   /** Green S.NO stays until the next add highlights another line, or cart is cleared / sold. */
   useEffect(() => {
