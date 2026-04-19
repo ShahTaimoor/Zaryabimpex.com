@@ -122,15 +122,20 @@ class ProductRepository {
       sql += ' AND stock_quantity > 0';
     }
 
-    if (useKeyset) {
+    if (useKeyset && !filters.sortBy) {
       sql += ` AND (created_at, id) < ($${paramCount++}::timestamptz, $${paramCount++}::uuid)`;
       params.push(cursorDecoded.t, cursorDecoded.id);
     }
 
-    if (useKeyset) {
+    if (useKeyset && !filters.sortBy) {
       sql += ' ORDER BY created_at DESC, id DESC';
     } else {
-      sql += ' ORDER BY created_at DESC, name ASC';
+      if (filters.sortBy === 'name') {
+        const dir = filters.sortOrder === 'desc' ? 'DESC' : 'ASC';
+        sql += ` ORDER BY name ${dir}`;
+      } else {
+        sql += ' ORDER BY created_at DESC, name ASC';
+      }
     }
     if (options.limit) {
       sql += ` LIMIT $${paramCount++}`;
@@ -323,7 +328,7 @@ class ProductRepository {
     const offset = (page - 1) * limit;
     const listMode = options.listMode === 'minimal' ? 'minimal' : 'full';
     const cursorStr = options.cursor || options.keysetCursor;
-    const decoded = typeof cursorStr === 'string' ? decodeCursor(cursorStr) : null;
+    const decoded = (typeof cursorStr === 'string' && !filters.sortBy) ? decodeCursor(cursorStr) : null;
 
     let countSql = 'SELECT COUNT(*) FROM products WHERE (is_deleted = FALSE OR is_deleted IS NULL)';
     const countParams = [];

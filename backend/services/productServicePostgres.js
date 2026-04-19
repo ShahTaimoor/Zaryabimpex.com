@@ -159,6 +159,8 @@ class ProductServicePostgres {
     else if (queryParams.status === 'inactive') filters.isActive = false;
     if (queryParams.lowStock === 'true' || queryParams.lowStock === true) filters.lowStock = true;
     if (queryParams.stockStatus) filters.stockStatus = queryParams.stockStatus;
+    if (queryParams.sortBy) filters.sortBy = queryParams.sortBy;
+    if (queryParams.sortOrder) filters.sortOrder = queryParams.sortOrder;
     return filters;
   }
 

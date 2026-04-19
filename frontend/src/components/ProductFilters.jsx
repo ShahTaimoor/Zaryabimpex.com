@@ -7,7 +7,8 @@ import {
   Search,
   Package,
   Tag,
-  AlertTriangle
+  AlertTriangle,
+  ArrowUpDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -168,6 +169,37 @@ const ProductFilters = ({ filters, onFiltersChange, categories = [], onClearFilt
               </select>
             </div>
 
+            {/* Sort Filter */}
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                <ArrowUpDown className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1" />
+                Sort By
+              </label>
+              <select
+                value={filters.sortBy ? `${filters.sortBy}-${filters.sortOrder || 'asc'}` : ''}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const [sortBy, sortOrder] = e.target.value.split('-');
+                    onFiltersChange({
+                        ...filters,
+                        sortBy,
+                        sortOrder
+                    });
+                  } else {
+                    const newFilters = { ...filters };
+                    delete newFilters.sortBy;
+                    delete newFilters.sortOrder;
+                    onFiltersChange(newFilters);
+                  }
+                }}
+                className="input"
+              >
+                <option value="">Default (Recent)</option>
+                <option value="name-asc">Name (A to Z)</option>
+                <option value="name-desc">Name (Z to A)</option>
+              </select>
+            </div>
+
           </div>
 
           {/* Active Filters Display */}
@@ -198,6 +230,12 @@ const ProductFilters = ({ filters, onFiltersChange, categories = [], onClearFilt
                         value === 'outOfStock' ? 'Out of Stock' :
                           value === 'inStock' ? 'In Stock' : value;
                       break;
+                    case 'sortBy':
+                      label = 'Sort By';
+                      displayValue = value === 'name' ? (filters.sortOrder === 'desc' ? 'Name (Z to A)' : 'Name (A to Z)') : value;
+                      break;
+                    case 'sortOrder':
+                      return null; // Don't show sortOrder tag separately
                     case 'search':
                       label = 'Search';
                       displayValue = `"${value}"`;
@@ -213,7 +251,16 @@ const ProductFilters = ({ filters, onFiltersChange, categories = [], onClearFilt
                     >
                       {label}: {displayValue}
                       <button
-                        onClick={() => handleClearFilter(key)}
+                        onClick={() => {
+                          if (key === 'sortBy') {
+                            const newFilters = { ...filters };
+                            delete newFilters.sortBy;
+                            delete newFilters.sortOrder;
+                            onFiltersChange(newFilters);
+                          } else {
+                            handleClearFilter(key);
+                          }
+                        }}
                         className="ml-1 hover:text-blue-600"
                       >
                         <X className="h-3 w-3" />
