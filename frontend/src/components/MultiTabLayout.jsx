@@ -50,6 +50,7 @@ import TabContent from './TabContent';
 import { toast } from 'sonner';
 import ErrorBoundary from './ErrorBoundary';
 import MobileNavigation from './MobileNavigation';
+import MobileBottomNav from './MobileBottomNav';
 import { useResponsive } from './ResponsiveContainer';
 import { useGetAlertSummaryQuery } from '../store/services/inventoryAlertsApi';
 import { Button } from '@/components/ui/button';
@@ -225,6 +226,26 @@ export function loadSidebarConfig() {
     return migrated;
   } catch {
     return {};
+  }
+}
+
+export function loadBottomNavConfig() {
+  const saved = localStorage.getItem('bottomNavConfig');
+  if (!saved) return [
+    { name: 'Cash Receipts', href: '/cash-receipts', icon: 'Receipt' },
+    { name: 'Bank Receipts', href: '/bank-receipts', icon: 'Receipt' },
+    { name: 'Cash Payments', href: '/cash-payments', icon: 'CreditCard' },
+    { name: 'Bank Payments', href: '/bank-payments', icon: 'CreditCard' }
+  ];
+  try {
+    return JSON.parse(saved);
+  } catch {
+    return [
+      { name: 'Cash Receipts', href: '/cash-receipts', icon: 'Receipt' },
+      { name: 'Bank Receipts', href: '/bank-receipts', icon: 'Receipt' },
+      { name: 'Cash Payments', href: '/cash-payments', icon: 'CreditCard' },
+      { name: 'Bank Payments', href: '/bank-payments', icon: 'CreditCard' }
+    ];
   }
 }
 
@@ -794,61 +815,9 @@ export const MultiTabLayout = ({ children }) => {
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation Bar - Card-style, matches desktop emerald/blue colors */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-gray-100/95 border-t border-gray-200 backdrop-blur-sm">
-        <div className="flex items-stretch gap-2 px-3 py-3 max-w-screen-sm mx-auto">
-          {/* Receipts - same as desktop: emerald-50/emerald-700 */}
-          {sidebarConfig['Cash Receipts'] !== false && (
-            <button
-              onClick={() => handleNavigationClick({ href: '/cash-receipts', name: 'Cash Receipts' })}
-              className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${isActivePath('/cash-receipts')
-                ? 'bg-emerald-100 text-emerald-700 border-emerald-200 ring-2 ring-emerald-400/60'
-                : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                }`}
-              title="Cash Receipt"
-            >
-              Cash R.
-            </button>
-          )}
-          {sidebarConfig['Bank Receipts'] !== false && (
-            <button
-              onClick={() => handleNavigationClick({ href: '/bank-receipts', name: 'Bank Receipts' })}
-              className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${isActivePath('/bank-receipts')
-                ? 'bg-emerald-100 text-emerald-700 border-emerald-200 ring-2 ring-emerald-400/60'
-                : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                }`}
-              title="Bank Receipt"
-            >
-              Bank R.
-            </button>
-          )}
-          {/* Payments - same as desktop: blue-50/blue-700 */}
-          {sidebarConfig['Cash Payments'] !== false && (
-            <button
-              onClick={() => handleNavigationClick({ href: '/cash-payments', name: 'Cash Payments' })}
-              className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${isActivePath('/cash-payments')
-                ? 'bg-blue-100 text-blue-700 border-blue-200 ring-2 ring-blue-400/60'
-                : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-                }`}
-              title="Cash Payment"
-            >
-              Cash P.
-            </button>
-          )}
-          {sidebarConfig['Bank Payments'] !== false && (
-            <button
-              onClick={() => handleNavigationClick({ href: '/bank-payments', name: 'Bank Payments' })}
-              className={`flex-1 min-w-0 flex items-center justify-center py-3 px-3 rounded-xl font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] border ${isActivePath('/bank-payments')
-                ? 'bg-blue-100 text-blue-700 border-blue-200 ring-2 ring-blue-400/60'
-                : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-                }`}
-              title="Bank Payment"
-            >
-              Bank P.
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Mobile Bottom Navigation Bar - Dynamic based on configuration */}
+      <MobileBottomNav />
     </div>
   );
 };
+
