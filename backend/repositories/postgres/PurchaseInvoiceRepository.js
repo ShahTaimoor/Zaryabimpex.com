@@ -1,4 +1,5 @@
 const { query } = require('../../config/postgres');
+const { decodeCursor, encodeCursor } = require('../../utils/keysetCursor');
 
 // Extract address from stored supplier_info (JSONB) when supplier table address is empty
 function getAddressFromSupplierInfo(supplierInfo) {
@@ -258,16 +259,39 @@ class PurchaseInvoiceRepository {
   }
 
   async findAll(filters = {}, options = {}) {
+    const listMode = options.listMode === 'minimal' ? 'minimal' : 'full';
+    const cursorDecoded =
+      options.cursor && typeof options.cursor === 'object' && options.cursor.t && options.cursor.id
+        ? options.cursor
+        : null;
+    const useKeyset = Boolean(cursorDecoded) && !filters.search;
+
     // Build base SQL with LEFT JOIN for supplier
-    let sql = `
-      SELECT 
-        pi.*,
+    const selectCols =
+      listMode === 'minimal'
+        ? `pi.id, pi.invoice_number, pi.invoice_type, pi.supplier_id, pi.supplier_info,
+        pi.pricing, pi.payment, pi.expected_delivery, pi.actual_delivery, pi.notes, pi.terms,
+        pi.invoice_date, pi.status, pi.confirmed_date, pi.received_date,
+        pi.ledger_posted, pi.auto_posted, pi.posted_at, pi.ledger_reference_id,
+        pi.last_modified_by, pi.created_by, pi.created_at, pi.updated_at,
+        jsonb_array_length(COALESCE(pi.items::jsonb, '[]'::jsonb))::int AS line_item_count,
         s.id as joined_supplier_id,
         s.company_name as supplier_company_name,
         s.name as supplier_name,
         s.address as supplier_address,
         s.phone as supplier_phone,
-        s.email as supplier_email
+        s.email as supplier_email`
+        : `pi.*,
+        s.id as joined_supplier_id,
+        s.company_name as supplier_company_name,
+        s.name as supplier_name,
+        s.address as supplier_address,
+        s.phone as supplier_phone,
+        s.email as supplier_email`;
+
+    let sql = `
+      SELECT 
+        ${selectCols}
       FROM purchase_invoices pi
       LEFT JOIN suppliers s ON pi.supplier_id = s.id AND s.deleted_at IS NULL
       WHERE pi.deleted_at IS NULL
@@ -307,12 +331,17 @@ class PurchaseInvoiceRepository {
       params.push(filters.dateTo);
     }
 
-    sql += ' ORDER BY pi.created_at DESC';
+    if (useKeyset) {
+      sql += ` AND (pi.created_at, pi.id) < ($${paramCount++}::timestamptz, $${paramCount++}::uuid)`;
+      params.push(cursorDecoded.t, cursorDecoded.id);
+    }
+
+    sql += ' ORDER BY pi.created_at DESC, pi.id DESC';
     if (options.limit) {
       sql += ` LIMIT $${paramCount++}`;
       params.push(options.limit);
     }
-    if (options.offset) {
+    if (!useKeyset && options.offset) {
       sql += ` OFFSET $${paramCount++}`;
       params.push(options.offset);
     }
@@ -329,8 +358,12 @@ class PurchaseInvoiceRepository {
       // Map invoice_date to invoiceDate for frontend compatibility
       invoice.invoiceDate = invoice.invoice_date || invoice.invoiceDate || invoice.created_at || invoice.createdAt;
 
-      // Parse JSONB fields
-      if (invoice.items && typeof invoice.items === 'string') {
+      if (listMode === 'minimal') {
+        const n = invoice.line_item_count;
+        delete invoice.line_item_count;
+        invoice.lineItemCount = typeof n === 'number' ? n : parseInt(n, 10) || 0;
+        invoice.items = [];
+      } else if (invoice.items && typeof invoice.items === 'string') {
         try {
           invoice.items = JSON.parse(invoice.items);
         } catch (e) {
@@ -438,8 +471,11 @@ class PurchaseInvoiceRepository {
     const limit = options.limit || 20;
     const offset = (page - 1) * limit;
     const getAll = options.getAll === true;
+    const listMode = options.listMode === 'minimal' ? 'minimal' : 'full';
+    const cursorStr = options.cursor || options.keysetCursor;
+    const decoded = typeof cursorStr === 'string' ? decodeCursor(cursorStr) : null;
 
-    let countSql = 'SELECT COUNT(*) FROM purchase_invoices pi WHERE pi.deleted_at IS NULL';
+    let countSql = 'SELECT COUNT(*)::bigint AS c FROM purchase_invoices pi WHERE pi.deleted_at IS NULL';
     const countParams = [];
     let paramCount = 1;
     if (filter.supplierId || filter.supplier) {
@@ -463,7 +499,6 @@ class PurchaseInvoiceRepository {
       countSql += ` AND (pi.invoice_number ILIKE $${paramCount++} OR pi.notes ILIKE $${paramCount++} OR (pi.supplier_info->>'companyName') ILIKE $${paramCount++})`;
       countParams.push(term, term, term);
     }
-    // Same as list: filter by invoice date (bill date) only
     if (filter.dateFrom) {
       countSql += ` AND COALESCE(pi.invoice_date, pi.created_at) >= $${paramCount++}`;
       countParams.push(filter.dateFrom);
@@ -473,9 +508,41 @@ class PurchaseInvoiceRepository {
       countParams.push(filter.dateTo);
     }
     const countResult = await query(countSql, countParams);
-    const total = parseInt(countResult.rows[0].count, 10);
+    const total = parseInt(countResult.rows[0].c, 10);
+
+    if (decoded && !filter.search) {
+      const fetchLimit = limit + 1;
+      const invoices = await this.findAll(filter, {
+        listMode,
+        cursor: decoded,
+        limit: fetchLimit,
+        offset: undefined
+      });
+      const hasMore = invoices.length > limit;
+      const pageRows = hasMore ? invoices.slice(0, limit) : invoices;
+      let nextCursor = null;
+      if (hasMore && pageRows.length > 0) {
+        const last = pageRows[pageRows.length - 1];
+        const ca = last.created_at || last.createdAt;
+        nextCursor = encodeCursor(ca, last.id);
+      }
+      return {
+        invoices: pageRows,
+        total,
+        pagination: {
+          current: null,
+          pages: null,
+          total,
+          hasNext: hasMore,
+          hasPrev: false,
+          mode: 'keyset',
+          nextCursor
+        }
+      };
+    }
 
     const invoices = await this.findAll(filter, {
+      listMode,
       limit: getAll ? total : limit,
       offset: getAll ? 0 : offset
     });
@@ -484,8 +551,16 @@ class PurchaseInvoiceRepository {
       invoices,
       total,
       pagination: getAll
-        ? { current: 1, pages: 1, total, hasNext: false, hasPrev: false }
-        : { current: page, pages: Math.ceil(total / limit), total, hasNext: page < Math.ceil(total / limit), hasPrev: page > 1 }
+        ? { current: 1, pages: 1, total, hasNext: false, hasPrev: false, mode: 'offset' }
+        : {
+            current: page,
+            pages: Math.ceil(total / limit),
+            total,
+            hasNext: page < Math.ceil(total / limit),
+            hasPrev: page > 1,
+            mode: 'offset',
+            nextCursor: null
+          }
     };
   }
 

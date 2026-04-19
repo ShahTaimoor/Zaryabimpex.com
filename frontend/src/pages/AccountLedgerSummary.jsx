@@ -25,6 +25,7 @@ import { getId } from '../utils/entityId';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useTableRowVirtualizer, getVirtualTablePadding } from '../hooks/useTableRowVirtualizer';
 
 const AccountLedgerSummary = () => {
   const ALL_BANKS_VALUE = '__all_banks__';
@@ -450,6 +451,35 @@ const AccountLedgerSummary = () => {
         return String(a.voucherNo).localeCompare(String(b.voucherNo));
       });
   }, [allEntries, banks, selectedBankId, selectedBank, bankReceiptsData, bankPaymentsData, ALL_BANKS_VALUE]);
+
+  const customerEntries = useMemo(
+    () => customerDetail?.entries ?? detailedTransactionsData?.data?.entries ?? [],
+    [customerDetail?.entries, detailedTransactionsData?.data?.entries]
+  );
+  const supplierEntries = useMemo(
+    () => supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries ?? [],
+    [supplierDetail?.entries, detailedSupplierTransactionsData?.data?.entries]
+  );
+
+  const virtualizeCustomerLedgerRows = Boolean(selectedCustomerId && customerEntries.length > 35);
+  const virtualizeSupplierLedgerRows = Boolean(selectedSupplierId && supplierEntries.length > 35);
+  const virtualizeBankLedgerRows = bankLedgerRows.length > 35;
+
+  const { scrollRef: customerLedgerScrollRef, virtualizer: customerLedgerVirtualizer } = useTableRowVirtualizer({
+    rowCount: customerEntries.length,
+    enabled: virtualizeCustomerLedgerRows,
+    estimateSize: 52,
+  });
+  const { scrollRef: supplierLedgerScrollRef, virtualizer: supplierLedgerVirtualizer } = useTableRowVirtualizer({
+    rowCount: supplierEntries.length,
+    enabled: virtualizeSupplierLedgerRows,
+    estimateSize: 56,
+  });
+  const { scrollRef: bankLedgerScrollRef, virtualizer: bankLedgerVirtualizer } = useTableRowVirtualizer({
+    rowCount: bankLedgerRows.length,
+    enabled: virtualizeBankLedgerRows,
+    estimateSize: 48,
+  });
 
   const handleClearFilters = () => {
     setFilters({
@@ -937,7 +967,10 @@ const AccountLedgerSummary = () => {
                   <LoadingSpinner />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div
+                  ref={customerLedgerScrollRef}
+                  className={`overflow-x-auto ${virtualizeCustomerLedgerRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
+                >
                   <table className="min-w-full account-ledger-table">
                     <thead>
                       <tr className="bg-emerald-600 border-b border-emerald-700">
@@ -970,15 +1003,15 @@ const AccountLedgerSummary = () => {
                       </tr>
 
                       {/* Transaction Rows */}
-                      {(customerDetail?.entries ?? detailedTransactionsData?.data?.entries)?.length === 0 ? (
+                      {customerEntries.length === 0 ? (
                         <tr>
                           <td colSpan={showReturnColumn ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
                             <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
                             <p>No transactions found for this period</p>
                           </td>
                         </tr>
-                      ) : (
-                        (customerDetail?.entries ?? detailedTransactionsData?.data?.entries)?.map((entry, index) => (
+                      ) : !virtualizeCustomerLedgerRows ? (
+                        customerEntries.map((entry, index) => (
                           <tr key={index} className="hover:bg-gray-50 transition-colors">
                             <td className="px-4 py-3 text-sm text-gray-900">
                               {formatDate(entry.date)}
@@ -1019,11 +1052,76 @@ const AccountLedgerSummary = () => {
                             </td>
                           </tr>
                         ))
+                      ) : (
+                        (() => {
+                          const vItems = customerLedgerVirtualizer.getVirtualItems();
+                          const totalH = customerLedgerVirtualizer.getTotalSize();
+                          const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
+                          const cs = showReturnColumn ? 8 : 7;
+                          return (
+                            <>
+                              {padTop > 0 ? (
+                                <tr aria-hidden className="pointer-events-none">
+                                  <td colSpan={cs} className="p-0 border-0" style={{ height: padTop }} />
+                                </tr>
+                              ) : null}
+                              {vItems.map((vr) => {
+                                const entry = customerEntries[vr.index];
+                                return (
+                                  <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
+                                    <td className="px-4 py-3 text-sm text-gray-900">
+                                      {formatDate(entry.date)}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-900">
+                                      {entry.voucherNo || '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-900">
+                                      {entry.particular || '-'}
+                                    </td>
+                                    {showReturnColumn && (
+                                      <td className="px-4 py-3 text-sm text-gray-900">
+                                        {entry.source === 'Sale Return' ? 'Return' : ''}
+                                      </td>
+                                    )}
+                                    <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                      {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                      {entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}
+                                    </td>
+                                    <td className={`px-4 py-3 text-sm text-right font-semibold ${(entry.balance || 0) < 0 ? 'text-red-600' : 'text-gray-900'
+                                      }`}>
+                                      {formatCurrency(entry.balance || 0)}
+                                    </td>
+                                    <td className="px-4 py-3 text-center no-print">
+                                      {entry.referenceId && entry.source && ['sale', 'Sale Return', 'cash_receipt', 'bank_receipt', 'sale_payment'].includes((entry.source || '').toString()) ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handlePrintEntry(entry)}
+                                          disabled={printLoading}
+                                          className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+                                          title={entry.source === 'Sale Return' ? 'Print return' : (entry.source === 'cash_receipt' || entry.source === 'bank_receipt') ? 'Print receipt' : 'Print sale invoice'}
+                                        >
+                                          <Printer className="h-4 w-4" />
+                                        </button>
+                                      ) : null}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {padBottom > 0 ? (
+                                <tr aria-hidden className="pointer-events-none">
+                                  <td colSpan={cs} className="p-0 border-0" style={{ height: padBottom }} />
+                                </tr>
+                              ) : null}
+                            </>
+                          );
+                        })()
                       )}
 
                       {/* Return Total Row - shows when there are returns and return column is visible */}
                         {showReturnColumn &&
-                        ((customerDetail?.entries ?? detailedTransactionsData?.data?.entries)?.length > 0) &&
+                        customerEntries.length > 0 &&
                         (customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0) > 0 && (
                         <tr className="bg-emerald-100 font-medium">
                           <td className="px-4 py-3 text-sm text-gray-900"></td>
@@ -1040,20 +1138,20 @@ const AccountLedgerSummary = () => {
                       )}
 
                       {/* Total Row */}
-                      {(customerDetail?.entries ?? detailedTransactionsData?.data?.entries)?.length > 0 && (
+                      {customerEntries.length > 0 && (
                         <tr className="bg-emerald-200 font-semibold border-t-2 border-emerald-300">
                           <td className="px-4 py-3 text-sm text-gray-900"></td>
                           <td className="px-4 py-3 text-sm text-gray-900"></td>
                           <td className="px-4 py-3 text-sm text-gray-900">Total</td>
                           {showReturnColumn && <td className="px-4 py-3 text-sm text-gray-900"></td>}
                           <td className="px-4 py-3 text-sm text-right text-gray-900">
-                            {formatCurrency(sumDebits(customerDetail?.entries ?? detailedTransactionsData?.data?.entries))}
+                            {formatCurrency(sumDebits(customerEntries))}
                           </td>
                           <td className="px-4 py-3 text-sm text-right text-gray-900">
-                            {formatCurrency(sumCredits(customerDetail?.entries ?? detailedTransactionsData?.data?.entries))}
+                            {formatCurrency(sumCredits(customerEntries))}
                           </td>
-                          <td className={`px-4 py-3 text-sm text-right font-bold ${closingBalanceFromEntries(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0, customerDetail?.entries ?? detailedTransactionsData?.data?.entries, false) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                            {formatCurrency(closingBalanceFromEntries(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0, customerDetail?.entries ?? detailedTransactionsData?.data?.entries, false))}
+                          <td className={`px-4 py-3 text-sm text-right font-bold ${closingBalanceFromEntries(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0, customerEntries, false) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                            {formatCurrency(closingBalanceFromEntries(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0, customerEntries, false))}
                           </td>
                           <td className="px-4 py-3 text-sm text-center no-print"></td>
                         </tr>
@@ -1091,7 +1189,10 @@ const AccountLedgerSummary = () => {
                   <LoadingSpinner />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div
+                  ref={supplierLedgerScrollRef}
+                  className={`overflow-x-auto ${virtualizeSupplierLedgerRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
+                >
                   <table className="min-w-full account-ledger-table">
                     <thead>
                       <tr className="bg-blue-600 border-b border-blue-700">
@@ -1118,15 +1219,15 @@ const AccountLedgerSummary = () => {
                       </tr>
 
                       {/* Transaction Entries */}
-                      {(supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries)?.length === 0 ? (
+                      {supplierEntries.length === 0 ? (
                         <tr>
                           <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
                             <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
                             <p>No transactions found for this period</p>
                           </td>
                         </tr>
-                      ) : (
-                        (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries)?.map((entry, index) => (
+                      ) : !virtualizeSupplierLedgerRows ? (
+                        supplierEntries.map((entry, index) => (
                           <tr key={index} className="hover:bg-gray-50 transition-colors">
                             <td className="px-4 py-3 text-sm text-gray-900">
                               {formatDate(entry.date)}
@@ -1162,22 +1263,81 @@ const AccountLedgerSummary = () => {
                             </td>
                           </tr>
                         ))
+                      ) : (
+                        (() => {
+                          const vItems = supplierLedgerVirtualizer.getVirtualItems();
+                          const totalH = supplierLedgerVirtualizer.getTotalSize();
+                          const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
+                          return (
+                            <>
+                              {padTop > 0 ? (
+                                <tr aria-hidden className="pointer-events-none">
+                                  <td colSpan={7} className="p-0 border-0" style={{ height: padTop }} />
+                                </tr>
+                              ) : null}
+                              {vItems.map((vr) => {
+                                const entry = supplierEntries[vr.index];
+                                return (
+                                  <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
+                                    <td className="px-4 py-3 text-sm text-gray-900">
+                                      {formatDate(entry.date)}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-900">
+                                      {entry.voucherNo || '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-700 max-w-md whitespace-normal break-words">
+                                      {entry.particular || '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                      {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                      {entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}
+                                    </td>
+                                    <td className={`px-4 py-3 text-sm text-right font-semibold ${(entry.balance || 0) < 0 ? 'text-red-600' : 'text-gray-900'
+                                      }`}>
+                                      {formatCurrency(entry.balance || 0)}
+                                    </td>
+                                    <td className="px-4 py-3 text-center no-print">
+                                      {entry.referenceId && entry.source && ['purchase', 'Purchase Return', 'purchase_invoice', 'purchase_invoice_payment'].includes((entry.source || '').toString()) ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handlePrintEntry(entry)}
+                                          disabled={printLoading}
+                                          className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+                                          title={entry.source === 'Purchase Return' ? 'Print return' : 'Print purchase invoice'}
+                                        >
+                                          <Printer className="h-4 w-4" />
+                                        </button>
+                                      ) : null}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {padBottom > 0 ? (
+                                <tr aria-hidden className="pointer-events-none">
+                                  <td colSpan={7} className="p-0 border-0" style={{ height: padBottom }} />
+                                </tr>
+                              ) : null}
+                            </>
+                          );
+                        })()
                       )}
 
                       {/* Total Row */}
-                      {(supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries)?.length > 0 && (
+                      {supplierEntries.length > 0 && (
                         <tr className="bg-blue-200 font-semibold border-t-2 border-blue-300">
                           <td className="px-4 py-3 text-sm text-gray-900"></td>
                           <td className="px-4 py-3 text-sm text-gray-900"></td>
                           <td className="px-4 py-3 text-sm text-gray-900">Total</td>
                           <td className="px-4 py-3 text-sm text-right text-gray-900">
-                            {formatCurrency(sumDebits(supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries))}
+                            {formatCurrency(sumDebits(supplierEntries))}
                           </td>
                           <td className="px-4 py-3 text-sm text-right text-gray-900">
-                            {formatCurrency(sumCredits(supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries))}
+                            {formatCurrency(sumCredits(supplierEntries))}
                           </td>
-                          <td className={`px-4 py-3 text-sm text-right font-bold ${closingBalanceFromEntries(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0, supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries, true) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                            {formatCurrency(closingBalanceFromEntries(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0, supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries, true))}
+                          <td className={`px-4 py-3 text-sm text-right font-bold ${closingBalanceFromEntries(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0, supplierEntries, true) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                            {formatCurrency(closingBalanceFromEntries(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0, supplierEntries, true))}
                           </td>
                           <td className="px-4 py-3 text-center no-print"></td>
                         </tr>
@@ -1205,7 +1365,10 @@ const AccountLedgerSummary = () => {
             <div className="px-6 py-4 border-b border-gray-300 bg-gray-100">
               <h2 className="text-lg font-semibold text-gray-900">Bank Ledger</h2>
             </div>
-            <div className="overflow-x-auto">
+            <div
+              ref={bankLedgerScrollRef}
+              className={`overflow-x-auto ${virtualizeBankLedgerRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
+            >
               <table className="min-w-full border border-gray-300">
                 <thead className="bg-gray-100">
                   <tr>
@@ -1224,7 +1387,7 @@ const AccountLedgerSummary = () => {
                         {!selectedBankId ? 'Please select a bank to view ledger entries.' : 'No bank ledger entries found for this period.'}
                       </td>
                     </tr>
-                  ) : (
+                  ) : !virtualizeBankLedgerRows ? (
                     bankLedgerRows.map((entry, index) => (
                       <tr key={`${entry.voucherNo}-${entry.date}-${index}`} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{formatDate(entry.date)}</td>
@@ -1235,6 +1398,39 @@ const AccountLedgerSummary = () => {
                         <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.creditAmount)}</td>
                       </tr>
                     ))
+                  ) : (
+                    (() => {
+                      const vItems = bankLedgerVirtualizer.getVirtualItems();
+                      const totalH = bankLedgerVirtualizer.getTotalSize();
+                      const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
+                      return (
+                        <>
+                          {padTop > 0 ? (
+                            <tr aria-hidden className="pointer-events-none">
+                              <td colSpan={6} className="p-0 border-0" style={{ height: padTop }} />
+                            </tr>
+                          ) : null}
+                          {vItems.map((vr) => {
+                            const entry = bankLedgerRows[vr.index];
+                            return (
+                              <tr key={vr.key} className="hover:bg-gray-50" style={{ height: vr.size }}>
+                                <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{formatDate(entry.date)}</td>
+                                <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.voucherNo}</td>
+                                <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.bankName}</td>
+                                <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.particular}</td>
+                                <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.debitAmount)}</td>
+                                <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.creditAmount)}</td>
+                              </tr>
+                            );
+                          })}
+                          {padBottom > 0 ? (
+                            <tr aria-hidden className="pointer-events-none">
+                              <td colSpan={6} className="p-0 border-0" style={{ height: padBottom }} />
+                            </tr>
+                          ) : null}
+                        </>
+                      );
+                    })()
                   )}
                 </tbody>
               </table>

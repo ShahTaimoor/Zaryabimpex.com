@@ -135,8 +135,15 @@ class PurchaseInvoiceService {
     const page = parseInt(queryParams.page) || 1;
     const useAll = queryParams.all === true || queryParams.all === 'true';
     const limit = useAll ? 999999 : (parseInt(queryParams.limit) || 20);
+    const listMode = queryParams.listMode === 'minimal' ? 'minimal' : 'full';
     const filter = await this.buildFilter(queryParams);
-    const result = await purchaseInvoiceRepository.findWithPagination(filter, { page, limit });
+    const result = await purchaseInvoiceRepository.findWithPagination(filter, {
+      page,
+      limit,
+      getAll: useAll,
+      listMode,
+      cursor: queryParams.cursor
+    });
 
     // Repository now handles invoiceNumber mapping and supplierInfo transformation
     // Just ensure items are parsed if needed (should already be done by repository)

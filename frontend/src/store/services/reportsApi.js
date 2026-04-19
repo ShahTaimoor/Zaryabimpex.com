@@ -8,6 +8,7 @@ export const reportsApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      keepUnusedDataFor: 90,
       providesTags: [{ type: 'Reports', id: 'SALES_REPORT' }],
     }),
     getProductReport: builder.query({
@@ -16,6 +17,7 @@ export const reportsApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      keepUnusedDataFor: 90,
       providesTags: [{ type: 'Reports', id: 'PRODUCT_REPORT' }],
     }),
     getCustomerReport: builder.query({
@@ -24,6 +26,7 @@ export const reportsApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      keepUnusedDataFor: 90,
       providesTags: [{ type: 'Reports', id: 'CUSTOMER_REPORT' }],
     }),
     getInventoryReport: builder.query({
@@ -32,6 +35,7 @@ export const reportsApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      keepUnusedDataFor: 90,
       providesTags: [{ type: 'Reports', id: 'INVENTORY_REPORT' }],
     }),
     getSummaryCards: builder.query({
@@ -48,6 +52,7 @@ export const reportsApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      keepUnusedDataFor: 90,
       providesTags: [{ type: 'Reports', id: 'PARTY_BALANCE' }],
     }),
     getFinancialReport: builder.query({
@@ -56,6 +61,7 @@ export const reportsApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      keepUnusedDataFor: 90,
       providesTags: [{ type: 'Reports', id: 'FINANCIAL_REPORT' }],
     }),
     getBankCashSummary: builder.query({
@@ -64,6 +70,7 @@ export const reportsApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      keepUnusedDataFor: 90,
       providesTags: [{ type: 'Reports', id: 'BANK_CASH_SUMMARY' }],
     }),
     getBackdateReport: builder.query({
@@ -71,6 +78,7 @@ export const reportsApi = api.injectEndpoints({
         url: 'backdate-report',
         method: 'get',
       }),
+      keepUnusedDataFor: 90,
       providesTags: [{ type: 'Reports', id: 'BACKDATE_REPORT' }],
     }),
     getPurchaseBySupplierReport: builder.query({
@@ -79,6 +87,7 @@ export const reportsApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      keepUnusedDataFor: 90,
       providesTags: [{ type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' }],
     }),
   }),

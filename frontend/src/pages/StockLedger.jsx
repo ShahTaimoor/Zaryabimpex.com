@@ -21,6 +21,7 @@ import { getCurrentDatePakistan, getDateDaysAgo, formatDateForInput } from '../u
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
 /** Initial rows when opening customer/supplier dropdown (no search yet) */
 const ENTITY_DROPDOWN_INITIAL_LIMIT = 20;
@@ -50,6 +51,9 @@ export const StockLedger = () => {
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
   const [productSearchQuery, setProductSearchQuery] = useState('');
+  const debouncedCustomerSearch = useDebouncedValue(customerSearchQuery, 300);
+  const debouncedSupplierSearch = useDebouncedValue(supplierSearchQuery, 300);
+  const debouncedProductSearch = useDebouncedValue(productSearchQuery, 300);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
@@ -98,7 +102,7 @@ export const StockLedger = () => {
     }
   );
 
-  const customerListLimit = customerSearchQuery.trim()
+  const customerListLimit = debouncedCustomerSearch.trim()
     ? ENTITY_DROPDOWN_SEARCH_LIMIT
     : ENTITY_DROPDOWN_INITIAL_LIMIT;
 
@@ -106,7 +110,7 @@ export const StockLedger = () => {
     {
       limit: customerListLimit,
       page: 1,
-      ...(customerSearchQuery.trim() ? { search: customerSearchQuery.trim() } : {}),
+      ...(debouncedCustomerSearch.trim() ? { search: debouncedCustomerSearch.trim() } : {}),
     },
     { skip: !showCustomerDropdown }
   );
@@ -115,7 +119,7 @@ export const StockLedger = () => {
     return customersData?.data?.customers || customersData?.customers || customersData?.data || [];
   }, [customersData]);
 
-  const supplierListLimit = supplierSearchQuery.trim()
+  const supplierListLimit = debouncedSupplierSearch.trim()
     ? ENTITY_DROPDOWN_SEARCH_LIMIT
     : ENTITY_DROPDOWN_INITIAL_LIMIT;
 
@@ -123,7 +127,7 @@ export const StockLedger = () => {
     {
       limit: supplierListLimit,
       page: 1,
-      ...(supplierSearchQuery.trim() ? { search: supplierSearchQuery.trim() } : {}),
+      ...(debouncedSupplierSearch.trim() ? { search: debouncedSupplierSearch.trim() } : {}),
     },
     { skip: !showSupplierDropdown }
   );
@@ -132,7 +136,7 @@ export const StockLedger = () => {
     return suppliersData?.data?.suppliers || suppliersData?.suppliers || suppliersData?.data || [];
   }, [suppliersData]);
 
-  const productListLimit = productSearchQuery.trim()
+  const productListLimit = debouncedProductSearch.trim()
     ? ENTITY_DROPDOWN_SEARCH_LIMIT
     : ENTITY_DROPDOWN_INITIAL_LIMIT;
 
@@ -140,7 +144,7 @@ export const StockLedger = () => {
     {
       limit: productListLimit,
       page: 1,
-      ...(productSearchQuery.trim() ? { search: productSearchQuery.trim() } : {}),
+      ...(debouncedProductSearch.trim() ? { search: debouncedProductSearch.trim() } : {}),
     },
     { skip: !showProductDropdown }
   );

@@ -1,5 +1,4 @@
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+// jsPDF + autotable are loaded only when generating a products PDF (keeps initial bundle smaller).
 
 // Resize and load image as base64
 const loadImage = (url) => {
@@ -8,7 +7,6 @@ const loadImage = (url) => {
     const img = new Image();
     img.crossOrigin = 'Anonymous';
     img.onload = () => {
-      // Resize logic to prevent memory bloat
       const MAX_DIM = 100;
       let width = img.width;
       let height = img.height;
@@ -40,17 +38,23 @@ const loadImage = (url) => {
 };
 
 export const generateProductsPdf = async (products, onProgress) => {
-  const doc = new jsPDF('landscape'); // Landscape to give columns more breathing room
+  const [jspdfMod, autoTableModule] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+  const { jsPDF } = jspdfMod;
+  const autoTable = autoTableModule.default;
+
+  const doc = new jsPDF('landscape');
   doc.setFontSize(14);
-  doc.text("Products Report", 14, 16);
+  doc.text('Products Report', 14, 16);
 
   const rows = [];
-  const images = []; // Store images separately to avoid autoTable printing base64 text
+  const images = [];
   const BATCH_SIZE = 5;
 
   onProgress?.(5);
 
-  // Process images in batches so the UI doesn't freeze
   for (let i = 0; i < products.length; i += BATCH_SIZE) {
     const batch = products.slice(i, i + BATCH_SIZE);
     await Promise.all(
@@ -61,7 +65,7 @@ export const generateProductsPdf = async (products, onProgress) => {
 
         rows[absoluteIdx] = [
           absoluteIdx + 1,
-          '', // Empty string for Image column so text doesn't print
+          '',
           p.name || 'N/A',
           p.categoryName || p.category?.name || (typeof p.category === 'string' ? p.category : '-'),
           p.pricing?.cost || 0,
@@ -71,8 +75,7 @@ export const generateProductsPdf = async (products, onProgress) => {
         ];
       })
     );
-    // Yield to the main thread briefly
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
     const percent = Math.floor(5 + ((i + BATCH_SIZE) / products.length) * 80);
     onProgress?.(Math.min(percent, 85));
   }
@@ -81,17 +84,17 @@ export const generateProductsPdf = async (products, onProgress) => {
 
   autoTable(doc, {
     startY: 24,
-    head: [["S.No", "Image", "Product Name", "Category", "Cost Price", "Retail Price", "Whsl Price", "Stock"]],
+    head: [['S.No', 'Image', 'Product Name', 'Category', 'Cost Price', 'Retail Price', 'Whsl Price', 'Stock']],
     body: rows,
     styles: { fontSize: 8, cellPadding: 3, valign: 'middle' },
     headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold', halign: 'center' },
     columnStyles: {
       0: { cellWidth: 12, halign: 'center' },
-      1: { cellWidth: 20, minCellHeight: 20, halign: 'center' }, // Image column
+      1: { cellWidth: 20, minCellHeight: 20, halign: 'center' },
     },
-    didDrawCell: function (data) {
+    didDrawCell(data) {
       if (data.column.index === 1 && data.cell.section === 'body') {
-        const rowIndex = data.row.index; // autoTable maps body array rows sequentially from 0
+        const rowIndex = data.row.index;
         const imgData = images[rowIndex];
 
         if (imgData && typeof imgData === 'string' && imgData.startsWith('data:image')) {

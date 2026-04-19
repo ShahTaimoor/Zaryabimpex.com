@@ -3,18 +3,10 @@
  * Complete section for period-over-period comparisons with Recharts
  */
 
-import React, { useState } from 'react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer
-} from 'recharts';
+import React, { useState, Suspense, lazy } from 'react';
 import { BarChart3 } from 'lucide-react';
+
+const PeriodOverviewBarChart = lazy(() => import('./PeriodOverviewBarChart'));
 import PeriodSelector from './PeriodSelector';
 import PeriodComparisonCard from './PeriodComparisonCard';
 import ComparisonChart from './ComparisonChart';
@@ -154,30 +146,17 @@ export const PeriodComparisonSection = ({
           {combinedChartData.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden p-4">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Performance overview</h3>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart
-                  data={combinedChartData}
-                  margin={{ top: 8, right: 16, left: 8, bottom: 24 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                  <XAxis
-                    dataKey="metric"
-                    tick={{ fontSize: 11 }}
-                    stroke="#6b7280"
-                    interval={0}
-                    textAnchor="middle"
-                  />
-                  <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" width={48} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }}
-                    formatter={(value) => [Number(value).toLocaleString(), '']}
-                    labelFormatter={(label) => label.replace(/\n/g, ' ')}
-                  />
-                  <Legend />
-                  <Bar dataKey="previous" name={previousLabel} fill="#94a3b8" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="current" name={currentLabel} fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              </ResponsiveContainer>
+              <Suspense
+                fallback={(
+                  <div className="h-[280px] bg-gray-50 rounded-lg animate-pulse border border-gray-100" aria-hidden />
+                )}
+              >
+                <PeriodOverviewBarChart
+                  combinedChartData={combinedChartData}
+                  currentLabel={currentLabel}
+                  previousLabel={previousLabel}
+                />
+              </Suspense>
             </div>
           )}
 

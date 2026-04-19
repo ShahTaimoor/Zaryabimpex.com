@@ -21,7 +21,6 @@ export const supplierBalancesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { supplierId }) => [
         { type: 'Suppliers', id: supplierId },
         { type: 'Suppliers', id: 'LIST' },
-        { type: 'Accounting' },
         { type: 'Accounting', id: 'SUPPLIER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -47,7 +46,6 @@ export const supplierBalancesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { supplierId }) => [
         { type: 'Suppliers', id: supplierId },
         { type: 'Suppliers', id: 'LIST' },
-        { type: 'Accounting' },
         { type: 'Accounting', id: 'SUPPLIER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -55,6 +53,8 @@ export const supplierBalancesApi = api.injectEndpoints({
         { type: 'Accounting', id: 'TRIAL_BALANCE' },
         { type: 'ChartOfAccounts', id: 'LIST' },
         { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'CashPayments', id: 'LIST' },
+        { type: 'BankPayments', id: 'LIST' },
         { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
@@ -70,7 +70,6 @@ export const supplierBalancesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, supplierId) => [
         { type: 'Suppliers', id: supplierId },
         { type: 'Suppliers', id: 'LIST' },
-        { type: 'Accounting' },
         { type: 'Accounting', id: 'SUPPLIER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -82,6 +81,7 @@ export const supplierBalancesApi = api.injectEndpoints({
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     canAcceptPurchase: builder.query({
@@ -109,7 +109,6 @@ export const supplierBalancesApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         { type: 'Suppliers', id: 'LIST' },
-        { type: 'Accounting' },
         { type: 'Accounting', id: 'SUPPLIER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -122,6 +121,7 @@ export const supplierBalancesApi = api.injectEndpoints({
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),

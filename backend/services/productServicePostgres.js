@@ -174,7 +174,13 @@ class ProductServicePostgres {
     if (!getAll && (!Number.isFinite(limit) || limit < 1)) limit = 20;
 
     const filters = this.buildFilter(queryParams);
-    const result = await productRepository.findWithPagination(filters, { page, limit });
+    const listMode = queryParams.listMode === 'minimal' ? 'minimal' : 'full';
+    const result = await productRepository.findWithPagination(filters, {
+      page,
+      limit,
+      listMode,
+      cursor: queryParams.cursor
+    });
 
     const categoryIds = [...new Set(result.products.map(p => p.category_id).filter(Boolean))];
     const categoryMap = await getCategoryMap(categoryIds);

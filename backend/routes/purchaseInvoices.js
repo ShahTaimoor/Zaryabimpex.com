@@ -67,6 +67,8 @@ router.get('/', [
   query('status').optional().isIn(['draft', 'confirmed', 'received', 'paid', 'cancelled', 'closed']),
   query('paymentStatus').optional().isIn(['pending', 'paid', 'partial', 'overdue']),
   query('invoiceType').optional().isIn(['purchase', 'return', 'adjustment']),
+  query('listMode').optional().isIn(['full', 'minimal']),
+  query('cursor').optional().isString().trim(),
   ...validateDateParams,
   handleValidationErrors,
   processDateFilter(['invoiceDate', 'createdAt']),

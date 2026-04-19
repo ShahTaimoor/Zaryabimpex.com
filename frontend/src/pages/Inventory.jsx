@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { 
   Package, 
   TrendingUp, 
@@ -51,6 +52,12 @@ export const Inventory = () => {
   const navigate = useNavigate();
   const { openTab } = useTab();
 
+  const debouncedSearch = useDebouncedValue(searchTerm, 350);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, statusFilter, lowStockFilter, warehouseFilter]);
+
   // Fetch inventory data
   const {
     data: inventoryData,
@@ -59,14 +66,14 @@ export const Inventory = () => {
     refetch,
   } = useGetInventoryQuery(
     {
-      search: searchTerm,
+      search: debouncedSearch,
       status: statusFilter,
       lowStock: lowStockFilter,
       warehouse: warehouseFilter,
       page: currentPage,
       limit: itemsPerPage,
     },
-    { refetchOnMountOrArgChange: true }
+    { refetchOnMountOrArgChange: 120 }
   );
 
   // Fetch inventory summary
@@ -74,11 +81,11 @@ export const Inventory = () => {
     data: summaryData,
     isLoading: summaryLoading,
     error: summaryError,
-  } = useGetInventorySummaryQuery(undefined, { refetchOnMountOrArgChange: true, pollingInterval: 30000 });
+  } = useGetInventorySummaryQuery(undefined, { refetchOnMountOrArgChange: 180, pollingInterval: 30000 });
 
   // Fetch low stock items
   const { data: lowStockData, isLoading: lowStockLoading } = useGetLowStockItemsQuery(undefined, {
-    refetchOnMountOrArgChange: true,
+    refetchOnMountOrArgChange: 180,
     pollingInterval: 60000,
   });
 

@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Phone
 } from 'lucide-react';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useCreateTransactionMutation } from '../store/services/dropShippingApi';
 import { useLazySearchSuppliersQuery, useGetActiveSuppliersQuery } from '../store/services/suppliersApi';
 import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
@@ -47,6 +48,8 @@ const DropShipping = () => {
   // Product Section
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productSearchTerm, setProductSearchTerm] = useState('');
+  const debouncedProductSearch = useDebouncedValue(productSearchTerm, 300);
+  const debouncedSupplierSearch = useDebouncedValue(supplierSearchTerm, 300);
   const [quantity, setQuantity] = useState(1);
   const [supplierRate, setSupplierRate] = useState('');
   const [customerRate, setCustomerRate] = useState('');
@@ -64,14 +67,14 @@ const DropShipping = () => {
   const [suppliersData, setSuppliersData] = React.useState(null);
 
   React.useEffect(() => {
-    if (supplierSearchTerm.length > 0) {
-      searchSuppliers(supplierSearchTerm).then(({ data }) => {
+    if (debouncedSupplierSearch.length > 0) {
+      searchSuppliers(debouncedSupplierSearch).then(({ data }) => {
         setSuppliersData(data);
       });
     } else {
       setSuppliersData(activeSuppliersData);
     }
-  }, [supplierSearchTerm, activeSuppliersData, searchSuppliers]);
+  }, [debouncedSupplierSearch, activeSuppliersData, searchSuppliers]);
 
   const {
     customers,
@@ -80,9 +83,9 @@ const DropShipping = () => {
   } = useDebouncedCustomerSearch(customerSearchTerm, { selectedCustomer: customer });
 
   const { data: productsData } = useGetProductsQuery(
-    { search: productSearchTerm, limit: 50 },
+    { search: debouncedProductSearch, limit: 50 },
     {
-      skip: productSearchTerm.length === 0,
+      skip: debouncedProductSearch.length === 0,
       keepPreviousData: true,
     }
   );

@@ -4,6 +4,17 @@ const customerRepository = require('../repositories/CustomerRepository');
 const salesService = require('./salesService');
 const ReturnRepository = require('../repositories/postgres/ReturnRepository');
 const AccountingService = require('./accountingService');
+const { getCached } = require('../utils/ttlCache');
+const { stableQueryKey } = require('../utils/stableQueryKey');
+
+const REPORT_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.REPORT_CACHE_TTL_MS || '90000', 10));
+
+function reportsCache(methodName, filters, factory) {
+  if (filters && (String(filters.nocache || '') === '1' || String(filters.nocache || '').toLowerCase() === 'true')) {
+    return factory();
+  }
+  return getCached(`reports:${methodName}:${stableQueryKey(filters)}`, REPORT_CACHE_TTL_MS, factory);
+}
 
 class ReportsService {
   /**
@@ -35,6 +46,7 @@ class ReportsService {
    * @returns {Promise<object>}
    */
   async getSalesReport(filters) {
+    return reportsCache('getSalesReport', filters, async () => {
     const { query } = require('../config/postgres');
     const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
 
@@ -213,6 +225,7 @@ class ReportsService {
       groupBy,
       dateRange: { from: dateFrom, to: dateTo }
     };
+    });
   }
 
   /**
@@ -221,6 +234,7 @@ class ReportsService {
    * @returns {Promise<object>}
    */
   async getProductReport(queryParams) {
+    return reportsCache('getProductReport', queryParams, async () => {
     const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
     
     // Use Pakistan timezone for date filtering
@@ -302,6 +316,7 @@ class ReportsService {
       },
       total: Object.keys(productSales).length
     };
+    });
   }
 
   /**
@@ -310,6 +325,7 @@ class ReportsService {
    * @returns {Promise<object>}
    */
   async getCustomerReport(queryParams) {
+    return reportsCache('getCustomerReport', queryParams, async () => {
     const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
     
     // Use Pakistan timezone for date filtering
@@ -428,6 +444,7 @@ class ReportsService {
         businessType
       }
     };
+    });
   }
 
   /**
@@ -436,6 +453,7 @@ class ReportsService {
    * @returns {Promise<object>}
    */
   async getStockSummaryReport(filters) {
+    return reportsCache('getStockSummaryReport', filters, async () => {
     const { query } = require('../config/postgres');
     const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
 
@@ -658,6 +676,7 @@ class ReportsService {
       reportType: 'stock-summary',
       filters: { categoryId, search: searchTerm || undefined, dateFrom: filters.dateFrom, dateTo: filters.dateTo }
     };
+    });
   }
 
   /**
@@ -666,6 +685,7 @@ class ReportsService {
    * @returns {Promise<object>}
    */
   async getInventoryReport(filters) {
+    return reportsCache('getInventoryReport', filters, async () => {
     const reportType = filters.type || 'summary';
     if (reportType === 'stock-summary') {
       return this.getStockSummaryReport(filters);
@@ -791,6 +811,7 @@ class ReportsService {
       reportType,
       filters: { categoryId }
     };
+    });
   }
 
   /**
@@ -799,6 +820,7 @@ class ReportsService {
    * @returns {Promise<object>}
    */
   async getFinancialReport(filters) {
+    return reportsCache('getFinancialReport', filters, async () => {
     const { query } = require('../config/postgres');
     const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
 
@@ -928,6 +950,7 @@ class ReportsService {
       reportType,
       dateRange: { from: dateFrom, to: dateTo }
     };
+    });
   }
 
   /**
@@ -936,6 +959,7 @@ class ReportsService {
    * @returns {Promise<object>}
    */
   async getSummaryCards(filters) {
+    return reportsCache('getSummaryCards', filters, async () => {
     const { query } = require('../config/postgres');
     const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
 
@@ -1044,6 +1068,7 @@ class ReportsService {
       totalCustomerPayments: parseFloat(customerPayments.rows[0].total || 0),
       totalSupplierPayments: parseFloat(supplierPayments.rows[0].total || 0),
     };
+    });
   }
 
   /**
@@ -1052,6 +1077,7 @@ class ReportsService {
    * @returns {Promise<object>}
    */
   async getBankCashSummary(filters) {
+    return reportsCache('getBankCashSummary', filters, async () => {
     const { query } = require('../config/postgres');
     const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
 
@@ -1186,6 +1212,7 @@ class ReportsService {
       },
       dateRange: { from: dateFrom, to: dateTo }
     };
+    });
   }
 
   /**
@@ -1194,6 +1221,7 @@ class ReportsService {
    * @returns {Promise<object>}
    */
   async getPartyBalanceReport(filters) {
+    return reportsCache('getPartyBalanceReport', filters, async () => {
     const { query } = require('../config/postgres');
     const partyType = filters.partyType || 'customer';
     const city = filters.city && filters.city !== 'all' ? filters.city : null;
@@ -1281,6 +1309,7 @@ class ReportsService {
       partyType,
       city: city || 'All Cities'
     };
+    });
   }
 
   /**
@@ -1290,6 +1319,7 @@ class ReportsService {
    * @returns {Promise<{ data: Array, summary }>}
    */
   async getPurchaseBySupplierReport(filters) {
+    return reportsCache('getPurchaseBySupplierReport', filters, async () => {
     const { query } = require('../config/postgres');
     const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
 
@@ -1446,6 +1476,7 @@ class ReportsService {
       }),
       summary
     };
+    });
   }
 }
 

@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { LoadingButton } from '@/components/LoadingSpinner';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import BaseModal from '@/components/BaseModal';
+import { compressImageFileToDataUrl } from '@/utils/imageCompress';
 
 /** Max rows shown in dropdown (server search caps higher; we slice in hook). */
 const PRODUCT_DROPDOWN_LIMIT = 50;
@@ -184,7 +185,7 @@ function ProductSearchComponent({
     // We only want to recalculate when priceType or selectedProduct changes.
   }, [priceType, selectedProduct]);
 
-  const handleManualImageFile = useCallback((e) => {
+  const handleManualImageFile = useCallback(async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -197,12 +198,16 @@ function ProductSearchComponent({
       e.target.value = '';
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const r = reader.result;
-      setManualProductImage(typeof r === 'string' ? r : null);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const dataUrl = await compressImageFileToDataUrl(file, {
+        maxDim: 1600,
+        maxBytes: MAX_MANUAL_IMAGE_BYTES,
+        quality: 0.85,
+      });
+      setManualProductImage(dataUrl);
+    } catch {
+      toast.error('Could not process image');
+    }
     e.target.value = '';
   }, []);
 
@@ -555,8 +560,8 @@ function ProductSearchComponent({
                       onChange={handleManualImageFile}
                     />
                     {manualProductImage ? (
-                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-gray-200">
-                        <img src={manualProductImage} alt="" className="h-full w-full object-cover" />
+                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+                        <img src={manualProductImage} alt="" width={40} height={40} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                         <button
                           type="button"
                           className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80"
@@ -584,7 +589,7 @@ function ProductSearchComponent({
                   onClick={() => setShowImagePreview(true)}
                   title="Click to view full size"
                 >
-                  <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="h-full w-full object-cover" />
+                  <img src={selectedProduct.imageUrl} alt="" width={40} height={40} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
                     <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
@@ -867,8 +872,8 @@ function ProductSearchComponent({
                       onChange={handleManualImageFile}
                     />
                     {manualProductImage ? (
-                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-gray-200">
-                        <img src={manualProductImage} alt="" className="h-full w-full object-cover" />
+                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+                        <img src={manualProductImage} alt="" width={40} height={40} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                         <button
                           type="button"
                           className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80"
@@ -896,7 +901,7 @@ function ProductSearchComponent({
                   onClick={() => setShowImagePreview(true)}
                   title="Click to view full size"
                 >
-                  <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="h-full w-full object-cover" />
+                  <img src={selectedProduct.imageUrl} alt="" width={40} height={40} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
                     <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>

@@ -15,8 +15,12 @@ export const purchaseInvoicesApi = api.injectEndpoints({
       query: (params) => ({
         url: 'purchase-invoices',
         method: 'get',
-        params,
+        params: {
+          listMode: 'minimal',
+          ...params,
+        },
       }),
+      keepUnusedDataFor: 60,
       providesTags: (result) =>
         result?.data?.purchaseInvoices
           ? [

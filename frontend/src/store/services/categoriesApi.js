@@ -8,6 +8,7 @@ export const categoriesApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      keepUnusedDataFor: 90,
       providesTags: [{ type: 'Categories', id: 'LIST' }],
     }),
     getCategoryTree: builder.query({
@@ -15,6 +16,7 @@ export const categoriesApi = api.injectEndpoints({
         url: 'categories/tree',
         method: 'get',
       }),
+      keepUnusedDataFor: 180,
       providesTags: [{ type: 'Categories', id: 'TREE' }],
     }),
     createCategory: builder.mutation({

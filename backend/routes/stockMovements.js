@@ -53,6 +53,8 @@ router.get('/', [
   ...validateDateParams,
   query('location').optional({ checkFalsy: true }).isString().trim(),
   query('status').optional({ checkFalsy: true }).isIn(['pending', 'completed', 'cancelled', 'reversed']).withMessage('Invalid status'),
+  query('listMode').optional({ checkFalsy: true }).isIn(['full', 'minimal']),
+  query('cursor').optional({ checkFalsy: true }).isString().trim(),
   handleValidationErrors,
   processDateFilter(['movementDate', 'createdAt']),
 ], async (req, res) => {
@@ -107,7 +109,9 @@ router.get('/', [
 
     const result = await stockMovementRepository.findWithPagination(filter, {
       page: parseInt(page),
-      limit: parseInt(limit)
+      limit: parseInt(limit),
+      listMode: req.query.listMode === 'minimal' ? 'minimal' : 'full',
+      cursor: req.query.cursor
     });
 
     const movements = result.movements;

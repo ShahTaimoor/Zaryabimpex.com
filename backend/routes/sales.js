@@ -98,6 +98,8 @@ router.get('/', [
   query('status').optional({ checkFalsy: true }).isIn(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'returned']),
   query('paymentStatus').optional({ checkFalsy: true }).isIn(['pending', 'paid', 'partial', 'refunded']),
   query('orderType').optional({ checkFalsy: true }).isIn(['retail', 'wholesale', 'return', 'exchange']),
+  query('listMode').optional().isIn(['full', 'minimal']),
+  query('cursor').optional().isString().trim(),
   ...validateDateParams,
   handleValidationErrors,
   processDateFilter(['billDate', 'createdAt']), // Support both billDate and createdAt

@@ -17,6 +17,7 @@ export default defineConfig({
     include: ['react', 'react-dom'],
   },
   build: {
+    // `vite build` emits hashed filenames under dist/assets/ by default — set long-cache headers on that path in nginx/CDN.
     rollupOptions: {
       output: {
         manualChunks: {
@@ -26,6 +27,7 @@ export default defineConfig({
           'vendor-forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
           'vendor-editors': ['react-quill'],
           'vendor-ui': ['@headlessui/react', '@radix-ui/react-slot', 'lucide-react'],
+          'vendor-virtual': ['@tanstack/react-virtual'],
         },
       },
     },

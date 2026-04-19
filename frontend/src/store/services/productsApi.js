@@ -13,6 +13,9 @@ export const productsApi = api.injectEndpoints({
             filteredParams[key] = value;
           }
         });
+        if (!filteredParams.listMode) {
+          filteredParams.listMode = 'minimal';
+        }
         return {
           url: 'products',
           method: 'get',

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+
+const NotesQuillEditor = lazy(() => import('./NotesQuillEditor'));
 import {
   MessageSquare,
   Plus,
@@ -43,6 +44,7 @@ const NotesPanel = ({
   const [selectedNoteId, setSelectedNoteId] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 350);
   const [filterPrivate, setFilterPrivate] = useState(null);
   const [filterTags, setFilterTags] = useState([]);
   const [availableTags, setAvailableTags] = useState([]);
@@ -455,15 +457,21 @@ const NotesPanel = ({
                       Note Content
                     </label>
                     <div className="relative">
-                      <ReactQuill
-                        ref={quillRef}
-                        theme="snow"
-                        value={noteHtmlContent}
-                        onChange={handleEditorChange}
-                        modules={quillModules}
-                        placeholder="Type @ to mention someone..."
-                        className="bg-white"
-                      />
+                      <Suspense
+                        fallback={(
+                          <div className="h-40 bg-gray-50 rounded border border-gray-200 animate-pulse" aria-hidden />
+                        )}
+                      >
+                        <NotesQuillEditor
+                          ref={quillRef}
+                          theme="snow"
+                          value={noteHtmlContent}
+                          onChange={handleEditorChange}
+                          modules={quillModules}
+                          placeholder="Type @ to mention someone..."
+                          className="bg-white"
+                        />
+                      </Suspense>
                       {showMentions && mentionUsers.length > 0 && (
                         <div className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto w-full">
                           {mentionUsers.map(user => (

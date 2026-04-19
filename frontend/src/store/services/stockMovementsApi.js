@@ -19,6 +19,7 @@ export const stockMovementsApi = api.injectEndpoints({
           params: filteredParams,
         };
       },
+      keepUnusedDataFor: 60,
       providesTags: (result) => {
         const list = result?.data?.movements || result?.movements || result?.items || [];
         return list.length

@@ -19,6 +19,7 @@ export const notesApi = api.injectEndpoints({
           params: filteredParams,
         };
       },
+      keepUnusedDataFor: 60,
       providesTags: (result) => {
         const list = result?.data?.notes || result?.notes || result?.items || [];
         return list.length

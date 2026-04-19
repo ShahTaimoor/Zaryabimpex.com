@@ -21,7 +21,6 @@ export const customerBalancesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { customerId }) => [
         { type: 'Customers', id: customerId },
         { type: 'Customers', id: 'LIST' },
-        { type: 'Accounting' },
         { type: 'Accounting', id: 'CUSTOMER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -46,7 +45,6 @@ export const customerBalancesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, { customerId }) => [
         { type: 'Customers', id: customerId },
         { type: 'Customers', id: 'LIST' },
-        { type: 'Accounting' },
         { type: 'Accounting', id: 'CUSTOMER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -54,6 +52,7 @@ export const customerBalancesApi = api.injectEndpoints({
         { type: 'Accounting', id: 'TRIAL_BALANCE' },
         { type: 'ChartOfAccounts', id: 'LIST' },
         { type: 'ChartOfAccounts', id: 'STATS' },
+        { type: 'CashReceipts', id: 'LIST' },
         { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
@@ -69,7 +68,6 @@ export const customerBalancesApi = api.injectEndpoints({
       invalidatesTags: (_res, _err, customerId) => [
         { type: 'Customers', id: customerId },
         { type: 'Customers', id: 'LIST' },
-        { type: 'Accounting' },
         { type: 'Accounting', id: 'CUSTOMER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -81,6 +79,7 @@ export const customerBalancesApi = api.injectEndpoints({
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
     canMakePurchase: builder.query({
@@ -108,7 +107,6 @@ export const customerBalancesApi = api.injectEndpoints({
       }),
       invalidatesTags: [
         { type: 'Customers', id: 'LIST' },
-        { type: 'Accounting' },
         { type: 'Accounting', id: 'CUSTOMER_BALANCE' },
         { type: 'Accounting', id: 'LEDGER_SUMMARY' },
         { type: 'Accounting', id: 'LEDGER_ENTRIES' },
@@ -121,6 +119,7 @@ export const customerBalancesApi = api.injectEndpoints({
         { type: 'Reports', id: 'PARTY_BALANCE' },
         { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
   }),

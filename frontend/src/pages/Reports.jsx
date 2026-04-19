@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useTableRowVirtualizer, getVirtualTablePadding } from '../hooks/useTableRowVirtualizer';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { toast } from 'sonner';
 import {
   TrendingUp,
@@ -45,6 +47,7 @@ export const Reports = () => {
   const [inventoryType, setInventoryType] = useState('stock-summary');
   const [financialType, setFinancialType] = useState('trial-balance');
   const [inventoryProductSearch, setInventoryProductSearch] = useState('');
+  const debouncedInventoryProductSearch = useDebouncedValue(inventoryProductSearch, 400);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   /** Party Balances table: client-side paging */
   const [partyBalancePage, setPartyBalancePage] = useState(1);
@@ -144,7 +147,7 @@ export const Reports = () => {
     refetch: refetchInventory
   } = useGetInventoryReportQuery({
     type: inventoryType,
-    ...(inventoryProductSearch.trim() ? { search: inventoryProductSearch.trim() } : {}),
+    ...(debouncedInventoryProductSearch.trim() ? { search: debouncedInventoryProductSearch.trim() } : {}),
     ...(inventoryType === 'stock-summary' && { dateFrom: dateRange.from, dateTo: dateRange.to })
   }, {
     skip: activeTab !== 'inventory'
@@ -200,7 +203,7 @@ export const Reports = () => {
 
   useEffect(() => {
     setStockSummaryPage(1);
-  }, [inventoryType, dateRange.from, dateRange.to, inventoryProductSearch]);
+  }, [inventoryType, dateRange.from, dateRange.to, debouncedInventoryProductSearch]);
 
   useEffect(() => {
     setStockSummaryPage(1);
@@ -442,6 +445,21 @@ export const Reports = () => {
         return [];
     }
   };
+
+  const virtualizePartyRows = activeTab === 'party-balance' && partyBalancePaginatedRows.length > 35;
+  const virtualizeStockSummaryRows =
+    activeTab === 'inventory' && isInventoryPaginated && stockSummaryPaginatedRows.length > 35;
+
+  const { scrollRef: partyTableScrollRef, virtualizer: partyRowVirtualizer } = useTableRowVirtualizer({
+    rowCount: partyBalancePaginatedRows.length,
+    enabled: virtualizePartyRows,
+    estimateSize: 52,
+  });
+  const { scrollRef: stockSummaryTableScrollRef, virtualizer: stockSummaryRowVirtualizer } = useTableRowVirtualizer({
+    rowCount: stockSummaryPaginatedRows.length,
+    enabled: virtualizeStockSummaryRows,
+    estimateSize: 52,
+  });
 
   const getReportTitle = () => {
     switch (activeTab) {
@@ -879,7 +897,10 @@ export const Reports = () => {
                 opening-balance postings so they match the general ledger.
               </p>
 
-              <div className="overflow-x-auto border border-gray-100 rounded-lg">
+              <div
+                ref={partyTableScrollRef}
+                className={`overflow-x-auto border border-gray-100 rounded-lg ${virtualizePartyRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
+              >
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -901,16 +922,55 @@ export const Reports = () => {
                       <tr>
                         <td colSpan={getColumns().length} className="px-6 py-10 text-center text-gray-500">No data found for the selected filters</td>
                       </tr>
+                    ) : !virtualizePartyRows ? (
+                      partyBalancePaginatedRows.map((row, idx) => {
+                        const rowIndex = (Math.min(partyBalancePage, partyBalanceTotalPages) - 1) * partyPageSize + idx;
+                        return (
+                          <tr key={row.id || idx} className="hover:bg-gray-50 transition-colors">
+                            {getColumns().map((col, colIdx) => (
+                              <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
+                                {col.render ? col.render(row, rowIndex) : row[col.key]}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })
                     ) : (
-                      partyBalancePaginatedRows.map((row, idx) => (
-                        <tr key={row.id || idx} className="hover:bg-gray-50 transition-colors">
-                          {getColumns().map((col, colIdx) => (
-                            <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                              {col.render ? col.render(row) : row[col.key]}
-                            </td>
-                          ))}
-                        </tr>
-                      ))
+                      (() => {
+                        const cols = getColumns();
+                        const colSpan = cols.length;
+                        const vItems = partyRowVirtualizer.getVirtualItems();
+                        const totalH = partyRowVirtualizer.getTotalSize();
+                        const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
+                        const pageBase = (Math.min(partyBalancePage, partyBalanceTotalPages) - 1) * partyPageSize;
+                        return (
+                          <>
+                            {padTop > 0 ? (
+                              <tr aria-hidden className="pointer-events-none">
+                                <td colSpan={colSpan} className="p-0 border-0" style={{ height: padTop }} />
+                              </tr>
+                            ) : null}
+                            {vItems.map((vr) => {
+                              const row = partyBalancePaginatedRows[vr.index];
+                              const rowIndex = pageBase + vr.index;
+                              return (
+                                <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
+                                  {cols.map((col, colIdx) => (
+                                    <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
+                                      {col.render ? col.render(row, rowIndex) : row[col.key]}
+                                    </td>
+                                  ))}
+                                </tr>
+                              );
+                            })}
+                            {padBottom > 0 ? (
+                              <tr aria-hidden className="pointer-events-none">
+                                <td colSpan={colSpan} className="p-0 border-0" style={{ height: padBottom }} />
+                              </tr>
+                            ) : null}
+                          </>
+                        );
+                      })()
                     )}
                   </tbody>
                 </table>
@@ -1084,7 +1144,10 @@ export const Reports = () => {
                 </div>
               </div>
 
-              <div className="overflow-x-auto border border-gray-100 rounded-lg">
+              <div
+                ref={stockSummaryTableScrollRef}
+                className={`overflow-x-auto border border-gray-100 rounded-lg ${virtualizeStockSummaryRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
+              >
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -1110,22 +1173,68 @@ export const Reports = () => {
                       </tr>
                     ) : (
                       <>
-                        {(isInventoryPaginated ? stockSummaryPaginatedRows : inventoryReportData?.data || []).map((row, idx) => (
-                          <tr key={row.id || idx} className="hover:bg-gray-50 transition-colors">
-                            {getColumns().map((col, colIdx) => (
-                              <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                                {col.render
-                                  ? col.render(
-                                    row,
-                                    isInventoryPaginated
-                                      ? (stockSummaryPage - 1) * stockSummaryPageSize + idx
-                                      : idx
-                                  )
-                                  : row[col.key]}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
+                        {!isInventoryPaginated ? (
+                          (inventoryReportData?.data || []).map((row, idx) => (
+                            <tr key={row.id || idx} className="hover:bg-gray-50 transition-colors">
+                              {getColumns().map((col, colIdx) => (
+                                <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
+                                  {col.render ? col.render(row, idx) : row[col.key]}
+                                </td>
+                              ))}
+                            </tr>
+                          ))
+                        ) : !virtualizeStockSummaryRows ? (
+                          stockSummaryPaginatedRows.map((row, idx) => (
+                            <tr key={row.id || idx} className="hover:bg-gray-50 transition-colors">
+                              {getColumns().map((col, colIdx) => (
+                                <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
+                                  {col.render
+                                    ? col.render(
+                                      row,
+                                      (Math.min(stockSummaryPage, stockSummaryTotalPages) - 1) * stockSummaryPageSize + idx
+                                    )
+                                    : row[col.key]}
+                                </td>
+                              ))}
+                            </tr>
+                          ))
+                        ) : (
+                          (() => {
+                            const cols = getColumns();
+                            const colSpan = cols.length;
+                            const vItems = stockSummaryRowVirtualizer.getVirtualItems();
+                            const totalH = stockSummaryRowVirtualizer.getTotalSize();
+                            const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
+                            const pageBase = (Math.min(stockSummaryPage, stockSummaryTotalPages) - 1) * stockSummaryPageSize;
+                            return (
+                              <>
+                                {padTop > 0 ? (
+                                  <tr aria-hidden className="pointer-events-none">
+                                    <td colSpan={colSpan} className="p-0 border-0" style={{ height: padTop }} />
+                                  </tr>
+                                ) : null}
+                                {vItems.map((vr) => {
+                                  const row = stockSummaryPaginatedRows[vr.index];
+                                  const rowIndex = pageBase + vr.index;
+                                  return (
+                                    <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
+                                      {cols.map((col, colIdx) => (
+                                        <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
+                                          {col.render ? col.render(row, rowIndex) : row[col.key]}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  );
+                                })}
+                                {padBottom > 0 ? (
+                                  <tr aria-hidden className="pointer-events-none">
+                                    <td colSpan={colSpan} className="p-0 border-0" style={{ height: padBottom }} />
+                                  </tr>
+                                ) : null}
+                              </>
+                            );
+                          })()
+                        )}
                         {inventoryType === 'stock-summary' && stockSummaryTotal > 0 && inventoryReportData?.summary && (
                           <tr className="bg-gray-50 font-bold border-t-2 border-gray-300">
                             <td colSpan={3} className="px-6 py-3 text-sm text-gray-900">Grand Total</td>

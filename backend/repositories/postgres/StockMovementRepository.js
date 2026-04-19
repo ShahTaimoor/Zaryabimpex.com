@@ -1,4 +1,5 @@
 const { query } = require('../../config/postgres');
+const { decodeCursor, encodeCursor } = require('../../utils/keysetCursor');
 
 function rowToMovement(row) {
   if (!row) return null;
@@ -49,7 +50,23 @@ class StockMovementRepository {
   }
 
   async findAll(filters = {}, options = {}) {
-    let sql = 'SELECT * FROM stock_movements WHERE 1=1';
+    const listMode = options.listMode === 'minimal' ? 'minimal' : 'full';
+    const cursorDecoded =
+      options.cursor && typeof options.cursor === 'object' && options.cursor.t && options.cursor.id
+        ? options.cursor
+        : null;
+    const useKeyset = Boolean(cursorDecoded);
+
+    const selectCols =
+      listMode === 'minimal'
+        ? `id, product_id, product_name, product_sku, movement_type, quantity, unit_cost, total_value,
+           previous_stock, new_stock, reference_type, reference_id, reference_number, location,
+           from_location, to_location, user_id, user_name, reason, notes, batch_number, expiry_date,
+           supplier_id, customer_id, status, is_reversal, original_movement_id, reversed_by,
+           reversed_at, system_generated, created_at, updated_at`
+        : '*';
+
+    let sql = `SELECT ${selectCols} FROM stock_movements WHERE 1=1`;
     const params = [];
     let paramCount = 1;
 
@@ -100,12 +117,17 @@ class StockMovementRepository {
       params.push(filters.dateTo);
     }
 
-    sql += ' ORDER BY created_at DESC';
+    if (useKeyset) {
+      sql += ` AND (created_at, id) < ($${paramCount++}::timestamptz, $${paramCount++}::uuid)`;
+      params.push(cursorDecoded.t, cursorDecoded.id);
+    }
+
+    sql += ' ORDER BY created_at DESC, id DESC';
     if (options.limit) {
       sql += ` LIMIT $${paramCount++}`;
       params.push(options.limit);
     }
-    if (options.offset) {
+    if (!useKeyset && options.offset) {
       sql += ` OFFSET $${paramCount++}`;
       params.push(options.offset);
     }
@@ -119,8 +141,11 @@ class StockMovementRepository {
     const limit = options.limit || 20;
     const offset = (page - 1) * limit;
     const getAll = options.getAll === true;
+    const listMode = options.listMode === 'minimal' ? 'minimal' : 'full';
+    const cursorStr = options.cursor || options.keysetCursor;
+    const decoded = typeof cursorStr === 'string' ? decodeCursor(cursorStr) : null;
 
-    let countSql = 'SELECT COUNT(*) FROM stock_movements WHERE 1=1';
+    let countSql = 'SELECT COUNT(*)::bigint AS c FROM stock_movements WHERE 1=1';
     const countParams = [];
     let paramCount = 1;
     if (filter.productId || filter.product) {

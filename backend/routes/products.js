@@ -105,7 +105,9 @@ router.get('/', [
       }
     }
     return true;
-  })
+  }),
+  query('listMode').optional({ checkFalsy: true }).isIn(['full', 'minimal']),
+  query('cursor').optional({ checkFalsy: true }).isString().trim()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);

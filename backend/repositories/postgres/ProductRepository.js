@@ -1,5 +1,6 @@
 const { query } = require('../../config/postgres');
 const inventoryBalanceRepository = require('./InventoryBalanceRepository');
+const { decodeCursor, encodeCursor } = require('../../utils/keysetCursor');
 
 
 function rowToProduct(row) {
@@ -44,7 +45,22 @@ class ProductRepository {
   }
 
   async findAll(filters = {}, options = {}) {
-    let sql = 'SELECT * FROM products WHERE 1=1';
+    const listMode = options.listMode === 'minimal' ? 'minimal' : 'full';
+    const cursorDecoded =
+      options.cursor && typeof options.cursor === 'object' && options.cursor.t && options.cursor.id
+        ? options.cursor
+        : null;
+    const useKeyset = Boolean(cursorDecoded);
+
+    const selectList =
+      listMode === 'minimal'
+        ? `id, name, sku, barcode, hs_code, category_id, cost_price, selling_price, wholesale_price,
+           stock_quantity, min_stock_level, unit, pieces_per_box, is_active, image_url,
+           country_of_origin, net_weight_kg, gross_weight_kg, import_ref_no, gd_number, invoice_ref,
+           created_at, updated_at, is_deleted`
+        : '*';
+
+    let sql = `SELECT ${selectList} FROM products WHERE 1=1`;
     if (!filters.includeDeleted) {
       sql += ' AND (is_deleted = FALSE OR is_deleted IS NULL)';
     }
@@ -106,12 +122,21 @@ class ProductRepository {
       sql += ' AND stock_quantity > 0';
     }
 
-    sql += ' ORDER BY created_at DESC, name ASC';
+    if (useKeyset) {
+      sql += ` AND (created_at, id) < ($${paramCount++}::timestamptz, $${paramCount++}::uuid)`;
+      params.push(cursorDecoded.t, cursorDecoded.id);
+    }
+
+    if (useKeyset) {
+      sql += ' ORDER BY created_at DESC, id DESC';
+    } else {
+      sql += ' ORDER BY created_at DESC, name ASC';
+    }
     if (options.limit) {
       sql += ` LIMIT $${paramCount++}`;
       params.push(options.limit);
     }
-    if (options.offset) {
+    if (!useKeyset && options.offset) {
       sql += ` OFFSET $${paramCount++}`;
       params.push(options.offset);
     }
@@ -296,6 +321,9 @@ class ProductRepository {
     const page = options.page || 1;
     const limit = options.limit || 20;
     const offset = (page - 1) * limit;
+    const listMode = options.listMode === 'minimal' ? 'minimal' : 'full';
+    const cursorStr = options.cursor || options.keysetCursor;
+    const decoded = typeof cursorStr === 'string' ? decodeCursor(cursorStr) : null;
 
     let countSql = 'SELECT COUNT(*) FROM products WHERE (is_deleted = FALSE OR is_deleted IS NULL)';
     const countParams = [];
@@ -344,14 +372,46 @@ class ProductRepository {
     const countResult = await query(countSql, countParams);
     const total = parseInt(countResult.rows[0].count, 10);
 
-    const products = await this.findAll(filters, { limit, offset });
+    if (decoded) {
+      const fetchLimit = limit + 1;
+      const products = await this.findAll(filters, {
+        listMode,
+        cursor: decoded,
+        limit: fetchLimit
+      });
+      const hasMore = products.length > limit;
+      const pageRows = hasMore ? products.slice(0, limit) : products;
+      let nextCursor = null;
+      if (hasMore && pageRows.length > 0) {
+        const last = pageRows[pageRows.length - 1];
+        const ca = last.created_at || last.createdAt;
+        nextCursor = encodeCursor(ca, last.id);
+      }
+      return {
+        products: pageRows,
+        pagination: {
+          current: null,
+          pages: null,
+          total,
+          limit,
+          mode: 'keyset',
+          nextCursor,
+          hasMore
+        }
+      };
+    }
+
+    const products = await this.findAll(filters, { listMode, limit, offset });
     return {
       products,
       pagination: {
         current: page,
         pages: Math.ceil(total / limit) || 1,
         total,
-        limit
+        limit,
+        mode: 'offset',
+        nextCursor: null,
+        hasMore: page * limit < total
       }
     };
   }

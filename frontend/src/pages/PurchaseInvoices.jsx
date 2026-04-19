@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import {
   FileText,
   Search,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import {
   useGetPurchaseInvoicesQuery,
+  useLazyGetPurchaseInvoicesQuery,
   useLazyGetPurchaseInvoiceQuery,
   useConfirmPurchaseInvoiceMutation,
   useDeletePurchaseInvoiceMutation,
@@ -33,7 +35,22 @@ import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
 import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
+import PaginationControls from '../components/PaginationControls';
+import { useCursorPagination } from '../hooks/useCursorPagination';
 
+const PI_PAGE_SIZE = 50;
+
+/** Normalize list API envelope to an invoices array */
+function purchaseInvoicesFromResponse(res) {
+  if (!res) return [];
+  const top = res?.data ?? res;
+  if (top?.data?.invoices) return top.data.invoices;
+  if (top?.invoices) return top.invoices;
+  if (top?.data?.data?.invoices) return top.data.data.invoices;
+  if (Array.isArray(top)) return top;
+  if (Array.isArray(top?.data)) return top.data;
+  return [];
+}
 
 // Edit allowed only within 1 month of invoice date
 const canEditByDate = (invoice) => {
@@ -87,7 +104,7 @@ const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onP
 
             <div className="flex items-center text-sm text-gray-600">
               <TrendingUp className="h-4 w-4 mr-2" />
-              {Math.round(invoice.pricing?.total || 0)} ({invoice.items?.length || 0} items)
+              {Math.round(invoice.pricing?.total || 0)} ({invoice.lineItemCount ?? invoice.items?.length ?? 0} items)
             </div>
 
             <div className="text-sm text-gray-500">
@@ -144,6 +161,7 @@ const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onP
 export const PurchaseInvoices = () => {
   const { companyInfo: companySettings } = useCompanyInfo();
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebouncedValue(searchTerm, 350);
   const [statusFilter, setStatusFilter] = useState('');
   const today = getCurrentDatePakistan();
   const [dateFrom, setDateFrom] = useState(today); // Today
@@ -151,14 +169,24 @@ export const PurchaseInvoices = () => {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
 
+  const {
+    currentPage: invoicePage,
+    currentCursor,
+    updateFromPagination,
+    getUiPagination,
+    goToPage,
+  } = useCursorPagination([debouncedSearch, statusFilter, dateFrom, dateTo]);
 
   const { openTab } = useTab();
 
   // Build query params
-  const queryParams = React.useMemo(() => {
+  const queryParams = useMemo(() => {
     const params = {
-      search: searchTerm || undefined,
+      search: debouncedSearch || undefined,
       status: statusFilter || undefined,
+      page: invoicePage,
+      cursor: currentCursor,
+      limit: PI_PAGE_SIZE,
     };
 
     if (dateFrom) {
@@ -169,13 +197,15 @@ export const PurchaseInvoices = () => {
     }
 
     return params;
-  }, [searchTerm, statusFilter, dateFrom, dateTo]);
+  }, [debouncedSearch, statusFilter, dateFrom, dateTo, invoicePage, currentCursor]);
 
   // Fetch purchase invoices
-  const { data, isLoading, error, refetch } = useGetPurchaseInvoicesQuery(
+  const { data: piResponse, isLoading, error, refetch } = useGetPurchaseInvoicesQuery(
     queryParams,
-    { refetchOnMountOrArgChange: true }
+    { refetchOnMountOrArgChange: 120 }
   );
+
+  const [fetchPurchaseInvoicesAll] = useLazyGetPurchaseInvoicesQuery();
 
   // Editing occurs in Purchase page; no supplier query needed here
 
@@ -269,7 +299,7 @@ export const PurchaseInvoices = () => {
       render: (value, item) => (
         <div className="text-right">
           <div className="font-semibold text-gray-900">{Math.round(value)}</div>
-          <div className="text-sm text-gray-500">{item.items?.length || 0} items</div>
+          <div className="text-sm text-gray-500">{item.lineItemCount ?? item.items?.length ?? 0} items</div>
         </div>
       ),
     },
@@ -343,7 +373,7 @@ export const PurchaseInvoices = () => {
   // Event handlers
   const handleConfirm = (invoice) => {
     if (window.confirm(`Are you sure you want to confirm invoice ${invoice.invoiceNumber}?`)) {
-      confirmPurchaseInvoiceMutation(invoice._id)
+      confirmPurchaseInvoiceMutation(invoice._id || invoice.id)
         .unwrap()
         .then(() => {
           showSuccessToast('Purchase invoice confirmed successfully');
@@ -357,11 +387,11 @@ export const PurchaseInvoices = () => {
 
   const handleDelete = (invoice) => {
     const message = invoice.status === 'confirmed'
-      ? `Are you sure you want to delete invoice ${invoice.invoiceNumber}?\n\nThis will:\n• Remove ${invoice.items?.length || 0} products from inventory\n• Reduce supplier balance by ${Math.round((invoice.pricing?.total || 0) - (invoice.payment?.amount || 0))}`
+      ? `Are you sure you want to delete invoice ${invoice.invoiceNumber}?\n\nThis will:\n• Remove ${invoice.lineItemCount ?? invoice.items?.length ?? 0} products from inventory\n• Reduce supplier balance by ${Math.round((invoice.pricing?.total || 0) - (invoice.payment?.amount || 0))}`
       : `Are you sure you want to delete invoice ${invoice.invoiceNumber}?`;
 
     if (window.confirm(message)) {
-      deletePurchaseInvoiceMutation(invoice._id)
+      deletePurchaseInvoiceMutation(invoice._id || invoice.id)
         .unwrap()
         .then(() => {
           showSuccessToast('Purchase invoice deleted successfully');
@@ -373,43 +403,51 @@ export const PurchaseInvoices = () => {
     }
   };
 
-  const handleEdit = (invoice) => {
-    // Get component info for Purchase page
+  const handleEdit = async (invoice) => {
     const componentInfo = getComponentInfo('/purchase');
-    if (componentInfo) {
-      // Create a new tab for editing the purchase invoice
-      const newTabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      // Prepare the invoice data to pass to the Purchase page
-      const invoiceData = {
-        invoiceId: invoice._id,
-        invoiceNumber: invoice.invoiceNumber,
-        supplier: invoice.supplierInfo,
-        items: invoice.items || [],
-        notes: invoice.notes || '',
-        invoiceType: invoice.invoiceType || 'purchase',
-        invoiceDate: invoice.invoiceDate || invoice.createdAt, // Include invoiceDate for editing
-        createdAt: invoice.createdAt, // Include createdAt as fallback
-        isEditMode: true,
-        payment: invoice.payment || {} // Include payment for amount paid editing
-      };
-
-      openTab({
-        title: `Edit Purchase - ${invoice.invoiceNumber}`,
-        path: '/purchase',
-        component: componentInfo.component,
-        icon: componentInfo.icon,
-        allowMultiple: true,
-        props: {
-          tabId: newTabId,
-          editData: invoiceData
-        }
-      });
-
-      showSuccessToast(`Opening ${invoice.invoiceNumber} for editing...`);
-    } else {
+    if (!componentInfo) {
       showErrorToast('Purchase page not found');
+      return;
     }
+    const id = invoice._id || invoice.id;
+    let row = invoice;
+    if (id) {
+      try {
+        const result = await getPurchaseInvoiceById(id).unwrap();
+        const full = result?.invoice || result?.data?.invoice || result?.data || result;
+        if (full) row = full;
+      } catch {
+        /* use list row */
+      }
+    }
+
+    const newTabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const invoiceData = {
+      invoiceId: row._id || row.id,
+      invoiceNumber: row.invoiceNumber,
+      supplier: row.supplierInfo,
+      items: row.items || [],
+      notes: row.notes || '',
+      invoiceType: row.invoiceType || 'purchase',
+      invoiceDate: row.invoiceDate || row.createdAt,
+      createdAt: row.createdAt,
+      isEditMode: true,
+      payment: row.payment || {}
+    };
+
+    openTab({
+      title: `Edit Purchase - ${row.invoiceNumber}`,
+      path: '/purchase',
+      component: componentInfo.component,
+      icon: componentInfo.icon,
+      allowMultiple: true,
+      props: {
+        tabId: newTabId,
+        editData: invoiceData
+      }
+    });
+
+    showSuccessToast(`Opening ${row.invoiceNumber} for editing...`);
   };
 
   const handleView = (invoice) => {
@@ -420,17 +458,37 @@ export const PurchaseInvoices = () => {
 
 
   // Memoize invoices data - must be before conditional returns to follow Rules of Hooks
-  const invoices = React.useMemo(() => {
-    if (!data) return [];
-    if (data?.data?.invoices) return data.data.invoices;
-    if (data?.invoices) return data.invoices;
-    if (data?.data?.data?.invoices) return data.data.data.invoices;
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.data)) return data.data;
-    return [];
-  }, [data]);
+  const invoices = useMemo(
+    () => purchaseInvoicesFromResponse(piResponse),
+    [piResponse]
+  );
 
-  const getExportData = () => {
+  const piPagination = piResponse?.data?.pagination ?? piResponse?.pagination ?? {};
+  const uiPagination = useMemo(
+    () => getUiPagination(piPagination, PI_PAGE_SIZE),
+    [getUiPagination, piPagination]
+  );
+  const invoiceRowOffset = (invoicePage - 1) * PI_PAGE_SIZE;
+
+  useEffect(() => {
+    updateFromPagination(piPagination);
+  }, [piPagination, updateFromPagination]);
+
+  const getExportData = async () => {
+    let res;
+    try {
+      res = await fetchPurchaseInvoicesAll({
+        search: debouncedSearch || undefined,
+        status: statusFilter || undefined,
+        dateFrom,
+        dateTo,
+        all: 'true',
+      }).unwrap();
+    } catch (e) {
+      handleApiError(e, 'Purchase invoices export');
+      return null;
+    }
+    const allRows = purchaseInvoicesFromResponse(res);
     return {
       title: 'Purchase Invoices Report',
       filename: `Purchase_Invoices_${dateFrom}_to_${dateTo}.xlsx`,
@@ -450,7 +508,7 @@ export const PurchaseInvoices = () => {
         { header: 'Payment', key: 'paymentStatus', width: 15 },
         { header: 'Notes', key: 'notes', width: 40 }
       ],
-      data: invoices.map((invoice, i) => ({
+      data: allRows.map((invoice, i) => ({
         sno: i + 1,
         imageUrl: invoice.items?.[0]?.product?.imageUrl ?? invoice.items?.[0]?.productData?.imageUrl ?? null,
         invoiceNumber: invoice.invoiceNumber ?? '—',
@@ -458,7 +516,7 @@ export const PurchaseInvoices = () => {
         date: invoice.invoiceDate || invoice.invoice_date || invoice.createdAt
           ? new Date(invoice.invoiceDate || invoice.invoice_date || invoice.createdAt).toLocaleDateString()
           : 'Invalid Date',
-        itemsCount: invoice.items?.length ?? 0,
+        itemsCount: invoice.lineItemCount ?? invoice.items?.length ?? 0,
         total: Number(invoice.pricing?.total || 0),
         paymentStatus: (invoice.payment?.status || 'pending').toUpperCase(),
         notes: invoice.notes?.trim() || ''
@@ -467,8 +525,8 @@ export const PurchaseInvoices = () => {
         rows: [
           {
             label: 'GRAND TOTAL:',
-            invoiceNumber: `${invoices.length} Invoices`,
-            total: invoices.reduce((sum, o) => sum + Number(o.pricing?.total || 0), 0)
+            invoiceNumber: `${allRows.length} Invoices`,
+            total: allRows.reduce((sum, o) => sum + Number(o.pricing?.total || 0), 0)
           }
         ]
       }
@@ -591,7 +649,7 @@ export const PurchaseInvoices = () => {
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{idx + 1}</span>
+                        <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{invoiceRowOffset + idx + 1}</span>
                         <h3 className="font-semibold text-sm text-gray-900 truncate">{invoice.invoiceNumber}</h3>
                         <StatusBadge status={invoice.status} />
                       </div>
@@ -603,7 +661,7 @@ export const PurchaseInvoices = () => {
                           ? new Date(invoice.invoiceDate || invoice.invoice_date || invoice.createdAt).toLocaleDateString()
                           : 'Invalid Date'}</span>
                         <span>•</span>
-                        <span>{invoice.items?.length || 0} items</span>
+                        <span>{invoice.lineItemCount ?? invoice.items?.length ?? 0} items</span>
                       </div>
                     </div>
                     <div className="flex items-center flex-nowrap gap-1 flex-shrink-0">
@@ -697,7 +755,7 @@ export const PurchaseInvoices = () => {
                   {/* Items */}
                   <div className="col-span-1">
                     <span className="text-xs sm:text-sm text-gray-600">
-                      {invoice.items?.length || 0}
+                      {invoice.lineItemCount ?? invoice.items?.length ?? 0}
                     </span>
                   </div>
 
@@ -794,6 +852,13 @@ export const PurchaseInvoices = () => {
               </div>
             ))}
           </div>
+          <PaginationControls
+            page={uiPagination.current}
+            totalPages={Math.max(1, Number(uiPagination.pages) || 1)}
+            onPageChange={(page) => goToPage(page, uiPagination.hasNext)}
+            totalItems={uiPagination.total}
+            limit={uiPagination.limit ?? PI_PAGE_SIZE}
+          />
         </div>
       )}
 

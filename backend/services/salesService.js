@@ -310,13 +310,16 @@ class SalesService {
 
     const page = getAllOrders ? 1 : (parseInt(queryParams.page) || 1);
     const limit = getAllOrders ? 999999 : (parseInt(queryParams.limit) || 20);
+    const listMode = queryParams.listMode === 'minimal' ? 'minimal' : 'full';
 
     const filter = await this.buildFilter(queryParams);
 
     const result = await salesRepository.findWithPagination(filter, {
       page,
       limit,
-      sort: 'created_at DESC'
+      sort: 'created_at DESC',
+      listMode,
+      cursor: queryParams.cursor
     });
 
     const sales = result.sales || [];
@@ -346,7 +349,7 @@ class SalesService {
         o.customer.pendingBalance = (ob + bal) > 0 ? (ob + bal) : 0;
         o.customer.advanceBalance = (ob + bal) < 0 ? Math.abs(ob + bal) : 0;
       }
-      if (o.items && Array.isArray(o.items)) {
+      if (listMode !== 'minimal' && o.items && Array.isArray(o.items)) {
         o.items = await this.enrichItemsWithProductNames(o.items);
         o.items = o.items.map(item => {
           const i = { ...item };

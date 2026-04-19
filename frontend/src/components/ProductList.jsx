@@ -133,12 +133,18 @@ export const ProductList = ({
                     <div className="flex items-center space-x-1.5 xl:space-x-2 2xl:space-x-3">
                       {showImages ? (
                         product.imageUrl ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={product.name}
-                            crossOrigin="anonymous"
-                            className="h-6 w-6 xl:h-8 xl:w-8 2xl:h-10 2xl:w-10 object-cover rounded-md flex-shrink-0 border border-gray-200"
-                          />
+                          <div className="h-6 w-6 xl:h-8 xl:w-8 2xl:h-10 2xl:w-10 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+                            <img
+                              src={product.imageUrl}
+                              alt=""
+                              width={40}
+                              height={40}
+                              loading="lazy"
+                              decoding="async"
+                              crossOrigin="anonymous"
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
                         ) : (
                           <Package className="h-4 w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-gray-400 flex-shrink-0" />
                         )
@@ -283,12 +289,18 @@ export const ProductList = ({
                     <div className="flex items-start space-x-2 xl:space-x-3">
                       {showImages ? (
                         product.imageUrl ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={product.name}
-                            crossOrigin="anonymous"
-                            className="h-8 w-8 xl:h-10 xl:w-10 object-cover rounded-md flex-shrink-0 border border-gray-200 mt-0.5"
-                          />
+                          <div className="h-8 w-8 xl:h-10 xl:w-10 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50 mt-0.5">
+                            <img
+                              src={product.imageUrl}
+                              alt=""
+                              width={40}
+                              height={40}
+                              loading="lazy"
+                              decoding="async"
+                              crossOrigin="anonymous"
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
                         ) : (
                           <Package className="h-5 w-5 xl:h-6 xl:w-6 text-gray-400 flex-shrink-0 mt-0.5" />
                         )

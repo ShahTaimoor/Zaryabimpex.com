@@ -1,7 +1,88 @@
 const { query, transaction } = require('../../config/postgres');
+const { decodeCursor, encodeCursor } = require('../../utils/keysetCursor');
 
 function run(q, params, client) {
   return client ? client.query(q, params) : query(q, params);
+}
+
+/**
+ * Shared WHERE fragment for sales list/count (alias: table alias, e.g. "s").
+ * Starts after `... WHERE s.deleted_at IS NULL`
+ */
+function buildSalesFilterSql(filters, params, startIdx, alias = 's') {
+  const col = (name) => `${alias}.${name}`;
+  let sql = '';
+  let p = startIdx;
+
+  if (filters.customerId) {
+    sql += ` AND ${col('customer_id')} = $${p++}`;
+    params.push(filters.customerId);
+  }
+
+  if (filters.customerIds && filters.customerIds.length > 0) {
+    sql += ` AND ${col('customer_id')} = ANY($${p++}::uuid[])`;
+    params.push(filters.customerIds);
+  }
+
+  if (filters.status) {
+    sql += ` AND ${col('status')} = $${p++}`;
+    params.push(filters.status);
+  }
+
+  if (filters.paymentStatus) {
+    sql += ` AND ${col('payment_status')} = $${p++}`;
+    params.push(filters.paymentStatus);
+  }
+
+  if (filters.orderNumber) {
+    sql += ` AND ${col('order_number')} ILIKE $${p++}`;
+    params.push(`%${filters.orderNumber}%`);
+  }
+
+  if (filters.search) {
+    const searchPattern = `%${String(filters.search).trim()}%`;
+    if (filters.searchCustomerIds && filters.searchCustomerIds.length > 0) {
+      sql += ` AND (${col('order_number')} ILIKE $${p++} OR ${col('notes')} ILIKE $${p++} OR ${col('customer_id')} = ANY($${p++}::uuid[]))`;
+      params.push(searchPattern, searchPattern, filters.searchCustomerIds);
+    } else {
+      sql += ` AND (${col('order_number')} ILIKE $${p++} OR ${col('notes')} ILIKE $${p++})`;
+      params.push(searchPattern, searchPattern);
+    }
+  }
+
+  if (filters.dateFrom) {
+    sql += ` AND ${col('sale_date')} >= $${p++}`;
+    params.push(filters.dateFrom);
+  }
+
+  if (filters.dateTo) {
+    sql += ` AND ${col('sale_date')} <= $${p++}`;
+    params.push(filters.dateTo);
+  }
+
+  if (filters.productIds && filters.productIds.length > 0) {
+    if (filters.productIds.includes('__none__')) {
+      sql += ' AND 1 = 0';
+    } else {
+      sql += ` AND EXISTS (
+          SELECT 1 FROM jsonb_array_elements(COALESCE(${col('items')}::jsonb, '[]'::jsonb)) AS elem
+          WHERE (elem->>'product') = ANY($${p}::text[])
+        )`;
+      params.push(filters.productIds.map((id) => String(id)));
+      p++;
+    }
+  }
+
+  if (filters.excludeStatuses && filters.excludeStatuses.length > 0) {
+    sql += ` AND NOT (${col('status')} = ANY($${p++}::text[]))`;
+    params.push(filters.excludeStatuses);
+  }
+
+  if (filters.requireCustomerId) {
+    sql += ` AND ${col('customer_id')} IS NOT NULL`;
+  }
+
+  return { sql, nextIdx: p };
 }
 
 class SalesRepository {
@@ -22,181 +103,132 @@ class SalesRepository {
 
   /**
    * Find all sales with filters
+   * @param {object} options
+   * @param {'full'|'minimal'} [options.listMode] - minimal omits line items JSON (uses line_item_count only)
+   * @param {object} [options.cursor] - { t: ISO string, id: uuid } for keyset (requires ORDER BY created_at DESC, id DESC)
    */
   async findAll(filters = {}, options = {}) {
-    let sql = 'SELECT * FROM sales WHERE deleted_at IS NULL';
+    const listMode = options.listMode === 'minimal' ? 'minimal' : 'full';
     const params = [];
-    let paramCount = 1;
+    const alias = 's';
+    const baseWhere = `FROM sales ${alias} WHERE ${alias}.deleted_at IS NULL`;
+    const { sql: filterSql, nextIdx } = buildSalesFilterSql(filters, params, 1, alias);
+    let sql = '';
 
-    if (filters.customerId) {
-      sql += ` AND customer_id = $${paramCount++}`;
-      params.push(filters.customerId);
+    if (listMode === 'minimal') {
+      sql = `SELECT ${alias}.id, ${alias}.order_number, ${alias}.customer_id, ${alias}.sale_date,
+        ${alias}.subtotal, ${alias}.discount, ${alias}.tax, ${alias}.total,
+        ${alias}.payment_method, ${alias}.payment_status, ${alias}.status, ${alias}.notes,
+        ${alias}.created_by, ${alias}.updated_by, ${alias}.created_at, ${alias}.updated_at,
+        ${alias}.amount_paid, ${alias}.applied_discounts, ${alias}.order_type,
+        jsonb_array_length(COALESCE(${alias}.items::jsonb, '[]'::jsonb))::int AS line_item_count
+        ${baseWhere}`;
+    } else {
+      sql = `SELECT ${alias}.* ${baseWhere}`;
     }
+    sql += filterSql;
 
-    if (filters.customerIds && filters.customerIds.length > 0) {
-      sql += ` AND customer_id = ANY($${paramCount++}::uuid[])`;
-      params.push(filters.customerIds);
-    }
-
-    if (filters.status) {
-      sql += ` AND status = $${paramCount++}`;
-      params.push(filters.status);
-    }
-
-    if (filters.paymentStatus) {
-      sql += ` AND payment_status = $${paramCount++}`;
-      params.push(filters.paymentStatus);
-    }
-
-    if (filters.orderNumber) {
-      sql += ` AND order_number ILIKE $${paramCount++}`;
-      params.push(`%${filters.orderNumber}%`);
-    }
-
-    if (filters.search) {
-      const searchPattern = `%${String(filters.search).trim()}%`;
-      if (filters.searchCustomerIds && filters.searchCustomerIds.length > 0) {
-        sql += ` AND (order_number ILIKE $${paramCount++} OR notes ILIKE $${paramCount++} OR customer_id = ANY($${paramCount++}::uuid[]))`;
-        params.push(searchPattern, searchPattern, filters.searchCustomerIds);
-      } else {
-        sql += ` AND (order_number ILIKE $${paramCount++} OR notes ILIKE $${paramCount++})`;
-        params.push(searchPattern, searchPattern);
-      }
-    }
-
-    if (filters.dateFrom) {
-      sql += ` AND sale_date >= $${paramCount++}`;
-      params.push(filters.dateFrom);
-    }
-
-    if (filters.dateTo) {
-      sql += ` AND sale_date <= $${paramCount++}`;
-      params.push(filters.dateTo);
-    }
-
-    if (filters.productIds && filters.productIds.length > 0) {
-      if (filters.productIds.includes('__none__')) {
-        sql += ' AND 1 = 0';
-      } else {
-        sql += ` AND EXISTS (
-          SELECT 1 FROM jsonb_array_elements(COALESCE(items::jsonb, '[]'::jsonb)) AS elem
-          WHERE (elem->>'product') = ANY($${paramCount}::text[])
-        )`;
-        params.push(filters.productIds.map(id => String(id)));
-        paramCount++;
-      }
-    }
-
-    if (filters.excludeStatuses && filters.excludeStatuses.length > 0) {
-      sql += ` AND NOT (status = ANY($${paramCount++}::text[]))`;
-      params.push(filters.excludeStatuses);
-    }
-
-    if (filters.requireCustomerId) {
-      sql += ' AND customer_id IS NOT NULL';
+    let paramCount = nextIdx;
+    const cursorDecoded = options.cursor && typeof options.cursor === 'object' ? options.cursor : null;
+    if (cursorDecoded && cursorDecoded.t && cursorDecoded.id) {
+      sql += ` AND (${alias}.created_at, ${alias}.id) < ($${paramCount++}::timestamptz, $${paramCount++}::uuid)`;
+      params.push(cursorDecoded.t, cursorDecoded.id);
     }
 
     const { toSortString } = require('../../utils/sortParam');
-    const sortStr = toSortString(options.sort, 'created_at DESC');
-    const [field, direction] = sortStr.split(' ');
-    const allowed = ['created_at', 'sale_date', 'order_number', 'total', 'status', 'payment_status'];
-    const col = allowed.includes(field) ? field : 'created_at';
-    const dir = (direction || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-    sql += ` ORDER BY ${col} ${dir}`;
+    const useKeysetOrder = Boolean(cursorDecoded);
+    if (useKeysetOrder) {
+      sql += ` ORDER BY ${alias}.created_at DESC, ${alias}.id DESC`;
+    } else {
+      const sortStr = toSortString(options.sort, 'created_at DESC');
+      const [field, direction] = sortStr.split(' ');
+      const allowed = ['created_at', 'sale_date', 'order_number', 'total', 'status', 'payment_status'];
+      const col = allowed.includes(field) ? field : 'created_at';
+      const dir = (direction || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+      sql += ` ORDER BY ${alias}.${col} ${dir}, ${alias}.id DESC`;
+    }
 
     if (options.limit) {
       sql += ` LIMIT $${paramCount++}`;
       params.push(options.limit);
     }
 
-    if (options.offset) {
+    if (!cursorDecoded && options.offset) {
       sql += ` OFFSET $${paramCount++}`;
       params.push(options.offset);
     }
 
     const result = await query(sql, params);
     const rows = result.rows || [];
-    rows.forEach(sale => {
-      if (sale && sale.items && typeof sale.items === 'string') {
-        try { sale.items = JSON.parse(sale.items); } catch (_) { sale.items = []; }
+    rows.forEach((sale) => {
+      if (listMode === 'minimal') {
+        const n = sale.line_item_count;
+        delete sale.line_item_count;
+        sale.lineItemCount = typeof n === 'number' ? n : parseInt(n, 10) || 0;
+        sale.items = [];
+      } else if (sale && sale.items && typeof sale.items === 'string') {
+        try {
+          sale.items = JSON.parse(sale.items);
+        } catch (_) {
+          sale.items = [];
+        }
       }
     });
     return rows;
   }
 
   /**
-   * Find sales with pagination
+   * Find sales with pagination (offset) or keyset cursor (cursor string)
    */
   async findWithPagination(filters = {}, options = {}) {
     const page = options.page || 1;
     const limit = options.limit || 20;
     const offset = (page - 1) * limit;
+    const listMode = options.listMode === 'minimal' ? 'minimal' : 'full';
 
-    // Build same WHERE as findAll for count
-    let countSql = 'SELECT COUNT(*) FROM sales WHERE deleted_at IS NULL';
     const countParams = [];
-    let paramCount = 1;
-
-    if (filters.customerId) {
-      countSql += ` AND customer_id = $${paramCount++}`;
-      countParams.push(filters.customerId);
-    }
-    if (filters.customerIds && filters.customerIds.length > 0) {
-      countSql += ` AND customer_id = ANY($${paramCount++}::uuid[])`;
-      countParams.push(filters.customerIds);
-    }
-    if (filters.status) {
-      countSql += ` AND status = $${paramCount++}`;
-      countParams.push(filters.status);
-    }
-    if (filters.paymentStatus) {
-      countSql += ` AND payment_status = $${paramCount++}`;
-      countParams.push(filters.paymentStatus);
-    }
-    if (filters.search) {
-      const searchPattern = `%${String(filters.search).trim()}%`;
-      if (filters.searchCustomerIds && filters.searchCustomerIds.length > 0) {
-        countSql += ` AND (order_number ILIKE $${paramCount++} OR notes ILIKE $${paramCount++} OR customer_id = ANY($${paramCount++}::uuid[]))`;
-        countParams.push(searchPattern, searchPattern, filters.searchCustomerIds);
-      } else {
-        countSql += ` AND (order_number ILIKE $${paramCount++} OR notes ILIKE $${paramCount++})`;
-        countParams.push(searchPattern, searchPattern);
-      }
-    }
-    if (filters.dateFrom) {
-      countSql += ` AND sale_date >= $${paramCount++}`;
-      countParams.push(filters.dateFrom);
-    }
-    if (filters.dateTo) {
-      countSql += ` AND sale_date <= $${paramCount++}`;
-      countParams.push(filters.dateTo);
-    }
-    if (filters.productIds && filters.productIds.length > 0) {
-      if (filters.productIds.includes('__none__')) {
-        countSql += ' AND 1 = 0';
-      } else {
-        countSql += ` AND EXISTS (
-          SELECT 1 FROM jsonb_array_elements(COALESCE(items::jsonb, '[]'::jsonb)) AS elem
-          WHERE (elem->>'product') = ANY($${paramCount++}::text[])
-        )`;
-        countParams.push(filters.productIds.map(id => String(id)));
-      }
-    }
-
-    if (filters.excludeStatuses && filters.excludeStatuses.length > 0) {
-      countSql += ` AND NOT (status = ANY($${paramCount++}::text[]))`;
-      countParams.push(filters.excludeStatuses);
-    }
-
-    if (filters.requireCustomerId) {
-      countSql += ' AND customer_id IS NOT NULL';
-    }
-
+    const { sql: countFilterSql } = buildSalesFilterSql(filters, countParams, 1, 's');
+    const countSql = `SELECT COUNT(*)::bigint AS c FROM sales s WHERE s.deleted_at IS NULL${countFilterSql}`;
     const countResult = await query(countSql, countParams);
-    const total = parseInt(countResult.rows[0].count, 10);
+    const total = parseInt(countResult.rows[0].c, 10);
+
+    const cursorStr = options.cursor || options.keysetCursor;
+    const decoded = typeof cursorStr === 'string' ? decodeCursor(cursorStr) : null;
+
+    if (decoded) {
+      const fetchLimit = limit + 1;
+      const sales = await this.findAll(filters, {
+        ...options,
+        listMode,
+        cursor: decoded,
+        limit: fetchLimit,
+        offset: undefined
+      });
+      const hasMore = sales.length > limit;
+      const pageRows = hasMore ? sales.slice(0, limit) : sales;
+      let nextCursor = null;
+      if (hasMore && pageRows.length > 0) {
+        const last = pageRows[pageRows.length - 1];
+        const ca = last.created_at || last.createdAt;
+        nextCursor = encodeCursor(ca, last.id);
+      }
+      return {
+        sales: pageRows,
+        pagination: {
+          page: null,
+          limit,
+          total,
+          pages: null,
+          mode: 'keyset',
+          nextCursor,
+          hasMore
+        }
+      };
+    }
 
     const sales = await this.findAll(filters, {
       ...options,
+      listMode,
       limit,
       offset
     });
@@ -207,7 +239,10 @@ class SalesRepository {
         page,
         limit,
         total,
-        pages: Math.ceil(total / limit) || 1
+        pages: Math.ceil(total / limit) || 1,
+        mode: 'offset',
+        nextCursor: null,
+        hasMore: page * limit < total
       }
     };
   }

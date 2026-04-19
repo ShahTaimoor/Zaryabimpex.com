@@ -25,6 +25,7 @@ import {
 } from '../store/services/categoriesApi';
 import PaginationControls from '../components/PaginationControls';
 import { flattenCategoryApiTree } from '../utils/categoryTree';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
 const CategoryModal = ({ category, isOpen, onClose, onSave, isSubmitting, categories = [], categoryType = 'parent' }) => {
   const [formData, setFormData] = useState({
@@ -310,16 +311,16 @@ export const Categories = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm]);
+  }, [debouncedSearch]);
 
   const { data, isLoading, error, refetch } = useGetCategoriesQuery(
-    { search: searchTerm, page, limit: 50 },
-    { refetchOnMountOrArgChange: true }
+    { search: debouncedSearch, page, limit: 50 },
+    { refetchOnMountOrArgChange: 120 }
   );
 
   const { data: modalTree } = useGetCategoryTreeQuery(undefined, {
     skip: !isModalOpen,
-    refetchOnMountOrArgChange: true,
+    refetchOnMountOrArgChange: 300,
   });
 
   const modalCategoryList = useMemo(() => {

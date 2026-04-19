@@ -36,6 +36,7 @@ import { handleApiError } from '../utils/errorHandler';
 import { toast } from 'sonner';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
+import { useCursorPagination } from '../hooks/useCursorPagination';
 
 export const StockMovements = () => {
   const defaultDateTo = getCurrentDatePakistan();
@@ -51,7 +52,6 @@ export const StockMovements = () => {
     location: '',
     status: ''
   });
-  const [currentPage, setCurrentPage] = useState(1);
   const [selectedMovement, setSelectedMovement] = useState(null);
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
   const [adjustmentData, setAdjustmentData] = useState({
@@ -64,6 +64,14 @@ export const StockMovements = () => {
     location: 'main_warehouse'
   });
 
+  const {
+    currentPage,
+    currentCursor,
+    updateFromPagination,
+    getUiPagination,
+    goToPage,
+  } = useCursorPagination([JSON.stringify(filters)]);
+
   // Fetch stock movements
   const {
     data: movementsData,
@@ -74,6 +82,7 @@ export const StockMovements = () => {
     {
       ...filters,
       page: currentPage,
+      cursor: currentCursor,
       limit: 20
     },
     {
@@ -224,7 +233,6 @@ export const StockMovements = () => {
   // Handlers
   const handleFilterChange = (key, value, { silent = false } = {}) => {
     setFilters(prev => ({ ...prev, [key]: value }));
-    setCurrentPage(1);
     if (!silent) {
       executeRefetch();
     }
@@ -244,7 +252,6 @@ export const StockMovements = () => {
       location: '',
       status: ''
     });
-    setCurrentPage(1);
     setTimeout(() => executeRefetch(), 0);
   };
 
@@ -309,10 +316,15 @@ export const StockMovements = () => {
   }
 
   const movements = movementsData?.data?.movements || [];
-  const pagination = movementsData?.data?.pagination || {};
+  const rawPagination = movementsData?.data?.pagination || {};
+  const pagination = getUiPagination(rawPagination, 20);
   const summary = movementsData?.data?.summary || {};
   const stats = statsData?.data?.overview || {};
   const topProducts = statsData?.data?.topProducts || [];
+
+  useEffect(() => {
+    updateFromPagination(rawPagination);
+  }, [rawPagination, updateFromPagination]);
 
   return (
     <div className="space-y-6">
@@ -669,7 +681,7 @@ export const StockMovements = () => {
               </div>
               <div className="flex space-x-2">
                 <Button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  onClick={() => goToPage(currentPage - 1, pagination.hasNext)}
                   disabled={pagination.current === 1}
                   variant="secondary"
                   size="sm"
@@ -680,7 +692,7 @@ export const StockMovements = () => {
                   Page {pagination.current} of {pagination.pages}
                 </span>
                 <Button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.pages))}
+                  onClick={() => goToPage(currentPage + 1, pagination.hasNext)}
                   disabled={pagination.current === pagination.pages}
                   variant="secondary"
                   size="sm"

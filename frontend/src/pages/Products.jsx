@@ -49,11 +49,13 @@ import { useAppDispatch } from '../store/hooks';
 import { api } from '../store/api';
 import { useProductOperations } from '../hooks/useProductOperations';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ExcelExportButton from '../components/ExcelExportButton';
 import ExcelImportButton from '../components/ExcelImportButton';
 import PdfExportButton from '../components/PdfExportButton';
+import { useCursorPagination } from '../hooks/useCursorPagination';
 
 const LIMIT_OPTIONS = [50, 500, 1000, 5000];
 const DEFAULT_LIMIT = 50;
@@ -61,7 +63,6 @@ const DEFAULT_LIMIT = 50;
 export const Products = () => {
   const dispatch = useAppDispatch();
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_LIMIT);
   const [filters, setFilters] = useState({});
   const [bulkUpdateType, setBulkUpdateType] = useState(null);
@@ -73,19 +74,30 @@ export const Products = () => {
   const [notesEntity, setNotesEntity] = useState(null);
   const { openTab } = useTab();
 
+  const debouncedSearch = useDebouncedValue(searchTerm, 350);
+
+  const {
+    currentPage,
+    currentCursor,
+    updateFromPagination,
+    getUiPagination,
+    goToPage,
+  } = useCursorPagination([debouncedSearch, JSON.stringify(filters), itemsPerPage]);
+
   const queryParams = {
-    search: searchTerm || undefined,
+    search: debouncedSearch || undefined,
     page: currentPage,
+    cursor: currentCursor,
     limit: itemsPerPage,
     ...filters
   };
 
   const { data, isLoading, error, refetch } = useGetProductsQuery(queryParams, {
-    refetchOnMountOrArgChange: true,
+    refetchOnMountOrArgChange: 120,
   });
 
   const { data: categoryTreeRaw } = useGetCategoryTreeQuery(undefined, {
-    refetchOnMountOrArgChange: true,
+    refetchOnMountOrArgChange: 300,
   });
 
   const categoriesData = useMemo(() => {
@@ -105,15 +117,8 @@ export const Products = () => {
 
   const pagination = useMemo(() => {
     const raw = data?.pagination || data?.data?.pagination || {};
-    return {
-      current: raw.current ?? raw.page ?? 1,
-      pages: raw.pages ?? 1,
-      total: raw.total ?? 0,
-      limit: raw.limit ?? itemsPerPage,
-      hasPrev: (raw.current ?? raw.page ?? 1) > 1,
-      hasNext: (raw.current ?? raw.page ?? 1) < (raw.pages ?? 1),
-    };
-  }, [data, itemsPerPage]);
+    return getUiPagination(raw, itemsPerPage);
+  }, [data, getUiPagination, itemsPerPage]);
 
   const products = allProducts;
 
@@ -134,24 +139,22 @@ export const Products = () => {
 
   const handleFiltersChange = (newFilters) => {
     setFilters(newFilters);
-    setCurrentPage(1);
   };
 
   const handleLimitChange = (e) => {
     const val = Number(e.target.value);
     setItemsPerPage(val);
-    setCurrentPage(1);
   };
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
 
   const handleClearFilters = () => {
     setFilters({});
     setSearchTerm('');
-    setCurrentPage(1);
   };
+
+  useEffect(() => {
+    const raw = data?.pagination || data?.data?.pagination || {};
+    updateFromPagination(raw);
+  }, [data, updateFromPagination]);
 
   const handleBulkUpdate = async (updates) => {
     await productOps.handleBulkUpdate(updates, bulkOps);
@@ -513,7 +516,7 @@ export const Products = () => {
           </p>
           <nav className="flex items-center gap-2">
             <Button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              onClick={() => goToPage(currentPage - 1, pagination.hasNext)}
               disabled={!pagination.hasPrev}
               variant="outline"
               size="sm"
@@ -525,7 +528,7 @@ export const Products = () => {
               Page {pagination.current} of {pagination.pages}
             </span>
             <Button
-              onClick={() => setCurrentPage((p) => Math.min(pagination.pages, p + 1))}
+              onClick={() => goToPage(currentPage + 1, pagination.hasNext)}
               disabled={!pagination.hasNext}
               variant="outline"
               size="sm"

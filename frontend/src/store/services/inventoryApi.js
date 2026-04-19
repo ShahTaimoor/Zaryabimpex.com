@@ -19,6 +19,7 @@ export const inventoryApi = api.injectEndpoints({
           params: filteredParams,
         };
       },
+      keepUnusedDataFor: 60,
       providesTags: (result) =>
         result?.data?.items
           ? [
@@ -32,6 +33,7 @@ export const inventoryApi = api.injectEndpoints({
         url: 'inventory/summary',
         method: 'get',
       }),
+      keepUnusedDataFor: 120,
       providesTags: [{ type: 'Inventory', id: 'SUMMARY' }],
     }),
     getLowStockItems: builder.query({
@@ -39,6 +41,7 @@ export const inventoryApi = api.injectEndpoints({
         url: 'inventory/low-stock',
         method: 'get',
       }),
+      keepUnusedDataFor: 120,
       providesTags: [{ type: 'Inventory', id: 'LOW_STOCK' }],
     }),
     createStockAdjustment: builder.mutation({
@@ -155,6 +158,7 @@ export const inventoryApi = api.injectEndpoints({
           params: filteredParams,
         };
       },
+      keepUnusedDataFor: 60,
       providesTags: [{ type: 'StockLedger', id: 'LIST' }],
     }),
     // Stock Movements
@@ -169,12 +173,16 @@ export const inventoryApi = api.injectEndpoints({
             filteredParams[key] = value;
           }
         });
+        if (!filteredParams.listMode) {
+          filteredParams.listMode = 'minimal';
+        }
         return {
           url: 'stock-movements',
           method: 'get',
           params: filteredParams,
         };
       },
+      keepUnusedDataFor: 60,
       providesTags: [{ type: 'Inventory', id: 'MOVEMENTS' }],
     }),
     getStockMovementStats: builder.query({

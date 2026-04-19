@@ -8,6 +8,7 @@ export const purchaseOrdersApi = api.injectEndpoints({
         method: 'get',
         params,
       }),
+      keepUnusedDataFor: 60,
       providesTags: (result) =>
         result?.data?.purchaseOrders
           ? [

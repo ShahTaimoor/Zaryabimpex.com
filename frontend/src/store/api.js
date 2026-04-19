@@ -8,6 +8,8 @@ const BASE_URL = import.meta.env.VITE_API_URL
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: axiosBaseQuery({ baseUrl: BASE_URL }),
+  /** Default cache lifetime for list/detail queries; heavy endpoints can override. */
+  keepUnusedDataFor: 90,
   tagTypes: [
     'Auth',
     'Sales',

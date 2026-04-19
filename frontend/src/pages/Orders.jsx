@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import {
   ShoppingCart,
   Search,
@@ -32,6 +33,7 @@ import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import PaginationControls from '../components/PaginationControls';
+import { useCursorPagination } from '../hooks/useCursorPagination';
 
 const INVOICE_PAGE_SIZE = 50;
 
@@ -139,7 +141,7 @@ const OrderCard = ({ order, onView, onEdit, onPrint }) => {
               {Math.round(order.pricing?.total ?? order.total ?? 0)}
             </p>
             <p className="text-sm text-gray-600">
-              {order.items?.length ?? 0} item{(order.items?.length ?? 0) !== 1 ? 's' : ''}
+              {order.lineItemCount ?? order.items?.length ?? 0} item{(order.lineItemCount ?? order.items?.length ?? 0) !== 1 ? 's' : ''}
             </p>
           </div>
         </div>
@@ -189,11 +191,18 @@ const OrderCard = ({ order, onView, onEdit, onPrint }) => {
 
 export const Orders = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebouncedValue(searchTerm, 350);
   const [statusFilter, setStatusFilter] = useState('');
-  const [invoicePage, setInvoicePage] = useState(1);
   const today = getLocalDateString();
   const [fromDate, setFromDate] = useState(today); // Today
   const [toDate, setToDate] = useState(today); // Today
+  const {
+    currentPage: invoicePage,
+    currentCursor,
+    updateFromPagination,
+    getUiPagination,
+    goToPage,
+  } = useCursorPagination([debouncedSearch, statusFilter, fromDate, toDate]);
 
   // Handle date change from DateFilter component
   const handleDateChange = (newStartDate, newEndDate) => {
@@ -215,18 +224,16 @@ export const Orders = () => {
   // Fetch orders
   const { data: ordersResponse, isLoading, error, refetch: refetchOrders } = useGetOrdersQuery(
     {
-      search: searchTerm,
+      search: debouncedSearch,
       status: statusFilter || undefined,
       dateFrom: fromDate || undefined,
       dateTo: toDate || undefined,
       page: invoicePage,
+      cursor: currentCursor,
       limit: INVOICE_PAGE_SIZE
-    }
+    },
+    { refetchOnMountOrArgChange: 120 }
   );
-
-  useEffect(() => {
-    setInvoicePage(1);
-  }, [searchTerm, statusFilter, fromDate, toDate]);
 
   // Extract orders from response
   const orders = React.useMemo(() => {
@@ -239,7 +246,15 @@ export const Orders = () => {
   }, [ordersResponse]);
 
   const ordersPagination = ordersResponse?.data?.pagination ?? ordersResponse?.pagination ?? {};
+  const uiPagination = React.useMemo(
+    () => getUiPagination(ordersPagination, INVOICE_PAGE_SIZE),
+    [getUiPagination, ordersPagination]
+  );
   const invoiceRowOffset = (invoicePage - 1) * INVOICE_PAGE_SIZE;
+
+  useEffect(() => {
+    updateFromPagination(ordersPagination);
+  }, [ordersPagination, updateFromPagination]);
 
   // Fetch company settings
   const { data: companySettingsData } = useGetCompanySettingsQuery(undefined, {
@@ -499,7 +514,7 @@ export const Orders = () => {
         orderNumber: order.order_number ?? order.orderNumber ?? '—',
         customerName: order.customer?.businessName ?? order.customer?.business_name ?? order.customer?.displayName ?? order.customer?.name ?? order.customerInfo?.businessName ?? order.customerInfo?.business_name ?? order.customerInfo?.name ?? 'Walk-in Customer',
         date: formatOrderDate(order),
-        itemsCount: order.items?.length ?? 0,
+        itemsCount: order.lineItemCount ?? order.items?.length ?? 0,
         total: Number(order.pricing?.total ?? order.total ?? 0),
         paymentStatus: getDerivedPaymentStatus(order).toUpperCase(),
         orderType: (order.orderType ?? order.order_type ?? '—').toUpperCase(),
@@ -673,7 +688,7 @@ export const Orders = () => {
 
                     {/* Items */}
                     <div className="col-span-1 text-center text-gray-600">
-                      {order.items?.length ?? 0}
+                      {order.lineItemCount ?? order.items?.length ?? 0}
                     </div>
 
                     {/* Total */}
@@ -771,11 +786,11 @@ export const Orders = () => {
             ))}
           </div>
           <PaginationControls
-            page={Number(ordersPagination.page ?? invoicePage) || 1}
-            totalPages={Math.max(1, Number(ordersPagination.pages) || 1)}
-            onPageChange={setInvoicePage}
-            totalItems={ordersPagination.total}
-            limit={ordersPagination.limit ?? INVOICE_PAGE_SIZE}
+            page={uiPagination.current}
+            totalPages={Math.max(1, Number(uiPagination.pages) || 1)}
+            onPageChange={(page) => goToPage(page, uiPagination.hasNext)}
+            totalItems={uiPagination.total}
+            limit={uiPagination.limit ?? INVOICE_PAGE_SIZE}
           />
         </div>
       )}
