@@ -5,6 +5,7 @@ const CategoryRepository = require('../repositories/postgres/CategoryRepository'
 const SupplierRepository = require('../repositories/postgres/SupplierRepository');
 const PurchaseOrderRepository = require('../repositories/PurchaseOrderRepository');
 const PurchaseInvoiceRepository = require('../repositories/PurchaseInvoiceRepository');
+const ProductVariantRepository = require('../repositories/postgres/ProductVariantRepository');
 
 async function getSalesGroupedByProduct(dateFrom, dateTo, status = 'completed') {
   const sales = await SalesRepository.findAll(
@@ -26,25 +27,63 @@ async function getSalesGroupedByProduct(dateFrom, dateTo, status = 'completed') 
   return Object.values(byProduct);
 }
 
+/**
+ * Normalizes a variant to look like a product for report calculations.
+ */
+function normalizeVariant(variant, baseProduct = null) {
+  const pricing = typeof variant.pricing === 'string' ? JSON.parse(variant.pricing) : (variant.pricing || {});
+  const inventory = typeof variant.inventory_data === 'string' ? JSON.parse(variant.inventory_data) : (variant.inventory_data || {});
+  
+  return {
+    ...variant,
+    name: variant.display_name || variant.variant_name || (baseProduct ? `${baseProduct.product_name} - ${variant.variant_value}` : 'Unnamed Variant'),
+    product_name: variant.display_name || variant.variant_name || (baseProduct ? `${baseProduct.product_name} - ${variant.variant_value}` : 'Unnamed Variant'),
+    stock_quantity: Number(inventory.currentStock ?? 0),
+    stockQuantity: Number(inventory.currentStock ?? 0),
+    cost_price: Number(pricing.cost ?? 0),
+    costPrice: Number(pricing.cost ?? 0),
+    selling_price: Number(pricing.retail ?? 0),
+    sellingPrice: Number(pricing.retail ?? 0),
+    min_stock_level: Number(inventory.reorderPoint ?? 0),
+    minStockLevel: Number(inventory.reorderPoint ?? 0),
+    category_id: baseProduct?.category_id || variant.category_id,
+    isVariant: true,
+    base_product_name: baseProduct?.product_name
+  };
+}
+
 async function getProductsForReport(filters = {}) {
   const { categories } = filters;
+  let products = [];
+  
   if (categories && categories.length > 0) {
-    const all = [];
     for (const catId of categories) {
       const rows = await ProductRepository.findAll({ categoryId: catId }, { limit: 2000 });
-      all.push(...rows);
+      products.push(...rows);
     }
+    // De-duplicate products
     const seen = new Set();
-    return all.filter((p) => {
+    products = products.filter((p) => {
       const id = String(p.id || p._id);
       if (seen.has(id)) return false;
       seen.add(id);
       return true;
     });
+  } else {
+    products = await ProductRepository.findAll({}, { limit: 2000 });
   }
-  // Do not force isActive=true for reports; migrated data can have NULL/false
-  // while still representing valid inventory items.
-  return ProductRepository.findAll({}, { limit: 2000 });
+
+  // Fetch and normalize variants for these products
+  const allItems = [...products];
+  const variantPromises = products.map(async (p) => {
+    const variants = await ProductVariantRepository.findByBaseProduct(p.id);
+    return variants.map(v => normalizeVariant(v, p));
+  });
+
+  const variantLists = await Promise.all(variantPromises);
+  variantLists.forEach(list => allItems.push(...list));
+
+  return allItems;
 }
 
 class InventoryReportService {
@@ -504,7 +543,7 @@ class InventoryReportService {
   async generateCategoryPerformanceData(report) {
     try {
       const { startDate, endDate } = report;
-      const products = await ProductRepository.findAll({}, { limit: 5000 });
+      const products = await getProductsForReport(report.config?.filters || {});
       const byCategory = {};
       for (const p of products) {
         const cid = (p.category_id || p.category || p._id)?.toString?.() ?? 'none';
@@ -647,7 +686,7 @@ class InventoryReportService {
       const { startDate, endDate, config } = report;
       const { thresholds } = config;
 
-      const products = await ProductRepository.findAll({}, { limit: 10000 });
+      const products = await getProductsForReport(config?.filters || {});
       const summaryData = products.reduce(
         (acc, p) => {
           acc.totalProducts++;
@@ -712,7 +751,7 @@ class InventoryReportService {
       const { startDate, endDate, periodType } = report;
       const previousPeriod = this.getPreviousPeriod(startDate, endDate, periodType);
 
-      const prevProducts = await ProductRepository.findAll({}, { limit: 10000 });
+      const prevProducts = await getProductsForReport(report.config?.filters || {});
       const previousData = prevProducts.reduce(
         (acc, p) => {
           acc.totalProducts++;
