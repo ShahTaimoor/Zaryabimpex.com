@@ -93,6 +93,27 @@ router.get('/customers', [
   }
 });
 
+// @route   GET /api/reports/inventory-reconciliation
+// @desc    Get inventory reconciliation report (Opening, Purchases, Sales, Returns, Closing, Valuation)
+// @access  Private
+router.get('/inventory-reconciliation', [
+  auth,
+  requirePermission('view_reports'),
+  query('dateFrom').optional().isDate(),
+  query('dateTo').optional().isDate(),
+  query('categoryId').optional(),
+  query('productId').optional(),
+  handleValidationErrors,
+], async (req, res) => {
+  try {
+    const report = await reportsService.getInventoryReconciliationReport(req.query);
+    res.json(report);
+  } catch (error) {
+    console.error('Inventory reconciliation report error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   GET /api/reports/inventory
 // @desc    Get inventory report (summary, low-stock, valuation, stock-summary)
 // @access  Private

@@ -680,6 +680,183 @@ class ReportsService {
   }
 
   /**
+   * Enhanced Inventory Reconciliation Report (Your Requirements)
+   * Shows: Opening Stock, Purchases, Sales, Sale Returns, Purchase Returns, Closing Stock, Valuation
+   * Formula: Closing Stock = Opening + Purchases - Sales + Sale Returns - Purchase Returns
+   * @param {object} filters - Query filters (dateFrom, dateTo, categoryId, productId)
+   * @returns {Promise<object>}
+   */
+  async getInventoryReconciliationReport(filters) {
+    return reportsCache('getInventoryReconciliationReport', filters, async () => {
+    const { query } = require('../config/postgres');
+    const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
+
+    const dateFrom = filters.dateFrom ? getStartOfDayPakistan(filters.dateFrom) : getStartOfDayPakistan(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    const dateTo = filters.dateTo ? getEndOfDayPakistan(filters.dateTo) : getEndOfDayPakistan(new Date().toISOString().split('T')[0]);
+    const categoryId = filters.categoryId && filters.categoryId !== 'all' ? filters.categoryId : null;
+    const productId = filters.productId ? filters.productId : null;
+
+    const params = [dateFrom, dateTo];
+    let paramIdx = 3;
+    let prodFilter = '';
+    if (categoryId) {
+      prodFilter += ` AND p.category_id = $${paramIdx++}`;
+      params.push(categoryId);
+    }
+    if (productId) {
+      prodFilter += ` AND p.id = $${paramIdx++}`;
+      params.push(productId);
+    }
+
+    // Get opening stock as of dateFrom (from inventory_balance or calculate from movements)
+    const openingStockSql = `
+      WITH opening_movements AS (
+        SELECT product_id,
+          SUM(CASE
+            WHEN movement_type IN ('purchase','return_in','adjustment_in','transfer_in','production','initial_stock') THEN quantity
+            WHEN movement_type IN ('sale','return_out','adjustment_out','transfer_out','damage','expiry','theft','consumption') THEN -quantity
+            ELSE 0
+          END) as opening_qty
+        FROM stock_movements
+        WHERE created_at < $1 AND status = 'completed'
+        GROUP BY product_id
+      )
+      SELECT p.id as product_id, p.name, p.sku, p.unit,
+             COALESCE(om.opening_qty, 0) as opening_stock
+      FROM products p
+      LEFT JOIN opening_movements om ON om.product_id = p.id
+      WHERE p.is_deleted = FALSE AND p.is_active = TRUE ${prodFilter}
+    `;
+
+    const openingResult = await query(openingStockSql, params.slice(0, paramIdx));
+    const openingStockMap = new Map();
+    openingResult.rows.forEach(row => {
+      openingStockMap.set(row.product_id, {
+        name: row.name,
+        sku: row.sku,
+        unit: row.unit,
+        openingStock: parseFloat(row.opening_stock || 0)
+      });
+    });
+
+    // Get period movements
+    const movementsSql = `
+      SELECT product_id,
+        SUM(CASE WHEN movement_type = 'purchase' THEN quantity ELSE 0 END) as purchases,
+        SUM(CASE WHEN movement_type = 'sale' THEN quantity ELSE 0 END) as sales,
+        SUM(CASE WHEN movement_type = 'return_in' THEN quantity ELSE 0 END) as sale_returns,
+        SUM(CASE WHEN movement_type = 'return_out' THEN quantity ELSE 0 END) as purchase_returns
+      FROM stock_movements
+      WHERE created_at >= $1 AND created_at <= $2 AND status = 'completed'
+      GROUP BY product_id
+    `;
+
+    const movementsResult = await query(movementsSql, [dateFrom, dateTo]);
+    const movementsMap = new Map();
+    movementsResult.rows.forEach(row => {
+      movementsMap.set(row.product_id, {
+        purchases: parseFloat(row.purchases || 0),
+        sales: parseFloat(row.sales || 0),
+        saleReturns: parseFloat(row.sale_returns || 0),
+        purchaseReturns: parseFloat(row.purchase_returns || 0)
+      });
+    });
+
+    // Get current cost prices and closing stock
+    const currentSql = `
+      WITH ib_agg AS (
+        SELECT product_id, SUM(COALESCE(quantity, 0))::decimal AS quantity
+        FROM inventory_balance
+        GROUP BY product_id
+      ),
+      inv_agg AS (
+        SELECT product_id, SUM(COALESCE(current_stock, 0))::decimal AS current_stock
+        FROM inventory
+        WHERE deleted_at IS NULL
+        GROUP BY product_id
+      )
+      SELECT p.id, p.name, p.sku, p.unit, cat.name as category_name,
+             COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) as closing_stock,
+             p.cost_price
+      FROM products p
+      LEFT JOIN categories cat ON p.category_id = cat.id
+      LEFT JOIN ib_agg ib ON ib.product_id = p.id
+      LEFT JOIN inv_agg i ON i.product_id = p.id
+      WHERE p.is_deleted = FALSE AND p.is_active = TRUE ${prodFilter}
+      ORDER BY p.name ASC
+    `;
+
+    const currentResult = await query(currentSql, params.slice(2));
+    const reportData = [];
+
+    currentResult.rows.forEach(row => {
+      const productId = row.id;
+      const opening = openingStockMap.get(productId) || { openingStock: 0 };
+      const movements = movementsMap.get(productId) || {
+        purchases: 0, sales: 0, saleReturns: 0, purchaseReturns: 0
+      };
+
+      const openingStock = opening.openingStock;
+      const purchases = movements.purchases;
+      const sales = movements.sales;
+      const saleReturns = movements.saleReturns;
+      const purchaseReturns = movements.purchaseReturns;
+
+      // Your formula: Closing Stock = Opening + Purchases - Sales + Sale Returns - Purchase Returns
+      const calculatedClosing = openingStock + purchases - sales + saleReturns - purchaseReturns;
+      const actualClosing = parseFloat(row.closing_stock || 0);
+      const costPrice = parseFloat(row.cost_price || 0);
+
+      reportData.push({
+        productId,
+        productName: row.name,
+        sku: row.sku,
+        unit: row.unit,
+        categoryName: row.category_name,
+        openingStock,
+        purchases,
+        sales,
+        saleReturns,
+        purchaseReturns,
+        calculatedClosing,
+        actualClosing,
+        variance: calculatedClosing - actualClosing,
+        costPrice,
+        valuation: calculatedClosing * costPrice
+      });
+    });
+
+    // Calculate totals
+    const totals = reportData.reduce((acc, item) => ({
+      openingStock: acc.openingStock + item.openingStock,
+      purchases: acc.purchases + item.purchases,
+      sales: acc.sales + item.sales,
+      saleReturns: acc.saleReturns + item.saleReturns,
+      purchaseReturns: acc.purchaseReturns + item.purchaseReturns,
+      calculatedClosing: acc.calculatedClosing + item.calculatedClosing,
+      actualClosing: acc.actualClosing + item.actualClosing,
+      variance: acc.variance + item.variance,
+      valuation: acc.valuation + item.valuation
+    }), {
+      openingStock: 0, purchases: 0, sales: 0, saleReturns: 0, purchaseReturns: 0,
+      calculatedClosing: 0, actualClosing: 0, variance: 0, valuation: 0
+    });
+
+    return {
+      data: reportData,
+      summary: {
+        ...totals,
+        totalProducts: reportData.length,
+        productsWithVariance: reportData.filter(p => Math.abs(p.variance) > 0.001).length
+      },
+      reportType: 'inventory-reconciliation',
+      filters: { dateFrom, dateTo, categoryId, productId },
+      formula: 'Closing Stock = Opening + Purchases - Sales + Sale Returns - Purchase Returns'
+    };
+    });
+  }
+
+  /**
    * Get comprehensive inventory report
    * @param {object} filters - Query filters (category, lowStock, type)
    * @returns {Promise<object>}
