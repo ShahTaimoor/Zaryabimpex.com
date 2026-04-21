@@ -31,7 +31,7 @@ router.get('/accounts', auth, ledgerView, async (req, res) => {
 // GET /api/account-ledger/all-entries
 router.get('/all-entries', auth, ledgerView, async (req, res) => {
   try {
-    const result = await accountLedgerService.getAccountLedger({ ...req.query, limit: req.query.limit || 1000 });
+    const result = await accountLedgerService.getAccountLedger({ ...req.query, limit: req.query.limit || 5000 });
     res.json(result?.data ? result : { success: true, data: result });
   } catch (error) {
     console.error('Account ledger all entries error:', error);

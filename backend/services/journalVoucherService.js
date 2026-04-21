@@ -66,6 +66,37 @@ class JournalVoucherService {
       errors.push('Journal voucher must involve at least 2 different accounts');
     }
 
+    // Party validation: AR/AP accounts must have a customer/supplier link
+    for (let i = 0; i < (data.entries || []).length; i++) {
+        const entry = data.entries[i];
+        const code = (entry.accountCode || entry.account_code || '').toUpperCase();
+        let cid = entry.customerId || entry.customer_id;
+        let sid = entry.supplierId || entry.supplier_id;
+
+        // Auto-link if code starts with CUST- or SUPP- and ID is missing
+        if (!cid && code.startsWith('CUST-')) {
+            cid = code.replace('CUST-', '');
+            entry.customerId = cid; // Update the entry object as well
+        }
+        if (!sid && code.startsWith('SUPP-')) {
+            sid = code.replace('SUPP-', '');
+            entry.supplierId = sid;
+        }
+
+        // AR Accounts: code 1100 or starts with CUST-
+        if (code === '1100' || code.startsWith('CUST-')) {
+            if (!cid) {
+                errors.push(`Entry ${i + 1}: Accounts Receivable must be linked to a specific customer.`);
+            }
+        }
+        // AP Accounts: code 2000 or starts with SUPP-
+        if (code === '2000' || code.startsWith('SUPP-')) {
+            if (!sid) {
+                errors.push(`Entry ${i + 1}: Accounts Payable must be linked to a specific supplier.`);
+            }
+        }
+    }
+
     return {
       isValid: errors.length === 0,
       errors,

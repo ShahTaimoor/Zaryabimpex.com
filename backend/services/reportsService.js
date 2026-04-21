@@ -1320,20 +1320,22 @@ class ReportsService {
         COALESCE(p.total_payments, 0) as "totalPayments"
       FROM banks b
       LEFT JOIN (
-        SELECT bank_id, COALESCE(SUM(amount), 0) as total_receipts
-        FROM bank_receipts
-        WHERE deleted_at IS NULL
-        ${dateClause}
-        ${bankIdFilterReceiptTable}
-        GROUP BY bank_id
+        SELECT br.bank_id, COALESCE(SUM(al.debit_amount), 0) as total_receipts
+        FROM account_ledger al
+        JOIN bank_receipts br ON al.reference_id = br.id AND al.reference_type = 'bank_receipt'
+        WHERE al.status = 'completed' AND al.reversed_at IS NULL
+          ${dateClause.replace('date', 'al.transaction_date')}
+          ${bankIdFilterReceiptTable}
+        GROUP BY br.bank_id
       ) r ON r.bank_id = b.id
       LEFT JOIN (
-        SELECT bank_id, COALESCE(SUM(amount), 0) as total_payments
-        FROM bank_payments
-        WHERE deleted_at IS NULL
-        ${dateClause}
-        ${bankIdFilterPaymentTable}
-        GROUP BY bank_id
+        SELECT bp.bank_id, COALESCE(SUM(al.credit_amount), 0) as total_payments
+        FROM account_ledger al
+        JOIN bank_payments bp ON al.reference_id = bp.id AND al.reference_type = 'bank_payment'
+        WHERE al.status = 'completed' AND al.reversed_at IS NULL
+          ${dateClause.replace('date', 'al.transaction_date')}
+          ${bankIdFilterPaymentTable}
+        GROUP BY bp.bank_id
       ) p ON p.bank_id = b.id
       WHERE b.deleted_at IS NULL
       ${bankIdFilterBankTable}
@@ -1341,10 +1343,39 @@ class ReportsService {
     `;
 
     const bankResult = await query(bankSummarySql, bankParams);
+    
+    // FETCH JOURNAL VOUCHERS AND OTHER LEDGER ENTRIES FOR BANK (1001)
+    // These are entries that are NOT bank_receipt or bank_payment
+    const bankJournalSql = `
+      SELECT 
+        COALESCE(SUM(debit_amount), 0) as "totalReceipts",
+        COALESCE(SUM(credit_amount), 0) as "totalPayments"
+      FROM account_ledger
+      WHERE account_code = '1001'
+        AND status = 'completed'
+        AND reversed_at IS NULL
+        AND reference_type NOT IN ('bank_receipt', 'bank_payment', 'bank_opening_balance')
+        ${dateClause.replace('date', 'transaction_date')}
+    `;
+    const bankJournalResult = await query(bankJournalSql, dateParams);
+    const bankJournal = bankJournalResult.rows[0] || { totalReceipts: 0, totalPayments: 0 };
+    
+    // Process bank rows and merge Journal Adjustments if possible
     const banks = bankResult.rows.map(row => {
-      const openingBalance = parseFloat(row.openingBalance || 0);
-      const totalReceipts = parseFloat(row.totalReceipts || 0);
-      const totalPayments = parseFloat(row.totalPayments || 0);
+      let openingBalance = parseFloat(row.openingBalance || 0);
+      let totalReceipts = parseFloat(row.totalReceipts || 0);
+      let totalPayments = parseFloat(row.totalPayments || 0);
+
+      // HEURISTIC: If there is only one bank OR the journal entries specifically mention this bank, merge them
+      // In this specific system, account 1001 is treated as the primary bank account.
+      if (bankResult.rows.length === 1 || row.accountNumber === '1001') {
+        totalReceipts += parseFloat(bankJournal.totalReceipts || 0);
+        totalPayments += parseFloat(bankJournal.totalPayments || 0);
+        // We set these to 0 so they aren't added again or as a separate row
+        bankJournal.totalReceipts = 0;
+        bankJournal.totalPayments = 0;
+      }
+
       return {
         ...row,
         openingBalance,
@@ -1354,10 +1385,24 @@ class ReportsService {
       };
     });
 
+    // If there are still journal entries left (e.g. multiple banks and they didn't match), add them as a separate row
+    if ((parseFloat(bankJournal.totalReceipts) > 0 || parseFloat(bankJournal.totalPayments) > 0) && bankIds.length === 0) {
+      banks.push({
+        id: 'journal-adjustments',
+        bankName: 'Journal Entries / Adjustments',
+        accountName: 'General Ledger',
+        accountNumber: '1001',
+        openingBalance: 0,
+        totalReceipts: parseFloat(bankJournal.totalReceipts),
+        totalPayments: parseFloat(bankJournal.totalPayments),
+        balance: parseFloat(bankJournal.totalReceipts) - parseFloat(bankJournal.totalPayments)
+      });
+    }
+
     const cashSummarySql = `
       SELECT 
-        COALESCE((SELECT SUM(amount) FROM cash_receipts WHERE deleted_at IS NULL ${dateClause}), 0) as "totalReceipts",
-        COALESCE((SELECT SUM(amount) FROM cash_payments WHERE deleted_at IS NULL ${dateClause}), 0) as "totalPayments"
+        COALESCE((SELECT SUM(debit_amount) FROM account_ledger WHERE account_code = '1000' AND status = 'completed' AND reversed_at IS NULL ${dateClause.replace('date', 'transaction_date')}), 0) as "totalReceipts",
+        COALESCE((SELECT SUM(credit_amount) FROM account_ledger WHERE account_code = '1000' AND status = 'completed' AND reversed_at IS NULL ${dateClause.replace('date', 'transaction_date')}), 0) as "totalPayments"
     `;
     const [cashResult, cashOpeningDisplay] = await Promise.all([
       query(cashSummarySql, dateParams),

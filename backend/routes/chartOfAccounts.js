@@ -331,7 +331,7 @@ router.post('/sync-party-accounts', auth, chartManage, async (req, res) => {
     
     for (const customer of customersResult.rows) {
       results.customersProcessed++;
-      const accountCode = `CUST-${customer.id}`;
+      const accountCode = `CUST-${String(customer.id).toUpperCase()}`;
       const accountName = customer.business_name || customer.name || 'Unknown Customer';
       
       try {
@@ -347,7 +347,7 @@ router.post('/sync-party-accounts', auth, chartManage, async (req, res) => {
             normalBalance: 'debit',
             openingBalance: 0,
             currentBalance: 0,
-            allowDirectPosting: false,
+            allowDirectPosting: true,
             isSystemAccount: false,
             isActive: true,
             description: `Customer Account: ${accountName}`,
@@ -372,7 +372,7 @@ router.post('/sync-party-accounts', auth, chartManage, async (req, res) => {
     
     for (const supplier of suppliersResult.rows) {
       results.suppliersProcessed++;
-      const accountCode = `SUPP-${supplier.id}`;
+      const accountCode = `SUPP-${String(supplier.id).toUpperCase()}`;
       const accountName = supplier.company_name || supplier.business_name || supplier.name || 'Unknown Supplier';
       
       try {
@@ -388,7 +388,7 @@ router.post('/sync-party-accounts', auth, chartManage, async (req, res) => {
             normalBalance: 'credit',
             openingBalance: 0,
             currentBalance: 0,
-            allowDirectPosting: false,
+            allowDirectPosting: true,
             isSystemAccount: false,
             isActive: true,
             description: `Supplier Account: ${accountName}`,

@@ -26,7 +26,9 @@ async function getCached(key, ttlMs, factory) {
   return value;
 }
 
-/** Best-effort cap to avoid unbounded growth */
+/**
+ * Best-effort cap to avoid unbounded growth
+ */
 const MAX_KEYS = 500;
 
 function pruneIfNeeded() {
@@ -40,6 +42,19 @@ function pruneIfNeeded() {
   keys.forEach((k) => store.delete(k));
 }
 
+/**
+ * Remove any keys from cache that start with prefix
+ * @param {string} prefix 
+ */
+function invalidateByPrefix(prefix) {
+  if (!prefix) return;
+  for (const key of store.keys()) {
+    if (key.startsWith(prefix)) {
+      store.delete(key);
+    }
+  }
+}
+
 setInterval(() => {
   try {
     pruneIfNeeded();
@@ -48,4 +63,4 @@ setInterval(() => {
   }
 }, 60_000).unref?.();
 
-module.exports = { getCached };
+module.exports = { getCached, invalidateByPrefix };

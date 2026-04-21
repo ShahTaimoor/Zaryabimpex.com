@@ -35,6 +35,10 @@ function entryCamel(row) {
     debitAmount: parseFloat(row.debit_amount) || 0,
     creditAmount: parseFloat(row.credit_amount) || 0,
     description: row.description,
+    customerId: row.customer_id,
+    supplierId: row.supplier_id,
+    customerName: row.customer_name,
+    supplierName: row.supplier_name,
     createdAt: row.created_at
   };
 }
@@ -125,9 +129,16 @@ class JournalVoucherRepository {
 
     const jv = toCamel(jvResult.rows[0]);
 
-    // Get entries
+    // Get entries with party names
     const entriesResult = await query(
-      'SELECT * FROM journal_voucher_entries WHERE journal_voucher_id = $1 ORDER BY line_number',
+      `SELECT e.*, 
+              c.name as customer_name,
+              COALESCE(s.business_name, s.name) as supplier_name
+       FROM journal_voucher_entries e
+       LEFT JOIN customers c ON e.customer_id = c.id
+       LEFT JOIN suppliers s ON e.supplier_id = s.id
+       WHERE e.journal_voucher_id = $1 
+       ORDER BY e.line_number`,
       [id]
     );
     jv.entries = entriesResult.rows.map(entryCamel);
@@ -179,8 +190,8 @@ class JournalVoucherRepository {
           const entry = data.entries[i];
           const entryResult = await clientToUse.query(
             `INSERT INTO journal_voucher_entries 
-             (journal_voucher_id, line_number, account_code, account_name, particulars, debit_amount, credit_amount, description)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             (journal_voucher_id, line_number, account_code, account_name, particulars, debit_amount, credit_amount, description, customer_id, supplier_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              RETURNING *`,
             [
               jvId,
@@ -190,7 +201,9 @@ class JournalVoucherRepository {
               entry.particulars || '',
               parseFloat(entry.debitAmount || entry.debit_amount || 0),
               parseFloat(entry.creditAmount || entry.credit_amount || 0),
-              entry.description || ''
+              entry.description || '',
+              entry.customerId || entry.customer_id || null,
+              entry.supplierId || entry.supplier_id || null
             ]
           );
           entries.push(entryCamel(entryResult.rows[0]));
@@ -265,8 +278,8 @@ class JournalVoucherRepository {
           const entry = data.entries[i];
           const entryResult = await clientToUse.query(
             `INSERT INTO journal_voucher_entries 
-             (journal_voucher_id, line_number, account_code, account_name, particulars, debit_amount, credit_amount, description)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             (journal_voucher_id, line_number, account_code, account_name, particulars, debit_amount, credit_amount, description, customer_id, supplier_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              RETURNING *`,
             [
               id,
@@ -276,7 +289,9 @@ class JournalVoucherRepository {
               entry.particulars || '',
               parseFloat(entry.debitAmount || entry.debit_amount || 0),
               parseFloat(entry.creditAmount || entry.credit_amount || 0),
-              entry.description || ''
+              entry.description || '',
+              entry.customerId || entry.customer_id || null,
+              entry.supplierId || entry.supplier_id || null
             ]
           );
           entries.push(entryCamel(entryResult.rows[0]));

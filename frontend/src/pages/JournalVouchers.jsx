@@ -17,6 +17,8 @@ import {
   useCreateJournalVoucherMutation,
   usePostJournalVoucherMutation,
 } from '../store/services/journalVouchersApi';
+import { useLazySearchCustomersQuery } from '../store/services/customersApi';
+import { useLazySearchSuppliersQuery } from '../store/services/suppliersApi';
 import { handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,7 +33,9 @@ const createEmptyEntry = () => ({
   accountId: '',
   debit: '',
   credit: '',
-  particulars: ''
+  particulars: '',
+  partyId: '',
+  partyName: ''
 });
 
 const getAccountDisplayLabel = (account) => {
@@ -39,7 +43,7 @@ const getAccountDisplayLabel = (account) => {
   // Hide UUID-based codes for customer/supplier party accounts — show only the name
   const isPartyAccount =
     account.accountCode?.startsWith('CUST-') ||
-    account.accountCode?.startsWith('SUP-')  ||
+    account.accountCode?.startsWith('SUPP-') ||
     (Array.isArray(account.tags) && (account.tags.includes('customer') || account.tags.includes('supplier')));
   if (isPartyAccount) return account.accountName || '';
   return `${account.accountCode} — ${account.accountName}`;
@@ -82,8 +86,15 @@ const ViewModal = ({ voucher, onClose }) => {
             <tbody className="divide-y divide-gray-100">
               {(voucher.entries || []).map((e, i) => (
                 <tr key={i}>
-                  <td className="px-4 py-2 font-mono text-gray-900">{e.accountCode}</td>
-                  <td className="px-4 py-2 text-gray-600">{e.particulars || e.description || '—'}</td>
+                  <td className="px-4 py-2 font-mono text-gray-900 border-b">
+                    <div className="font-bold">{e.accountCode}</div>
+                    {(e.customerName || e.supplierName) && (
+                      <div className="text-xs text-blue-600 font-sans mt-0.5">
+                        Party: {e.customerName || e.supplierName}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-gray-600 border-b">{e.particulars || e.description || '—'}</td>
                   <td className="px-4 py-2 text-right text-gray-900">
                     {parseFloat(e.debitAmount) > 0 ? parseFloat(e.debitAmount).toFixed(2) : '—'}
                   </td>
@@ -112,6 +123,53 @@ const ViewModal = ({ voucher, onClose }) => {
         </div>
       </div>
     </div>
+  );
+};
+
+/* ─── Party‑Selector Component ────────────────────────────────────────── */
+const PartySelector = ({ type, value, onChange, placeholder }) => {
+  const [searchCustomers] = useLazySearchCustomersQuery();
+  const [searchSuppliers] = useLazySearchSuppliersQuery();
+
+  const loadOptions = async (inputValue) => {
+    if (!inputValue || inputValue.length < 2) return [];
+    try {
+      if (type === 'customer') {
+        const result = await searchCustomers(inputValue).unwrap();
+        const list = result?.data || result || [];
+        return list.map(c => ({
+          value: c.id || c._id,
+          label: c.name || c.businessName || 'Unnamed Customer'
+        }));
+      } else {
+        const result = await searchSuppliers(inputValue).unwrap();
+        const list = result?.data || result || [];
+        return list.map(s => ({
+          value: s.id || s._id,
+          label: s.name || s.business_name || s.company_name || 'Unnamed Supplier'
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to search parties:', err);
+      return [];
+    }
+  };
+
+  return (
+    <AsyncSelect
+      cacheOptions
+      loadOptions={loadOptions}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder || `Search ${type}...`}
+      isClearable
+      menuPortalTarget={document.body}
+      className="w-full min-w-[200px]"
+      styles={{
+        control: (p) => ({ ...p, minHeight: '2.5rem' }),
+        menuPortal: (base) => ({ ...base, zIndex: 9999 })
+      }}
+    />
   );
 };
 
@@ -147,7 +205,10 @@ export const JournalVouchers = () => {
   const updateAccountMap = useCallback((accounts) => {
     setAccountMap(prev => {
       const next = new Map(prev);
-      accounts.forEach(a => next.set(a._id, a));
+      accounts.forEach(a => {
+        if (a._id) next.set(a._id, a);
+        if (a.id) next.set(a.id, a);
+      });
       return next;
     });
   }, []);
@@ -304,6 +365,28 @@ export const JournalVouchers = () => {
         const updated = { ...entry, [field]: value };
         if (field === 'debit'  && value) updated.credit = '';
         if (field === 'credit' && value) updated.debit  = '';
+        
+        // If account changes, clear or auto-set party
+        if (field === 'accountId') {
+          const account = value ? accountMap.get(value) : null;
+          if (account) {
+            const code = account.accountCode || '';
+            if (code.startsWith('CUST-')) {
+              updated.partyId = code.replace('CUST-', '');
+              updated.partyName = account.accountName;
+            } else if (code.startsWith('SUPP-')) {
+              updated.partyId = code.replace('SUPP-', '');
+              updated.partyName = account.accountName;
+            } else {
+              updated.partyId = '';
+              updated.partyName = '';
+            }
+          } else {
+            updated.partyId = '';
+            updated.partyName = '';
+          }
+        }
+        
         return updated;
       });
       return { ...prev, entries: nextEntries };
@@ -320,6 +403,26 @@ export const JournalVouchers = () => {
         return prev;
       }
       return { ...prev, entries: prev.entries.filter((_, idx) => idx !== index) };
+    });
+  };
+
+  const handlePartySelection = (index, partyId, partyName, type) => {
+    setFormState(prev => {
+      const nextEntries = [...prev.entries];
+      const entry = { ...nextEntries[index], partyId, partyName };
+
+      // Auto-select account if not set
+      if (partyId && !entry.accountId) {
+        const defaultCode = (type === 'customer') ? '1100' : '2000';
+        // Find matching account ID from map
+        const defaultAccount = Array.from(accountMap.values()).find(a => a.accountCode === defaultCode);
+        if (defaultAccount) {
+          entry.accountId = defaultAccount.id || defaultAccount._id;
+        }
+      }
+      
+      nextEntries[index] = entry;
+      return { ...prev, entries: nextEntries };
     });
   };
 
@@ -356,12 +459,15 @@ export const JournalVouchers = () => {
             creditAmount: entry.credit ? parseFloat(entry.credit) : 0
           };
         }
-        const account = accountMap.get(entry.accountId);
+        const account = entry.accountId ? accountMap.get(entry.accountId) : null;
+        const code = account?.accountCode || entry.accountId;
         return {
-          accountCode:  account?.accountCode || entry.accountId,
+          accountCode:  code,
           particulars:  entry.particulars?.trim() || '',
           debitAmount:  entry.debit  ? parseFloat(entry.debit)  : 0,
-          creditAmount: entry.credit ? parseFloat(entry.credit) : 0
+          creditAmount: entry.credit ? parseFloat(entry.credit) : 0,
+          customerId:   (code === '1100' || code.startsWith('CUST-')) ? entry.partyId || undefined : undefined,
+          supplierId:   (code === '2000' || code.startsWith('SUPP-')) ? entry.partyId || undefined : undefined
         };
       })
     };
@@ -470,6 +576,7 @@ export const JournalVouchers = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                  <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Party (Link)</th>
                   <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Particulars</th>
                   <th className="px-2 sm:px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Debit</th>
                   <th className="px-2 sm:px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Credit</th>
@@ -497,12 +604,39 @@ export const JournalVouchers = () => {
                       />
                     </td>
                     <td className="px-2 sm:px-4 py-3">
+                      {(() => {
+                        const account = accountMap.get(entry.accountId);
+                        const code = account?.accountCode || '';
+                        if (code === '1100' || code.startsWith('CUST-')) {
+                          return (
+                            <PartySelector
+                              type="customer"
+                              value={entry.partyId ? { value: entry.partyId, label: entry.partyName } : null}
+                              onChange={(opt) => handlePartySelection(index, opt?.value || '', opt?.label || '', 'customer')}
+                              placeholder="Link Customer..."
+                            />
+                          );
+                        }
+                        if (code === '2000' || code.startsWith('SUPP-')) {
+                          return (
+                            <PartySelector
+                              type="supplier"
+                              value={entry.partyId ? { value: entry.partyId, label: entry.partyName } : null}
+                              onChange={(opt) => handlePartySelection(index, opt?.value || '', opt?.label || '', 'supplier')}
+                              placeholder="Link Supplier..."
+                            />
+                          );
+                        }
+                        return <span className="text-gray-400 text-xs italic">Not required</span>;
+                      })()}
+                    </td>
+                    <td className="px-2 sm:px-4 py-3">
                       <Input
                         type="text"
                         autoComplete="off"
                         value={entry.particulars}
                         onChange={(e) => handleEntryChange(index, 'particulars', e.target.value)}
-                        className="w-full min-w-[150px] sm:min-w-[220px]"
+                        className="w-full min-w-[150px]"
                         placeholder="Narration / memo"
                         maxLength={500}
                       />

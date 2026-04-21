@@ -223,7 +223,7 @@ const AccountLedgerSummary = () => {
 
   // Fetch all ledger entries so Bank filter works even without customer/supplier selection
   const { data: allEntriesData } = useGetAllEntriesQuery(
-    { startDate: filters.startDate, endDate: filters.endDate },
+    { startDate: filters.startDate, endDate: filters.endDate, limit: 5000 },
     { refetchOnMountOrArgChange: true }
   );
 
@@ -351,6 +351,19 @@ const AccountLedgerSummary = () => {
       const bank = (banks || []).find(b => String(b._id || b.id) === String(bankId));
       if (bank?.bankName) return bank.bankName;
     }
+
+    // Fallback for manual entries (like JVs) that hit the bank account
+    if (entry?.accountCode === '1001' && (banks || []).length === 1) {
+      return banks[0].bankName;
+    }
+
+    // Fallback for manual entries (like JVs) that hit the bank account
+    if ((banks || []).length === 1) {
+      if (entry?.accountCode === '1001' || entry?.accountCode === String(banks[0].accountNumber)) {
+        return banks[0].bankName;
+      }
+    }
+
     return '-';
   };
 
@@ -358,13 +371,20 @@ const AccountLedgerSummary = () => {
     const directId = entry?.bank?._id || entry?.bank?.id || entry?.bankId || entry?.bank_id || entry?.bank || '';
     if (directId) return directId;
 
+    // Fallback for manual entries (like JVs) that hit the bank account
+    if ((banks || []).length === 1) {
+      if (entry?.accountCode === '1001' || entry?.accountCode === String(banks[0].accountNumber)) {
+        return banks[0]._id || banks[0].id || '';
+      }
+    }
+
     const explicitName = String(entry?.bankName || entry?.bank?.bankName || '').trim().toLowerCase();
     if (explicitName) {
       const byName = (banks || []).find((b) => String(b?.bankName || '').trim().toLowerCase() === explicitName);
       if (byName) return byName._id || byName.id || '';
     }
 
-    const particularText = String(entry?.particular || '').toLowerCase();
+    const particularText = String(entry?.particular || entry?.description || '').toLowerCase();
     if (particularText) {
       const fromParticular = (banks || []).find((b) =>
         particularText.includes(String(b?.bankName || '').trim().toLowerCase())
@@ -417,13 +437,30 @@ const AccountLedgerSummary = () => {
     }));
 
     const fallbackRows = (allEntries || [])
-      .filter((entry) => String(entry?.source || '').toLowerCase().includes('bank'))
+      .filter((entry) => {
+        const src = String(entry?.source || '').toLowerCase();
+        const accCode = String(entry?.accountCode || '').trim();
+        
+        // Match by source description
+        if (src.includes('bank') || src.includes('journal')) return true;
+        
+        // Match by account code (1001 is the standard bank account)
+        if (accCode === '1001') return true;
+        
+        // Match against any of our banks' account numbers
+        if ((banks || []).length > 0) {
+          if (banks.some(b => String(b.accountNumber).trim() === accCode)) return true;
+        }
+
+        return false;
+      })
       .map((entry) => ({
-        date: entry?.date,
-        voucherNo: entry?.voucherNo || '-',
+        date: entry?.date || entry?.transactionDate,
+        voucherNo: entry?.voucherNo || entry?.referenceNumber || '-',
         bankId: resolveBankId(entry),
         bankName: resolveBankName(entry),
-        particular: entry?.particular || '-',
+        particular: entry?.particular || entry?.description || '-',
+        accountCode: String(entry?.accountCode || '').trim(),
         debitAmount: Number(entry?.debitAmount) || 0,
         creditAmount: Number(entry?.creditAmount) || 0,
       }));
@@ -432,9 +469,18 @@ const AccountLedgerSummary = () => {
 
     return mergedRows
       .filter(entry => {
-        if (!selectedBankId) return false; // "Select Bank" should not auto-show data
+        if (!selectedBankId) return false; 
         if (selectedBankId === ALL_BANKS_VALUE) return true;
+        
+        // Match by explicit bankId (UUID)
         if (String(entry.bankId) === String(selectedBankId)) return true;
+
+        // Match by Account Code (1001 is the general bank GL account)
+        // If we have only one bank, any 1001 entry belongs here.
+        if (entry.accountCode === '1001') return true;
+        
+        // Also match if the entry's account matches the selected bank's specific number
+        if (selectedBank?.accountNumber && entry.accountCode === String(selectedBank.accountNumber).trim()) return true;
 
         const rowBankName = String(entry.bankName || '').trim().toLowerCase();
         if (selectedBankName && rowBankName && rowBankName === selectedBankName) return true;

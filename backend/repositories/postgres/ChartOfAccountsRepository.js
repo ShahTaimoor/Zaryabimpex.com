@@ -73,9 +73,10 @@ class ChartOfAccountsRepository {
   }
 
   async findByAccountCode(accountCode) {
+    if (!accountCode) return null;
     const result = await query(
-      'SELECT * FROM chart_of_accounts WHERE account_code = $1 AND deleted_at IS NULL LIMIT 1',
-      [accountCode]
+      'SELECT * FROM chart_of_accounts WHERE UPPER(account_code) = $1 AND deleted_at IS NULL LIMIT 1',
+      [accountCode.toUpperCase()]
     );
     return toCamel(result.rows[0] || null);
   }
@@ -179,7 +180,7 @@ class ChartOfAccountsRepository {
       `INSERT INTO chart_of_accounts (account_code, account_name, account_type, account_category, parent_account_id, level, is_active, is_system_account, allow_direct_posting, normal_balance, current_balance, opening_balance, description, currency, is_taxable, tax_rate, metadata, created_by, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING *`,
       [
-        data.accountCode || data.account_code,
+      (data.accountCode || data.account_code || '').toUpperCase(),
         data.accountName || data.account_name,
         data.accountType || data.account_type,
         data.accountCategory || data.account_category,

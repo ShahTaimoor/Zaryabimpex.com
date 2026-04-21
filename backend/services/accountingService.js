@@ -1,5 +1,6 @@
 const { query, transaction } = require('../config/postgres');
 const { v4: uuidv4 } = require('uuid');
+const { invalidateByPrefix } = require('../utils/ttlCache');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function isValidUuid(v) {
@@ -21,7 +22,7 @@ class AccountingService {
   static async validateAccount(accountCode, queryFn = null) {
     const q = queryFn || query;
     const result = await q(
-      'SELECT * FROM chart_of_accounts WHERE account_code = $1 AND is_active = TRUE AND deleted_at IS NULL',
+      'SELECT * FROM chart_of_accounts WHERE UPPER(account_code) = $1 AND is_active = TRUE AND deleted_at IS NULL',
       [accountCode.toUpperCase()]
     );
 
@@ -187,10 +188,14 @@ class AccountingService {
     // If client is provided, use it directly (part of existing transaction)
     // Otherwise, create a new transaction
     if (client) {
-      return await executeTransaction(client);
+      const result = await executeTransaction(client);
+      invalidateByPrefix('reports:');
+      return result;
     } else {
       return await transaction(async (newClient) => {
-        return await executeTransaction(newClient);
+        const result = await executeTransaction(newClient);
+        invalidateByPrefix('reports:');
+        return result;
       });
     }
   }
@@ -1956,6 +1961,8 @@ class AccountingService {
         reference_type: 'journal_voucher',
         reference_id: voucher.id,
         reference_number: voucher.voucherNumber || voucher.voucher_number || `JV-${voucher.id?.substring(0, 8)}`,
+        customer_id: entry.customerId || entry.customer_id || null,
+        supplier_id: entry.supplierId || entry.supplier_id || null,
         currency: 'PKR',
         status: 'completed',
         created_by: isValidUuid(createdBy) ? createdBy : null
@@ -1973,8 +1980,8 @@ class AccountingService {
             transaction_id, transaction_date, account_code,
             debit_amount, credit_amount, description,
             reference_type, reference_id, reference_number,
-            currency, status, created_by
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            customer_id, supplier_id, currency, status, created_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
           [
             entry.transaction_id,
             entry.transaction_date,
@@ -1985,6 +1992,8 @@ class AccountingService {
             entry.reference_type,
             entry.reference_id,
             entry.reference_number,
+            entry.customer_id,
+            entry.supplier_id,
             entry.currency,
             entry.status,
             entry.created_by
@@ -1997,6 +2006,10 @@ class AccountingService {
       for (const accountCode of affectedAccounts) {
         await this.updateAccountBalance(client, accountCode);
       }
+      
+      // Invalidate report cache to ensure real-time updates
+      const { invalidateByPrefix } = require('../utils/ttlCache');
+      invalidateByPrefix('reports:');
     });
   }
 }
