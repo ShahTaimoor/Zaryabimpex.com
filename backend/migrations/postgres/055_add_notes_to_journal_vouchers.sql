@@ -1,0 +1,1 @@
+ALTER TABLE journal_vouchers ADD COLUMN IF NOT EXISTS notes TEXT;

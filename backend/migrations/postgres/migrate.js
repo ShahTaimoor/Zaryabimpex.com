@@ -72,7 +72,11 @@ const MIGRATIONS = [
   '050_purchases_list_indexes.sql',
   '051_purchases_payment_status_index.sql',
   '052_sales_cash_dashboard_partial_indexes.sql',
-  '053_list_filters_composite_indexes.sql'
+  '053_list_filters_composite_indexes.sql',
+  '054_journal_vouchers.sql',
+  '055_add_notes_to_journal_vouchers.sql',
+  '056_make_entries_optional_journal_vouchers.sql',
+  '057_journal_vouchers_missing_columns.sql'
 ];
 
 async function ensureMigrationsTable() {

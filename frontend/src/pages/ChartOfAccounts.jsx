@@ -23,6 +23,7 @@ import {
   useUpdateAccountMutation,
   useDeleteAccountMutation,
 } from '../store/services/chartOfAccountsApi';
+import { useGetBanksQuery } from '../store/services/banksApi';
 import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
 import { handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
@@ -879,11 +880,50 @@ export const ChartOfAccounts = () => {
     includeBalances: 'true'
   });
 
+  // Fetch banks to show them in the Chart of Accounts list
+  const { data: banksResponse, isLoading: banksLoading } = useGetBanksQuery({ isActive: 'true' });
+  const banks = React.useMemo(() => {
+    const list = banksResponse?.data?.banks || banksResponse?.banks || [];
+    return list.filter(b => !b.deletedAt && b.isActive !== false);
+  }, [banksResponse]);
+
   // Extract accounts array from response
   const accounts = React.useMemo(() => {
     const rawData = accountsResponse?.data || accountsResponse || [];
-    return Array.isArray(rawData) ? rawData : [];
-  }, [accountsResponse]);
+    let list = Array.isArray(rawData) ? rawData : [];
+    
+    // Inject Bank accounts into the list
+    if (filterType === '' || filterType === 'asset') {
+      const bankAccounts = banks.map(b => ({
+        _id: `BANK::${b._id || b.id}`,
+        id: `BANK::${b._id || b.id}`,
+        accountCode: `BANK-${(b.accountNumber || b.id || '').substring(0, 6).toUpperCase()}`,
+        accountName: `${b.bankName || b.bank_name} — ${b.accountName || b.account_name}`,
+        accountType: 'asset',
+        accountCategory: 'current_assets',
+        currentBalance: b.currentBalance || 0,
+        normalBalance: 'debit',
+        isSystemAccount: true, // Prevent manual edit/delete in CoA
+        description: `Account: ${b.accountNumber} | Branch: ${b.branchName || 'Main'}`
+      }));
+      
+      // If there's a search term, filter the synthetic bank accounts manually since the backend didn't do it
+      const filteredBanks = searchTerm
+        ? bankAccounts.filter(ba => 
+            ba.accountName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            ba.accountCode.toLowerCase().includes(searchTerm.toLowerCase())
+          )
+        : bankAccounts;
+
+      // Filter out the generic 1001 bank account if we are showing specific bank accounts to avoid duplicates/confusion, 
+      // or optionally keep it if user wants to see the aggregate. For now we keep it, or maybe don't keep it? 
+      // Actually, we'll just add the granular specific bank accounts.
+      list = [...list, ...filteredBanks];
+    }
+
+    return list;
+  }, [accountsResponse, banks, filterType, searchTerm]);
+
 
   const getExportData = () => {
     return {
@@ -1251,14 +1291,22 @@ export const ChartOfAccounts = () => {
                               <tr key={account._id} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 whitespace-nowrap pl-20">
                                   <span className="text-sm font-mono font-medium text-gray-900">
-                                    {account.accountCode}
+                                    {account.accountCode?.startsWith('CUST-')
+                                      ? `CUST-${account.accountCode.slice(5, 11).toUpperCase()}`
+                                      : account.accountCode?.startsWith('SUP-')
+                                      ? `SUP-${account.accountCode.slice(4, 10).toUpperCase()}`
+                                      : account.accountCode}
                                   </span>
                                 </td>
                                 <td className="px-6 py-4">
                                   <div>
                                     <div className="text-sm font-medium text-gray-900">{account.accountName}</div>
                                     {account.description && (
-                                      <div className="text-xs text-gray-500">{account.description}</div>
+                                      <div className="text-xs text-gray-500">
+                                        {account.description
+                                          .replace(/^Customer Account:\s*/i, '')
+                                          .replace(/^Supplier Account:\s*/i, '')}
+                                      </div>
                                     )}
                                   </div>
                                 </td>

@@ -1892,6 +1892,113 @@ class AccountingService {
     );
     return new Set((result.rows || []).map(r => r.id && r.id.toString()));
   }
+
+  /**
+   * Post journal voucher entries to the account ledger.
+   * Creates individual ledger entries for each debit/credit in the voucher.
+   * @param {Object} voucher - Journal voucher object with entries array
+   * @param {string} createdBy - User ID who is posting the voucher
+   */
+  static async postJournalVoucherToLedger(voucher, createdBy) {
+    if (!voucher || !voucher.entries || !Array.isArray(voucher.entries)) {
+      throw new Error('Invalid journal voucher: missing entries');
+    }
+
+    const entries = voucher.entries;
+    if (entries.length === 0) {
+      throw new Error('Journal voucher must have at least one entry');
+    }
+
+    // Validate that debits equal credits
+    let totalDebit = 0;
+    let totalCredit = 0;
+    for (const entry of entries) {
+      totalDebit += parseFloat(entry.debitAmount ?? entry.debit ?? 0);
+      totalCredit += parseFloat(entry.creditAmount ?? entry.credit ?? 0);
+    }
+
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      throw new Error(`Journal voucher is unbalanced: Debits ${totalDebit} ≠ Credits ${totalCredit}`);
+    }
+
+    const transactionId = `JV-${Date.now()}-${uuidv4().substring(0, 8)}`;
+    const transactionDate = voucher.voucherDate || voucher.voucher_date || new Date();
+
+    // Process each entry in the voucher
+    const ledgerEntries = [];
+    let entryIndex = 1;
+
+    for (const entry of entries) {
+      const accountCode = entry.accountCode || entry.account_code;
+      // Support both camelCase from repository (debitAmount/creditAmount) and raw form fields (debit/credit)
+      const debitAmount = parseFloat(entry.debitAmount ?? entry.debit ?? 0);
+      const creditAmount = parseFloat(entry.creditAmount ?? entry.credit ?? 0);
+      const description = entry.particulars || entry.description || voucher.description || 'Journal Voucher Entry';
+
+      if (!accountCode) {
+        throw new Error('Each journal voucher entry must specify an account code');
+      }
+
+      if ((debitAmount > 0 && creditAmount > 0) || (debitAmount === 0 && creditAmount === 0)) {
+        throw new Error('Each entry must have either debit OR credit amount, not both or neither');
+      }
+
+      // Validate account exists and is active
+      await this.validateAccount(accountCode);
+
+      const ledgerEntry = {
+        transaction_id: `${transactionId}-${entryIndex}`,
+        transaction_date: transactionDate,
+        account_code: accountCode.toUpperCase(),
+        debit_amount: debitAmount,
+        credit_amount: creditAmount,
+        description: description,
+        reference_type: 'journal_voucher',
+        reference_id: voucher.id,
+        reference_number: voucher.voucherNumber || voucher.voucher_number || `JV-${voucher.id?.substring(0, 8)}`,
+        currency: 'PKR',
+        status: 'completed',
+        created_by: isValidUuid(createdBy) ? createdBy : null
+      };
+
+      ledgerEntries.push(ledgerEntry);
+      entryIndex++;
+    }
+
+    // Insert all entries in a transaction
+    await transaction(async (client) => {
+      for (const entry of ledgerEntries) {
+        await client.query(
+          `INSERT INTO account_ledger (
+            transaction_id, transaction_date, account_code,
+            debit_amount, credit_amount, description,
+            reference_type, reference_id, reference_number,
+            currency, status, created_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          [
+            entry.transaction_id,
+            entry.transaction_date,
+            entry.account_code,
+            entry.debit_amount,
+            entry.credit_amount,
+            entry.description,
+            entry.reference_type,
+            entry.reference_id,
+            entry.reference_number,
+            entry.currency,
+            entry.status,
+            entry.created_by
+          ]
+        );
+      }
+
+      // Update account balances for all affected accounts
+      const affectedAccounts = [...new Set(ledgerEntries.map(e => e.account_code))];
+      for (const accountCode of affectedAccounts) {
+        await this.updateAccountBalance(client, accountCode);
+      }
+    });
+  }
 }
 
 module.exports = AccountingService;

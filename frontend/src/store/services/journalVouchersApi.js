@@ -1,5 +1,22 @@
 import { api } from '../api';
 
+const JV_TAGS = [
+  { type: 'JournalVouchers', id: 'LIST' },
+  { type: 'Accounting' },
+  { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+  { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+  { type: 'Accounting', id: 'ALL_ENTRIES' },
+  { type: 'Accounting', id: 'TRIAL_BALANCE' },
+  { type: 'ChartOfAccounts', id: 'LIST' },
+  { type: 'ChartOfAccounts', id: 'STATS' },
+  { type: 'ChartOfAccounts', id: 'HIERARCHY' },
+  { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+  { type: 'Reports', id: 'PARTY_BALANCE' },
+  { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
+  { type: 'Reports', id: 'SUMMARY_CARDS' },
+  { type: 'Reports', id: 'FINANCIAL_REPORT' },
+];
+
 export const journalVouchersApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getJournalVouchers: builder.query({
@@ -19,6 +36,7 @@ export const journalVouchersApi = api.injectEndpoints({
           ]
           : [{ type: 'JournalVouchers', id: 'LIST' }],
     }),
+
     getJournalVoucher: builder.query({
       query: (id) => ({
         url: `journal-vouchers/${id}`,
@@ -26,6 +44,7 @@ export const journalVouchersApi = api.injectEndpoints({
       }),
       providesTags: (_r, _e, id) => [{ type: 'JournalVouchers', id }],
     }),
+
     createJournalVoucher: builder.mutation({
       query: (data) => ({
         url: 'journal-vouchers',
@@ -33,22 +52,57 @@ export const journalVouchersApi = api.injectEndpoints({
         data,
       }),
       invalidatesTags: [
-        { type: 'JournalVouchers', id: 'LIST' },
+        ...JV_TAGS,
         { type: 'Customers', id: 'LIST' },
         { type: 'Suppliers', id: 'LIST' },
-        { type: 'Accounting' },
-        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
-        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
-        { type: 'Accounting', id: 'ALL_ENTRIES' },
-        { type: 'Accounting', id: 'TRIAL_BALANCE' },
-        { type: 'ChartOfAccounts', id: 'LIST' },
-        { type: 'ChartOfAccounts', id: 'STATS' },
-        { type: 'ChartOfAccounts', id: 'HIERARCHY' },
-        { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
-        { type: 'Reports', id: 'PARTY_BALANCE' },
-        { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
-        { type: 'Reports', id: 'SUMMARY_CARDS' },
-        { type: 'Reports', id: 'FINANCIAL_REPORT' },
+      ],
+    }),
+
+    updateJournalVoucher: builder.mutation({
+      query: ({ id, ...data }) => ({
+        url: `journal-vouchers/${id}`,
+        method: 'put',
+        data,
+      }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'JournalVouchers', id },
+        ...JV_TAGS,
+      ],
+    }),
+
+    postJournalVoucher: builder.mutation({
+      query: (id) => ({
+        url: `journal-vouchers/${id}/post`,
+        method: 'post',
+      }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'JournalVouchers', id },
+        ...JV_TAGS,
+        { type: 'Customers', id: 'LIST' },
+        { type: 'Suppliers', id: 'LIST' },
+      ],
+    }),
+
+    reverseJournalVoucher: builder.mutation({
+      query: ({ id, reason }) => ({
+        url: `journal-vouchers/${id}/reverse`,
+        method: 'post',
+        data: { reason },
+      }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'JournalVouchers', id },
+        ...JV_TAGS,
+      ],
+    }),
+
+    deleteJournalVoucher: builder.mutation({
+      query: (id) => ({
+        url: `journal-vouchers/${id}`,
+        method: 'delete',
+      }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'JournalVouchers', id },
+        ...JV_TAGS,
       ],
     }),
   }),
@@ -59,5 +113,8 @@ export const {
   useGetJournalVouchersQuery,
   useGetJournalVoucherQuery,
   useCreateJournalVoucherMutation,
+  useUpdateJournalVoucherMutation,
+  usePostJournalVoucherMutation,
+  useReverseJournalVoucherMutation,
+  useDeleteJournalVoucherMutation,
 } = journalVouchersApi;
-
