@@ -18,6 +18,32 @@ export const BarcodeScanner = ({
   const scannerRef = useRef(null);
   const html5QrCodeRef = useRef(null);
 
+  // Function to play a beep sound using Web Audio API
+  const playBeep = () => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 0.01);
+      gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
+
+      oscillator.start(audioCtx.currentTime);
+      oscillator.stop(audioCtx.currentTime + 0.15);
+      
+      // Close context after it's done
+      setTimeout(() => audioCtx.close(), 200);
+    } catch (e) {
+      console.warn('Audio beep failed:', e);
+    }
+  };
+
   useEffect(() => {
     if (isOpen && !html5QrCodeRef.current) {
       try {
@@ -60,6 +86,7 @@ export const BarcodeScanner = ({
         },
         (decodedText, decodedResult) => {
           // Success callback
+          playBeep();
           setLastScanned(decodedText);
           if (onScan) {
             onScan(decodedText, decodedResult);

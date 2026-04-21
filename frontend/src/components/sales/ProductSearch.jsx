@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { Plus, Camera, X } from 'lucide-react';
-import { productsApi, useLazyGetLastPurchasePriceQuery } from '@/store/services/productsApi';
-import { productVariantsApi } from '@/store/services/productVariantsApi';
+import { productsApi, useLazyGetLastPurchasePriceQuery, useLazyGetProductsQuery } from '@/store/services/productsApi';
+import { productVariantsApi, useLazyGetVariantsQuery } from '@/store/services/productVariantsApi';
 import { useDebouncedPosProductSearch } from '@/hooks/useDebouncedPosProductSearch';
 import { SearchableDropdown } from '@/components/SearchableDropdown';
 import { DualUnitQuantityInput } from '@/components/DualUnitQuantityInput';
@@ -56,6 +56,8 @@ function ProductSearchComponent({
   const manualImageInputRef = useRef(null);
   const dispatch = useDispatch();
 
+  const [triggerProducts] = useLazyGetProductsQuery();
+  const [triggerVariants] = useLazyGetVariantsQuery();
   const [getLastPurchasePrice] = useLazyGetLastPurchasePriceQuery();
 
   const {
@@ -168,6 +170,141 @@ function ProductSearchComponent({
     setCalculatedRate(calculatedPrice);
     setCustomRate(calculatedPrice.toString());
   };
+
+  /**
+   * Universal handler for detected barcodes (USB or Camera).
+   * Fetches the product and auto-adds to cart if a single match is found.
+   */
+  const handleBarcodeSubmit = useCallback(async (barcodeValue) => {
+    if (!barcodeValue || isAddingToCart) return;
+
+    try {
+      setIsAddingToCart(true);
+      
+      // Fetch both products and variants by code
+      const [pRes, vRes] = await Promise.all([
+        triggerProducts({ code: barcodeValue, status: 'active', limit: 2 }).unwrap(),
+        triggerVariants({ code: barcodeValue, status: 'active', limit: 2 }).unwrap()
+      ]);
+
+      const foundProducts = pRes?.products ?? pRes?.data?.products ?? [];
+      const foundVariants = vRes?.variants ?? vRes?.data?.variants ?? [];
+      
+      // Combine results
+      const totalMatches = [
+        ...foundProducts.map(p => ({ ...p, isVariant: false })),
+        ...foundVariants.map(v => ({ 
+          ...v, 
+          isVariant: true,
+          name: v.displayName || v.variantName || `${v.baseProduct?.name || ''} - ${v.variantValue || ''}`.trim()
+        }))
+      ];
+
+      if (totalMatches.length === 0) {
+        toast.error(`No product found with barcode: ${barcodeValue}`);
+        setProductSearchTerm(barcodeValue); // Set search term so user can see what failed
+        return;
+      }
+
+      if (totalMatches.length > 1) {
+        toast.warning(`Multiple products found for barcode: ${barcodeValue}. Please select manually.`);
+        setProductSearchTerm(barcodeValue);
+        return;
+      }
+
+      // Single match found - Auto Add to cart
+      const product = totalMatches[0];
+      
+      // Check stock if not allowed to oversell
+      const currentStock = product.inventory?.currentStock || 0;
+      if (!allowOutOfStock && currentStock === 0) {
+        toast.error(`${product.name} is out of stock.`);
+        return;
+      }
+
+      // Calculate price based on type
+      const unitPrice = calculatePrice(product, priceType);
+      
+      // Check for loss warning (sale < cost)
+      const costPrice = getCostPrice(product); // Simplified for auto-add to avoid blocking confirm dialogs
+      if (unitPrice < costPrice) {
+        toast.warning(`Auto-added ${product.name} with price BELOW cost!`, { duration: 4000 });
+      }
+
+      // Add to cart
+      const ppb = getPiecesPerBox(product);
+      const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(1, ppb) : {};
+      
+      onAddProduct({
+        product,
+        quantity: 1,
+        ...(ppb && { boxes, pieces }),
+        unitPrice: unitPrice
+      });
+
+      toast.success(`Scanned: ${product.name}`, {
+        icon: '✅',
+        duration: 2000,
+        position: 'top-center'
+      });
+
+      // Clear search and focus back
+      setProductSearchTerm('');
+      setSelectedProduct(null);
+      setIsAddingProduct(false);
+
+    } catch (error) {
+      handleApiError(error, 'Barcode Search');
+    } finally {
+      setIsAddingToCart(false);
+      // Ensure focus returns to search field for next scan
+      setTimeout(() => productSearchRef.current?.focus({ preventScroll: true }), 100);
+    }
+  }, [triggerProducts, triggerVariants, priceType, allowOutOfStock, onAddProduct, isAddingToCart]);
+
+  // USB Barcode Scanner Detection (Keyboard Emulation)
+  useEffect(() => {
+    let buffer = '';
+    let lastKeyTime = Date.now();
+
+    const handleGlobalKeyDown = (e) => {
+      // Ignore modifier keys
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+
+      const currentTime = Date.now();
+      const timeDiff = currentTime - lastKeyTime;
+      lastKeyTime = currentTime;
+
+      // Scanners usually send keys very fast (<30ms between keys)
+      // If time between keys is short, it's likely a scanner
+      if (timeDiff < 50) {
+        if (e.key === 'Enter') {
+          if (buffer.length >= 4) {
+            e.preventDefault();
+            e.stopPropagation();
+            const scannedValue = buffer;
+            buffer = '';
+            handleBarcodeSubmit(scannedValue);
+          } else {
+            buffer = '';
+          }
+        } else if (e.key.length === 1) {
+          buffer += e.key;
+        }
+      } else {
+        // Too slow, probably manual typing. Clear buffer.
+        // But if it was a single character after a long pause, it might be the START of a scan
+        if (e.key.length === 1) {
+          buffer = e.key;
+        } else {
+          buffer = '';
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
+  }, [handleBarcodeSubmit]);
 
   // Update rate when price type changes
   useEffect(() => {
@@ -1109,19 +1246,7 @@ function ProductSearchComponent({
         isOpen={showBarcodeScanner}
         onClose={() => setShowBarcodeScanner(false)}
         onScan={(barcodeValue) => {
-          // Search for product by barcode
-          const foundProduct = allProducts.find(p =>
-            p.barcode === barcodeValue || p.sku === barcodeValue
-          );
-
-          if (foundProduct) {
-            handleProductSelect(foundProduct);
-            toast.success(`Product found: ${foundProduct.name}`);
-          } else {
-            // If not found by barcode, search by name/description
-            setProductSearchTerm(barcodeValue);
-            toast(`Searching for: ${barcodeValue}`, { icon: 'ℹ️' });
-          }
+          handleBarcodeSubmit(barcodeValue);
           setShowBarcodeScanner(false);
         }}
       />
