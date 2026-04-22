@@ -401,56 +401,19 @@ const AccountLedgerSummary = () => {
   );
 
   const bankLedgerRows = useMemo(() => {
-    const selectedBankName = String(selectedBank?.bankName || '').trim().toLowerCase();
-    const receipts =
-      bankReceiptsData?.data?.bankReceipts ||
-      bankReceiptsData?.bankReceipts ||
-      bankReceiptsData?.data?.receipts ||
-      bankReceiptsData?.receipts ||
-      [];
-
-    const payments =
-      bankPaymentsData?.data?.bankPayments ||
-      bankPaymentsData?.bankPayments ||
-      bankPaymentsData?.data?.payments ||
-      bankPaymentsData?.payments ||
-      [];
-
-    const receiptRows = receipts.map((entry) => ({
-      date: entry?.date,
-      voucherNo: entry?.voucherCode || entry?.voucherNo || '-',
-      bankId: entry?.bank?._id || entry?.bank?.id || entry?.bankId || entry?.bank || '',
-      bankName: entry?.bank?.bankName || entry?.bankName || resolveBankName(entry),
-      particular: entry?.particular || '-',
-      debitAmount: Number(entry?.amount) || Number(entry?.debitAmount) || 0,
-      creditAmount: 0,
-    }));
-
-    const paymentRows = payments.map((entry) => ({
-      date: entry?.date,
-      voucherNo: entry?.voucherCode || entry?.voucherNo || '-',
-      bankId: entry?.bank?._id || entry?.bank?.id || entry?.bankId || entry?.bank_id || entry?.bank || '',
-      bankName: entry?.bank?.bankName || entry?.bankName || entry?.bank_name || entry?.bankAccount || entry?.bank_account || resolveBankName(entry),
-      particular: entry?.particular || '-',
-      debitAmount: 0,
-      creditAmount: Number(entry?.amount) || Number(entry?.creditAmount) || 0,
-    }));
-
-    const fallbackRows = (allEntries || [])
+    // BANK LEDGER REFACTOR: 
+    // We only use data from the Account Ledger for account 1001 (Bank GL)
+    // because it is the single source of truth that captures all Receipts, 
+    // Payments, and Journal Vouchers.
+    const filteredRows = (allEntries || [])
       .filter((entry) => {
-        const src = String(entry?.source || '').toLowerCase();
         const accCode = String(entry?.accountCode || '').trim();
         
-        // Match by source description
-        if (src.includes('bank') || src.includes('journal')) return true;
-        
-        // Match by account code (1001 is the standard bank account)
+        // 1. PRIMARY MATCH: Account Code 1001 (General Bank GL)
         if (accCode === '1001') return true;
         
-        // Match against any of our banks' account numbers
-        if ((banks || []).length > 0) {
-          if (banks.some(b => String(b.accountNumber).trim() === accCode)) return true;
-        }
+        // 2. SECONDARY MATCH: Specific Bank Account Number if known
+        if (selectedBank?.accountNumber && accCode === String(selectedBank.accountNumber).trim()) return true;
 
         return false;
       })
@@ -465,29 +428,17 @@ const AccountLedgerSummary = () => {
         creditAmount: Number(entry?.creditAmount) || 0,
       }));
 
-    const mergedRows = [...receiptRows, ...paymentRows, ...fallbackRows];
-
-    return mergedRows
+    return filteredRows
       .filter(entry => {
         if (!selectedBankId) return false; 
         if (selectedBankId === ALL_BANKS_VALUE) return true;
         
-        // Match by explicit bankId (UUID)
+        // Match by explicit bankId (associated in back-end or through resolveBankId)
         if (String(entry.bankId) === String(selectedBankId)) return true;
 
-        // Match by Account Code (1001 is the general bank GL account)
-        // If we have only one bank, any 1001 entry belongs here.
-        if (entry.accountCode === '1001') return true;
+        // If only one bank exists, all '1001' entries belong to it
+        if ((banks || []).length === 1 && entry.accountCode === '1001') return true;
         
-        // Also match if the entry's account matches the selected bank's specific number
-        if (selectedBank?.accountNumber && entry.accountCode === String(selectedBank.accountNumber).trim()) return true;
-
-        const rowBankName = String(entry.bankName || '').trim().toLowerCase();
-        if (selectedBankName && rowBankName && rowBankName === selectedBankName) return true;
-
-        const rowParticular = String(entry.particular || '').toLowerCase();
-        if (selectedBankName && rowParticular.includes(selectedBankName)) return true;
-
         return false;
       })
       .sort((a, b) => {
@@ -496,7 +447,7 @@ const AccountLedgerSummary = () => {
         if (aTime !== bTime) return aTime - bTime;
         return String(a.voucherNo).localeCompare(String(b.voucherNo));
       });
-  }, [allEntries, banks, selectedBankId, selectedBank, bankReceiptsData, bankPaymentsData, ALL_BANKS_VALUE]);
+  }, [allEntries, banks, selectedBankId, selectedBank, ALL_BANKS_VALUE]);
 
   const customerEntries = useMemo(
     () => customerDetail?.entries ?? detailedTransactionsData?.data?.entries ?? [],
@@ -1427,6 +1378,24 @@ const AccountLedgerSummary = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white">
+                  {/* Opening Balance Row */}
+                  {selectedBank && (
+                    <tr className="bg-blue-50 font-medium">
+                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">
+                        {filters.startDate ? formatDate(filters.startDate) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">-</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{selectedBank.bankName}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">OB: Opening Balance</td>
+                      <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">
+                        {selectedBank.opening_balance > 0 ? formatCurrency(selectedBank.opening_balance) : '0.00'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">
+                        {selectedBank.opening_balance < 0 ? formatCurrency(Math.abs(selectedBank.opening_balance)) : '0.00'}
+                      </td>
+                    </tr>
+                  )}
+
                   {bankLedgerRows.length === 0 ? (
                     <tr>
                       <td colSpan="6" className="px-4 py-8 text-center text-gray-500 border border-gray-300">
@@ -1477,6 +1446,37 @@ const AccountLedgerSummary = () => {
                         </>
                       );
                     })()
+                  )}
+                  {/* Total Row for Bank Ledger */}
+                  {bankLedgerRows.length > 0 && (
+                    <tr className="bg-green-100 font-semibold border-t-2 border-green-300">
+                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300"></td>
+                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300"></td>
+                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300"></td>
+                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300 text-right">Totals / Net Change</td>
+                      <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">
+                        {formatCurrency(bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0))}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">
+                        {formatCurrency(bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0))}
+                      </td>
+                    </tr>
+                  )}
+                  {selectedBank && (
+                    <tr className="bg-green-200 font-bold border-t-2 border-green-400">
+                      <td colSpan="4" className="px-4 py-3 text-right text-sm text-gray-900 border border-gray-300 uppercase tracking-wider">Final Closing Balance</td>
+                      <td colSpan="2" className={`px-4 py-3 text-right text-lg border border-gray-300 ${
+                        (parseFloat(selectedBank.opening_balance || 0) + 
+                         bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) - 
+                         bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)) < 0 ? 'text-red-700' : 'text-green-800'
+                      }`}>
+                        {formatCurrency(
+                          parseFloat(selectedBank.opening_balance || 0) + 
+                          bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) - 
+                          bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)
+                        )}
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
