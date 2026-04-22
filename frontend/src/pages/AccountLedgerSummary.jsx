@@ -521,10 +521,11 @@ const AccountLedgerSummary = () => {
     setCustomerSearchQuery(label);
     setDebouncedCustomerQuery(label.trim());
     setShowCustomerDropdown(false);
-    // Clear supplier selection when customer is selected
+    // Clear other selections when customer is selected
     setSelectedSupplierId('');
     setSupplierSearchQuery('');
     setDebouncedSupplierQuery('');
+    setSelectedBankId('');
   };
 
   const handleSupplierSelect = (supplier) => {
@@ -532,10 +533,11 @@ const AccountLedgerSummary = () => {
     setSupplierSearchQuery(supplier.companyName || supplier.name || '');
     setDebouncedSupplierQuery((supplier.companyName || supplier.name || '').trim());
     setShowSupplierDropdown(false);
-    // Clear customer selection when supplier is selected
+    // Clear other selections when supplier is selected
     setSelectedCustomerId('');
     setCustomerSearchQuery('');
     setDebouncedCustomerQuery('');
+    setSelectedBankId('');
   };
 
   const formatCurrency = (amount) => {
@@ -918,7 +920,19 @@ const AccountLedgerSummary = () => {
             <label className="block text-xs font-medium text-gray-600 mb-1.5">Bank</label>
             <select
               value={selectedBankId}
-              onChange={(e) => setSelectedBankId(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedBankId(val);
+                if (val) {
+                  // Clear customer/supplier selections when bank is selected
+                  setSelectedCustomerId('');
+                  setCustomerSearchQuery('');
+                  setDebouncedCustomerQuery('');
+                  setSelectedSupplierId('');
+                  setSupplierSearchQuery('');
+                  setDebouncedSupplierQuery('');
+                }
+              }}
               autoComplete="off"
               className="w-full h-9 border border-gray-300 rounded-md px-2 text-sm bg-white"
             >
@@ -1182,7 +1196,7 @@ const AccountLedgerSummary = () => {
           )}
 
           {/* Suppliers Section - Show only if supplier is selected and customer is not */}
-          {selectedSupplierId && !selectedCustomerId && (
+          {selectedSupplierId && !selectedCustomerId && !selectedBankId && (
             <div className="bg-white border border-blue-200 rounded-lg shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-blue-200 bg-blue-50">
                 <div className="flex items-start gap-3">
@@ -1367,155 +1381,172 @@ const AccountLedgerSummary = () => {
             </div>
           )}
 
-          {!selectedCustomerId && !selectedSupplierId && (
+          {(selectedBankId || selectedBankId === ALL_BANKS_VALUE) && !selectedCustomerId && !selectedSupplierId && (
+            <div className="bg-white border border-indigo-200 rounded-lg shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-indigo-200 bg-indigo-50">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-200">
+                    <Building2 className="h-5 w-5 text-indigo-700" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      {selectedBankId === ALL_BANKS_VALUE ? 'All Banks Ledger' : (selectedBank?.bankName || 'Bank Ledger')}
+                    </h2>
+                    {filters.startDate && filters.endDate && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {formatDate(filters.startDate)} – {formatDate(filters.endDate)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                ref={bankLedgerScrollRef}
+                className={`overflow-x-auto ${virtualizeBankLedgerRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
+              >
+                <table className="min-w-full account-ledger-table">
+                  <thead>
+                    <tr className="bg-indigo-600 border-b border-indigo-700">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Voucher No</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Bank Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Particular</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Debits</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Credits</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {/* Opening Balance Row */}
+                    {(selectedBank || selectedBankId === ALL_BANKS_VALUE) && (
+                      <tr className="bg-indigo-50/50 font-medium">
+                        <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">
+                          {filters.startDate ? formatDate(filters.startDate) : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">-</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">
+                          {selectedBankId === ALL_BANKS_VALUE ? 'All Banks' : selectedBank?.bankName}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">OB: Opening Balance</td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">
+                          {(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) > 0 
+                            ? formatCurrency(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) 
+                            : '0.00'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">
+                          {(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) < 0 
+                            ? formatCurrency(Math.abs(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0))) 
+                            : '0.00'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100 font-bold">
+                          {formatCurrency(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0))}
+                        </td>
+                      </tr>
+                    )}
+
+                    {bankLedgerRows.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="px-4 py-8 text-center text-gray-500 border-b border-gray-100">
+                          {!selectedBankId ? 'Please select a bank to view ledger entries.' : 'No bank ledger entries found for this period.'}
+                        </td>
+                      </tr>
+                    ) : !virtualizeBankLedgerRows ? (
+                      bankLedgerRows.map((entry, index) => (
+                        <tr key={`${entry.voucherNo}-${entry.date}-${index}`} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{formatDate(entry.date)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.voucherNo}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.bankName}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.particular}</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">{formatCurrency(entry.debitAmount)}</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">{formatCurrency(entry.creditAmount)}</td>
+                          <td className="px-4 py-3 text-sm text-right font-bold text-gray-900 border-b border-gray-100">{formatCurrency(entry.balance)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      (() => {
+                        const vItems = bankLedgerVirtualizer.getVirtualItems();
+                        const totalH = bankLedgerVirtualizer.getTotalSize();
+                        const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
+                        return (
+                          <>
+                            {padTop > 0 ? (
+                              <tr aria-hidden className="pointer-events-none">
+                                <td colSpan={7} className="p-0 border-0" style={{ height: padTop }} />
+                              </tr>
+                            ) : null}
+                            {vItems.map((vr) => {
+                              const entry = bankLedgerRows[vr.index];
+                              return (
+                                <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
+                                  <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{formatDate(entry.date)}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.voucherNo}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.bankName}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.particular}</td>
+                                  <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">{formatCurrency(entry.debitAmount)}</td>
+                                  <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">{formatCurrency(entry.creditAmount)}</td>
+                                  <td className="px-4 py-3 text-sm text-right font-bold text-gray-900 border-b border-gray-100">{formatCurrency(entry.balance)}</td>
+                                </tr>
+                              );
+                            })}
+                            {padBottom > 0 ? (
+                              <tr aria-hidden className="pointer-events-none">
+                                <td colSpan={7} className="p-0 border-0" style={{ height: padBottom }} />
+                              </tr>
+                            ) : null}
+                          </>
+                        );
+                      })()
+                    )}
+                    {/* Total Row for Bank Ledger */}
+                    {bankLedgerRows.length > 0 && (
+                      <tr className="bg-indigo-100 font-semibold border-t-2 border-indigo-200">
+                        <td className="px-4 py-3 text-sm text-gray-900"></td>
+                        <td className="px-4 py-3 text-sm text-gray-900"></td>
+                        <td className="px-4 py-3 text-sm text-gray-900"></td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right">Totals / Net Change</td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900">
+                          {formatCurrency(bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0))}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900">
+                          {formatCurrency(bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0))}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900"></td>
+                      </tr>
+                    )}
+                    {(selectedBank || selectedBankId === ALL_BANKS_VALUE) && (
+                      <tr className="bg-indigo-200 font-bold border-t-2 border-indigo-300">
+                        <td colSpan="6" className="px-4 py-3 text-right text-sm text-gray-900 uppercase tracking-wider">Final Closing Balance</td>
+                        <td className={`px-4 py-3 text-right text-lg ${
+                          (selectedBankId === ALL_BANKS_VALUE ? bankTotals.closingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.closingBalance || (parseFloat(selectedBank?.openingBalance || 0) + 
+                           bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) - 
+                           bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)))) < 0 ? 'text-red-700' : 'text-indigo-800'
+                        }`}>
+                          {formatCurrency(
+                            selectedBankId === ALL_BANKS_VALUE ? bankTotals.closingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.closingBalance || (parseFloat(selectedBank?.openingBalance || 0) + 
+                            bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) - 
+                            bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)))
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {!selectedCustomerId && !selectedSupplierId && !selectedBankId && (
             <div className="bg-white border border-gray-200 rounded-lg shadow-sm py-20 px-6 text-center">
               <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 mb-4">
                 <FileText className="h-7 w-7 text-gray-400" />
               </div>
               <h3 className="text-base font-medium text-gray-900 mb-1">No ledger selected</h3>
               <p className="text-sm text-gray-500 max-w-sm mx-auto">
-                Select a customer or supplier above to view their account ledger and transaction history.
+                Select a customer, supplier, or bank above to view their account ledger and transaction history.
               </p>
             </div>
           )}
-
-          <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-300 bg-gray-100">
-              <h2 className="text-lg font-semibold text-gray-900">Bank Ledger</h2>
-            </div>
-            <div
-              ref={bankLedgerScrollRef}
-              className={`overflow-x-auto ${virtualizeBankLedgerRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
-            >
-              <table className="min-w-full border border-gray-300">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Voucher No</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Bank Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Particular</th>
-                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Debits</th>
-                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Credits</th>
-                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Balance</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white">
-                  {/* Opening Balance Row */}
-                  {(selectedBank || selectedBankId === ALL_BANKS_VALUE) && (
-                    <tr className="bg-blue-50 font-medium">
-                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">
-                        {filters.startDate ? formatDate(filters.startDate) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">-</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">
-                        {selectedBankId === ALL_BANKS_VALUE ? 'All Banks' : selectedBank?.bankName}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">OB: Opening Balance</td>
-                      <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">
-                        {(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) > 0 
-                          ? formatCurrency(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) 
-                          : '0.00'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">
-                        {(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) < 0 
-                          ? formatCurrency(Math.abs(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0))) 
-                          : '0.00'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300 font-bold">
-                        {formatCurrency(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0))}
-                      </td>
-                    </tr>
-                  )}
-
-                  {bankLedgerRows.length === 0 ? (
-                    <tr>
-                      <td colSpan="7" className="px-4 py-8 text-center text-gray-500 border border-gray-300">
-                        {!selectedBankId ? 'Please select a bank to view ledger entries.' : 'No bank ledger entries found for this period.'}
-                      </td>
-                    </tr>
-                  ) : !virtualizeBankLedgerRows ? (
-                    bankLedgerRows.map((entry, index) => (
-                      <tr key={`${entry.voucherNo}-${entry.date}-${index}`} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{formatDate(entry.date)}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.voucherNo}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.bankName}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.particular}</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.debitAmount)}</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.creditAmount)}</td>
-                        <td className="px-4 py-3 text-sm text-right font-bold text-gray-900 border border-gray-300">{formatCurrency(entry.balance)}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    (() => {
-                      const vItems = bankLedgerVirtualizer.getVirtualItems();
-                      const totalH = bankLedgerVirtualizer.getTotalSize();
-                      const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
-                      return (
-                        <>
-                          {padTop > 0 ? (
-                            <tr aria-hidden className="pointer-events-none">
-                              <td colSpan={7} className="p-0 border-0" style={{ height: padTop }} />
-                            </tr>
-                          ) : null}
-                          {vItems.map((vr) => {
-                            const entry = bankLedgerRows[vr.index];
-                            return (
-                              <tr key={vr.key} className="hover:bg-gray-50" style={{ height: vr.size }}>
-                                <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{formatDate(entry.date)}</td>
-                                <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.voucherNo}</td>
-                                <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.bankName}</td>
-                                <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.particular}</td>
-                                <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.debitAmount)}</td>
-                                <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.creditAmount)}</td>
-                                <td className="px-4 py-3 text-sm text-right font-bold text-gray-900 border border-gray-300">{formatCurrency(entry.balance)}</td>
-                              </tr>
-                            );
-                          })}
-                          {padBottom > 0 ? (
-                            <tr aria-hidden className="pointer-events-none">
-                              <td colSpan={7} className="p-0 border-0" style={{ height: padBottom }} />
-                            </tr>
-                          ) : null}
-                        </>
-                      );
-                    })()
-                  )}
-                  {/* Total Row for Bank Ledger */}
-                  {bankLedgerRows.length > 0 && (
-                    <tr className="bg-green-100 font-semibold border-t-2 border-green-300">
-                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300"></td>
-                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300"></td>
-                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300"></td>
-                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300 text-right">Totals / Net Change</td>
-                      <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">
-                        {formatCurrency(bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0))}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">
-                        {formatCurrency(bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0))}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300"></td>
-                    </tr>
-                  )}
-                  {(selectedBank || selectedBankId === ALL_BANKS_VALUE) && (
-                    <tr className="bg-green-200 font-bold border-t-2 border-green-400">
-                      <td colSpan="6" className="px-4 py-3 text-right text-sm text-gray-900 border border-gray-300 uppercase tracking-wider">Final Closing Balance</td>
-                      <td className={`px-4 py-3 text-right text-lg border border-gray-300 ${
-                        (selectedBankId === ALL_BANKS_VALUE ? bankTotals.closingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.closingBalance || (parseFloat(selectedBank?.openingBalance || 0) + 
-                         bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) - 
-                         bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)))) < 0 ? 'text-red-700' : 'text-green-800'
-                      }`}>
-                        {formatCurrency(
-                          selectedBankId === ALL_BANKS_VALUE ? bankTotals.closingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.closingBalance || (parseFloat(selectedBank?.openingBalance || 0) + 
-                          bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) - 
-                          bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)))
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
       )}
 
