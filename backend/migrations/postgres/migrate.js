@@ -80,7 +80,8 @@ const MIGRATIONS = [
   '058_jv_entries_party_linking.sql',
   '059_increase_jv_account_code_length.sql',
   '060_enable_direct_posting_party_accounts.sql',
-  '061_uppercase_account_codes.sql'
+  '061_uppercase_account_codes.sql',
+  '062_add_bank_id_support.sql'
 ];
 
 async function ensureMigrationsTable() {

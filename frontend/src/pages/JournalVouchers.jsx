@@ -287,9 +287,9 @@ export const JournalVouchers = () => {
     // Also filter banks
     const filteredBanks = searchQuery
       ? banks.filter(b => {
-          const name = `${b.bankName || b.bank_name} ${b.accountName || b.account_name}`.toLowerCase();
-          return name.includes(searchQuery.toLowerCase());
-        })
+        const name = `${b.bankName || b.bank_name} ${b.accountName || b.account_name}`.toLowerCase();
+        return name.includes(searchQuery.toLowerCase());
+      })
       : banks;
     const bankGroup = {
       label: 'Bank Accounts',
@@ -314,7 +314,7 @@ export const JournalVouchers = () => {
 
   /* ── mutations ── */
   const [createJournalVoucher, { isLoading: creating }] = useCreateJournalVoucherMutation();
-  const [postJournalVoucher,   { isLoading: posting }]  = usePostJournalVoucherMutation();
+  const [postJournalVoucher, { isLoading: posting }] = usePostJournalVoucherMutation();
 
   const recording = creating || posting;
 
@@ -347,11 +347,11 @@ export const JournalVouchers = () => {
 
   /* ── totals ── */
   const totals = useMemo(() => {
-    const debitTotal  = formState.entries.reduce((s, e) => s + (parseFloat(e.debit)  || 0), 0);
+    const debitTotal = formState.entries.reduce((s, e) => s + (parseFloat(e.debit) || 0), 0);
     const creditTotal = formState.entries.reduce((s, e) => s + (parseFloat(e.credit) || 0), 0);
-    const difference  = Math.round((debitTotal - creditTotal) * 100) / 100;
+    const difference = Math.round((debitTotal - creditTotal) * 100) / 100;
     return {
-      debitTotal:  Math.round(debitTotal  * 100) / 100,
+      debitTotal: Math.round(debitTotal * 100) / 100,
       creditTotal: Math.round(creditTotal * 100) / 100,
       difference
     };
@@ -363,9 +363,9 @@ export const JournalVouchers = () => {
       const nextEntries = prev.entries.map((entry, idx) => {
         if (idx !== index) return entry;
         const updated = { ...entry, [field]: value };
-        if (field === 'debit'  && value) updated.credit = '';
-        if (field === 'credit' && value) updated.debit  = '';
-        
+        if (field === 'debit' && value) updated.credit = '';
+        if (field === 'credit' && value) updated.debit = '';
+
         // If account changes, clear or auto-set party
         if (field === 'accountId') {
           const account = value ? accountMap.get(value) : null;
@@ -386,7 +386,7 @@ export const JournalVouchers = () => {
             updated.partyName = '';
           }
         }
-        
+
         return updated;
       });
       return { ...prev, entries: nextEntries };
@@ -420,7 +420,7 @@ export const JournalVouchers = () => {
           entry.accountId = defaultAccount.id || defaultAccount._id;
         }
       }
-      
+
       nextEntries[index] = entry;
       return { ...prev, entries: nextEntries };
     });
@@ -440,10 +440,10 @@ export const JournalVouchers = () => {
     }
 
     const payload = {
-      voucherDate:  formState.voucherDate,
-      reference:    formState.reference?.trim()   || undefined,
-      description:  formState.description?.trim() || undefined,
-      notes:        formState.notes?.trim()       || undefined,
+      voucherDate: formState.voucherDate,
+      reference: formState.reference?.trim() || undefined,
+      description: formState.description?.trim() || undefined,
+      notes: formState.notes?.trim() || undefined,
       entries: formState.entries.map(entry => {
         // Bank entries use a synthetic BANK::{id} value — resolve to account 1001
         if (entry.accountId?.startsWith('BANK::')) {
@@ -453,21 +453,22 @@ export const JournalVouchers = () => {
             ? `${bank.bankName || bank.bank_name} — ${bank.accountName || bank.account_name}`
             : 'Bank';
           return {
-            accountCode:  '1001',
-            particulars:  entry.particulars?.trim() || bankLabel,
-            debitAmount:  entry.debit  ? parseFloat(entry.debit)  : 0,
-            creditAmount: entry.credit ? parseFloat(entry.credit) : 0
+            accountCode: '1001',
+            particulars: entry.particulars?.trim() || bankLabel,
+            debitAmount: entry.debit ? parseFloat(entry.debit) : 0,
+            creditAmount: entry.credit ? parseFloat(entry.credit) : 0,
+            bankId: bankId
           };
         }
         const account = entry.accountId ? accountMap.get(entry.accountId) : null;
         const code = account?.accountCode || entry.accountId;
         return {
-          accountCode:  code,
-          particulars:  entry.particulars?.trim() || '',
-          debitAmount:  entry.debit  ? parseFloat(entry.debit)  : 0,
+          accountCode: code,
+          particulars: entry.particulars?.trim() || '',
+          debitAmount: entry.debit ? parseFloat(entry.debit) : 0,
           creditAmount: entry.credit ? parseFloat(entry.credit) : 0,
-          customerId:   (code === '1100' || code.startsWith('CUST-')) ? entry.partyId || undefined : undefined,
-          supplierId:   (code === '2000' || code.startsWith('SUPP-')) ? entry.partyId || undefined : undefined
+          customerId: (code === '1100' || code.startsWith('CUST-')) ? entry.partyId || undefined : undefined,
+          supplierId: (code === '2000' || code.startsWith('SUPP-')) ? entry.partyId || undefined : undefined
         };
       })
     };
@@ -501,7 +502,7 @@ export const JournalVouchers = () => {
   const handleFilterChange = (field, value) =>
     setFilters(prev => ({ ...prev, [field]: value }));
 
-  const vouchers   = vouchersData?.data?.vouchers || vouchersData?.vouchers || [];
+  const vouchers = vouchersData?.data?.vouchers || vouchersData?.vouchers || [];
   const pagination = vouchersData?.data?.pagination || vouchersData?.pagination;
 
   /* ────────────────────────────────── RENDER ─────────────────────────── */

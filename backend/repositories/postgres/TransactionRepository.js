@@ -20,6 +20,7 @@ function toCamel(row) {
     customerId: row.customer_id,
     supplierId: row.supplier_id,
     productId: row.product_id,
+    bankId: row.bank_id,
     currency: row.currency,
     status: row.status,
     paymentMethod: row.payment_method,
@@ -102,6 +103,11 @@ class TransactionRepository {
     if (filter.supplierId) {
       conditions.push(`supplier_id = $${paramCount++}`);
       params.push(filter.supplierId);
+    }
+
+    if (filter.bankId) {
+      conditions.push(`bank_id = $${paramCount++}`);
+      params.push(filter.bankId);
     }
 
     if (filter.transactionDate) {
@@ -196,8 +202,8 @@ class TransactionRepository {
 
   async create(data) {
     const result = await query(
-      `INSERT INTO account_ledger (transaction_id, transaction_date, account_code, debit_amount, credit_amount, description, reference_type, reference_id, reference_number, customer_id, supplier_id, product_id, currency, status, payment_method, order_id, payment_id, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING *`,
+      `INSERT INTO account_ledger (transaction_id, transaction_date, account_code, debit_amount, credit_amount, description, reference_type, reference_id, reference_number, customer_id, supplier_id, product_id, bank_id, currency, status, payment_method, order_id, payment_id, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING *`,
       [
         data.transactionId || data.transaction_id,
         data.transactionDate || data.transaction_date || new Date(),
@@ -211,6 +217,7 @@ class TransactionRepository {
         data.customerId || data.customer_id || null,
         data.supplierId || data.supplier_id || null,
         data.productId || data.product_id || null,
+        data.bankId || data.bank_id || null,
         data.currency || 'PKR',
         data.status || 'completed',
         data.paymentMethod || data.payment_method || null,

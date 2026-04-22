@@ -1315,15 +1315,12 @@ class ReportsService {
         SELECT 
           al.debit_amount,
           al.credit_amount,
-          -- Resolve Bank ID: Try to find which bank this entry belongs to
+          -- Resolve Bank ID: Use direct bank_id link, fallback to first bank only for historical entries
           COALESCE(
-            br.bank_id,
-            bp.bank_id,
+            al.bank_id,
             (SELECT b2.id FROM banks b2 WHERE b2.deleted_at IS NULL ORDER BY b2.bank_name ASC LIMIT 1)
           ) as resolved_bank_id
         FROM account_ledger al
-        LEFT JOIN bank_receipts br ON al.reference_id = br.id AND al.reference_type = 'bank_receipt'
-        LEFT JOIN bank_payments bp ON al.reference_id = bp.id AND al.reference_type = 'bank_payment'
         WHERE al.account_code = '1001'
           AND al.status = 'completed'
           AND al.reversed_at IS NULL

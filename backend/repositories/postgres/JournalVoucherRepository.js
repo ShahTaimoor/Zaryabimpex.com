@@ -37,6 +37,7 @@ function entryCamel(row) {
     description: row.description,
     customerId: row.customer_id,
     supplierId: row.supplier_id,
+    bankId: row.bank_id,
     customerName: row.customer_name,
     supplierName: row.supplier_name,
     createdAt: row.created_at
@@ -78,14 +79,14 @@ class JournalVoucherRepository {
     }
 
     sql += ' ORDER BY voucher_date DESC, created_at DESC';
-    
-    if (options.limit) { 
-      sql += ` LIMIT $${n++}`; 
-      params.push(options.limit); 
+
+    if (options.limit) {
+      sql += ` LIMIT $${n++}`;
+      params.push(options.limit);
     }
-    if (options.skip != null) { 
-      sql += ` OFFSET $${n++}`; 
-      params.push(options.skip); 
+    if (options.skip != null) {
+      sql += ` OFFSET $${n++}`;
+      params.push(options.skip);
     }
 
     const result = await query(sql, params);
@@ -190,8 +191,8 @@ class JournalVoucherRepository {
           const entry = data.entries[i];
           const entryResult = await clientToUse.query(
             `INSERT INTO journal_voucher_entries 
-             (journal_voucher_id, line_number, account_code, account_name, particulars, debit_amount, credit_amount, description, customer_id, supplier_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             (journal_voucher_id, line_number, account_code, account_name, particulars, debit_amount, credit_amount, description, customer_id, supplier_id, bank_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              RETURNING *`,
             [
               jvId,
@@ -203,7 +204,8 @@ class JournalVoucherRepository {
               parseFloat(entry.creditAmount || entry.credit_amount || 0),
               entry.description || '',
               entry.customerId || entry.customer_id || null,
-              entry.supplierId || entry.supplier_id || null
+              entry.supplierId || entry.supplier_id || null,
+              entry.bankId || entry.bank_id || null
             ]
           );
           entries.push(entryCamel(entryResult.rows[0]));
@@ -278,8 +280,8 @@ class JournalVoucherRepository {
           const entry = data.entries[i];
           const entryResult = await clientToUse.query(
             `INSERT INTO journal_voucher_entries 
-             (journal_voucher_id, line_number, account_code, account_name, particulars, debit_amount, credit_amount, description, customer_id, supplier_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             (journal_voucher_id, line_number, account_code, account_name, particulars, debit_amount, credit_amount, description, customer_id, supplier_id, bank_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              RETURNING *`,
             [
               id,
@@ -291,7 +293,8 @@ class JournalVoucherRepository {
               parseFloat(entry.creditAmount || entry.credit_amount || 0),
               entry.description || '',
               entry.customerId || entry.customer_id || null,
-              entry.supplierId || entry.supplier_id || null
+              entry.supplierId || entry.supplier_id || null,
+              entry.bankId || entry.bank_id || null
             ]
           );
           entries.push(entryCamel(entryResult.rows[0]));
@@ -377,7 +380,7 @@ class JournalVoucherRepository {
       changedBy,
       changeDetails ? JSON.stringify(changeDetails) : null
     ];
-    
+
     if (client) {
       await client.query(sql, params);
     } else {

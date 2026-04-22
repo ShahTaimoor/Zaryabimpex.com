@@ -24,7 +24,7 @@ class JournalVoucherService {
     // Calculate totals and validate entries
     let totalDebit = 0;
     let totalCredit = 0;
-    const accountCodes = new Set();
+    const uniqueAccountKeys = new Set();
 
     for (let i = 0; i < (data.entries || []).length; i++) {
       const entry = data.entries[i];
@@ -36,8 +36,16 @@ class JournalVoucherService {
         errors.push(`Entry ${i + 1}: Account code is required`);
         continue;
       }
-      const accountCode = entry.accountCode || entry.account_code;
-      accountCodes.add(accountCode);
+      
+      const accountCode = (entry.accountCode || entry.account_code).toUpperCase();
+      const bankId = entry.bankId || entry.bank_id || '';
+      const customerId = entry.customerId || entry.customer_id || '';
+      const supplierId = entry.supplierId || entry.supplier_id || '';
+      
+      // Use a composite key to distinguish between different entities (banks, customers, suppliers)
+      // that share the same General Ledger account code (e.g., 1001 for all banks).
+      const compositeKey = `${accountCode}|${bankId}|${customerId}|${supplierId}`;
+      uniqueAccountKeys.add(compositeKey);
 
       // Check debit/credit values
       if (debit < 0) {
@@ -62,39 +70,39 @@ class JournalVoucherService {
     }
 
     // Check at least 2 different accounts
-    if (accountCodes.size < 2) {
+    if (uniqueAccountKeys.size < 2) {
       errors.push('Journal voucher must involve at least 2 different accounts');
     }
 
     // Party validation: AR/AP accounts must have a customer/supplier link
     for (let i = 0; i < (data.entries || []).length; i++) {
-        const entry = data.entries[i];
-        const code = (entry.accountCode || entry.account_code || '').toUpperCase();
-        let cid = entry.customerId || entry.customer_id;
-        let sid = entry.supplierId || entry.supplier_id;
+      const entry = data.entries[i];
+      const code = (entry.accountCode || entry.account_code || '').toUpperCase();
+      let cid = entry.customerId || entry.customer_id;
+      let sid = entry.supplierId || entry.supplier_id;
 
-        // Auto-link if code starts with CUST- or SUPP- and ID is missing
-        if (!cid && code.startsWith('CUST-')) {
-            cid = code.replace('CUST-', '');
-            entry.customerId = cid; // Update the entry object as well
-        }
-        if (!sid && code.startsWith('SUPP-')) {
-            sid = code.replace('SUPP-', '');
-            entry.supplierId = sid;
-        }
+      // Auto-link if code starts with CUST- or SUPP- and ID is missing
+      if (!cid && code.startsWith('CUST-')) {
+        cid = code.replace('CUST-', '');
+        entry.customerId = cid; // Update the entry object as well
+      }
+      if (!sid && code.startsWith('SUPP-')) {
+        sid = code.replace('SUPP-', '');
+        entry.supplierId = sid;
+      }
 
-        // AR Accounts: code 1100 or starts with CUST-
-        if (code === '1100' || code.startsWith('CUST-')) {
-            if (!cid) {
-                errors.push(`Entry ${i + 1}: Accounts Receivable must be linked to a specific customer.`);
-            }
+      // AR Accounts: code 1100 or starts with CUST-
+      if (code === '1100' || code.startsWith('CUST-')) {
+        if (!cid) {
+          errors.push(`Entry ${i + 1}: Accounts Receivable must be linked to a specific customer.`);
         }
-        // AP Accounts: code 2000 or starts with SUPP-
-        if (code === '2000' || code.startsWith('SUPP-')) {
-            if (!sid) {
-                errors.push(`Entry ${i + 1}: Accounts Payable must be linked to a specific supplier.`);
-            }
+      }
+      // AP Accounts: code 2000 or starts with SUPP-
+      if (code === '2000' || code.startsWith('SUPP-')) {
+        if (!sid) {
+          errors.push(`Entry ${i + 1}: Accounts Payable must be linked to a specific supplier.`);
         }
+      }
     }
 
     return {

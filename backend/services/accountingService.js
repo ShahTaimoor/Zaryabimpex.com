@@ -127,8 +127,8 @@ class AccountingService {
           transaction_id, transaction_date, account_code,
           debit_amount, credit_amount, description,
           reference_type, reference_id, reference_number,
-          customer_id, supplier_id, currency, status, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          customer_id, supplier_id, bank_id, currency, status, created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         RETURNING *`,
         [
           `${transactionId}-1`,
@@ -142,6 +142,7 @@ class AccountingService {
           metadata.referenceNumber,
           metadata.customerId,
           metadata.supplierId,
+          metadata.bankId || entry1.bankId || null,
           metadata.currency || 'PKR',
           metadata.status || 'completed',
           isValidUuid(metadata.createdBy) ? metadata.createdBy : null
@@ -154,8 +155,8 @@ class AccountingService {
           transaction_id, transaction_date, account_code,
           debit_amount, credit_amount, description,
           reference_type, reference_id, reference_number,
-          customer_id, supplier_id, currency, status, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          customer_id, supplier_id, bank_id, currency, status, created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         RETURNING *`,
         [
           `${transactionId}-2`,
@@ -169,6 +170,7 @@ class AccountingService {
           metadata.referenceNumber,
           metadata.customerId,
           metadata.supplierId,
+          metadata.bankId || entry2.bankId || null,
           metadata.currency || 'PKR',
           metadata.status || 'completed',
           metadata.createdBy
@@ -488,6 +490,7 @@ class AccountingService {
             referenceType: 'bank_opening_balance',
             referenceId: bankId,
             referenceNumber: refNum,
+            bankId: bankId,
             transactionDate: txnDate,
             currency: 'PKR',
             createdBy
@@ -502,6 +505,7 @@ class AccountingService {
             referenceType: 'bank_opening_balance',
             referenceId: bankId,
             referenceNumber: refNum,
+            bankId: bankId,
             transactionDate: txnDate,
             currency: 'PKR',
             createdBy
@@ -1217,6 +1221,7 @@ class AccountingService {
       supplierId: supplierId || null,
       partyType: partyType,
       partyId: partyId,
+      bankId: bankReceipt.bank_id || bankReceipt.bankId,
       transactionDate: bankReceipt.date || bankReceipt.transactionDate || new Date(),
       currency: 'PKR',
       createdBy: bankReceipt.created_by || bankReceipt.createdBy
@@ -1480,6 +1485,7 @@ class AccountingService {
       supplierId: supplierId || null,
       partyType: partyType,
       partyId: partyId,
+      bankId: bankPayment.bank_id || bankPayment.bankId,
       transactionDate: bankPayment.date || bankPayment.transactionDate || new Date(),
       currency: 'PKR',
       createdBy: bankPayment.created_by || bankPayment.createdBy
@@ -1963,6 +1969,7 @@ class AccountingService {
         reference_number: voucher.voucherNumber || voucher.voucher_number || `JV-${voucher.id?.substring(0, 8)}`,
         customer_id: entry.customerId || entry.customer_id || null,
         supplier_id: entry.supplierId || entry.supplier_id || null,
+        bank_id: entry.bankId || entry.bank_id || null,
         currency: 'PKR',
         status: 'completed',
         created_by: isValidUuid(createdBy) ? createdBy : null
@@ -1980,8 +1987,8 @@ class AccountingService {
             transaction_id, transaction_date, account_code,
             debit_amount, credit_amount, description,
             reference_type, reference_id, reference_number,
-            customer_id, supplier_id, currency, status, created_by
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+            customer_id, supplier_id, bank_id, currency, status, created_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
           [
             entry.transaction_id,
             entry.transaction_date,
@@ -1994,6 +2001,7 @@ class AccountingService {
             entry.reference_number,
             entry.customer_id,
             entry.supplier_id,
+            entry.bank_id,
             entry.currency,
             entry.status,
             entry.created_by
