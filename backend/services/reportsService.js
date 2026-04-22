@@ -1376,8 +1376,8 @@ class ReportsService {
 
     const cashSummarySql = `
       SELECT 
-        COALESCE((SELECT SUM(debit_amount) FROM account_ledger WHERE account_code = '1000' AND status = 'completed' AND reversed_at IS NULL ${dateClause.replace('date', 'transaction_date')}), 0) as "totalReceipts",
-        COALESCE((SELECT SUM(credit_amount) FROM account_ledger WHERE account_code = '1000' AND status = 'completed' AND reversed_at IS NULL ${dateClause.replace('date', 'transaction_date')}), 0) as "totalPayments"
+        COALESCE((SELECT SUM(debit_amount) FROM account_ledger WHERE account_code = '1000' AND status = 'completed' AND reversed_at IS NULL AND reference_type != 'cash_opening_balance' ${dateClause.replace('date', 'transaction_date')}), 0) as "totalReceipts",
+        COALESCE((SELECT SUM(credit_amount) FROM account_ledger WHERE account_code = '1000' AND status = 'completed' AND reversed_at IS NULL AND reference_type != 'cash_opening_balance' ${dateClause.replace('date', 'transaction_date')}), 0) as "totalPayments"
     `;
     const [cashResult, cashOpeningDisplay] = await Promise.all([
       query(cashSummarySql, dateParams),
