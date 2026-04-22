@@ -819,6 +819,83 @@ class AccountLedgerService {
         }
       };
 
+      // Process banks (calculate period-specific opening balance)
+      const bankResults = await query('SELECT id, bank_name as "bankName", opening_balance as "openingBalance" FROM banks WHERE deleted_at IS NULL');
+      const allBanks = bankResults.rows;
+      
+      const bankSummaries = await Promise.all(
+        allBanks.map(async (bank) => {
+          try {
+            const bankId = bank.id;
+            const initialOpening = parseFloat(bank.openingBalance || 0);
+            let openingBalance = initialOpening;
+
+            // Calculate period opening balance (before startDate)
+            if (start) {
+              const prePeriodEntries = await query(
+                `SELECT COALESCE(SUM(debit_amount - credit_amount), 0) as balance
+                 FROM account_ledger
+                 WHERE account_code = '1001'
+                   AND bank_id = $1
+                   AND status = 'completed'
+                   AND reversed_at IS NULL
+                   AND reference_type != 'bank_opening_balance'
+                   AND transaction_date < $2`,
+                [bankId, start]
+              );
+              openingBalance += parseFloat(prePeriodEntries.rows[0].balance || 0);
+            }
+
+            // Get period transactions totals
+            const periodTotals = await query(
+              `SELECT COALESCE(SUM(debit_amount), 0) as "totalDebits",
+                      COALESCE(SUM(credit_amount), 0) as "totalCredits"
+               FROM account_ledger
+               WHERE account_code = '1001'
+                 AND bank_id = $1
+                 AND status = 'completed'
+                 AND reversed_at IS NULL
+                 AND reference_type != 'bank_opening_balance'
+                 AND transaction_date BETWEEN $2 AND $3`,
+              [bankId, start || new Date(0), end || new Date()]
+            );
+
+            const totalDebits = parseFloat(periodTotals.rows[0].totalDebits || 0);
+            const totalCredits = parseFloat(periodTotals.rows[0].totalCredits || 0);
+            const closingBalance = openingBalance + totalDebits - totalCredits;
+
+            return {
+              id: bankId,
+              name: bank.bankName,
+              openingBalance,
+              totalDebits,
+              totalCredits,
+              closingBalance
+            };
+          } catch (err) {
+            console.error(`Error processing bank summary for ${bank.bankName}:`, err);
+            return {
+              id: bank.id,
+              name: bank.bankName,
+              openingBalance: parseFloat(bank.openingBalance || 0),
+              totalDebits: 0,
+              totalCredits: 0,
+              closingBalance: parseFloat(bank.openingBalance || 0)
+            };
+          }
+        })
+      );
+
+      data.banks = {
+        summary: bankSummaries,
+        totals: {
+          openingBalance: bankSummaries.reduce((sum, b) => sum + b.openingBalance, 0),
+          totalDebits: bankSummaries.reduce((sum, b) => sum + b.totalDebits, 0),
+          totalCredits: bankSummaries.reduce((sum, b) => sum + b.totalCredits, 0),
+          closingBalance: bankSummaries.reduce((sum, b) => sum + b.closingBalance, 0)
+        }
+      };
+
       // When a single customer is requested, add the shape the frontend expects for "Customer Receivables" detail view
       if (customerId && filteredCustomerSummaries.length === 1) {
         const one = filteredCustomerSummaries[0];

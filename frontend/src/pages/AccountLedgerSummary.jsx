@@ -277,8 +277,10 @@ const AccountLedgerSummary = () => {
   // Extract data from summary (must be before early return)
   const allCustomersSummary = summaryData?.data?.customers?.summary || [];
   const suppliers = summaryData?.data?.suppliers?.summary || [];
+  const banksSummary = summaryData?.data?.banks?.summary || [];
   const customerTotals = summaryData?.data?.customers?.totals || {};
   const supplierTotals = summaryData?.data?.suppliers?.totals || {};
+  const bankTotals = summaryData?.data?.banks?.totals || {};
   const period = summaryData?.data?.period || {};
 
   // Filter customers based on selection (must be before early return)
@@ -446,8 +448,27 @@ const AccountLedgerSummary = () => {
         const bTime = new Date(b.date || 0).getTime();
         if (aTime !== bTime) return aTime - bTime;
         return String(a.voucherNo).localeCompare(String(b.voucherNo));
+      })
+      .map((entry, index, array) => {
+        // Calculate running balance
+        // Determine the opening balance for the selected context
+        let baseOpening = 0;
+        if (selectedBankId === ALL_BANKS_VALUE) {
+          baseOpening = bankTotals.openingBalance || 0;
+        } else {
+          const bankSum = banksSummary.find(b => String(b.id) === String(selectedBankId));
+          baseOpening = bankSum ? bankSum.openingBalance : (selectedBank?.openingBalance || selectedBank?.opening_balance || 0);
+        }
+
+        // Running balance = baseOpening + Sum(all debits up to now) - Sum(all credits up to now)
+        const previousEntries = array.slice(0, index + 1);
+        const runningBalance = baseOpening + 
+          previousEntries.reduce((sum, e) => sum + (e.debitAmount || 0), 0) - 
+          previousEntries.reduce((sum, e) => sum + (e.creditAmount || 0), 0);
+        
+        return { ...entry, balance: runningBalance };
       });
-  }, [allEntries, banks, selectedBankId, selectedBank, ALL_BANKS_VALUE]);
+  }, [allEntries, banks, selectedBankId, selectedBank, ALL_BANKS_VALUE, banksSummary, bankTotals]);
 
   const customerEntries = useMemo(
     () => customerDetail?.entries ?? detailedTransactionsData?.data?.entries ?? [],
@@ -1375,30 +1396,40 @@ const AccountLedgerSummary = () => {
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Particular</th>
                     <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Debits</th>
                     <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Credits</th>
+                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider border border-gray-300">Balance</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white">
                   {/* Opening Balance Row */}
-                  {selectedBank && (
+                  {(selectedBank || selectedBankId === ALL_BANKS_VALUE) && (
                     <tr className="bg-blue-50 font-medium">
                       <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">
                         {filters.startDate ? formatDate(filters.startDate) : '-'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">-</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{selectedBank.bankName}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">
+                        {selectedBankId === ALL_BANKS_VALUE ? 'All Banks' : selectedBank?.bankName}
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">OB: Opening Balance</td>
                       <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">
-                        {selectedBank.opening_balance > 0 ? formatCurrency(selectedBank.opening_balance) : '0.00'}
+                        {(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) > 0 
+                          ? formatCurrency(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) 
+                          : '0.00'}
                       </td>
                       <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">
-                        {selectedBank.opening_balance < 0 ? formatCurrency(Math.abs(selectedBank.opening_balance)) : '0.00'}
+                        {(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) < 0 
+                          ? formatCurrency(Math.abs(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0))) 
+                          : '0.00'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300 font-bold">
+                        {formatCurrency(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0))}
                       </td>
                     </tr>
                   )}
 
                   {bankLedgerRows.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="px-4 py-8 text-center text-gray-500 border border-gray-300">
+                      <td colSpan="7" className="px-4 py-8 text-center text-gray-500 border border-gray-300">
                         {!selectedBankId ? 'Please select a bank to view ledger entries.' : 'No bank ledger entries found for this period.'}
                       </td>
                     </tr>
@@ -1411,6 +1442,7 @@ const AccountLedgerSummary = () => {
                         <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.particular}</td>
                         <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.debitAmount)}</td>
                         <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.creditAmount)}</td>
+                        <td className="px-4 py-3 text-sm text-right font-bold text-gray-900 border border-gray-300">{formatCurrency(entry.balance)}</td>
                       </tr>
                     ))
                   ) : (
@@ -1422,7 +1454,7 @@ const AccountLedgerSummary = () => {
                         <>
                           {padTop > 0 ? (
                             <tr aria-hidden className="pointer-events-none">
-                              <td colSpan={6} className="p-0 border-0" style={{ height: padTop }} />
+                              <td colSpan={7} className="p-0 border-0" style={{ height: padTop }} />
                             </tr>
                           ) : null}
                           {vItems.map((vr) => {
@@ -1435,12 +1467,13 @@ const AccountLedgerSummary = () => {
                                 <td className="px-4 py-3 text-sm text-gray-900 border border-gray-300">{entry.particular}</td>
                                 <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.debitAmount)}</td>
                                 <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">{formatCurrency(entry.creditAmount)}</td>
+                                <td className="px-4 py-3 text-sm text-right font-bold text-gray-900 border border-gray-300">{formatCurrency(entry.balance)}</td>
                               </tr>
                             );
                           })}
                           {padBottom > 0 ? (
                             <tr aria-hidden className="pointer-events-none">
-                              <td colSpan={6} className="p-0 border-0" style={{ height: padBottom }} />
+                              <td colSpan={7} className="p-0 border-0" style={{ height: padBottom }} />
                             </tr>
                           ) : null}
                         </>
@@ -1460,20 +1493,21 @@ const AccountLedgerSummary = () => {
                       <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300">
                         {formatCurrency(bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0))}
                       </td>
+                      <td className="px-4 py-3 text-sm text-right text-gray-900 border border-gray-300"></td>
                     </tr>
                   )}
-                  {selectedBank && (
+                  {(selectedBank || selectedBankId === ALL_BANKS_VALUE) && (
                     <tr className="bg-green-200 font-bold border-t-2 border-green-400">
-                      <td colSpan="4" className="px-4 py-3 text-right text-sm text-gray-900 border border-gray-300 uppercase tracking-wider">Final Closing Balance</td>
-                      <td colSpan="2" className={`px-4 py-3 text-right text-lg border border-gray-300 ${
-                        (parseFloat(selectedBank.opening_balance || 0) + 
+                      <td colSpan="6" className="px-4 py-3 text-right text-sm text-gray-900 border border-gray-300 uppercase tracking-wider">Final Closing Balance</td>
+                      <td className={`px-4 py-3 text-right text-lg border border-gray-300 ${
+                        (selectedBankId === ALL_BANKS_VALUE ? bankTotals.closingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.closingBalance || (parseFloat(selectedBank?.openingBalance || 0) + 
                          bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) - 
-                         bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)) < 0 ? 'text-red-700' : 'text-green-800'
+                         bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)))) < 0 ? 'text-red-700' : 'text-green-800'
                       }`}>
                         {formatCurrency(
-                          parseFloat(selectedBank.opening_balance || 0) + 
+                          selectedBankId === ALL_BANKS_VALUE ? bankTotals.closingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.closingBalance || (parseFloat(selectedBank?.openingBalance || 0) + 
                           bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) - 
-                          bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)
+                          bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)))
                         )}
                       </td>
                     </tr>
