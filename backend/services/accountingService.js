@@ -307,6 +307,67 @@ class AccountingService {
   }
 
   /**
+   * Get unified balance for any account type (Customer, Supplier, Bank, COA)
+   * This is the central source of truth for all balance checks.
+   * @param {string} id - UUID or Account Code
+   * @param {'customer'|'supplier'|'bank'|'coa'} type
+   * @param {Date|null} asOfDate
+   */
+  static async getUnifiedBalance(id, type, asOfDate = null) {
+    switch (type) {
+      case 'customer':
+        return await this.getCustomerBalance(id, asOfDate);
+      case 'supplier':
+        return await this.getSupplierBalance(id, asOfDate);
+      case 'bank':
+        return await this.getAccountBalance('1001', asOfDate, { useDbFallback: true }); // Bank Account
+      case 'coa':
+        return await this.getAccountBalance(id, asOfDate);
+      default:
+        throw new Error(`Invalid account type for unified balance: ${type}`);
+    }
+  }
+
+  /**
+   * Centralized method to record inventory value changes (Debit/Credit Inventory Asset)
+   * This ensures physical stock movements always have a corresponding financial entry.
+   */
+  static async recordInventoryValueChange(params, client = null) {
+    const { productId, delta, unitCost, reason, referenceType, referenceId, referenceNumber, createdBy, transactionDate } = params;
+    
+    const amount = Math.abs(Math.round(delta * unitCost * 100) / 100);
+    if (amount < 0.01) return null;
+
+    const entry1 = {
+      accountCode: '1200', // Inventory Asset
+      debitAmount: delta > 0 ? amount : 0,
+      creditAmount: delta < 0 ? amount : 0,
+      description: `${reason} (${Math.abs(delta)} units)`
+    };
+
+    // Offset account: Retained Earnings (3100) for adjustments, or specific accounts based on reference
+    let offsetAccount = '3100';
+    if (referenceType === 'sale') offsetAccount = '5000'; // COGS
+    if (referenceType === 'purchase_invoice') offsetAccount = '2000'; // Accounts Payable (usually handled by recordPurchaseInvoice)
+
+    const entry2 = {
+      accountCode: offsetAccount,
+      debitAmount: delta < 0 ? amount : 0,
+      creditAmount: delta > 0 ? amount : 0,
+      description: `Inventory Offset: ${referenceNumber || reason}`
+    };
+
+    return await this.createTransaction(entry1, entry2, {
+      referenceType: referenceType || 'inventory_adjustment',
+      referenceId,
+      referenceNumber,
+      transactionDate: transactionDate || new Date(),
+      currency: 'PKR',
+      createdBy
+    }, client);
+  }
+
+  /**
    * Get customer balance from ledger
    * Only includes AR account (1100) entries - single source of truth
    */
@@ -385,6 +446,74 @@ class AccountingService {
     const row = result.rows[0];
     return parseFloat(row.opening_balance || 0) + parseFloat(row.ledger_balance || 0);
   }
+
+  /**
+   * Get ledger-calculated balance for a specific bank account
+   * @param {string} bankId - Bank UUID
+   * @param {Date} asOfDate - Optional end date
+   * @returns {Promise<number>}
+   */
+  static async getBankBalance(bankId, asOfDate = null) {
+    const dateFilter = asOfDate ? 'AND l.transaction_date <= $2' : '';
+    const params = [bankId];
+    if (asOfDate) params.push(asOfDate);
+
+    const result = await query(
+      `SELECT 
+        b.opening_balance,
+        COALESCE(SUM(l.debit_amount - l.credit_amount), 0) AS ledger_balance
+       FROM banks b
+       LEFT JOIN account_ledger l ON b.id = l.bank_id
+         AND l.account_code = '1001'
+         AND l.status = 'completed'
+         AND l.reversed_at IS NULL
+         AND (l.reference_type IS NULL OR l.reference_type <> 'bank_opening_balance')
+         ${dateFilter}
+       WHERE b.id = $1
+       GROUP BY b.id, b.opening_balance`,
+      params
+    );
+
+    if (result.rows.length === 0) return 0;
+    const row = result.rows[0];
+    return parseFloat(row.opening_balance || 0) + parseFloat(row.ledger_balance || 0);
+  }
+
+  /**
+   * Get ledger-calculated balances for multiple bank accounts
+   * @param {Array<string>} bankIds - Array of Bank UUIDs
+   * @param {Date} asOfDate - Optional end date
+   * @returns {Promise<Object>} Map of bankId -> balance
+   */
+  static async getBulkBankBalances(bankIds, asOfDate = null) {
+    if (!bankIds || bankIds.length === 0) return {};
+    const dateFilter = asOfDate ? 'AND l.transaction_date <= $1' : '';
+    const params = asOfDate ? [asOfDate] : [];
+
+    const result = await query(
+      `SELECT 
+        b.id,
+        b.opening_balance,
+        COALESCE(SUM(l.debit_amount - l.credit_amount), 0) AS ledger_balance
+       FROM banks b
+       LEFT JOIN account_ledger l ON b.id = l.bank_id
+         AND l.account_code = '1001'
+         AND l.status = 'completed'
+         AND l.reversed_at IS NULL
+         AND (l.reference_type IS NULL OR l.reference_type <> 'bank_opening_balance')
+         ${dateFilter}
+       WHERE b.id = ANY($${params.length + 1})
+       GROUP BY b.id, b.opening_balance`,
+      [...params, bankIds]
+    );
+
+    const balances = {};
+    result.rows.forEach(row => {
+      balances[row.id] = parseFloat(row.opening_balance || 0) + parseFloat(row.ledger_balance || 0);
+    });
+    return balances;
+  }
+
 
   /**
    * Post or update supplier opening balance in account ledger

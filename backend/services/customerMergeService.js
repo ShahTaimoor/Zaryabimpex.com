@@ -1,8 +1,10 @@
-const { transaction } = require('../config/postgres');
-const CustomerRepository = require('../repositories/CustomerRepository');
-const CustomerTransactionRepository = require('../repositories/CustomerTransactionRepository');
-const SalesRepository = require('../repositories/SalesRepository');
-const PaymentApplicationRepository = require('../repositories/PaymentApplicationRepository');
+const CustomerRepository = require('../repositories/postgres/CustomerRepository');
+const CustomerTransactionRepository = require('../repositories/postgres/CustomerTransactionRepository');
+const SalesRepository = require('../repositories/postgres/SalesRepository');
+const PaymentApplicationRepository = require('../repositories/postgres/PaymentApplicationRepository');
+const TransactionRepository = require('../repositories/postgres/TransactionRepository');
+const ChartOfAccountsRepository = require('../repositories/postgres/ChartOfAccountsRepository');
+const AccountingService = require('./accountingService');
 const customerAuditLogService = require('./customerAuditLogService');
 
 function toId(v) {
@@ -43,18 +45,28 @@ class CustomerMergeService {
 
     let transactionsMoved = 0;
     let salesOrdersMoved = 0;
+    let ledgerEntriesMoved = 0;
 
+    const { transaction } = require('../config/postgres');
     await transaction(async (client) => {
+      // 1. Move Customer Sub-Ledger Transactions
       transactionsMoved = await CustomerTransactionRepository.updateCustomerId(sourceCustomerId, targetCustomerId, client);
+      
+      // 2. Move Sales Orders
       salesOrdersMoved = await SalesRepository.updateCustomerId(sourceCustomerId, targetCustomerId, client);
+      
+      // 3. Move Payment Applications
       await PaymentApplicationRepository.updateCustomerId(sourceCustomerId, targetCustomerId, client);
 
-      const mergedBalances = {
-        pendingBalance: (Number(source.pending_balance ?? source.pendingBalance ?? 0) || 0) + (Number(target.pending_balance ?? target.pendingBalance ?? 0) || 0),
-        advanceBalance: (Number(source.advance_balance ?? source.advanceBalance ?? 0) || 0) + (Number(target.advance_balance ?? target.advanceBalance ?? 0) || 0),
-      };
-      mergedBalances.currentBalance = mergedBalances.pendingBalance - mergedBalances.advanceBalance;
+      // 4. Move General Ledger Entries
+      ledgerEntriesMoved = await TransactionRepository.updateCustomerId(sourceCustomerId, targetCustomerId, client);
+      
+      // 5. Consolidate COA Account entries
+      const sourceAccountCode = `CUST-${sourceCustomerId}`;
+      const targetAccountCode = `CUST-${targetCustomerId}`;
+      await TransactionRepository.moveAccountEntries(sourceAccountCode, targetAccountCode, client);
 
+      // 6. Merge basic info
       let targetAddress = target.address;
       if (mergeAddresses && source.address) {
         const existing = Array.isArray(targetAddress) ? targetAddress : (targetAddress ? [targetAddress] : []);
@@ -78,12 +90,10 @@ class CustomerMergeService {
           : source.notes;
       }
 
+      // 7. Update Target (No balance columns updated anymore)
       await CustomerRepository.update(
         targetCustomerId,
         {
-          pendingBalance: mergedBalances.pendingBalance,
-          advanceBalance: mergedBalances.advanceBalance,
-          currentBalance: mergedBalances.currentBalance,
           addresses: targetAddress,
           notes: targetNotes,
           updatedBy: userId,
@@ -91,8 +101,16 @@ class CustomerMergeService {
         client
       );
 
+      // 8. Delete Source Customer and its COA Account
       await CustomerRepository.delete(sourceCustomerId, client);
+      const sourceAccount = await ChartOfAccountsRepository.findByAccountCode(sourceAccountCode);
+      if (sourceAccount) {
+        await ChartOfAccountsRepository.softDelete(sourceAccount.id);
+      }
     });
+
+    // 9. Recalculate/Get New Balance from Ledger
+    const newBalance = await AccountingService.getCustomerBalance(targetCustomerId);
 
     await customerAuditLogService.logCustomerMerge(
       sourceCustomerId,
@@ -102,20 +120,13 @@ class CustomerMergeService {
         sourceName: source.business_name || source.businessName || source.name,
         targetName: target.business_name || target.businessName || target.name,
         mergedBalances: {
-          pendingBalance: (Number(source.pending_balance ?? 0) || 0) + (Number(target.pending_balance ?? 0) || 0),
-          advanceBalance: (Number(source.advance_balance ?? 0) || 0) + (Number(target.advance_balance ?? 0) || 0),
+          currentBalance: newBalance
         },
         transactionsMoved,
         salesOrdersMoved,
+        ledgerEntriesMoved
       }
     );
-
-    const targetUpdated = await CustomerRepository.findById(targetCustomerId);
-    const mergedBalances = {
-      pendingBalance: Number(targetUpdated?.pending_balance ?? 0),
-      advanceBalance: Number(targetUpdated?.advance_balance ?? 0),
-      currentBalance: Number(targetUpdated?.current_balance ?? 0),
-    };
 
     return {
       success: true,
@@ -127,12 +138,13 @@ class CustomerMergeService {
       targetCustomer: {
         id: targetCustomerId,
         name: target.business_name || target.businessName || target.name,
-        newBalances: mergedBalances,
+        newBalance: newBalance,
       },
       statistics: {
         transactionsMoved,
         salesOrdersMoved,
-        mergedBalances,
+        ledgerEntriesMoved,
+        newBalance,
       },
     };
   }

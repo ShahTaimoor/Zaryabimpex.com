@@ -3,6 +3,7 @@ const InventoryRepository = require('../repositories/postgres/InventoryRepositor
 const ProductRepository = require('../repositories/postgres/ProductRepository');
 const ProductVariantRepository = require('../repositories/postgres/ProductVariantRepository');
 const SupplierRepository = require('../repositories/postgres/SupplierRepository');
+const AccountingService = require('./accountingService');
 
 /**
  * Business Rule Validation Service
@@ -38,7 +39,7 @@ class BusinessRuleValidationService {
         
         // Validate credit limit if account payment
         if (customer && orderData.payment?.method === 'account') {
-          const currentBalance = Number(customer.current_balance ?? customer.currentBalance ?? 0);
+          const currentBalance = await AccountingService.getCustomerBalance(orderData.customer);
           const orderTotal = orderData.pricing?.total || 0;
           const newBalance = currentBalance + orderTotal;
           const creditLimit = Number(customer.credit_limit ?? customer.creditLimit ?? 0);

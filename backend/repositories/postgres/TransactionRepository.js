@@ -228,6 +228,33 @@ class TransactionRepository {
     );
     return toCamel(result.rows[0]);
   }
+
+  async moveAccountEntries(sourceAccountCode, targetAccountCode, client = null) {
+    const q = client ? client.query.bind(client) : query;
+    const result = await q(
+      'UPDATE account_ledger SET account_code = $1, updated_at = CURRENT_TIMESTAMP WHERE account_code = $2',
+      [targetAccountCode, sourceAccountCode]
+    );
+    return result.rowCount || 0;
+  }
+
+  async updateCustomerId(sourceCustomerId, targetCustomerId, client = null) {
+    const q = client ? client.query.bind(client) : query;
+    const result = await q(
+      'UPDATE account_ledger SET customer_id = $1, updated_at = CURRENT_TIMESTAMP WHERE customer_id = $2',
+      [targetCustomerId, sourceCustomerId]
+    );
+    return result.rowCount || 0;
+  }
+
+  async updateSupplierId(sourceSupplierId, targetSupplierId, client = null) {
+    const q = client ? client.query.bind(client) : query;
+    const result = await q(
+      'UPDATE account_ledger SET supplier_id = $1, updated_at = CURRENT_TIMESTAMP WHERE supplier_id = $2',
+      [targetSupplierId, sourceSupplierId]
+    );
+    return result.rowCount || 0;
+  }
 }
 
 module.exports = new TransactionRepository();

@@ -59,9 +59,9 @@ class BankRepository {
     const result = await query(
       `INSERT INTO banks (
         account_name, account_number, bank_name, branch_name, branch_address,
-        account_type, routing_number, swift_code, iban, opening_balance, current_balance,
+        account_type, routing_number, swift_code, iban, opening_balance,
         is_active, notes, created_by, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *`,
       [
         data.accountName || data.account_name,
@@ -74,7 +74,6 @@ class BankRepository {
         data.swiftCode || data.swift_code || null,
         data.iban || null,
         data.openingBalance ?? data.opening_balance ?? 0,
-        data.currentBalance ?? data.current_balance ?? 0,
         data.isActive !== false,
         data.notes || null,
         data.createdBy || data.created_by
@@ -98,7 +97,6 @@ class BankRepository {
       swiftCode: 'swift_code',
       iban: 'iban',
       openingBalance: 'opening_balance',
-      currentBalance: 'current_balance',
       isActive: 'is_active',
       notes: 'notes',
       updatedBy: 'updated_by'

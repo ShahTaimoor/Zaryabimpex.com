@@ -1128,22 +1128,9 @@ class ReturnManagementService {
 
   // Update supplier balance
   async updateSupplierBalance(supplierId, amount, originalInvoiceId) {
-    try {
-      const SupplierBalanceService = require('../services/supplierBalanceService');
-      if (SupplierBalanceService && SupplierBalanceService.recordReturn) {
-        await SupplierBalanceService.recordReturn(supplierId, amount, originalInvoiceId);
-      } else {
-        const supplier = await SupplierRepository.findById(supplierId);
-        if (supplier) {
-          const currentBalance = Number(supplier.current_balance ?? supplier.currentBalance ?? 0);
-          const { query } = require('../config/postgres');
-          await query('UPDATE suppliers SET current_balance = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [currentBalance - amount, supplierId]);
-        }
-      }
-    } catch (error) {
-      console.error('Error updating supplier balance:', error);
-      // Don't throw - accounting entries are more critical
-    }
+    // Note: Manual balance updates removed. 
+    // Ledger is the SSoT; return refunds already post ledger entries in processPurchaseReturnRefund.
+    return;
   }
 
   // Process exchange (pass client when inside return transaction so exchange order commits with return)

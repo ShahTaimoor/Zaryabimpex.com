@@ -40,6 +40,11 @@ import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
 import {
+  usePostJournalMutation,
+  useGetTrialBalanceQuery,
+  useGetUnifiedBalanceQuery
+} from '../store/services/accountingApi';
+import {
   hasDualUnit,
   getPiecesPerBox,
   piecesToBoxesAndPieces,
@@ -446,7 +451,21 @@ export const Sales = ({ tabId, editData }) => {
     refetchOnMountOrArgChange: true,
     refetchOnFocus: true // Refetch when window regains focus
   });
+
+  // Use centralized unified balance instead of entity-specific balance
+  const { data: unifiedBalanceData } = useGetUnifiedBalanceQuery({
+    type: 'customer',
+    id: selectedCustomerId
+  }, {
+    skip: !selectedCustomerId
+  });
+
   const customerWithBalance = selectedCustomerDetail?.data?.customer ?? selectedCustomerDetail?.customer ?? selectedCustomerDetail ?? selectedCustomer;
+  // Override balance with centralized ledger balance if available
+  const currentBalanceNum = unifiedBalanceData?.balance ?? (
+    customerWithBalance?.currentBalance !== undefined ? Number(customerWithBalance.currentBalance) :
+    (Number(customerWithBalance?.pendingBalance ?? 0) - Number(customerWithBalance?.advanceBalance ?? 0))
+  );
 
   const activeBanks = useMemo(
     () => {
@@ -1525,13 +1544,6 @@ export const Sales = ({ tabId, editData }) => {
               // Then fallback to customerWithBalance (from detail query) if needed
               const balanceSource = selectedCustomer ?? customerWithBalance;
               const creditLimitNum = Math.max(0, Number(selectedCustomer?.creditLimit ?? selectedCustomer?.credit_limit ?? balanceSource?.creditLimit ?? balanceSource?.credit_limit ?? 0) || 0);
-              // Use currentBalance from selectedCustomer first (already correct from bulk query)
-              const rawBalance = selectedCustomer?.currentBalance !== undefined && selectedCustomer?.currentBalance !== null
-                ? Number(selectedCustomer.currentBalance)
-                : (balanceSource?.currentBalance !== undefined && balanceSource?.currentBalance !== null
-                  ? Number(balanceSource.currentBalance)
-                  : (Number(balanceSource?.pendingBalance ?? 0) - Number(balanceSource?.advanceBalance ?? 0)));
-              const currentBalanceNum = (isNaN(rawBalance) || rawBalance === null || rawBalance === undefined) ? 0 : rawBalance;
               const availableCreditNum = Math.max(0, creditLimitNum - currentBalanceNum);
               return (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">

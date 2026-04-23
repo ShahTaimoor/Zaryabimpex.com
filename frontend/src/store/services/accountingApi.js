@@ -34,9 +34,24 @@ export const accountingApi = api.injectEndpoints({
       }),
       providesTags: [{ type: 'Accounting', id: 'TRIAL_BALANCE' }],
     }),
+    getUnifiedBalance: builder.query({
+      query: ({ type, id, asOfDate }) => ({
+        url: `accounting/balance/${type}/${id}`,
+        method: 'get',
+        params: { asOfDate },
+      }),
+      providesTags: (result, error, { type, id }) => [
+        { type: 'Accounting', id: `BALANCE_${type}_${id}` },
+        { type: 'Reports', id: 'PARTY_BALANCE' }
+      ],
+    }),
   }),
   overrideExisting: false,
 });
 
-export const { usePostJournalMutation, useGetTrialBalanceQuery } = accountingApi;
+export const { 
+  usePostJournalMutation, 
+  useGetTrialBalanceQuery,
+  useGetUnifiedBalanceQuery
+} = accountingApi;
 

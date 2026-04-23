@@ -5,26 +5,10 @@ const AccountingService = require('./accountingService');
 
 class CustomerBalanceService {
   static async recordPayment(customerId, paymentAmount, orderId = null, user = null, paymentDetails = {}) {
+    // Note: Manual balance updates removed.
+    // We only create the CustomerTransaction for sub-ledger reporting (aging, etc).
     const customer = await customerRepository.findById(customerId);
     if (!customer) throw new Error('Customer not found');
-
-    const balanceBefore = {
-      pendingBalance: customer.pending_balance ?? customer.pendingBalance ?? 0,
-      advanceBalance: customer.advance_balance ?? customer.advanceBalance ?? 0,
-      currentBalance: customer.current_balance ?? customer.currentBalance ?? 0
-    };
-
-    let pendingBalance = balanceBefore.pendingBalance;
-    let advanceBalance = balanceBefore.advanceBalance;
-    let remainingPayment = paymentAmount;
-    if (pendingBalance > 0 && remainingPayment > 0) {
-      const pendingReduction = Math.min(remainingPayment, pendingBalance);
-      pendingBalance -= pendingReduction;
-      remainingPayment -= pendingReduction;
-    }
-    if (remainingPayment > 0) advanceBalance += remainingPayment;
-    const currentBalance = pendingBalance - advanceBalance;
-    const balanceAfter = { pendingBalance, advanceBalance, currentBalance };
 
     if (user) {
       const userId = user.id || user._id;
@@ -38,10 +22,8 @@ class CustomerBalanceService {
         referenceId: orderId,
         netAmount: paymentAmount,
         affectsPendingBalance: true,
-        affectsAdvanceBalance: remainingPayment > 0,
+        affectsAdvanceBalance: false, // Legacy field
         balanceImpact: -paymentAmount,
-        balanceBefore,
-        balanceAfter,
         paymentDetails: {
           paymentMethod: paymentDetails.paymentMethod || 'account',
           paymentReference: paymentDetails.paymentReference,
@@ -66,19 +48,9 @@ class CustomerBalanceService {
    * @returns {Promise<Object>}
    */
   static async recordInvoice(customerId, invoiceAmount, orderId = null, user = null, invoiceData = {}) {
+    // Note: Manual balance updates removed.
     const customer = await customerRepository.findById(customerId);
     if (!customer) throw new Error('Customer not found');
-
-    const balanceBefore = {
-      pendingBalance: customer.pending_balance ?? customer.pendingBalance ?? 0,
-      advanceBalance: customer.advance_balance ?? customer.advanceBalance ?? 0,
-      currentBalance: customer.current_balance ?? customer.currentBalance ?? 0
-    };
-    const balanceAfter = {
-      pendingBalance: balanceBefore.pendingBalance + invoiceAmount,
-      advanceBalance: balanceBefore.advanceBalance,
-      currentBalance: (balanceBefore.pendingBalance + invoiceAmount) - balanceBefore.advanceBalance
-    };
 
     if (user) {
       const userId = user.id || user._id;
@@ -101,8 +73,6 @@ class CustomerBalanceService {
         netAmount: invoiceAmount,
         affectsPendingBalance: true,
         balanceImpact: invoiceAmount,
-        balanceBefore,
-        balanceAfter,
         lineItems: invoiceData.lineItems || [],
         status: 'posted',
         remainingAmount: invoiceAmount,
@@ -255,22 +225,14 @@ class CustomerBalanceService {
 
     const reconciliationService = require('./reconciliationService');
     const reconciliation = await reconciliationService.reconcileCustomerBalance(customerId, {
-      autoCorrect: true,
-      alertOnDiscrepancy: false
-    });
-    const calculated = reconciliation.calculated;
-
-    const updatedCustomer = await customerRepository.update(customerId, {
-      pendingBalance: calculated.pendingBalance,
-      advanceBalance: calculated.advanceBalance,
-      currentBalance: calculated.currentBalance
+      autoCorrect: false, // Cannot autocorrect table columns as they are deprecated
+      alertOnDiscrepancy: true
     });
 
-    if (!updatedCustomer) throw new Error('Concurrent update conflict during balance recalculation');
     return {
-      customer: updatedCustomer,
+      customer,
       reconciliation,
-      corrected: reconciliation.discrepancy.hasDifference
+      corrected: false
     };
   }
 
@@ -298,81 +260,9 @@ class CustomerBalanceService {
   }
 
   /**
-   * Fix currentBalance for a customer by recalculating from pendingBalance and advanceBalance
-   * This is useful when currentBalance is out of sync
-   * @param {String} customerId - Customer ID
-   * @returns {Promise<Object>}
+   * Note: fixCurrentBalance and fixAllCurrentBalances removed as current_balance column is deprecated.
+   * All balance reporting is now derived dynamically from the General Ledger.
    */
-  static async fixCurrentBalance(customerId) {
-    const customer = await customerRepository.findById(customerId);
-    if (!customer) throw new Error('Customer not found');
-    const pendingBalance = customer.pending_balance ?? customer.pendingBalance ?? 0;
-    const advanceBalance = customer.advance_balance ?? customer.advanceBalance ?? 0;
-    const correctCurrentBalance = pendingBalance - advanceBalance;
-    const oldCurrentBalance = customer.current_balance ?? customer.currentBalance ?? 0;
-
-    if (Math.abs(oldCurrentBalance - correctCurrentBalance) > 0.01) {
-      const updatedCustomer = await customerRepository.update(customerId, { currentBalance: correctCurrentBalance });
-      if (!updatedCustomer) throw new Error('Concurrent balance update conflict. Please retry.');
-      return { customer: updatedCustomer, fixed: true, oldCurrentBalance, newCurrentBalance: correctCurrentBalance };
-    }
-    return { customer, fixed: false, message: 'CurrentBalance is already correct' };
-  }
-
-  /**
-   * Fix currentBalance for all customers by recalculating from pendingBalance and advanceBalance
-   * @returns {Promise<Object>}
-   */
-  static async fixAllCurrentBalances() {
-    const customers = await customerRepository.findAll({}, { limit: 10000 });
-    const results = [];
-
-    for (const customer of customers) {
-      try {
-        const pendingBalance = customer.pending_balance ?? customer.pendingBalance ?? 0;
-        const advanceBalance = customer.advance_balance ?? customer.advanceBalance ?? 0;
-        const correctCurrentBalance = pendingBalance - advanceBalance;
-        const oldCurrentBalance = customer.current_balance ?? customer.currentBalance ?? 0;
-
-        if (Math.abs(oldCurrentBalance - correctCurrentBalance) > 0.01) {
-          const updated = await customerRepository.update(customer.id, { currentBalance: correctCurrentBalance });
-          results.push({
-            customerId: customer.id,
-            customerName: customer.business_name || customer.businessName || customer.name,
-            success: !!updated,
-            fixed: !!updated,
-            oldCurrentBalance,
-            newCurrentBalance: correctCurrentBalance,
-            pendingBalance,
-            advanceBalance
-          });
-        } else {
-          results.push({
-            customerId: customer.id,
-            customerName: customer.business_name || customer.businessName || customer.name,
-            success: true,
-            fixed: false,
-            message: 'Already correct'
-          });
-        }
-      } catch (error) {
-        results.push({
-          customerId: customer.id,
-          customerName: customer.business_name || customer.businessName || customer.name,
-          success: false,
-          error: error.message
-        });
-      }
-    }
-
-    const fixed = results.filter(r => r.success && r.fixed).length;
-    const alreadyCorrect = results.filter(r => r.success && !r.fixed).length;
-    const failed = results.filter(r => !r.success).length;
-    return {
-      results,
-      summary: { total: results.length, fixed, alreadyCorrect, failed }
-    };
-  }
 }
 
 module.exports = CustomerBalanceService;

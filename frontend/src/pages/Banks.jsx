@@ -649,6 +649,9 @@ const Banks = () => {
                     Opening Balance
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Current Balance
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Routing Number
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -690,8 +693,13 @@ const Banks = () => {
                       <span className="text-sm text-gray-900">{bank.branchName || 'N/A'}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-green-600">
+                      <span className="text-sm font-medium text-gray-600">
                         {(bank.openingBalance || 0).toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`text-sm font-bold ${(bank.currentBalance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {(bank.currentBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

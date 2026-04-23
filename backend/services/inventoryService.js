@@ -87,22 +87,31 @@ const updateStock = async ({ productId, type, quantity, reason, reference, refer
         ...(finalCost !== undefined && finalCost !== null && isIn ? { costPrice: finalCost } : {})
       }, client);
 
-      // Update Accounting Ledger (optional skip for flows that post dedicated financial entries)
+      // Update Accounting Ledger (Ensure physical stock matches financial value)
       if (!skipAccountingEntry) {
         try {
           const delta = isIn ? quantity : -quantity;
           const unitCost = cost || parseFloat(productRow.cost_price || productRow.costPrice) || 0;
           const validatedUserId = isValidUuid(performedBy) ? performedBy : null;
 
-          await AccountingService.recordStockAdjustment(productId, delta, unitCost, {
-            client,
+          await AccountingService.recordInventoryValueChange({
+            productId,
+            delta,
+            unitCost,
+            reason: reason || `Inventory ${type}`,
+            referenceType: referenceModel === 'PurchaseInvoice' ? 'purchase_invoice' : (referenceModel === 'Sale' ? 'sale' : 'inventory_adjustment'),
+            referenceId,
+            referenceNumber,
             createdBy: validatedUserId,
-            reason: reason || `Inventory ${type}`
-          });
+            transactionDate: new Date()
+          }, client);
         } catch (accErr) {
           // When called inside an explicit transaction, fail fast to preserve atomicity.
-          if (client) throw accErr;
-          console.error('Failed to update ledger for inventory movement:', accErr);
+          if (client) {
+            console.error('Ledger update failed within transaction. Aborting stock update.');
+            throw accErr;
+          }
+          console.error('Failed to update ledger for inventory movement (non-critical outside transaction):', accErr);
         }
       }
     } else {

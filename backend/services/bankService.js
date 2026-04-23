@@ -47,7 +47,19 @@ class BankService {
     const rows = await BankRepository.findWithFilters(filter, {
       sort: { bankName: 1, accountNumber: 1 }
     });
-    return rows.map(mapBankForResponse);
+    
+    const banks = rows.map(mapBankForResponse);
+    const bankIds = banks.map(b => b.id).filter(Boolean);
+    
+    if (bankIds.length > 0) {
+      const balances = await AccountingService.getBulkBankBalances(bankIds);
+      return banks.map(bank => ({
+        ...bank,
+        currentBalance: balances[bank.id] || 0
+      }));
+    }
+    
+    return banks;
   }
 
   /**
@@ -56,11 +68,15 @@ class BankService {
    * @returns {Promise<object>}
    */
   async getBankById(id) {
-    const bank = await BankRepository.findById(id);
-    if (!bank) {
+    const bankRow = await BankRepository.findById(id);
+    if (!bankRow) {
       throw new Error('Bank not found');
     }
-    return mapBankForResponse(bank);
+    
+    const bank = mapBankForResponse(bankRow);
+    bank.currentBalance = await AccountingService.getBankBalance(id);
+    
+    return bank;
   }
 
   /**

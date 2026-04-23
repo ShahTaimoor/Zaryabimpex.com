@@ -27,6 +27,7 @@ import {
 
 } from '../store/services/purchaseInvoicesApi';
 import { SearchableDropdown } from '../components/SearchableDropdown';
+import { useGetUnifiedBalanceQuery } from '../store/services/accountingApi';
 import { toast } from 'sonner';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import PrintModal, { DirectPrintInvoice } from '../components/PrintModal';
@@ -584,6 +585,15 @@ export const Purchase = ({ tabId, editData }) => {
     }
   }, [completeSupplierData]);
 
+  // Use centralized unified balance instead of entity-specific balance
+  const supplierIdForBalance = selectedSupplier?._id || selectedSupplier?.id;
+  const { data: unifiedBalanceData } = useGetUnifiedBalanceQuery({
+    type: 'supplier',
+    id: supplierIdForBalance
+  }, {
+    skip: !supplierIdForBalance
+  });
+
   // Trigger search when supplier search term changes
   useEffect(() => {
     if (supplierSearchTerm.length > 0) {
@@ -885,8 +895,10 @@ export const Purchase = ({ tabId, editData }) => {
     : directDiscount.value;
 
   const total = subtotal + tax - directDiscountAmount;
-  const supplierOutstanding =
-    Number(selectedSupplier?.pendingBalance ?? selectedSupplier?.outstandingBalance ?? 0) || 0;
+  // Use centralized ledger balance if available, fallback to entity balance
+  const supplierOutstanding = unifiedBalanceData?.balance ?? (
+    Number(selectedSupplier?.pendingBalance ?? selectedSupplier?.outstandingBalance ?? 0) || 0
+  );
   const totalPayables = total + supplierOutstanding;
 
   const addToPurchase = (newItem) => {

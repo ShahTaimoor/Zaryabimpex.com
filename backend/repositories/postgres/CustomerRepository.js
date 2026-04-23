@@ -196,18 +196,6 @@ class CustomerRepository {
       updates.push(`customer_tier = $${paramCount++}`);
       params.push(customerData.customerTier);
     }
-    if (customerData.currentBalance !== undefined) {
-      updates.push(`current_balance = $${paramCount++}`);
-      params.push(customerData.currentBalance);
-    }
-    if (customerData.pendingBalance !== undefined) {
-      updates.push(`pending_balance = $${paramCount++}`);
-      params.push(customerData.pendingBalance);
-    }
-    if (customerData.advanceBalance !== undefined) {
-      updates.push(`advance_balance = $${paramCount++}`);
-      params.push(customerData.advanceBalance);
-    }
     if (customerData.isActive !== undefined) {
       updates.push(`is_active = $${paramCount++}`);
       params.push(customerData.isActive);

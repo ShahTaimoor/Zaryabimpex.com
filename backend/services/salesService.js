@@ -735,7 +735,7 @@ class SalesService {
             reference: 'Sales Invoice',
             performedBy: user._id,
             notes: 'Stock reduced due to sales invoice creation'
-          }, { client });
+          }, { client, skipAccountingEntry: true });
         }
       }
 

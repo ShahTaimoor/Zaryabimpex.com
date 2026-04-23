@@ -102,10 +102,11 @@ class ReconciliationService {
         await this.alertDiscrepancy(customer, reconciliation);
       }
 
-      // Auto-correct if enabled
+      // Auto-correct if enabled (Note: auto-correction of table columns is deprecated)
       if (autoCorrect) {
-        await this.correctBalance(customerId, calculated, reconciliation);
-        reconciliation.corrected = true;
+        // We no longer correct current_balance column as it is deprecated.
+        reconciliation.corrected = false;
+        reconciliation.message = 'Table columns are deprecated; use ledger reconciliation instead.';
       }
     }
 
@@ -309,32 +310,9 @@ class ReconciliationService {
    * @returns {Promise<Customer>}
    */
   async correctBalance(customerId, calculated, reconciliation) {
-    const customer = await CustomerRepository.findById(customerId);
-    if (!customer) {
-      throw new Error('Customer not found');
-    }
-
-    const updated = await CustomerRepository.update(customerId, {
-      pendingBalance: calculated.pendingBalance,
-      advanceBalance: calculated.advanceBalance,
-      currentBalance: calculated.currentBalance
-    });
-
-    if (!updated) {
-      throw new Error('Concurrent update conflict during balance correction');
-    }
-
-    // Log correction
-    await customerAuditLogService.logBalanceAdjustment(
-      customerId,
-      reconciliation.current.currentBalance,
-      calculated.currentBalance,
-      { _id: null }, // System user
-      null,
-      `Balance auto-corrected during reconciliation: ${JSON.stringify(reconciliation.discrepancyDetails)}`
-    );
-
-    return updated;
+    // Note: Manual balance correction in customer table is deprecated.
+    console.warn(`Discrepancy for ${customerId} detected but not auto-corrected as table columns are deprecated.`);
+    return null;
   }
 
   /**
@@ -469,12 +447,8 @@ class ReconciliationService {
         if (Math.abs(ledgerBalance - profileBalance) > 0.01) {
           results.discrepancies++;
           if (autoCorrect) {
-            const { query } = require('../config/postgres');
-            await query(
-              'UPDATE suppliers SET current_balance = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-              [ledgerBalance, supplierId]
-            );
-            results.corrected++;
+            // We no longer correct current_balance column in suppliers table as it is deprecated.
+            results.corrected = 0;
           }
         }
       } catch (err) {

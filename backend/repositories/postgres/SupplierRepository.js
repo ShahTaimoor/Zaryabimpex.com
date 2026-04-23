@@ -96,9 +96,9 @@ class SupplierRepository {
     const result = await query(
       `INSERT INTO suppliers (
         name, company_name, contact_person, email, phone, address,
-        opening_balance, pending_balance, advance_balance, current_balance, credit_limit, payment_terms, tax_id, notes,
+        opening_balance, credit_limit, payment_terms, tax_id, notes,
         is_active, supplier_type, rating, created_by, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *`,
       [
         supplierData.name || null,
@@ -108,9 +108,6 @@ class SupplierRepository {
         supplierData.phone || null,
         supplierData.address ? (typeof supplierData.address === 'object' ? JSON.stringify(supplierData.address) : supplierData.address) : (supplierData.addresses ? JSON.stringify(supplierData.addresses) : null),
         openingBalance,
-        supplierData.pendingBalance ?? pendingBalance,
-        supplierData.advanceBalance ?? advanceBalance,
-        (supplierData.pendingBalance ?? pendingBalance) - (supplierData.advanceBalance ?? advanceBalance),
         supplierData.creditLimit || 0,
         supplierData.paymentTerms || supplierData.payment_terms || null,
         supplierData.taxId || supplierData.tax_id || null,
@@ -187,18 +184,6 @@ class SupplierRepository {
     if (supplierData.updatedBy !== undefined) {
       updates.push(`updated_by = $${paramCount++}`);
       params.push(supplierData.updatedBy);
-    }
-    if (supplierData.pendingBalance !== undefined) {
-      updates.push(`pending_balance = $${paramCount++}`);
-      params.push(supplierData.pendingBalance);
-    }
-    if (supplierData.advanceBalance !== undefined) {
-      updates.push(`advance_balance = $${paramCount++}`);
-      params.push(supplierData.advanceBalance);
-    }
-    if (supplierData.currentBalance !== undefined) {
-      updates.push(`current_balance = $${paramCount++}`);
-      params.push(supplierData.currentBalance);
     }
 
     updates.push(`updated_at = CURRENT_TIMESTAMP`);

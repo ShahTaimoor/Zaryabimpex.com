@@ -148,6 +148,7 @@ app.use('/api/products', require('./routes/products'));
 app.use('/api/product-variants', require('./routes/productVariants'));
 app.use('/api/product-transformations', require('./routes/productTransformations'));
 app.use('/api/customers', require('./routes/customers'));
+app.use('/api/accounting', require('./routes/accounting'));
 app.use('/api/customer-transactions', require('./routes/customerTransactions'));
 app.use('/api/customer-merges', require('./routes/customerMerges'));
 app.use('/api/reconciliation', require('./routes/reconciliation'));
