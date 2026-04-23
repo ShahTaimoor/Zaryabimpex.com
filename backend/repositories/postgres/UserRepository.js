@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { query } = require('../../config/postgres');
+const rbacConfig = require('../../config/rbacConfig');
 
 function rowToUser(row) {
   if (!row) return null;
@@ -26,10 +27,24 @@ function rowToUser(row) {
     created_at: row.created_at,
     updated_at: row.updated_at
   };
+
+  // Merge default permissions for the role into the user object
+  if (user.role && rbacConfig.ROLE_PERMISSIONS[user.role.toLowerCase()]) {
+    const roleDefaults = rbacConfig.ROLE_PERMISSIONS[user.role.toLowerCase()];
+    user.permissions = Array.from(new Set([...user.permissions, ...roleDefaults]));
+  }
   user.isLocked = !!(user.lockUntil && new Date(user.lockUntil) > new Date());
   user.hasPermission = function (permission) {
+    // 1. Admin always has all permissions
     if (this.role === 'admin') return true;
-    return Array.isArray(this.permissions) && this.permissions.includes(permission);
+
+    // 2. Check if user has explicit permission assigned in DB
+    if (Array.isArray(this.permissions) && this.permissions.includes(permission)) {
+      return true;
+    }
+
+    // 3. Fallback to role-based default permissions
+    return rbacConfig.hasPermission(this.role, permission);
   };
   user.toSafeObject = function () {
     const o = { ...this };

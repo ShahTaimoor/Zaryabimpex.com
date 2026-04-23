@@ -5,7 +5,7 @@ import { LoadingButton } from './LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, allProducts = [], onEditExisting, categories = [] }) => {
+export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, allProducts = [], onEditExisting, categories = [], showCostPrice = true }) => {
   const showImages = localStorage.getItem('showProductImagesUI') !== 'false';
   const [showHsCodeField, setShowHsCodeField] = useState(
     () => localStorage.getItem('showProductHsCodeColumn') !== 'false'
@@ -517,23 +517,25 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 xl:gap-4">
-            <div>
-              <label htmlFor="pricing.cost" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
-                Cost Price
-              </label>
-              <input
-                id="pricing.cost"
-                name="pricing.cost"
-                type="number"
-                step="0.01"
-                value={formData.pricing.cost || ''}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                placeholder="0.00"
-                className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
-              />
-              <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Product cost</p>
-            </div>
+            {showCostPrice && (
+              <div>
+                <label htmlFor="pricing.cost" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                  Cost Price
+                </label>
+                <input
+                  id="pricing.cost"
+                  name="pricing.cost"
+                  type="number"
+                  step="0.01"
+                  value={formData.pricing.cost || ''}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  placeholder="0.00"
+                  className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                />
+                <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Product cost</p>
+              </div>
+            )}
             <div>
               <label htmlFor="pricing.retail" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                 Retail Price

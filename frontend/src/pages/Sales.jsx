@@ -80,6 +80,7 @@ import { getComponentInfo } from '../components/ComponentRegistry';
 import { useAuth } from '../contexts/AuthContext';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 
+import { PERMISSIONS } from '../config/rbacConfig';
 import { getLocalDateString } from '../utils/dateUtils';
 
 import { ProductSearch } from '../components/sales/ProductSearch';
@@ -165,7 +166,7 @@ export const Sales = ({ tabId, editData }) => {
 
   const allowSaleWithoutProductEnabled = companySettings.orderSettings?.allowSaleWithoutProduct === true;
   const allowManualCostPriceEnabled = companySettings.orderSettings?.allowManualCostPrice === true;
-  const globalShowCostPriceAllowed = companySettings.orderSettings?.showCostPrice !== false; // Default to true if not set
+  const globalShowCostPriceAllowed = companySettings.orderSettings?.showCostPrice !== false && hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS); 
 
   const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
@@ -1615,7 +1616,7 @@ export const Sales = ({ tabId, editData }) => {
                   </Button>
                 )}
                 <div className="flex items-center space-x-2">
-                  {globalShowCostPriceAllowed && (
+                  {hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) && (
                     <Button
                       type="button"
                       onClick={() => setShowCostPrice((prev) => !prev)}
@@ -1637,7 +1638,7 @@ export const Sales = ({ tabId, editData }) => {
                       )}
                     </Button>
                   )}
-                  {user?.role === 'admin' && (
+                  {hasPermission(PERMISSIONS.VIEW_FINANCIAL_DATA) && (
                     <>
                       <Button
                         type="button"
@@ -1697,7 +1698,7 @@ export const Sales = ({ tabId, editData }) => {
               onAddProduct={addToCart}
               selectedCustomer={selectedCustomer}
               showCostPrice={showCostPrice && globalShowCostPriceAllowed}
-              hasCostPricePermission={hasPermission('view_cost_prices')}
+              hasCostPricePermission={hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS)}
               priceType={priceType}
               dualUnitShowBoxInput={dualUnitShowBoxInputEnabled}
               dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
@@ -1738,12 +1739,12 @@ export const Sales = ({ tabId, editData }) => {
               <CartTableHeader
                 className={`hidden md:grid gap-x-1 items-center pb-2 border-b border-gray-300 mb-2 ${dualUnitShowBoxInputEnabled
                   ? (
-                    showCostPrice && hasPermission('view_cost_prices')
+                    showCostPrice && hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS)
                       ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
                       : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
                   )
                   : (
-                    showCostPrice && hasPermission('view_cost_prices')
+                    showCostPrice && hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS)
                       ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
                       : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
                   )
@@ -1754,7 +1755,7 @@ export const Sales = ({ tabId, editData }) => {
                   ...(dualUnitShowBoxInputEnabled ? [{ key: 'box', label: 'Box' }] : []),
                   { key: 'stock', label: 'Stock' },
                   { key: 'qty', label: 'Qty' },
-                  ...(showCostPrice && hasPermission('view_cost_prices') ? [{ key: 'cost', label: 'Cost' }] : []),
+                  ...(showCostPrice && hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) ? [{ key: 'cost', label: 'Cost' }] : []),
                   { key: 'rate', label: 'Rate' },
                   { key: 'total', label: 'Total', labelClassName: 'text-xs font-semibold text-gray-600 uppercase block text-center' },
                   { key: 'action', label: 'Action', wrapperClassName: 'min-w-0 flex justify-end', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-right' },
@@ -1835,6 +1836,7 @@ export const Sales = ({ tabId, editData }) => {
                           <div className="flex flex-wrap items-center gap-2 mt-1">
                             {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low Stock</span>}
                             {lastPurchasePrices[item.product._id] !== undefined &&
+                              hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) &&
                               item.unitPrice < lastPurchasePrices[item.product._id] && (
                                 <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
                                   ⚠️ Loss
@@ -1953,7 +1955,7 @@ export const Sales = ({ tabId, editData }) => {
                           min="0"
                         />
                       </div>
-                      {showCostPrice && hasPermission('view_cost_prices') && (
+                      {showCostPrice && hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) && (
                         <div className="col-span-2">
                           <label className="block text-xs font-medium text-gray-500 mb-1">Cost</label>
                           <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center">
@@ -1971,12 +1973,12 @@ export const Sales = ({ tabId, editData }) => {
                     <div
                       className={`grid gap-x-1 items-center ${dualUnitShowBoxInputEnabled
                         ? (
-                          showCostPrice && hasPermission('view_cost_prices')
+                          showCostPrice && hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS)
                             ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
                             : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
                         )
                         : (
-                          showCostPrice && hasPermission('view_cost_prices')
+                          showCostPrice && hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS)
                             ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
                             : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
                         )
@@ -2022,8 +2024,9 @@ export const Sales = ({ tabId, editData }) => {
                                 : item.product.name}
                             </span>
                             {isLowStock && <span className="text-yellow-600 text-xs whitespace-nowrap">⚠️ Low Stock</span>}
-                            {/* Warning if sale price is below cost price (always show, regardless of showCostPrice) */}
+                            {/* Warning if sale price is below cost price (only if has permission) */}
                             {lastPurchasePrices[item.product._id] !== undefined &&
+                              hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) &&
                               item.unitPrice < lastPurchasePrices[item.product._id] && (
                                 <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold whitespace-nowrap" title={`Sale price below cost! Loss: ${Math.round(lastPurchasePrices[item.product._id] - item.unitPrice)} per unit`}>
                                   ⚠️ Loss
@@ -2126,7 +2129,7 @@ export const Sales = ({ tabId, editData }) => {
                       </div>
 
                       {/* Purchase Price (Cost) - 1 column (conditional) - Between Quantity and Rate */}
-                      {showCostPrice && hasPermission('view_cost_prices') && (
+                      {showCostPrice && hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) && (
                         <div className="min-w-0">
                           <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-8 flex items-center justify-center" title="Cost Price">
                             {lastPurchasePrices[item.product._id] !== undefined
@@ -2144,7 +2147,7 @@ export const Sales = ({ tabId, editData }) => {
                           const effectiveCost = lastPurchasePrices[item.product._id] !== undefined
                             ? lastPurchasePrices[item.product._id]
                             : item.product.pricing?.cost;
-                          const isBelowCost = effectiveCost !== undefined && effectiveCost !== null && item.unitPrice < effectiveCost;
+                          const isBelowCost = hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) && effectiveCost !== undefined && effectiveCost !== null && item.unitPrice < effectiveCost;
 
                           return (
                             <Input

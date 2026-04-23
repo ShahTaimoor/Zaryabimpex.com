@@ -57,11 +57,15 @@ import ExcelImportButton from '../components/ExcelImportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import { useCursorPagination } from '../hooks/useCursorPagination';
 
-const LIMIT_OPTIONS = [50, 500, 1000, 5000];
+import { PERMISSIONS } from '../config/rbacConfig';
+import { useAuth } from '../contexts/AuthContext';
+
 const DEFAULT_LIMIT = 50;
+const LIMIT_OPTIONS = [50, 500, 1000, 5000];
 
 export const Products = () => {
   const dispatch = useAppDispatch();
+  const { hasPermission } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_LIMIT);
   const [filters, setFilters] = useState({});
@@ -166,7 +170,7 @@ export const Products = () => {
   const [autoCreateImportCategories, setAutoCreateImportCategories] = useState(true);
 
   const { companyInfo: companySettings } = useCompanyInfo();
-  const showCostPrice = companySettings.orderSettings?.showCostPrice !== false;
+  const showCostPrice = companySettings.orderSettings?.showCostPrice !== false && hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS);
 
   const getExportData = () => {
     const columns = [
@@ -549,6 +553,7 @@ export const Products = () => {
         allProducts={products || []}
         onEditExisting={productOps.handleEditExisting}
         categories={categoriesData || []}
+        showCostPrice={showCostPrice}
       />
 
       <DeleteConfirmationDialog

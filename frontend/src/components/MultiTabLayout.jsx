@@ -43,6 +43,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { PERMISSIONS } from '../config/rbacConfig';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../utils/componentUtils';
 import TabBar from './TabBar';
@@ -78,14 +79,15 @@ function DatabaseIcon(props) {
 }
 
 export const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: null, allowMultiple: true },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'view_dashboard', allowMultiple: true },
 
   {
     name: 'Sales',
     icon: ShoppingCart,
+    permission: 'view_sales',
     children: [
       { name: 'Sales Orders', href: '/sales-orders', icon: FileText, permission: 'view_sales_orders' },
-      { name: 'Sales', href: '/sales', icon: CreditCard, permission: 'view_sales_orders' },
+      { name: 'Sales', href: '/sales', icon: CreditCard, permission: 'manage_sales' },
       { name: 'Sales Invoices', href: '/sales-invoices', icon: Search, permission: 'view_sales_invoices' },
     ]
   },
@@ -93,6 +95,7 @@ export const navigation = [
   {
     name: 'Purchase',
     icon: Truck,
+    permission: 'view_purchase_orders',
     children: [
       { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText, permission: 'view_purchase_orders' },
       { name: 'Purchase', href: '/purchase', icon: Truck, permission: 'view_purchase_orders' },
@@ -115,12 +118,13 @@ export const navigation = [
   {
     name: 'Financials',
     icon: Wallet,
+    permission: 'view_reports',
     children: [
       { name: 'Cash Receipts', href: '/cash-receipts', icon: Receipt, permission: 'view_reports' },
       { name: 'Cash Payments', href: '/cash-payments', icon: CreditCard, permission: 'view_reports' },
       { name: 'Bank Receipts', href: '/bank-receipts', icon: Building, permission: 'view_reports' },
       { name: 'Bank Payments', href: '/bank-payments', icon: ArrowUpDown, permission: 'view_reports' },
-      { name: 'Record Expense', href: '/expenses', icon: Wallet, permission: null },
+      { name: 'Record Expense', href: '/expenses', icon: Wallet, permission: 'view_reports' },
     ]
   },
 
@@ -135,7 +139,7 @@ export const navigation = [
       { name: 'Customers', href: '/customers', icon: Users, permission: 'view_customers' },
       { name: 'Customer Analytics', href: '/customer-analytics', icon: BarChart3, permission: 'view_customer_analytics' },
       { name: 'Suppliers', href: '/suppliers', icon: Building, permission: 'view_suppliers' },
-      { name: 'Bank & cash opening', href: '/banks', icon: Building2, permission: null },
+      { name: 'Bank & cash opening', href: '/banks', icon: Building2, permission: 'manage_settings' },
       { name: 'Investors', href: '/investors', icon: TrendingUp, permission: 'view_investors' },
       { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight, permission: 'create_drop_shipping' },
       { name: 'Cities', href: '/cities', icon: MapPin, permission: 'manage_users' },
@@ -145,6 +149,7 @@ export const navigation = [
   {
     name: 'Inventory',
     icon: Warehouse,
+    permission: 'view_inventory',
     children: [
       { name: 'Inventory', href: '/inventory', icon: Warehouse, permission: 'view_inventory' },
       { name: 'Inventory Alerts', href: '/inventory-alerts', icon: AlertTriangle, permission: 'view_inventory', allowMultiple: true },
@@ -157,6 +162,7 @@ export const navigation = [
   {
     name: 'Accounting',
     icon: ClipboardList,
+    permission: 'view_chart_of_accounts',
     children: [
       { name: 'Chart of Accounts', href: '/chart-of-accounts', icon: FolderTree, permission: 'view_chart_of_accounts' },
       { name: 'Journal Vouchers', href: '/journal-vouchers', icon: FileText, permission: 'view_reports', allowMultiple: true },
@@ -167,6 +173,7 @@ export const navigation = [
   {
     name: 'Analytics',
     icon: BarChart3,
+    permission: 'view_reports',
     children: [
       { name: 'P&L Statements', href: '/pl-statements', icon: BarChart3, permission: 'view_pl_statements' },
       { name: 'Balance Sheet', href: '/balance-sheet-statement', icon: FileText, permission: 'view_balance_sheets' },

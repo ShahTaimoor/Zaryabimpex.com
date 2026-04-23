@@ -14,7 +14,7 @@ router.post('/register', [
   body('lastName').trim().isLength({ min: 1 }).withMessage('Last name is required'),
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['admin', 'manager', 'cashier', 'inventory', 'viewer']).withMessage('Invalid role'),
+  body('role').isIn(['admin', 'manager', 'cashier', 'inventory', 'viewer', 'employee']).withMessage('Invalid role'),
   body('status').optional().isIn(['active', 'inactive']).withMessage('Invalid status')
 ], async (req, res) => {
   try {

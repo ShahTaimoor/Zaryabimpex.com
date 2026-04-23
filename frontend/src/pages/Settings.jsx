@@ -244,7 +244,8 @@ export const Settings2 = () => {
         { key: 'create_orders', name: 'Create Orders' },
         { key: 'edit_orders', name: 'Edit Orders' },
         { key: 'cancel_orders', name: 'Cancel Orders' },
-        { key: 'view_cost_prices', name: 'View Cost Prices' },
+        { key: 'view_product_costs', name: 'View Cost Prices' },
+        { key: 'manage_sales', name: 'Manage Sales (Profit/Loss)' },
         // Purchase Operations - Granular
         {
           key: 'create_purchase_orders',
@@ -296,7 +297,7 @@ export const Settings2 = () => {
         // Inventory Operations - Granular
         { key: 'generate_purchase_orders', name: 'Generate Purchase Orders' },
         { key: 'acknowledge_inventory_alerts', name: 'Acknowledge Inventory Alerts' },
-
+        { key: 'manage_inventory', name: 'Full Inventory Control' },
         { key: 'import_inventory_data', name: 'Import Inventory Data' }
       ]
     },
@@ -353,7 +354,8 @@ export const Settings2 = () => {
             { key: 'view_sales_performance', name: 'Sales Performance' },
             { key: 'view_inventory_reports', name: 'Inventory Reports' },
             { key: 'view_general_reports', name: 'Reports' },
-            { key: 'view_backdate_report', name: 'Backdate Report' }
+            { key: 'view_backdate_report', name: 'Backdate Report' },
+            { key: 'view_financial_data', name: 'Financial Data (Cost/Profit)' }
           ]
         },
         { key: 'view_analytics', name: 'View Analytics' },
@@ -463,7 +465,8 @@ export const Settings2 = () => {
         { key: 'view_trial_balance', name: 'View Trial Balance' },
         { key: 'update_balance_sheet', name: 'Update Balance Sheet' },
         { key: 'view_chart_of_accounts', name: 'View Chart of Accounts' },
-        { key: 'view_accounting_summary', name: 'View Financial Summary' }
+        { key: 'view_accounting_summary', name: 'View Financial Summary' },
+        { key: 'manage_accounting', name: 'Manage Accounting' }
       ]
     },
     attendance: {
@@ -512,9 +515,9 @@ export const Settings2 = () => {
       // Orders
       view_orders: true, create_orders: true, edit_orders: true, cancel_orders: true,
       view_sales_orders: true, view_purchase_orders: true, view_sales_invoices: true, view_purchase_invoices: true,
-      view_cost_prices: true,
+      view_product_costs: true, manage_sales: true,
       // Inventory
-      view_inventory: true, update_inventory: true,
+      view_inventory: true, update_inventory: true, manage_inventory: true,
       view_inventory_levels: true, view_stock_movements: true, view_low_stock_alerts: true,
       update_stock_quantities: true, create_stock_adjustments: true, process_receipts: true,
       // Returns
@@ -528,7 +531,7 @@ export const Settings2 = () => {
       view_reports: true, view_analytics: true, view_recommendations: true,
       view_pl_statements: true, view_balance_sheets: true, view_sales_performance: true,
       view_inventory_reports: true, view_general_reports: true, view_backdate_report: true,
-      view_customer_analytics: true, view_anomaly_detection: true,
+      view_customer_analytics: true, view_anomaly_detection: true, view_financial_data: true,
       share_reports: true, schedule_reports: true, view_advanced_analytics: true,
       // Financial Operations
       view_cash_receipts: true, create_cash_receipts: true, edit_cash_receipts: true, delete_cash_receipts: true,
@@ -551,6 +554,7 @@ export const Settings2 = () => {
       // Accounting
       view_accounting_transactions: true, view_accounting_accounts: true, view_trial_balance: true,
       update_balance_sheet: true, view_chart_of_accounts: true, view_accounting_summary: true,
+      manage_accounting: true,
       // Attendance
       clock_attendance: true, clock_in: true, clock_out: true, manage_attendance_breaks: true,
       view_own_attendance: true, view_team_attendance: true,
@@ -578,9 +582,9 @@ export const Settings2 = () => {
       // Orders - Full access
       view_orders: true, create_orders: true, edit_orders: true, cancel_orders: true,
       view_sales_orders: true, view_purchase_orders: true, view_sales_invoices: true, view_purchase_invoices: true,
-      view_cost_prices: true,
+      view_product_costs: true, manage_sales: true,
       // Inventory - Full access
-      view_inventory: true, update_inventory: true,
+      view_inventory: true, update_inventory: true, manage_inventory: true,
       view_inventory_levels: true, view_stock_movements: true, view_low_stock_alerts: true,
       update_stock_quantities: true, create_stock_adjustments: true, process_receipts: true,
       // Returns - Full access
@@ -594,7 +598,7 @@ export const Settings2 = () => {
       view_reports: true, view_analytics: true, view_recommendations: true,
       view_pl_statements: true, view_balance_sheets: true, view_sales_performance: true,
       view_inventory_reports: true, view_general_reports: true, view_backdate_report: true,
-      view_customer_analytics: true, view_anomaly_detection: true,
+      view_customer_analytics: true, view_anomaly_detection: true, view_financial_data: true,
       share_reports: true, schedule_reports: true, view_advanced_analytics: true,
       // Financial Operations
       view_cash_receipts: true, create_cash_receipts: true, edit_cash_receipts: true, delete_cash_receipts: true,
@@ -673,6 +677,26 @@ export const Settings2 = () => {
       // Reports - Limited financial reports
       view_reports: true,
       view_pl_statements: true, view_balance_sheets: true, view_general_reports: true
+    },
+    employee: {
+      view_sales: true,
+      manage_sales: true
+    },
+    inventory: {
+      view_products: true,
+      view_product_list: true,
+      view_product_details: true,
+      view_product_categories: true,
+      view_product_inventory: true,
+      view_inventory: true,
+      update_inventory: true,
+      manage_inventory: true,
+      view_inventory_levels: true,
+      view_stock_movements: true,
+      view_low_stock_alerts: true,
+      update_stock_quantities: true,
+      create_stock_adjustments: true,
+      process_receipts: true
     }
   };
 
@@ -1733,6 +1757,7 @@ export const Settings2 = () => {
                           }}
                         >
                           <option value="cashier">Cashier — Daily point of sale ops</option>
+                          <option value="employee">Employee — Restricted access to Sales only</option>
                           <option value="manager">Manager — Full back-office operations</option>
                           <option value="inventory">Inventory — Manage stock & ledgers</option>
                           <option value="admin">Administrator — Full uninhibited access</option>

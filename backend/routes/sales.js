@@ -19,7 +19,7 @@ function canBeCancelled(order) {
   const status = order?.status;
   return status === 'pending' || status === 'confirmed';
 }
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, maskSensitiveData } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 const { preventPOSDuplicates } = require('../middleware/duplicatePrevention');
 
@@ -103,6 +103,8 @@ router.get('/', [
   ...validateDateParams,
   handleValidationErrors,
   processDateFilter(['billDate', 'createdAt']), // Support both billDate and createdAt
+  requirePermission('view_sales'),
+  maskSensitiveData('view_product_costs', ['items.unitCost', 'items.cost_price'])
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -139,7 +141,9 @@ router.get('/cctv-orders', [
   query('dateFrom').optional().isISO8601(),
   query('dateTo').optional().isISO8601(),
   query('orderNumber').optional().trim(),
-  query('customerId').optional().isUUID(4)
+  query('customerId').optional().isUUID(4),
+  requirePermission('view_sales'), // Or specific CCTV permission if needed
+  maskSensitiveData('view_product_costs', ['items.unitCost', 'items.cost_price'])
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -201,7 +205,8 @@ router.get('/cctv-orders', [
 router.get('/period-summary', [
   auth,
   query('dateFrom').isISO8601().withMessage('Invalid start date'),
-  query('dateTo').isISO8601().withMessage('Invalid end date')
+  query('dateTo').isISO8601().withMessage('Invalid end date'),
+  requirePermission('view_financial_data')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -249,7 +254,11 @@ router.get('/period-summary', [
 // @route   GET /api/orders/:id
 // @desc    Get single order
 // @access  Private
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', [
+  auth,
+  requirePermission('view_sales'),
+  maskSensitiveData('view_product_costs', ['items.unitCost', 'items.cost_price'])
+], async (req, res) => {
   try {
     const order = await salesService.getSalesOrderById(req.params.id);
 
@@ -275,7 +284,10 @@ router.get('/:id', auth, async (req, res) => {
 // @route   GET /api/orders/customer/:customerId/last-prices
 // @desc    Get last order prices for a customer (product prices from most recent order)
 // @access  Private
-router.get('/customer/:customerId/last-prices', auth, async (req, res) => {
+router.get('/customer/:customerId/last-prices', [
+  auth,
+  requirePermission('view_sales')
+], async (req, res) => {
   try {
     const { customerId } = req.params;
 

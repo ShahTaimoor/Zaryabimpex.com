@@ -46,6 +46,7 @@ import { useResponsive } from './ResponsiveContainer';
 import { WhatsAppFloat } from './WhatsAppFloat';
 import { useGetCategoryTreeQuery } from '../store/services/categoriesApi';
 import { adaptApiCategoryTreeForSidebar } from '../utils/categoryTree';
+import { PERMISSIONS, hasPermission } from '../config/rbacConfig';
 
 // Revised Navigation Structure
 export const navigation = [
@@ -54,21 +55,23 @@ export const navigation = [
   {
     name: 'Sales',
     icon: ShoppingCart,
+    permission: PERMISSIONS.VIEW_SALES,
     children: [
-      { name: 'Sales Orders', href: '/sales-orders', icon: FileText },
-      { name: 'Sales', href: '/sales', icon: CreditCard },
-      { name: 'Sales Invoices', href: '/sales-invoices', icon: Search },
+      { name: 'Sales Orders', href: '/sales-orders', icon: FileText, permission: PERMISSIONS.VIEW_SALES_ORDERS },
+      { name: 'Sales', href: '/sales', icon: CreditCard, permission: PERMISSIONS.MANAGE_SALES },
+      { name: 'Sales Invoices', href: '/sales-invoices', icon: Search, permission: PERMISSIONS.VIEW_SALES_ORDERS },
     ]
   },
 
   {
     name: 'Purchase',
     icon: Truck,
+    permission: PERMISSIONS.MANAGE_INVENTORY,
     children: [
-      { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText },
-      { name: 'Purchase', href: '/purchase', icon: Truck },
-      { name: 'Purchase Invoices', href: '/purchase-invoices', icon: Search },
-      { name: 'Products by Supplier', href: '/purchase-by-supplier', icon: BarChart3 },
+      { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText, permission: PERMISSIONS.MANAGE_INVENTORY },
+      { name: 'Purchase', href: '/purchase', icon: Truck, permission: PERMISSIONS.MANAGE_INVENTORY },
+      { name: 'Purchase Invoices', href: '/purchase-invoices', icon: Search, permission: PERMISSIONS.MANAGE_INVENTORY },
+      { name: 'Products by Supplier', href: '/purchase-by-supplier', icon: BarChart3, permission: PERMISSIONS.VIEW_REPORTS },
     ]
   },
 
@@ -76,70 +79,74 @@ export const navigation = [
     name: 'Operations',
     icon: Layers,
     children: [
-      { name: 'Sale Returns', href: '/sale-returns', icon: RotateCcw },
-      { name: 'Purchase Returns', href: '/purchase-returns', icon: RotateCcw },
-      { name: 'Discounts', href: '/discounts', icon: Tag },
-      { name: 'CCTV Access', href: '/cctv-access', icon: Camera },
+      { name: 'Sale Returns', href: '/sale-returns', icon: RotateCcw, permission: PERMISSIONS.MANAGE_SALES },
+      { name: 'Purchase Returns', href: '/purchase-returns', icon: RotateCcw, permission: PERMISSIONS.MANAGE_INVENTORY },
+      { name: 'Discounts', href: '/discounts', icon: Tag, permission: PERMISSIONS.MANAGE_SETTINGS },
+      { name: 'CCTV Access', href: '/cctv-access', icon: Camera, permission: PERMISSIONS.VIEW_SALES },
     ]
   },
 
   {
     name: 'Financials',
     icon: Wallet,
+    permission: PERMISSIONS.VIEW_ACCOUNTING,
     children: [
-      { name: 'Cash Receipts', href: '/cash-receipts', icon: Receipt },
-      { name: 'Cash Payments', href: '/cash-payments', icon: CreditCard },
-      { name: 'Bank Receipts', href: '/bank-receipts', icon: Building },
-      { name: 'Bank Payments', href: '/bank-payments', icon: ArrowUpDown },
-      { name: 'Record Expense', href: '/expenses', icon: Wallet },
+      { name: 'Cash Receipts', href: '/cash-receipts', icon: Receipt, permission: PERMISSIONS.VIEW_ACCOUNTING },
+      { name: 'Cash Payments', href: '/cash-payments', icon: CreditCard, permission: PERMISSIONS.VIEW_ACCOUNTING },
+      { name: 'Bank Receipts', href: '/bank-receipts', icon: Building, permission: PERMISSIONS.VIEW_ACCOUNTING },
+      { name: 'Bank Payments', href: '/bank-payments', icon: ArrowUpDown, permission: PERMISSIONS.VIEW_ACCOUNTING },
+      { name: 'Record Expense', href: '/expenses', icon: Wallet, permission: PERMISSIONS.VIEW_ACCOUNTING },
     ]
   },
 
   {
     name: 'Master Data',
-    icon: DatabaseIcon, // We'll need a different icon or reuse one
+    icon: DatabaseIcon,
     children: [
-      { name: 'Products', href: '/products', icon: Package },
-      { name: 'Categories', href: '/categories', icon: Tag },
-      { name: 'Customers', href: '/customers', icon: Users },
-      { name: 'Suppliers', href: '/suppliers', icon: Building },
-      { name: 'Bank & cash opening', href: '/banks', icon: Building2 },
-      { name: 'Investors', href: '/investors', icon: TrendingUp },
-      { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight },
+      { name: 'Products', href: '/products', icon: Package, permission: PERMISSIONS.VIEW_PRODUCTS },
+      { name: 'Categories', href: '/categories', icon: Tag, permission: PERMISSIONS.VIEW_PRODUCTS },
+      { name: 'Customers', href: '/customers', icon: PERMISSIONS.VIEW_PRODUCTS }, // Employees might need to view customers
+      { name: 'Suppliers', href: '/suppliers', icon: Building, permission: PERMISSIONS.MANAGE_INVENTORY },
+      { name: 'Bank & cash opening', href: '/banks', icon: Building2, permission: PERMISSIONS.MANAGE_SETTINGS },
+      { name: 'Investors', href: '/investors', icon: TrendingUp, permission: PERMISSIONS.VIEW_REPORTS },
+      { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight, permission: PERMISSIONS.VIEW_SALES },
     ]
   },
 
   {
     name: 'Inventory',
     icon: Warehouse,
+    permission: PERMISSIONS.VIEW_INVENTORY,
     children: [
-      { name: 'Inventory', href: '/inventory', icon: Warehouse },
-      { name: 'Warehouses', href: '/warehouses', icon: Warehouse },
-      { name: 'Stock Movements', href: '/stock-movements', icon: ArrowUpDown },
-      { name: 'Stock Ledger', href: '/stock-ledger', icon: FileText },
+      { name: 'Inventory', href: '/inventory', icon: Warehouse, permission: PERMISSIONS.VIEW_INVENTORY },
+      { name: 'Warehouses', href: '/warehouses', icon: Warehouse, permission: PERMISSIONS.VIEW_INVENTORY },
+      { name: 'Stock Movements', href: '/stock-movements', icon: ArrowUpDown, permission: PERMISSIONS.VIEW_INVENTORY },
+      { name: 'Stock Ledger', href: '/stock-ledger', icon: FileText, permission: PERMISSIONS.VIEW_INVENTORY },
     ]
   },
 
   {
     name: 'Accounting',
     icon: ClipboardList,
+    permission: PERMISSIONS.VIEW_ACCOUNTING,
     children: [
-      { name: 'Chart of Accounts', href: '/chart-of-accounts', icon: FolderTree },
-      { name: 'Journal Vouchers', href: '/journal-vouchers', icon: FileText },
-      { name: 'Account Ledger Summary', href: '/account-ledger', icon: FileText },
+      { name: 'Chart of Accounts', href: '/chart-of-accounts', icon: FolderTree, permission: PERMISSIONS.VIEW_ACCOUNTING },
+      { name: 'Journal Vouchers', href: '/journal-vouchers', icon: FileText, permission: PERMISSIONS.VIEW_ACCOUNTING },
+      { name: 'Account Ledger Summary', href: '/account-ledger', icon: FileText, permission: PERMISSIONS.VIEW_ACCOUNTING },
     ]
   },
 
   {
     name: 'Analytics',
     icon: BarChart3,
+    permission: PERMISSIONS.VIEW_REPORTS,
     children: [
-      { name: 'P&L Statements', href: '/pl-statements', icon: BarChart3 },
-      { name: 'Balance Sheet', href: '/balance-sheet-statement', icon: FileText },
-      { name: 'Sales Performance', href: '/sales-performance', icon: TrendingUp },
-      { name: 'Inventory Reports', href: '/inventory-reports', icon: Warehouse },
-      { name: 'Reports', href: '/reports', icon: BarChart3 },
-      { name: 'Backdate Report', href: '/backdate-report', icon: Clock },
+      { name: 'P&L Statements', href: '/pl-statements', icon: BarChart3, permission: PERMISSIONS.VIEW_FINANCIAL_DATA },
+      { name: 'Balance Sheet', href: '/balance-sheet-statement', icon: FileText, permission: PERMISSIONS.VIEW_FINANCIAL_DATA },
+      { name: 'Sales Performance', href: '/sales-performance', icon: TrendingUp, permission: PERMISSIONS.VIEW_REPORTS },
+      { name: 'Inventory Reports', href: '/inventory-reports', icon: Warehouse, permission: PERMISSIONS.VIEW_REPORTS },
+      { name: 'Reports', href: '/reports', icon: BarChart3, permission: PERMISSIONS.VIEW_REPORTS },
+      { name: 'Backdate Report', href: '/backdate-report', icon: Clock, permission: PERMISSIONS.VIEW_REPORTS },
     ]
   },
 
@@ -147,8 +154,8 @@ export const navigation = [
     name: 'System',
     icon: Settings,
     children: [
-      { name: 'Settings', href: '/settings', icon: Settings },
-      { name: 'Migration', href: '/migration', icon: RefreshCw },
+      { name: 'Settings', href: '/settings', icon: Settings, permission: PERMISSIONS.MANAGE_SETTINGS },
+      { name: 'Migration', href: '/migration', icon: RefreshCw, permission: PERMISSIONS.MANAGE_SETTINGS },
       { name: 'Help & Support', href: '/help', icon: HelpCircle },
     ]
   }
@@ -205,9 +212,17 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, level = 0, categoryTre
   // Check visibility based on config
   if (sidebarConfig && sidebarConfig[item.name] === false) return null;
 
+  // Check visibility based on RBAC permissions
+  if (item.permission && !hasPermission(user, item.permission)) return null;
+
   // If group, check if any child is visible
   if (hasChildren) {
-    const hasVisibleChild = item.children.some(child => sidebarConfig?.[child.name] !== false);
+    const hasVisibleChild = item.children.some(child => {
+      // Must pass both sidebarConfig and RBAC permission check
+      const configVisible = sidebarConfig?.[child.name] !== false;
+      const permissionVisible = !child.permission || hasPermission(user, child.permission);
+      return configVisible && permissionVisible;
+    });
     if (!hasVisibleChild) return null;
   }
 
