@@ -1268,11 +1268,62 @@ class AccountingService {
       referenceType: 'cash_payment',
       referenceId: cashPayment.id,
       referenceNumber: refNum,
-      customerId: null,
-      supplierId: null,
+      customerId: cashPayment.customer_id || cashPayment.customerId || null,
+      supplierId: cashPayment.supplier_id || cashPayment.supplierId || null,
       transactionDate: cashPayment.date || cashPayment.transactionDate || new Date(),
       currency: 'PKR',
       createdBy: cashPayment.created_by || cashPayment.createdBy
+    }, client);
+  }
+
+  /**
+   * Record bank payment for an expense (posts to account_ledger: Expense Account and Bank Account).
+   * Unlike recordBankPayment, this debits a specific expense account instead of AR/AP.
+   * However, it still links to a customer or supplier for tracking purposes as required.
+   * 
+   * @param {Object} bankPayment - Bank payment data
+   * @param {string} expenseAccountId - Expense account UUID
+   * @param {Object} client - Optional PostgreSQL client for existing transaction
+   */
+  static async recordExpenseBankPayment(bankPayment, expenseAccountId, client = null) {
+    const q = client ? client.query.bind(client) : query;
+    const accountResult = await q(
+      'SELECT account_code, allow_direct_posting FROM chart_of_accounts WHERE id = $1 AND is_active = TRUE AND deleted_at IS NULL',
+      [expenseAccountId]
+    );
+    if (!accountResult.rows.length) {
+      throw new Error('Expense account not found or inactive');
+    }
+    const expenseAccountCode = accountResult.rows[0].account_code;
+    const amount = parseFloat(bankPayment.amount);
+    const supplierId = bankPayment.supplier_id || bankPayment.supplierId;
+    const customerId = bankPayment.customer_id || bankPayment.customerId;
+    const refNum = bankPayment.payment_number || bankPayment.paymentNumber || bankPayment.id;
+
+    const entry1 = {
+      accountCode: expenseAccountCode,
+      debitAmount: amount,
+      creditAmount: 0,
+      description: `Expense: ${bankPayment.particular || refNum}`
+    };
+
+    const entry2 = {
+      accountCode: '1001', // Bank Account
+      debitAmount: 0,
+      creditAmount: amount,
+      description: `Bank Payment: ${refNum}`
+    };
+
+    return await this.createTransaction(entry1, entry2, {
+      referenceType: 'bank_payment',
+      referenceId: bankPayment.id,
+      referenceNumber: refNum,
+      customerId: customerId || null,
+      supplierId: supplierId || null,
+      bankId: bankPayment.bank_id || bankPayment.bankId,
+      transactionDate: bankPayment.date || bankPayment.transactionDate || new Date(),
+      currency: 'PKR',
+      createdBy: bankPayment.created_by || bankPayment.createdBy
     }, client);
   }
 

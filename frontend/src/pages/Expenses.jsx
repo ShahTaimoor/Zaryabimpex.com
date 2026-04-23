@@ -10,8 +10,15 @@ import {
   Eye,
   Printer,
   Pencil,
-  Trash2
+  Trash2,
+  Search,
+  Building,
+  User,
+  Phone,
+  Mail
 } from 'lucide-react';
+import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
+import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch';
 import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import {
@@ -42,7 +49,9 @@ const defaultFormState = {
   amount: '',
   notes: '',
   bank: '',
-  particular: ''
+  particular: '',
+  supplier: '',
+  customer: ''
 };
 
 const Expenses = () => {
@@ -50,6 +59,13 @@ const Expenses = () => {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [recentExpenses, setRecentExpenses] = useState([]);
   const [editingExpense, setEditingExpense] = useState(null);
+  const [partyType, setPartyType] = useState('supplier'); // 'supplier' or 'customer'
+  const [supplierSearchTerm, setSupplierSearchTerm] = useState('');
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  const [selectedSupplier, setSelectedSupplier] = useState(null);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [supplierDropdownIndex, setSupplierDropdownIndex] = useState(-1);
+  const [customerDropdownIndex, setCustomerDropdownIndex] = useState(-1);
 
   const { data: expenseAccountsResponse, isLoading: expenseAccountsLoading } = useGetAccountsQuery({
     accountType: 'expense',
@@ -75,16 +91,14 @@ const Expenses = () => {
     { limit: 20 }
   );
   const cashPaymentsData = useMemo(() => {
-    const items = cashPaymentsResponse?.data?.cashPayments || cashPaymentsResponse?.cashPayments || cashPaymentsResponse?.data?.data?.cashPayments || [];
-    return items.filter((payment) => !payment?.supplier && !payment?.customer);
+    return cashPaymentsResponse?.data?.cashPayments || cashPaymentsResponse?.cashPayments || cashPaymentsResponse?.data?.data?.cashPayments || [];
   }, [cashPaymentsResponse]);
 
   const { data: bankPaymentsResponse, isFetching: bankExpensesLoading } = useGetBankPaymentsQuery(
     { limit: 20 }
   );
   const bankPaymentsData = useMemo(() => {
-    const items = bankPaymentsResponse?.data?.bankPayments || bankPaymentsResponse?.bankPayments || bankPaymentsResponse?.data?.data?.bankPayments || [];
-    return items.filter((payment) => !payment?.supplier && !payment?.customer);
+    return bankPaymentsResponse?.data?.bankPayments || bankPaymentsResponse?.bankPayments || bankPaymentsResponse?.data?.data?.bankPayments || [];
   }, [bankPaymentsResponse]);
 
   const combinedRecentExpenses = useMemo(() => {
@@ -161,6 +175,102 @@ const Expenses = () => {
   const [updateBankPayment, { isLoading: updatingBankPayment }] = useUpdateBankPaymentMutation();
   const [deleteBankPayment] = useDeleteBankPaymentMutation();
 
+  const { suppliers } = useDebouncedSupplierSearch(supplierSearchTerm, { selectedSupplier });
+  const { customers } = useDebouncedCustomerSearch(customerSearchTerm, { selectedCustomer });
+
+  const handleSupplierSelect = (supplierId) => {
+    const supplier = suppliers.find(s => (s.id || s._id) === supplierId);
+    setSelectedSupplier(supplier);
+    setFormData(prev => ({ ...prev, supplier: supplierId, customer: '' }));
+    setSelectedCustomer(null);
+    setCustomerSearchTerm('');
+  };
+
+  const handleCustomerSelect = (customerId) => {
+    const customer = customers.find(c => (c.id || c._id) === customerId);
+    setSelectedCustomer(customer);
+    setFormData(prev => ({ ...prev, customer: customerId, supplier: '' }));
+    setSelectedSupplier(null);
+    setSupplierSearchTerm('');
+  };
+
+  const handleSupplierSearch = (searchTerm) => {
+    setSupplierSearchTerm(searchTerm);
+    setSupplierDropdownIndex(-1);
+    if (searchTerm === '') {
+      setSelectedSupplier(null);
+      setFormData(prev => ({ ...prev, supplier: '' }));
+    }
+  };
+
+  const handleCustomerSearch = (searchTerm) => {
+    setCustomerSearchTerm(searchTerm);
+    setCustomerDropdownIndex(-1);
+    if (searchTerm === '') {
+      setSelectedCustomer(null);
+      setFormData(prev => ({ ...prev, customer: '' }));
+    }
+  };
+
+  const handleSupplierKeyDown = (e) => {
+    if (!supplierSearchTerm || (suppliers || []).length === 0) return;
+    const filteredSuppliers = suppliers || [];
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSupplierDropdownIndex(prev => prev < filteredSuppliers.length - 1 ? prev + 1 : 0);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSupplierDropdownIndex(prev => prev > 0 ? prev - 1 : filteredSuppliers.length - 1);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (supplierDropdownIndex >= 0 && supplierDropdownIndex < filteredSuppliers.length) {
+          const s = filteredSuppliers[supplierDropdownIndex];
+          handleSupplierSelect(s.id || s._id);
+          setSupplierSearchTerm(s.displayName || s.companyName || s.name || '');
+          setSupplierDropdownIndex(-1);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setSupplierSearchTerm('');
+        setSupplierDropdownIndex(-1);
+        break;
+    }
+  };
+
+  const handleCustomerKeyDown = (e) => {
+    if (!customerSearchTerm || (customers || []).length === 0) return;
+    const filteredCustomers = customers || [];
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setCustomerDropdownIndex(prev => prev < filteredCustomers.length - 1 ? prev + 1 : 0);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setCustomerDropdownIndex(prev => prev > 0 ? prev - 1 : filteredCustomers.length - 1);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (customerDropdownIndex >= 0 && customerDropdownIndex < filteredCustomers.length) {
+          const c = filteredCustomers[customerDropdownIndex];
+          const name = c.businessName || c.business_name || c.displayName || c.name || '';
+          handleCustomerSelect(c.id || c._id);
+          setCustomerSearchTerm(name);
+          setCustomerDropdownIndex(-1);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setCustomerSearchTerm('');
+        setCustomerDropdownIndex(-1);
+        break;
+    }
+  };
+
   const handleCashExpenseSubmit = async (payload) => {
     try {
       let data;
@@ -227,6 +337,11 @@ const Expenses = () => {
     setFormData(defaultFormState);
     setPaymentMethod('cash');
     setEditingExpense(null);
+    setSupplierSearchTerm('');
+    setCustomerSearchTerm('');
+    setSelectedSupplier(null);
+    setSelectedCustomer(null);
+    setPartyType('supplier');
   };
 
   const handleSubmit = (event) => {
@@ -258,10 +373,16 @@ const Expenses = () => {
 
       handleBankExpenseSubmit({
         ...basePayload,
-        bank: formData.bank
+        bank: formData.bank,
+        supplier: formData.supplier || undefined,
+        customer: formData.customer || undefined
       });
     } else {
-      handleCashExpenseSubmit(basePayload);
+      handleCashExpenseSubmit({
+        ...basePayload,
+        supplier: formData.supplier || undefined,
+        customer: formData.customer || undefined
+      });
     }
   };
 
@@ -274,8 +395,22 @@ const Expenses = () => {
       amount: expense.amount?.toString() || '',
       notes: expense.notes || '',
       bank: expense.bank?._id || expense.bank || '',
-      particular: expense.particular || ''
+      particular: expense.particular || '',
+      supplier: expense.supplier?._id || expense.supplier || '',
+      customer: expense.customer?._id || expense.customer || ''
     });
+
+    if (expense.supplier) {
+      setPartyType('supplier');
+      const s = expense.supplier;
+      setSelectedSupplier(s);
+      setSupplierSearchTerm(s.displayName || s.companyName || s.name || '');
+    } else if (expense.customer) {
+      setPartyType('customer');
+      const c = expense.customer;
+      setSelectedCustomer(c);
+      setCustomerSearchTerm(c.businessName || c.business_name || c.displayName || c.name || '');
+    }
   };
 
   const handleDeleteExpense = async (expense) => {
@@ -342,6 +477,12 @@ const Expenses = () => {
               <td class="label">Amount</td>
               <td>${formatCurrency(expense.amount || 0)}</td>
             </tr>
+            ${expense.supplier || expense.customer ? `
+            <tr>
+              <td class="label">Party</td>
+              <td>${expense.supplier?.displayName || expense.customer?.displayName || '-'}</td>
+            </tr>
+            ` : ''}
             <tr>
               <td class="label">Description</td>
               <td>${expense.particular || '-'}</td>
@@ -504,7 +645,6 @@ const Expenses = () => {
                   onChange={(e) => setFormData((prev) => ({ ...prev, particular: e.target.value }))}
                 />
               </div>
-
               {paymentMethod === 'bank' && (
                 <div>
                   <label className="form-label">Bank Account</label>
@@ -525,6 +665,134 @@ const Expenses = () => {
                   </select>
                 </div>
               )}
+
+              <div className="pt-2">
+                <label className="form-label mb-3 text-gray-600">Party Association (Optional)</label>
+                <div className="flex items-center gap-6 mb-4">
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input
+                      type="radio"
+                      value="supplier"
+                      checked={partyType === 'supplier'}
+                      onChange={(e) => {
+                        setPartyType(e.target.value);
+                        setSelectedCustomer(null);
+                        setCustomerSearchTerm('');
+                        setFormData(prev => ({ ...prev, customer: '' }));
+                      }}
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">Supplier</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input
+                      type="radio"
+                      value="customer"
+                      checked={partyType === 'customer'}
+                      onChange={(e) => {
+                        setPartyType(e.target.value);
+                        setSelectedSupplier(null);
+                        setSupplierSearchTerm('');
+                        setFormData(prev => ({ ...prev, supplier: '' }));
+                      }}
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">Customer</span>
+                  </label>
+                </div>
+
+                {partyType === 'supplier' ? (
+                  <div className="relative">
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        autoComplete="off"
+                        value={supplierSearchTerm}
+                        onChange={(e) => handleSupplierSearch(e.target.value)}
+                        onKeyDown={handleSupplierKeyDown}
+                        className="w-full pr-10"
+                        placeholder="Search or select supplier..."
+                      />
+                      <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
+                    {supplierSearchTerm && !selectedSupplier && (
+                      <div className="absolute z-10 mt-1 w-full max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
+                        {(suppliers || []).map((supplier, index) => (
+                          <div
+                            key={supplier.id || supplier._id}
+                            onClick={() => {
+                              handleSupplierSelect(supplier.id || supplier._id);
+                              setSupplierSearchTerm(supplier.displayName || supplier.companyName || supplier.name || '');
+                              setSupplierDropdownIndex(-1);
+                            }}
+                            className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${supplierDropdownIndex === index ? 'bg-blue-50' : ''}`}
+                          >
+                            <div className="font-medium text-sm text-gray-900">{supplier.displayName || supplier.companyName || supplier.name || 'Unknown'}</div>
+                            <div className="text-xs text-gray-600">{supplier.phone}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {selectedSupplier && (
+                      <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center space-x-3">
+                          <Building className="h-4 w-4 text-gray-400" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{selectedSupplier.displayName || selectedSupplier.companyName || selectedSupplier.name}</p>
+                            {selectedSupplier.phone && <p className="text-xs text-gray-500">{selectedSupplier.phone}</p>}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        autoComplete="off"
+                        value={customerSearchTerm}
+                        onChange={(e) => handleCustomerSearch(e.target.value)}
+                        onKeyDown={handleCustomerKeyDown}
+                        className="w-full pr-10"
+                        placeholder="Search or select customer..."
+                      />
+                      <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
+                    {customerSearchTerm && !selectedCustomer && (
+                      <div className="absolute z-10 mt-1 w-full max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
+                        {(customers || []).map((customer, index) => (
+                          <div
+                            key={customer.id || customer._id}
+                            onClick={() => {
+                              const name = customer.businessName || customer.business_name || customer.displayName || customer.name || '';
+                              handleCustomerSelect(customer.id || customer._id);
+                              setCustomerSearchTerm(name);
+                              setCustomerDropdownIndex(-1);
+                            }}
+                            className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${customerDropdownIndex === index ? 'bg-blue-50' : ''}`}
+                          >
+                            <div className="font-medium text-sm text-gray-900">{customer.businessName || customer.business_name || customer.displayName || customer.name || 'Unknown'}</div>
+                            <div className="text-xs text-gray-600">{customer.phone}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {selectedCustomer && (
+                      <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center space-x-3">
+                          <User className="h-4 w-4 text-gray-400" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name}</p>
+                            {selectedCustomer.phone && <p className="text-xs text-gray-500">{selectedCustomer.phone}</p>}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
             </div>
 
             <div className="space-y-4">
@@ -607,6 +875,7 @@ const Expenses = () => {
                       <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Voucher</th>
                       <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Expense Account</th>
                       <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Description</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Party</th>
                       <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Amount</th>
                       <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Method</th>
                       <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
@@ -628,6 +897,9 @@ const Expenses = () => {
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {expense.particular || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {expense.supplier?.displayName || expense.customer?.displayName || '—'}
                         </td>
                         <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right whitespace-nowrap">
                           {formatCurrency(expense.amount || 0)}

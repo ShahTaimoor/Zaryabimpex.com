@@ -126,6 +126,7 @@ router.post('/', [
       supplier,
       customer,
       notes,
+      expenseAccount,
     } = req.body;
 
     // Order validation removed - orders handled separately
@@ -160,10 +161,10 @@ router.post('/', [
       });
     }
 
-    if (!customer && !supplier) {
+    if (!customer && !supplier && !expenseAccount) {
       return res.status(400).json({
         success: false,
-        message: 'Bank payment must specify either a customer or a supplier'
+        message: 'Bank payment must specify either a customer, a supplier, or an expense account'
       });
     }
 
@@ -202,7 +203,11 @@ router.post('/', [
       const payment = await bankPaymentRepository.create(bankPaymentData, client);
 
       // Post to account ledger atomically (using same client)
-      await AccountingService.recordBankPayment(payment, client);
+      if (expenseAccount) {
+        await AccountingService.recordExpenseBankPayment(payment, expenseAccount, client);
+      } else {
+        await AccountingService.recordBankPayment(payment, client);
+      }
 
       return payment;
     });
