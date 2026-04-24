@@ -47,6 +47,33 @@ class CustomerTransactionService {
       requiresApproval = false
     } = transactionData;
 
+    let affectsPendingBalance = transactionData.affectsPendingBalance ?? false;
+    let affectsAdvanceBalance = transactionData.affectsAdvanceBalance ?? false;
+    let balanceImpact = transactionData.balanceImpact ?? 0;
+
+    if (transactionData.balanceImpact === undefined) {
+      switch (transactionType) {
+        case 'invoice':
+          affectsPendingBalance = true;
+          balanceImpact = netAmount;
+          break;
+        case 'payment':
+          affectsAdvanceBalance = true;
+          balanceImpact = -netAmount;
+          break;
+        case 'refund':
+        case 'credit_note':
+          balanceImpact = -netAmount;
+          break;
+        case 'debit_note':
+        case 'opening_balance':
+        case 'adjustment':
+        case 'reversal':
+          balanceImpact = netAmount;
+          break;
+      }
+    }
+
     const customer = await CustomerRepository.findById(customerId);
     if (!customer) throw new Error('Customer not found');
 

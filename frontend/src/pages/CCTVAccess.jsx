@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  Camera, 
-  Search, 
-  Calendar, 
-  Clock, 
-  FileText, 
+import {
+  Camera,
+  Search,
+  Calendar,
+  Clock,
+  FileText,
   User,
   Eye,
   Copy,
@@ -164,12 +164,12 @@ const CCTVAccess = ({ tabId }) => {
     // - For Hikvision: http://cctv-ip/playback?start={startTime}&end={endTime}
     // - For Dahua: http://cctv-ip/cgi-bin/playback?start={startTime}&end={endTime}
     // - For generic: http://cctv-ip/playback?from={startTime}&to={endTime}
-    
+
     if (!order.billStartTime || !order.billEndTime) return null;
-    
+
     // Get CCTV base URL from environment or settings
     const cctvBaseURL = process.env.REACT_APP_CCTV_BASE_URL || '';
-    
+
     if (!cctvBaseURL) {
       // Return time range for manual lookup
       return {
@@ -177,21 +177,21 @@ const CCTVAccess = ({ tabId }) => {
         endTime: formatDateTime(order.billEndTime)
       };
     }
-    
+
     // Format times for URL (ISO 8601 format)
     const startTime = new Date(order.billStartTime).toISOString();
     const endTime = new Date(order.billEndTime).toISOString();
-    
+
     // Adjust for buffer (±5 seconds)
     const bufferStart = new Date(new Date(startTime).getTime() - 5000).toISOString();
     const bufferEnd = new Date(new Date(endTime).getTime() + 5000).toISOString();
-    
+
     return `${cctvBaseURL}?start=${encodeURIComponent(bufferStart)}&end=${encodeURIComponent(bufferEnd)}`;
   };
 
   const handleOpenCCTV = (order) => {
     const cctvURL = generateCCTVURL(order);
-    
+
     if (typeof cctvURL === 'string') {
       // Open CCTV system in new window
       window.open(cctvURL, '_blank');
@@ -318,362 +318,362 @@ const CCTVAccess = ({ tabId }) => {
             </p>
           </div>
         ) : (
-        <>
-          {/* Orders List */}
-          <div className="rounded-2xl border border-slate-200/90 bg-white shadow-sm shadow-slate-200/40 overflow-hidden">
-            <div className="border-b border-slate-100 bg-slate-50/80 px-4 sm:px-6 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-800">Matching invoices</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Bill times are used for CCTV playback windows</p>
-              </div>
-              <Link
-                to="/inventory-alerts"
-                className="inline-flex items-center gap-0.5 text-sm font-medium text-slate-700 hover:text-slate-900 shrink-0"
-              >
-                Inventory alerts
-                <ChevronRight className="h-4 w-4" aria-hidden />
-              </Link>
-            </div>
-            <div className="flex items-stretch">
-              <button
-                type="button"
-                onClick={() => scrollTableBy(-280)}
-                disabled={!canScrollTableLeft}
-                aria-label="Scroll table left"
-                title="Scroll left"
-                className="flex-shrink-0 flex items-center justify-center w-9 sm:w-10 border-r border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-slate-50 transition-colors"
-              >
-                <ChevronLeft className="h-5 w-5" aria-hidden />
-              </button>
-              <div
-                ref={tableScrollRef}
-                onScroll={updateTableScrollState}
-                className="flex-1 min-w-0 overflow-x-auto scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-              >
-              <table className="w-full min-w-[900px] table-auto">
-                <thead className="bg-slate-50/90 border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[140px]">
-                      Invoice #
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">
-                      Customer
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[160px]">
-                      Bill Start Time
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[160px]">
-                      Bill End Time
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[100px] whitespace-nowrap">
-                      Duration
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[80px] whitespace-nowrap">
-                      Amount
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[180px] whitespace-nowrap">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-slate-100">
-                  {orders.map((order) => (
-                    <tr key={order._id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-slate-400" />
-                          <span className="font-medium text-slate-900">{order.orderNumber}</span>
-                          {/* Show warning icon if billDate differs from CCTV date */}
-                          {order.billDate && order.billStartTime && 
-                           new Date(order.billDate).toDateString() !== new Date(order.billStartTime).toDateString() && (
-                            <AlertTriangle className="h-4 w-4 text-yellow-600" title="Bill date differs from CCTV recording date" />
-                          )}
-                        </div>
-                        <div className="text-xs text-slate-500 mt-1">
-                          {order.billDate ? formatDateOnly(order.billDate) : formatDateOnly(order.createdAt)}
-                          {order.billDate && order.billStartTime && 
-                           new Date(order.billDate).toDateString() !== new Date(order.billStartTime).toDateString() && (
-                            <span className="text-amber-600 ml-1" title={`CCTV: ${formatDateOnly(order.billStartTime)}`}>
-                              (CCTV: {formatDateOnly(order.billStartTime)})
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-slate-400" />
-                          <span className="text-slate-900">
-                            {order.customer?.displayName || 
-                             order.customerInfo?.name || 
-                             'Walk-in Customer'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-green-600 flex-shrink-0" />
-                          <span className="text-slate-900 font-mono text-sm">
-                            {formatDateTime(order.billStartTime)}
-                          </span>
-                          <button
-                            onClick={() => copyToClipboard(formatDateTime(order.billStartTime), `start-${order._id}`)}
-                            className="text-slate-600 hover:text-slate-900 transition-colors"
-                            title="Copy start time"
-                          >
-                            {copiedTime === `start-${order._id}` ? (
-                              <CheckCircle className="h-4 w-4" />
-                            ) : (
-                              <Copy className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-red-600 flex-shrink-0" />
-                          <span className="text-slate-900 font-mono text-sm">
-                            {formatDateTime(order.billEndTime)}
-                          </span>
-                          <button
-                            onClick={() => copyToClipboard(formatDateTime(order.billEndTime), `end-${order._id}`)}
-                            className="text-slate-600 hover:text-slate-900 transition-colors"
-                            title="Copy end time"
-                          >
-                            {copiedTime === `end-${order._id}` ? (
-                              <CheckCircle className="h-4 w-4" />
-                            ) : (
-                              <Copy className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className="text-slate-600 text-sm">
-                          {calculateDuration(order.billStartTime, order.billEndTime)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className="font-semibold text-slate-900">
-                          {Math.round(order.pricing?.total || 0)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => handleOpenCCTV(order)}
-                            className="bg-slate-900 text-white px-3 py-1.5 rounded-xl hover:bg-slate-800 transition-colors flex items-center gap-2 text-sm flex-shrink-0 shadow-sm"
-                            title="Open CCTV Playback"
-                          >
-                            <Eye className="h-4 w-4" />
-                            View Footage
-                          </button>
-                          <button
-                            onClick={() => handleViewDetails(order)}
-                            className="border border-slate-200 bg-white text-slate-700 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-2 text-sm flex-shrink-0"
-                            title="View Details"
-                          >
-                            <FileText className="h-4 w-4" />
-                            Details
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </div>
-              <button
-                type="button"
-                onClick={() => scrollTableBy(280)}
-                disabled={!canScrollTableRight}
-                aria-label="Scroll table right"
-                title="Scroll right"
-                className="flex-shrink-0 flex items-center justify-center w-9 sm:w-10 border-l border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-slate-50 transition-colors"
-              >
-                <ChevronRight className="h-5 w-5" aria-hidden />
-              </button>
-            </div>
-
-            {/* Pagination */}
-            {data?.pagination && data.pagination.pages > 1 && (
-              <div className="bg-slate-50/90 px-4 py-3.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="text-sm text-slate-600">
-                  Showing {((data.pagination.page - 1) * data.pagination.limit) + 1} to{' '}
-                  {Math.min(data.pagination.page * data.pagination.limit, data.pagination.total)} of{' '}
-                  {data.pagination.total} results
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={data.pagination.page === 1}
-                    className="px-4 py-2 text-sm font-medium border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    onClick={() => setPage(p => Math.min(data.pagination.pages, p + 1))}
-                    disabled={data.pagination.page === data.pagination.pages}
-                    className="px-4 py-2 text-sm font-medium border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-        {/* Details Modal */}
-        {showDetails && selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-[2px]">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20">
-            <div className="h-1 bg-gradient-to-r from-slate-700 via-blue-600 to-slate-700" aria-hidden />
-            <div className="overflow-y-auto max-h-[calc(90vh-0.25rem)] p-6 sm:p-8">
-              <div className="flex justify-between items-start gap-4 mb-6">
+          <>
+            {/* Orders List */}
+            <div className="rounded-2xl border border-slate-200/90 bg-white shadow-sm shadow-slate-200/40 overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50/80 px-4 sm:px-6 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Invoice details</h2>
-                  <p className="text-sm text-slate-500 mt-1">Review timestamps before opening playback</p>
+                  <h3 className="text-sm font-semibold text-slate-800">Matching invoices</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Bill times are used for CCTV playback windows</p>
+                </div>
+                <Link
+                  to="/inventory-alerts"
+                  className="inline-flex items-center gap-0.5 text-sm font-medium text-slate-700 hover:text-slate-900 shrink-0"
+                >
+                  Inventory alerts
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </Link>
+              </div>
+              <div className="flex items-stretch">
+                <button
+                  type="button"
+                  onClick={() => scrollTableBy(-280)}
+                  disabled={!canScrollTableLeft}
+                  aria-label="Scroll table left"
+                  title="Scroll left"
+                  className="flex-shrink-0 flex items-center justify-center w-9 sm:w-10 border-r border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-slate-50 transition-colors"
+                >
+                  <ChevronLeft className="h-5 w-5" aria-hidden />
+                </button>
+                <div
+                  ref={tableScrollRef}
+                  onScroll={updateTableScrollState}
+                  className="flex-1 min-w-0 overflow-x-auto scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                >
+                  <table className="w-full min-w-[900px] table-auto">
+                    <thead className="bg-slate-50/90 border-b border-slate-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[140px]">
+                          Invoice #
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">
+                          Customer
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[160px]">
+                          Bill Start Time
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[160px]">
+                          Bill End Time
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[100px] whitespace-nowrap">
+                          Duration
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[80px] whitespace-nowrap">
+                          Amount
+                        </th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[180px] whitespace-nowrap">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-slate-100">
+                      {orders.map((order) => (
+                        <tr key={order._id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-slate-400" />
+                              <span className="font-medium text-slate-900">{order.orderNumber}</span>
+                              {/* Show warning icon if billDate differs from CCTV date */}
+                              {order.billDate && order.billStartTime &&
+                                new Date(order.billDate).toDateString() !== new Date(order.billStartTime).toDateString() && (
+                                  <AlertTriangle className="h-4 w-4 text-yellow-600" title="Bill date differs from CCTV recording date" />
+                                )}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-1">
+                              {order.billDate ? formatDateOnly(order.billDate) : formatDateOnly(order.createdAt)}
+                              {order.billDate && order.billStartTime &&
+                                new Date(order.billDate).toDateString() !== new Date(order.billStartTime).toDateString() && (
+                                  <span className="text-amber-600 ml-1" title={`CCTV: ${formatDateOnly(order.billStartTime)}`}>
+                                    (CCTV: {formatDateOnly(order.billStartTime)})
+                                  </span>
+                                )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-slate-400" />
+                              <span className="text-slate-900">
+                                {order.customer?.displayName ||
+                                  order.customerInfo?.name ||
+                                  'Walk-in Customer'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-green-600 flex-shrink-0" />
+                              <span className="text-slate-900 font-mono text-sm">
+                                {formatDateTime(order.billStartTime)}
+                              </span>
+                              <button
+                                onClick={() => copyToClipboard(formatDateTime(order.billStartTime), `start-${order._id}`)}
+                                className="text-slate-600 hover:text-slate-900 transition-colors"
+                                title="Copy start time"
+                              >
+                                {copiedTime === `start-${order._id}` ? (
+                                  <CheckCircle className="h-4 w-4" />
+                                ) : (
+                                  <Copy className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-red-600 flex-shrink-0" />
+                              <span className="text-slate-900 font-mono text-sm">
+                                {formatDateTime(order.billEndTime)}
+                              </span>
+                              <button
+                                onClick={() => copyToClipboard(formatDateTime(order.billEndTime), `end-${order._id}`)}
+                                className="text-slate-600 hover:text-slate-900 transition-colors"
+                                title="Copy end time"
+                              >
+                                {copiedTime === `end-${order._id}` ? (
+                                  <CheckCircle className="h-4 w-4" />
+                                ) : (
+                                  <Copy className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span className="text-slate-600 text-sm">
+                              {calculateDuration(order.billStartTime, order.billEndTime)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span className="font-semibold text-slate-900">
+                              {Math.round(order.pricing?.total || 0)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => handleOpenCCTV(order)}
+                                className="bg-slate-900 text-white px-3 py-1.5 rounded-xl hover:bg-slate-800 transition-colors flex items-center gap-2 text-sm flex-shrink-0 shadow-sm"
+                                title="Open CCTV Playback"
+                              >
+                                <Eye className="h-4 w-4" />
+                                View Footage
+                              </button>
+                              <button
+                                onClick={() => handleViewDetails(order)}
+                                className="border border-slate-200 bg-white text-slate-700 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-2 text-sm flex-shrink-0"
+                                title="View Details"
+                              >
+                                <FileText className="h-4 w-4" />
+                                Details
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowDetails(false);
-                    setSelectedOrder(null);
-                  }}
-                  className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-                  aria-label="Close"
+                  onClick={() => scrollTableBy(280)}
+                  disabled={!canScrollTableRight}
+                  aria-label="Scroll table right"
+                  title="Scroll right"
+                  className="flex-shrink-0 flex items-center justify-center w-9 sm:w-10 border-l border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-slate-50 transition-colors"
                 >
-                  <X className="h-5 w-5 sm:h-6 sm:w-6" />
+                  <ChevronRight className="h-5 w-5" aria-hidden />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Invoice number</label>
-                    <p className="text-slate-900 font-semibold mt-1">{selectedOrder.orderNumber}</p>
+              {/* Pagination */}
+              {data?.pagination && data.pagination.pages > 1 && (
+                <div className="bg-slate-50/90 px-4 py-3.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="text-sm text-slate-600">
+                    Showing {((data.pagination.page - 1) * data.pagination.limit) + 1} to{' '}
+                    {Math.min(data.pagination.page * data.pagination.limit, data.pagination.total)} of{' '}
+                    {data.pagination.total} results
                   </div>
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Date</label>
-                    <p className="text-slate-900 mt-1">{formatDateOnly(selectedOrder.createdAt)}</p>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Customer</label>
-                    <p className="text-slate-900 mt-1">
-                      {selectedOrder.customer?.displayName || 
-                       selectedOrder.customerInfo?.name || 
-                       'Walk-in Customer'}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total amount</label>
-                    <p className="text-slate-900 font-semibold mt-1">
-                      {Math.round(selectedOrder.pricing?.total || 0)}
-                    </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      disabled={data.pagination.page === 1}
+                      className="px-4 py-2 text-sm font-medium border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => setPage(p => Math.min(data.pagination.pages, p + 1))}
+                      disabled={data.pagination.page === data.pagination.pages}
+                      className="px-4 py-2 text-sm font-medium border border-slate-200 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                    </button>
                   </div>
                 </div>
+              )}
+            </div>
+          </>
+        )}
 
-                {/* Bill Date vs CCTV Timestamps Warning */}
-                {selectedOrder.billDate && selectedOrder.billStartTime && (
-                  (() => {
-                    const billDateOnly = new Date(selectedOrder.billDate).toDateString();
-                    const cctvDateOnly = new Date(selectedOrder.billStartTime).toDateString();
-                    const isMismatch = billDateOnly !== cctvDateOnly;
-                    return isMismatch ? (
-                      <div className="bg-amber-50 border border-amber-200/90 rounded-xl p-4 mb-4">
-                        <div className="flex items-start gap-3">
-                          <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                          <div className="flex-1">
-                            <h4 className="text-sm font-semibold text-amber-950 mb-1">
-                              Date mismatch detected
-                            </h4>
-                            <p className="text-sm text-amber-900/90 mb-2">
-                              This invoice has been backdated/postdated. The bill date is different from the actual CCTV recording time.
-                            </p>
-                            <div className="text-xs text-amber-900/80 space-y-1">
-                              <div><strong>Bill Date (Accounting):</strong> {formatDateOnly(selectedOrder.billDate)}</div>
-                              <div><strong>CCTV Recording Date:</strong> {formatDateOnly(selectedOrder.billStartTime)}</div>
-                              <div className="mt-2 italic">
-                                Note: CCTV footage is available at the actual recording time, not the bill date.
+        {/* Details Modal */}
+        {showDetails && selectedOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-[2px]">
+            <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20">
+              <div className="h-1 bg-gradient-to-r from-slate-700 via-blue-600 to-slate-700" aria-hidden />
+              <div className="overflow-y-auto max-h-[calc(90vh-0.25rem)] p-6 sm:p-8">
+                <div className="flex justify-between items-start gap-4 mb-6">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Invoice details</h2>
+                    <p className="text-sm text-slate-500 mt-1">Review timestamps before opening playback</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDetails(false);
+                      setSelectedOrder(null);
+                    }}
+                    className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5 sm:h-6 sm:w-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Invoice number</label>
+                      <p className="text-slate-900 font-semibold mt-1">{selectedOrder.orderNumber}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Date</label>
+                      <p className="text-slate-900 mt-1">{formatDateOnly(selectedOrder.createdAt)}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Customer</label>
+                      <p className="text-slate-900 mt-1">
+                        {selectedOrder.customer?.displayName ||
+                          selectedOrder.customerInfo?.name ||
+                          'Walk-in Customer'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total amount</label>
+                      <p className="text-slate-900 font-semibold mt-1">
+                        {Math.round(selectedOrder.pricing?.total || 0)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Bill Date vs CCTV Timestamps Warning */}
+                  {selectedOrder.billDate && selectedOrder.billStartTime && (
+                    (() => {
+                      const billDateOnly = new Date(selectedOrder.billDate).toDateString();
+                      const cctvDateOnly = new Date(selectedOrder.billStartTime).toDateString();
+                      const isMismatch = billDateOnly !== cctvDateOnly;
+                      return isMismatch ? (
+                        <div className="bg-amber-50 border border-amber-200/90 rounded-xl p-4 mb-4">
+                          <div className="flex items-start gap-3">
+                            <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <h4 className="text-sm font-semibold text-amber-950 mb-1">
+                                Date mismatch detected
+                              </h4>
+                              <p className="text-sm text-amber-900/90 mb-2">
+                                This invoice has been backdated/postdated. The bill date is different from the actual CCTV recording time.
+                              </p>
+                              <div className="text-xs text-amber-900/80 space-y-1">
+                                <div><strong>Bill Date (Accounting):</strong> {formatDateOnly(selectedOrder.billDate)}</div>
+                                <div><strong>CCTV Recording Date:</strong> {formatDateOnly(selectedOrder.billStartTime)}</div>
+                                <div className="mt-2 italic">
+                                  Note: CCTV footage is available at the actual recording time, not the bill date.
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ) : null;
-                  })()
-                )}
+                      ) : null;
+                    })()
+                  )}
 
-                <div className="border-t border-slate-100 pt-4 mt-4">
-                  <h3 className="text-base font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
-                      <Camera className="h-4 w-4" aria-hidden />
-                    </span>
-                    CCTV timestamps
-                  </h3>
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <span className="text-sm font-medium text-slate-600">Bill start time</span>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-slate-900 font-mono text-sm truncate">
-                          {formatDateTime(selectedOrder.billStartTime)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(formatDateTime(selectedOrder.billStartTime), 'detail-start')}
-                          className="text-slate-600 hover:text-slate-900 shrink-0"
-                        >
-                          {copiedTime === 'detail-start' ? (
-                            <CheckCircle className="h-4 w-4" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <span className="text-sm font-medium text-slate-600">Bill end time</span>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-slate-900 font-mono text-sm truncate">
-                          {formatDateTime(selectedOrder.billEndTime)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(formatDateTime(selectedOrder.billEndTime), 'detail-end')}
-                          className="text-slate-600 hover:text-slate-900 shrink-0"
-                        >
-                          {copiedTime === 'detail-end' ? (
-                            <CheckCircle className="h-4 w-4" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-200/80">
-                      <span className="text-sm font-medium text-slate-600">Duration</span>
-                      <span className="text-slate-900 font-medium">
-                        {calculateDuration(selectedOrder.billStartTime, selectedOrder.billEndTime)}
+                  <div className="border-t border-slate-100 pt-4 mt-4">
+                    <h3 className="text-base font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                        <Camera className="h-4 w-4" aria-hidden />
                       </span>
+                      CCTV timestamps
+                    </h3>
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <span className="text-sm font-medium text-slate-600">Bill start time</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-slate-900 font-mono text-sm truncate">
+                            {formatDateTime(selectedOrder.billStartTime)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(formatDateTime(selectedOrder.billStartTime), 'detail-start')}
+                            className="text-slate-600 hover:text-slate-900 shrink-0"
+                          >
+                            {copiedTime === 'detail-start' ? (
+                              <CheckCircle className="h-4 w-4" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <span className="text-sm font-medium text-slate-600">Bill end time</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-slate-900 font-mono text-sm truncate">
+                            {formatDateTime(selectedOrder.billEndTime)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(formatDateTime(selectedOrder.billEndTime), 'detail-end')}
+                            className="text-slate-600 hover:text-slate-900 shrink-0"
+                          >
+                            {copiedTime === 'detail-end' ? (
+                              <CheckCircle className="h-4 w-4" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-200/80">
+                        <span className="text-sm font-medium text-slate-600">Duration</span>
+                        <span className="text-slate-900 font-medium">
+                          {calculateDuration(selectedOrder.billStartTime, selectedOrder.billEndTime)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="mt-5">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenCCTV(selectedOrder)}
-                      className="w-full bg-slate-900 text-white px-4 py-3 rounded-xl hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 font-semibold shadow-md shadow-slate-900/15"
-                    >
-                      <Eye className="h-5 w-5" />
-                      Open CCTV Playback
-                    </button>
+
+                    <div className="mt-5">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCCTV(selectedOrder)}
+                        className="w-full bg-slate-900 text-white px-4 py-3 rounded-xl hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 font-semibold shadow-md shadow-slate-900/15"
+                      >
+                        <Eye className="h-5 w-5" />
+                        Open CCTV Playback
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
         )}
       </div>
     </div>

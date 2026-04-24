@@ -1,21 +1,26 @@
 import { createSlice } from '@reduxjs/toolkit';
 import { authApi } from '../services/authApi';
 
-const getStoredToken = () => {
-  if (typeof window === 'undefined') return null;
+const getStoredAuth = () => {
+  if (typeof window === 'undefined') return { token: null, user: null };
   try {
-    return localStorage.getItem('authToken');
+    const token = localStorage.getItem('authToken');
+    const userStr = localStorage.getItem('authUser');
+    const user = userStr ? JSON.parse(userStr) : null;
+    return { token, user };
   } catch {
-    return null;
+    return { token: null, user: null };
   }
 };
 
+const { token: storedToken, user: storedUser } = getStoredAuth();
+
 const initialState = {
-  user: null,
-  token: getStoredToken(), // Prefer token fallback for Safari/iPad cross-site cookie issues
+  user: storedUser,
+  token: storedToken,
   status: 'idle',
   error: null,
-  isAuthenticated: !!getStoredToken(),
+  isAuthenticated: !!storedToken,
 };
 
 const authSlice = createSlice({
@@ -24,10 +29,17 @@ const authSlice = createSlice({
   reducers: {
     setUser(state, { payload }) {
       state.user = payload;
-      // If we have a user, we're authenticated (token is in HTTP-only cookie)
       state.isAuthenticated = !!payload;
       if (payload && !state.token) {
-        state.token = 'cookie'; // Placeholder to indicate auth via cookie
+        state.token = 'cookie';
+      }
+      // Persist user
+      if (typeof window !== 'undefined' && payload) {
+        try {
+          localStorage.setItem('authUser', JSON.stringify(payload));
+        } catch (e) {
+          console.error('Failed to store auth user', e);
+        }
       }
     },
     logout(state) {
@@ -40,6 +52,7 @@ const authSlice = createSlice({
       if (typeof window !== 'undefined') {
         try {
           localStorage.removeItem('authToken');
+          localStorage.removeItem('authUser');
         } catch {
           // ignore storage errors
         }
@@ -59,9 +72,14 @@ const authSlice = createSlice({
         state.status = 'succeeded';
         state.error = null;
         // Store token fallback for browsers that block cross-site cookies (e.g. Safari/iPad)
-        if (payload?.token && typeof window !== 'undefined') {
+        if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('authToken', payload.token);
+            if (payload?.token) {
+              localStorage.setItem('authToken', payload.token);
+            }
+            if (state.user) {
+              localStorage.setItem('authUser', JSON.stringify(state.user));
+            }
           } catch {
             // ignore storage errors
           }
@@ -80,14 +98,18 @@ const authSlice = createSlice({
         state.error = null;
       })
       .addMatcher(authApi.endpoints.currentUser.matchRejected, (state) => {
-        state.user = null;
-        state.isAuthenticated = false;
-        state.token = null;
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.removeItem('authToken');
-          } catch {
-            // ignore storage errors
+        // If offline, we don't want to clear the session just because the request failed
+        if (navigator.onLine) {
+          state.user = null;
+          state.isAuthenticated = false;
+          state.token = null;
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.removeItem('authToken');
+              localStorage.removeItem('authUser');
+            } catch {
+              // ignore storage errors
+            }
           }
         }
       });

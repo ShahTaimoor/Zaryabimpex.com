@@ -1299,10 +1299,10 @@ const SalesOrders = ({ tabId }) => {
         base.isManual = true;
         const uc = Number(
           item.productData?.pricing?.cost ??
-            item.productData?.pricing?.cost_price ??
-            item.productData?.cost_price ??
-            item.productData?.costPrice ??
-            0
+          item.productData?.pricing?.cost_price ??
+          item.productData?.cost_price ??
+          item.productData?.costPrice ??
+          0
         );
         if (Number.isFinite(uc) && uc >= 0) {
           base.unitCost = uc;
@@ -1385,10 +1385,10 @@ const SalesOrders = ({ tabId }) => {
           base.isManual = true;
           const uc = Number(
             item.productData?.pricing?.cost ??
-              item.productData?.pricing?.cost_price ??
-              item.productData?.cost_price ??
-              item.productData?.costPrice ??
-              0
+            item.productData?.pricing?.cost_price ??
+            item.productData?.cost_price ??
+            item.productData?.costPrice ??
+            0
           );
           if (Number.isFinite(uc) && uc >= 0) {
             base.unitCost = uc;
@@ -2237,292 +2237,53 @@ const SalesOrders = ({ tabId }) => {
                     : 'overflow-visible -mx-1 px-1'
                 }
               >
-              {formData.items.map((item, index) => {
-                const product = item.productData || item.product; // Use stored product data or fallback to product
-                const totalPrice = item.unitPrice * item.quantity;
-                const isLowStock = product?.inventory?.currentStock <= (product?.inventory?.reorderPoint || 0);
-                const serialHighlight = highlightedSoLineIndex === index;
+                {formData.items.map((item, index) => {
+                  const product = item.productData || item.product; // Use stored product data or fallback to product
+                  const totalPrice = item.unitPrice * item.quantity;
+                  const isLowStock = product?.inventory?.currentStock <= (product?.inventory?.reorderPoint || 0);
+                  const serialHighlight = highlightedSoLineIndex === index;
 
-                return (
-                  <div
-                    key={index}
-                    ref={(node) => {
-                      if (node) soCartLineElRefs.current.set(index, node);
-                      else soCartLineElRefs.current.delete(index);
-                    }}
-                    className={`py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                  >
-                    {/* Desktop Grid Layout */}
+                  return (
                     <div
-                      className={`hidden md:grid gap-x-1 items-center ${dualUnitShowBoxInputEnabled
-                        ? (
-                          showCostPrice && canViewCostPrice
-                            ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
-                            : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                        )
-                        : (
-                          showCostPrice && canViewCostPrice
-                            ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
-                            : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                        )
-                        }`}
+                      key={index}
+                      ref={(node) => {
+                        if (node) soCartLineElRefs.current.set(index, node);
+                        else soCartLineElRefs.current.delete(index);
+                      }}
+                      className={`py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
                     >
-                      {/* Serial Number - 1 column */}
-                      <div className="min-w-0 flex justify-start">
-                        <span
-                          className={`text-sm font-medium px-0.5 py-1 rounded border block text-center h-8 flex items-center justify-center transition-colors duration-300 ${
-                            serialHighlight
-                              ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
-                              : 'text-gray-700 bg-gray-50 border-gray-200'
+                      {/* Desktop Grid Layout */}
+                      <div
+                        className={`hidden md:grid gap-x-1 items-center ${dualUnitShowBoxInputEnabled
+                          ? (
+                            showCostPrice && canViewCostPrice
+                              ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                              : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                          )
+                          : (
+                            showCostPrice && canViewCostPrice
+                              ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                              : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                          )
                           }`}
-                        >
-                          {index + 1}
-                        </span>
-                      </div>
-
-                      {/* Product Name - reduced width to keep row alignment */}
-                      <div className="min-w-0 flex items-center h-8 gap-2">
-                        {product?.imageUrl && showProductImages && (
-                          <div
-                            className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
-                            onClick={() => setPreviewImageProduct(product)}
-                            title="Click to view full size"
+                      >
+                        {/* Serial Number - 1 column */}
+                        <div className="min-w-0 flex justify-start">
+                          <span
+                            className={`text-sm font-medium px-0.5 py-1 rounded border block text-center h-8 flex items-center justify-center transition-colors duration-300 ${serialHighlight
+                                ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
+                                : 'text-gray-700 bg-gray-50 border-gray-200'
+                              }`}
                           >
-                            <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
-                              <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          </div>
-                        )}
-                        <div className="flex flex-col min-w-0 w-full">
-                          <span className="font-medium text-sm truncate min-w-0">
-                            {product?.isVariant
-                              ? (safeRender(product?.displayName || product?.variantName || product?.name) || 'Unknown Variant')
-                              : (safeRender(product?.name) || 'Unknown Product')}
-                            {isLowStock && <span className="text-yellow-600 text-xs ml-2">⚠️ Low Stock</span>}
-                            {lastPurchasePrices[item.product?.toString()] !== undefined &&
-                              item.unitPrice < lastPurchasePrices[item.product?.toString()] && (
-                                <span className="text-xs ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold" title={`Sale price below cost! Loss: ${Math.round(lastPurchasePrices[item.product?.toString()] - item.unitPrice)} per unit`}>
-                                  ⚠️ Below Cost
-                                </span>
-                              )}
-                            {isLastPricesApplied && priceStatus[item.product?.toString()] && (
-                              <span className={`text-xs ml-2 px-1.5 py-0.5 rounded ${priceStatus[item.product?.toString()] === 'updated'
-                                ? 'bg-green-100 text-green-700'
-                                : priceStatus[item.product?.toString()] === 'unchanged'
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-yellow-100 text-yellow-700'
-                                }`}>
-                                {priceStatus[item.product?.toString()] === 'updated'
-                                  ? 'Updated'
-                                  : priceStatus[item.product?.toString()] === 'unchanged'
-                                    ? 'Same Price'
-                                    : 'Not in Last Order'}
-                              </span>
-                            )}
-                          </span>
-                          {product?.isVariant && (
-                            <span className="text-xs text-gray-500">
-                              {product.variantType}: {product.variantValue}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Box column */}
-                      {dualUnitShowBoxInputEnabled && (
-                        <div className="min-w-0">
-                          {hasDualUnit(product) ? (
-                            (() => {
-                              const ppb = getPiecesPerBox(product);
-                              const boxVal =
-                                item.boxes != null
-                                  ? item.boxes
-                                  : ppb
-                                    ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
-                                    : 0;
-                              return (
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={item.quantity === 0 ? '' : boxVal}
-                                  onChange={(e) => {
-                                    const nextBoxes = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                    const piecesPerBox = getPiecesPerBox(product) || 1;
-                                    const currentPieces = item.pieces != null
-                                      ? Math.max(0, Number(item.pieces) || 0)
-                                      : piecesToBoxesAndPieces(item.quantity, piecesPerBox).pieces;
-                                    const rawQty = nextBoxes * piecesPerBox + currentPieces;
-                                    const stockCap = Number(product?.inventory?.currentStock ?? 0);
-                                    if (rawQty > stockCap && stockCap >= 0) {
-                                      toast.warning(`Warning: Quantity ${rawQty} exceeds available stock ${stockCap}`, { duration: 3000, icon: '⚠️' });
-                                    }
-                                    const nextQty = rawQty;
-                                    setFormData(prev => ({
-                                      ...prev,
-                                      items: prev.items.map((itm, i) => (
-                                        i === index
-                                          ? { ...itm, boxes: nextBoxes, quantity: nextQty, total: nextQty * itm.unitPrice }
-                                          : itm
-                                      ))
-                                    }));
-                                  }}
-                                  onFocus={(e) => e.target.select()}
-                                  className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(product?.inventory?.currentStock || 0) === 0
-                                    ? 'text-red-700 bg-red-50 border-red-200'
-                                    : (product?.inventory?.currentStock || 0) <= (product?.inventory?.reorderPoint || 0)
-                                      ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                                      : 'text-gray-700 bg-gray-100 border-gray-200'
-                                    }`}
-                                  title="Full boxes"
-                                />
-                              );
-                            })()
-                          ) : (
-                            <span className="text-sm font-semibold text-gray-400 bg-gray-50 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
-                              —
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Stock - 1 column */}
-                      <div className="min-w-0">
-                        <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
-                          {product?.inventory?.currentStock || 0}
-                        </span>
-                      </div>
-
-                      {/* Quantity */}
-                      <div className="min-w-0">
-                        <DualUnitQuantityInput
-                          product={product}
-                          quantity={item.quantity}
-                          onChange={(newQuantity, dual) => {
-                            if (newQuantity <= 0) {
-                              handleRemoveItem(index);
-                              return;
-                            }
-                            const stockCap = Number(product?.inventory?.currentStock ?? 0);
-                            if (newQuantity > stockCap && stockCap >= 0) {
-                              toast.warning(`Warning: Quantity ${newQuantity} exceeds available stock ${stockCap}`, { duration: 3000, icon: '⚠️' });
-                            }
-                            const ppb = getPiecesPerBox(product);
-                            const { boxes, pieces } = ppb && dual ? dual : (ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {});
-                            setFormData(prev => ({
-                              ...prev,
-                              items: prev.items.map((itm, i) =>
-                                i === index ? {
-                                  ...itm,
-                                  quantity: newQuantity,
-                                  ...(ppb && { boxes, pieces }),
-                                  total: newQuantity * itm.unitPrice
-                                } : itm
-                              )
-                            }));
-                          }}
-                          min={1}
-                          max={undefined}
-                          stockPiecesForRemaining={product?.inventory?.currentStock ?? 0}
-
-                          showBoxInput={!dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
-                          showPiecesInput={dualUnitShowPiecesInputEnabled}
-                          showPiecesUnitLabel={false}
-                          inputClassName="input text-center h-8"
-                          compact={hasDualUnit(product)}
-                        />
-                      </div>
-
-                      {/* Purchase Price (Cost) - 1 column (conditional) - Between Quantity and Rate */}
-                      {showCostPrice && canViewCostPrice && (
-                        <div className="min-w-0">
-                          <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-8 flex items-center justify-center" title={lastPurchasePrices[item.product?.toString()] !== undefined ? 'Last Purchase Price' : 'Product Cost (from pricing)'}>
-                            {lastPurchasePrices[item.product?.toString()] !== undefined
-                              ? `${Math.round(lastPurchasePrices[item.product?.toString()])}`
-                              : (product?.pricing?.cost != null && product?.pricing?.cost !== '')
-                                ? `${Math.round(Number(product.pricing.cost))}`
-                                : 'N/A'}
+                            {index + 1}
                           </span>
                         </div>
-                      )}
 
-                      {/* Rate - 1 column */}
-                      <div className="min-w-0">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={item.unitPrice}
-                          onChange={(e) => {
-                            const newPrice = parseFloat(e.target.value) || 0;
-                            const costPrice = lastPurchasePrices[item.product?.toString()];
-
-                            // Check if new price is below cost (always check, regardless of showCostPrice)
-                            if (costPrice !== undefined && newPrice < costPrice) {
-                              const loss = costPrice - newPrice;
-                              const lossPercent = ((loss / costPrice) * 100).toFixed(1);
-                              const shouldProceed = window.confirm(
-                                `⚠️ WARNING: Sale price (${newPrice}) is below cost price (${Math.round(costPrice)}).\n\n` +
-                                `Loss per unit: ${Math.round(loss)} (${lossPercent}%)\n` +
-                                `Total loss: ${Math.round(loss * item.quantity)}\n\n` +
-                                `Do you want to proceed?`
-                              );
-                              if (!shouldProceed) {
-                                return;
-                              }
-                            }
-
-                            setFormData(prev => ({
-                              ...prev,
-                              items: prev.items.map((itm, i) =>
-                                i === index ? { ...itm, unitPrice: newPrice, total: itm.quantity * newPrice } : itm
-                              )
-                            }));
-                          }}
-                          onFocus={(e) => e.target.select()}
-                          className={`input text-center h-8 ${lastPurchasePrices[item.product?.toString()] !== undefined &&
-                            item.unitPrice < lastPurchasePrices[item.product?.toString()]
-                            ? 'border-red-500 bg-red-50'
-                            : ''
-                            }`}
-                          title={
-                            lastPurchasePrices[item.product?.toString()] !== undefined &&
-                              item.unitPrice < lastPurchasePrices[item.product?.toString()]
-                              ? `⚠️ WARNING: Sale price (${Math.round(item.unitPrice)}) is below cost price (${Math.round(lastPurchasePrices[item.product?.toString()])})`
-                              : ''
-                          }
-                          min="0"
-                        />
-                      </div>
-
-                      {/* Total - 1 column */}
-                      <div className="min-w-0">
-                        <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
-                          {Math.round(totalPrice)}
-                        </span>
-                      </div>
-
-                      {/* Delete Button - 1 column */}
-                      <div className="min-w-0 flex justify-end">
-                        <LoadingButton
-                          onClick={() => handleRemoveItem(index)}
-                          isLoading={isRemovingFromCart[formData.items[index]?.product?.toString() || index]}
-                          variant="destructive"
-                          size="sm"
-                          className="h-8 w-8 p-0 flex-shrink-0"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </LoadingButton>
-                      </div>
-                    </div>
-
-                    {/* Mobile Card Layout */}
-                    <div className="md:hidden p-3 bg-white border border-gray-200 rounded-lg space-y-3">
-                      {/* Product Name and Delete Button Row */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                        {/* Product Name - reduced width to keep row alignment */}
+                        <div className="min-w-0 flex items-center h-8 gap-2">
                           {product?.imageUrl && showProductImages && (
                             <div
-                              className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                              className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
                               onClick={() => setPreviewImageProduct(product)}
                               title="Click to view full size"
                             >
@@ -2532,52 +2293,107 @@ const SalesOrders = ({ tabId }) => {
                               </div>
                             </div>
                           )}
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span
-                                className={`text-xs font-semibold px-2 py-0.5 rounded transition-colors duration-300 ${
-                                  serialHighlight
-                                    ? 'bg-green-100 text-green-800 border border-green-400 ring-2 ring-green-300/80'
-                                    : 'text-gray-500 bg-gray-100'
-                                }`}
-                              >
-                                #{index + 1}
-                              </span>
-                            </div>
-                            <h5 className="font-medium text-sm text-gray-900 truncate">
-                              {safeRender(product?.name) || 'Unknown Product'}
-                            </h5>
-                            {isLowStock && <span className="text-yellow-600 text-xs text-nowrap">⚠️ Low Stock</span>}
-                          </div>
-                          {lastPurchasePrices[item.product?.toString()] !== undefined &&
-                            item.unitPrice < lastPurchasePrices[item.product?.toString()] && (
-                              <span className="text-xs ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
-                                ⚠️ Below Cost
+                          <div className="flex flex-col min-w-0 w-full">
+                            <span className="font-medium text-sm truncate min-w-0">
+                              {product?.isVariant
+                                ? (safeRender(product?.displayName || product?.variantName || product?.name) || 'Unknown Variant')
+                                : (safeRender(product?.name) || 'Unknown Product')}
+                              {isLowStock && <span className="text-yellow-600 text-xs ml-2">⚠️ Low Stock</span>}
+                              {lastPurchasePrices[item.product?.toString()] !== undefined &&
+                                item.unitPrice < lastPurchasePrices[item.product?.toString()] && (
+                                  <span className="text-xs ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold" title={`Sale price below cost! Loss: ${Math.round(lastPurchasePrices[item.product?.toString()] - item.unitPrice)} per unit`}>
+                                    ⚠️ Below Cost
+                                  </span>
+                                )}
+                              {isLastPricesApplied && priceStatus[item.product?.toString()] && (
+                                <span className={`text-xs ml-2 px-1.5 py-0.5 rounded ${priceStatus[item.product?.toString()] === 'updated'
+                                  ? 'bg-green-100 text-green-700'
+                                  : priceStatus[item.product?.toString()] === 'unchanged'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-yellow-100 text-yellow-700'
+                                  }`}>
+                                  {priceStatus[item.product?.toString()] === 'updated'
+                                    ? 'Updated'
+                                    : priceStatus[item.product?.toString()] === 'unchanged'
+                                      ? 'Same Price'
+                                      : 'Not in Last Order'}
+                                </span>
+                              )}
+                            </span>
+                            {product?.isVariant && (
+                              <span className="text-xs text-gray-500">
+                                {product.variantType}: {product.variantValue}
                               </span>
                             )}
+                          </div>
                         </div>
-                        <LoadingButton
-                          onClick={() => handleRemoveItem(index)}
-                          isLoading={isRemovingFromCart[formData.items[index]?.product?.toString() || index]}
-                          variant="destructive"
-                          size="sm"
-                          className="flex-shrink-0"
-                          title="Remove Item"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </LoadingButton>
-                      </div>
 
-                      {/* Details Grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Stock</p>
-                          <p className="text-sm font-medium text-gray-900">
+                        {/* Box column */}
+                        {dualUnitShowBoxInputEnabled && (
+                          <div className="min-w-0">
+                            {hasDualUnit(product) ? (
+                              (() => {
+                                const ppb = getPiecesPerBox(product);
+                                const boxVal =
+                                  item.boxes != null
+                                    ? item.boxes
+                                    : ppb
+                                      ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
+                                      : 0;
+                                return (
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={item.quantity === 0 ? '' : boxVal}
+                                    onChange={(e) => {
+                                      const nextBoxes = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                      const piecesPerBox = getPiecesPerBox(product) || 1;
+                                      const currentPieces = item.pieces != null
+                                        ? Math.max(0, Number(item.pieces) || 0)
+                                        : piecesToBoxesAndPieces(item.quantity, piecesPerBox).pieces;
+                                      const rawQty = nextBoxes * piecesPerBox + currentPieces;
+                                      const stockCap = Number(product?.inventory?.currentStock ?? 0);
+                                      if (rawQty > stockCap && stockCap >= 0) {
+                                        toast.warning(`Warning: Quantity ${rawQty} exceeds available stock ${stockCap}`, { duration: 3000, icon: '⚠️' });
+                                      }
+                                      const nextQty = rawQty;
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        items: prev.items.map((itm, i) => (
+                                          i === index
+                                            ? { ...itm, boxes: nextBoxes, quantity: nextQty, total: nextQty * itm.unitPrice }
+                                            : itm
+                                        ))
+                                      }));
+                                    }}
+                                    onFocus={(e) => e.target.select()}
+                                    className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(product?.inventory?.currentStock || 0) === 0
+                                      ? 'text-red-700 bg-red-50 border-red-200'
+                                      : (product?.inventory?.currentStock || 0) <= (product?.inventory?.reorderPoint || 0)
+                                        ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                                        : 'text-gray-700 bg-gray-100 border-gray-200'
+                                      }`}
+                                    title="Full boxes"
+                                  />
+                                );
+                              })()
+                            ) : (
+                              <span className="text-sm font-semibold text-gray-400 bg-gray-50 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
+                                —
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Stock - 1 column */}
+                        <div className="min-w-0">
+                          <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
                             {product?.inventory?.currentStock || 0}
-                          </p>
+                          </span>
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Quantity</p>
+
+                        {/* Quantity */}
+                        <div className="min-w-0">
                           <DualUnitQuantityInput
                             product={product}
                             quantity={item.quantity}
@@ -2590,36 +2406,56 @@ const SalesOrders = ({ tabId }) => {
                               if (newQuantity > stockCap && stockCap >= 0) {
                                 toast.warning(`Warning: Quantity ${newQuantity} exceeds available stock ${stockCap}`, { duration: 3000, icon: '⚠️' });
                               }
+                              const ppb = getPiecesPerBox(product);
+                              const { boxes, pieces } = ppb && dual ? dual : (ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {});
                               setFormData(prev => ({
                                 ...prev,
                                 items: prev.items.map((itm, i) =>
-                                  i === index
-                                    ? { ...itm, quantity: newQuantity, ...(dual || {}), total: newQuantity * itm.unitPrice }
-                                    : itm
+                                  i === index ? {
+                                    ...itm,
+                                    quantity: newQuantity,
+                                    ...(ppb && { boxes, pieces }),
+                                    total: newQuantity * itm.unitPrice
+                                  } : itm
                                 )
                               }));
                             }}
                             min={1}
                             max={undefined}
                             stockPiecesForRemaining={product?.inventory?.currentStock ?? 0}
-                            showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
-                            showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
+
+                            showBoxInput={!dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
                             showPiecesInput={dualUnitShowPiecesInputEnabled}
                             showPiecesUnitLabel={false}
-                            inputClassName="input text-center h-8 text-sm w-full"
+                            inputClassName="input text-center h-8"
+                            compact={hasDualUnit(product)}
                           />
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Rate</p>
+
+                        {/* Purchase Price (Cost) - 1 column (conditional) - Between Quantity and Rate */}
+                        {showCostPrice && canViewCostPrice && (
+                          <div className="min-w-0">
+                            <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-8 flex items-center justify-center" title={lastPurchasePrices[item.product?.toString()] !== undefined ? 'Last Purchase Price' : 'Product Cost (from pricing)'}>
+                              {lastPurchasePrices[item.product?.toString()] !== undefined
+                                ? `${Math.round(lastPurchasePrices[item.product?.toString()])}`
+                                : (product?.pricing?.cost != null && product?.pricing?.cost !== '')
+                                  ? `${Math.round(Number(product.pricing.cost))}`
+                                  : 'N/A'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Rate - 1 column */}
+                        <div className="min-w-0">
                           <input
                             type="number"
                             step="0.01"
-                            autoComplete="off"
                             value={item.unitPrice}
                             onChange={(e) => {
                               const newPrice = parseFloat(e.target.value) || 0;
                               const costPrice = lastPurchasePrices[item.product?.toString()];
 
+                              // Check if new price is below cost (always check, regardless of showCostPrice)
                               if (costPrice !== undefined && newPrice < costPrice) {
                                 const loss = costPrice - newPrice;
                                 const lossPercent = ((loss / costPrice) * 100).toFixed(1);
@@ -2642,39 +2478,201 @@ const SalesOrders = ({ tabId }) => {
                               }));
                             }}
                             onFocus={(e) => e.target.select()}
-                            className={`input text-center h-8 text-sm w-full ${lastPurchasePrices[item.product?.toString()] !== undefined &&
+                            className={`input text-center h-8 ${lastPurchasePrices[item.product?.toString()] !== undefined &&
                               item.unitPrice < lastPurchasePrices[item.product?.toString()]
                               ? 'border-red-500 bg-red-50'
                               : ''
                               }`}
+                            title={
+                              lastPurchasePrices[item.product?.toString()] !== undefined &&
+                                item.unitPrice < lastPurchasePrices[item.product?.toString()]
+                                ? `⚠️ WARNING: Sale price (${Math.round(item.unitPrice)}) is below cost price (${Math.round(lastPurchasePrices[item.product?.toString()])})`
+                                : ''
+                            }
                             min="0"
                           />
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Total</p>
-                          <p className="text-sm font-semibold text-gray-900 bg-gray-100 px-2 py-1 rounded border border-gray-200 text-center h-8 flex items-center justify-center">
+
+                        {/* Total - 1 column */}
+                        <div className="min-w-0">
+                          <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
                             {Math.round(totalPrice)}
-                          </p>
+                          </span>
+                        </div>
+
+                        {/* Delete Button - 1 column */}
+                        <div className="min-w-0 flex justify-end">
+                          <LoadingButton
+                            onClick={() => handleRemoveItem(index)}
+                            isLoading={isRemovingFromCart[formData.items[index]?.product?.toString() || index]}
+                            variant="destructive"
+                            size="sm"
+                            className="h-8 w-8 p-0 flex-shrink-0"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </LoadingButton>
                         </div>
                       </div>
 
-                      {/* Cost Price (if shown) */}
-                      {showCostPrice && canViewCostPrice && (
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">{lastPurchasePrices[item.product?.toString()] !== undefined ? 'Last Purchase Price' : 'Cost'}</p>
-                          <p className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200">
-                            {lastPurchasePrices[item.product?.toString()] !== undefined
-                              ? `${Math.round(lastPurchasePrices[item.product?.toString()])}`
-                              : (product?.pricing?.cost != null && product?.pricing?.cost !== '')
-                                ? `${Math.round(Number(product.pricing.cost))}`
-                                : 'N/A'}
-                          </p>
+                      {/* Mobile Card Layout */}
+                      <div className="md:hidden p-3 bg-white border border-gray-200 rounded-lg space-y-3">
+                        {/* Product Name and Delete Button Row */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0 flex items-center gap-2">
+                            {product?.imageUrl && showProductImages && (
+                              <div
+                                className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                                onClick={() => setPreviewImageProduct(product)}
+                                title="Click to view full size"
+                              >
+                                <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                                  <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span
+                                  className={`text-xs font-semibold px-2 py-0.5 rounded transition-colors duration-300 ${serialHighlight
+                                      ? 'bg-green-100 text-green-800 border border-green-400 ring-2 ring-green-300/80'
+                                      : 'text-gray-500 bg-gray-100'
+                                    }`}
+                                >
+                                  #{index + 1}
+                                </span>
+                              </div>
+                              <h5 className="font-medium text-sm text-gray-900 truncate">
+                                {safeRender(product?.name) || 'Unknown Product'}
+                              </h5>
+                              {isLowStock && <span className="text-yellow-600 text-xs text-nowrap">⚠️ Low Stock</span>}
+                            </div>
+                            {lastPurchasePrices[item.product?.toString()] !== undefined &&
+                              item.unitPrice < lastPurchasePrices[item.product?.toString()] && (
+                                <span className="text-xs ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
+                                  ⚠️ Below Cost
+                                </span>
+                              )}
+                          </div>
+                          <LoadingButton
+                            onClick={() => handleRemoveItem(index)}
+                            isLoading={isRemovingFromCart[formData.items[index]?.product?.toString() || index]}
+                            variant="destructive"
+                            size="sm"
+                            className="flex-shrink-0"
+                            title="Remove Item"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </LoadingButton>
                         </div>
-                      )}
+
+                        {/* Details Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Stock</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {product?.inventory?.currentStock || 0}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Quantity</p>
+                            <DualUnitQuantityInput
+                              product={product}
+                              quantity={item.quantity}
+                              onChange={(newQuantity, dual) => {
+                                if (newQuantity <= 0) {
+                                  handleRemoveItem(index);
+                                  return;
+                                }
+                                const stockCap = Number(product?.inventory?.currentStock ?? 0);
+                                if (newQuantity > stockCap && stockCap >= 0) {
+                                  toast.warning(`Warning: Quantity ${newQuantity} exceeds available stock ${stockCap}`, { duration: 3000, icon: '⚠️' });
+                                }
+                                setFormData(prev => ({
+                                  ...prev,
+                                  items: prev.items.map((itm, i) =>
+                                    i === index
+                                      ? { ...itm, quantity: newQuantity, ...(dual || {}), total: newQuantity * itm.unitPrice }
+                                      : itm
+                                  )
+                                }));
+                              }}
+                              min={1}
+                              max={undefined}
+                              stockPiecesForRemaining={product?.inventory?.currentStock ?? 0}
+                              showRemainingAfterSale={showRemainingStockAfterSaleEnabled}
+                              showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
+                              showPiecesInput={dualUnitShowPiecesInputEnabled}
+                              showPiecesUnitLabel={false}
+                              inputClassName="input text-center h-8 text-sm w-full"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Rate</p>
+                            <input
+                              type="number"
+                              step="0.01"
+                              autoComplete="off"
+                              value={item.unitPrice}
+                              onChange={(e) => {
+                                const newPrice = parseFloat(e.target.value) || 0;
+                                const costPrice = lastPurchasePrices[item.product?.toString()];
+
+                                if (costPrice !== undefined && newPrice < costPrice) {
+                                  const loss = costPrice - newPrice;
+                                  const lossPercent = ((loss / costPrice) * 100).toFixed(1);
+                                  const shouldProceed = window.confirm(
+                                    `⚠️ WARNING: Sale price (${newPrice}) is below cost price (${Math.round(costPrice)}).\n\n` +
+                                    `Loss per unit: ${Math.round(loss)} (${lossPercent}%)\n` +
+                                    `Total loss: ${Math.round(loss * item.quantity)}\n\n` +
+                                    `Do you want to proceed?`
+                                  );
+                                  if (!shouldProceed) {
+                                    return;
+                                  }
+                                }
+
+                                setFormData(prev => ({
+                                  ...prev,
+                                  items: prev.items.map((itm, i) =>
+                                    i === index ? { ...itm, unitPrice: newPrice, total: itm.quantity * newPrice } : itm
+                                  )
+                                }));
+                              }}
+                              onFocus={(e) => e.target.select()}
+                              className={`input text-center h-8 text-sm w-full ${lastPurchasePrices[item.product?.toString()] !== undefined &&
+                                item.unitPrice < lastPurchasePrices[item.product?.toString()]
+                                ? 'border-red-500 bg-red-50'
+                                : ''
+                                }`}
+                              min="0"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Total</p>
+                            <p className="text-sm font-semibold text-gray-900 bg-gray-100 px-2 py-1 rounded border border-gray-200 text-center h-8 flex items-center justify-center">
+                              {Math.round(totalPrice)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Cost Price (if shown) */}
+                        {showCostPrice && canViewCostPrice && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">{lastPurchasePrices[item.product?.toString()] !== undefined ? 'Last Purchase Price' : 'Cost'}</p>
+                            <p className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200">
+                              {lastPurchasePrices[item.product?.toString()] !== undefined
+                                ? `${Math.round(lastPurchasePrices[item.product?.toString()])}`
+                                : (product?.pricing?.cost != null && product?.pricing?.cost !== '')
+                                  ? `${Math.round(Number(product.pricing.cost))}`
+                                  : 'N/A'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -3098,171 +3096,171 @@ const SalesOrders = ({ tabId }) => {
             </div>
           ) : (
             <>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Order #
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Customer
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {salesOrders.map((order, index) => (
-                    <tr key={order?.id ?? order?._id ?? `so-${index}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(order?.order_date ?? order?.orderDate ?? order?.createdAt ?? order?.created_at)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {order?.so_number ?? order?.soNumber ?? order?.invoiceNumber ?? '—'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {order?.customer?.businessName ?? order?.customer?.business_name ?? order?.customer?.displayName ?? order?.customer?.name ?? 'Walk-in'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
-                        {order?.order_type ?? order?.orderType ?? '—'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center space-x-1">
-                          {getStatusIcon(order?.status)}
-                          <span className="capitalize">
-                            {order?.status === 'draft' ? 'Pending' : (order?.status ?? '').replace(/_/g, ' ')}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {(() => {
-                          const items = Array.isArray(order?.items) ? order.items : [];
-                          const fromItems = items.length > 0
-                            ? items.reduce((sum, i) => sum + (Number(i.totalPrice ?? i.total ?? 0) || (Number(i.quantity || 0) * Number(i.unitPrice ?? i.unit_price ?? 0))), 0)
-                            : null;
-                          const stored = order?.total ?? order?.pricing?.total ?? 0;
-                          return Math.round(fromItems != null && fromItems > 0 ? fromItems : stored);
-                        })()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => {
-                              setNotesEntity({ type: 'SalesOrder', id: order?.id ?? order?._id, name: order?.so_number ?? order?.soNumber });
-                              setShowNotes(true);
-                            }}
-                            className="text-green-600 hover:text-green-900"
-                            title="Notes"
-                          >
-                            <MessageSquare className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleView(order)}
-                            className="text-blue-600 hover:text-blue-900"
-                            title="View"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handlePrint(order)}
-                            className="text-gray-600 hover:text-gray-900"
-                            title="Print"
-                          >
-                            <Printer className="h-4 w-4" />
-                          </button>
-                          <ExcelExportButton
-                            getData={() => {
-                              const payload = getInvoicePdfPayload(order, companySettings, 'Sales Order', 'Customer');
-                              return {
-                                ...payload,
-                                filename: `Sales_Order_${order.soNumber || order.orderNumber || order._id}.xlsx`
-                              };
-                            }}
-                            label=""
-                            className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-green-600 hover:text-green-800 px-1 py-1"
-                          />
-                          <PdfExportButton
-                            getData={() => getInvoicePdfPayload(order, companySettings, 'Sales Order', 'Customer')}
-                            label=""
-                            className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-red-600 hover:text-red-800 px-1 py-1"
-                          />
-                          {order.status === 'draft' && (
-                            <>
-                              <button
-                                onClick={() => handleEdit(order)}
-                                className="text-indigo-600 hover:text-indigo-900"
-                                title="Edit"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </button>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Order #
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Customer
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Total
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {salesOrders.map((order, index) => (
+                      <tr key={order?.id ?? order?._id ?? `so-${index}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatDate(order?.order_date ?? order?.orderDate ?? order?.createdAt ?? order?.created_at)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {order?.so_number ?? order?.soNumber ?? order?.invoiceNumber ?? '—'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {order?.customer?.businessName ?? order?.customer?.business_name ?? order?.customer?.displayName ?? order?.customer?.name ?? 'Walk-in'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
+                          {order?.order_type ?? order?.orderType ?? '—'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center space-x-1">
+                            {getStatusIcon(order?.status)}
+                            <span className="capitalize">
+                              {order?.status === 'draft' ? 'Pending' : (order?.status ?? '').replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {(() => {
+                            const items = Array.isArray(order?.items) ? order.items : [];
+                            const fromItems = items.length > 0
+                              ? items.reduce((sum, i) => sum + (Number(i.totalPrice ?? i.total ?? 0) || (Number(i.quantity || 0) * Number(i.unitPrice ?? i.unit_price ?? 0))), 0)
+                              : null;
+                            const stored = order?.total ?? order?.pricing?.total ?? 0;
+                            return Math.round(fromItems != null && fromItems > 0 ? fromItems : stored);
+                          })()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                setNotesEntity({ type: 'SalesOrder', id: order?.id ?? order?._id, name: order?.so_number ?? order?.soNumber });
+                                setShowNotes(true);
+                              }}
+                              className="text-green-600 hover:text-green-900"
+                              title="Notes"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleView(order)}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="View"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handlePrint(order)}
+                              className="text-gray-600 hover:text-gray-900"
+                              title="Print"
+                            >
+                              <Printer className="h-4 w-4" />
+                            </button>
+                            <ExcelExportButton
+                              getData={() => {
+                                const payload = getInvoicePdfPayload(order, companySettings, 'Sales Order', 'Customer');
+                                return {
+                                  ...payload,
+                                  filename: `Sales_Order_${order.soNumber || order.orderNumber || order._id}.xlsx`
+                                };
+                              }}
+                              label=""
+                              className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-green-600 hover:text-green-800 px-1 py-1"
+                            />
+                            <PdfExportButton
+                              getData={() => getInvoicePdfPayload(order, companySettings, 'Sales Order', 'Customer')}
+                              label=""
+                              className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-red-600 hover:text-red-800 px-1 py-1"
+                            />
+                            {order.status === 'draft' && (
+                              <>
+                                <button
+                                  onClick={() => handleEdit(order)}
+                                  className="text-indigo-600 hover:text-indigo-900"
+                                  title="Edit"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <LoadingButton
+                                  onClick={() => handleConfirm(order?.id ?? order?._id)}
+                                  isLoading={confirming}
+                                  size="icon-sm"
+                                  iconOnly
+                                  variant="ghost"
+                                  className="text-green-600 hover:text-green-900 shrink-0"
+                                  title="Confirm & create sales invoice (this becomes a Sale)"
+                                  disabled={confirming}
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </LoadingButton>
+                                <LoadingButton
+                                  onClick={() => handleCancel(order?.id ?? order?._id)}
+                                  isLoading={cancelling}
+                                  size="icon-sm"
+                                  iconOnly
+                                  variant="ghost"
+                                  className="text-red-600 hover:text-red-900 shrink-0"
+                                  title="Cancel Order"
+                                  disabled={cancelling}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </LoadingButton>
+                              </>
+                            )}
+                            {order.status === 'draft' && (
                               <LoadingButton
-                                onClick={() => handleConfirm(order?.id ?? order?._id)}
-                                isLoading={confirming}
-                                size="icon-sm"
-                                iconOnly
-                                variant="ghost"
-                                className="text-green-600 hover:text-green-900 shrink-0"
-                                title="Confirm & create sales invoice (this becomes a Sale)"
-                                disabled={confirming}
-                              >
-                                <CheckCircle className="h-4 w-4" />
-                              </LoadingButton>
-                              <LoadingButton
-                                onClick={() => handleCancel(order?.id ?? order?._id)}
-                                isLoading={cancelling}
+                                onClick={() => handleDelete(order?.id ?? order?._id)}
+                                isLoading={deleting}
                                 size="icon-sm"
                                 iconOnly
                                 variant="ghost"
                                 className="text-red-600 hover:text-red-900 shrink-0"
-                                title="Cancel Order"
-                                disabled={cancelling}
+                                title="Delete"
+                                disabled={deleting}
                               >
-                                <XCircle className="h-4 w-4" />
+                                <Trash2 className="h-4 w-4" />
                               </LoadingButton>
-                            </>
-                          )}
-                          {order.status === 'draft' && (
-                            <LoadingButton
-                              onClick={() => handleDelete(order?.id ?? order?._id)}
-                              isLoading={deleting}
-                              size="icon-sm"
-                              iconOnly
-                              variant="ghost"
-                              className="text-red-600 hover:text-red-900 shrink-0"
-                              title="Delete"
-                              disabled={deleting}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </LoadingButton>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <PaginationControls
-              page={Number(paginationInfo.current ?? pagination.page) || 1}
-              totalPages={Math.max(1, Number(paginationInfo.pages) || 1)}
-              onPageChange={(p) => setPagination((prev) => ({ ...prev, page: p }))}
-              totalItems={paginationInfo.total}
-              limit={pagination.limit}
-            />
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationControls
+                page={Number(paginationInfo.current ?? pagination.page) || 1}
+                totalPages={Math.max(1, Number(paginationInfo.pages) || 1)}
+                onPageChange={(p) => setPagination((prev) => ({ ...prev, page: p }))}
+                totalItems={paginationInfo.total}
+                limit={pagination.limit}
+              />
             </>
           )}
         </div>

@@ -93,26 +93,26 @@ export const BalanceSheetStatement = () => {
   const inventoryValue = Number(assets?.currentAssets?.inventory?.total ?? assets?.currentAssets?.inventory ?? 0);
   const receivableValue = Number(
     assets?.currentAssets?.accountsReceivable?.netReceivables ??
-      assets?.currentAssets?.accountsReceivable?.total ??
-      assets?.currentAssets?.accountsReceivable ??
-      0
+    assets?.currentAssets?.accountsReceivable?.total ??
+    assets?.currentAssets?.accountsReceivable ??
+    0
   );
 
   const equipmentValue = Number(
     assets?.fixedAssets?.propertyPlantEquipment?.equipment ??
-      assets?.fixedAssets?.propertyPlantEquipment?.total ??
-      assets?.fixedAssets?.propertyPlantEquipment ??
-      0
+    assets?.fixedAssets?.propertyPlantEquipment?.total ??
+    assets?.fixedAssets?.propertyPlantEquipment ??
+    0
   );
   const furnitureValue = Number(
     assets?.fixedAssets?.propertyPlantEquipment?.furniture ??
-      assets?.fixedAssets?.furniture ??
-      0
+    assets?.fixedAssets?.furniture ??
+    0
   );
 
   const totalCurrentAssets = Number(
     assets?.currentAssets?.totalCurrentAssets ??
-      cashValue + bankValue + inventoryValue + receivableValue
+    cashValue + bankValue + inventoryValue + receivableValue
   );
   const totalFixedAssets = Number(
     assets?.fixedAssets?.totalFixedAssets ?? equipmentValue + furnitureValue
@@ -120,28 +120,28 @@ export const BalanceSheetStatement = () => {
 
   const accountsPayableValue = Number(
     liabilities?.currentLiabilities?.accountsPayable?.total ??
-      liabilities?.currentLiabilities?.accountsPayable ??
-      0
+    liabilities?.currentLiabilities?.accountsPayable ??
+    0
   );
   const loansValue = Number(
     liabilities?.longTermLiabilities?.longTermDebt?.total ??
-      liabilities?.currentLiabilities?.shortTermDebt?.total ??
-      liabilities?.longTermLiabilities?.longTermDebt ??
-      liabilities?.currentLiabilities?.shortTermDebt ??
-      0
+    liabilities?.currentLiabilities?.shortTermDebt?.total ??
+    liabilities?.longTermLiabilities?.longTermDebt ??
+    liabilities?.currentLiabilities?.shortTermDebt ??
+    0
   );
 
   const ownerCapitalValue = Number(
     equity?.ownerCapital ??
-      equity?.contributedCapital?.total ??
-      equity?.totalEquity ??
-      0
+    equity?.contributedCapital?.total ??
+    equity?.totalEquity ??
+    0
   );
   const retainedEarningsValue = Number(
     equity?.retainedEarnings?.endingRetainedEarnings ??
-      equity?.retainedEarnings?.currentPeriodEarnings ??
-      equity?.retainedEarnings?.total ??
-      0
+    equity?.retainedEarnings?.currentPeriodEarnings ??
+    equity?.retainedEarnings?.total ??
+    0
   );
 
   return (

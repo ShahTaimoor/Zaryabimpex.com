@@ -102,7 +102,7 @@ const PurchaseItem = ({
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0 flex items-center gap-2">
             {product?.imageUrl && showProductImages && (
-              <div 
+              <div
                 className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
                 onClick={() => setPreviewImageProduct(product)}
                 title="Click to view full size"
@@ -119,19 +119,19 @@ const PurchaseItem = ({
                 {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low Stock</span>}
               </div>
               <p className="font-medium text-sm truncate">{displayName}</p>
-            {product.isVariant && (
-              <p className="text-xs text-gray-500 mt-0.5">
-                {product.variantType}: {product.variantValue}
-              </p>
-            )}
-            {(() => {
-              const b = (product.barcode ?? '').toString().trim();
-              if (b) return <p className="text-xs text-gray-600 font-mono mt-0.5">Barcode: {b}</p>;
-              const s = (product.sku ?? '').toString().trim();
-              if (s) return <p className="text-xs text-gray-600 font-mono mt-0.5">SKU: {s}</p>;
-              return null;
-            })()}
-          </div>
+              {product.isVariant && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {product.variantType}: {product.variantValue}
+                </p>
+              )}
+              {(() => {
+                const b = (product.barcode ?? '').toString().trim();
+                if (b) return <p className="text-xs text-gray-600 font-mono mt-0.5">Barcode: {b}</p>;
+                const s = (product.sku ?? '').toString().trim();
+                if (s) return <p className="text-xs text-gray-600 font-mono mt-0.5">SKU: {s}</p>;
+                return null;
+              })()}
+            </div>
           </div>
           <Button
             onClick={() => onRemove(item.product?._id)}
@@ -209,19 +209,17 @@ const PurchaseItem = ({
       {/* Desktop Table Row — same column model as Sales (Box + Qty split when dual-unit) */}
       <div className={`hidden md:block py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
         <div
-          className={`grid gap-x-1 items-center ${
-            dualUnitShowBoxInputEnabled
+          className={`grid gap-x-1 items-center ${dualUnitShowBoxInputEnabled
               ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
               : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-          }`}
+            }`}
         >
           <div className="min-w-0 flex justify-start">
             <span
-              className={`text-sm font-medium px-0.5 py-1 rounded border block w-8 text-center h-8 flex items-center justify-center transition-colors duration-300 ${
-                highlightSerial
+              className={`text-sm font-medium px-0.5 py-1 rounded border block w-8 text-center h-8 flex items-center justify-center transition-colors duration-300 ${highlightSerial
                   ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
                   : 'text-gray-700 bg-gray-50 border-gray-200'
-              }`}
+                }`}
             >
               {index + 1}
             </span>
@@ -229,7 +227,7 @@ const PurchaseItem = ({
 
           <div className="min-w-0 flex items-center h-8 gap-2">
             {product?.imageUrl && showProductImages && (
-              <div 
+              <div
                 className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
                 onClick={() => setPreviewImageProduct(product)}
                 title="Click to view full size"
@@ -278,13 +276,12 @@ const PurchaseItem = ({
                       value={item.quantity === 0 ? '' : boxVal}
                       onChange={(e) => onUpdateCartBoxCount(item.product?._id, e.target.value)}
                       onFocus={(e) => e.target.select()}
-                      className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${
-                        (product.inventory?.currentStock || 0) === 0
+                      className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(product.inventory?.currentStock || 0) === 0
                           ? 'text-red-700 bg-red-50 border-red-200'
                           : (product.inventory?.currentStock || 0) <= (product.inventory?.reorderPoint || 0)
                             ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
                             : 'text-gray-700 bg-gray-100 border-gray-200'
-                      }`}
+                        }`}
                       title="Full boxes"
                     />
                   );
@@ -302,13 +299,12 @@ const PurchaseItem = ({
 
           <div className="min-w-0">
             <span
-              className={`text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center ${
-                (product.inventory?.currentStock || 0) === 0
+              className={`text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center ${(product.inventory?.currentStock || 0) === 0
                   ? 'text-red-700 bg-red-50 border-red-200'
                   : (product.inventory?.currentStock || 0) <= (product.inventory?.reorderPoint || 0)
                     ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
                     : 'text-gray-700 bg-gray-100 border-gray-200'
-              }`}
+                }`}
             >
               {hasDualUnit(product) ? formatStockDualLabel(currentStock, product) : currentStock}
             </span>
@@ -1329,11 +1325,10 @@ export const Purchase = ({ tabId, editData }) => {
           <CartItemsTableSection
             desktopHeader={(
               <CartTableHeader
-                className={`hidden md:grid gap-x-1 items-center pb-2 border-b border-gray-300 mb-2 ${
-                  dualUnitShowBoxInputEnabledPage
+                className={`hidden md:grid gap-x-1 items-center pb-2 border-b border-gray-300 mb-2 ${dualUnitShowBoxInputEnabledPage
                     ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
                     : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                }`}
+                  }`}
                 columns={[
                   { key: 'sno', label: 'S.NO', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-left' },
                   { key: 'product', label: 'Product' },
@@ -1355,27 +1350,27 @@ export const Purchase = ({ tabId, editData }) => {
                   : 'overflow-visible -mx-1 px-1'
               }
             >
-            {purchaseItems.map((item, index) => (
-              <div
-                key={item.product?._id ?? index}
-                ref={(node) => {
-                  if (node) purchaseCartLineElRefs.current.set(index, node);
-                  else purchaseCartLineElRefs.current.delete(index);
-                }}
-              >
-              <PurchaseItem
-                item={item}
-                index={index}
-                onUpdateQuantity={updateQuantity}
-                onUpdateCost={updateCost}
-                onRemove={removeFromPurchase}
-                onUpdateCartBoxCount={updateCartBoxCount}
-                showProductImages={showProductImages}
-                setPreviewImageProduct={setPreviewImageProduct}
-                highlightSerial={highlightedPurchaseLineIndex === index}
-              />
-              </div>
-            ))}
+              {purchaseItems.map((item, index) => (
+                <div
+                  key={item.product?._id ?? index}
+                  ref={(node) => {
+                    if (node) purchaseCartLineElRefs.current.set(index, node);
+                    else purchaseCartLineElRefs.current.delete(index);
+                  }}
+                >
+                  <PurchaseItem
+                    item={item}
+                    index={index}
+                    onUpdateQuantity={updateQuantity}
+                    onUpdateCost={updateCost}
+                    onRemove={removeFromPurchase}
+                    onUpdateCartBoxCount={updateCartBoxCount}
+                    showProductImages={showProductImages}
+                    setPreviewImageProduct={setPreviewImageProduct}
+                    highlightSerial={highlightedPurchaseLineIndex === index}
+                  />
+                </div>
+              ))}
             </div>
           </CartItemsTableSection>
         </ProductSelectionCartSection>
@@ -1383,14 +1378,12 @@ export const Purchase = ({ tabId, editData }) => {
         {/* Purchase Details + Order Summary — same two-column pattern as Sales */}
         {purchaseItems.length > 0 && (
           <div
-            className={`mt-4 grid w-full min-w-0 grid-cols-1 gap-4 lg:gap-5 lg:items-start ${
-              showPurchaseDetailsFields ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
-            }`}
+            className={`mt-4 grid w-full min-w-0 grid-cols-1 gap-4 lg:gap-5 lg:items-start ${showPurchaseDetailsFields ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
+              }`}
           >
             <OrderCheckoutCard
-              className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${
-                showPurchaseDetailsFields ? 'order-1' : 'order-2'
-              }`}
+              className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${showPurchaseDetailsFields ? 'order-1' : 'order-2'
+                }`}
             >
               <OrderDetailsSection
                 detailsTitle="Purchase Details"
@@ -1609,9 +1602,8 @@ export const Purchase = ({ tabId, editData }) => {
             </OrderCheckoutCard>
 
             <OrderCheckoutCard
-              className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${
-                showPurchaseDetailsFields ? 'order-2' : 'order-1'
-              }`}
+              className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${showPurchaseDetailsFields ? 'order-2' : 'order-1'
+                }`}
             >
               <OrderSummaryContent className="bg-none bg-slate-50">
                 <div className="space-y-2">
@@ -1642,9 +1634,8 @@ export const Purchase = ({ tabId, editData }) => {
                       <div className="flex items-center justify-between md:block">
                         <span className="text-sm font-medium text-muted-foreground">Previous Outstanding:</span>
                         <div
-                          className={`text-2xl font-semibold tabular-nums md:mt-1 ${
-                            supplierOutstanding > 0 ? 'text-red-600' : 'text-green-600'
-                          }`}
+                          className={`text-2xl font-semibold tabular-nums md:mt-1 ${supplierOutstanding > 0 ? 'text-red-600' : 'text-green-600'
+                            }`}
                         >
                           {supplierOutstanding.toFixed(2)}
                         </div>
@@ -1920,20 +1911,20 @@ export const Purchase = ({ tabId, editData }) => {
                       />
                       <span>Print labels after purchase</span>
                     </label>
-                )}
-                <LoadingButton
-                  onClick={handleProcessPurchase}
-                  isLoading={false}
-                  variant="default"
-                  size="lg"
-                  className="flex-2"
-                >
-                  <Truck className="h-4 w-4 mr-2" />
-                  {editData?.isEditMode ? 'Update Purchase Invoice' : 'Complete Purchase & Update Inventory'}
-                </LoadingButton>
-              </OrderCheckoutActions>
-            </OrderSummaryContent>
-          </OrderCheckoutCard>
+                  )}
+                  <LoadingButton
+                    onClick={handleProcessPurchase}
+                    isLoading={false}
+                    variant="default"
+                    size="lg"
+                    className="flex-2"
+                  >
+                    <Truck className="h-4 w-4 mr-2" />
+                    {editData?.isEditMode ? 'Update Purchase Invoice' : 'Complete Purchase & Update Inventory'}
+                  </LoadingButton>
+                </OrderCheckoutActions>
+              </OrderSummaryContent>
+            </OrderCheckoutCard>
           </div>
         )}
 
@@ -1977,9 +1968,9 @@ export const Purchase = ({ tabId, editData }) => {
         >
           <div className="flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden min-h-[300px] p-4">
             {previewImageProduct?.imageUrl ? (
-              <img 
-                src={previewImageProduct.imageUrl} 
-                alt="Product Preview" 
+              <img
+                src={previewImageProduct.imageUrl}
+                alt="Product Preview"
                 className="max-w-full max-h-[70vh] object-contain"
               />
             ) : (

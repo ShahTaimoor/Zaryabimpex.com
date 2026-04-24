@@ -381,11 +381,12 @@ router.post('/', [
       });
     }
 
-    const { customer, items, orderType, payment, notes, isTaxExempt, billDate, appliedDiscounts, discountAmount, subtotal, total, tax } = req.body;
+    const { clientSideId, customer, items, orderType, payment, notes, isTaxExempt, billDate, appliedDiscounts, discountAmount, subtotal, total, tax } = req.body;
 
-    // Use SalesService to create the sale (invoice); appliedDiscounts/discountAmount from POS discount codes
+    // Use SalesService to create the sale (invoice)
     const savedOrder = await salesService.createSale(
       {
+        clientSideId,
         customer,
         items,
         orderType,
@@ -415,6 +416,39 @@ router.post('/', [
     console.error('Create order error:', error);
     res.status(500).json({
       message: error.message || 'Server error. Please try again later.',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// @route   POST /api/sales/sync
+// @desc    Sync offline-created order
+// @access  Private
+router.post('/sync', [
+  auth,
+  requirePermission('create_orders'),
+  body('clientSideId').isUUID().withMessage('Valid clientSideId required for sync'),
+  body('items').isArray({ min: 1 }).withMessage('Order must have at least one item'),
+  body('payment.method').isIn(['cash', 'credit_card', 'debit_card', 'check', 'account', 'split', 'bank']).withMessage('Invalid payment method')
+], async (req, res) => {
+  const billStartTime = new Date();
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const savedOrder = await salesService.createSale(req.body, req.user);
+
+    res.status(201).json({
+      success: true,
+      message: 'Offline order synced successfully',
+      order: savedOrder
+    });
+  } catch (error) {
+    console.error('Sync order error:', error);
+    res.status(500).json({
+      message: error.message || 'Server error during sync',
       error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }

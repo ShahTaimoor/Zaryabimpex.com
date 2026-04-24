@@ -110,7 +110,7 @@ const MobileBottomNav = () => {
   if (visibleItems.length === 0) return null;
 
   return (
-    <div className="lg:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white/90 border-t border-gray-200 backdrop-blur-md pb-safe">
+    <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 border-t border-gray-200 backdrop-blur-md pb-safe">
       <div className="flex items-center justify-around px-2 py-2 max-w-screen-sm mx-auto h-16">
         {visibleItems.map((item) => {
           const IconComponent = Icons[item.icon] || Icons.Circle;

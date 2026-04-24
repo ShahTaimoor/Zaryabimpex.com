@@ -410,10 +410,10 @@ const AccountLedgerSummary = () => {
     const filteredRows = (allEntries || [])
       .filter((entry) => {
         const accCode = String(entry?.accountCode || '').trim();
-        
+
         // 1. PRIMARY MATCH: Account Code 1001 (General Bank GL)
         if (accCode === '1001') return true;
-        
+
         // 2. SECONDARY MATCH: Specific Bank Account Number if known
         if (selectedBank?.accountNumber && accCode === String(selectedBank.accountNumber).trim()) return true;
 
@@ -432,15 +432,15 @@ const AccountLedgerSummary = () => {
 
     return filteredRows
       .filter(entry => {
-        if (!selectedBankId) return false; 
+        if (!selectedBankId) return false;
         if (selectedBankId === ALL_BANKS_VALUE) return true;
-        
+
         // Match by explicit bankId (associated in back-end or through resolveBankId)
         if (String(entry.bankId) === String(selectedBankId)) return true;
 
         // If only one bank exists, all '1001' entries belong to it
         if ((banks || []).length === 1 && entry.accountCode === '1001') return true;
-        
+
         return false;
       })
       .sort((a, b) => {
@@ -462,10 +462,10 @@ const AccountLedgerSummary = () => {
 
         // Running balance = baseOpening + Sum(all debits up to now) - Sum(all credits up to now)
         const previousEntries = array.slice(0, index + 1);
-        const runningBalance = baseOpening + 
-          previousEntries.reduce((sum, e) => sum + (e.debitAmount || 0), 0) - 
+        const runningBalance = baseOpening +
+          previousEntries.reduce((sum, e) => sum + (e.debitAmount || 0), 0) -
           previousEntries.reduce((sum, e) => sum + (e.creditAmount || 0), 0);
-        
+
         return { ...entry, balance: runningBalance };
       });
   }, [allEntries, banks, selectedBankId, selectedBank, ALL_BANKS_VALUE, banksSummary, bankTotals]);
@@ -751,554 +751,722 @@ const AccountLedgerSummary = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 space-y-6">
-      {/* Header - professional card */}
-      <header className="bg-white border border-gray-200 rounded-lg shadow-sm px-6 py-5">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Account Ledger Summary</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Customer receivables and supplier payables</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              onClick={handleSyncPurchaseLedger}
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
-              disabled={isSyncPurchaseLoading}
-              title="Sync purchase invoices ledger for this date range"
-            >
-              <FileText className="h-4 w-4" />
-              {isSyncPurchaseLoading ? 'Syncing...' : 'Sync Purchase Ledger'}
-            </Button>
-            <Button
-              onClick={handleSyncSalesLedger}
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
-              disabled={isSyncLoading}
-              title="Sync sales ledger for edited invoices in this date range"
-            >
-              <FileText className="h-4 w-4" />
-              {isSyncLoading ? 'Syncing...' : 'Sync Sales Ledger'}
-            </Button>
-            <Button
-              onClick={handleBackfillSales}
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
-              disabled={isBackfillLoading}
-              title="Post missing sales to ledger for the selected date range"
-            >
-              <FileText className="h-4 w-4" />
-              {isBackfillLoading ? 'Backfilling...' : 'Backfill Sales'}
-            </Button>
-            <Button
-              onClick={handlePrint}
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
-              disabled={!selectedCustomerId && !selectedSupplierId}
-              title={!selectedCustomerId && !selectedSupplierId ? 'Select a customer or supplier to print' : 'Print ledger summary'}
-            >
-              <Printer className="h-4 w-4" />
-              Print
-            </Button>
+        {/* Header - professional card */}
+        <header className="bg-white border border-gray-200 rounded-lg shadow-sm px-6 py-5">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Account Ledger Summary</h1>
+              <p className="text-sm text-gray-500 mt-0.5">Customer receivables and supplier payables</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={handleSyncPurchaseLedger}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
+                disabled={isSyncPurchaseLoading}
+                title="Sync purchase invoices ledger for this date range"
+              >
+                <FileText className="h-4 w-4" />
+                {isSyncPurchaseLoading ? 'Syncing...' : 'Sync Purchase Ledger'}
+              </Button>
+              <Button
+                onClick={handleSyncSalesLedger}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
+                disabled={isSyncLoading}
+                title="Sync sales ledger for edited invoices in this date range"
+              >
+                <FileText className="h-4 w-4" />
+                {isSyncLoading ? 'Syncing...' : 'Sync Sales Ledger'}
+              </Button>
+              <Button
+                onClick={handleBackfillSales}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
+                disabled={isBackfillLoading}
+                title="Post missing sales to ledger for the selected date range"
+              >
+                <FileText className="h-4 w-4" />
+                {isBackfillLoading ? 'Backfilling...' : 'Backfill Sales'}
+              </Button>
+              <Button
+                onClick={handlePrint}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
+                disabled={!selectedCustomerId && !selectedSupplierId}
+                title={!selectedCustomerId && !selectedSupplierId ? 'Select a customer or supplier to print' : 'Print ledger summary'}
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </Button>
 
-          </div>
-        </div>
-      </header>
-
-      {/* Filters - clean card */}
-      <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
-        <h2 className="text-sm font-medium text-gray-700 mb-4 uppercase tracking-wide">Filters</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {/* Customer Dropdown */}
-          <div className="relative" ref={customerDropdownRef}>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Customer</label>
-            <div className="relative">
-              <Input
-                type="text"
-                placeholder="Search or select..."
-                value={customerSearchQuery}
-                onChange={(e) => {
-                  setCustomerSearchQuery(e.target.value);
-                  setShowCustomerDropdown(true);
-                }}
-                onFocus={() => setShowCustomerDropdown(true)}
-                className="w-full h-9 border-gray-300 text-sm"
-              />
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-              {showCustomerDropdown && filteredCustomers.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto">
-                  {filteredCustomers.map((customer) => {
-                    const businessName = customer.businessName || customer.business_name || customer.companyName || customer.company_name || '';
-                    const displayName = businessName || customer.name || 'Unknown Customer';
-                    return (
-                      <button
-                        key={getId(customer) ?? displayName}
-                        onClick={() => handleCustomerSelect(customer)}
-                        className={`w-full text-left px-3 py-2.5 text-sm border-b border-gray-100 last:border-0 hover:bg-gray-50 ${selectedCustomerId == getId(customer) ? 'bg-gray-100' : ''}`}
-                      >
-                        <div className="text-sm font-medium text-gray-900">{displayName}</div>
-                        {businessName && customer.name && customer.name !== businessName && (
-                          <div className="text-xs text-gray-500">{customer.name}</div>
-                        )}
-                        {customer.email && (
-                          <div className="text-xs text-gray-500">{customer.email}</div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           </div>
+        </header>
 
-          {/* Supplier Dropdown */}
-          <div className="relative" ref={supplierDropdownRef}>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Supplier</label>
-            <div className="relative">
-              <Input
-                type="text"
-                placeholder="Search or select..."
-                value={supplierSearchQuery}
-                onChange={(e) => {
-                  setSupplierSearchQuery(e.target.value);
-                  setShowSupplierDropdown(true);
-                }}
-                onFocus={() => setShowSupplierDropdown(true)}
-                className="w-full h-9 border-gray-300 text-sm"
-              />
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-              {showSupplierDropdown && filteredSuppliers.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto">
-                  {filteredSuppliers.map((supplier) => {
-                    const displayName = supplier.companyName || supplier.company_name || supplier.name || 'Unknown Supplier';
-                    return (
-                      <button
-                        key={getId(supplier) ?? displayName}
-                        onClick={() => handleSupplierSelect(supplier)}
-                        className={`w-full text-left px-3 py-2.5 text-sm border-b border-gray-100 last:border-0 hover:bg-gray-50 ${selectedSupplierId == getId(supplier) ? 'bg-gray-100' : ''}`}
-                      >
-                        <div className="text-sm font-medium text-gray-900">{displayName}</div>
-                        {supplier.name && supplier.name !== displayName && (
-                          <div className="text-xs text-gray-500">{supplier.name}</div>
-                        )}
-                        {supplier.email && (
-                          <div className="text-xs text-gray-500">{supplier.email}</div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Date range */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Date range</label>
-            <div className="flex items-center gap-2">
-              <Input
-                type="date"
-                value={filters.startDate}
-                onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                className="flex-1 min-w-0 h-9 border-gray-300 text-sm relative [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-              />
-              <span className="text-gray-400 shrink-0">–</span>
-              <Input
-                type="date"
-                value={filters.endDate}
-                onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                className="flex-1 min-w-0 h-9 border-gray-300 text-sm relative [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-              />
-            </div>
-          </div>
-
-          {/* Bank */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Bank</label>
-            <select
-              value={selectedBankId}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedBankId(val);
-                if (val) {
-                  // Clear customer/supplier selections when bank is selected
-                  setSelectedCustomerId('');
-                  setCustomerSearchQuery('');
-                  setDebouncedCustomerQuery('');
-                  setSelectedSupplierId('');
-                  setSupplierSearchQuery('');
-                  setDebouncedSupplierQuery('');
-                }
-              }}
-              autoComplete="off"
-              className="w-full h-9 border border-gray-300 rounded-md px-2 text-sm bg-white"
-            >
-              <option value="">Select Bank</option>
-              <option value={ALL_BANKS_VALUE}>All Banks</option>
-              {(banks || []).map((bank) => (
-                <option key={bank._id || bank.id} value={bank._id || bank.id}>
-                  {bank.bankName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Clear */}
-          <div className="flex items-end">
-            <Button
-              onClick={handleClearFilters}
-              variant="outline"
-              size="sm"
-              className="w-full h-9 border-gray-300 text-gray-700"
-            >
-              Clear
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <LoadingSpinner />
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Customers Section - Show only if customer is selected and supplier is not */}
-          {selectedCustomerId && !selectedSupplierId && (
-            <div className="bg-white border border-emerald-200 rounded-lg shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-emerald-200 bg-emerald-50">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-200">
-                    <Users className="h-5 w-5 text-emerald-700" />
+        {/* Filters - clean card */}
+        <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
+          <h2 className="text-sm font-medium text-gray-700 mb-4 uppercase tracking-wide">Filters</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Customer Dropdown */}
+            <div className="relative" ref={customerDropdownRef}>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Customer</label>
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="Search or select..."
+                  value={customerSearchQuery}
+                  onChange={(e) => {
+                    setCustomerSearchQuery(e.target.value);
+                    setShowCustomerDropdown(true);
+                  }}
+                  onFocus={() => setShowCustomerDropdown(true)}
+                  className="w-full h-9 border-gray-300 text-sm"
+                />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                {showCustomerDropdown && filteredCustomers.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto">
+                    {filteredCustomers.map((customer) => {
+                      const businessName = customer.businessName || customer.business_name || customer.companyName || customer.company_name || '';
+                      const displayName = businessName || customer.name || 'Unknown Customer';
+                      return (
+                        <button
+                          key={getId(customer) ?? displayName}
+                          onClick={() => handleCustomerSelect(customer)}
+                          className={`w-full text-left px-3 py-2.5 text-sm border-b border-gray-100 last:border-0 hover:bg-gray-50 ${selectedCustomerId == getId(customer) ? 'bg-gray-100' : ''}`}
+                        >
+                          <div className="text-sm font-medium text-gray-900">{displayName}</div>
+                          {businessName && customer.name && customer.name !== businessName && (
+                            <div className="text-xs text-gray-500">{customer.name}</div>
+                          )}
+                          {customer.email && (
+                            <div className="text-xs text-gray-500">{customer.email}</div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                      <h2 className="text-lg font-semibold text-gray-900">
-                        {customerDetail?.customer?.name || detailedTransactionsData?.data?.customer?.name || 'Customer Receivables'}
-                      </h2>
-                      {showReturnColumn && (
-                        <span className="text-sm text-gray-600">
-                          Return total: {formatCurrency(customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0)}
-                        </span>
+                )}
+              </div>
+            </div>
+
+            {/* Supplier Dropdown */}
+            <div className="relative" ref={supplierDropdownRef}>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Supplier</label>
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="Search or select..."
+                  value={supplierSearchQuery}
+                  onChange={(e) => {
+                    setSupplierSearchQuery(e.target.value);
+                    setShowSupplierDropdown(true);
+                  }}
+                  onFocus={() => setShowSupplierDropdown(true)}
+                  className="w-full h-9 border-gray-300 text-sm"
+                />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                {showSupplierDropdown && filteredSuppliers.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto">
+                    {filteredSuppliers.map((supplier) => {
+                      const displayName = supplier.companyName || supplier.company_name || supplier.name || 'Unknown Supplier';
+                      return (
+                        <button
+                          key={getId(supplier) ?? displayName}
+                          onClick={() => handleSupplierSelect(supplier)}
+                          className={`w-full text-left px-3 py-2.5 text-sm border-b border-gray-100 last:border-0 hover:bg-gray-50 ${selectedSupplierId == getId(supplier) ? 'bg-gray-100' : ''}`}
+                        >
+                          <div className="text-sm font-medium text-gray-900">{displayName}</div>
+                          {supplier.name && supplier.name !== displayName && (
+                            <div className="text-xs text-gray-500">{supplier.name}</div>
+                          )}
+                          {supplier.email && (
+                            <div className="text-xs text-gray-500">{supplier.email}</div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Date range */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Date range</label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  value={filters.startDate}
+                  onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                  className="flex-1 min-w-0 h-9 border-gray-300 text-sm relative [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                />
+                <span className="text-gray-400 shrink-0">–</span>
+                <Input
+                  type="date"
+                  value={filters.endDate}
+                  onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                  className="flex-1 min-w-0 h-9 border-gray-300 text-sm relative [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Bank */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Bank</label>
+              <select
+                value={selectedBankId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedBankId(val);
+                  if (val) {
+                    // Clear customer/supplier selections when bank is selected
+                    setSelectedCustomerId('');
+                    setCustomerSearchQuery('');
+                    setDebouncedCustomerQuery('');
+                    setSelectedSupplierId('');
+                    setSupplierSearchQuery('');
+                    setDebouncedSupplierQuery('');
+                  }
+                }}
+                autoComplete="off"
+                className="w-full h-9 border border-gray-300 rounded-md px-2 text-sm bg-white"
+              >
+                <option value="">Select Bank</option>
+                <option value={ALL_BANKS_VALUE}>All Banks</option>
+                {(banks || []).map((bank) => (
+                  <option key={bank._id || bank.id} value={bank._id || bank.id}>
+                    {bank.bankName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Clear */}
+            <div className="flex items-end">
+              <Button
+                onClick={handleClearFilters}
+                variant="outline"
+                size="sm"
+                className="w-full h-9 border-gray-300 text-gray-700"
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <LoadingSpinner />
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Customers Section - Show only if customer is selected and supplier is not */}
+            {selectedCustomerId && !selectedSupplierId && (
+              <div className="bg-white border border-emerald-200 rounded-lg shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-emerald-200 bg-emerald-50">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-200">
+                      <Users className="h-5 w-5 text-emerald-700" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                        <h2 className="text-lg font-semibold text-gray-900">
+                          {customerDetail?.customer?.name || detailedTransactionsData?.data?.customer?.name || 'Customer Receivables'}
+                        </h2>
+                        {showReturnColumn && (
+                          <span className="text-sm text-gray-600">
+                            Return total: {formatCurrency(customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0)}
+                          </span>
+                        )}
+                      </div>
+                      {filters.startDate && filters.endDate && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {formatDate(filters.startDate)} – {formatDate(filters.endDate)}
+                        </p>
                       )}
                     </div>
-                    {filters.startDate && filters.endDate && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {formatDate(filters.startDate)} – {formatDate(filters.endDate)}
-                      </p>
-                    )}
                   </div>
                 </div>
-              </div>
 
-              {detailedLoading ? (
-                <div className="flex justify-center items-center py-16">
-                  <LoadingSpinner />
-                </div>
-              ) : (
-                <div
-                  ref={customerLedgerScrollRef}
-                  className={`overflow-x-auto ${virtualizeCustomerLedgerRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
-                >
-                  <table className="min-w-full account-ledger-table">
-                    <thead>
-                      <tr className="bg-emerald-600 border-b border-emerald-700">
-                        <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Date</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Voucher No</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Particular</th>
-                        {showReturnColumn && (
-                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider w-20">Return</th>
-                        )}
-                        <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Debits</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Credits</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Balance</th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider w-20 no-print">Print</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
-                      {/* Opening Balance Row */}
-                      <tr className="bg-emerald-50/50">
-                        <td className="px-4 py-3 text-sm text-gray-900"></td>
-                        <td className="px-4 py-3 text-sm text-gray-900"></td>
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">Opening Balance:</td>
-                        {showReturnColumn && <td className="px-4 py-3 text-sm text-gray-900"></td>}
-                        <td className="px-4 py-3 text-sm text-right text-gray-900"></td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900"></td>
-                        <td className={`px-4 py-3 text-sm text-right font-bold ${((customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance) || 0) < 0 ? 'text-red-600' : 'text-gray-900'
-                          }`}>
-                          {formatCurrency(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-center no-print"></td>
-                      </tr>
-
-                      {/* Transaction Rows */}
-                      {customerEntries.length === 0 ? (
-                        <tr>
-                          <td colSpan={showReturnColumn ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
-                            <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                            <p>No transactions found for this period</p>
-                          </td>
+                {detailedLoading ? (
+                  <div className="flex justify-center items-center py-16">
+                    <LoadingSpinner />
+                  </div>
+                ) : (
+                  <div
+                    ref={customerLedgerScrollRef}
+                    className={`overflow-x-auto ${virtualizeCustomerLedgerRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
+                  >
+                    <table className="min-w-full account-ledger-table">
+                      <thead>
+                        <tr className="bg-emerald-600 border-b border-emerald-700">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Date</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Voucher No</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Particular</th>
+                          {showReturnColumn && (
+                            <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider w-20">Return</th>
+                          )}
+                          <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Debits</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Credits</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Balance</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider w-20 no-print">Print</th>
                         </tr>
-                      ) : !virtualizeCustomerLedgerRows ? (
-                        customerEntries.map((entry, index) => (
-                          <tr key={index} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              {formatDate(entry.date)}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              {entry.voucherNo || '-'}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              {entry.particular || '-'}
-                            </td>
-                            {showReturnColumn && (
-                              <td className="px-4 py-3 text-sm text-gray-900">
-                                {entry.source === 'Sale Return' ? 'Return' : ''}
-                              </td>
-                            )}
-                            <td className="px-4 py-3 text-sm text-right text-gray-900">
-                              {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-right text-gray-900">
-                              {entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right font-semibold ${(entry.balance || 0) < 0 ? 'text-red-600' : 'text-gray-900'
-                              }`}>
-                              {formatCurrency(entry.balance || 0)}
-                            </td>
-                            <td className="px-4 py-3 text-center no-print">
-                              {entry.referenceId && entry.source && ['sale', 'Sale Return', 'cash_receipt', 'bank_receipt', 'sale_payment'].includes((entry.source || '').toString()) ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handlePrintEntry(entry)}
-                                  disabled={printLoading}
-                                  className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
-                                  title={entry.source === 'Sale Return' ? 'Print return' : (entry.source === 'cash_receipt' || entry.source === 'bank_receipt') ? 'Print receipt' : 'Print sale invoice'}
-                                >
-                                  <Printer className="h-4 w-4" />
-                                </button>
-                              ) : null}
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        (() => {
-                          const vItems = customerLedgerVirtualizer.getVirtualItems();
-                          const totalH = customerLedgerVirtualizer.getTotalSize();
-                          const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
-                          const cs = showReturnColumn ? 8 : 7;
-                          return (
-                            <>
-                              {padTop > 0 ? (
-                                <tr aria-hidden className="pointer-events-none">
-                                  <td colSpan={cs} className="p-0 border-0" style={{ height: padTop }} />
-                                </tr>
-                              ) : null}
-                              {vItems.map((vr) => {
-                                const entry = customerEntries[vr.index];
-                                return (
-                                  <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
-                                    <td className="px-4 py-3 text-sm text-gray-900">
-                                      {formatDate(entry.date)}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-900">
-                                      {entry.voucherNo || '-'}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-900">
-                                      {entry.particular || '-'}
-                                    </td>
-                                    {showReturnColumn && (
-                                      <td className="px-4 py-3 text-sm text-gray-900">
-                                        {entry.source === 'Sale Return' ? 'Return' : ''}
-                                      </td>
-                                    )}
-                                    <td className="px-4 py-3 text-sm text-right text-gray-900">
-                                      {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-right text-gray-900">
-                                      {entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}
-                                    </td>
-                                    <td className={`px-4 py-3 text-sm text-right font-semibold ${(entry.balance || 0) < 0 ? 'text-red-600' : 'text-gray-900'
-                                      }`}>
-                                      {formatCurrency(entry.balance || 0)}
-                                    </td>
-                                    <td className="px-4 py-3 text-center no-print">
-                                      {entry.referenceId && entry.source && ['sale', 'Sale Return', 'cash_receipt', 'bank_receipt', 'sale_payment'].includes((entry.source || '').toString()) ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => handlePrintEntry(entry)}
-                                          disabled={printLoading}
-                                          className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
-                                          title={entry.source === 'Sale Return' ? 'Print return' : (entry.source === 'cash_receipt' || entry.source === 'bank_receipt') ? 'Print receipt' : 'Print sale invoice'}
-                                        >
-                                          <Printer className="h-4 w-4" />
-                                        </button>
-                                      ) : null}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                              {padBottom > 0 ? (
-                                <tr aria-hidden className="pointer-events-none">
-                                  <td colSpan={cs} className="p-0 border-0" style={{ height: padBottom }} />
-                                </tr>
-                              ) : null}
-                            </>
-                          );
-                        })()
-                      )}
-
-                      {/* Return Total Row - shows when there are returns and return column is visible */}
-                        {showReturnColumn &&
-                        customerEntries.length > 0 &&
-                        (customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0) > 0 && (
-                        <tr className="bg-emerald-100 font-medium">
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 bg-white">
+                        {/* Opening Balance Row */}
+                        <tr className="bg-emerald-50/50">
                           <td className="px-4 py-3 text-sm text-gray-900"></td>
                           <td className="px-4 py-3 text-sm text-gray-900"></td>
-                          <td className="px-4 py-3 text-sm text-gray-900">Return Total</td>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">Return</td>
-                          <td className="px-4 py-3 text-sm text-right text-gray-900">0</td>
-                          <td className="px-4 py-3 text-sm text-right text-gray-900">
-                            {formatCurrency(customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0)}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right text-gray-900"></td>
-                          <td className="px-4 py-3 text-center no-print"></td>
-                        </tr>
-                      )}
-
-                      {/* Total Row */}
-                      {customerEntries.length > 0 && (
-                        <tr className="bg-emerald-200 font-semibold border-t-2 border-emerald-300">
-                          <td className="px-4 py-3 text-sm text-gray-900"></td>
-                          <td className="px-4 py-3 text-sm text-gray-900"></td>
-                          <td className="px-4 py-3 text-sm text-gray-900">Total</td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">Opening Balance:</td>
                           {showReturnColumn && <td className="px-4 py-3 text-sm text-gray-900"></td>}
-                          <td className="px-4 py-3 text-sm text-right text-gray-900">
-                            {formatCurrency(sumDebits(customerEntries))}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right text-gray-900">
-                            {formatCurrency(sumCredits(customerEntries))}
-                          </td>
-                          <td className={`px-4 py-3 text-sm text-right font-bold ${closingBalanceFromEntries(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0, customerEntries, false) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                            {formatCurrency(closingBalanceFromEntries(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0, customerEntries, false))}
+                          <td className="px-4 py-3 text-sm text-right text-gray-900"></td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900"></td>
+                          <td className={`px-4 py-3 text-sm text-right font-bold ${((customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance) || 0) < 0 ? 'text-red-600' : 'text-gray-900'
+                            }`}>
+                            {formatCurrency(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0)}
                           </td>
                           <td className="px-4 py-3 text-sm text-center no-print"></td>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
 
-          {/* Suppliers Section - Show only if supplier is selected and customer is not */}
-          {selectedSupplierId && !selectedCustomerId && !selectedBankId && (
-            <div className="bg-white border border-blue-200 rounded-lg shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-blue-200 bg-blue-50">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-200">
-                    <Building2 className="h-5 w-5 text-blue-700" />
+                        {/* Transaction Rows */}
+                        {customerEntries.length === 0 ? (
+                          <tr>
+                            <td colSpan={showReturnColumn ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
+                              <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                              <p>No transactions found for this period</p>
+                            </td>
+                          </tr>
+                        ) : !virtualizeCustomerLedgerRows ? (
+                          customerEntries.map((entry, index) => (
+                            <tr key={index} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                {formatDate(entry.date)}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                {entry.voucherNo || '-'}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                {entry.particular || '-'}
+                              </td>
+                              {showReturnColumn && (
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {entry.source === 'Sale Return' ? 'Return' : ''}
+                                </td>
+                              )}
+                              <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                {entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}
+                              </td>
+                              <td className={`px-4 py-3 text-sm text-right font-semibold ${(entry.balance || 0) < 0 ? 'text-red-600' : 'text-gray-900'
+                                }`}>
+                                {formatCurrency(entry.balance || 0)}
+                              </td>
+                              <td className="px-4 py-3 text-center no-print">
+                                {entry.referenceId && entry.source && ['sale', 'Sale Return', 'cash_receipt', 'bank_receipt', 'sale_payment'].includes((entry.source || '').toString()) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePrintEntry(entry)}
+                                    disabled={printLoading}
+                                    className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+                                    title={entry.source === 'Sale Return' ? 'Print return' : (entry.source === 'cash_receipt' || entry.source === 'bank_receipt') ? 'Print receipt' : 'Print sale invoice'}
+                                  >
+                                    <Printer className="h-4 w-4" />
+                                  </button>
+                                ) : null}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          (() => {
+                            const vItems = customerLedgerVirtualizer.getVirtualItems();
+                            const totalH = customerLedgerVirtualizer.getTotalSize();
+                            const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
+                            const cs = showReturnColumn ? 8 : 7;
+                            return (
+                              <>
+                                {padTop > 0 ? (
+                                  <tr aria-hidden className="pointer-events-none">
+                                    <td colSpan={cs} className="p-0 border-0" style={{ height: padTop }} />
+                                  </tr>
+                                ) : null}
+                                {vItems.map((vr) => {
+                                  const entry = customerEntries[vr.index];
+                                  return (
+                                    <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
+                                      <td className="px-4 py-3 text-sm text-gray-900">
+                                        {formatDate(entry.date)}
+                                      </td>
+                                      <td className="px-4 py-3 text-sm text-gray-900">
+                                        {entry.voucherNo || '-'}
+                                      </td>
+                                      <td className="px-4 py-3 text-sm text-gray-900">
+                                        {entry.particular || '-'}
+                                      </td>
+                                      {showReturnColumn && (
+                                        <td className="px-4 py-3 text-sm text-gray-900">
+                                          {entry.source === 'Sale Return' ? 'Return' : ''}
+                                        </td>
+                                      )}
+                                      <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                        {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
+                                      </td>
+                                      <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                        {entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}
+                                      </td>
+                                      <td className={`px-4 py-3 text-sm text-right font-semibold ${(entry.balance || 0) < 0 ? 'text-red-600' : 'text-gray-900'
+                                        }`}>
+                                        {formatCurrency(entry.balance || 0)}
+                                      </td>
+                                      <td className="px-4 py-3 text-center no-print">
+                                        {entry.referenceId && entry.source && ['sale', 'Sale Return', 'cash_receipt', 'bank_receipt', 'sale_payment'].includes((entry.source || '').toString()) ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handlePrintEntry(entry)}
+                                            disabled={printLoading}
+                                            className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+                                            title={entry.source === 'Sale Return' ? 'Print return' : (entry.source === 'cash_receipt' || entry.source === 'bank_receipt') ? 'Print receipt' : 'Print sale invoice'}
+                                          >
+                                            <Printer className="h-4 w-4" />
+                                          </button>
+                                        ) : null}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                {padBottom > 0 ? (
+                                  <tr aria-hidden className="pointer-events-none">
+                                    <td colSpan={cs} className="p-0 border-0" style={{ height: padBottom }} />
+                                  </tr>
+                                ) : null}
+                              </>
+                            );
+                          })()
+                        )}
+
+                        {/* Return Total Row - shows when there are returns and return column is visible */}
+                        {showReturnColumn &&
+                          customerEntries.length > 0 &&
+                          (customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0) > 0 && (
+                            <tr className="bg-emerald-100 font-medium">
+                              <td className="px-4 py-3 text-sm text-gray-900"></td>
+                              <td className="px-4 py-3 text-sm text-gray-900"></td>
+                              <td className="px-4 py-3 text-sm text-gray-900">Return Total</td>
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900">Return</td>
+                              <td className="px-4 py-3 text-sm text-right text-gray-900">0</td>
+                              <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                {formatCurrency(customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0)}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-right text-gray-900"></td>
+                              <td className="px-4 py-3 text-center no-print"></td>
+                            </tr>
+                          )}
+
+                        {/* Total Row */}
+                        {customerEntries.length > 0 && (
+                          <tr className="bg-emerald-200 font-semibold border-t-2 border-emerald-300">
+                            <td className="px-4 py-3 text-sm text-gray-900"></td>
+                            <td className="px-4 py-3 text-sm text-gray-900"></td>
+                            <td className="px-4 py-3 text-sm text-gray-900">Total</td>
+                            {showReturnColumn && <td className="px-4 py-3 text-sm text-gray-900"></td>}
+                            <td className="px-4 py-3 text-sm text-right text-gray-900">
+                              {formatCurrency(sumDebits(customerEntries))}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-right text-gray-900">
+                              {formatCurrency(sumCredits(customerEntries))}
+                            </td>
+                            <td className={`px-4 py-3 text-sm text-right font-bold ${closingBalanceFromEntries(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0, customerEntries, false) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                              {formatCurrency(closingBalanceFromEntries(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0, customerEntries, false))}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-center no-print"></td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      {supplierDetail?.supplier?.name || detailedSupplierTransactionsData?.data?.supplier?.name || 'Supplier Payables'}
-                    </h2>
-                    {filters.startDate && filters.endDate && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {formatDate(filters.startDate)} – {formatDate(filters.endDate)}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
+            )}
 
-              {detailedSupplierLoading ? (
-                <div className="flex justify-center items-center py-16">
-                  <LoadingSpinner />
+            {/* Suppliers Section - Show only if supplier is selected and customer is not */}
+            {selectedSupplierId && !selectedCustomerId && !selectedBankId && (
+              <div className="bg-white border border-blue-200 rounded-lg shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-blue-200 bg-blue-50">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-200">
+                      <Building2 className="h-5 w-5 text-blue-700" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        {supplierDetail?.supplier?.name || detailedSupplierTransactionsData?.data?.supplier?.name || 'Supplier Payables'}
+                      </h2>
+                      {filters.startDate && filters.endDate && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {formatDate(filters.startDate)} – {formatDate(filters.endDate)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              ) : (
+
+                {detailedSupplierLoading ? (
+                  <div className="flex justify-center items-center py-16">
+                    <LoadingSpinner />
+                  </div>
+                ) : (
+                  <div
+                    ref={supplierLedgerScrollRef}
+                    className={`overflow-x-auto ${virtualizeSupplierLedgerRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
+                  >
+                    <table className="min-w-full account-ledger-table">
+                      <thead>
+                        <tr className="bg-blue-600 border-b border-blue-700">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Date</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Voucher No</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Particular</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Debits</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Credits</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Balance</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider w-20 no-print">Print</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 bg-white">
+                        {/* Opening Balance Row */}
+                        <tr className="bg-blue-50/50">
+                          <td colSpan="3" className="px-4 py-3 text-sm font-medium text-gray-900">Opening Balance:</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900">0</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900">0</td>
+                          <td className={`px-4 py-3 text-sm text-right font-bold ${(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'
+                            }`}>
+                            {formatCurrency(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0)}
+                          </td>
+                          <td className="px-4 py-3 text-center no-print"></td>
+                        </tr>
+
+                        {/* Transaction Entries */}
+                        {supplierEntries.length === 0 ? (
+                          <tr>
+                            <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
+                              <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                              <p>No transactions found for this period</p>
+                            </td>
+                          </tr>
+                        ) : !virtualizeSupplierLedgerRows ? (
+                          supplierEntries.map((entry, index) => (
+                            <tr key={index} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                {formatDate(entry.date)}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                {entry.voucherNo || '-'}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700 max-w-md whitespace-normal break-words">
+                                {entry.particular || '-'}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                {entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}
+                              </td>
+                              <td className={`px-4 py-3 text-sm text-right font-semibold ${(entry.balance || 0) < 0 ? 'text-red-600' : 'text-gray-900'
+                                }`}>
+                                {formatCurrency(entry.balance || 0)}
+                              </td>
+                              <td className="px-4 py-3 text-center no-print">
+                                {entry.referenceId && entry.source && ['purchase', 'Purchase Return', 'purchase_invoice', 'purchase_invoice_payment'].includes((entry.source || '').toString()) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePrintEntry(entry)}
+                                    disabled={printLoading}
+                                    className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+                                    title={entry.source === 'Purchase Return' ? 'Print return' : 'Print purchase invoice'}
+                                  >
+                                    <Printer className="h-4 w-4" />
+                                  </button>
+                                ) : null}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          (() => {
+                            const vItems = supplierLedgerVirtualizer.getVirtualItems();
+                            const totalH = supplierLedgerVirtualizer.getTotalSize();
+                            const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
+                            return (
+                              <>
+                                {padTop > 0 ? (
+                                  <tr aria-hidden className="pointer-events-none">
+                                    <td colSpan={7} className="p-0 border-0" style={{ height: padTop }} />
+                                  </tr>
+                                ) : null}
+                                {vItems.map((vr) => {
+                                  const entry = supplierEntries[vr.index];
+                                  return (
+                                    <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
+                                      <td className="px-4 py-3 text-sm text-gray-900">
+                                        {formatDate(entry.date)}
+                                      </td>
+                                      <td className="px-4 py-3 text-sm text-gray-900">
+                                        {entry.voucherNo || '-'}
+                                      </td>
+                                      <td className="px-4 py-3 text-sm text-gray-700 max-w-md whitespace-normal break-words">
+                                        {entry.particular || '-'}
+                                      </td>
+                                      <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                        {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
+                                      </td>
+                                      <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                        {entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}
+                                      </td>
+                                      <td className={`px-4 py-3 text-sm text-right font-semibold ${(entry.balance || 0) < 0 ? 'text-red-600' : 'text-gray-900'
+                                        }`}>
+                                        {formatCurrency(entry.balance || 0)}
+                                      </td>
+                                      <td className="px-4 py-3 text-center no-print">
+                                        {entry.referenceId && entry.source && ['purchase', 'Purchase Return', 'purchase_invoice', 'purchase_invoice_payment'].includes((entry.source || '').toString()) ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handlePrintEntry(entry)}
+                                            disabled={printLoading}
+                                            className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+                                            title={entry.source === 'Purchase Return' ? 'Print return' : 'Print purchase invoice'}
+                                          >
+                                            <Printer className="h-4 w-4" />
+                                          </button>
+                                        ) : null}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                {padBottom > 0 ? (
+                                  <tr aria-hidden className="pointer-events-none">
+                                    <td colSpan={7} className="p-0 border-0" style={{ height: padBottom }} />
+                                  </tr>
+                                ) : null}
+                              </>
+                            );
+                          })()
+                        )}
+
+                        {/* Total Row */}
+                        {supplierEntries.length > 0 && (
+                          <tr className="bg-blue-200 font-semibold border-t-2 border-blue-300">
+                            <td className="px-4 py-3 text-sm text-gray-900"></td>
+                            <td className="px-4 py-3 text-sm text-gray-900"></td>
+                            <td className="px-4 py-3 text-sm text-gray-900">Total</td>
+                            <td className="px-4 py-3 text-sm text-right text-gray-900">
+                              {formatCurrency(sumDebits(supplierEntries))}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-right text-gray-900">
+                              {formatCurrency(sumCredits(supplierEntries))}
+                            </td>
+                            <td className={`px-4 py-3 text-sm text-right font-bold ${closingBalanceFromEntries(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0, supplierEntries, true) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                              {formatCurrency(closingBalanceFromEntries(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0, supplierEntries, true))}
+                            </td>
+                            <td className="px-4 py-3 text-center no-print"></td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(selectedBankId || selectedBankId === ALL_BANKS_VALUE) && !selectedCustomerId && !selectedSupplierId && (
+              <div className="bg-white border border-indigo-200 rounded-lg shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-indigo-200 bg-indigo-50">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-200">
+                      <Building2 className="h-5 w-5 text-indigo-700" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        {selectedBankId === ALL_BANKS_VALUE ? 'All Banks Ledger' : (selectedBank?.bankName || 'Bank Ledger')}
+                      </h2>
+                      {filters.startDate && filters.endDate && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {formatDate(filters.startDate)} – {formatDate(filters.endDate)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <div
-                  ref={supplierLedgerScrollRef}
-                  className={`overflow-x-auto ${virtualizeSupplierLedgerRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
+                  ref={bankLedgerScrollRef}
+                  className={`overflow-x-auto ${virtualizeBankLedgerRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
                 >
                   <table className="min-w-full account-ledger-table">
                     <thead>
-                      <tr className="bg-blue-600 border-b border-blue-700">
+                      <tr className="bg-indigo-600 border-b border-indigo-700">
                         <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Date</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Voucher No</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Bank Name</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Particular</th>
                         <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Debits</th>
                         <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Credits</th>
                         <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Balance</th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider w-20 no-print">Print</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
+                    <tbody className="bg-white divide-y divide-gray-200">
                       {/* Opening Balance Row */}
-                      <tr className="bg-blue-50/50">
-                        <td colSpan="3" className="px-4 py-3 text-sm font-medium text-gray-900">Opening Balance:</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900">0</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900">0</td>
-                        <td className={`px-4 py-3 text-sm text-right font-bold ${(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'
-                          }`}>
-                          {formatCurrency(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0)}
-                        </td>
-                        <td className="px-4 py-3 text-center no-print"></td>
-                      </tr>
-
-                      {/* Transaction Entries */}
-                      {supplierEntries.length === 0 ? (
-                        <tr>
-                          <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
-                            <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                            <p>No transactions found for this period</p>
+                      {(selectedBank || selectedBankId === ALL_BANKS_VALUE) && (
+                        <tr className="bg-indigo-50/50 font-medium">
+                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">
+                            {filters.startDate ? formatDate(filters.startDate) : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">-</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">
+                            {selectedBankId === ALL_BANKS_VALUE ? 'All Banks' : selectedBank?.bankName}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">OB: Opening Balance</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">
+                            {(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) > 0
+                              ? formatCurrency(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0))
+                              : '0.00'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">
+                            {(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) < 0
+                              ? formatCurrency(Math.abs(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)))
+                              : '0.00'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100 font-bold">
+                            {formatCurrency(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0))}
                           </td>
                         </tr>
-                      ) : !virtualizeSupplierLedgerRows ? (
-                        supplierEntries.map((entry, index) => (
-                          <tr key={index} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              {formatDate(entry.date)}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              {entry.voucherNo || '-'}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-700 max-w-md whitespace-normal break-words">
-                              {entry.particular || '-'}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-right text-gray-900">
-                              {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-right text-gray-900">
-                              {entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right font-semibold ${(entry.balance || 0) < 0 ? 'text-red-600' : 'text-gray-900'
-                              }`}>
-                              {formatCurrency(entry.balance || 0)}
-                            </td>
-                            <td className="px-4 py-3 text-center no-print">
-                              {entry.referenceId && entry.source && ['purchase', 'Purchase Return', 'purchase_invoice', 'purchase_invoice_payment'].includes((entry.source || '').toString()) ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handlePrintEntry(entry)}
-                                  disabled={printLoading}
-                                  className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
-                                  title={entry.source === 'Purchase Return' ? 'Print return' : 'Print purchase invoice'}
-                                >
-                                  <Printer className="h-4 w-4" />
-                                </button>
-                              ) : null}
-                            </td>
+                      )}
+
+                      {bankLedgerRows.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" className="px-4 py-8 text-center text-gray-500 border-b border-gray-100">
+                            {!selectedBankId ? 'Please select a bank to view ledger entries.' : 'No bank ledger entries found for this period.'}
+                          </td>
+                        </tr>
+                      ) : !virtualizeBankLedgerRows ? (
+                        bankLedgerRows.map((entry, index) => (
+                          <tr key={`${entry.voucherNo}-${entry.date}-${index}`} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{formatDate(entry.date)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.voucherNo}</td>
+                            <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.bankName}</td>
+                            <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.particular}</td>
+                            <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">{formatCurrency(entry.debitAmount)}</td>
+                            <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">{formatCurrency(entry.creditAmount)}</td>
+                            <td className="px-4 py-3 text-sm text-right font-bold text-gray-900 border-b border-gray-100">{formatCurrency(entry.balance)}</td>
                           </tr>
                         ))
                       ) : (
                         (() => {
-                          const vItems = supplierLedgerVirtualizer.getVirtualItems();
-                          const totalH = supplierLedgerVirtualizer.getTotalSize();
+                          const vItems = bankLedgerVirtualizer.getVirtualItems();
+                          const totalH = bankLedgerVirtualizer.getTotalSize();
                           const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
                           return (
                             <>
@@ -1308,41 +1476,16 @@ const AccountLedgerSummary = () => {
                                 </tr>
                               ) : null}
                               {vItems.map((vr) => {
-                                const entry = supplierEntries[vr.index];
+                                const entry = bankLedgerRows[vr.index];
                                 return (
                                   <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
-                                    <td className="px-4 py-3 text-sm text-gray-900">
-                                      {formatDate(entry.date)}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-900">
-                                      {entry.voucherNo || '-'}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-700 max-w-md whitespace-normal break-words">
-                                      {entry.particular || '-'}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-right text-gray-900">
-                                      {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-right text-gray-900">
-                                      {entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}
-                                    </td>
-                                    <td className={`px-4 py-3 text-sm text-right font-semibold ${(entry.balance || 0) < 0 ? 'text-red-600' : 'text-gray-900'
-                                      }`}>
-                                      {formatCurrency(entry.balance || 0)}
-                                    </td>
-                                    <td className="px-4 py-3 text-center no-print">
-                                      {entry.referenceId && entry.source && ['purchase', 'Purchase Return', 'purchase_invoice', 'purchase_invoice_payment'].includes((entry.source || '').toString()) ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => handlePrintEntry(entry)}
-                                          disabled={printLoading}
-                                          className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
-                                          title={entry.source === 'Purchase Return' ? 'Print return' : 'Print purchase invoice'}
-                                        >
-                                          <Printer className="h-4 w-4" />
-                                        </button>
-                                      ) : null}
-                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{formatDate(entry.date)}</td>
+                                    <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.voucherNo}</td>
+                                    <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.bankName}</td>
+                                    <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.particular}</td>
+                                    <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">{formatCurrency(entry.debitAmount)}</td>
+                                    <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">{formatCurrency(entry.creditAmount)}</td>
+                                    <td className="px-4 py-3 text-sm text-right font-bold text-gray-900 border-b border-gray-100">{formatCurrency(entry.balance)}</td>
                                   </tr>
                                 );
                               })}
@@ -1355,357 +1498,213 @@ const AccountLedgerSummary = () => {
                           );
                         })()
                       )}
-
-                      {/* Total Row */}
-                      {supplierEntries.length > 0 && (
-                        <tr className="bg-blue-200 font-semibold border-t-2 border-blue-300">
+                      {/* Total Row for Bank Ledger */}
+                      {bankLedgerRows.length > 0 && (
+                        <tr className="bg-indigo-100 font-semibold border-t-2 border-indigo-200">
                           <td className="px-4 py-3 text-sm text-gray-900"></td>
                           <td className="px-4 py-3 text-sm text-gray-900"></td>
-                          <td className="px-4 py-3 text-sm text-gray-900">Total</td>
+                          <td className="px-4 py-3 text-sm text-gray-900"></td>
+                          <td className="px-4 py-3 text-sm text-gray-900 text-right">Totals / Net Change</td>
                           <td className="px-4 py-3 text-sm text-right text-gray-900">
-                            {formatCurrency(sumDebits(supplierEntries))}
+                            {formatCurrency(bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0))}
                           </td>
                           <td className="px-4 py-3 text-sm text-right text-gray-900">
-                            {formatCurrency(sumCredits(supplierEntries))}
+                            {formatCurrency(bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0))}
                           </td>
-                          <td className={`px-4 py-3 text-sm text-right font-bold ${closingBalanceFromEntries(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0, supplierEntries, true) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                            {formatCurrency(closingBalanceFromEntries(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0, supplierEntries, true))}
+                          <td className="px-4 py-3 text-sm text-right text-gray-900"></td>
+                        </tr>
+                      )}
+                      {(selectedBank || selectedBankId === ALL_BANKS_VALUE) && (
+                        <tr className="bg-indigo-200 font-bold border-t-2 border-indigo-300">
+                          <td colSpan="6" className="px-4 py-3 text-right text-sm text-gray-900 uppercase tracking-wider">Final Closing Balance</td>
+                          <td className={`px-4 py-3 text-right text-lg ${(selectedBankId === ALL_BANKS_VALUE ? bankTotals.closingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.closingBalance || (parseFloat(selectedBank?.openingBalance || 0) +
+                              bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) -
+                              bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)))) < 0 ? 'text-red-700' : 'text-indigo-800'
+                            }`}>
+                            {formatCurrency(
+                              selectedBankId === ALL_BANKS_VALUE ? bankTotals.closingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.closingBalance || (parseFloat(selectedBank?.openingBalance || 0) +
+                                bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) -
+                                bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)))
+                            )}
                           </td>
-                          <td className="px-4 py-3 text-center no-print"></td>
                         </tr>
                       )}
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
-          )}
-
-          {(selectedBankId || selectedBankId === ALL_BANKS_VALUE) && !selectedCustomerId && !selectedSupplierId && (
-            <div className="bg-white border border-indigo-200 rounded-lg shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-indigo-200 bg-indigo-50">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-200">
-                    <Building2 className="h-5 w-5 text-indigo-700" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      {selectedBankId === ALL_BANKS_VALUE ? 'All Banks Ledger' : (selectedBank?.bankName || 'Bank Ledger')}
-                    </h2>
-                    {filters.startDate && filters.endDate && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {formatDate(filters.startDate)} – {formatDate(filters.endDate)}
-                      </p>
-                    )}
-                  </div>
-                </div>
               </div>
-
-              <div
-                ref={bankLedgerScrollRef}
-                className={`overflow-x-auto ${virtualizeBankLedgerRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
-              >
-                <table className="min-w-full account-ledger-table">
-                  <thead>
-                    <tr className="bg-indigo-600 border-b border-indigo-700">
-                      <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Voucher No</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Bank Name</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Particular</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Debits</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Credits</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {/* Opening Balance Row */}
-                    {(selectedBank || selectedBankId === ALL_BANKS_VALUE) && (
-                      <tr className="bg-indigo-50/50 font-medium">
-                        <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">
-                          {filters.startDate ? formatDate(filters.startDate) : '-'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">-</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">
-                          {selectedBankId === ALL_BANKS_VALUE ? 'All Banks' : selectedBank?.bankName}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">OB: Opening Balance</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">
-                          {(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) > 0 
-                            ? formatCurrency(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) 
-                            : '0.00'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">
-                          {(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0)) < 0 
-                            ? formatCurrency(Math.abs(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0))) 
-                            : '0.00'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100 font-bold">
-                          {formatCurrency(selectedBankId === ALL_BANKS_VALUE ? bankTotals.openingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.openingBalance || selectedBank?.openingBalance || selectedBank?.opening_balance || 0))}
-                        </td>
-                      </tr>
-                    )}
-
-                    {bankLedgerRows.length === 0 ? (
-                      <tr>
-                        <td colSpan="7" className="px-4 py-8 text-center text-gray-500 border-b border-gray-100">
-                          {!selectedBankId ? 'Please select a bank to view ledger entries.' : 'No bank ledger entries found for this period.'}
-                        </td>
-                      </tr>
-                    ) : !virtualizeBankLedgerRows ? (
-                      bankLedgerRows.map((entry, index) => (
-                        <tr key={`${entry.voucherNo}-${entry.date}-${index}`} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{formatDate(entry.date)}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.voucherNo}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.bankName}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.particular}</td>
-                          <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">{formatCurrency(entry.debitAmount)}</td>
-                          <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">{formatCurrency(entry.creditAmount)}</td>
-                          <td className="px-4 py-3 text-sm text-right font-bold text-gray-900 border-b border-gray-100">{formatCurrency(entry.balance)}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      (() => {
-                        const vItems = bankLedgerVirtualizer.getVirtualItems();
-                        const totalH = bankLedgerVirtualizer.getTotalSize();
-                        const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
-                        return (
-                          <>
-                            {padTop > 0 ? (
-                              <tr aria-hidden className="pointer-events-none">
-                                <td colSpan={7} className="p-0 border-0" style={{ height: padTop }} />
-                              </tr>
-                            ) : null}
-                            {vItems.map((vr) => {
-                              const entry = bankLedgerRows[vr.index];
-                              return (
-                                <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
-                                  <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{formatDate(entry.date)}</td>
-                                  <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.voucherNo}</td>
-                                  <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.bankName}</td>
-                                  <td className="px-4 py-3 text-sm text-gray-900 border-b border-gray-100">{entry.particular}</td>
-                                  <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">{formatCurrency(entry.debitAmount)}</td>
-                                  <td className="px-4 py-3 text-sm text-right text-gray-900 border-b border-gray-100">{formatCurrency(entry.creditAmount)}</td>
-                                  <td className="px-4 py-3 text-sm text-right font-bold text-gray-900 border-b border-gray-100">{formatCurrency(entry.balance)}</td>
-                                </tr>
-                              );
-                            })}
-                            {padBottom > 0 ? (
-                              <tr aria-hidden className="pointer-events-none">
-                                <td colSpan={7} className="p-0 border-0" style={{ height: padBottom }} />
-                              </tr>
-                            ) : null}
-                          </>
-                        );
-                      })()
-                    )}
-                    {/* Total Row for Bank Ledger */}
-                    {bankLedgerRows.length > 0 && (
-                      <tr className="bg-indigo-100 font-semibold border-t-2 border-indigo-200">
-                        <td className="px-4 py-3 text-sm text-gray-900"></td>
-                        <td className="px-4 py-3 text-sm text-gray-900"></td>
-                        <td className="px-4 py-3 text-sm text-gray-900"></td>
-                        <td className="px-4 py-3 text-sm text-gray-900 text-right">Totals / Net Change</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900">
-                          {formatCurrency(bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0))}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900">
-                          {formatCurrency(bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0))}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-900"></td>
-                      </tr>
-                    )}
-                    {(selectedBank || selectedBankId === ALL_BANKS_VALUE) && (
-                      <tr className="bg-indigo-200 font-bold border-t-2 border-indigo-300">
-                        <td colSpan="6" className="px-4 py-3 text-right text-sm text-gray-900 uppercase tracking-wider">Final Closing Balance</td>
-                        <td className={`px-4 py-3 text-right text-lg ${
-                          (selectedBankId === ALL_BANKS_VALUE ? bankTotals.closingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.closingBalance || (parseFloat(selectedBank?.openingBalance || 0) + 
-                           bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) - 
-                           bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)))) < 0 ? 'text-red-700' : 'text-indigo-800'
-                        }`}>
-                          {formatCurrency(
-                            selectedBankId === ALL_BANKS_VALUE ? bankTotals.closingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.closingBalance || (parseFloat(selectedBank?.openingBalance || 0) + 
-                            bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) - 
-                            bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)))
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {!selectedCustomerId && !selectedSupplierId && !selectedBankId && (
-            <div className="bg-white border border-gray-200 rounded-lg shadow-sm py-20 px-6 text-center">
-              <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 mb-4">
-                <FileText className="h-7 w-7 text-gray-400" />
-              </div>
-              <h3 className="text-base font-medium text-gray-900 mb-1">No ledger selected</h3>
-              <p className="text-sm text-gray-500 max-w-sm mx-auto">
-                Select a customer, supplier, or bank above to view their account ledger and transaction history.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Print Modal for invoices (Sale, Purchase) */}
-      <PrintModal
-        isOpen={showPrintModal}
-        onClose={() => {
-          setShowPrintModal(false);
-          setPrintData(null);
-        }}
-        orderData={printData}
-        documentTitle={printDocumentTitle}
-        partyLabel={printPartyLabel}
-      />
-
-      {/* Receipt / Payment print modal – for Cash Receipt, Bank Receipt */}
-      <ReceiptPaymentPrintModal
-        isOpen={showReceiptPrintModal}
-        onClose={() => {
-          setShowReceiptPrintModal(false);
-          setReceiptPrintData(null);
-        }}
-        documentTitle={receiptPrintTitle}
-        receiptData={receiptPrintData}
-      />
-
-      {/* Return print modal – for Sale Return, Purchase Return */}
-      <BasePrintModal
-        isOpen={showReturnPrintModal}
-        onClose={() => {
-          setShowReturnPrintModal(false);
-          setReturnPrintData(null);
-        }}
-        documentTitle={returnPrintData?.origin === 'purchase' ? 'Purchase Return' : 'Sale Return'}
-        hasData={!!returnPrintData}
-        emptyMessage="No return data to print."
-      >
-        <ReturnPrintContent
-          returnData={returnPrintData}
-          companyInfo={companyInfo}
-          partyLabel={returnPrintData?.origin === 'purchase' ? 'Supplier' : 'Customer'}
-        />
-      </BasePrintModal>
-
-      {/* Hidden Print Section - colored for customer (emerald) or supplier (blue) */}
-      <div
-        className={`hidden print:block account-ledger-print ${selectedCustomerId ? 'account-ledger-print--customer' : 'account-ledger-print--supplier'}`}
-        ref={printRef}
-      >
-        <div className="print-header text-center mb-4">
-          <h1 className="text-xl font-bold uppercase underline">Account Ledger Summary</h1>
-          <p className="font-bold">
-            {selectedCustomerId
-              ? (customerDetail?.customer?.name || detailedTransactionsData?.data?.customer?.name || 'Customer Receivables')
-              : (supplierDetail?.supplier?.name || detailedSupplierTransactionsData?.data?.supplier?.name || 'Supplier Payables')}
-            {(selectedCustomerId ? (customerDetail?.customer?.accountCode ?? detailedTransactionsData?.data?.customer?.accountCode) : (supplierDetail?.supplier?.accountCode ?? detailedSupplierTransactionsData?.data?.supplier?.accountCode))
-              ? ` - Account Code: ${selectedCustomerId ? (customerDetail?.customer?.accountCode ?? detailedTransactionsData?.data?.customer?.accountCode) : (supplierDetail?.supplier?.accountCode ?? detailedSupplierTransactionsData?.data?.supplier?.accountCode)}`
-              : ''}
-          </p>
-          <p>Period: {formatDate(filters.startDate)} to {formatDate(filters.endDate)}</p>
-        </div>
-
-        <table className="account-ledger-print-table" style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', border: '1px solid #000', fontSize: '10px' }}>
-          <thead>
-            <tr className="account-ledger-print-thead">
-              <th style={{ width: '4%', border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>S.NO</th>
-              <th style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>DATE</th>
-              <th style={{ width: showReturnColumn ? '52%' : '60%', border: '1px solid #000', padding: '6px 2px', textAlign: 'left' }}>DESCRIPTION</th>
-              {showReturnColumn && (
-                <th style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>RETURN</th>
-              )}
-              <th className="print-amount" style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>DEBITS</th>
-              <th className="print-amount" style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>CREDITS</th>
-              <th className="print-amount" style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>BALANCE</th>
-            </tr>
-          </thead>
-          <tbody>
-            {/* Opening Balance */}
-            <tr className="account-ledger-print-opening">
-              <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>-</td>
-              <td style={{ border: '1px solid #000', padding: '6px 2px' }}></td>
-              <td style={{ border: '1px solid #000', padding: '6px 2px', fontWeight: 'bold', fontSize: '11px' }}>Opening Balance</td>
-              {showReturnColumn && (
-                <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}></td>
-              )}
-              <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>0</td>
-              <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>0</td>
-              <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right', fontWeight: 'bold' }}>
-                {formatCurrency(
-                  (selectedCustomerId ? (customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance) : (supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance)) ?? 0
-                )}
-              </td>
-            </tr>
-
-            {/* Transaction Rows */}
-            {(selectedCustomerId ? (customerDetail?.entries ?? detailedTransactionsData?.data?.entries) : (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries))?.map((entry, index) => (
-              <tr key={index}>
-                <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>{index + 1}</td>
-                <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>{formatDate(entry.date)}</td>
-                <td style={{ border: '1px solid #000', padding: '6px 2px', fontSize: '12px' }}>
-                  <span className="font-medium">{entry.particular || '-'}</span>
-                  {entry.voucherNo && entry.voucherNo !== '-' && (
-                    <span className="ml-1">
-                      {entry.particular && entry.particular.toLowerCase().includes('sale') ? '#' : ''}:{entry.voucherNo}
-                    </span>
-                  )}
-                </td>
-                {showReturnColumn && (
-                  <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>
-                    {selectedCustomerId && entry.source === 'Sale Return' ? 'Return' : ''}
-                  </td>
-                )}
-                <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>
-                  {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
-                </td>
-                <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>
-                  {entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}
-                </td>
-                <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>
-                  {formatCurrency(entry.balance || 0)}
-                </td>
-              </tr>
-            ))}
-
-            {/* Return Total Row - customer only, when there are returns and return column visible */}
-            {showReturnColumn && selectedCustomerId && (customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0) > 0 && (
-              <tr className="account-ledger-print-subtotal">
-                <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}></td>
-                <td style={{ border: '1px solid #000', padding: '6px 2px' }}></td>
-                <td style={{ border: '1px solid #000', padding: '6px 2px', fontWeight: '600' }}>Return Total</td>
-                <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center', fontWeight: '600' }}>Return</td>
-                <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>0</td>
-                <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>
-                  {formatCurrency(customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0)}
-                </td>
-                <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}></td>
-              </tr>
             )}
 
-            {/* Total Row */}
-            <tr className="account-ledger-print-total">
-              <td colSpan={showReturnColumn ? 4 : 3} style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center', fontSize: '15px' }}>Total</td>
-              <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right', fontSize: '15px', fontWeight: 'bold' }}>
-                {formatCurrency(sumDebits(selectedCustomerId ? (customerDetail?.entries ?? detailedTransactionsData?.data?.entries) : (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries)))}
-              </td>
-              <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right', fontSize: '15px', fontWeight: 'bold' }}>
-                {formatCurrency(sumCredits(selectedCustomerId ? (customerDetail?.entries ?? detailedTransactionsData?.data?.entries) : (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries)))}
-              </td>
-              <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right', fontSize: '15px', fontWeight: 'bold' }}>
-                {formatCurrency(
-                  selectedCustomerId
-                    ? closingBalanceFromEntries(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0, customerDetail?.entries ?? detailedTransactionsData?.data?.entries, false)
-                    : closingBalanceFromEntries(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0, supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries, true)
+            {!selectedCustomerId && !selectedSupplierId && !selectedBankId && (
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm py-20 px-6 text-center">
+                <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 mb-4">
+                  <FileText className="h-7 w-7 text-gray-400" />
+                </div>
+                <h3 className="text-base font-medium text-gray-900 mb-1">No ledger selected</h3>
+                <p className="text-sm text-gray-500 max-w-sm mx-auto">
+                  Select a customer, supplier, or bank above to view their account ledger and transaction history.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Print Modal for invoices (Sale, Purchase) */}
+        <PrintModal
+          isOpen={showPrintModal}
+          onClose={() => {
+            setShowPrintModal(false);
+            setPrintData(null);
+          }}
+          orderData={printData}
+          documentTitle={printDocumentTitle}
+          partyLabel={printPartyLabel}
+        />
+
+        {/* Receipt / Payment print modal – for Cash Receipt, Bank Receipt */}
+        <ReceiptPaymentPrintModal
+          isOpen={showReceiptPrintModal}
+          onClose={() => {
+            setShowReceiptPrintModal(false);
+            setReceiptPrintData(null);
+          }}
+          documentTitle={receiptPrintTitle}
+          receiptData={receiptPrintData}
+        />
+
+        {/* Return print modal – for Sale Return, Purchase Return */}
+        <BasePrintModal
+          isOpen={showReturnPrintModal}
+          onClose={() => {
+            setShowReturnPrintModal(false);
+            setReturnPrintData(null);
+          }}
+          documentTitle={returnPrintData?.origin === 'purchase' ? 'Purchase Return' : 'Sale Return'}
+          hasData={!!returnPrintData}
+          emptyMessage="No return data to print."
+        >
+          <ReturnPrintContent
+            returnData={returnPrintData}
+            companyInfo={companyInfo}
+            partyLabel={returnPrintData?.origin === 'purchase' ? 'Supplier' : 'Customer'}
+          />
+        </BasePrintModal>
+
+        {/* Hidden Print Section - colored for customer (emerald) or supplier (blue) */}
+        <div
+          className={`hidden print:block account-ledger-print ${selectedCustomerId ? 'account-ledger-print--customer' : 'account-ledger-print--supplier'}`}
+          ref={printRef}
+        >
+          <div className="print-header text-center mb-4">
+            <h1 className="text-xl font-bold uppercase underline">Account Ledger Summary</h1>
+            <p className="font-bold">
+              {selectedCustomerId
+                ? (customerDetail?.customer?.name || detailedTransactionsData?.data?.customer?.name || 'Customer Receivables')
+                : (supplierDetail?.supplier?.name || detailedSupplierTransactionsData?.data?.supplier?.name || 'Supplier Payables')}
+              {(selectedCustomerId ? (customerDetail?.customer?.accountCode ?? detailedTransactionsData?.data?.customer?.accountCode) : (supplierDetail?.supplier?.accountCode ?? detailedSupplierTransactionsData?.data?.supplier?.accountCode))
+                ? ` - Account Code: ${selectedCustomerId ? (customerDetail?.customer?.accountCode ?? detailedTransactionsData?.data?.customer?.accountCode) : (supplierDetail?.supplier?.accountCode ?? detailedSupplierTransactionsData?.data?.supplier?.accountCode)}`
+                : ''}
+            </p>
+            <p>Period: {formatDate(filters.startDate)} to {formatDate(filters.endDate)}</p>
+          </div>
+
+          <table className="account-ledger-print-table" style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', border: '1px solid #000', fontSize: '10px' }}>
+            <thead>
+              <tr className="account-ledger-print-thead">
+                <th style={{ width: '4%', border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>S.NO</th>
+                <th style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>DATE</th>
+                <th style={{ width: showReturnColumn ? '52%' : '60%', border: '1px solid #000', padding: '6px 2px', textAlign: 'left' }}>DESCRIPTION</th>
+                {showReturnColumn && (
+                  <th style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>RETURN</th>
                 )}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+                <th className="print-amount" style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>DEBITS</th>
+                <th className="print-amount" style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>CREDITS</th>
+                <th className="print-amount" style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>BALANCE</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Opening Balance */}
+              <tr className="account-ledger-print-opening">
+                <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>-</td>
+                <td style={{ border: '1px solid #000', padding: '6px 2px' }}></td>
+                <td style={{ border: '1px solid #000', padding: '6px 2px', fontWeight: 'bold', fontSize: '11px' }}>Opening Balance</td>
+                {showReturnColumn && (
+                  <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}></td>
+                )}
+                <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>0</td>
+                <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>0</td>
+                <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right', fontWeight: 'bold' }}>
+                  {formatCurrency(
+                    (selectedCustomerId ? (customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance) : (supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance)) ?? 0
+                  )}
+                </td>
+              </tr>
+
+              {/* Transaction Rows */}
+              {(selectedCustomerId ? (customerDetail?.entries ?? detailedTransactionsData?.data?.entries) : (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries))?.map((entry, index) => (
+                <tr key={index}>
+                  <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>{index + 1}</td>
+                  <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>{formatDate(entry.date)}</td>
+                  <td style={{ border: '1px solid #000', padding: '6px 2px', fontSize: '12px' }}>
+                    <span className="font-medium">{entry.particular || '-'}</span>
+                    {entry.voucherNo && entry.voucherNo !== '-' && (
+                      <span className="ml-1">
+                        {entry.particular && entry.particular.toLowerCase().includes('sale') ? '#' : ''}:{entry.voucherNo}
+                      </span>
+                    )}
+                  </td>
+                  {showReturnColumn && (
+                    <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>
+                      {selectedCustomerId && entry.source === 'Sale Return' ? 'Return' : ''}
+                    </td>
+                  )}
+                  <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>
+                    {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
+                  </td>
+                  <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>
+                    {entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}
+                  </td>
+                  <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>
+                    {formatCurrency(entry.balance || 0)}
+                  </td>
+                </tr>
+              ))}
+
+              {/* Return Total Row - customer only, when there are returns and return column visible */}
+              {showReturnColumn && selectedCustomerId && (customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0) > 0 && (
+                <tr className="account-ledger-print-subtotal">
+                  <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}></td>
+                  <td style={{ border: '1px solid #000', padding: '6px 2px' }}></td>
+                  <td style={{ border: '1px solid #000', padding: '6px 2px', fontWeight: '600' }}>Return Total</td>
+                  <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center', fontWeight: '600' }}>Return</td>
+                  <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>0</td>
+                  <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>
+                    {formatCurrency(customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0)}
+                  </td>
+                  <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}></td>
+                </tr>
+              )}
+
+              {/* Total Row */}
+              <tr className="account-ledger-print-total">
+                <td colSpan={showReturnColumn ? 4 : 3} style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center', fontSize: '15px' }}>Total</td>
+                <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right', fontSize: '15px', fontWeight: 'bold' }}>
+                  {formatCurrency(sumDebits(selectedCustomerId ? (customerDetail?.entries ?? detailedTransactionsData?.data?.entries) : (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries)))}
+                </td>
+                <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right', fontSize: '15px', fontWeight: 'bold' }}>
+                  {formatCurrency(sumCredits(selectedCustomerId ? (customerDetail?.entries ?? detailedTransactionsData?.data?.entries) : (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries)))}
+                </td>
+                <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right', fontSize: '15px', fontWeight: 'bold' }}>
+                  {formatCurrency(
+                    selectedCustomerId
+                      ? closingBalanceFromEntries(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0, customerDetail?.entries ?? detailedTransactionsData?.data?.entries, false)
+                      : closingBalanceFromEntries(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0, supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries, true)
+                  )}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

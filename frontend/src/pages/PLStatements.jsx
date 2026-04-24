@@ -23,10 +23,10 @@ const formatDate = (dateString) => {
     // Fallback to simple formatting
     if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
       const [year, month, day] = dateString.split('-');
-      return new Date(year, month - 1, day).toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
+      return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
       });
     }
     return dateString;
@@ -37,7 +37,7 @@ export const PLStatements = () => {
   // Get first day of current month and today
   const today = getCurrentDatePakistan();
   const firstDayOfMonth = getStartOfMonth();
-  
+
   const [fromDate, setFromDate] = useState(firstDayOfMonth);
   const [toDate, setToDate] = useState(today);
   const [searchFromDate, setSearchFromDate] = useState(firstDayOfMonth);
@@ -77,7 +77,7 @@ export const PLStatements = () => {
 
   // Extract summary data - handle different response structures
   const summary = summaryData?.data || summaryData;
-  
+
   // Extract values from summary - handle both direct values and nested structure
   // Backend pl-statements/summary returns: revenue, returns, grossProfit, operatingExpenses, netIncome
   const salesRevenue = summary?.revenue?.salesRevenue ?? summary?.statement?.revenue?.salesRevenue ?? 0;

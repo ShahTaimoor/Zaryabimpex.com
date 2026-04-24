@@ -77,6 +77,15 @@ class UserService {
         { role: updatedUser.role, permissions: updatedUser.permissions },
         'User permissions modified'
       );
+    } else if (updateData.allowedNetwork !== undefined && updateData.allowedNetwork !== user.allowedNetwork) {
+      await userRepository.trackPermissionChange(
+        id,
+        changedBy?.id || changedBy?._id || changedBy,
+        'network_restriction_modified',
+        { allowedNetwork: user.allowedNetwork },
+        { allowedNetwork: updatedUser.allowedNetwork },
+        `Allowed network changed to ${updateData.allowedNetwork || 'none'}`
+      );
     }
 
     return updatedUser.toSafeObject ? updatedUser.toSafeObject() : updatedUser;

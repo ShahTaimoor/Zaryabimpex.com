@@ -373,354 +373,354 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
       headerClassName="p-3 sm:p-4 xl:p-5"
     >
       <form onSubmit={handleSubmit} className="space-y-4 xl:space-y-6">
-            {/* Company Name + Contact Person */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 xl:gap-4">
-              <div className="min-w-0">
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-                  Company Name *
-                </label>
-                <div className="relative">
-                  <Input
-                    type="text"
-                    required
-                    autoComplete="off"
-                    value={formData.companyName}
-                    onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                    className={`text-sm min-h-[2rem] xl:min-h-0 ${companyNameExists ? 'border-red-500' : ''}`}
-                    placeholder="Enter company name"
-                  />
-                  {companyNameChecking && (
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                      <LoadingInline size="sm" />
-                    </div>
-                  )}
+        {/* Company Name + Contact Person */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 xl:gap-4">
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+              Company Name *
+            </label>
+            <div className="relative">
+              <Input
+                type="text"
+                required
+                autoComplete="off"
+                value={formData.companyName}
+                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                className={`text-sm min-h-[2rem] xl:min-h-0 ${companyNameExists ? 'border-red-500' : ''}`}
+                placeholder="Enter company name"
+              />
+              {companyNameChecking && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <LoadingInline size="sm" />
                 </div>
-                {companyNameExists && (
-                  <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Company name already exists</p>
-                )}
-              </div>
-              <div className="min-w-0">
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-                  Contact Person *
-                </label>
-                <div className="relative">
-                  <Input
-                    type="text"
-                    required
-                    autoComplete="off"
-                    value={formData.contactPerson?.name || ''}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      contactPerson: { ...(formData.contactPerson || {}), name: e.target.value }
-                    })}
-                    className={`text-sm min-h-[2rem] xl:min-h-0 ${contactNameExists ? 'border-red-500' : ''}`}
-                    placeholder="Enter full name"
-                  />
-                  {contactNameChecking && (
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                      <LoadingInline size="sm" />
-                    </div>
-                  )}
-                </div>
-                {contactNameExists && (
-                  <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Contact name already exists</p>
-                )}
-              </div>
+              )}
             </div>
+            {companyNameExists && (
+              <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Company name already exists</p>
+            )}
+          </div>
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+              Contact Person *
+            </label>
+            <div className="relative">
+              <Input
+                type="text"
+                required
+                autoComplete="off"
+                value={formData.contactPerson?.name || ''}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  contactPerson: { ...(formData.contactPerson || {}), name: e.target.value }
+                })}
+                className={`text-sm min-h-[2rem] xl:min-h-0 ${contactNameExists ? 'border-red-500' : ''}`}
+                placeholder="Enter full name"
+              />
+              {contactNameChecking && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <LoadingInline size="sm" />
+                </div>
+              )}
+            </div>
+            {contactNameExists && (
+              <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Contact name already exists</p>
+            )}
+          </div>
+        </div>
 
-            {/* Email, Phone, Business Type, Payment Terms */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 xl:gap-4">
-                <div className="min-w-0">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-                    Email
-                  </label>
-                  <div className="relative">
+        {/* Email, Phone, Business Type, Payment Terms */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 xl:gap-4">
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+              Email
+            </label>
+            <div className="relative">
+              <Input
+                type="email"
+                autoComplete="off"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className={`text-sm min-h-[2rem] xl:min-h-0 ${emailExists ? 'border-red-500' : ''}`}
+                placeholder="email@company.com (optional)"
+              />
+              {emailChecking && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <LoadingInline size="sm" />
+                </div>
+              )}
+            </div>
+            {emailExists && (
+              <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Email already exists</p>
+            )}
+          </div>
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+              Phone
+            </label>
+            <Input
+              type="tel"
+              autoComplete="off"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              className="text-sm min-h-[2rem] xl:min-h-0"
+              placeholder="(555) 123-4567"
+            />
+          </div>
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+              Business Type
+            </label>
+            <select
+              value={formData.businessType}
+              onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
+              className="input text-sm min-h-[2rem] xl:min-h-0"
+            >
+              <option value="manufacturer">Manufacturer</option>
+              <option value="distributor">Distributor</option>
+              <option value="wholesaler">Wholesaler</option>
+              <option value="dropshipper">Dropshipper</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+              Payment Terms
+            </label>
+            <select
+              value={formData.paymentTerms}
+              onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
+              className="input text-sm min-h-[2rem] xl:min-h-0"
+            >
+              <option value="cash">Cash</option>
+              <option value="net15">Net 15</option>
+              <option value="net30">Net 30</option>
+              <option value="net45">Net 45</option>
+              <option value="net60">Net 60</option>
+              <option value="net90">Net 90</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Credit Limit, Opening Balance, Status */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 xl:gap-4">
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+              Credit Limit
+            </label>
+            <Input
+              type="number"
+              min="0"
+              autoComplete="off"
+              value={formData.creditLimit}
+              onChange={(e) => setFormData({ ...formData, creditLimit: parseFloat(e.target.value) || 0 })}
+              className="text-sm min-h-[2rem] xl:min-h-0"
+              placeholder="0"
+            />
+          </div>
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+              Opening Balance
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              autoComplete="off"
+              value={formData.openingBalance}
+              onChange={(e) => setFormData({ ...formData, openingBalance: parseFloat(e.target.value) || 0 })}
+              className="text-sm min-h-[2rem] xl:min-h-0"
+              placeholder="0.00"
+            />
+            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">
+              Positive = you owe supplier. Negative = advance/credit.
+            </p>
+          </div>
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+              Status
+            </label>
+            <select
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              className="input text-sm min-h-[2rem] xl:min-h-0"
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="pending">Pending</option>
+              <option value="suspended">Suspended</option>
+              <option value="blacklisted">Blacklisted</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Website, Lead Time, Min Order, Rating, Reliability */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 xl:gap-4">
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Website</label>
+            <Input
+              type="url"
+              autoComplete="off"
+              value={formData.website}
+              onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+              className="text-sm min-h-[2rem] xl:min-h-0"
+              placeholder="https://company.com"
+            />
+          </div>
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Lead Time (days)</label>
+            <Input
+              type="number"
+              min="0"
+              autoComplete="off"
+              value={formData.leadTime}
+              onChange={(e) => setFormData({ ...formData, leadTime: parseInt(e.target.value) || 0 })}
+              className="text-sm min-h-[2rem] xl:min-h-0"
+              placeholder="7"
+            />
+          </div>
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Min Order Amount</label>
+            <Input
+              type="number"
+              min="0"
+              autoComplete="off"
+              value={formData.minOrderAmount}
+              onChange={(e) => setFormData({ ...formData, minOrderAmount: parseFloat(e.target.value) || 0 })}
+              className="text-sm min-h-[2rem] xl:min-h-0"
+              placeholder="0"
+            />
+          </div>
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Rating (1-5)</label>
+            <select
+              value={formData.rating}
+              onChange={(e) => setFormData({ ...formData, rating: parseInt(e.target.value) })}
+              className="input text-sm min-h-[2rem] xl:min-h-0"
+            >
+              <option value={1}>1 Star</option>
+              <option value={2}>2 Stars</option>
+              <option value={3}>3 Stars</option>
+              <option value={4}>4 Stars</option>
+              <option value={5}>5 Stars</option>
+            </select>
+          </div>
+          <div className="min-w-0">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Reliability</label>
+            <select
+              value={formData.reliability}
+              onChange={(e) => setFormData({ ...formData, reliability: e.target.value })}
+              className="input text-sm min-h-[2rem] xl:min-h-0"
+            >
+              <option value="excellent">Excellent</option>
+              <option value="good">Good</option>
+              <option value="average">Average</option>
+              <option value="poor">Poor</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Address */}
+        <div>
+          <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-3 xl:mb-4">Address</h3>
+          <div className="space-y-4">
+            {formData.addresses.map((address, index) => (
+              <div key={index} className="border border-gray-200 rounded-lg p-3 sm:p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 xl:gap-4">
+                  <div className="min-w-0">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Street Address</label>
                     <Input
-                      type="email"
+                      type="text"
                       autoComplete="off"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className={`text-sm min-h-[2rem] xl:min-h-0 ${emailExists ? 'border-red-500' : ''}`}
-                      placeholder="email@company.com (optional)"
+                      value={address.street}
+                      onChange={(e) => handleAddressChange(index, 'street', e.target.value)}
+                      className="text-sm min-h-[2rem] xl:min-h-0"
+                      placeholder="123 Main St"
                     />
-                    {emailChecking && (
-                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                        <LoadingInline size="sm" />
-                      </div>
+                  </div>
+                  <div className="min-w-0">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">City *</label>
+                    <select
+                      value={address.city || ''}
+                      onChange={(e) => handleAddressChange(index, 'city', e.target.value)}
+                      className="input text-sm min-h-[2rem] xl:min-h-0"
+                      required
+                      disabled={citiesLoading}
+                    >
+                      <option value="">Select a city</option>
+                      {Array.isArray(citiesData) && citiesData.map((city) => (
+                        <option key={city._id || city.name} value={city.name}>
+                          {city.name}{city.state ? `, ${city.state}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {citiesLoading && (
+                      <p className="text-xs text-gray-500 mt-1">Loading cities...</p>
+                    )}
+                    {!citiesLoading && citiesData.length === 0 && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        No cities available. Please add cities first.
+                      </p>
                     )}
                   </div>
-                  {emailExists && (
-                    <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Email already exists</p>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-                    Phone
-                  </label>
-                  <Input
-                    type="tel"
-                    autoComplete="off"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="text-sm min-h-[2rem] xl:min-h-0"
-                    placeholder="(555) 123-4567"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-                    Business Type
-                  </label>
-                  <select
-                    value={formData.businessType}
-                    onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
-                    className="input text-sm min-h-[2rem] xl:min-h-0"
-                  >
-                    <option value="manufacturer">Manufacturer</option>
-                    <option value="distributor">Distributor</option>
-                    <option value="wholesaler">Wholesaler</option>
-                    <option value="dropshipper">Dropshipper</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="min-w-0">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-                    Payment Terms
-                  </label>
-                  <select
-                    value={formData.paymentTerms}
-                    onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
-                    className="input text-sm min-h-[2rem] xl:min-h-0"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="net15">Net 15</option>
-                    <option value="net30">Net 30</option>
-                    <option value="net45">Net 45</option>
-                    <option value="net60">Net 60</option>
-                    <option value="net90">Net 90</option>
-                  </select>
-                </div>
-              </div>
-
-            {/* Credit Limit, Opening Balance, Status */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 xl:gap-4">
-                <div className="min-w-0">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-                    Credit Limit
-                  </label>
-                  <Input
-                    type="number"
-                    min="0"
-                    autoComplete="off"
-                    value={formData.creditLimit}
-                    onChange={(e) => setFormData({ ...formData, creditLimit: parseFloat(e.target.value) || 0 })}
-                    className="text-sm min-h-[2rem] xl:min-h-0"
-                    placeholder="0"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-                    Opening Balance
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    autoComplete="off"
-                    value={formData.openingBalance}
-                    onChange={(e) => setFormData({ ...formData, openingBalance: parseFloat(e.target.value) || 0 })}
-                    className="text-sm min-h-[2rem] xl:min-h-0"
-                    placeholder="0.00"
-                  />
-                  <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">
-                    Positive = you owe supplier. Negative = advance/credit.
-                  </p>
-                </div>
-                <div className="min-w-0">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-                    Status
-                  </label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="input text-sm min-h-[2rem] xl:min-h-0"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="pending">Pending</option>
-                    <option value="suspended">Suspended</option>
-                    <option value="blacklisted">Blacklisted</option>
-                  </select>
-                </div>
-              </div>
-
-            {/* Website, Lead Time, Min Order, Rating, Reliability */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 xl:gap-4">
-                <div className="min-w-0">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Website</label>
-                  <Input
-                    type="url"
-                    autoComplete="off"
-                    value={formData.website}
-                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                    className="text-sm min-h-[2rem] xl:min-h-0"
-                    placeholder="https://company.com"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Lead Time (days)</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    autoComplete="off"
-                    value={formData.leadTime}
-                    onChange={(e) => setFormData({ ...formData, leadTime: parseInt(e.target.value) || 0 })}
-                    className="text-sm min-h-[2rem] xl:min-h-0"
-                    placeholder="7"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Min Order Amount</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    autoComplete="off"
-                    value={formData.minOrderAmount}
-                    onChange={(e) => setFormData({ ...formData, minOrderAmount: parseFloat(e.target.value) || 0 })}
-                    className="text-sm min-h-[2rem] xl:min-h-0"
-                    placeholder="0"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Rating (1-5)</label>
-                  <select
-                    value={formData.rating}
-                    onChange={(e) => setFormData({ ...formData, rating: parseInt(e.target.value) })}
-                    className="input text-sm min-h-[2rem] xl:min-h-0"
-                  >
-                    <option value={1}>1 Star</option>
-                    <option value={2}>2 Stars</option>
-                    <option value={3}>3 Stars</option>
-                    <option value={4}>4 Stars</option>
-                    <option value={5}>5 Stars</option>
-                  </select>
-                </div>
-                <div className="min-w-0">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Reliability</label>
-                  <select
-                    value={formData.reliability}
-                    onChange={(e) => setFormData({ ...formData, reliability: e.target.value })}
-                    className="input text-sm min-h-[2rem] xl:min-h-0"
-                  >
-                    <option value="excellent">Excellent</option>
-                    <option value="good">Good</option>
-                    <option value="average">Average</option>
-                    <option value="poor">Poor</option>
-                  </select>
-                </div>
-              </div>
-
-            {/* Address */}
-            <div>
-              <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-3 xl:mb-4">Address</h3>
-              <div className="space-y-4">
-                {formData.addresses.map((address, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-3 sm:p-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 xl:gap-4">
-                      <div className="min-w-0">
-                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Street Address</label>
-                        <Input
-                          type="text"
-                          autoComplete="off"
-                          value={address.street}
-                          onChange={(e) => handleAddressChange(index, 'street', e.target.value)}
-                          className="text-sm min-h-[2rem] xl:min-h-0"
-                          placeholder="123 Main St"
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">City *</label>
-                        <select
-                          value={address.city || ''}
-                          onChange={(e) => handleAddressChange(index, 'city', e.target.value)}
-                          className="input text-sm min-h-[2rem] xl:min-h-0"
-                          required
-                          disabled={citiesLoading}
-                        >
-                          <option value="">Select a city</option>
-                          {Array.isArray(citiesData) && citiesData.map((city) => (
-                            <option key={city._id || city.name} value={city.name}>
-                              {city.name}{city.state ? `, ${city.state}` : ''}
-                            </option>
-                          ))}
-                        </select>
-                        {citiesLoading && (
-                          <p className="text-xs text-gray-500 mt-1">Loading cities...</p>
-                        )}
-                        {!citiesLoading && citiesData.length === 0 && (
-                          <p className="text-xs text-amber-600 mt-1">
-                            No cities available. Please add cities first.
-                          </p>
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">State</label>
-                        <Input
-                          type="text"
-                          autoComplete="off"
-                          value={address.state}
-                          onChange={(e) => handleAddressChange(index, 'state', e.target.value)}
-                          className="text-sm min-h-[2rem] xl:min-h-0"
-                          placeholder="State"
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">ZIP Code</label>
-                        <Input
-                          type="text"
-                          autoComplete="off"
-                          value={address.zipCode}
-                          onChange={(e) => handleAddressChange(index, 'zipCode', e.target.value)}
-                          className="text-sm min-h-[2rem] xl:min-h-0"
-                          placeholder="12345"
-                        />
-                      </div>
-                    </div>
+                  <div className="min-w-0">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">State</label>
+                    <Input
+                      type="text"
+                      autoComplete="off"
+                      value={address.state}
+                      onChange={(e) => handleAddressChange(index, 'state', e.target.value)}
+                      className="text-sm min-h-[2rem] xl:min-h-0"
+                      placeholder="State"
+                    />
                   </div>
-                ))}
+                  <div className="min-w-0">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">ZIP Code</label>
+                    <Input
+                      type="text"
+                      autoComplete="off"
+                      value={address.zipCode}
+                      onChange={(e) => handleAddressChange(index, 'zipCode', e.target.value)}
+                      className="text-sm min-h-[2rem] xl:min-h-0"
+                      placeholder="12345"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
+          </div>
+        </div>
 
-            {/* Notes */}
-            <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Notes</label>
-              <Textarea
-                value={formData.notes}
-                autoComplete="off"
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                rows={3}
-                className="text-sm min-h-[2rem] xl:min-h-0"
-                placeholder="Additional notes about this supplier..."
-              />
-            </div>
+        {/* Notes */}
+        <div>
+          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Notes</label>
+          <Textarea
+            value={formData.notes}
+            autoComplete="off"
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            rows={3}
+            className="text-sm min-h-[2rem] xl:min-h-0"
+            placeholder="Additional notes about this supplier..."
+          />
+        </div>
 
-            {/* Form Actions */}
-            <div className="flex flex-wrap justify-end gap-2 xl:gap-3 pt-4 xl:pt-6 border-t border-gray-200">
-              <Button
-                type="button"
-                onClick={onCancel}
-                variant="secondary"
-                className="flex-shrink-0"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="default"
-                className="flex-shrink-0"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Saving...' : (supplier ? 'Update Supplier' : 'Add Supplier')}
-              </Button>
-            </div>
+        {/* Form Actions */}
+        <div className="flex flex-wrap justify-end gap-2 xl:gap-3 pt-4 xl:pt-6 border-t border-gray-200">
+          <Button
+            type="button"
+            onClick={onCancel}
+            variant="secondary"
+            className="flex-shrink-0"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="default"
+            className="flex-shrink-0"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Saving...' : (supplier ? 'Update Supplier' : 'Add Supplier')}
+          </Button>
+        </div>
       </form>
     </BaseModal>
   );

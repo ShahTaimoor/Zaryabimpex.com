@@ -87,6 +87,7 @@ export const Settings2 = () => {
     password: '',
     role: 'cashier',
     status: 'active',
+    allowedNetwork: '',
     permissions: {}
   });
   const [showNewUserPassword, setShowNewUserPassword] = useState(false);
@@ -1090,7 +1091,8 @@ export const Settings2 = () => {
 
     const userDataToSend = {
       ...newUserData,
-      permissions: permissionsArray
+      permissions: permissionsArray,
+      allowedNetwork: newUserData.allowedNetwork
     };
 
     createUserAsync(userDataToSend);
@@ -1114,6 +1116,7 @@ export const Settings2 = () => {
       password: '',
       role: user.role || 'cashier',
       status: user.status || 'active',
+      allowedNetwork: user.allowedNetwork || '',
       permissions: permissionsObject
     });
   };
@@ -1145,7 +1148,8 @@ export const Settings2 = () => {
         firstName: newUserData.firstName,
         lastName: newUserData.lastName,
         email: newUserData.email,
-        permissions: permissionsArray
+        permissions: permissionsArray,
+        allowedNetwork: newUserData.allowedNetwork
       };
 
       // Only include role and status if NOT editing own account
@@ -1201,6 +1205,7 @@ export const Settings2 = () => {
       password: '',
       role: 'cashier',
       status: 'active',
+      allowedNetwork: '',
       permissions: {}
     });
     setEditingUser(null);
@@ -1725,7 +1730,35 @@ export const Settings2 = () => {
                           </p>
                         </div>
                       )}
+
+                      {/* Allowed Network (CIDR) */}
+                      <div className="md:col-span-2 pt-4">
+                        <div className="group">
+                          <label className="block text-sm font-semibold text-gray-900 mb-2 group-focus-within:text-blue-600 transition-colors flex items-center">
+                            <Icons.Wifi className="h-4 w-4 mr-2 text-blue-500" />
+                            Allowed Network Restriction
+                          </label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                              <Icons.Network className="h-4 w-4 text-gray-400" />
+                            </div>
+                            <Input
+                              type="text"
+                              name="allowedNetwork"
+                              value={newUserData.allowedNetwork}
+                              onChange={handleNewUserChange}
+                              placeholder="e.g. 192.168.1.0/24, 10.0.0.0/8 (Optional)"
+                              autoComplete="off"
+                              className="h-11 pl-10 rounded-xl bg-gray-50/50 border-gray-200 focus:bg-white transition-all shadow-sm font-mono text-sm"
+                            />
+                          </div>
+                          <p className="text-[10px] font-bold text-gray-400 mt-2 ml-1 uppercase tracking-tight">
+                            Restrict login to specific IP ranges (CIDR). Leave empty for no restriction. Admins are exempt.
+                          </p>
+                        </div>
+                      </div>
                     </div>
+
                   </div>
 
                   {/* Row 2: Access Configuration container */}

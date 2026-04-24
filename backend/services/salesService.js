@@ -527,7 +527,13 @@ class SalesService {
    */
   async createSale(data, user, options = {}) {
     const { skipInventoryUpdate = false } = options;
-    const { customer, items, orderType, payment, notes, isTaxExempt, billDate, billStartTime, salesOrderId, appliedDiscounts: payloadDiscounts, discountAmount: payloadDiscountAmount, subtotal: payloadSubtotal, total: payloadTotal, tax: payloadTax } = data;
+    const { clientSideId, customer, items, orderType, payment, notes, isTaxExempt, billDate, billStartTime, salesOrderId, appliedDiscounts: payloadDiscounts, discountAmount: payloadDiscountAmount, subtotal: payloadSubtotal, total: payloadTotal, tax: payloadTax } = data;
+
+    // Check for idempotency if clientSideId is provided
+    if (clientSideId) {
+      const existing = await salesRepository.findByClientSideId(clientSideId);
+      if (existing) return existing;
+    }
 
     // Generate order number if not provided
     const settings = await settingsService.getCompanySettings();
@@ -719,7 +725,8 @@ class SalesService {
       notes,
       createdBy: user.id || user._id?.toString(),
       appliedDiscounts: appliedDiscountsForSale,
-      orderType: orderType || 'retail'
+      orderType: orderType || 'retail',
+      clientSideId: clientSideId || null
     };
 
     const order = await withBusinessTransaction(async ({ client, addPostCommit }) => {

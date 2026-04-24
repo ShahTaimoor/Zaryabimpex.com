@@ -242,10 +242,10 @@ const SaleReturns = () => {
     setSelectedCustomer(customer);
     setCustomerSearchTerm(
       customer?.businessName ||
-        customer?.business_name ||
-        customer?.displayName ||
-        customer?.name ||
-        ''
+      customer?.business_name ||
+      customer?.displayName ||
+      customer?.name ||
+      ''
     );
     setStep('product-search');
     setProductSearchTerm('');

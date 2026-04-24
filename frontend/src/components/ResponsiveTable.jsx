@@ -26,14 +26,14 @@ const ResponsiveTable = ({
   // Filter data based on search term
   const filteredData = data.filter(item => {
     if (!searchTerm) return true;
-    
+
     return columns.some(column => {
-      const value = column.accessor ? 
-        (typeof column.accessor === 'function' ? 
-          column.accessor(item) : 
+      const value = column.accessor ?
+        (typeof column.accessor === 'function' ?
+          column.accessor(item) :
           item[column.accessor]
         ) : '';
-      
+
       return String(value).toLowerCase().includes(searchTerm.toLowerCase());
     });
   });
@@ -42,15 +42,15 @@ const ResponsiveTable = ({
   const sortedData = [...filteredData].sort((a, b) => {
     if (!sortField) return 0;
 
-    const aValue = columns.find(col => col.key === sortField)?.accessor ? 
-      (typeof columns.find(col => col.key === sortField).accessor === 'function' ? 
-        columns.find(col => col.key === sortField).accessor(a) : 
+    const aValue = columns.find(col => col.key === sortField)?.accessor ?
+      (typeof columns.find(col => col.key === sortField).accessor === 'function' ?
+        columns.find(col => col.key === sortField).accessor(a) :
         a[columns.find(col => col.key === sortField).accessor]
       ) : '';
-    
-    const bValue = columns.find(col => col.key === sortField)?.accessor ? 
-      (typeof columns.find(col => col.key === sortField).accessor === 'function' ? 
-        columns.find(col => col.key === sortField).accessor(b) : 
+
+    const bValue = columns.find(col => col.key === sortField)?.accessor ?
+      (typeof columns.find(col => col.key === sortField).accessor === 'function' ?
+        columns.find(col => col.key === sortField).accessor(b) :
         b[columns.find(col => col.key === sortField).accessor]
       ) : '';
 
@@ -61,7 +61,7 @@ const ResponsiveTable = ({
 
   const handleSort = (field) => {
     if (!sortable) return;
-    
+
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -91,12 +91,12 @@ const ResponsiveTable = ({
         {/* Main content */}
         <div className="space-y-2">
           {columns.slice(0, 3).map((column, colIndex) => {
-            const value = column.accessor ? 
-              (typeof column.accessor === 'function' ? 
-                column.accessor(item) : 
+            const value = column.accessor ?
+              (typeof column.accessor === 'function' ?
+                column.accessor(item) :
                 item[column.accessor]
               ) : '';
-            
+
             return (
               <div key={colIndex} className="flex justify-between">
                 <span className="text-sm font-medium text-gray-500">
@@ -133,12 +133,12 @@ const ResponsiveTable = ({
             {expandedRows.has(index) && (
               <div className="mt-2 space-y-2 border-t border-gray-100 pt-2">
                 {columns.slice(3).map((column, colIndex) => {
-                  const value = column.accessor ? 
-                    (typeof column.accessor === 'function' ? 
-                      column.accessor(item) : 
+                  const value = column.accessor ?
+                    (typeof column.accessor === 'function' ?
+                      column.accessor(item) :
                       item[column.accessor]
                     ) : '';
-                  
+
                   return (
                     <div key={colIndex} className="flex justify-between">
                       <span className="text-sm font-medium text-gray-500">
@@ -206,16 +206,15 @@ const ResponsiveTable = ({
             {columns.map((column) => (
               <th
                 key={column.key}
-                className={`px-4 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                  sortable ? 'cursor-pointer hover:bg-gray-100' : ''
-                }`}
+                className={`px-4 sm:px-6 py-2.5 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${sortable ? 'cursor-pointer hover:bg-gray-100' : ''
+                  }`}
                 onClick={() => sortable && handleSort(column.key)}
               >
                 <div className="flex items-center space-x-1">
                   <span>{column.header}</span>
                   {sortable && sortField === column.key && (
-                    sortDirection === 'asc' ? 
-                      <ChevronUp className="h-4 w-4" /> : 
+                    sortDirection === 'asc' ?
+                      <ChevronUp className="h-4 w-4" /> :
                       <ChevronDown className="h-4 w-4" />
                   )}
                 </div>
@@ -236,12 +235,12 @@ const ResponsiveTable = ({
               onClick={() => onRowClick && onRowClick(item)}
             >
               {columns.map((column) => {
-                const value = column.accessor ? 
-                  (typeof column.accessor === 'function' ? 
-                    column.accessor(item) : 
+                const value = column.accessor ?
+                  (typeof column.accessor === 'function' ?
+                    column.accessor(item) :
                     item[column.accessor]
                   ) : '';
-                
+
                 return (
                   <td key={column.key} className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-900">
                     {column.render ? column.render(value, item, index) : value}

@@ -81,7 +81,9 @@ const MIGRATIONS = [
   '059_increase_jv_account_code_length.sql',
   '060_enable_direct_posting_party_accounts.sql',
   '061_uppercase_account_codes.sql',
-  '062_add_bank_id_support.sql'
+  '062_add_bank_id_support.sql',
+  '063_add_allowed_network_to_users.sql',
+  '064_add_client_side_id_to_transactions.sql'
 ];
 
 async function ensureMigrationsTable() {

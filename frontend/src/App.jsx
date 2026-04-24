@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorProvider } from './contexts/ErrorContext';
 import { TabProvider } from './contexts/TabContext';
@@ -10,6 +10,7 @@ import NetworkStatus from './components/NetworkStatus';
 import OfflineIndicator from './components/OfflineIndicator';
 import { LoadingPage } from './components/LoadingSpinner';
 import { PERMISSIONS } from './config/rbacConfig';
+import SyncManager from './services/SyncManager';
 
 // Critical components - load immediately (small, frequently used)
 import { Login } from './pages/Login';
@@ -66,6 +67,11 @@ const ProductTransformations = lazy(() => import('./pages/ProductTransformations
 const CCTVAccess = lazy(() => import('./pages/CCTVAccess'));
 
 function App() {
+  useEffect(() => {
+    // Initialize offline sync manager
+    SyncManager.init();
+  }, []);
+
   return (
     <ErrorBoundary>
       <ErrorProvider>
