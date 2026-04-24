@@ -886,17 +886,25 @@ export const Suppliers = () => {
       { header: 'Contact Person', key: 'contactPersonName', width: 25 },
       { header: 'Phone', key: 'phone', width: 20 },
       { header: 'Email', key: 'email', width: 30 },
+      { header: 'Address', key: 'fullAddress', width: 40 },
       { header: 'Type', key: 'businessType', width: 15 },
       { header: 'Rating', key: 'rating', width: 10, type: 'number' },
       { header: 'Balance', key: 'currentBalance', width: 15, type: 'currency' }
     ],
-    data: allSuppliers.map(s => ({
-      ...s,
-      companyName: s.companyName || s.company_name || s.businessName || '',
-      contactPersonName: s.contactPerson?.name || s.contact_person || '',
-      currentBalance: s.currentBalance ?? s.balance ?? 0,
-      phone: s.phone || s.contact_phone || ''
-    }))
+    data: allSuppliers.map(s => {
+      const rawAddr = s.address || s.addresses;
+      const addr = Array.isArray(rawAddr) ? (rawAddr[0] || {}) : (rawAddr || {});
+      const street = addr.street || '';
+      const city = addr.city || '';
+      return {
+        ...s,
+        companyName: s.companyName || s.company_name || s.businessName || '',
+        contactPersonName: s.contactPerson?.name || s.contact_person || '',
+        fullAddress: [street, city].filter(Boolean).join(', '),
+        currentBalance: s.currentBalance ?? s.balance ?? 0,
+        phone: s.phone || s.contact_phone || ''
+      };
+    })
   });
 
   const handleDownloadTemplate = () => {
@@ -908,6 +916,8 @@ export const Suppliers = () => {
         { header: 'Contact Person', key: 'contactPerson', width: 25 },
         { header: 'Phone', key: 'phone', width: 20 },
         { header: 'Email', key: 'email', width: 30 },
+        { header: 'Address', key: 'address', width: 35 },
+        { header: 'City', key: 'city', width: 15 },
         { header: 'Business Type', key: 'type', width: 15 },
         { header: 'Opening Balance', key: 'balance', width: 15, type: 'currency' }
       ]

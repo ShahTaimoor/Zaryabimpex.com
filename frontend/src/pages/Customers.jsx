@@ -94,17 +94,24 @@ export const Customers = () => {
       { header: 'Contact Person', key: 'contactPersonName', width: 25 },
       { header: 'Email', key: 'email', width: 30 },
       { header: 'Phone', key: 'phone', width: 20 },
+      { header: 'Address', key: 'fullAddress', width: 40 },
       { header: 'City', key: 'city', width: 15 },
       { header: 'Balance', key: 'currentBalance', width: 15, type: 'currency' }
     ],
-    data: customers.map(c => ({
-      ...c,
-      businessName: c.businessName || c.business_name || c.name || '',
-      contactPersonName: c.contactPerson?.name || c.contact_person || c.name || '',
-      city: c.city || (Array.isArray(c.address) ? (c.address[0]?.city || '') : (c.address?.city || '')),
-      currentBalance: c.currentBalance ?? c.balance ?? 0,
-      phone: c.phone || c.contact_phone || ''
-    }))
+    data: customers.map(c => {
+      const addr = Array.isArray(c.address) ? (c.address[0] || {}) : (c.address || {});
+      const street = addr.street || '';
+      const city = addr.city || c.city || '';
+      return {
+        ...c,
+        businessName: c.businessName || c.business_name || c.name || '',
+        contactPersonName: c.contactPerson?.name || c.contact_person || c.name || '',
+        city,
+        fullAddress: [street, city].filter(Boolean).join(', '),
+        currentBalance: c.currentBalance ?? c.balance ?? 0,
+        phone: c.phone || c.contact_phone || ''
+      };
+    })
   });
 
   const handleDownloadTemplate = () => {
@@ -116,6 +123,7 @@ export const Customers = () => {
         { header: 'Contact Person', key: 'contactPerson', width: 25 },
         { header: 'Email', key: 'email', width: 30 },
         { header: 'Phone', key: 'phone', width: 20 },
+        { header: 'Address', key: 'address', width: 35 },
         { header: 'City', key: 'city', width: 15 },
         { header: 'Opening Balance', key: 'balance', width: 15, type: 'currency' }
       ]

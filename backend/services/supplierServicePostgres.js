@@ -364,6 +364,15 @@ class SupplierService {
           ]) || (supplier.contactPerson && supplier.contactPerson.name)
         );
 
+        const addressVal = str(
+          pick(supplier, [
+            'address',
+            'street',
+            'street_address',
+            'location',
+            'full_address'
+          ])
+        );
         const mappedData = {
           companyName,
           contactPerson: {
@@ -372,7 +381,10 @@ class SupplierService {
           },
           email: str(supplier.email),
           phone: str(supplier.phone || supplier.mobile || supplier.contact_phone),
-          address: cityName ? { city: cityName } : undefined,
+          address: cityName || addressVal ? { 
+            city: cityName, 
+            street: addressVal 
+          } : undefined,
           openingBalance: num(supplier.opening_balance ?? supplier.openingBalance ?? supplier.balance ?? supplier.opening),
           businessType: str(supplier.business_type || supplier.type || supplier.businessType || 'wholesaler').toLowerCase() || 'wholesaler',
           status: 'active'

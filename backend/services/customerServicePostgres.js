@@ -371,12 +371,16 @@ class CustomerService {
           : String(cityRaw || '').trim();
 
         // Map user-friendly Excel headers to DB fields
+        const addressVal = customer.address || customer.Address || customer.street || customer.Street || '';
         const mappedData = {
           businessName: customer.business_name || customer.businessName || customer.business_name || '',
           name: customer.name || customer.contact_person || '',
           email: customer.email || '',
           phone: customer.phone || '',
-          address: cityName ? { city: cityName } : undefined,
+          address: cityName || addressVal ? { 
+            city: cityName,
+            street: addressVal 
+          } : undefined,
           openingBalance: parseFloat(customer.opening_balance || customer.openingBalance || customer.balance || 0),
           businessType: (customer.business_type || customer.businessType || 'wholesale').toLowerCase(),
           customerTier: (customer.customer_tier || customer.customerTier || 'bronze').toLowerCase(),
