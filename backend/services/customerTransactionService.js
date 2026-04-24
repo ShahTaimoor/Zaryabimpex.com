@@ -50,54 +50,6 @@ class CustomerTransactionService {
     const customer = await CustomerRepository.findById(customerId);
     if (!customer) throw new Error('Customer not found');
 
-    const balanceBefore = {
-      pendingBalance: customer.pending_balance ?? customer.pendingBalance ?? 0,
-      advanceBalance: customer.advance_balance ?? customer.advanceBalance ?? 0,
-      currentBalance: customer.current_balance ?? customer.currentBalance ?? 0
-    };
-
-    // Calculate balance impact
-    let balanceImpact = 0;
-    let affectsPendingBalance = false;
-    let affectsAdvanceBalance = false;
-
-    switch (transactionType) {
-      case 'invoice':
-      case 'debit_note':
-        balanceImpact = netAmount;
-        affectsPendingBalance = true;
-        break;
-      case 'payment':
-        balanceImpact = -netAmount; // Reduces what customer owes
-        affectsPendingBalance = true;
-        affectsAdvanceBalance = true; // May create advance
-        break;
-      case 'refund':
-      case 'credit_note':
-        balanceImpact = -netAmount; // Reduces what customer owes
-        affectsPendingBalance = true;
-        affectsAdvanceBalance = true;
-        break;
-      case 'adjustment':
-        balanceImpact = netAmount; // Can be positive or negative
-        affectsPendingBalance = true;
-        break;
-      case 'write_off':
-        balanceImpact = -netAmount; // Reduces receivable
-        affectsPendingBalance = true;
-        break;
-      case 'opening_balance':
-        balanceImpact = netAmount;
-        if (netAmount >= 0) {
-          affectsPendingBalance = true;
-        } else {
-          affectsAdvanceBalance = true;
-        }
-        break;
-    }
-
-    const balanceAfter = this.calculateNewBalances(balanceBefore, balanceImpact, transactionType);
-
     const transactionNumber = await CustomerTransactionRepository.generateTransactionNumber(transactionType, customerId);
     const resolvedDueDate = dueDate || this.calculateDueDate(customer.payment_terms || customer.paymentTerms);
     const aging = computeAging(resolvedDueDate);
@@ -118,8 +70,8 @@ class CustomerTransactionService {
       affectsPendingBalance,
       affectsAdvanceBalance,
       balanceImpact,
-      balanceBefore,
-      balanceAfter,
+      balanceBefore: null, // Legacy snapshot removed
+      balanceAfter: null,  // Legacy snapshot removed
       lineItems,
       paymentDetails,
       status: requiresApproval ? 'draft' : 'posted',
@@ -136,77 +88,6 @@ class CustomerTransactionService {
     return transaction;
   }
 
-  /**
-   * Calculate new balances after transaction
-   * @param {Object} balanceBefore - Current balances
-   * @param {Number} balanceImpact - Impact amount
-   * @param {String} transactionType - Type of transaction
-   * @returns {Object}
-   */
-  calculateNewBalances(balanceBefore, balanceImpact, transactionType) {
-    let pendingBalance = balanceBefore.pendingBalance;
-    let advanceBalance = balanceBefore.advanceBalance;
-
-    if (transactionType === 'payment') {
-      // Payment reduces pendingBalance first, then adds to advanceBalance
-      if (balanceImpact < 0) {
-        const paymentAmount = Math.abs(balanceImpact);
-        const pendingReduction = Math.min(paymentAmount, pendingBalance);
-        pendingBalance -= pendingReduction;
-
-        const remainingPayment = paymentAmount - pendingReduction;
-        if (remainingPayment > 0) {
-          advanceBalance += remainingPayment;
-        }
-      }
-    } else if (transactionType === 'invoice' || transactionType === 'debit_note') {
-      // Invoice adds to pendingBalance
-      pendingBalance += balanceImpact;
-    } else if (transactionType === 'refund' || transactionType === 'credit_note') {
-      // Refund reduces pendingBalance, may add to advanceBalance
-      if (balanceImpact < 0) {
-        const refundAmount = Math.abs(balanceImpact);
-        const pendingReduction = Math.min(refundAmount, pendingBalance);
-        pendingBalance -= pendingReduction;
-
-        const remainingRefund = refundAmount - pendingReduction;
-        if (remainingRefund > 0) {
-          advanceBalance += remainingRefund;
-        }
-      }
-    } else if (transactionType === 'adjustment') {
-      // Adjustment can affect either balance
-      if (balanceImpact > 0) {
-        pendingBalance += balanceImpact;
-      } else {
-        const adjustmentAmount = Math.abs(balanceImpact);
-        const pendingReduction = Math.min(adjustmentAmount, pendingBalance);
-        pendingBalance -= pendingReduction;
-
-        const remainingAdjustment = adjustmentAmount - pendingReduction;
-        if (remainingAdjustment > 0) {
-          advanceBalance = Math.max(0, advanceBalance - remainingAdjustment);
-        }
-      }
-    } else if (transactionType === 'write_off') {
-      // Write-off reduces pendingBalance
-      pendingBalance = Math.max(0, pendingBalance + balanceImpact);
-    } else if (transactionType === 'opening_balance') {
-      if (balanceImpact >= 0) {
-        pendingBalance += balanceImpact;
-      } else {
-        advanceBalance += Math.abs(balanceImpact);
-      }
-    }
-
-    const currentBalance = pendingBalance - advanceBalance;
-
-    return {
-      pendingBalance,
-      advanceBalance,
-      currentBalance
-    };
-  }
 
   /**
    * Calculate due date based on payment terms
@@ -246,104 +127,12 @@ class CustomerTransactionService {
    * @returns {Promise<Customer>}
    */
   async updateCustomerBalance(customerId, newBalances) {
+    console.warn(`[DEPRECATED] updateCustomerBalance called for ${customerId}. Manual column updates are disabled.`);
     const customer = await CustomerRepository.findById(customerId);
     if (!customer) throw new Error('Customer not found');
-
-    const updated = await CustomerRepository.update(customerId, {
-      pendingBalance: newBalances.pendingBalance,
-      advanceBalance: newBalances.advanceBalance,
-      currentBalance: newBalances.currentBalance
-    });
-
-    if (!updated) throw new Error('Concurrent balance update conflict. Please retry.');
-    return updated;
+    return customer; // Return original without updates
   }
 
-  /**
-   * Create accounting entries for transaction
-   * @param {CustomerTransaction} transaction - Transaction
-   * @param {Object} user - User
-   * @returns {Promise<Array>}
-   */
-  async createAccountingEntries(transaction, user) {
-    const entries = [];
-    const transactionType = transaction.transaction_type ?? transaction.transactionType;
-    const transactionNumber = transaction.transaction_number ?? transaction.transactionNumber;
-    const netAmount = transaction.net_amount ?? transaction.netAmount;
-    const paymentDetails = (transaction.payment_details ?? transaction.paymentDetails) || {};
-
-    switch (transactionType) {
-      case 'invoice':
-        // Debit: AR, Credit: Revenue
-        entries.push({
-          accountCode: 'AR',
-          debitAmount: netAmount,
-          creditAmount: 0,
-          description: `Invoice ${transactionNumber}`
-        });
-        entries.push({
-          accountCode: 'REV',
-          debitAmount: 0,
-          creditAmount: netAmount,
-          description: `Invoice ${transactionNumber}`
-        });
-        break;
-
-      case 'payment': {
-        const paymentAccount = paymentDetails.paymentMethod === 'bank_transfer'
-          ? 'BANK'
-          : 'CASH';
-        entries.push({
-          accountCode: paymentAccount,
-          debitAmount: transaction.netAmount,
-          creditAmount: 0,
-          description: `Payment ${transaction.transactionNumber}`
-        });
-        entries.push({
-          accountCode: 'AR',
-          debitAmount: 0,
-          creditAmount: netAmount,
-          description: `Payment ${transactionNumber}`
-        });
-        break;
-      }
-
-      case 'refund':
-      case 'credit_note':
-        // Debit: Sales Returns, Credit: AR
-        entries.push({
-          accountCode: 'SALES_RET',
-          debitAmount: netAmount,
-          creditAmount: 0,
-          description: `Refund ${transaction.transactionNumber}`
-        });
-        entries.push({
-          accountCode: 'AR',
-          debitAmount: 0,
-          creditAmount: netAmount,
-          description: `Refund ${transactionNumber}`
-        });
-        break;
-
-      case 'write_off':
-        // Debit: Bad Debt Expense, Credit: AR
-        entries.push({
-          accountCode: 'BAD_DEBT',
-          debitAmount: netAmount,
-          creditAmount: 0,
-          description: `Bad debt write-off ${transaction.transactionNumber}`
-        });
-        entries.push({
-          accountCode: 'AR',
-          debitAmount: 0,
-          creditAmount: netAmount,
-          description: `Bad debt write-off ${transactionNumber}`
-        });
-        break;
-    }
-
-    return entries;
-  }
 
   /**
    * Apply payment to invoices
