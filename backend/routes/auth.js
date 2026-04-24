@@ -16,7 +16,6 @@ router.post('/register', [
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').isIn(['admin', 'manager', 'cashier', 'inventory', 'viewer', 'employee']).withMessage('Invalid role'),
   body('status').optional().isIn(['active', 'inactive']).withMessage('Invalid status'),
-  body('allowedNetwork').optional().trim()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);

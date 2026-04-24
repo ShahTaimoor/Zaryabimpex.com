@@ -11,7 +11,7 @@ class AuthService {
    * @returns {Promise<{user: User, message: string}>}
    */
   async register(userData, createdBy) {
-    const { firstName, lastName, email, password, role, phone, department, permissions, status, allowedNetwork } = userData;
+    const { firstName, lastName, email, password, role, phone, department, permissions, status } = userData;
 
     // Check if email already exists
     const emailExists = await userRepository.emailExists(email);
@@ -29,8 +29,7 @@ class AuthService {
       phone,
       department,
       permissions: permissions || [],
-      status: status || 'active',
-      allowedNetwork
+      status: status || 'active'
     });
 
     // Track permission change
@@ -78,63 +77,6 @@ class AuthService {
       throw new Error('Invalid credentials');
     }
 
-    // --- IP Restriction Logic ---
-    // Admin users are exempt from IP restrictions
-    if (user.role !== 'admin' && user.allowedNetwork) {
-      try {
-        const clientIp = ipAddress;
-        const allowedRanges = user.allowedNetwork.split(',').map(s => s.trim()).filter(Boolean);
-
-        if (allowedRanges.length > 0) {
-          let isAllowed = false;
-          let parsedClientIp;
-
-          try {
-            parsedClientIp = ipaddr.parse(clientIp);
-          } catch (e) {
-            logger.warn(`Failed to parse client IP: ${clientIp}`);
-            throw new Error('Invalid client IP detected');
-          }
-
-          for (const rangeStr of allowedRanges) {
-            try {
-              if (rangeStr.includes('/')) {
-                // CIDR notation
-                const range = ipaddr.parseCIDR(rangeStr);
-                if (parsedClientIp.match(range)) {
-                  isAllowed = true;
-                  break;
-                }
-              } else {
-                // Single IP
-                const allowedIp = ipaddr.parse(rangeStr);
-                if (parsedClientIp.toString() === allowedIp.toString()) {
-                  isAllowed = true;
-                  break;
-                }
-              }
-            } catch (e) {
-              logger.warn(`Failed to parse allowed network range: ${rangeStr}`);
-              // Continue to next range
-            }
-          }
-
-          if (!isAllowed) {
-            logger.warn(`Login blocked for user ${email} from unauthorized IP: ${clientIp}`);
-            throw new Error('Access restricted: You are not connected to the authorized shop network.');
-          }
-        }
-      } catch (error) {
-        if (error.message.startsWith('Access restricted')) {
-          throw error;
-        }
-        logger.error(`Error during IP validation for user ${email}:`, error);
-        // Fallback: if validation fails due to technical error, we might want to block or allow.
-        // Given this is a security feature, blocking is safer.
-        throw new Error('Login failed due to network validation error. Please contact administrator.');
-      }
-    }
-    // ----------------------------
 
     // Reset login attempts on successful login
     if (user.loginAttempts > 0) {

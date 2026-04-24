@@ -24,7 +24,6 @@ function rowToUser(row) {
     loginAttempts: row.login_attempts ?? 0,
     lockUntil: row.lock_until,
     password_hash: row.password_hash,
-    allowedNetwork: row.allowed_network,
     created_at: row.created_at,
     updated_at: row.updated_at
   };
@@ -114,8 +113,8 @@ class UserRepository {
     const permissions = Array.isArray(data.permissions) ? data.permissions : [];
 
     const result = await query(
-      `INSERT INTO users (first_name, last_name, email, password_hash, phone, is_active, roles, permissions, allowed_network)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO users (first_name, last_name, email, password_hash, phone, is_active, roles, permissions)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         data.firstName || data.first_name || '',
@@ -125,8 +124,7 @@ class UserRepository {
         data.phone || null,
         data.status !== 'inactive' && data.status !== 'suspended',
         JSON.stringify(roles),
-        JSON.stringify(permissions),
-        data.allowedNetwork || null
+        JSON.stringify(permissions)
       ]
     );
     return rowToUser(result.rows[0]);
@@ -145,7 +143,6 @@ class UserRepository {
     if (data.roles !== undefined) { fields.push(`roles = $${n++}`); values.push(JSON.stringify(Array.isArray(data.roles) ? data.roles : [data.roles])); }
     if (data.role !== undefined) { fields.push(`roles = $${n++}`); values.push(JSON.stringify([data.role])); }
     if (data.permissions !== undefined) { fields.push(`permissions = $${n++}`); values.push(JSON.stringify(data.permissions)); }
-    if (data.allowedNetwork !== undefined) { fields.push(`allowed_network = $${n++}`); values.push(data.allowedNetwork); }
     if (data.password !== undefined) {
       const hash = await bcrypt.hash(data.password, 12);
       fields.push(`password_hash = $${n++}`);

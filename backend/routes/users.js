@@ -53,7 +53,6 @@ router.put('/:id', [
   body('email').optional().isEmail().normalizeEmail().withMessage('Valid email is required'),
   body('role').optional().isIn(['admin', 'manager', 'cashier', 'inventory', 'viewer', 'employee']).withMessage('Invalid role'),
   body('status').optional().isIn(['active', 'inactive', 'suspended']).withMessage('Invalid status'),
-  body('allowedNetwork').optional().trim()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -62,14 +61,13 @@ router.put('/:id', [
     }
 
     const updateData = {};
-    const { firstName, lastName, email, role, status, permissions, allowedNetwork } = req.body;
+    const { firstName, lastName, email, role, status, permissions } = req.body;
     if (firstName) updateData.firstName = firstName;
     if (lastName) updateData.lastName = lastName;
     if (email) updateData.email = email;
     if (role) updateData.role = role;
     if (status) updateData.status = status;
     if (permissions) updateData.permissions = permissions;
-    if (allowedNetwork !== undefined) updateData.allowedNetwork = allowedNetwork;
 
     const updatedUser = await userService.updateUser(req.params.id, updateData, req.user);
 
