@@ -136,25 +136,35 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File is too large. Max size is 10MB.');
+      return;
+    }
+
     setImageUploading(true);
     const form = new FormData();
     form.append('image', file);
 
     try {
+      // Use the standard API endpoint
       const response = await fetch('/api/images/upload', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`
+          // Use 'authToken' to match the rest of the app
+          Authorization: `Bearer ${localStorage.getItem('authToken')}`
         },
         body: form
       });
 
-      // Safely parse response — server may return HTML on unexpected errors
+      // Safely parse response — server may return HTML on 405/500 errors
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('Image upload: unexpected non-JSON response:', text.slice(0, 200));
-        throw new Error(`Server error (${response.status}): Please check the backend is running.`);
+        const status = response.status;
+        if (status === 405) {
+          throw new Error('Server error (405): Image upload is not allowed by the server configuration. Please check Nginx settings.');
+        }
+        throw new Error(`Server error (${status}): Unexpected response from server.`);
       }
 
       const data = await response.json();
@@ -166,10 +176,11 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       }));
       toast.success('Image uploaded successfully');
     } catch (error) {
+      console.error('Upload Error:', error);
       toast.error(error.message || 'Failed to upload image');
     } finally {
       setImageUploading(false);
-      // Reset file input so the same file can be re-selected after an error
+      // Reset file input
       event.target.value = '';
     }
   };
