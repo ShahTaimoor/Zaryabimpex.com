@@ -8,6 +8,10 @@ import './index.css';
 import './components/print/printStyles.css';
 import App from './App';
 import { store } from './store/store';
+import { registerServiceWorker } from './registerSW';
+
+// Register PWA service worker
+registerServiceWorker();
 
 const queryClient = new QueryClient({
   defaultOptions: {
