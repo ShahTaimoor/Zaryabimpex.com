@@ -98,7 +98,7 @@ class SupplierRepository {
         name, company_name, contact_person, email, phone, address,
         opening_balance, credit_limit, payment_terms, tax_id, notes,
         is_active, supplier_type, rating, created_by, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *`,
       [
         supplierData.name || null,
