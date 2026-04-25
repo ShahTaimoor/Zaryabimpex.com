@@ -342,7 +342,7 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                 <div className="relative border-2 border-dashed border-gray-300 rounded-md bg-gray-50 flex items-center justify-center overflow-hidden h-[120px] xl:h-[150px] group">
                   {formData.imageUrl ? (
                     <>
-                      <img src={formData.imageUrl} alt="Product" className="object-cover w-full h-full" />
+                      <img src={formData.imageUrl} alt="Product" crossOrigin="anonymous" className="object-cover w-full h-full" />
                       <button
                         type="button"
                         onClick={() => setFormData(prev => ({ ...prev, imageUrl: '' }))}

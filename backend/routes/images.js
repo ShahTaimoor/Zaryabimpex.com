@@ -38,31 +38,29 @@ const upload = multer({
 // @route   POST /api/images/upload
 // @desc    Upload to Cloudinary
 // @access  Private
-router.post('/upload', [
-  auth,
-  requirePermission('create_products'),
-  upload.single('image')
-], async (req, res) => {
+router.post('/upload', auth, upload.single('image'), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No image file uploaded' });
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'No image file uploaded' 
+      });
     }
 
     // Upload directly from buffer to Cloudinary
-    const result = await uploadImageOnCloudinary(req.file.buffer, 'products', {
-      width: 1200,
-      height: 1200,
-      fit: 'inside'
-    });
+    const { secure_url, public_id } = await uploadImageOnCloudinary(
+      req.file.buffer, 
+      'product_images'
+    );
 
     res.json({
       success: true,
       message: 'Image uploaded successfully',
       data: {
         urls: {
-          optimized: result.secure_url
+          optimized: secure_url
         },
-        public_id: result.public_id
+        public_id: public_id
       }
     });
   } catch (error) {
