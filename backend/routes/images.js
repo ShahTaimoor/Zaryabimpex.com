@@ -64,7 +64,7 @@ router.post('/upload', [
 
     const inputPath = req.file.path;
     const outputDir = path.join(__dirname, '../uploads/images/optimized');
-    const baseUrl = '/uploads/images/';
+    const baseUrl = '/api/images/';
 
     // Optimize image
     const optimized = await optimizeImage(inputPath, outputDir, {
