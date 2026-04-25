@@ -56,16 +56,24 @@ router.post('/upload', [
     });
 
     res.json({
+      success: true,
       message: 'Image uploaded successfully',
-      urls: {
-        optimized: result.secure_url
-      },
-      public_id: result.public_id
+      data: {
+        urls: {
+          optimized: result.secure_url
+        },
+        public_id: result.public_id
+      }
     });
   } catch (error) {
-    logger.error('Image upload error:', { error: error.message, stack: error.stack });
+    logger.error('Image upload error:', { 
+      error: error.message, 
+      stack: error.stack,
+      requestId: req.id
+    });
     
     res.status(500).json({ 
+      success: false,
       message: 'Image upload failed',
       error: error.message 
     });

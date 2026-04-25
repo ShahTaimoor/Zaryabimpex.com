@@ -164,6 +164,13 @@ export const productsApi = api.injectEndpoints({
         { type: 'Inventory', id: 'LIST' },
       ],
     }),
+    uploadProductImage: builder.mutation({
+      query: (formData) => ({
+        url: 'images/upload',
+        method: 'post',
+        data: formData,
+      }),
+    }),
   }),
   overrideExisting: false,
 });
@@ -184,4 +191,5 @@ export const {
   useGetLastPurchasePricesMutation,
   useLinkInvestorsMutation,
   useBulkCreateProductsMutation,
+  useUploadProductImageMutation,
 } = productsApi;
