@@ -148,6 +148,15 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
         },
         body: form
       });
+
+      // Safely parse response — server may return HTML on unexpected errors
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Image upload: unexpected non-JSON response:', text.slice(0, 200));
+        throw new Error(`Server error (${response.status}): Please check the backend is running.`);
+      }
+
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Image upload failed');
 
@@ -160,6 +169,8 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       toast.error(error.message || 'Failed to upload image');
     } finally {
       setImageUploading(false);
+      // Reset file input so the same file can be re-selected after an error
+      event.target.value = '';
     }
   };
 
