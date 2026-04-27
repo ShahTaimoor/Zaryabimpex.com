@@ -128,7 +128,6 @@ export const Sales = ({ tabId, editData }) => {
   const [directPrintOrder, setDirectPrintOrder] = useState(null);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [appliedDiscounts, setAppliedDiscounts] = useState([]);
-  const [isTaxExempt, setIsTaxExempt] = useState(true);
   const [directDiscount, setDirectDiscount] = useState({ type: 'amount', value: 0 });
   const [isAdvancePayment, setIsAdvancePayment] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -176,6 +175,8 @@ export const Sales = ({ tabId, editData }) => {
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const showSalesDiscountCodeEnabled = companySettings.orderSettings?.showSalesDiscountCode === true;
   const autoPrintEnabled = companySettings.printSettings?.autoPrintAfterSale !== false;
+  const taxSystemEnabled = companySettings.taxEnabled === true;
+  const globalTaxPercent = Math.min(100, Math.max(0, Number(companySettings.defaultTaxRate ?? 0)));
   const [showProfit, setShowProfit] = useState(false);
 
   // Sync state with global setting if it changes
@@ -272,11 +273,6 @@ export const Sales = ({ tabId, editData }) => {
           totalPrice: item.totalPrice || (item.quantity * (item.unitPrice || item.price || (item.product?.pricing?.retail || 0)))
         }));
         setCart(formattedItems);
-      }
-
-      // Set tax exempt status
-      if (editData.isTaxExempt !== undefined) {
-        setIsTaxExempt(editData.isTaxExempt);
       }
 
       // Restore existing discounts in edit mode (code + manual)
@@ -540,7 +536,7 @@ export const Sales = ({ tabId, editData }) => {
 
   const totalDiscountAmount = codeDiscountAmount + directDiscountAmount;
   const subtotalAfterDiscount = subtotal - totalDiscountAmount;
-  const tax = isTaxExempt ? 0 : subtotalAfterDiscount * 0.08;
+  const tax = taxSystemEnabled ? subtotalAfterDiscount * (globalTaxPercent / 100) : 0;
   const total = subtotalAfterDiscount + tax;
   const change = amountPaid - total;
   const manualDiscountDisplay = Math.max(0, Math.round(directDiscountAmount || 0));
@@ -1053,7 +1049,6 @@ export const Sales = ({ tabId, editData }) => {
           setSelectedCustomer(null);
           setCustomerSearchTerm('');
           setAppliedDiscounts([]);
-          setIsTaxExempt(true);
           setDirectDiscount({ type: 'amount', value: 0 });
           setIsAdvancePayment(false);
           setInvoiceNumber('');
@@ -1318,7 +1313,7 @@ export const Sales = ({ tabId, editData }) => {
       subtotal: subtotal,
       discountAmount: totalDiscountAmount,
       tax: tax,
-      isTaxExempt: isTaxExempt,
+      isTaxExempt: !taxSystemEnabled,
       total: total,
       invoiceNumber: invoiceNumber,
       billDate: billDate || undefined, // Include billDate for backdating (invoice number will be based on this)
@@ -1410,7 +1405,7 @@ export const Sales = ({ tabId, editData }) => {
     subtotal,
     totalDiscountAmount,
     tax,
-    isTaxExempt,
+    taxSystemEnabled,
     invoiceNumber,
     billDate,
     notes,
@@ -2289,32 +2284,6 @@ export const Sales = ({ tabId, editData }) => {
                       })()}
                     </div>
 
-                    {/* Tax Exemption Option */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Tax Status
-                      </label>
-                      <div className="flex items-center space-x-2 px-3 py-2 border border-gray-200 rounded h-10">
-                        <Input
-                          type="checkbox"
-                          id="taxExemptMobile"
-                          checked={isTaxExempt}
-                          onChange={(e) => setIsTaxExempt(e.target.checked)}
-                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                        />
-                        <div className="flex-1">
-                          <label htmlFor="taxExemptMobile" className="text-sm font-medium text-gray-700 cursor-pointer">
-                            Tax Exempt
-                          </label>
-                        </div>
-                        {isTaxExempt && (
-                          <div className="text-green-600 text-sm font-medium">
-                            ✓
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
                     {/* Invoice Number */}
                     <div>
                       <div className="flex items-center justify-between mb-1">
@@ -2429,32 +2398,6 @@ export const Sales = ({ tabId, editData }) => {
                       </select>
                     </div>
 
-                    {/* Tax Exemption Option */}
-                    <div className="flex flex-col w-40">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Tax Status
-                      </label>
-                      <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
-                        <Input
-                          type="checkbox"
-                          id="taxExempt"
-                          checked={isTaxExempt}
-                          onChange={(e) => setIsTaxExempt(e.target.checked)}
-                          className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                        />
-                        <div className="flex-1">
-                          <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
-                            Tax Exempt
-                          </label>
-                        </div>
-                        {isTaxExempt && (
-                          <div className="text-green-600 text-xs font-medium">
-                            ✓
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
                     {/* Invoice Number */}
                     <div className="flex flex-col w-72">
                       <div className="flex items-center gap-3 mb-1">
@@ -2548,9 +2491,9 @@ export const Sales = ({ tabId, editData }) => {
                       <span className="text-xl font-semibold tabular-nums text-red-600">-{Math.round(totalDiscountAmount)}</span>
                     </div>
                   )}
-                  {!isTaxExempt && (
+                  {taxSystemEnabled && tax > 0 && (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">Tax (8%):</span>
+                      <span className="text-sm font-medium text-muted-foreground">Tax ({globalTaxPercent}%):</span>
                       <span className="text-xl font-semibold tabular-nums text-foreground">{Math.round(tax)}</span>
                     </div>
                   )}
@@ -2839,7 +2782,7 @@ export const Sales = ({ tabId, editData }) => {
                                 advanceBalance: selectedCustomer.advanceBalance
                               } : null,
                               items: mapCartItemsForInvoicePrint(cart),
-                              pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt, total },
+                              pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt: !taxSystemEnabled, total },
                               payment: {
                                 method: paymentMethod,
                                 bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
@@ -2881,7 +2824,7 @@ export const Sales = ({ tabId, editData }) => {
                                 advanceBalance: selectedCustomer.advanceBalance
                               } : null,
                               items: mapCartItemsForInvoicePrint(cart),
-                              pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt, total },
+                              pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt: !taxSystemEnabled, total },
                               payment: {
                                 method: paymentMethod,
                                 bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,

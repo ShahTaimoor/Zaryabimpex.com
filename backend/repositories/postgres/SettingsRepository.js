@@ -41,7 +41,8 @@ class SettingsRepository {
       dateFormat: row.date_format,
       timeFormat: row.time_format,
       fiscalYearStart: row.fiscal_year_start,
-      defaultTaxRate: row.default_tax_rate,
+      taxEnabled: row.tax_enabled === true,
+      defaultTaxRate: row.default_tax_rate != null ? parseFloat(row.default_tax_rate) : 0,
       printSettings: typeof row.print_settings === 'string' ? JSON.parse(row.print_settings) : (row.print_settings || {}),
       orderSettings: typeof row.order_settings === 'string' ? JSON.parse(row.order_settings || '{}') : (row.order_settings || {}),
       createdAt: row.created_at,
@@ -66,6 +67,7 @@ class SettingsRepository {
       dateFormat: 'date_format',
       timeFormat: 'time_format',
       fiscalYearStart: 'fiscal_year_start',
+      taxEnabled: 'tax_enabled',
       defaultTaxRate: 'default_tax_rate',
       printSettings: 'print_settings',
       orderSettings: 'order_settings'

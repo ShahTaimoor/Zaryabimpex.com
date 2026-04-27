@@ -85,9 +85,15 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
   const tax = orderData.pricing?.taxAmount ?? orderData.tax ?? 0;
   const total = orderData.pricing?.total ?? orderData.total ?? 0;
 
+  const printShowTax = companySettings?.printSettings?.showTax !== false;
+  const showTaxInSummary =
+    companySettings?.taxEnabled === true && printShowTax && tax > 0;
+
   summaryRows.push({ name: 'Subtotal:', total: Math.round(subtotal).toLocaleString() });
   if (discount > 0) summaryRows.push({ name: 'Discount:', total: `-${Math.round(discount).toLocaleString()}` });
-  if (tax > 0) summaryRows.push({ name: 'Tax:', total: Math.round(tax).toLocaleString() });
+  if (showTaxInSummary) {
+    summaryRows.push({ name: 'Tax:', total: Math.round(tax).toLocaleString() });
+  }
   summaryRows.push({ name: 'Grand Total:', total: Math.round(total).toLocaleString() });
 
   // Add party details if needed - currently PdfExportButton only supports one table

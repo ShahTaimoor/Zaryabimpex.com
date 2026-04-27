@@ -18,6 +18,8 @@ const customerRepository = require('../repositories/postgres/CustomerRepository'
 const productRepository = require('../repositories/postgres/ProductRepository');
 const productVariantRepository = require('../repositories/postgres/ProductVariantRepository');
 const inventoryRepository = require('../repositories/InventoryRepository');
+const settingsService = require('../services/settingsService');
+const { applyGlobalTaxToSalesOrderItems } = require('../utils/globalTax');
 
 const router = express.Router();
 
@@ -341,8 +343,19 @@ router.post('/', [
       await enrichItemsWithProducts(req.body.items);
     }
 
+    const companySettings = await settingsService.getCompanySettings();
+    const taxRec = applyGlobalTaxToSalesOrderItems(
+      req.body.items || [],
+      req.body.isTaxExempt,
+      companySettings
+    );
+
     const soData = {
       ...req.body,
+      items: taxRec.items,
+      subtotal: taxRec.subtotal,
+      tax: taxRec.tax,
+      total: taxRec.total,
       soNumber: salesOrderRepository.generateSONumber(),
       createdBy: req.user?.id || req.user?._id
     };
@@ -414,11 +427,17 @@ router.put('/:id', [
       lastModifiedBy: req.user?.id || req.user?._id
     };
     if (Array.isArray(req.body.items)) {
-      updateData.items = ensureItemConfirmationStatus(req.body.items);
-      const tax = Number(salesOrder.tax) || 0;
-      const { subtotal, total } = recalculateTotalsFromItems(updateData.items, getSalesOrderLineTotal, tax);
-      updateData.subtotal = subtotal;
-      updateData.total = total;
+      const rawItems = ensureItemConfirmationStatus(req.body.items);
+      const companySettings = await settingsService.getCompanySettings();
+      const isEx =
+        updateData.isTaxExempt !== undefined
+          ? updateData.isTaxExempt
+          : salesOrder.is_tax_exempt ?? salesOrder.isTaxExempt;
+      const taxRec = applyGlobalTaxToSalesOrderItems(rawItems, isEx, companySettings);
+      updateData.items = taxRec.items;
+      updateData.tax = taxRec.tax;
+      updateData.subtotal = taxRec.subtotal;
+      updateData.total = taxRec.total;
       updateData.confirmationStatus = computeOrderConfirmationStatus(updateData.items);
     }
 
@@ -528,8 +547,15 @@ router.patch('/:id/items-confirmation', [
     }
 
     const confirmationStatus = computeOrderConfirmationStatus(items);
-    const tax = Number(salesOrder.tax) || 0;
-    const { subtotal, total } = recalculateTotalsFromItems(items, getSalesOrderLineTotal, tax);
+    const companySettingsPatch = await settingsService.getCompanySettings();
+    const isExPatch = salesOrder.is_tax_exempt ?? salesOrder.isTaxExempt;
+    const taxRecPatch = applyGlobalTaxToSalesOrderItems(items, isExPatch, companySettingsPatch);
+    items = taxRecPatch.items;
+    const { subtotal, total, tax } = {
+      subtotal: taxRecPatch.subtotal,
+      total: taxRecPatch.total,
+      tax: taxRecPatch.tax
+    };
 
     // Create invoice for newly confirmed items
     const newlyConfirmedIndices = Array.isArray(req.body.itemUpdates)
@@ -541,7 +567,14 @@ router.patch('/:id/items-confirmation', [
         : [];
 
     let automaticSale = null;
-    let updatePayload = { items, subtotal, total, confirmationStatus, lastModifiedBy: userId };
+    let updatePayload = {
+      items,
+      subtotal,
+      total,
+      tax,
+      confirmationStatus,
+      lastModifiedBy: userId
+    };
 
     if (newlyConfirmedIndices.length > 0) {
       try {

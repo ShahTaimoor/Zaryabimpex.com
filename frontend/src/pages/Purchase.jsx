@@ -432,7 +432,6 @@ export const Purchase = ({ tabId, editData }) => {
   const [expectedDelivery, setExpectedDelivery] = useState(new Date().toISOString().split('T')[0]);
   const [billDate, setBillDate] = useState(getLocalDateString()); // Bill Date for backdating (same as Sale page)
   const [notes, setNotes] = useState('');
-  const [taxExempt, setTaxExempt] = useState(true);
   const [showPurchaseDetailsFields, setShowPurchaseDetailsFields] = useState(false);
   const [showProductImages, setShowProductImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
 
@@ -449,6 +448,8 @@ export const Purchase = ({ tabId, editData }) => {
   const { isMobile } = useResponsive();
   const { companyInfo: companySettings } = useCompanyInfo();
   const dualUnitShowBoxInputEnabledPage = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
+  const taxSystemEnabled = companySettings.taxEnabled === true;
+  const globalTaxPct = Math.min(100, Math.max(0, Number(companySettings.defaultTaxRate ?? 0)));
 
   // Ref for supplier selection field to focus on page load
   const supplierSearchRef = useRef(null);
@@ -843,43 +844,11 @@ export const Purchase = ({ tabId, editData }) => {
     }
   };
 
-  // Calculate tax based on supplier and business rules
   const calculateTax = () => {
-    // If tax exempt is enabled, return 0
-    if (taxExempt) return 0;
-
+    if (!taxSystemEnabled) return 0;
     if (!selectedSupplier) return 0;
-
-    const subtotal = purchaseItems.reduce((sum, item) => sum + (item.costPerUnit * item.quantity), 0);
-
-    // Tax rules based on supplier type and business type
-    let taxRate = 0;
-
-    // Different tax rates for different supplier types
-    switch (selectedSupplier.businessType) {
-      case 'manufacturer':
-        taxRate = 0.06; // 6% for manufacturers
-        break;
-      case 'distributor':
-        taxRate = 0.07; // 7% for distributors
-        break;
-      case 'wholesaler':
-        taxRate = 0.08; // 8% for wholesalers
-        break;
-      case 'dropshipper':
-        taxRate = 0.05; // 5% for dropshippers
-        break;
-      default:
-        taxRate = 0.08; // Default 8%
-    }
-
-    // Check if supplier has tax-exempt status (could be added to supplier model)
-    // For now, we'll use a simple rule based on supplier rating
-    if (selectedSupplier.rating >= 5 && selectedSupplier.reliability === 'excellent') {
-      taxRate *= 0.5; // 50% tax reduction for excellent suppliers
-    }
-
-    return subtotal * taxRate;
+    const sub = purchaseItems.reduce((sum, item) => sum + (item.costPerUnit * item.quantity), 0);
+    return sub * (globalTaxPct / 100);
   };
 
   const subtotal = purchaseItems.reduce((sum, item) => sum + (item.costPerUnit * item.quantity), 0);
@@ -1099,7 +1068,7 @@ export const Purchase = ({ tabId, editData }) => {
         subtotal: subtotal,
         discountAmount: 0,
         taxAmount: tax,
-        isTaxExempt: taxExempt,
+        isTaxExempt: !taxSystemEnabled,
         total: total
       },
       payment: {
@@ -1127,7 +1096,7 @@ export const Purchase = ({ tabId, editData }) => {
     } else {
       handleCreatePurchaseInvoice(invoiceData);
     }
-  }, [purchaseItems, selectedSupplier, invoiceNumber, autoGenerateInvoice, expectedDelivery, billDate, notes, taxExempt, subtotal, tax, total, directDiscountAmount, paymentMethod, amountPaid, editData, handleCreatePurchaseInvoice, handleUpdatePurchaseInvoice, printBarcodeLabelsAfterInvoice]);
+  }, [purchaseItems, selectedSupplier, invoiceNumber, autoGenerateInvoice, expectedDelivery, billDate, notes, taxSystemEnabled, subtotal, tax, total, directDiscountAmount, paymentMethod, amountPaid, editData, handleCreatePurchaseInvoice, handleUpdatePurchaseInvoice, printBarcodeLabelsAfterInvoice]);
 
 
   return (
@@ -1465,24 +1434,6 @@ export const Purchase = ({ tabId, editData }) => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Tax Status</label>
-                        <div className="flex items-center space-x-2 px-3 py-2 border border-gray-200 rounded h-10">
-                          <Input
-                            type="checkbox"
-                            id="taxExemptPurchaseMobile"
-                            checked={taxExempt}
-                            onChange={(e) => setTaxExempt(e.target.checked)}
-                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                          />
-                          <div className="flex-1">
-                            <label htmlFor="taxExemptPurchaseMobile" className="text-sm font-medium text-gray-700 cursor-pointer">
-                              Tax Exempt
-                            </label>
-                          </div>
-                          {taxExempt && <div className="text-green-600 text-sm font-medium">✓</div>}
-                        </div>
-                      </div>
-                      <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
                         <Input
                           type="text"
@@ -1566,24 +1517,6 @@ export const Purchase = ({ tabId, editData }) => {
                           max={getLocalDateString()}
                         />
                       </div>
-                      <div className="flex flex-col w-40">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Tax Status</label>
-                        <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
-                          <Input
-                            type="checkbox"
-                            id="taxExemptPurchase"
-                            checked={taxExempt}
-                            onChange={(e) => setTaxExempt(e.target.checked)}
-                            className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                          />
-                          <div className="flex-1">
-                            <label htmlFor="taxExemptPurchase" className="text-xs font-medium text-gray-700 cursor-pointer">
-                              Tax Exempt
-                            </label>
-                          </div>
-                          {taxExempt && <div className="text-green-600 text-xs font-medium">✓</div>}
-                        </div>
-                      </div>
                       <div className="flex min-w-0 flex-1 flex-col basis-[min(100%,20rem)]">
                         <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
                         <Input
@@ -1615,9 +1548,9 @@ export const Purchase = ({ tabId, editData }) => {
                       </span>
                     </div>
                   )}
-                  {!taxExempt && (
+                  {taxSystemEnabled && tax > 0 && (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">Tax:</span>
+                      <span className="text-sm font-medium text-muted-foreground">Tax ({globalTaxPct}%):</span>
                       <span className="text-xl font-semibold tabular-nums text-foreground">{tax.toFixed(2)}</span>
                     </div>
                   )}
@@ -1727,7 +1660,6 @@ export const Purchase = ({ tabId, editData }) => {
                         setHighlightedPurchaseLineIndex(null);
                         setSelectedSupplier(null);
                         setSupplierSearchTerm('');
-                        setTaxExempt(true);
                         setDirectDiscount({ type: 'amount', value: 0 });
                         setAmountPaid(0);
                         setPaymentMethod('cash');
@@ -1803,7 +1735,7 @@ export const Purchase = ({ tabId, editData }) => {
                                 subtotal: subtotal,
                                 discountAmount: directDiscountAmount,
                                 taxAmount: tax,
-                                isTaxExempt: taxExempt,
+                                isTaxExempt: !taxSystemEnabled,
                                 total: total
                               },
                               payment: {
@@ -1876,7 +1808,7 @@ export const Purchase = ({ tabId, editData }) => {
                                 subtotal: subtotal,
                                 discountAmount: directDiscountAmount,
                                 taxAmount: tax,
-                                isTaxExempt: taxExempt,
+                                isTaxExempt: !taxSystemEnabled,
                                 total: total
                               },
                               payment: {

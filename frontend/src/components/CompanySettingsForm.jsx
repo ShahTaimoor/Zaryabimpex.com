@@ -24,6 +24,8 @@ export function CompanySettingsForm() {
     address: '',
     email: '',
     taxRegistrationNumber: '',
+    taxEnabled: false,
+    defaultTaxRate: 0,
   });
   const [logoPreview, setLogoPreview] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -48,8 +50,24 @@ export function CompanySettingsForm() {
       address: company.address ?? settings.address ?? '',
       email: settings.email ?? '',
       taxRegistrationNumber: settings.taxId ?? '',
+      taxEnabled: settings.taxEnabled === true,
+      defaultTaxRate:
+        settings.defaultTaxRate != null && settings.defaultTaxRate !== ''
+          ? Number(settings.defaultTaxRate)
+          : 0,
     }));
-  }, [company.companyName, company.phone, company.address, settings.companyName, settings.contactNumber, settings.address, settings.email, settings.taxId]);
+  }, [
+    company.companyName,
+    company.phone,
+    company.address,
+    settings.companyName,
+    settings.contactNumber,
+    settings.address,
+    settings.email,
+    settings.taxId,
+    settings.taxEnabled,
+    settings.defaultTaxRate,
+  ]);
 
   useEffect(() => {
     const size = Number(orderSettings.dashboardLogoSize);
@@ -98,6 +116,8 @@ export function CompanySettingsForm() {
         address: form.address,
         email: form.email,
         taxId: form.taxRegistrationNumber,
+        taxEnabled: !!form.taxEnabled,
+        defaultTaxRate: Math.min(100, Math.max(0, Number(form.defaultTaxRate) || 0)),
         orderSettings: {
           ...orderSettings,
           dashboardLogoSize: dashboardLogoSize,
@@ -213,6 +233,40 @@ export function CompanySettingsForm() {
             />
           </div>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-slate-50 p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">GST / global sales tax</h3>
+          <p className="text-xs text-gray-600 mt-1">
+            When enabled, this rate applies to sales invoices, sales orders, and purchases. When disabled, tax is not calculated or shown.
+          </p>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            name="taxEnabled"
+            checked={!!form.taxEnabled}
+            onChange={(e) => setForm((prev) => ({ ...prev, taxEnabled: e.target.checked }))}
+            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <span className="text-sm font-medium text-gray-800">Enable tax (GST/VAT)</span>
+        </label>
+        {form.taxEnabled && (
+          <div className="space-y-2 max-w-xs">
+            <label className="block text-xs font-medium text-gray-700">Tax percentage (%)</label>
+            <input
+              type="number"
+              name="defaultTaxRate"
+              min="0"
+              max="100"
+              step="0.01"
+              value={form.defaultTaxRate}
+              onChange={handleChange}
+              className="w-full rounded-lg border border-gray-300 py-2 px-3 text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+        )}
       </div>
 
       <div className="space-y-4">

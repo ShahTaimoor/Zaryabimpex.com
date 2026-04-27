@@ -86,7 +86,8 @@ const MIGRATIONS = [
   '064_add_client_side_id_to_transactions.sql',
   '065_search_uniqueness_and_ledger_indexes.sql',
   '066_cleanup_soft_deleted_duplicates_for_unique_indexes.sql',
-  '067_add_user_preferences_and_two_factor_auth.sql'
+  '067_add_user_preferences_and_two_factor_auth.sql',
+  '068_settings_tax_enabled.sql'
 ];
 
 async function ensureMigrationsTable() {

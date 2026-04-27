@@ -262,6 +262,7 @@ export const Orders = () => {
   });
 
   const companySettings = companySettingsData?.data || {};
+  const taxSystemEnabled = companySettings.taxEnabled === true;
   const companyName = companySettings.companyName?.trim() || 'Your Company Name';
   const companyAddress = companySettings.address?.trim() || '';
   const companyPhone = companySettings.contactNumber?.trim() || '';
@@ -355,7 +356,6 @@ export const Orders = () => {
             totalPrice: item.total ?? (item.quantity * (item.unitPrice ?? item.unit_price ?? 0))
           };
         }),
-        isTaxExempt: freshOrder.isTaxExempt ?? freshOrder.is_tax_exempt ?? true,
         payment: paymentForEditor,
         // The "Pending" label in the UI is based on the invoice/order status (not payment.status).
         // Pass it through so the edit screen can correctly initialize Amount Paid.
@@ -1008,10 +1008,12 @@ export const Orders = () => {
                           <td className="px-4 py-2">Subtotal:</td>
                           <td className="px-4 py-2 text-right">{Math.round(viewSubtotal)}</td>
                         </tr>
+                        {taxSystemEnabled && viewTax > 0 && (
                         <tr>
                           <td className="px-4 py-2">Tax:</td>
                           <td className="px-4 py-2 text-right">{Math.round(viewTax)}</td>
                         </tr>
+                        )}
                         <tr>
                           <td className="px-4 py-2">Discount:</td>
                           <td className="px-4 py-2 text-right">{Math.round(viewDiscount)}</td>

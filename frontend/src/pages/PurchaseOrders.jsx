@@ -298,6 +298,8 @@ export const PurchaseOrders = ({ tabId }) => {
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const resolvedCompanyAddress = companySettings.address || companySettings.billingAddress || '';
   const resolvedCompanyPhone = companySettings.contactNumber || '';
+  const taxSystemEnabled = companySettings.taxEnabled === true;
+  const effectiveGlobalTaxPct = Math.min(100, Math.max(0, Number(companySettings.defaultTaxRate ?? 0)));
 
   // Calculate default date range (14 days ago to today)
   const today = getCurrentDatePakistan();
@@ -364,8 +366,7 @@ export const PurchaseOrders = ({ tabId }) => {
     invoiceNumber: '',
     expectedDelivery: new Date().toISOString().split('T')[0],
     notes: '',
-    terms: '',
-    isTaxExempt: true
+    terms: ''
   });
 
   // Product selection state
@@ -580,8 +581,7 @@ export const PurchaseOrders = ({ tabId }) => {
       invoiceNumber: '',
       expectedDelivery: new Date().toISOString().split('T')[0],
       notes: '',
-      terms: '',
-      isTaxExempt: true
+      terms: ''
     });
     setSelectedSupplier(null);
     setSupplierSearchTerm('');
@@ -822,7 +822,8 @@ export const PurchaseOrders = ({ tabId }) => {
 
   const calculateTotals = () => {
     const subtotal = formData.items.reduce((sum, item) => sum + item.totalCost, 0);
-    const tax = formData.isTaxExempt ? 0 : subtotal * 0.08; // 8% tax if not exempt
+    const tax =
+      !taxSystemEnabled ? 0 : subtotal * (effectiveGlobalTaxPct / 100);
     const total = subtotal + tax;
     const supplierOutstanding =
       Number(selectedSupplier?.pendingBalance ?? selectedSupplier?.outstandingBalance ?? 0) || 0;
@@ -857,6 +858,7 @@ export const PurchaseOrders = ({ tabId }) => {
     const { subtotal, tax, total } = calculateTotals();
     const orderData = {
       ...formData,
+      isTaxExempt: !taxSystemEnabled,
       subtotal,
       tax,
       total
@@ -895,6 +897,7 @@ export const PurchaseOrders = ({ tabId }) => {
     // Clean the form data before sending to backend
     const cleanedData = {
       ...formData,
+      isTaxExempt: !taxSystemEnabled,
       items: formData.items.map(item => {
         const base = {
           product: item.product,
@@ -1075,8 +1078,7 @@ export const PurchaseOrders = ({ tabId }) => {
       items: processedItems,
       expectedDelivery: order.expectedDelivery ? new Date(order.expectedDelivery).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       notes: order.notes || '',
-      terms: order.terms || '',
-      isTaxExempt: order.isTaxExempt !== undefined ? order.isTaxExempt : true
+      terms: order.terms || ''
     };
 
     setFormData(newFormData);
@@ -1991,32 +1993,6 @@ export const PurchaseOrders = ({ tabId }) => {
                     </div>
                   </div>
 
-                  {/* Tax Exemption Option */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Tax Status
-                    </label>
-                    <div className="flex items-center space-x-2 px-3 py-2 border border-gray-200 rounded h-10">
-                      <input
-                        type="checkbox"
-                        id="taxExemptMobile"
-                        checked={formData.isTaxExempt}
-                        onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
-                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                      />
-                      <div className="flex-1">
-                        <label htmlFor="taxExemptMobile" className="text-sm font-medium text-gray-700 cursor-pointer">
-                          Tax Exempt
-                        </label>
-                      </div>
-                      {formData.isTaxExempt && (
-                        <div className="text-green-600 text-sm font-medium">
-                          ✓
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
                   {/* Notes */}
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -2062,32 +2038,6 @@ export const PurchaseOrders = ({ tabId }) => {
                     />
                   </div>
 
-                  {/* Tax Exemption Option */}
-                  <div className="flex flex-col w-40">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Tax Status
-                    </label>
-                    <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
-                      <input
-                        type="checkbox"
-                        id="taxExempt"
-                        checked={formData.isTaxExempt}
-                        onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
-                        className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                      />
-                      <div className="flex-1">
-                        <label htmlFor="taxExempt" className="text-xs font-medium text-gray-700 cursor-pointer">
-                          Tax Exempt
-                        </label>
-                      </div>
-                      {formData.isTaxExempt && (
-                        <div className="text-green-600 text-xs font-medium">
-                          ✓
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
                   {/* Notes */}
                   <div className="flex flex-col w-[28rem]">
                     <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -2114,12 +2064,14 @@ export const PurchaseOrders = ({ tabId }) => {
                 <span className="text-gray-800 font-semibold">Subtotal:</span>
                 <span className="text-xl font-bold text-gray-900">{Math.round(subtotal)}</span>
               </div>
+              {taxSystemEnabled && tax > 0 && (
               <div className="flex justify-between items-center">
                 <span className="text-gray-800 font-semibold">
-                  {formData.isTaxExempt ? 'Tax (Exempt):' : 'Tax (8%):'}
+                  {`Tax (${effectiveGlobalTaxPct}%):`}
                 </span>
                 <span className="text-xl font-bold text-gray-900">{Math.round(tax)}</span>
               </div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-gray-800 font-semibold">PO Total:</span>
                 <span className="text-xl font-bold text-gray-900">{Math.round(total)}</span>
@@ -2326,24 +2278,6 @@ export const PurchaseOrders = ({ tabId }) => {
                           />
                         </div>
 
-                        {/* Tax Exemption Option */}
-                        <div className="flex flex-col w-40">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Tax Status
-                          </label>
-                          <div className="flex items-center space-x-1 px-2 py-1 border border-gray-200 rounded h-8">
-                            <input
-                              type="checkbox"
-                              id="taxExemptEdit"
-                              checked={formData.isTaxExempt}
-                              onChange={(e) => setFormData(prev => ({ ...prev, isTaxExempt: e.target.checked }))}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <label htmlFor="taxExemptEdit" className="text-xs text-gray-700">
-                              Tax Exempt
-                            </label>
-                          </div>
-                        </div>
                       </div>
 
                       {/* Notes and Terms Row */}
@@ -3251,7 +3185,7 @@ export const PurchaseOrders = ({ tabId }) => {
                       <span className="text-gray-600">Subtotal:</span>
                       <span className="font-medium">{Math.round(Number(viewOrder.subtotal) || 0)}</span>
                     </div>
-                    {viewOrder.tax && viewOrder.tax > 0 && (
+                    {taxSystemEnabled && viewOrder.tax && Number(viewOrder.tax) > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Tax:</span>
                         <span className="font-medium">{Math.round(Number(viewOrder.tax))}</span>

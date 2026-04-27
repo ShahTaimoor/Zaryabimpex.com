@@ -13,6 +13,7 @@ const profitDistributionService = require('./profitDistributionService');
 const discountService = require('./discountService');
 const paymentRepository = require('../repositories/postgres/PaymentRepository');
 const settingsService = require('./settingsService');
+const { getEffectiveGlobalTaxRate } = require('../utils/globalTax');
 const purchaseInvoiceRepository = require('../repositories/postgres/PurchaseInvoiceRepository');
 const { withBusinessTransaction } = require('./withBusinessTransaction');
 
@@ -539,6 +540,7 @@ class SalesService {
     const settings = await settingsService.getCompanySettings();
     const orderSettings = settings?.orderSettings || {};
     const allowSaleWithoutProduct = orderSettings.allowSaleWithoutProduct === true;
+    const globalTax = getEffectiveGlobalTaxRate(settings, !!isTaxExempt);
 
     // Validate customer if provided
     let customerData = null;
@@ -604,13 +606,8 @@ class SalesService {
       const itemSubtotal = item.quantity * unitPrice;
       const itemDiscount = itemSubtotal * (itemDiscountPercent / 100);
       const itemTaxable = itemSubtotal - itemDiscount;
-      const taxRate =
-        isManual || !product
-          ? 0
-          : isVariant
-            ? (product.baseProduct?.taxSettings?.taxRate ?? 0)
-            : (product.tax_settings?.tax_rate ?? product.taxSettings?.taxRate ?? 0);
-      const itemTax = isTaxExempt ? 0 : itemTaxable * taxRate;
+      const taxRate = globalTax.rateDecimal;
+      const itemTax = itemTaxable * taxRate;
 
       let unitCost = 0;
       let productId = null;
@@ -663,7 +660,8 @@ class SalesService {
     // even when no discount code is selected.
     if (payloadDiscountAmount != null || payloadTax != null || payloadTotal != null) {
       if (payloadDiscountAmount != null) finalDiscount = Number(payloadDiscountAmount);
-      if (payloadTax != null) finalTax = Number(payloadTax);
+      if (!globalTax.enabled) finalTax = 0;
+      else if (payloadTax != null) finalTax = Number(payloadTax);
       if (payloadTotal != null) orderTotal = Number(payloadTotal);
       else orderTotal = subtotal - finalDiscount + finalTax;
     }

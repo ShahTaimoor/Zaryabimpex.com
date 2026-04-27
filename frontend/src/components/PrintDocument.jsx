@@ -110,6 +110,8 @@ const PrintDocument = ({
     const resolvedCompanySubtitle = resolvedDocumentTitle;
     const resolvedCompanyAddress = safeCompanySettings.address || '';
     const resolvedCompanyPhone = safeCompanySettings.contactNumber || safeCompanySettings.phone || '';
+    const taxSystemEnabled = safeCompanySettings.taxEnabled === true;
+    const effectiveShowTax = showTax && taxSystemEnabled;
 
     const partyInfo = useMemo(() => {
         if (!orderData) {
@@ -820,7 +822,7 @@ const PrintDocument = ({
                         <span>Subtotal</span>
                         <span>{formatCurrency(computedSubtotal)}</span>
                     </div>
-                    {showTax && (
+                    {effectiveShowTax && (
                         <div className="print-document__summary-row">
                             <span>Tax</span>
                             <span>{formatCurrency(taxValue)}</span>

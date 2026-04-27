@@ -13,6 +13,8 @@ const productVariantRepository = require('../repositories/ProductVariantReposito
 const customerRepository = require('../repositories/CustomerRepository');
 const cashReceiptRepository = require('../repositories/postgres/CashReceiptRepository');
 const bankReceiptRepository = require('../repositories/postgres/BankReceiptRepository');
+const settingsService = require('../services/settingsService');
+const { getEffectiveGlobalTaxRate } = require('../utils/globalTax');
 
 /** Check if order can be cancelled (works with plain order object from repo). */
 function canBeCancelled(order) {
@@ -594,7 +596,13 @@ router.put('/:id', [
 
     // Normalize for Postgres: order has total, subtotal, discount, tax; items array
     const orderTotal = () => parseFloat(order.total) || 0;
-    const orderPricing = { total: orderTotal(), subtotal: parseFloat(order.subtotal) || 0, discountAmount: parseFloat(order.discount) || 0, taxAmount: parseFloat(order.tax) || 0, isTaxExempt: false };
+    const orderPricing = {
+      total: orderTotal(),
+      subtotal: parseFloat(order.subtotal) || 0,
+      discountAmount: parseFloat(order.discount) || 0,
+      taxAmount: parseFloat(order.tax) || 0,
+      isTaxExempt: !!(order.is_tax_exempt ?? order.isTaxExempt ?? false)
+    };
     if (!order.pricing) order.pricing = orderPricing;
     if (!order.payment) order.payment = { method: order.payment_method || 'cash', status: order.payment_status || 'pending', amountPaid: 0, remainingBalance: orderTotal(), isPartialPayment: false };
 
@@ -647,8 +655,15 @@ router.put('/:id', [
       order.payment.status = amt >= (parseFloat(order.pricing?.total ?? order.total) || 0) ? 'paid' : (amt > 0 ? 'partial' : 'pending');
     }
 
+    if (req.body.isTaxExempt !== undefined) {
+      order.pricing.isTaxExempt = !!req.body.isTaxExempt;
+    }
+
     // Update items if provided and recalculate pricing
     if (req.body.items && req.body.items.length > 0) {
+      const compSettings = await settingsService.getCompanySettings();
+      const globalTax = getEffectiveGlobalTaxRate(compSettings, order.pricing.isTaxExempt);
+
       // Validate products and stock availability
       for (const item of req.body.items) {
         // Try to find as product first, then as variant
@@ -711,13 +726,8 @@ router.put('/:id', [
         const itemSubtotal = item.quantity * item.unitPrice;
         const itemDiscount = itemSubtotal * ((item.discountPercent || 0) / 100);
         const itemTaxable = itemSubtotal - itemDiscount;
-        // Use taxRate from item if provided, otherwise get from product/variant
-        const taxRate = item.taxRate !== undefined
-          ? item.taxRate
-          : (isVariantForTax
-            ? (productForTax?.baseProduct?.taxSettings?.taxRate || 0)
-            : (productForTax?.taxSettings?.taxRate || 0));
-        const itemTax = order.pricing.isTaxExempt ? 0 : itemTaxable * taxRate;
+        const taxRate = globalTax.rateDecimal;
+        const itemTax = itemTaxable * taxRate;
 
         // Get unit cost for P&L (COGS) - same logic as createSale
         let unitCost = 0;
@@ -741,7 +751,7 @@ router.put('/:id', [
           unitCost,
           cost_price: unitCost,
           discountPercent: item.discountPercent || 0,
-          taxRate: item.taxRate || 0,
+          taxRate,
           subtotal: itemSubtotal,
           discountAmount: itemDiscount,
           taxAmount: itemTax,
