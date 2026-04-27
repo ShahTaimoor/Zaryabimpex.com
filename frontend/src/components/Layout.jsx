@@ -376,15 +376,27 @@ export const Layout = ({ children }) => {
 
   // Sidebar visibility state (keys align with MultiTabLayout / Settings; migration in loadSidebarConfig)
   const [sidebarConfig, setSidebarConfig] = useState(() => loadSidebarConfig());
+  const [showTopBar, setShowTopBar] = useState(() => {
+    const saved = localStorage.getItem('showTopBarUI');
+    return saved === null ? true : saved === 'true';
+  });
 
   // Listener for sidebar configuration changes
   useEffect(() => {
     const handleSidebarChange = () => {
       setSidebarConfig(loadSidebarConfig());
     };
+    const handleTopBarVisibilityChange = () => {
+      const saved = localStorage.getItem('showTopBarUI');
+      setShowTopBar(saved === null ? true : saved === 'true');
+    };
 
     window.addEventListener('sidebarConfigChanged', handleSidebarChange);
-    return () => window.removeEventListener('sidebarConfigChanged', handleSidebarChange);
+    window.addEventListener('topBarVisibilityChanged', handleTopBarVisibilityChange);
+    return () => {
+      window.removeEventListener('sidebarConfigChanged', handleSidebarChange);
+      window.removeEventListener('topBarVisibilityChanged', handleTopBarVisibilityChange);
+    };
   }, []);
 
   const { data: categoryTreeRaw, isLoading: categoriesLoading, refetch: refetchCategories } = useGetCategoryTreeQuery(
@@ -465,7 +477,8 @@ export const Layout = ({ children }) => {
       {/* Main content */}
       <div className="lg:pl-64">
         {/* Top bar */}
-        <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+        {showTopBar && (
+          <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
           <button
             type="button"
             className="-m-2.5 p-2.5 text-gray-700 lg:hidden"
@@ -556,7 +569,8 @@ export const Layout = ({ children }) => {
               </div>
             </div>
           </div>
-        </div>
+          </div>
+        )}
 
         {/* Page content */}
         <main className={`${isMobile ? 'py-2' : 'py-4'} overflow-x-hidden max-w-full`}>

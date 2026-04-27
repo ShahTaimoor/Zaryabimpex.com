@@ -1367,6 +1367,11 @@ export const Settings2 = () => {
     return saved === null ? true : saved === 'true';
   });
 
+  const [showTopBarUI, setShowTopBarUI] = useState(() => {
+    const saved = localStorage.getItem('showTopBarUI');
+    return saved === null ? true : saved === 'true';
+  });
+
   const tabs = [
     { id: 'company', name: 'Company Information', shortName: 'Company', icon: Building },
     { id: 'users', name: 'Users Control', shortName: 'Users', icon: Users },
@@ -2412,6 +2417,25 @@ export const Settings2 = () => {
                     <Label htmlFor="accountLedgerShowReturn" className="flex flex-col cursor-pointer group-hover:text-blue-700">
                       <span className="text-sm font-semibold">Show Ledger Return</span>
                       <span className="text-[10px] text-gray-400">Column in Ledger Summary</span>
+                    </Label>
+                  </div>
+
+                  {/* Show Top Bar */}
+                  <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                    <Checkbox
+                      id="showTopBarUI"
+                      className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                      checked={showTopBarUI}
+                      onCheckedChange={(checked) => {
+                        setShowTopBarUI(checked);
+                        localStorage.setItem('showTopBarUI', String(checked));
+                        toast.success(`Top bar ${checked ? 'shown' : 'hidden'} in app layout`);
+                        window.dispatchEvent(new Event('topBarVisibilityChanged'));
+                      }}
+                    />
+                    <Label htmlFor="showTopBarUI" className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                      <span className="text-sm font-semibold">Show Top Bar</span>
+                      <span className="text-[10px] text-gray-400">Header visibility across pages</span>
                     </Label>
                   </div>
                 </div>

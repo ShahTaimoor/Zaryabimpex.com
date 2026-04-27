@@ -120,6 +120,7 @@ export const navigation = [
     icon: Wallet,
     permission: 'view_reports',
     children: [
+      { name: 'Cash Receiving', href: '/cash-receiving', icon: Receipt, permission: 'view_accounting' },
       { name: 'Cash Receipts', href: '/cash-receipts', icon: Receipt, permission: 'view_reports' },
       { name: 'Cash Payments', href: '/cash-payments', icon: CreditCard, permission: 'view_reports' },
       { name: 'Bank Receipts', href: '/bank-receipts', icon: Building, permission: 'view_reports' },
@@ -412,15 +413,27 @@ export const MultiTabLayout = ({ children }) => {
 
   // Sidebar visibility state
   const [sidebarConfig, setSidebarConfig] = useState(() => loadSidebarConfig());
+  const [showTopBar, setShowTopBar] = useState(() => {
+    const saved = localStorage.getItem('showTopBarUI');
+    return saved === null ? true : saved === 'true';
+  });
 
   // Listener for sidebar configuration changes
   useEffect(() => {
     const handleSidebarChange = () => {
       setSidebarConfig(loadSidebarConfig());
     };
+    const handleTopBarVisibilityChange = () => {
+      const saved = localStorage.getItem('showTopBarUI');
+      setShowTopBar(saved === null ? true : saved === 'true');
+    };
 
     window.addEventListener('sidebarConfigChanged', handleSidebarChange);
-    return () => window.removeEventListener('sidebarConfigChanged', handleSidebarChange);
+    window.addEventListener('topBarVisibilityChanged', handleTopBarVisibilityChange);
+    return () => {
+      window.removeEventListener('sidebarConfigChanged', handleSidebarChange);
+      window.removeEventListener('topBarVisibilityChanged', handleTopBarVisibilityChange);
+    };
   }, []);
 
   // Get alert summary for mobile bottom navbar
@@ -631,7 +644,8 @@ export const MultiTabLayout = ({ children }) => {
       {/* Main content */}
       <div className="lg:pl-64">
         {/* Top bar - Professional Design with Solid White Background */}
-        <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center border-b border-gray-200 bg-white px-3 sm:px-4 lg:px-6 shadow-sm overflow-visible">
+        {showTopBar && (
+          <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center border-b border-gray-200 bg-white px-3 sm:px-4 lg:px-6 shadow-sm overflow-visible">
           {/* Mobile Menu Button */}
           <button
             type="button"
@@ -667,15 +681,17 @@ export const MultiTabLayout = ({ children }) => {
 
             {/* Action Buttons - Shrink when zoom/screen percentage increases (responsive) */}
             <div className="hidden lg:flex items-center gap-1 xl:gap-1.5 2xl:gap-2 overflow-x-auto flex-1 min-w-0 scrollbar-hide overflow-y-visible">
-              <button
-                onClick={() => handleNavigationClick({ href: '/cash-receiving', name: 'Cash Receiving' })}
-                className="bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0"
-              >
-                <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-teal-200/60 flex-shrink-0">
-                  <Receipt className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-teal-700" />
-                </span>
-                <span>Multiple Cash Receipt</span>
-              </button>
+              {sidebarConfig['Cash Receiving'] !== false && (
+                <button
+                  onClick={() => handleNavigationClick({ href: '/cash-receiving', name: 'Cash Receiving' })}
+                  className="bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0"
+                >
+                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-teal-200/60 flex-shrink-0">
+                    <Receipt className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-teal-700" />
+                  </span>
+                  <span>Multiple Cash Receipt</span>
+                </button>
+              )}
               {sidebarConfig['Cash Receipts'] !== false && (
                 <button
                   onClick={() => handleNavigationClick({ href: '/cash-receipts', name: 'Cash Receipts' })}
@@ -801,7 +817,8 @@ export const MultiTabLayout = ({ children }) => {
               )}
             </div>
           </div>
-        </div>
+          </div>
+        )}
 
         {/* Tab Bar */}
         <TabBar />
