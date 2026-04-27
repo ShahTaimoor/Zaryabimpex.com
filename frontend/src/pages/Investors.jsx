@@ -502,12 +502,12 @@ export const Investors = ({ tabId }) => {
 
   return (
     <div className="p-4 sm:p-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0 mb-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Investors</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">Manage investors and track profit distributions</p>
+      <div className="flex items-center justify-between gap-2 mb-6">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Investors</h1>
+          <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">Manage investors and track profit distributions</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 flex-shrink-0 overflow-x-auto">
           <Button
             type="button"
             onClick={handlePrintInvestorsList}

@@ -103,16 +103,16 @@ const ProductVariants = () => {
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Product Variants</h1>
-            <p className="mt-1 text-sm sm:text-base text-gray-600">Manage product variants and transformations</p>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Product Variants</h1>
+            <p className="hidden sm:block mt-1 text-sm sm:text-base text-gray-600">Manage product variants and transformations</p>
           </div>
           <Button
             onClick={() => setIsModalOpen(true)}
             variant="default"
             size="default"
-            className="flex items-center justify-center gap-2 w-full sm:w-auto"
+            className="flex items-center justify-center gap-2 flex-shrink-0"
           >
             <Plus className="h-4 w-4" />
             Add Variant

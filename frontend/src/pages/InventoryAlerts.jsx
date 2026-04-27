@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   AlertTriangle, 
   TrendingDown,
+  Layers,
   Package,
   CheckCircle,
   XCircle,
@@ -134,6 +135,13 @@ const InventoryAlerts = () => {
   const alerts = Array.isArray(alertsData) ? alertsData : [];
   const summary = summaryResponse?.data?.data || summaryResponse?.data || summaryResponse || {};
 
+  const outOfStockCount = summary.outOfStock || 0;
+  const warningCount = summary.warning || 0;
+  const belowMinimumCount =
+    summary.belowMinimum != null
+      ? summary.belowMinimum
+      : Math.max(0, (summary.critical || 0) - outOfStockCount);
+
   const pagination = {
     current: alertsResponse?.data?.pagination?.page ?? alertsResponse?.pagination?.page ?? 1,
     pages: alertsResponse?.data?.pagination?.pages ?? alertsResponse?.pagination?.pages ?? 1,
@@ -189,17 +197,30 @@ const InventoryAlerts = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
-        <div className="bg-white rounded-lg shadow p-3 sm:p-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+        <div
+          className="bg-white rounded-lg shadow p-3 sm:p-4"
+          title="All active products that qualify as an inventory alert (critical severity plus warning severity)."
+        >
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
               <p className="text-xs sm:text-sm text-gray-600 truncate">Total Alerts</p>
               <p className="text-lg sm:text-2xl font-bold text-gray-900">{summary.total || 0}</p>
+              <p className="text-[11px] sm:text-xs text-gray-500 mt-1.5 leading-snug">
+                <span className="whitespace-nowrap">{outOfStockCount} out of stock</span>
+                <span className="text-gray-300 mx-1">·</span>
+                <span className="whitespace-nowrap">{belowMinimumCount} below min</span>
+                <span className="text-gray-300 mx-1">·</span>
+                <span className="whitespace-nowrap">{warningCount} warnings</span>
+              </p>
             </div>
             <AlertTriangle className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400 flex-shrink-0 ml-2" />
           </div>
         </div>
-        <div className="bg-red-50 rounded-lg shadow p-3 sm:p-4 border-l-4 border-red-500">
+        <div
+          className="bg-red-50 rounded-lg shadow p-3 sm:p-4 border-l-4 border-red-500"
+          title="Zero stock or at/below minimum stock — includes out-of-stock rows and below-minimum rows."
+        >
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
               <p className="text-xs sm:text-sm text-red-600 truncate">Critical</p>
@@ -208,7 +229,10 @@ const InventoryAlerts = () => {
             <XCircle className="h-6 w-6 sm:h-8 sm:w-8 text-red-400 flex-shrink-0 ml-2" />
           </div>
         </div>
-        <div className="bg-yellow-50 rounded-lg shadow p-3 sm:p-4 border-l-4 border-yellow-500">
+        <div
+          className="bg-yellow-50 rounded-lg shadow p-3 sm:p-4 border-l-4 border-yellow-500"
+          title="Stock above minimum but at or below the reorder point (yellow severity)."
+        >
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
               <p className="text-xs sm:text-sm text-yellow-600 truncate">Warning</p>
@@ -217,19 +241,39 @@ const InventoryAlerts = () => {
             <AlertTriangle className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-400 flex-shrink-0 ml-2" />
           </div>
         </div>
-        <div className="bg-gray-50 rounded-lg shadow p-3 sm:p-4 border-l-4 border-gray-500">
+        <div
+          className="bg-gray-50 rounded-lg shadow p-3 sm:p-4 border-l-4 border-gray-500"
+          title="Products with zero on-hand quantity."
+        >
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
               <p className="text-xs sm:text-sm text-gray-600 truncate">Out of Stock</p>
-              <p className="text-lg sm:text-2xl font-bold text-gray-700">{summary.outOfStock || 0}</p>
+              <p className="text-lg sm:text-2xl font-bold text-gray-700">{outOfStockCount}</p>
             </div>
             <Package className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400 flex-shrink-0 ml-2" />
           </div>
         </div>
-        <div className="bg-blue-50 rounded-lg shadow p-3 sm:p-4 border-l-4 border-blue-500">
+        <div
+          className="bg-orange-50 rounded-lg shadow p-3 sm:p-4 border-l-4 border-orange-500"
+          title="Still has stock but quantity is at or below the minimum level (subset of Critical, excluding zero stock)."
+        >
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-xs sm:text-sm text-blue-600 truncate">Low Stock</p>
+              <p className="text-xs sm:text-sm text-orange-800 truncate leading-tight">Below minimum</p>
+              <p className="text-[10px] sm:text-[11px] text-orange-700/90 -mt-0.5 mb-0.5">In stock</p>
+              <p className="text-lg sm:text-2xl font-bold text-orange-800">{belowMinimumCount}</p>
+            </div>
+            <Layers className="h-6 w-6 sm:h-8 sm:w-8 text-orange-400 flex-shrink-0 ml-2" />
+          </div>
+        </div>
+        <div
+          className="bg-blue-50 rounded-lg shadow p-3 sm:p-4 border-l-4 border-blue-500"
+          title="Reorder warning only: above minimum stock but still at or below reorder point."
+        >
+          <div className="flex items-center justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs sm:text-sm text-blue-600 truncate leading-tight">Reorder warning</p>
+              <p className="text-[10px] sm:text-[11px] text-blue-700/90 -mt-0.5 mb-0.5">Approaching reorder</p>
               <p className="text-lg sm:text-2xl font-bold text-blue-700">{summary.lowStock || 0}</p>
             </div>
             <TrendingDown className="h-6 w-6 sm:h-8 sm:w-8 text-blue-400 flex-shrink-0 ml-2" />

@@ -8,6 +8,7 @@ import {
   Camera,
   Printer,
   Download,
+  MoreHorizontal,
 } from 'lucide-react';
 import {
   useGetProductsQuery,
@@ -52,6 +53,13 @@ import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import ExcelExportButton from '../components/ExcelExportButton';
 import ExcelImportButton from '../components/ExcelImportButton';
 import PdfExportButton from '../components/PdfExportButton';
@@ -293,67 +301,13 @@ export const Products = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Products</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your product catalog</p>
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <div className="min-w-0 pr-2">
+          <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Products</h1>
+          <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">Manage your product catalog</p>
         </div>
-        <div className="flex-shrink-0 flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
-          <Button
-            onClick={() => {
-              const componentInfo = getComponentInfo('/categories');
-              if (componentInfo) {
-                openTab({
-                  title: 'Add Product Category',
-                  path: '/categories?action=add',
-                  component: componentInfo.component,
-                  icon: componentInfo.icon,
-                  allowMultiple: true,
-                  props: { action: 'add' }
-                });
-              }
-            }}
-            variant="outline"
-            size="default"
-            className="flex items-center justify-center gap-2 border-gray-200 bg-white text-gray-700 hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-700 transition-all shadow-sm"
-          >
-            <Tag className="h-4 w-4 text-indigo-600" />
-            <span className="hidden sm:inline font-semibold">Category</span>
-            <span className="sm:hidden font-semibold">Category</span>
-          </Button>
-          <Button
-            onClick={refreshCategories}
-            variant="outline"
-            size="default"
-            className="flex items-center justify-center gap-2 border-gray-200 bg-white text-gray-700 hover:border-teal-500 hover:bg-teal-50 hover:text-teal-700 transition-all shadow-sm"
-            title="Refresh categories list"
-          >
-            <RefreshCw className="h-4 w-4 text-teal-600" />
-            <span className="hidden sm:inline font-semibold">Refresh</span>
-            <span className="sm:hidden font-semibold">Refresh</span>
-          </Button>
-          <Button
-            onClick={() => setShowBarcodeScanner(true)}
-            variant="outline"
-            size="default"
-            className="flex items-center justify-center gap-2 border-gray-200 bg-white text-gray-700 hover:border-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-all shadow-sm"
-            title="Scan barcode to search product"
-          >
-            <Camera className="h-4 w-4 text-amber-600" />
-            <span className="hidden sm:inline font-semibold">Scan</span>
-            <span className="sm:hidden font-semibold">Scan</span>
-          </Button>
-          <Button
-            onClick={() => setShowLabelPrinter(true)}
-            variant="outline"
-            size="default"
-            className="flex items-center justify-center gap-2 border-gray-200 bg-white text-gray-700 hover:border-purple-500 hover:bg-purple-50 hover:text-purple-700 transition-all shadow-sm"
-            title="Print barcode labels"
-          >
-            <Printer className="h-4 w-4 text-purple-600" />
-            <span className="hidden sm:inline font-semibold">Print Barcode</span>
-            <span className="sm:hidden font-semibold">Print Barcode</span>
-          </Button>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-end gap-2 sm:gap-3 overflow-x-auto">
           <Button
             onClick={() => productOps.handleAdd()}
             variant="default"
@@ -376,24 +330,69 @@ export const Products = () => {
             onDataImported={handleImportData}
             label="Import"
           />
-          <label className="inline-flex items-center gap-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
-            <input
-              type="checkbox"
-              checked={autoCreateImportCategories}
-              onChange={(e) => setAutoCreateImportCategories(e.target.checked)}
-              className="h-4 w-4"
-            />
-            Auto-create category
-          </label>
-          <Button
-            onClick={handleDownloadTemplate}
-            variant="outline"
-            size="sm"
-            className="group flex items-center justify-center gap-2 border-orange-200 bg-white text-orange-600 hover:bg-orange-50 hover:border-orange-500 h-9 px-3 rounded-lg shadow-sm transition-all duration-200"
-          >
-            <Download className="h-3.5 w-3.5 group-hover:-translate-y-0.5 transition-transform" />
-            <span className="text-xs font-semibold tracking-tight uppercase">Template</span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="default"
+                className="flex items-center justify-center gap-2 border-gray-200 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-all shadow-sm"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="font-semibold">More</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  const componentInfo = getComponentInfo('/categories');
+                  if (componentInfo) {
+                    openTab({
+                      title: 'Add Product Category',
+                      path: '/categories?action=add',
+                      component: componentInfo.component,
+                      icon: componentInfo.icon,
+                      allowMultiple: true,
+                      props: { action: 'add' }
+                    });
+                  }
+                }}
+              >
+                <Tag className="h-4 w-4 mr-2 text-indigo-600" />
+                Add Category
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); refreshCategories(); }}>
+                <RefreshCw className="h-4 w-4 mr-2 text-teal-600" />
+                Refresh Categories
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setShowBarcodeScanner(true); }}>
+                <Camera className="h-4 w-4 mr-2 text-amber-600" />
+                Scan Barcode
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setShowLabelPrinter(true); }}>
+                <Printer className="h-4 w-4 mr-2 text-purple-600" />
+                Print Barcode Labels
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleDownloadTemplate(); }}>
+                <Download className="h-4 w-4 mr-2 text-orange-600" />
+                Download Template
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-default">
+                <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={autoCreateImportCategories}
+                    onChange={(e) => setAutoCreateImportCategories(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Auto-create category
+                </label>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          </div>
         </div>
       </div>
 

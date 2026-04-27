@@ -11,6 +11,7 @@ import {
   ShoppingBag,
   CheckCircle,
   XCircle,
+  AlertTriangle,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -514,14 +515,14 @@ export const Reports = () => {
       const base = {
         'Total Items': inventoryReportData?.summary?.totalItems || 0,
         'Total Cost': inventoryReportData?.summary?.totalCost || 0,
-        'In Stock': inventoryReportData?.summary?.inStockCount || 0,
+        'Above minimum': inventoryReportData?.summary?.inStockCount || 0,
+        'Low Stock': inventoryReportData?.summary?.lowStockCount ?? 0,
         'Out of Stock': inventoryReportData?.summary?.outOfStockCount || 0
       };
       if (inventoryType === 'stock-summary') {
         const valData = {
           ...base,
-          'Retail Valuation': inventoryReportData?.summary?.totalRetailValuation ?? 0,
-          'Reconcile Delta': inventoryReportData?.summary?.totalReconciliationDelta ?? 0
+          'Retail Valuation': inventoryReportData?.summary?.totalRetailValuation ?? 0
         };
         if (showCostPrice) {
           valData['Wholesale Valuation'] = inventoryReportData?.summary?.totalWholesaleValuation ?? 0;
@@ -574,6 +575,9 @@ export const Reports = () => {
       if (title === 'Total Cost') return 'Cost Price';
       if (title === 'Wholesale Valuation') return 'Wholesale Price';
       if (title === 'Retail Valuation') return 'Retail Price';
+      if (title === 'Above minimum') return 'Qty above minimum level';
+      if (title === 'Low Stock') return 'Qty ≤ minimum (still in hand)';
+      if (title === 'Out of Stock') return 'Qty = 0';
       return 'Current Status';
     }
     if (activeTab === 'bank-cash') return 'Current Total';
@@ -796,13 +800,20 @@ export const Reports = () => {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${activeTab === 'inventory' ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-4'}`}>
+      {/* Summary Cards — inventory uses auto-fill so 7 cards wrap as balanced rows (e.g. 4+3), not 6+1 */}
+      <div
+        className={`grid gap-4 ${
+          activeTab === 'inventory'
+            ? 'grid-cols-1 sm:[grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr))]'
+            : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+        }`}
+      >
         {Object.entries(getSummaryData() || {}).map(([title, value], idx) => {
           const getIcon = () => {
             if (title === 'Wholesale Valuation') return <DollarSign className="h-6 w-6 text-amber-600" />;
             if (title === 'Retail Valuation') return <ShoppingBag className="h-6 w-6 text-teal-600" />;
-            if (title === 'In Stock') return <CheckCircle className="h-6 w-6 text-green-600" />;
+            if (title === 'Above minimum') return <CheckCircle className="h-6 w-6 text-green-600" />;
+            if (title === 'Low Stock') return <AlertTriangle className="h-6 w-6 text-amber-600" />;
             if (title === 'Out of Stock') return <XCircle className="h-6 w-6 text-red-600" />;
             return idx === 0 ? <Users className="h-6 w-6 text-blue-600" /> :
               idx === 1 ? <TrendingUp className="h-6 w-6 text-purple-600" /> :
@@ -811,7 +822,8 @@ export const Reports = () => {
           const getBgColor = () => {
             if (title === 'Wholesale Valuation') return "bg-amber-50";
             if (title === 'Retail Valuation') return "bg-teal-50";
-            if (title === 'In Stock') return "bg-green-50";
+            if (title === 'Above minimum') return "bg-green-50";
+            if (title === 'Low Stock') return "bg-amber-50";
             if (title === 'Out of Stock') return "bg-red-50";
             return idx === 0 ? "bg-blue-50" :
               idx === 1 ? "bg-purple-50" :
@@ -1638,19 +1650,17 @@ export const Reports = () => {
 };
 
 const SummaryCard = ({ title, value, icon, bgColor, trend }) => (
-  <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex items-start justify-between">
-    <div>
-      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-      <h3 className="text-2xl font-bold text-gray-900 font-mono">
+  <div className="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-gray-100 flex items-start justify-between gap-3 min-w-0">
+    <div className="min-w-0 flex-1">
+      <p className="text-sm font-medium text-gray-500 mb-1 truncate" title={title}>
+        {title}
+      </p>
+      <h3 className="text-xl sm:text-2xl font-bold text-gray-900 font-mono tracking-tight break-all sm:break-normal">
         {typeof value === 'number' ? value.toLocaleString(undefined, { minimumFractionDigits: 2 }) : (value || '0.00')}
       </h3>
-      <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-        {trend}
-      </p>
+      <p className="text-xs text-gray-400 mt-2 leading-snug">{trend}</p>
     </div>
-    <div className={`p-3 rounded-xl ${bgColor}`}>
-      {icon}
-    </div>
+    <div className={`p-2.5 sm:p-3 rounded-xl shrink-0 ${bgColor}`}>{icon}</div>
   </div>
 );
 

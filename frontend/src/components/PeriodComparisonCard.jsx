@@ -10,6 +10,7 @@ import { formatPercentageChange } from '../utils/periodComparisons';
 
 export const PeriodComparisonCard = ({
   title,
+  subtitle,
   currentValue,
   previousValue,
   format = 'currency', // 'currency', 'number', 'percentage'
@@ -18,7 +19,8 @@ export const PeriodComparisonCard = ({
   showTarget = false,
   targetValue = null,
   className = '',
-  size = 'default' // 'default', 'large', 'small'
+  size = 'default', // 'default', 'large', 'small'
+  hideComparisonDetails = false
 }) => {
   const percentageChange = previousValue !== 0 && previousValue !== null
     ? ((currentValue - previousValue) / previousValue) * 100
@@ -83,6 +85,11 @@ export const PeriodComparisonCard = ({
           )}
           <div>
             <h3 className={`${classes.title} font-medium text-gray-700`}>{title}</h3>
+            {subtitle && (
+              <p className="text-xs text-gray-500 mt-0.5">
+                {subtitle}
+              </p>
+            )}
             {showTarget && targetValue && (
               <p className="text-xs text-gray-500 mt-0.5">
                 Target: {formatValue(targetValue)}
@@ -100,35 +107,39 @@ export const PeriodComparisonCard = ({
           </p>
         </div>
 
-        {/* Comparison */}
-        <div className="flex items-center space-x-2">
-          {isPositive && (
-            <TrendingUp className="h-4 w-4 text-green-600" />
-          )}
-          {isNegative && (
-            <svg className="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path d="M3 8c1.5 0 2.5 1 2.5 2.5S4.5 13 3 13m4 0c1.5 0 2.5 1 2.5 2.5S8.5 18 7 18m4 0c1.5 0 2.5 1 2.5 2.5S12.5 23 11 23" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M18 20l-2.5-2.5m2.5 2.5l-2.5 2.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          )}
-          {isNeutral && (
-            <Minus className="h-4 w-4 text-gray-400" />
-          )}
-          
-          <span className={`${classes.change} font-medium ${formattedChange.color}`}>
-            {formattedChange.value}
-          </span>
-          
-          <span className={`${classes.change} text-gray-500`}>
-            vs previous period
-          </span>
-        </div>
+        {!hideComparisonDetails && (
+          <>
+            {/* Comparison */}
+            <div className="flex items-center space-x-2">
+              {isPositive && (
+                <TrendingUp className="h-4 w-4 text-green-600" />
+              )}
+              {isNegative && (
+                <svg className="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path d="M3 8c1.5 0 2.5 1 2.5 2.5S4.5 13 3 13m4 0c1.5 0 2.5 1 2.5 2.5S8.5 18 7 18m4 0c1.5 0 2.5 1 2.5 2.5S12.5 23 11 23" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M18 20l-2.5-2.5m2.5 2.5l-2.5 2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+              {isNeutral && (
+                <Minus className="h-4 w-4 text-gray-400" />
+              )}
 
-        {/* Previous Value */}
-        {previousValue !== null && previousValue !== undefined && (
-          <p className={`${classes.change} text-gray-500`}>
-            Previous: {formatValue(previousValue)}
-          </p>
+              <span className={`${classes.change} font-medium ${formattedChange.color}`}>
+                {formattedChange.value}
+              </span>
+
+              <span className={`${classes.change} text-gray-500`}>
+                vs previous period
+              </span>
+            </div>
+
+            {/* Previous Value */}
+            {previousValue !== null && previousValue !== undefined && (
+              <p className={`${classes.change} text-gray-500`}>
+                Previous: {formatValue(previousValue)}
+              </p>
+            )}
+          </>
         )}
 
         {/* Target Achievement */}

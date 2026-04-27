@@ -352,13 +352,13 @@ export const Inventory = () => {
   return (
     <ResponsiveContainer className="space-y-4 xl:space-y-6 min-w-0">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Inventory Management</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">Track and manage product stock levels</p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Inventory Management</h1>
+          <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">Track and manage product stock levels</p>
         </div>
-        
-        <div className="flex flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto flex-shrink-0">
+
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 overflow-x-auto">
           {!lowStockFilter && (
             <Button
               onClick={() => setShowAdjustmentModal(true)}

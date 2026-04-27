@@ -1374,11 +1374,11 @@ export const Settings2 = () => {
 
   const tabs = [
     { id: 'company', name: 'Company Information', shortName: 'Company', icon: Building },
-    { id: 'users', name: 'Users Control', shortName: 'Users', icon: Users },
+    { id: 'users', name: 'Users', shortName: 'Users', icon: Users },
     { id: 'print', name: 'Print Preview Settings', shortName: 'Print', icon: Printer },
     { id: 'sidebar', name: 'Sidebar Configuration', shortName: 'Sidebar', icon: LayoutDashboard },
-    { id: 'mobile-nav', name: 'Mobile Bottom Nav', shortName: 'Mobile Nav', icon: Smartphone },
-    { id: 'other', name: 'Other', shortName: 'Other', icon: BarChart3 },
+    { id: 'mobile-nav', name: 'Mobile Nav', shortName: 'Mobile Nav', icon: Smartphone },
+    { id: 'other', name: 'Advanced', shortName: 'Advanced', icon: BarChart3 },
   ];
 
   return (
@@ -1391,8 +1391,23 @@ export const Settings2 = () => {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide w-full">
-        <nav className="-mb-px flex space-x-4 md:space-x-8 w-full">
+      <div className="border-b border-gray-200 -mx-4 px-4 md:mx-0 md:px-0 w-full">
+        <div className="md:hidden pb-3">
+          <label htmlFor="settings-tab-select" className="sr-only">Select settings tab</label>
+          <select
+            id="settings-tab-select"
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value)}
+            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {tabs.map((tab) => (
+              <option key={tab.id} value={tab.id}>
+                {tab.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <nav className="-mb-px hidden md:flex space-x-4 md:space-x-8 w-full overflow-x-auto scrollbar-hide">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -2354,14 +2369,31 @@ export const Settings2 = () => {
             <div className="card-header">
               <div className="flex items-center space-x-2">
                 <BarChart3 className="h-5 w-5 text-gray-600" />
-                <h2 className="text-lg font-semibold">Other Settings</h2>
+                <h2 className="text-lg font-semibold">Advanced Settings</h2>
               </div>
               <p className="text-sm text-gray-600 mt-1">
-                Display options and miscellaneous settings
+                Display options, financial guidance, and advanced controls
               </p>
             </div>
             <div className="card-content">
               <div className="space-y-6">
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-4">Financial Help</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm text-gray-700">
+                    <div><strong>Sales:</strong> Total revenue from Sales Orders + Sales Invoices</div>
+                    <div><strong>Net Revenue:</strong> Sales minus discounts given</div>
+                    <div><strong>Purchase (COGS):</strong> Cost of goods purchased from suppliers</div>
+                    <div><strong>Gross Profit:</strong> Net Revenue - COGS (your margin)</div>
+                    <div><strong>Receipts:</strong> Total money received (Cash Receipts + Bank Receipts + Sales Invoice Payments)</div>
+                    <div><strong>Payments:</strong> Cash/Bank money paid (includes supplier payments + expenses)</div>
+                    <div><strong>Net Cash Flow:</strong> Total receipts minus total payments (cash position)</div>
+                  </div>
+                  <div className="mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded text-sm text-gray-800">
+                    <strong>Note:</strong> Receipts/Payments may include both sales/purchases and separate cash/bank transactions.
+                    For accurate accounting, check individual transaction pages.
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {/* Show Product Images */}
                   <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">

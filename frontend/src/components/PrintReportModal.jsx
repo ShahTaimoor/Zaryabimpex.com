@@ -139,7 +139,7 @@ const PrintReportModal = ({
             {summaryData && (
               <div className="grid grid-cols-4 gap-4 mb-8">
                 {Object.entries(summaryData).map(([label, value]) => {
-                  const isCount = /Total Items|In Stock|Out of Stock|Low Stock|Count|Items Found/i.test(label);
+                  const isCount = /Total Items|Above minimum|In Stock|Out of Stock|Low Stock|Count|Items Found/i.test(label);
                   const formatted =
                     typeof value === 'number'
                       ? isCount

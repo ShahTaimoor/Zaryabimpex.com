@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   ShoppingCart,
   Users,
@@ -31,15 +30,18 @@ import {
   useLazyGetOrdersQuery,
   useLazyGetPeriodSummaryQuery,
 } from '../store/services/salesApi';
-import { useGetLowStockItemsQuery, useGetInventorySummaryQuery } from '../store/services/inventoryApi';
+import { useGetLowStockItemsQuery, useGetInventorySummaryQuery, useGetAlertSummaryQuery } from '../store/services/inventoryApi';
 import { useGetCustomersQuery } from '../store/services/customersApi';
 import { useLazyGetSalesOrdersQuery } from '../store/services/salesOrdersApi';
 import { useLazyGetPurchaseOrdersQuery } from '../store/services/purchaseOrdersApi';
+import { useConfirmSalesOrderMutation, useCancelSalesOrderMutation } from '../store/services/salesOrdersApi';
+import { useConfirmPurchaseOrderMutation, useCancelPurchaseOrderMutation } from '../store/services/purchaseOrdersApi';
 import { useLazyGetPurchaseInvoicesQuery } from '../store/services/purchaseInvoicesApi';
 import { useLazyGetCashReceiptsQuery } from '../store/services/cashReceiptsApi';
 import { useLazyGetCashPaymentsQuery } from '../store/services/cashPaymentsApi';
 import { useLazyGetBankReceiptsQuery } from '../store/services/bankReceiptsApi';
 import { useLazyGetBankPaymentsQuery } from '../store/services/bankPaymentsApi';
+import { useGetLowStockAlertsQuery } from '../store/services/inventoryAlertsApi';
 import { useGetDashboardRangeSummaryQuery } from '../store/services/dashboardApi';
 import { useGetUpcomingExpensesQuery } from '../store/services/expensesApi';
 import { useGetCompanySettingsQuery } from '../store/services/settingsApi';
@@ -53,9 +55,13 @@ import ComparisonChart from '../components/ComparisonChart';
 import { usePeriodComparison } from '../hooks/usePeriodComparison';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan } from '../utils/dateUtils';
+import { toast } from 'sonner';
 
-const StatCard = ({ title, value, icon: Icon, color, change, changeType }) => (
-  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2 sm:p-2.5 xl:p-3 2xl:p-4 h-full min-w-0">
+const StatCard = ({ title, value, icon: Icon, color, change, changeType, onClick }) => (
+  <div
+    className={`bg-white rounded-lg shadow-sm border border-gray-200 p-2 sm:p-2.5 xl:p-3 2xl:p-4 h-full min-w-0 ${onClick ? 'cursor-pointer hover:border-gray-300 hover:shadow-md transition-all' : ''}`}
+    onClick={onClick}
+  >
     <div className="text-center flex flex-col justify-center items-center h-full">
       <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2 2xl:mb-3">
         <div className={`p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 rounded-full ${color}`}>
@@ -83,9 +89,9 @@ const StatCard = ({ title, value, icon: Icon, color, change, changeType }) => (
 );
 
 const DASHBOARD_HIDDEN_KEY = 'dashboardDataHidden';
+const LOW_STOCK_THRESHOLD = 5;
 
 export const Dashboard = () => {
-  const navigate = useNavigate();
   const today = getCurrentDatePakistan();
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
@@ -129,6 +135,8 @@ export const Dashboard = () => {
   const [showBankPaymentsModal, setShowBankPaymentsModal] = useState(false);
   const [showAllReceiptsModal, setShowAllReceiptsModal] = useState(false);
   const [showAllPaymentsModal, setShowAllPaymentsModal] = useState(false);
+  const [showDiscountsModal, setShowDiscountsModal] = useState(false);
+  const [showLowStockModal, setShowLowStockModal] = useState(false);
 
   // Lazy query for period summary
   const [getPeriodSummary] = useLazyGetPeriodSummaryQuery();
@@ -172,6 +180,21 @@ export const Dashboard = () => {
   }
 
   const { data: lowStockData, isLoading: lowStockLoading } = useGetLowStockItemsQuery();
+  const { data: lowStockAlertsData, isLoading: lowStockAlertsLoading } = useGetLowStockAlertsQuery(
+    {
+      includeOutOfStock: true,
+      includeCritical: true,
+      includeWarning: true,
+      page: 1,
+      limit: 5000,
+    },
+    {
+      pollingInterval: 30000,
+    }
+  );
+  const { data: alertSummaryData } = useGetAlertSummaryQuery(undefined, {
+    pollingInterval: 30000,
+  });
 
   const { data: inventoryData, isLoading: inventoryLoading } = useGetInventorySummaryQuery();
 
@@ -190,6 +213,10 @@ export const Dashboard = () => {
 
   const [fetchSalesOrdersModal, soModalState] = useLazyGetSalesOrdersQuery();
   const [fetchPurchaseOrdersModal, poModalState] = useLazyGetPurchaseOrdersQuery();
+  const [confirmSalesOrderMutation, { isLoading: confirmingSalesOrder }] = useConfirmSalesOrderMutation();
+  const [cancelSalesOrderMutation, { isLoading: cancellingSalesOrder }] = useCancelSalesOrderMutation();
+  const [confirmPurchaseOrderMutation, { isLoading: confirmingPurchaseOrder }] = useConfirmPurchaseOrderMutation();
+  const [cancelPurchaseOrderMutation, { isLoading: cancellingPurchaseOrder }] = useCancelPurchaseOrderMutation();
   const [fetchSalesInvoicesModal, siModalState] = useLazyGetOrdersQuery();
   const [fetchPurchaseInvoicesModal, piModalState] = useLazyGetPurchaseInvoicesQuery();
   const [fetchCashReceiptsModal, crModalState] = useLazyGetCashReceiptsQuery();
@@ -210,8 +237,8 @@ export const Dashboard = () => {
 
   useEffect(() => {
     if (!startDate || !endDate) return;
-    if (showSalesInvoicesModal || showAllReceiptsModal) fetchSalesInvoicesModal(rangeParams);
-  }, [showSalesInvoicesModal, showAllReceiptsModal, startDate, endDate, fetchSalesInvoicesModal]);
+    if (showSalesInvoicesModal || showAllReceiptsModal || showDiscountsModal) fetchSalesInvoicesModal(rangeParams);
+  }, [showSalesInvoicesModal, showAllReceiptsModal, showDiscountsModal, startDate, endDate, fetchSalesInvoicesModal]);
 
   useEffect(() => {
     if (!startDate || !endDate) return;
@@ -251,7 +278,7 @@ export const Dashboard = () => {
   const { data: companySettingsData } = useGetCompanySettingsQuery();
   const { data: companyData } = useFetchCompanyQuery();
 
-  if (summaryLoading || lowStockLoading || inventoryLoading || customersLoading || rangeSummaryLoading || recurringExpensesLoading) {
+  if (summaryLoading || lowStockLoading || lowStockAlertsLoading || inventoryLoading || customersLoading || rangeSummaryLoading || recurringExpensesLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -262,9 +289,17 @@ export const Dashboard = () => {
   // Handle different response structures from RTK Query
   // RTK Query wraps responses in 'data', but some APIs return data directly
   const summary = todaySummary?.data?.summary || todaySummary?.summary || {};
-  const lowStockCount = lowStockData?.data?.products?.length || lowStockData?.products?.length || 0;
-  const inventorySummary = inventoryData?.data?.summary ?? inventoryData?.data ?? inventoryData?.summary ?? {};
-
+  const inventorySummary =
+    inventoryData?.data?.summary ??
+    inventoryData?.data ??
+    inventoryData?.summary ??
+    inventoryData ??
+    {};
+  const inventoryAlertsSummary =
+    alertSummaryData?.data?.data ??
+    alertSummaryData?.data ??
+    alertSummaryData ??
+    {};
   const customersPagination = customersData?.pagination ?? customersData?.data?.pagination;
   const activeCustomersCount =
     customersPagination?.total ??
@@ -396,17 +431,39 @@ export const Dashboard = () => {
 
   // Column definitions for modals
   const salesOrdersColumns = [
-    { key: 'soNumber', label: 'Order Number', sortable: true },
+    {
+      key: 'soNumber',
+      label: 'Order Number',
+      sortable: true,
+      render: (val, row) => val || row.so_number || row.orderNumber || row.order_number || row.invoiceNumber || '-'
+    },
     { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.business_name || row.customer?.displayName || row.customer?.name || '-' },
-    { key: 'orderDate', label: 'Date', sortable: true, format: 'date' },
+    {
+      key: 'orderDate',
+      label: 'Date',
+      sortable: true,
+      format: 'date',
+      render: (val, row) => formatDate(val || row.order_date || row.createdAt || row.created_at || row.date)
+    },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'total', label: 'Total', sortable: true, format: 'currency' }
   ];
 
   const purchaseOrdersColumns = [
-    { key: 'poNumber', label: 'PO Number', sortable: true },
+    {
+      key: 'poNumber',
+      label: 'PO Number',
+      sortable: true,
+      render: (val, row) => val || row.purchase_order_number || row.po_number || row.orderNumber || row.order_number || row.referenceNumber || '-'
+    },
     { key: 'supplier', label: 'Supplier', sortable: true, render: (val, row) => row.supplier?.businessName || row.supplier?.business_name || row.supplier?.companyName || row.supplier?.displayName || row.supplier?.name || '-' },
-    { key: 'orderDate', label: 'Date', sortable: true, format: 'date' },
+    {
+      key: 'orderDate',
+      label: 'Date',
+      sortable: true,
+      format: 'date',
+      render: (val, row) => formatDate(val || row.purchase_date || row.order_date || row.createdAt || row.created_at || row.date)
+    },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'total', label: 'Total', sortable: true, format: 'currency' }
   ];
@@ -416,6 +473,28 @@ export const Dashboard = () => {
     { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.business_name || row.customerInfo?.businessName || row.customerInfo?.business_name || row.customerName || row.customer?.name || row.customerInfo?.name || '-' },
     { key: 'sale_date', label: 'Date', sortable: true, format: 'date', render: (val, row) => formatDate(val || row.createdAt || row.orderDate || row.date) },
     { key: 'status', label: 'Status', sortable: true },
+    { key: 'total', label: 'Total', sortable: true, render: (val, row) => formatCurrency(val !== undefined && val !== null ? val : (row.pricing?.total || 0)) }
+  ];
+
+  const salesDiscountsColumns = [
+    { key: 'order_number', label: 'Order Number', sortable: true, render: (val, row) => val || row.orderNumber || row.invoiceNo || '-' },
+    { key: 'customer', label: 'Customer', sortable: true, render: (val, row) => row.customer?.businessName || row.customer?.business_name || row.customerInfo?.businessName || row.customerInfo?.business_name || row.customerName || row.customer?.name || row.customerInfo?.name || '-' },
+    { key: 'sale_date', label: 'Date', sortable: true, format: 'date', render: (val, row) => formatDate(val || row.createdAt || row.orderDate || row.date) },
+    {
+      key: 'discount_amount',
+      label: 'Discount',
+      sortable: true,
+      render: (val, row) => {
+        const discountValue = Number(
+          row.discountAmount ??
+          row.discount_amount ??
+          row.pricing?.discountAmount ??
+          row.pricing?.discount ??
+          0
+        ) || 0;
+        return formatCurrency(discountValue);
+      }
+    },
     { key: 'total', label: 'Total', sortable: true, render: (val, row) => formatCurrency(val !== undefined && val !== null ? val : (row.pricing?.total || 0)) }
   ];
 
@@ -482,14 +561,112 @@ export const Dashboard = () => {
     { key: 'amount', label: 'Amount', sortable: true, format: 'currency' }
   ];
 
+  const getLowStockProductName = (row) =>
+    row.name ??
+    row.productName ??
+    row.product_name ??
+    row.product?.name ??
+    row.product?.displayName ??
+    '-';
+
+  const getLowStockSku = (row) =>
+    row.sku ??
+    row.productCode ??
+    row.product_code ??
+    row.product?.sku ??
+    row.product?.code ??
+    '-';
+
+  const getLowStockCurrentStock = (row) =>
+    Number(
+      row.currentStock ??
+      row.current_stock ??
+      row.stockQuantity ??
+      row.stock_quantity ??
+      row.inventory?.currentStock ??
+      row.inventory?.current_stock ??
+      row.metrics?.currentStock ??
+      row.metrics?.current_stock ??
+      0
+    );
+
+  const getLowStockReorderPoint = (row) =>
+    Number(
+      row.reorderPoint ??
+      row.reorder_point ??
+      row.minStock ??
+      row.min_stock ??
+      row.inventory?.reorderPoint ??
+      row.inventory?.reorder_point ??
+      row.metrics?.reorderPoint ??
+      row.metrics?.reorder_point ??
+      0
+    );
+
+  const lowStockItemsColumns = [
+    {
+      key: 'name',
+      label: 'Product',
+      sortable: true,
+      render: (_val, row) => getLowStockProductName(row)
+    },
+    {
+      key: 'sku',
+      label: 'SKU',
+      sortable: true,
+      render: (_val, row) => getLowStockSku(row)
+    },
+    {
+      key: 'current_stock',
+      label: 'Current Stock',
+      sortable: true,
+      render: (_val, row) => getLowStockCurrentStock(row)
+    },
+    {
+      key: 'reorder_point',
+      label: 'Reorder Point',
+      sortable: true,
+      render: (_val, row) => getLowStockReorderPoint(row)
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      render: (_val, row) => {
+        const current = getLowStockCurrentStock(row);
+        return current < LOW_STOCK_THRESHOLD ? `Low Stock (< ${LOW_STOCK_THRESHOLD})` : 'Normal';
+      }
+    }
+  ];
+
   const purchaseInvoicesDataArray = pickList(piModalState.data, ['invoices']);
   const salesOrdersModalData = salesOrdersArray;
   const purchaseOrdersModalData = pickList(poModalState.data, ['purchaseOrders']);
   const salesInvoicesModalData = salesInvoicesArray;
+  const salesDiscountsDataArray = salesInvoicesArray.filter((row) => {
+    const discountValue = Number(
+      row.discountAmount ??
+      row.discount_amount ??
+      row.pricing?.discountAmount ??
+      row.pricing?.discount ??
+      0
+    ) || 0;
+    return discountValue > 0;
+  });
   const cashReceiptsDataArray = cashReceiptsArray;
   const cashPaymentsDataArray = cashPaymentsArray;
   const bankReceiptsDataArray = bankReceiptsArray;
   const bankPaymentsDataArray = bankPaymentsArray;
+  const lowStockAlertsArrayRaw =
+    lowStockAlertsData?.data?.data ||
+    lowStockAlertsData?.data ||
+    lowStockAlertsData ||
+    [];
+  const lowStockItemsDataArray = (Array.isArray(lowStockAlertsArrayRaw) ? lowStockAlertsArrayRaw : []).filter((row) => {
+    const current = getLowStockCurrentStock(row);
+    return current < LOW_STOCK_THRESHOLD;
+  });
+  const lowStockCount = lowStockItemsDataArray.length;
 
   // Combined receipts and payments data (cash + bank + sales invoice payments)
   const salesInvoiceReceiptsArray = salesInvoicesArray
@@ -526,18 +703,190 @@ export const Dashboard = () => {
     ? Math.min(900, Math.max(120, dashboardLogoSizeRaw))
     : 500;
 
+  const getRowOrderId = (row) => row?.id || row?._id;
+
+  const handleConfirmPendingSalesOrder = async (row) => {
+    const id = getRowOrderId(row);
+    if (!id) {
+      toast.error('Sales order id not found');
+      return;
+    }
+    if (!window.confirm('Confirm this sales order? This will generate invoice and update stock.')) {
+      return;
+    }
+    try {
+      await confirmSalesOrderMutation(id).unwrap();
+      toast.success('Sales order confirmed successfully');
+      fetchSalesOrdersModal(rangeParams);
+      fetchSalesInvoicesModal(rangeParams);
+    } catch (error) {
+      toast.error(error?.data?.message || error?.message || 'Failed to confirm sales order');
+    }
+  };
+
+  const handleCancelPendingSalesOrder = async (row) => {
+    const id = getRowOrderId(row);
+    if (!id) {
+      toast.error('Sales order id not found');
+      return;
+    }
+    if (!window.confirm('Cancel this sales order? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      await cancelSalesOrderMutation(id).unwrap();
+      toast.success('Sales order cancelled successfully');
+      fetchSalesOrdersModal(rangeParams);
+    } catch (error) {
+      toast.error(error?.data?.message || error?.message || 'Failed to cancel sales order');
+    }
+  };
+
+  const handleConfirmPendingPurchaseOrder = async (row) => {
+    const id = getRowOrderId(row);
+    if (!id) {
+      toast.error('Purchase order id not found');
+      return;
+    }
+    if (!window.confirm('Confirm this purchase order? Inventory will be updated and invoice may be created.')) {
+      return;
+    }
+    try {
+      await confirmPurchaseOrderMutation(id).unwrap();
+      toast.success('Purchase order confirmed successfully');
+      fetchPurchaseOrdersModal(rangeParams);
+      fetchPurchaseInvoicesModal(rangeParams);
+    } catch (error) {
+      toast.error(error?.data?.message || error?.message || 'Failed to confirm purchase order');
+    }
+  };
+
+  const handleCancelPendingPurchaseOrder = async (row) => {
+    const id = getRowOrderId(row);
+    if (!id) {
+      toast.error('Purchase order id not found');
+      return;
+    }
+    if (!window.confirm('Cancel this purchase order? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      await cancelPurchaseOrderMutation(id).unwrap();
+      toast.success('Purchase order cancelled successfully');
+      fetchPurchaseOrdersModal(rangeParams);
+    } catch (error) {
+      toast.error(error?.data?.message || error?.message || 'Failed to cancel purchase order');
+    }
+  };
+
+  const isPendingSalesRow = (row) => {
+    const normalizedStatus = (row?.status || '').toLowerCase().trim();
+    return normalizedStatus === 'draft' || normalizedStatus === 'pending';
+  };
+
+  const isCompletedSalesRow = (row) => {
+    const normalizedStatus = (row?.status || '').toLowerCase().trim();
+    return normalizedStatus === 'confirmed' || normalizedStatus === 'partially_invoiced' || normalizedStatus === 'fully_invoiced';
+  };
+
+  const isCancelledSalesRow = (row) => {
+    const normalizedStatus = (row?.status || '').toLowerCase().trim();
+    return normalizedStatus === 'cancelled';
+  };
+
+  const isPendingPurchaseRow = (row) => {
+    const normalizedStatus = (row?.status || '').toLowerCase().trim();
+    return normalizedStatus === 'draft' || normalizedStatus === 'pending';
+  };
+
+  const isCompletedPurchaseRow = (row) => {
+    const normalizedStatus = (row?.status || '').toLowerCase().trim();
+    return normalizedStatus === 'confirmed' || normalizedStatus === 'partially_received' || normalizedStatus === 'fully_received';
+  };
+
+  const isCancelledPurchaseRow = (row) => {
+    const normalizedStatus = (row?.status || '').toLowerCase().trim();
+    return normalizedStatus === 'cancelled';
+  };
+
+  const pendingSalesRowActions = [
+    {
+      label: confirmingSalesOrder ? 'Confirming...' : 'Confirm Invoice',
+      className: 'h-7 px-2 text-[10px] sm:text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50',
+      isVisible: isPendingSalesRow,
+      isDisabled: () => confirmingSalesOrder || cancellingSalesOrder,
+      onClick: handleConfirmPendingSalesOrder
+    },
+    {
+      label: cancellingSalesOrder ? 'Cancelling...' : 'Cancel Invoice',
+      className: 'h-7 px-2 text-[10px] sm:text-xs border-red-200 text-red-700 hover:bg-red-50',
+      isVisible: isPendingSalesRow,
+      isDisabled: () => confirmingSalesOrder || cancellingSalesOrder,
+      onClick: handleCancelPendingSalesOrder
+    },
+    {
+      label: 'Invoice Complete',
+      variant: 'ghost',
+      className: 'h-7 px-2 text-[10px] sm:text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 cursor-default',
+      isVisible: isCompletedSalesRow,
+      isDisabled: () => true,
+      onClick: () => {}
+    },
+    {
+      label: 'Invoice Cancel',
+      variant: 'ghost',
+      className: 'h-7 px-2 text-[10px] sm:text-xs text-red-700 bg-red-50 border border-red-200 cursor-default',
+      isVisible: isCancelledSalesRow,
+      isDisabled: () => true,
+      onClick: () => {}
+    }
+  ];
+
+  const pendingPurchaseRowActions = [
+    {
+      label: confirmingPurchaseOrder ? 'Confirming...' : 'Confirm Invoice',
+      className: 'h-7 px-2 text-[10px] sm:text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50',
+      isVisible: isPendingPurchaseRow,
+      isDisabled: () => confirmingPurchaseOrder || cancellingPurchaseOrder,
+      onClick: handleConfirmPendingPurchaseOrder
+    },
+    {
+      label: cancellingPurchaseOrder ? 'Cancelling...' : 'Cancel Invoice',
+      className: 'h-7 px-2 text-[10px] sm:text-xs border-red-200 text-red-700 hover:bg-red-50',
+      isVisible: isPendingPurchaseRow,
+      isDisabled: () => confirmingPurchaseOrder || cancellingPurchaseOrder,
+      onClick: handleCancelPendingPurchaseOrder
+    },
+    {
+      label: 'Invoice Complete',
+      variant: 'ghost',
+      className: 'h-7 px-2 text-[10px] sm:text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 cursor-default',
+      isVisible: isCompletedPurchaseRow,
+      isDisabled: () => true,
+      onClick: () => {}
+    },
+    {
+      label: 'Invoice Cancel',
+      variant: 'ghost',
+      className: 'h-7 px-2 text-[10px] sm:text-xs text-red-700 bg-red-50 border border-red-200 cursor-default',
+      isVisible: isCancelledPurchaseRow,
+      isDisabled: () => true,
+      onClick: () => {}
+    }
+  ];
+
   return (
     <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Dashboard</h1>
           {!dashboardHidden && (
-            <p className="text-sm sm:text-base text-gray-600">Welcome back! Here's what's happening today.</p>
+            <p className="hidden sm:block text-sm sm:text-base text-gray-600">Welcome back! Here's what's happening today.</p>
           )}
         </div>
 
         {/* Hide Data Button - Mobile only (no date filter here to save space) */}
-        <div className="flex items-center justify-end gap-2 w-full sm:w-auto lg:hidden">
+        <div className="flex items-center justify-end gap-2 flex-shrink-0 lg:hidden">
           <button
             type="button"
             onClick={toggleDashboardVisibility}
@@ -741,7 +1090,13 @@ export const Dashboard = () => {
                   </div>
 
                   {/* Discount */}
-                  <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                    onClick={() => setShowDiscountsModal(true)}
+                  >
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                    </div>
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
                       <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-red-500 rounded-full">
                         <Tag className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
@@ -754,7 +1109,7 @@ export const Dashboard = () => {
                   {/* Pending Sales Orders */}
                   <div
                     className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm min-w-0"
-                    onClick={() => navigate('/sales-orders')}
+                    onClick={() => setShowSalesOrdersModal(true)}
                   >
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
                       <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-cyan-500 rounded-full">
@@ -768,7 +1123,7 @@ export const Dashboard = () => {
                   {/* Pending Purchase Orders */}
                   <div
                     className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm min-w-0"
-                    onClick={() => navigate('/purchase-orders')}
+                    onClick={() => setShowPurchaseOrdersModal(true)}
                   >
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
                       <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-indigo-500 rounded-full">
@@ -894,7 +1249,7 @@ export const Dashboard = () => {
             />
             <StatCard
               title="Total Products"
-              value={inventorySummary.totalProducts || 0}
+              value={inventorySummary.totalProducts ?? inventorySummary.total_products ?? 0}
               icon={Package}
               color="bg-warning-500"
             />
@@ -923,10 +1278,11 @@ export const Dashboard = () => {
               value={lowStockCount}
               icon={AlertTriangle}
               color="bg-danger-500"
+              onClick={() => setShowLowStockModal(true)}
             />
           </div>
 
-          {/* Period Comparison Section – graphs & cards */}
+          {/* Period Comparison Section */}
           <div className="card">
             <div className="card-content pt-4">
               <PeriodComparisonSection
@@ -969,115 +1325,31 @@ export const Dashboard = () => {
                     iconColor: 'bg-orange-500'
                   }
                 ]}
+                additionalCards={[
+                  {
+                    title: "Today's Orders",
+                    subtitle: `Retail: ${summary.orderTypes?.retail || 0} | Wholesale: ${summary.orderTypes?.wholesale || 0}`,
+                    currentValue: summary.totalOrders || 0,
+                    format: 'number',
+                    icon: ShoppingCart,
+                    iconColor: 'bg-cyan-500',
+                    hideComparisonDetails: true
+                  },
+                  {
+                    title: 'Payment Methods Today',
+                    subtitle: Object.entries(summary.paymentMethods || {})
+                      .slice(0, 2)
+                      .map(([method, count]) => `${method.replace('_', ' ')}: ${count}`)
+                      .join(' | ') || 'No payments',
+                    currentValue: Object.values(summary.paymentMethods || {}).reduce((acc, val) => acc + Number(val || 0), 0),
+                    format: 'number',
+                    icon: CreditCard,
+                    iconColor: 'bg-emerald-500',
+                    hideComparisonDetails: true
+                  }
+                ]}
                 fetchFunction={fetchPeriodSummary}
               />
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-            {/* Recent Orders */}
-            <div className="card">
-              <div className="card-header">
-                <h3 className="text-base sm:text-lg font-medium text-gray-900">Today's Orders</h3>
-              </div>
-              <div className="card-content">
-                {summary.orderTypes ? (
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Retail Orders</span>
-                      <span className="font-medium">{summary.orderTypes.retail || 0}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Wholesale Orders</span>
-                      <span className="font-medium">{summary.orderTypes.wholesale || 0}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Returns</span>
-                      <span className="font-medium">{summary.orderTypes.return || 0}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Exchanges</span>
-                      <span className="font-medium">{summary.orderTypes.exchange || 0}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-gray-500">No orders today</p>
-                )}
-              </div>
-            </div>
-
-            {/* Low Stock Alert */}
-            <div className="card">
-              <div className="card-header">
-                <h3 className="text-base sm:text-lg font-medium text-gray-900">Low Stock Alert</h3>
-              </div>
-              <div className="card-content">
-                {lowStockCount > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-600">
-                      {lowStockCount} products are running low on stock
-                    </p>
-                    <div className="space-y-1">
-                      {lowStockData?.data?.products?.slice(0, 3).map((product) => (
-                        <div key={product._id} className="flex justify-between items-center text-sm">
-                          <span className="truncate">{product.name}</span>
-                          <span className="text-danger-600 font-medium">
-                            {product.inventory.currentStock} left
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    {lowStockCount > 3 && (
-                      <p className="text-xs text-gray-500">
-                        And {lowStockCount - 3} more...
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-success-600">All products are well stocked!</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Payment Methods */}
-          {summary.paymentMethods && (
-            <div className="card">
-              <div className="card-header">
-                <h3 className="text-base sm:text-lg font-medium text-gray-900">Payment Methods Today</h3>
-              </div>
-              <div className="card-content">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-                  {Object.entries(summary.paymentMethods).map(([method, count]) => (
-                    <div key={method} className="text-center">
-                      <p className="text-2xl font-semibold text-gray-900">{count}</p>
-                      <p className="text-sm text-gray-600 capitalize">
-                        {method.replace('_', ' ')}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Financial Metrics Legend */}
-          <div className="card bg-gray-50 border-gray-200">
-            <div className="card-content">
-              <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3">📊 Financial Metrics Explained</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 text-xs text-gray-700">
-                <div><strong>Sales:</strong> Total revenue from Sales Orders + Sales Invoices</div>
-                <div><strong>Net Revenue:</strong> Sales minus discounts given</div>
-                <div><strong>Purchase (COGS):</strong> Cost of goods purchased from suppliers</div>
-                <div><strong>Gross Profit:</strong> Net Revenue - COGS (your margin)</div>
-                <div><strong>Receipts:</strong> Total money received (Cash Receipts + Bank Receipts + Sales Invoice Payments)</div>
-                <div><strong>Payments:</strong> Cash/Bank money paid (includes supplier payments + expenses)</div>
-                <div><strong>Net Cash Flow:</strong> Total receipts minus total payments (cash position)</div>
-                <div className="md:col-span-2 lg:col-span-3 mt-2 p-2 bg-yellow-100 border border-yellow-300 rounded">
-                  <strong>⚠️ Note:</strong> Receipts/Payments may include both sales/purchases AND separate cash/bank transactions. For accurate accounting, check individual transaction pages.
-                </div>
-              </div>
             </div>
           </div>
 
@@ -1089,6 +1361,7 @@ export const Dashboard = () => {
             columns={salesOrdersColumns}
             data={salesOrdersModalData}
             isLoading={soModalState.isFetching}
+            rowActions={pendingSalesRowActions}
             dateFrom={startDate}
             dateTo={endDate}
             onDateChange={(from, to) => {
@@ -1104,6 +1377,7 @@ export const Dashboard = () => {
             columns={purchaseOrdersColumns}
             data={purchaseOrdersModalData}
             isLoading={poModalState.isFetching}
+            rowActions={pendingPurchaseRowActions}
             dateFrom={startDate}
             dateTo={endDate}
             onDateChange={(from, to) => {
@@ -1235,6 +1509,43 @@ export const Dashboard = () => {
               setStartDate(from);
               setEndDate(to);
             }}
+          />
+
+          <DashboardReportModal
+            isOpen={showLowStockModal}
+            onClose={() => setShowLowStockModal(false)}
+            title="Low Stock Items"
+            columns={lowStockItemsColumns}
+            data={lowStockItemsDataArray}
+            isLoading={lowStockAlertsLoading}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+            summary={[
+              { label: 'Low Stock Count', value: lowStockCount }
+            ]}
+          />
+
+          <DashboardReportModal
+            isOpen={showDiscountsModal}
+            onClose={() => setShowDiscountsModal(false)}
+            title="Discount Given"
+            columns={salesDiscountsColumns}
+            data={salesDiscountsDataArray}
+            isLoading={siModalState.isFetching}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+            summary={[
+              { label: 'Total Discount Given', value: totalDiscounts },
+              { label: 'Invoices With Discount', value: salesDiscountsDataArray.length }
+            ]}
           />
         </>
       )}

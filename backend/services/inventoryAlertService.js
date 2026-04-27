@@ -202,11 +202,17 @@ class InventoryAlertService {
     try {
       const alerts = await this.getLowStockAlerts();
       
+      const outOfStock = alerts.filter(a => a.stockStatus === 'out_of_stock').length;
+      const belowMinimum = alerts.filter(a => a.stockStatus === 'critical').length;
+
       return {
         total: alerts.length,
         critical: alerts.filter(a => a.alertLevel === 'critical').length,
         warning: alerts.filter(a => a.alertLevel === 'warning').length,
-        outOfStock: alerts.filter(a => a.stockStatus === 'out_of_stock').length,
+        outOfStock,
+        /** In stock but at or below minimum (not zero stock). */
+        belowMinimum,
+        /** Warning tier: above minimum but at/below reorder point (`stockStatus === 'low_stock'`). */
         lowStock: alerts.filter(a => a.stockStatus === 'low_stock').length
       };
     } catch (error) {

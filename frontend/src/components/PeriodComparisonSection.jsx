@@ -16,6 +16,7 @@ import { getPeriodLabel } from '../utils/periodComparisons';
 export const PeriodComparisonSection = ({
   title = 'Period Comparison',
   metrics = [],
+  additionalCards = [],
   fetchFunction,
   className = ''
 }) => {
@@ -126,7 +127,7 @@ export const PeriodComparisonSection = ({
       {!isLoading && (
         <>
           {/* Summary cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             {comparisons.map((comparison, index) => (
               <PeriodComparisonCard
                 key={index}
@@ -138,6 +139,19 @@ export const PeriodComparisonSection = ({
                 icon={comparison.icon}
                 iconColor={comparison.iconColor}
                 showTarget={comparison.showTarget}
+              />
+            ))}
+            {additionalCards.map((card, index) => (
+              <PeriodComparisonCard
+                key={`additional-${index}`}
+                title={card.title}
+                subtitle={card.subtitle}
+                currentValue={card.currentValue}
+                previousValue={card.previousValue ?? null}
+                format={card.format || 'number'}
+                icon={card.icon}
+                iconColor={card.iconColor || 'bg-slate-500'}
+                hideComparisonDetails={card.hideComparisonDetails !== false}
               />
             ))}
           </div>

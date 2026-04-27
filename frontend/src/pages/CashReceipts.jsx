@@ -644,18 +644,18 @@ const CashReceipts = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Cash Receipts</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">Manage and view all cash receipt transactions</p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Cash Receipts</h1>
+          <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">Manage and view all cash receipt transactions</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
+        <div className="flex items-center gap-2 flex-shrink-0 overflow-x-auto">
 
           <Button
             onClick={resetForm}
             variant="default"
             size="default"
-            className="flex items-center justify-center gap-2 w-full sm:w-auto"
+            className="flex items-center justify-center gap-2"
           >
             <Plus className="h-4 w-4" />
             <span>New Receipt</span>

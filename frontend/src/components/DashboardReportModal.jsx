@@ -18,7 +18,8 @@ const DashboardReportModal = ({
   onDateChange,
   filters = {},
   onFilterChange,
-  summary = null
+  summary = null,
+  rowActions = []
 }) => {
   const [localFilters, setLocalFilters] = useState(() => filters || {});
   const [localDateFrom, setLocalDateFrom] = useState(() => dateFrom);
@@ -185,6 +186,11 @@ const DashboardReportModal = ({
                       </div>
                     </th>
                   ))}
+                  {rowActions.length > 0 && (
+                    <th className="px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -221,6 +227,27 @@ const DashboardReportModal = ({
                             : row[column.key] || '-'}
                         </td>
                       ))}
+                      {rowActions.length > 0 && (
+                        <td className="px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-[10px] sm:text-xs md:text-sm text-gray-900">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {rowActions
+                              .filter((action) => (action.isVisible ? action.isVisible(row) : true))
+                              .map((action, actionIndex) => (
+                                <Button
+                                  key={`${action.label}-${actionIndex}`}
+                                  type="button"
+                                  size="sm"
+                                  variant={action.variant || 'outline'}
+                                  className={action.className || 'h-7 px-2 text-[10px] sm:text-xs'}
+                                  disabled={action.isDisabled ? action.isDisabled(row) : false}
+                                  onClick={() => action.onClick(row)}
+                                >
+                                  {typeof action.label === 'function' ? action.label(row) : action.label}
+                                </Button>
+                              ))}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}
