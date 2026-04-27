@@ -1285,7 +1285,7 @@ export const PurchaseOrders = ({ tabId }) => {
       {/* Supplier Selection and Information Row */}
       <div className="flex flex-col md:flex-row items-start space-y-4 md:space-y-0 md:space-x-12">
         {/* Supplier Selection */}
-        <div className="w-full md:w-[750px] flex-shrink-0">
+        <div className="w-full max-w-3xl flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-gray-700">
               Select Supplier

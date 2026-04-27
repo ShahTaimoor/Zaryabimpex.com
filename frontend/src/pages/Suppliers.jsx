@@ -1055,7 +1055,7 @@ export const Suppliers = () => {
         <div className="card w-full min-w-0 overflow-hidden">
           <div className="card-content p-0 w-full min-w-0 overflow-x-auto">
             {/* Table Header - Hidden on mobile/tablet */}
-            <div className="hidden lg:block bg-gray-50 px-4 xl:px-8 py-3 xl:py-4 border-b border-gray-200 min-w-[880px]">
+            <div className="hidden lg:block bg-gray-50 px-4 xl:px-8 py-3 xl:py-4 border-b border-gray-200 min-w-[760px] xl:min-w-[880px]">
               <div className="grid grid-cols-12 gap-3 xl:gap-6 items-center">
                 <div className="col-span-4">
                   <h3 className="text-sm lg:text-base font-medium text-gray-700">Company Name</h3>
@@ -1175,7 +1175,7 @@ export const Suppliers = () => {
                   </div>
 
                   {/* Desktop Table Layout */}
-                  <div className="hidden lg:grid grid-cols-12 gap-3 xl:gap-6 items-center min-w-[880px]">
+                  <div className="hidden lg:grid grid-cols-12 gap-3 xl:gap-6 items-center min-w-[760px] xl:min-w-[880px]">
                     {/* Company Name & Contact Person */}
                     <div className="col-span-4">
                       <div className="flex items-center space-x-3 lg:space-x-4">

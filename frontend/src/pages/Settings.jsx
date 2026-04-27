@@ -35,6 +35,8 @@ import { toast } from 'sonner';
 import {
   useGetCompanySettingsQuery,
   useUpdateCompanySettingsMutation,
+  useGetUserPreferencesQuery,
+  useUpdateUserPreferencesMutation,
 } from '../store/services/settingsApi';
 import { useFetchCompanyQuery } from '../store/services/companyApi';
 import {
@@ -128,6 +130,8 @@ export const Settings2 = () => {
     showPrintPaymentStatus: true,
     showPrintPaymentMethod: true,
     showPrintPaymentAmount: true,
+    autoPrintAfterSale: true,
+    autoCompleteSaleAfterPrint: true,
     mobilePrintPreview: false,
     headerText: '',
     footerText: '',
@@ -702,10 +706,14 @@ export const Settings2 = () => {
 
   // Fetch company settings
   const { data: settingsResponse, isLoading: companyLoading, refetch: refetchSettings } = useGetCompanySettingsQuery();
+  const { data: userPreferencesResponse } = useGetUserPreferencesQuery();
   const { data: companyApiResponse } = useFetchCompanyQuery();
   const [updateCompanySettings] = useUpdateCompanySettingsMutation();
+  const [updateUserPreferences, { isLoading: isSavingUserPreferences }] = useUpdateUserPreferencesMutation();
   const settings = settingsResponse?.data || settingsResponse;
+  const userPreferences = userPreferencesResponse?.data || userPreferencesResponse || {};
   const companyProfile = companyApiResponse?.data || {};
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
 
   // Map settings data to component state
   useEffect(() => {
@@ -745,6 +753,8 @@ export const Settings2 = () => {
           showPrintPaymentStatus: settings.printSettings.showPrintPaymentStatus ?? true,
           showPrintPaymentMethod: settings.printSettings.showPrintPaymentMethod ?? true,
           showPrintPaymentAmount: settings.printSettings.showPrintPaymentAmount ?? true,
+          autoPrintAfterSale: settings.printSettings.autoPrintAfterSale ?? true,
+          autoCompleteSaleAfterPrint: settings.printSettings.autoCompleteSaleAfterPrint ?? true,
           mobilePrintPreview: settings.printSettings.mobilePrintPreview ?? false,
           headerText: settings.printSettings.headerText || '',
           footerText: settings.printSettings.footerText || '',
@@ -864,6 +874,8 @@ export const Settings2 = () => {
           showPrintPaymentStatus: ps.showPrintPaymentStatus ?? true,
           showPrintPaymentMethod: ps.showPrintPaymentMethod ?? true,
           showPrintPaymentAmount: ps.showPrintPaymentAmount ?? true,
+          autoPrintAfterSale: ps.autoPrintAfterSale ?? true,
+          autoCompleteSaleAfterPrint: ps.autoCompleteSaleAfterPrint ?? true,
           mobilePrintPreview: ps.mobilePrintPreview ?? prev.mobilePrintPreview ?? false,
           headerText: ps.headerText || prev.headerText || '',
           footerText: ps.footerText || prev.footerText || '',
@@ -921,6 +933,21 @@ export const Settings2 = () => {
       handleApiError(error, 'Company Information Update');
     } finally {
       setSavingCompanySettings(false);
+    }
+  };
+
+  useEffect(() => {
+    setTwoFactorEnabled(!!userPreferences?.twoFactorEnabled);
+  }, [userPreferences?.twoFactorEnabled]);
+
+  const handleToggleTwoFactor = async (checked) => {
+    setTwoFactorEnabled(!!checked);
+    try {
+      await updateUserPreferences({ twoFactorEnabled: !!checked }).unwrap();
+      toast.success(`Two-factor authentication ${checked ? 'enabled' : 'disabled'} successfully`);
+    } catch (error) {
+      setTwoFactorEnabled(!checked);
+      handleApiError(error, 'Update 2FA Setting');
     }
   };
 
@@ -2244,6 +2271,29 @@ export const Settings2 = () => {
                         ))}
                       </div>
                     </div>
+
+                    {/* Post-Print Behavior */}
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-2 border-b border-gray-100 pb-2">
+                        <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600"><Save className="h-4 w-4" /></div>
+                        <h4 className="text-sm font-bold text-gray-700">Post-Print Behavior</h4>
+                      </div>
+                      <div className="flex items-start space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-emerald-300 hover:shadow-md transition-all duration-200 group">
+                        <Checkbox
+                          id="autoPrintAfterSale"
+                          className="mt-0.5 w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                          checked={printSettings.autoPrintAfterSale}
+                          onCheckedChange={(checked) => handlePrintSettingsChange({ target: { name: 'autoPrintAfterSale', type: 'checkbox', checked } })}
+                        />
+                        <Label htmlFor="autoPrintAfterSale" className="flex flex-col cursor-pointer">
+                          <span className="text-sm font-semibold text-gray-700 group-hover:text-emerald-700">Auto-print after sale</span>
+                          <span className="text-xs text-gray-500 mt-1">
+                            If checked, the print dialog opens automatically after sale completion. If unchecked, no automatic print dialog will appear.
+                          </span>
+                        </Label>
+                      </div>
+
+                    </div>
                   </div>
                 </div>
 
@@ -2258,14 +2308,10 @@ export const Settings2 = () => {
                       <span className="text-orange-600 font-medium"> Please save your company information first to see the preview.</span>
                     )}
                   </p>
-                  <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 md:p-8 overflow-auto flex justify-center items-start min-h-[500px] max-h-[800px] shadow-inner">
+                  <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 md:p-8 overflow-auto flex justify-center items-start min-h-[420px] max-h-[80dvh] shadow-inner">
                     <div
-                      style={
-                        printSettings.mobilePrintPreview
-                          ? { maxWidth: 420, width: '100%', transform: 'scale(0.9)', transformOrigin: 'top center', marginBottom: '-100px' }
-                          : { transform: 'scale(0.6)', transformOrigin: 'top center', marginBottom: '-400px', width: '900px' }
-                      }
-                      className="transition-transform duration-300 ease-in-out"
+                      style={printSettings.mobilePrintPreview ? { maxWidth: 420, width: '100%' } : { maxWidth: 900, width: '100%' }}
+                      className="transition-all duration-300 ease-in-out"
                     >
                       <PrintDocument
                         companySettings={{ ...companyData, logo: companyProfile.logo || companyData.logo }}
@@ -2372,6 +2418,24 @@ export const Settings2 = () => {
 
                 <div className="pt-4 border-t border-gray-100">
                   <OrderItemWiseConfirmationSettings />
+                </div>
+
+                <div className="pt-4 border-t border-gray-100">
+                  <div className="flex items-start justify-between gap-4 p-4 border border-gray-200 rounded-xl bg-white">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">Two-Factor Authentication (2FA)</h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Require a one-time code after email/password login for this account.
+                      </p>
+                    </div>
+                    <Checkbox
+                      id="twoFactorEnabled"
+                      checked={twoFactorEnabled}
+                      disabled={isSavingUserPreferences}
+                      onCheckedChange={(checked) => handleToggleTwoFactor(!!checked)}
+                      className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

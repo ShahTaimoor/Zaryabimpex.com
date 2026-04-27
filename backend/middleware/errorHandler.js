@@ -6,6 +6,20 @@
 
 const logger = require('../utils/logger');
 
+const sendErrorResponse = (res, req, statusCode, error) => {
+  const payload = {
+    ...error,
+    statusCode,
+    requestId: req.id
+  };
+
+  return res.status(statusCode).json({
+    success: false,
+    requestId: req.id,
+    error: payload
+  });
+};
+
 /**
  * Check if error is a duplicate key error (PostgreSQL unique_violation or MongoDB E11000)
  */
@@ -144,33 +158,23 @@ const errorHandler = (err, req, res, next) => {
     const formatted = formatDuplicateKeyMessage(err);
     // Ensure status code is 409 for duplicate key errors
     formatted.statusCode = 409;
-    return res.status(409).json({
-      success: false,
-      error: formatted
-    });
+    return sendErrorResponse(res, req, 409, formatted);
   }
 
   // Handle WriteConflict (112) and TransientTransactionError - return HTTP 409 Conflict
   if (isWriteConflictError(err)) {
     const formatted = formatWriteConflictMessage(err);
     formatted.statusCode = 409;
-    return res.status(409).json({
-      success: false,
-      error: formatted
-    });
+    return sendErrorResponse(res, req, 409, formatted);
   }
 
   // Handle TransientTransactionError (may not have code 112 but has errorLabels)
   if (err.errorLabels && Array.isArray(err.errorLabels)) {
     if (err.errorLabels.includes('TransientTransactionError')) {
-      return res.status(409).json({
-        success: false,
-        error: {
-          message: 'A concurrent transaction conflict occurred. Please retry your operation.',
-          code: 'TRANSIENT_TRANSACTION_ERROR',
-          statusCode: 409,
-          retryable: true
-        }
+      return sendErrorResponse(res, req, 409, {
+        message: 'A concurrent transaction conflict occurred. Please retry your operation.',
+        code: 'TRANSIENT_TRANSACTION_ERROR',
+        retryable: true
       });
     }
   }
@@ -178,42 +182,28 @@ const errorHandler = (err, req, res, next) => {
   // Handle validation errors
   const validationError = formatValidationError(err);
   if (validationError) {
-    return res.status(validationError.statusCode).json({
-      success: false,
-      error: validationError
-    });
+    return sendErrorResponse(res, req, validationError.statusCode, validationError);
   }
 
   // Handle CastError (invalid ID)
   const castError = formatCastError(err);
   if (castError) {
-    return res.status(castError.statusCode).json({
-      success: false,
-      error: castError
-    });
+    return sendErrorResponse(res, req, castError.statusCode, castError);
   }
 
   // Handle database connection errors
   if (err.name === 'MongoNetworkError' || err.name === 'MongoTimeoutError' || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
-    return res.status(503).json({
-      success: false,
-      error: {
-        message: 'Database connection error. Please try again later.',
-        code: 'DATABASE_CONNECTION_ERROR',
-        statusCode: 503
-      }
+    return sendErrorResponse(res, req, 503, {
+      message: 'Database connection error. Please try again later.',
+      code: 'DATABASE_CONNECTION_ERROR'
     });
   }
 
   // Handle unauthorized errors
   if (err.name === 'UnauthorizedError' || err.status === 401) {
-    return res.status(401).json({
-      success: false,
-      error: {
-        message: err.message || 'Unauthorized',
-        code: 'UNAUTHORIZED',
-        statusCode: 401
-      }
+    return sendErrorResponse(res, req, 401, {
+      message: err.message || 'Unauthorized',
+      code: 'UNAUTHORIZED'
     });
   }
 
@@ -221,16 +211,12 @@ const errorHandler = (err, req, res, next) => {
   const statusCode = err.statusCode || err.status || 500;
   const message = err.message || 'Internal server error';
   
-  res.status(statusCode).json({
-    success: false,
-    error: {
-      message: process.env.NODE_ENV === 'production' 
-        ? 'An unexpected error occurred' 
-        : message,
-      code: err.code || 'INTERNAL_SERVER_ERROR',
-      statusCode,
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-    }
+  return sendErrorResponse(res, req, statusCode, {
+    message: process.env.NODE_ENV === 'production'
+      ? 'An unexpected error occurred'
+      : message,
+    code: err.code || 'INTERNAL_SERVER_ERROR',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 };
 

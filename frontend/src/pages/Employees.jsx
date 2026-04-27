@@ -32,6 +32,7 @@ import { handleApiError, showSuccessToast } from '../utils/errorHandler';
 import { formatDate } from '../utils/formatters';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
+import PageShell from '../components/PageShell';
 
 const Employees = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -230,7 +231,7 @@ const Employees = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-8 bg-gray-50/30 min-h-screen">
+    <PageShell className="bg-gray-50/30" maxWidthClassName="max-w-7xl" contentClassName="space-y-6 p-4 md:p-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -689,7 +690,7 @@ const Employees = () => {
         itemType="Employee"
         isLoading={deleting}
       />
-    </div>
+    </PageShell>
   );
 };
 

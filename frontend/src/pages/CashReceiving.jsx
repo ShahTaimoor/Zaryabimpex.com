@@ -18,6 +18,7 @@ import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useCreateBatchCashReceiptsMutation } from '../store/services/cashReceiptsApi';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import PrintModal from '../components/PrintModal';
+import PageShell from '../components/PageShell';
 import { Button } from '@/components/ui/button';
 import { getLocalDateString } from '../utils/dateUtils';
 
@@ -592,7 +593,7 @@ const CashReceiving = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-6 bg-gray-50 min-h-screen">
+    <PageShell className="bg-gray-50" contentClassName="space-y-4 sm:space-y-6 p-3 sm:p-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow p-4 sm:p-6">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6">Cash Receipt Voucher</h1>
@@ -997,7 +998,7 @@ const CashReceiving = () => {
         documentTitle="Cash Receipt Voucher"
         partyLabel="Customer"
       />
-    </div>
+    </PageShell>
   );
 };
 

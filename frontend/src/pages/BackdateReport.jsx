@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { useGetBackdateReportQuery } from '../store/services/reportsApi';
 import { LoadingPage } from '../components/LoadingSpinner';
+import PageShell from '../components/PageShell';
 
 const BackdateReport = () => {
   const [filter, setFilter] = useState('all'); // all, backdate, future, recent
@@ -60,7 +61,7 @@ const BackdateReport = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <PageShell className="bg-gray-50" centerContent>
         <div className="text-center">
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Report</h2>
@@ -72,13 +73,12 @@ const BackdateReport = () => {
             Retry
           </button>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
+    <PageShell className="bg-gray-50" maxWidthClassName="max-w-7xl" contentClassName="p-6">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Backdate & Future Date Report</h1>
@@ -330,8 +330,7 @@ const BackdateReport = () => {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 };
 

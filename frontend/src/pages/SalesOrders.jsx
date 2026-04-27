@@ -1917,7 +1917,7 @@ const SalesOrders = ({ tabId }) => {
       {/* Customer Selection and Information Row */}
       <div className="flex flex-col lg:flex-row items-stretch lg:items-start lg:gap-12 gap-4">
         {/* Customer Selection */}
-        <div className="w-full lg:w-[750px] lg:flex-shrink-0">
+        <div className="w-full max-w-3xl lg:flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <label className="block text-sm font-medium text-gray-700">

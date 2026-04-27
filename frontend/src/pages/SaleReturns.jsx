@@ -620,7 +620,7 @@ const SaleReturns = () => {
 
       {/* Customer Selection - same layout as Sales page */}
       <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start space-x-12'}`}>
-        <div className={`${isMobile ? 'w-full' : 'w-[750px] flex-shrink-0'}`}>
+        <div className={`${isMobile ? 'w-full' : 'w-full max-w-3xl flex-shrink-0'}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <label className="block text-sm font-medium text-gray-700">

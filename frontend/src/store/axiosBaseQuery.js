@@ -1,6 +1,17 @@
 import axios from 'axios';
 import { sanitizeRequestData, sanitizeResponseData } from '../utils/sanitization';
 
+const getRequestIdFromResponse = (response) => {
+  if (!response) return null;
+  return (
+    response?.data?.requestId ||
+    response?.data?.error?.requestId ||
+    response?.headers?.['x-request-id'] ||
+    response?.headers?.['X-Request-ID'] ||
+    null
+  );
+};
+
 /**
  * Creates an axios-based base query for RTK Query
  * @param {Object} options - Configuration options
@@ -151,10 +162,14 @@ const axiosBaseQuery = ({ baseUrl = '' } = {}) => {
       };
     } catch (axiosError) {
       const err = axiosError;
+      const requestId = getRequestIdFromResponse(err.response);
+      const errorPayload = err.response?.data || err.message;
+
       return {
         error: {
           status: err.response?.status,
-          data: err.response?.data || err.message,
+          data: errorPayload,
+          requestId,
         },
       };
     }

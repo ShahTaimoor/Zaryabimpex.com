@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { query } = require('../../config/postgres');
 const rbacConfig = require('../../config/rbacConfig');
 
@@ -23,6 +24,9 @@ function rowToUser(row) {
     status: row.is_active ? 'active' : 'inactive',
     loginAttempts: row.login_attempts ?? 0,
     lockUntil: row.lock_until,
+    preferences: row.preferences || {},
+    twoFactorCodeHash: row.two_factor_code_hash || null,
+    twoFactorExpiresAt: row.two_factor_expires_at || null,
     password_hash: row.password_hash,
     created_at: row.created_at,
     updated_at: row.updated_at
@@ -96,6 +100,20 @@ class UserRepository {
     return row ? rowToUser(row) : null;
   }
 
+  async findByPhone(phone, options = {}) {
+    const normalized = String(phone || '').replace(/\D/g, '');
+    if (!normalized) return null;
+    const result = await query(
+      `SELECT * FROM users
+       WHERE regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = $1
+         AND deleted_at IS NULL`,
+      [normalized]
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return options.includePassword ? rowToUser(row) : rowToUser({ ...row, password_hash: undefined });
+  }
+
   async emailExists(email, excludeId = null) {
     let sql = 'SELECT 1 FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL';
     const params = [email.trim()];
@@ -111,10 +129,11 @@ class UserRepository {
     const passwordHash = await bcrypt.hash(data.password, 12);
     const roles = data.role ? [data.role] : (data.roles || ['cashier']);
     const permissions = Array.isArray(data.permissions) ? data.permissions : [];
+    const preferences = data.preferences && typeof data.preferences === 'object' ? data.preferences : {};
 
     const result = await query(
-      `INSERT INTO users (first_name, last_name, email, password_hash, phone, is_active, roles, permissions)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO users (first_name, last_name, email, password_hash, phone, is_active, roles, permissions, preferences)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         data.firstName || data.first_name || '',
@@ -124,7 +143,8 @@ class UserRepository {
         data.phone || null,
         data.status !== 'inactive' && data.status !== 'suspended',
         JSON.stringify(roles),
-        JSON.stringify(permissions)
+        JSON.stringify(permissions),
+        JSON.stringify(preferences)
       ]
     );
     return rowToUser(result.rows[0]);
@@ -143,6 +163,9 @@ class UserRepository {
     if (data.roles !== undefined) { fields.push(`roles = $${n++}`); values.push(JSON.stringify(Array.isArray(data.roles) ? data.roles : [data.roles])); }
     if (data.role !== undefined) { fields.push(`roles = $${n++}`); values.push(JSON.stringify([data.role])); }
     if (data.permissions !== undefined) { fields.push(`permissions = $${n++}`); values.push(JSON.stringify(data.permissions)); }
+    if (data.preferences !== undefined) { fields.push(`preferences = $${n++}`); values.push(JSON.stringify(data.preferences || {})); }
+    if (data.twoFactorCodeHash !== undefined) { fields.push(`two_factor_code_hash = $${n++}`); values.push(data.twoFactorCodeHash); }
+    if (data.twoFactorExpiresAt !== undefined) { fields.push(`two_factor_expires_at = $${n++}`); values.push(data.twoFactorExpiresAt); }
     if (data.password !== undefined) {
       const hash = await bcrypt.hash(data.password, 12);
       fields.push(`password_hash = $${n++}`);
@@ -216,6 +239,43 @@ class UserRepository {
 
   async findByIdWithPassword(id) {
     return this.findById(id);
+  }
+
+  async updateUserPreferences(id, preferencesPatch) {
+    const existing = await this.findById(id);
+    if (!existing) return null;
+    const mergedPreferences = {
+      ...(existing.preferences || {}),
+      ...(preferencesPatch || {})
+    };
+    return this.update(id, { preferences: mergedPreferences });
+  }
+
+  async setTwoFactorCode(id, code, expiresAt) {
+    const codeHash = crypto.createHash('sha256').update(String(code)).digest('hex');
+    await query(
+      `UPDATE users
+       SET two_factor_code_hash = $1, two_factor_expires_at = $2, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3 AND deleted_at IS NULL`,
+      [codeHash, expiresAt, id]
+    );
+  }
+
+  async clearTwoFactorCode(id) {
+    await query(
+      `UPDATE users
+       SET two_factor_code_hash = NULL, two_factor_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND deleted_at IS NULL`,
+      [id]
+    );
+  }
+
+  verifyTwoFactorCode(user, code) {
+    if (!user || !user.twoFactorCodeHash || !user.twoFactorExpiresAt) return false;
+    const now = new Date();
+    if (new Date(user.twoFactorExpiresAt) < now) return false;
+    const candidateHash = crypto.createHash('sha256').update(String(code)).digest('hex');
+    return candidateHash === user.twoFactorCodeHash;
   }
 
   async updateProfile(id, updateData) {

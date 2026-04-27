@@ -200,7 +200,7 @@ const ResponsiveTable = ({
   // Desktop table component
   const DesktopTable = () => (
     <div className="overflow-x-auto min-w-0">
-      <table className="min-w-full divide-y divide-gray-200 min-w-[600px]">
+      <table className="w-full divide-y divide-gray-200 min-w-[520px] sm:min-w-[600px]">
         <thead className="bg-gray-50">
           <tr>
             {columns.map((column) => (

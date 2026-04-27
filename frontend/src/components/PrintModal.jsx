@@ -91,7 +91,8 @@ const InvoicePrintModal = ({
   orderData,
   documentTitle = 'Invoice',
   partyLabel = 'Customer',
-  autoPrint = false
+  autoPrint = false,
+  onAfterPrint
 }) => {
   const { companyInfo: companySettings } = useCompanyInfo();
   const resolvedDocumentTitle = documentTitle || 'Invoice';
@@ -121,6 +122,7 @@ const InvoicePrintModal = ({
       hasData={!!orderData}
       emptyMessage="No invoice data to print."
       autoPrint={autoPrint}
+      onAfterPrint={onAfterPrint}
       getPdfData={() => getInvoicePdfPayload(orderData, companySettings, resolvedDocumentTitle, partyLabel)}
     >
       <PrintDocument

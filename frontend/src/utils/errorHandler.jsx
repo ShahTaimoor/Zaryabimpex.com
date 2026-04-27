@@ -12,6 +12,20 @@ const ERROR_MESSAGES = {
   unknown: 'An unexpected error occurred. Please try again.'
 };
 
+export const getErrorRequestId = (error) => {
+  if (!error) return null;
+  return (
+    error?.requestId ||
+    error?.data?.requestId ||
+    error?.data?.error?.requestId ||
+    error?.response?.data?.requestId ||
+    error?.response?.data?.error?.requestId ||
+    error?.response?.headers?.['x-request-id'] ||
+    error?.response?.headers?.['X-Request-ID'] ||
+    null
+  );
+};
+
 // Error severity levels
 export const ERROR_SEVERITY = {
   LOW: 'low',
@@ -126,12 +140,31 @@ export const showErrorToast = (error, options = {}) => {
   try {
     const message = getErrorMessage(error);
     const severity = getErrorSeverity(error);
+    const requestId = getErrorRequestId(error);
     
     // Ensure message is a string
     const safeMessage = typeof message === 'string' ? message : String(message);
     
     const toastOptions = {
       duration: severity === ERROR_SEVERITY.CRITICAL ? 8000 : 4000,
+      ...(requestId ? { description: `Ref: ${requestId}` } : {}),
+      ...(requestId
+        ? {
+            action: {
+              label: 'Copy Ref',
+              onClick: async () => {
+                if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                  try {
+                    await navigator.clipboard.writeText(requestId);
+                    toast.success('Reference copied');
+                  } catch {
+                    // Ignore clipboard failures; keep toast non-blocking.
+                  }
+                }
+              }
+            }
+          }
+        : {}),
       ...options
     };
     
@@ -194,6 +227,7 @@ export const handleApiError = (error, context = '') => {
   try {
     const message = getErrorMessage(error);
     const severity = getErrorSeverity(error);
+    const requestId = getErrorRequestId(error);
     
     // Ensure message is a string
     const safeMessage = typeof message === 'string' ? message : String(message);
@@ -207,6 +241,7 @@ export const handleApiError = (error, context = '') => {
       severity,
       type: error?.type,
       status: error?.status || error?.response?.status,
+      requestId,
       originalError: error
     };
   } catch (e) {
@@ -217,6 +252,7 @@ export const handleApiError = (error, context = '') => {
       severity: ERROR_SEVERITY.HIGH,
       type: 'unknown',
       status: null,
+      requestId: null,
       originalError: error
     };
   }
@@ -294,6 +330,7 @@ export default {
   showSuccessToast,
   showWarningToast,
   showInfoToast,
+  getErrorRequestId,
   handleApiError,
   withRetry,
   safeAsync,

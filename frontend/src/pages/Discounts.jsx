@@ -33,6 +33,7 @@ import { handleApiError, showSuccessToast, showErrorToast } from '../utils/error
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import CreateDiscountModal from '../components/CreateDiscountModal';
 import DiscountDetailModal from '../components/DiscountDetailModal';
+import PageShell from '../components/PageShell';
 import DiscountFilters from '../components/DiscountFilters';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
@@ -196,7 +197,7 @@ const Discounts = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-8 bg-gray-50/30 min-h-screen">
+    <PageShell className="bg-gray-50/30" maxWidthClassName="max-w-7xl" contentClassName="space-y-6 p-4 md:p-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -527,7 +528,7 @@ const Discounts = () => {
         itemType="Discount"
         isLoading={deleting}
       />
-    </div>
+    </PageShell>
   );
 };
 

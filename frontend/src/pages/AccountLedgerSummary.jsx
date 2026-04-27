@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTableRowVirtualizer, getVirtualTablePadding } from '../hooks/useTableRowVirtualizer';
+import PageShell from '../components/PageShell';
 
 const AccountLedgerSummary = () => {
   const ALL_BANKS_VALUE = '__all_banks__';
@@ -749,8 +750,7 @@ const AccountLedgerSummary = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <PageShell className="bg-gray-50" contentClassName="px-4 sm:px-6 py-6 space-y-6" maxWidthClassName="max-w-[1600px]">
         {/* Header - professional card */}
         <header className="bg-white border border-gray-200 rounded-lg shadow-sm px-6 py-5">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -1705,8 +1705,7 @@ const AccountLedgerSummary = () => {
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
+    </PageShell>
   );
 };
 

@@ -6,6 +6,7 @@ import { useLazySearchSuppliersQuery, useGetSuppliersQuery, useGetSupplierQuery 
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import DateFilter from '../components/DateFilter';
 import { LoadingPage } from '../components/LoadingSpinner';
+import PageShell from '../components/PageShell';
 import { getDateDaysAgo, getCurrentDatePakistan } from '../utils/dateUtils';
 
 const supplierDisplayKey = (s) =>
@@ -67,7 +68,7 @@ export default function PurchaseBySupplierReport() {
   const handlePrint = () => window.print();
 
   return (
-    <div className="space-y-6 p-4 md:p-6 bg-gray-50 min-h-screen">
+    <PageShell className="bg-gray-50" contentClassName="space-y-6 p-4 md:p-6">
       <div>
       <div className="flex flex-col gap-4">
         <h1 className="text-2xl font-bold text-gray-900">Products Purchased by Supplier</h1>
@@ -235,6 +236,6 @@ export default function PurchaseBySupplierReport() {
         </div>
       </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -105,7 +105,7 @@ router.get('/', [
   processDateFilter(['billDate', 'createdAt']), // Support both billDate and createdAt
   requirePermission('view_sales'),
   maskSensitiveData('view_product_costs', ['items.unitCost', 'items.cost_price'])
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -126,8 +126,7 @@ router.get('/', [
       pagination: result.pagination
     });
   } catch (error) {
-    console.error('Get orders error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
@@ -144,7 +143,7 @@ router.get('/cctv-orders', [
   query('customerId').optional().isUUID(4),
   requirePermission('view_sales'), // Or specific CCTV permission if needed
   maskSensitiveData('view_product_costs', ['items.unitCost', 'items.cost_price'])
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -194,8 +193,7 @@ router.get('/cctv-orders', [
       }
     });
   } catch (error) {
-    console.error('Get CCTV orders error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    return next(error);
   }
 });
 
@@ -207,7 +205,7 @@ router.get('/period-summary', [
   query('dateFrom').isISO8601().withMessage('Invalid start date'),
   query('dateTo').isISO8601().withMessage('Invalid end date'),
   requirePermission('view_financial_data')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -246,8 +244,7 @@ router.get('/period-summary', [
     };
     res.json({ data: summary });
   } catch (error) {
-    console.error('Get period summary error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    return next(error);
   }
 });
 
@@ -364,7 +361,7 @@ router.post('/', [
   body('payment.advanceAmount').optional().isFloat({ min: 0 }).withMessage('Advance amount must be a positive number'),
   body('isTaxExempt').optional().isBoolean().withMessage('Tax exempt must be a boolean'),
   body('billDate').optional().isISO8601().withMessage('Valid bill date required (ISO 8601 format)')
-], async (req, res) => {
+], async (req, res, next) => {
   // Capture bill start time (when billing begins)
   const billStartTime = new Date();
 
@@ -413,11 +410,7 @@ router.post('/', [
       order: orderForResponse
     });
   } catch (error) {
-    console.error('Create order error:', error);
-    res.status(500).json({
-      message: error.message || 'Server error. Please try again later.',
-      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    return next(error);
   }
 });
 
@@ -430,7 +423,7 @@ router.post('/sync', [
   body('clientSideId').isUUID().withMessage('Valid clientSideId required for sync'),
   body('items').isArray({ min: 1 }).withMessage('Order must have at least one item'),
   body('payment.method').isIn(['cash', 'credit_card', 'debit_card', 'check', 'account', 'split', 'bank']).withMessage('Invalid payment method')
-], async (req, res) => {
+], async (req, res, next) => {
   const billStartTime = new Date();
   try {
     const errors = validationResult(req);
@@ -446,18 +439,14 @@ router.post('/sync', [
       order: savedOrder
     });
   } catch (error) {
-    console.error('Sync order error:', error);
-    res.status(500).json({
-      message: error.message || 'Server error during sync',
-      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    return next(error);
   }
 });
 
 // @route   POST /api/sales/post-missing-to-ledger
 // @desc    Backfill account ledger: post any sales/invoices that were never recorded to the ledger (e.g. created before the fix).
 // @access  Private
-router.post('/post-missing-to-ledger', auth, requirePermission('view_reports'), async (req, res) => {
+router.post('/post-missing-to-ledger', auth, requirePermission('view_reports'), async (req, res, next) => {
   try {
     const dateFrom = req.query.dateFrom || req.body?.dateFrom;
     const dateTo = req.query.dateTo || req.body?.dateTo;
@@ -468,15 +457,14 @@ router.post('/post-missing-to-ledger', auth, requirePermission('view_reports'), 
       ...result
     });
   } catch (error) {
-    console.error('Post missing sales to ledger error:', error);
-    return res.status(500).json({ success: false, message: error.message || 'Failed to post missing sales to ledger.' });
+    return next(error);
   }
 });
 
 // @route   POST /api/sales/sync-ledger
 // @desc    Sync sales to ledger: update existing sale entries + post missing (fixes old edits not reflected).
 // @access  Private
-router.post('/sync-ledger', auth, requirePermission('view_reports'), async (req, res) => {
+router.post('/sync-ledger', auth, requirePermission('view_reports'), async (req, res, next) => {
   try {
     const dateFrom = req.query.dateFrom || req.body?.dateFrom;
     const dateTo = req.query.dateTo || req.body?.dateTo;
@@ -487,8 +475,7 @@ router.post('/sync-ledger', auth, requirePermission('view_reports'), async (req,
       ...result
     });
   } catch (error) {
-    console.error('Sync sales ledger error:', error);
-    return res.status(500).json({ success: false, message: error.message || 'Failed to sync sales ledger.' });
+    return next(error);
   }
 });
 

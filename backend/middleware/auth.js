@@ -2,6 +2,8 @@ const jwt = require('jsonwebtoken');
 const userRepository = require('../repositories/postgres/UserRepository');
 const logger = require('../utils/logger');
 
+const getUserId = (user) => user?.id ?? user?._id;
+
 const auth = async (req, res, next) => {
   try {
     // Try to get token from HTTP-only cookie first, then fall back to Authorization header
@@ -156,6 +158,7 @@ const maskSensitiveData = (permission, fields) => {
 
 module.exports = {
   auth,
+  getUserId,
   requirePermission,
   requireAnyPermission,
   requireRole,

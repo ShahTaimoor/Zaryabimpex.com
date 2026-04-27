@@ -133,7 +133,6 @@ export const Sales = ({ tabId, editData }) => {
   const [isAdvancePayment, setIsAdvancePayment] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [autoGenerateInvoice, setAutoGenerateInvoice] = useState(true);
-  const [autoPrint, setAutoPrint] = useState(false); // Default to false as requested
   const [showSalesDetailsFields, setShowSalesDetailsFields] = useState(false);
   const [billDate, setBillDate] = useState(getLocalDateString()); // Default to current date for backdating invoices
   const [notes, setNotes] = useState('');
@@ -176,6 +175,7 @@ export const Sales = ({ tabId, editData }) => {
   const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const showSalesDiscountCodeEnabled = companySettings.orderSettings?.showSalesDiscountCode === true;
+  const autoPrintEnabled = companySettings.printSettings?.autoPrintAfterSale !== false;
   const [showProfit, setShowProfit] = useState(false);
 
   // Sync state with global setting if it changes
@@ -1079,6 +1079,23 @@ export const Sales = ({ tabId, editData }) => {
     }
   };
 
+  const resetSaleDraft = useCallback(({ resetBillDate = false } = {}) => {
+    setCart([]);
+    setHighlightedCartLineIndex(null);
+    setAmountPaid(0);
+    setAppliedDiscounts([]);
+    setDirectDiscount({ type: 'amount', value: 0 });
+    setNotes('');
+    setInvoiceNumber('');
+    if (resetBillDate) {
+      setBillDate(getLocalDateString());
+    }
+    setLastPurchasePrices({});
+    setOriginalPrices({});
+    setIsLastPricesApplied(false);
+    setPriceStatus({});
+  }, []);
+
 
 
   const handleCreateOrder = useCallback(async (orderData) => {
@@ -1096,32 +1113,23 @@ export const Sales = ({ tabId, editData }) => {
       const result = await createSale({ payload: orderData }).unwrap();
       showSuccessToast('Sale created successfully');
 
+      // Force refresh product search cache so stock quantities reflect immediately
+      // even when browser print dialog temporarily interrupts UI lifecycle.
+      try {
+        refetchProducts?.();
+      } catch {
+        // ignore cache refresh errors; sale has already been completed
+      }
+
       // RTK Query invalidatesTags will automatically refetch Products and Customers
       // No need to manually refetch - it happens automatically via cache invalidation
       // This prevents React warnings about updating components during render
 
-      // Reset cart and form
-      setCart([]);
-      setHighlightedCartLineIndex(null);
-      // Don't reset selectedCustomer immediately - let it update from refetched data
-      // setSelectedCustomer(null);
-      setAmountPaid(0);
-      setAppliedDiscounts([]);
-      setDirectDiscount({ type: 'amount', value: 0 });
-      setNotes('');
-      setInvoiceNumber('');
-      setBillDate(getLocalDateString()); // Reset to current date
-      setLastPurchasePrices({});
-      setOriginalPrices({});
-      setIsLastPricesApplied(false);
-      setPriceStatus({});
-
-      // Show print modal if order was created and autoPrint is enabled
-      if (result?.order) {
-        if (autoPrint) {
-          setCurrentOrder(result.order);
-          setShowPrintModal(true);
-        }
+      if (result?.order && autoPrintEnabled) {
+        setDirectPrintOrder(result.order);
+      } else {
+        // No print flow: complete and clear immediately.
+        resetSaleDraft({ resetBillDate: true });
       }
       resetSubmittingState();
     } catch (error) {
@@ -1145,7 +1153,7 @@ export const Sales = ({ tabId, editData }) => {
         resetSubmittingState();
       }
     }
-  }, [createSale, resetSubmittingState]);
+  }, [createSale, resetSubmittingState, autoPrintEnabled, resetSaleDraft, refetchProducts]);
 
   const handleUpdateOrder = useCallback(async (orderId, updateData) => {
     // Double-check: prevent duplicate calls even if handleCheckout guard fails
@@ -1162,31 +1170,22 @@ export const Sales = ({ tabId, editData }) => {
       const result = await updateOrder({ id: orderId, ...updateData }).unwrap();
       showSuccessToast('Order updated successfully');
 
+      // Keep product stock in sync immediately after update/create actions.
+      try {
+        refetchProducts?.();
+      } catch {
+        // ignore cache refresh errors; order update already succeeded
+      }
+
       // RTK Query invalidatesTags will automatically refetch Products and Customers
       // No need to manually refetch - it happens automatically via cache invalidation
       // This prevents React warnings about updating components during render
 
-      // Reset cart and form
-      setCart([]);
-      setHighlightedCartLineIndex(null);
-      // Don't reset selectedCustomer immediately - let it update from refetched data
-      // setSelectedCustomer(null);
-      setAmountPaid(0);
-      setAppliedDiscounts([]);
-      setDirectDiscount({ type: 'amount', value: 0 });
-      setNotes('');
-      setInvoiceNumber('');
-      setLastPurchasePrices({});
-      setOriginalPrices({});
-      setIsLastPricesApplied(false);
-      setPriceStatus({});
-
-      // Show print modal if order was updated and autoPrint is enabled
-      if (result?.order) {
-        if (autoPrint) {
-          setCurrentOrder(result.order);
-          setShowPrintModal(true);
-        }
+      if (result?.order && autoPrintEnabled) {
+        setDirectPrintOrder(result.order);
+      } else {
+        // No print flow: complete and clear immediately.
+        resetSaleDraft();
       }
       resetSubmittingState();
     } catch (error) {
@@ -1209,7 +1208,7 @@ export const Sales = ({ tabId, editData }) => {
         resetSubmittingState();
       }
     }
-  }, [updateOrder, resetSubmittingState, isSubmittingRef]);
+  }, [updateOrder, resetSubmittingState, isSubmittingRef, autoPrintEnabled, resetSaleDraft, refetchProducts]);
 
   const handleCheckout = useCallback((e) => {
     // Prevent default and stop propagation to avoid any event bubbling issues
@@ -1470,7 +1469,7 @@ export const Sales = ({ tabId, editData }) => {
         {/* Customer Selection and Information Row */}
         <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start space-x-12'}`}>
           {/* Customer Selection */}
-          <div className={`${isMobile ? 'w-full' : 'w-[750px] flex-shrink-0'}`}>
+          <div className={`${isMobile ? 'w-full' : 'w-full max-w-3xl flex-shrink-0'}`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <label className="block text-sm font-medium text-gray-700">
@@ -2906,18 +2905,6 @@ export const Sales = ({ tabId, editData }) => {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
-                  <div className="flex items-center space-x-2 px-2">
-                    <Input
-                      type="checkbox"
-                      id="autoPrint"
-                      checked={autoPrint}
-                      onChange={(e) => setAutoPrint(e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="autoPrint" className="text-sm font-medium text-gray-700 cursor-pointer">
-                      Print after sale
-                    </label>
-                  </div>
                   <LoadingButton
                     onClick={handleCheckout}
                     isLoading={isSubmitting || isCreatingSale || isUpdatingOrder}
@@ -2990,7 +2977,10 @@ export const Sales = ({ tabId, editData }) => {
           orderData={directPrintOrder}
           documentTitle="Sales Invoice"
           partyLabel="Customer"
-          onComplete={() => setDirectPrintOrder(null)}
+          onComplete={() => {
+            resetSaleDraft({ resetBillDate: true });
+            setDirectPrintOrder(null);
+          }}
         />
       )}
 
@@ -3000,6 +2990,9 @@ export const Sales = ({ tabId, editData }) => {
         onClose={() => {
           setShowPrintModal(false);
           setCurrentOrder(null);
+        }}
+        onAfterPrint={() => {
+          resetSaleDraft({ resetBillDate: true });
         }}
         orderData={currentOrder}
         documentTitle="Sales Invoice"

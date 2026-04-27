@@ -109,7 +109,7 @@ router.get('/', [
   query('listMode').optional({ checkFalsy: true }).isIn(['full', 'minimal']),
   query('cursor').optional({ checkFalsy: true }).isString().trim(),
   maskSensitiveData('view_product_costs', 'pricing.cost')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -129,15 +129,14 @@ router.get('/', [
       pagination: result.pagination
     });
   } catch (error) {
-    console.error('Get products error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
 // @route   GET /api/products/:id/last-purchase-price
 // @desc    Get last purchase price for a product
 // @access  Private
-router.get('/:id/last-purchase-price', auth, maskSensitiveData('view_product_costs', 'lastPurchasePrice'), async (req, res) => {
+router.get('/:id/last-purchase-price', auth, maskSensitiveData('view_product_costs', 'lastPurchasePrice'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const priceInfo = await productService.getLastPurchasePrice(id);
@@ -158,18 +157,14 @@ router.get('/:id/last-purchase-price', auth, maskSensitiveData('view_product_cos
       purchaseDate: priceInfo.purchaseDate
     });
   } catch (error) {
-    console.error('Get last purchase price error:', error);
-    res.status(500).json({ 
-      message: 'Server error', 
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
-    });
+    return next(error);
   }
 });
 
 // @route   GET /api/products/:id
 // @desc    Get single product
 // @access  Private
-router.get('/:id', auth, maskSensitiveData('view_product_costs', 'pricing.cost'), async (req, res) => {
+router.get('/:id', auth, maskSensitiveData('view_product_costs', 'pricing.cost'), async (req, res, next) => {
   try {
     const product = await productService.getProductById(req.params.id);
     res.json({ product });
@@ -180,11 +175,7 @@ router.get('/:id', auth, maskSensitiveData('view_product_costs', 'pricing.cost')
     if (error.message === 'Invalid product id') {
       return res.status(400).json({ message: 'Invalid product id' });
     }
-    console.error('Get product error:', error);
-    res.status(500).json({
-      message: 'Server error',
-      ...(process.env.NODE_ENV === 'development' && { details: error.message })
-    });
+    return next(error);
   }
 });
 
@@ -206,7 +197,7 @@ router.post('/', [
   body('pricing.cost').isFloat({ min: 0 }).withMessage('Cost must be a positive number'),
   body('pricing.retail').isFloat({ min: 0 }).withMessage('Retail price must be a positive number'),
   body('pricing.wholesale').isFloat({ min: 0 }).withMessage('Wholesale price must be a positive number')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -261,11 +252,7 @@ router.post('/', [
       });
     }
     
-    res.status(500).json({ 
-      message: 'Server error creating product',
-      error: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    return next(error);
   }
 });
 
@@ -286,7 +273,7 @@ router.put('/:id', [
   body('pricing.cost').optional().isFloat({ min: 0 }),
   body('pricing.retail').optional().isFloat({ min: 0 }),
   body('pricing.wholesale').optional().isFloat({ min: 0 })
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -327,7 +314,7 @@ router.put('/:id', [
         code: 'DUPLICATE_PRODUCT_KEY'
       });
     }
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
@@ -337,16 +324,18 @@ router.put('/:id', [
 router.delete('/:id', [
   auth,
   requirePermission('delete_products')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     // Call service to delete product (soft delete, pass req for audit logging)
     const result = await productService.deleteProduct(req.params.id, req);
     res.json(result);
   } catch (error) {
-    console.error('Delete product error:', error);
     // Return appropriate status code based on error type
     const statusCode = error.message && error.message.includes('Cannot delete') ? 400 : 500;
-    res.status(statusCode).json({ message: error.message || 'Server error' });
+    if (statusCode === 400) {
+      return res.status(400).json({ message: error.message || 'Cannot delete product' });
+    }
+    return next(error);
   }
 });
 
@@ -356,7 +345,7 @@ router.delete('/:id', [
 router.post('/:id/restore', [
   auth,
   requirePermission('delete_products')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const result = await productService.restoreProduct(req.params.id);
     res.json(result);
@@ -364,8 +353,7 @@ router.post('/:id/restore', [
     if (error.message === 'Deleted product not found') {
       return res.status(404).json({ message: 'Deleted product not found' });
     }
-    console.error('Restore product error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
@@ -376,27 +364,25 @@ router.get('/deleted', [
   auth,
   requirePermission('delete_products'),
   maskSensitiveData('view_product_costs', 'pricing.cost')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const deletedProducts = await productService.getDeletedProducts();
     res.json(deletedProducts);
   } catch (error) {
-    console.error('Get deleted products error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
 // @route   GET /api/products/search/:query
 // @desc    Search products by name
 // @access  Private
-router.get('/search/:query', auth, maskSensitiveData('view_product_costs', 'pricing.cost'), async (req, res) => {
+router.get('/search/:query', auth, maskSensitiveData('view_product_costs', 'pricing.cost'), async (req, res, next) => {
   try {
     const query = req.params.query;
     const products = await productService.searchProducts(query, 10);
     res.json({ products });
   } catch (error) {
-    console.error('Search products error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
@@ -408,7 +394,7 @@ router.put('/bulk', [
   requirePermission('update_products'),
   body('productIds').isArray().withMessage('Product IDs array is required'),
   body('updates').isObject().withMessage('Updates object is required')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const { productIds, updates } = req.body;
     
@@ -417,8 +403,7 @@ router.put('/bulk', [
     
     res.json(result);
   } catch (error) {
-    console.error('Bulk update products error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    return next(error);
   }
 });
 
@@ -429,7 +414,7 @@ router.delete('/bulk', [
   auth,
   requirePermission('delete_products'),
   body('productIds').isArray().withMessage('Product IDs array is required')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const { productIds } = req.body;
     
@@ -438,23 +423,24 @@ router.delete('/bulk', [
     
     res.json(result);
   } catch (error) {
-    console.error('Bulk delete products error:', error);
     // Return appropriate status code based on error type
     const statusCode = error.message && error.message.includes('Cannot delete') ? 400 : 500;
-    res.status(statusCode).json({ message: error.message || 'Server error' });
+    if (statusCode === 400) {
+      return res.status(400).json({ message: error.message || 'Cannot delete selected products' });
+    }
+    return next(error);
   }
 });
 
 // @route   GET /api/products/low-stock
 // @desc    Get products with low stock
 // @access  Private
-router.get('/low-stock', auth, async (req, res) => {
+router.get('/low-stock', auth, async (req, res, next) => {
   try {
     const products = await productService.getLowStockProducts();
     res.json({ products });
   } catch (error) {
-    console.error('Get low stock products error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
@@ -465,7 +451,7 @@ router.post('/:id/price-check', [
   auth,
   body('customerType').isIn(['retail', 'wholesale', 'distributor', 'individual']).withMessage('Invalid customer type'),
   body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -476,8 +462,7 @@ router.post('/:id/price-check', [
     const result = await productService.getPriceForCustomerType(req.params.id, customerType, quantity);
     res.json(result);
   } catch (error) {
-    console.error('Price check error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
@@ -501,7 +486,7 @@ router.post('/:id/investors', [
   body('investors.*.investor').isUUID(4).withMessage('Invalid investor ID'),
   body('investors.*.sharePercentage').optional().isFloat({ min: 0, max: 100 }),
   handleValidationErrors
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const product = await productService.updateProductInvestors(req.params.id, req.body.investors);
 
@@ -511,12 +496,7 @@ router.post('/:id/investors', [
       data: product
     });
   } catch (error) {
-    console.error('Error linking investors:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    return next(error);
   }
 });
 
@@ -524,7 +504,7 @@ router.post('/:id/investors', [
 router.delete('/:id/investors/:investorId', [
   auth,
   requirePermission('edit_products')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const product = await productService.removeProductInvestor(req.params.id, req.params.investorId);
 
@@ -537,19 +517,14 @@ router.delete('/:id/investors/:investorId', [
     if (error.message === 'Product not found') {
       return res.status(404).json({ message: error.message });
     }
-    console.error('Error removing investor:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    return next(error);
   }
 });
 
 // @route   POST /api/products/get-last-purchase-prices
 // @desc    Get last purchase prices for multiple products
 // @access  Private
-router.post('/get-last-purchase-prices', auth, async (req, res) => {
+router.post('/get-last-purchase-prices', auth, async (req, res, next) => {
   try {
     const { productIds } = req.body;
     
@@ -565,11 +540,7 @@ router.post('/get-last-purchase-prices', auth, async (req, res) => {
       prices: prices
     });
   } catch (error) {
-    console.error('Get last purchase prices error:', error);
-    res.status(500).json({ 
-      message: 'Server error', 
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
-    });
+    return next(error);
   }
 });
 
@@ -579,7 +550,7 @@ router.post('/get-last-purchase-prices', auth, async (req, res) => {
 router.get('/:id/audit-logs', [
   auth,
   requirePermission('view_products')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const { id } = req.params;
     const { limit = 50, skip = 0, action, startDate, endDate } = req.query;
@@ -598,8 +569,7 @@ router.get('/:id/audit-logs', [
       count: logs.length
     });
   } catch (error) {
-    console.error('Get audit logs error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
@@ -609,7 +579,7 @@ router.get('/:id/audit-logs', [
 router.get('/expiring-soon', [
   auth,
   requirePermission('view_products')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const days = parseInt(req.query.days) || 30;
     const result = await expiryManagementService.getExpiringSoon(days);
@@ -619,8 +589,7 @@ router.get('/expiring-soon', [
       ...result
     });
   } catch (error) {
-    console.error('Get expiring products error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
@@ -630,7 +599,7 @@ router.get('/expiring-soon', [
 router.get('/expired', [
   auth,
   requirePermission('view_products')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const result = await expiryManagementService.getExpired();
     
@@ -639,8 +608,7 @@ router.get('/expired', [
       ...result
     });
   } catch (error) {
-    console.error('Get expired products error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
@@ -650,7 +618,7 @@ router.get('/expired', [
 router.post('/:id/write-off-expired', [
   auth,
   requirePermission('edit_products')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const { id } = req.params;
     const result = await expiryManagementService.writeOffExpired(id, req.user?.id ?? req.user?._id, req);
@@ -661,11 +629,7 @@ router.post('/:id/write-off-expired', [
       ...result
     });
   } catch (error) {
-    console.error('Write off expired error:', error);
-    res.status(500).json({ 
-      message: 'Server error',
-      error: error.message 
-    });
+    return next(error);
   }
 });
 
@@ -676,7 +640,7 @@ router.post('/:id/calculate-cost', [
   auth,
   requirePermission('view_products'),
   body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -695,11 +659,7 @@ router.post('/:id/calculate-cost', [
       ...costInfo
     });
   } catch (error) {
-    console.error('Calculate cost error:', error);
-    res.status(500).json({ 
-      message: 'Server error',
-      error: error.message 
-    });
+    return next(error);
   }
 });
 
@@ -710,7 +670,7 @@ router.post('/bulk-create', [
   auth,
   requirePermission('create_products'),
   body('products').isArray().withMessage('Products array is required')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -725,8 +685,7 @@ router.post('/bulk-create', [
     );
     res.status(201).json(result);
   } catch (error) {
-    console.error('Bulk create products error:', error);
-    res.status(500).json({ message: 'Server error bulk creating products', error: error.message });
+    return next(error);
   }
 });
 

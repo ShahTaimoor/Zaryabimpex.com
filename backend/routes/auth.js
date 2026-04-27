@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { auth } = require('../middleware/auth');
+const { auth, getUserId } = require('../middleware/auth');
 const authService = require('../services/authService');
 
 const router = express.Router();
@@ -16,7 +16,7 @@ router.post('/register', [
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').isIn(['admin', 'manager', 'cashier', 'inventory', 'viewer', 'employee']).withMessage('Invalid role'),
   body('status').optional().isIn(['active', 'inactive']).withMessage('Invalid status'),
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -39,16 +39,7 @@ router.post('/register', [
     if (error.message === 'User already exists' || error.code === 11000) {
       return res.status(400).json({ message: 'User already exists' });
     }
-
-    console.error('❌ Registration error:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    });
-    res.status(500).json({
-      message: 'Server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    return next(error);
   }
 });
 
@@ -60,7 +51,7 @@ router.post('/register', [
 router.post('/login', [
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
   body('password').exists().withMessage('Password is required')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -106,17 +97,113 @@ router.post('/login', [
         message: 'Server configuration error: JWT_SECRET is missing'
       });
     }
+    if (error.message === 'Unable to deliver two-factor code. Please contact administrator.') {
+      return res.status(503).json({ message: error.message });
+    }
 
-    console.error('❌ Login error:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
-      code: error.code
+    return next(error);
+  }
+});
+
+// @route   POST /api/auth/request-2fa-code
+// @desc    Send 2FA code to a registered email/mobile (2FA must be enabled; no password)
+// @access  Public
+router.post('/request-2fa-code', [
+  body('channel').optional().isIn(['email', 'sms']).withMessage('channel must be "email" or "sms"'),
+  body('email').optional().isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('phone').optional().isString().withMessage('Valid phone is required'),
+  body().custom((value) => {
+    const channel = value?.channel === 'sms' ? 'sms' : 'email';
+    if (channel === 'sms') {
+      return !!String(value?.phone || '').trim();
+    }
+    return !!String(value?.email || '').trim();
+  }).withMessage('Please provide email for email channel, or phone for sms channel')
+], async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { channel = 'email', email, phone } = req.body;
+    const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.get('User-Agent');
+
+    const result = await authService.requestTwoFactorCode({ channel, email, phone }, ipAddress, userAgent);
+    return res.json(result);
+  } catch (error) {
+    if (
+      error.message === 'No account found with this email address' ||
+      error.message === 'No account found with this mobile number'
+    ) {
+      return res.status(404).json({ message: error.message });
+    }
+    if (
+      error.message === 'This account is inactive' ||
+      error.message === 'No mobile number is saved for this account' ||
+      error.message === 'SMS gateway is not configured' ||
+      error.message === 'Failed to send SMS verification code' ||
+      error.message.includes('locked') ||
+      error.message.includes('Two-factor is not enabled')
+    ) {
+      return res.status(400).json({ message: error.message });
+    }
+    if (error.message === 'Unable to deliver two-factor code. Please contact administrator.') {
+      return res.status(503).json({ message: error.message });
+    }
+    if (error.message.includes('JWT_SECRET')) {
+      return res.status(500).json({ message: 'Server configuration error: JWT_SECRET is missing' });
+    }
+    return next(error);
+  }
+});
+
+// @route   POST /api/auth/verify-2fa
+// @desc    Verify 2FA challenge and complete login
+// @access  Public
+router.post('/verify-2fa', [
+  body('tempToken').isString().withMessage('tempToken is required'),
+  body('code').isLength({ min: 6, max: 6 }).withMessage('A valid 6-digit code is required')
+], async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { tempToken, code } = req.body;
+    const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.get('User-Agent');
+
+    const result = await authService.verifyTwoFactor(tempToken, code, ipAddress, userAgent);
+
+    res.cookie('token', result.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 8 * 60 * 60 * 1000,
+      path: '/'
     });
-    res.status(500).json({
-      message: 'Server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+
+    res.json({
+      message: result.message,
+      token: result.token,
+      user: result.user
     });
+  } catch (error) {
+    if (
+      error.message === 'Two-factor token and code are required' ||
+      error.message === 'Invalid or expired two-factor token' ||
+      error.message === 'Invalid two-factor challenge' ||
+      error.message === 'Invalid or expired two-factor code'
+    ) {
+      return res.status(400).json({ message: error.message });
+    }
+    if (error.message === 'User not found') {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    return next(error);
   }
 });
 
@@ -125,16 +212,16 @@ router.post('/login', [
 // @route   GET /api/auth/me
 // @desc    Get current user
 // @access  Private
-router.get('/me', auth, async (req, res) => {
+router.get('/me', auth, async (req, res, next) => {
   try {
-    const user = await authService.getCurrentUser(req.user._id);
+    const userId = getUserId(req.user);
+    const user = await authService.getCurrentUser(userId);
     res.json({ user });
   } catch (error) {
     if (error.message === 'User not found') {
       return res.status(404).json({ message: 'User not found' });
     }
-    console.error('Get user error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
@@ -148,7 +235,7 @@ router.put('/profile', [
   body('email').optional().isEmail().normalizeEmail(),
   body('phone').optional().trim(),
   body('department').optional().trim()
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -158,7 +245,8 @@ router.put('/profile', [
     const updateData = req.body;
 
     // Call service to update profile
-    const result = await authService.updateProfile(req.user._id, updateData);
+    const userId = getUserId(req.user);
+    const result = await authService.updateProfile(userId, updateData);
 
     res.json(result);
   } catch (error) {
@@ -168,8 +256,7 @@ router.put('/profile', [
     if (error.message === 'Email already exists') {
       return res.status(400).json({ message: 'Email already exists' });
     }
-    console.error('Profile update error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
@@ -180,7 +267,7 @@ router.post('/change-password', [
   auth,
   body('currentPassword').exists().withMessage('Current password is required'),
   body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters')
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -190,7 +277,8 @@ router.post('/change-password', [
     const { currentPassword, newPassword } = req.body;
 
     // Call service to change password
-    const result = await authService.changePassword(req.user._id, currentPassword, newPassword);
+    const userId = getUserId(req.user);
+    const result = await authService.changePassword(userId, currentPassword, newPassword);
 
     res.json(result);
   } catch (error) {
@@ -200,15 +288,14 @@ router.post('/change-password', [
     if (error.message === 'Current password is incorrect') {
       return res.status(400).json({ message: 'Current password is incorrect' });
     }
-    console.error('Password change error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 
 // @route   POST /api/auth/logout
 // @desc    Logout user (clear HTTP-only cookie)
 // @access  Private
-router.post('/logout', auth, async (req, res) => {
+router.post('/logout', auth, async (req, res, next) => {
   try {
     // Clear the HTTP-only cookie
     res.clearCookie('token', {
@@ -220,8 +307,7 @@ router.post('/logout', auth, async (req, res) => {
 
     res.json({ message: 'Logout successful' });
   } catch (error) {
-    console.error('Logout error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return next(error);
   }
 });
 

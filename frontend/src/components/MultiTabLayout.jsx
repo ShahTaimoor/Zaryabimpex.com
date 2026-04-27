@@ -570,7 +570,7 @@ export const MultiTabLayout = ({ children }) => {
   }, [userMenuOpen]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-[100dvh] bg-gray-50">
       {/* Mobile Navigation */}
       <MobileNavigation user={user} onLogout={handleLogout} />
 
@@ -587,7 +587,7 @@ export const MultiTabLayout = ({ children }) => {
               <X className="h-6 w-6" />
             </button>
           </div>
-          <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto max-h-[calc(100vh-4rem)] scrollbar-thin scrollbar-thumb-gray-200">
+          <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto max-h-[calc(100dvh-4rem)] scrollbar-thin scrollbar-thumb-gray-200">
             {navigation.map((item) => (
               <SidebarItem
                 key={item.name}
@@ -612,7 +612,7 @@ export const MultiTabLayout = ({ children }) => {
           <div className="flex h-16 items-center px-6 border-b border-gray-100">
             <h1 className="text-xl font-bold text-gray-900">POS System</h1>
           </div>
-          <nav className="flex-1 space-y-1 px-3 py-6 overflow-y-auto max-h-[calc(100vh-4rem)] scrollbar-thin scrollbar-thumb-gray-200">
+          <nav className="flex-1 space-y-1 px-3 py-6 overflow-y-auto max-h-[calc(100dvh-4rem)] scrollbar-thin scrollbar-thumb-gray-200">
             {navigation.map((item) => (
               <SidebarItem
                 key={item.name}

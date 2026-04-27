@@ -2,8 +2,125 @@ const userRepository = require('../repositories/postgres/UserRepository');
 const jwt = require('jsonwebtoken');
 const ipaddr = require('ipaddr.js');
 const logger = require('../utils/logger');
+const { sendTwoFactorCodeEmail } = require('../utils/emailService');
+const { sendTwoFactorCodeSms } = require('../utils/smsService');
 
 class AuthService {
+  createAuthToken(user) {
+    if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim() === '') {
+      throw new Error('Server configuration error: JWT_SECRET is missing');
+    }
+    const payload = {
+      userId: user._id,
+      email: user.email,
+      role: user.role
+    };
+    return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '8h' });
+  }
+
+  createTwoFactorChallengeToken(userId) {
+    if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim() === '') {
+      throw new Error('Server configuration error: JWT_SECRET is missing');
+    }
+    return jwt.sign({ userId, type: '2fa_challenge' }, process.env.JWT_SECRET, { expiresIn: '10m' });
+  }
+
+  createTwoFactorCode() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+  }
+
+  /**
+   * Generate OTP, deliver it by channel, return temp JWT for /verify-2fa.
+   */
+  async createAndDeliverTwoFactorChallenge(user, ipAddress, userAgent, deliveryChannel = 'email') {
+    const otpCode = this.createTwoFactorCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await userRepository.setTwoFactorCode(user.id, otpCode, expiresAt);
+    let delivered = false;
+
+    try {
+      if (deliveryChannel === 'sms') {
+        await sendTwoFactorCodeSms({
+          toPhone: user.phone,
+          code: otpCode
+        });
+      } else {
+        await sendTwoFactorCodeEmail({
+          toEmail: user.email,
+          code: otpCode
+        });
+      }
+      delivered = true;
+    } catch (deliveryError) {
+      logger.error(`2FA ${deliveryChannel} delivery failed for user ${user.id}: ${deliveryError.message}`);
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('Unable to deliver two-factor code. Please contact administrator.');
+      }
+      logger.warn(`2FA dev fallback code for user ${user.id}: ${otpCode}`);
+    }
+
+    const challengeToken = this.createTwoFactorChallengeToken(user.id);
+
+    logger.info('2FA challenge created', {
+      userId: user.id,
+      channel: deliveryChannel,
+      destination: deliveryChannel === 'sms' ? user.phone : user.email,
+      ipAddress,
+      userAgent
+    });
+
+    return {
+      twoFactorRequired: true,
+      tempToken: challengeToken,
+      message: delivered
+        ? `Two-factor authentication code sent to your ${deliveryChannel === 'sms' ? 'mobile number' : 'email'}`
+        : 'Two-factor authentication code required (development fallback active)'
+    };
+  }
+
+  /**
+   * Send a 2FA code to a registered email/mobile (no password). User must have 2FA enabled.
+   */
+  async requestTwoFactorCode(payload, ipAddress, userAgent) {
+    const channel = payload?.channel === 'sms' ? 'sms' : 'email';
+    const email = String(payload?.email || '').trim();
+    const phone = String(payload?.phone || '').trim();
+
+    if (channel === 'sms' && !phone) throw new Error('Mobile number is required');
+    if (channel === 'email' && !email) throw new Error('Email is required');
+
+    const user = channel === 'sms'
+      ? await userRepository.findByPhone(phone)
+      : await userRepository.findByEmail(email);
+    if (!user) {
+      throw new Error(
+        channel === 'sms'
+          ? 'No account found with this mobile number'
+          : 'No account found with this email address'
+      );
+    }
+
+    if (channel === 'sms' && !user.phone) {
+      throw new Error('No mobile number is saved for this account');
+    }
+
+    if (!user.isActive) {
+      throw new Error('This account is inactive');
+    }
+
+    if (user.isLocked) {
+      throw new Error('Account is temporarily locked due to too many failed login attempts');
+    }
+
+    if (!user?.preferences?.twoFactorEnabled) {
+      throw new Error(
+        'Two-factor is not enabled for this account. Enable it in Settings after signing in with email and password, or use the Email & password tab.'
+      );
+    }
+
+    return this.createAndDeliverTwoFactorChallenge(user, ipAddress, userAgent, channel);
+  }
+
   /**
    * Register a new user
    * @param {object} userData - User data
@@ -83,23 +200,49 @@ class AuthService {
       await userRepository.resetLoginAttempts(user.id);
     }
 
+    // Email & password: complete session here. OTP verification is only for the Two-factor tab (request-2fa-code + verify-2fa).
+
     // Track login activity
     await userRepository.trackLogin(user.id, ipAddress, userAgent);
 
-    // Create JWT token
-    if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim() === '') {
-      throw new Error('Server configuration error: JWT_SECRET is missing');
+    const token = this.createAuthToken(user);
+
+    return {
+      user: user.toSafeObject(),
+      token,
+      message: 'Login successful'
+    };
+  }
+
+  async verifyTwoFactor(tempToken, code, ipAddress, userAgent) {
+    if (!tempToken || !code) {
+      throw new Error('Two-factor token and code are required');
     }
 
-    const payload = {
-      userId: user._id,
-      email: user.email,
-      role: user.role
-    };
+    let payload;
+    try {
+      payload = jwt.verify(tempToken, process.env.JWT_SECRET);
+    } catch (error) {
+      throw new Error('Invalid or expired two-factor token');
+    }
 
-    const token = jwt.sign(payload, process.env.JWT_SECRET, {
-      expiresIn: '8h'
-    });
+    if (payload?.type !== '2fa_challenge' || !payload?.userId) {
+      throw new Error('Invalid two-factor challenge');
+    }
+
+    const user = await userRepository.findByIdWithPassword(payload.userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const isValidCode = userRepository.verifyTwoFactorCode(user, code);
+    if (!isValidCode) {
+      throw new Error('Invalid or expired two-factor code');
+    }
+
+    await userRepository.clearTwoFactorCode(user.id);
+    await userRepository.trackLogin(user.id, ipAddress, userAgent);
+    const token = this.createAuthToken(user);
 
     return {
       user: user.toSafeObject(),

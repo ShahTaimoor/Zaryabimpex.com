@@ -10,6 +10,22 @@ export const authApi = api.injectEndpoints({
       }),
       invalidatesTags: [{ type: 'Auth', id: 'CURRENT_USER' }],
     }),
+    requestTwoFactorCode: builder.mutation({
+      query: ({ channel = 'email', email, phone }) => ({
+        url: 'auth/request-2fa-code',
+        method: 'post',
+        data: { channel, email, phone },
+      }),
+      invalidatesTags: [{ type: 'Auth', id: 'CURRENT_USER' }],
+    }),
+    verifyTwoFactor: builder.mutation({
+      query: ({ tempToken, code }) => ({
+        url: 'auth/verify-2fa',
+        method: 'post',
+        data: { tempToken, code },
+      }),
+      invalidatesTags: [{ type: 'Auth', id: 'CURRENT_USER' }],
+    }),
     currentUser: builder.query({
       query: () => ({ url: 'auth/me', method: 'get' }),
       providesTags: [{ type: 'Auth', id: 'CURRENT_USER' }],
@@ -43,6 +59,8 @@ export const authApi = api.injectEndpoints({
 
 export const {
   useLoginMutation,
+  useRequestTwoFactorCodeMutation,
+  useVerifyTwoFactorMutation,
   useCurrentUserQuery,
   useUpdateProfileMutation,
   useChangePasswordMutation,

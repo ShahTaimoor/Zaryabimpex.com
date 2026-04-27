@@ -55,14 +55,14 @@ class SettingsService {
    * @returns {Promise<object>}
    */
   async updateUserPreferences(userId, preferences) {
-    const { theme, language, timezone } = preferences;
+    const { theme, language, timezone, twoFactorEnabled } = preferences;
+    const patch = {};
+    if (theme !== undefined) patch.theme = theme;
+    if (language !== undefined) patch.language = language;
+    if (timezone !== undefined) patch.timezone = timezone;
+    if (twoFactorEnabled !== undefined) patch.twoFactorEnabled = !!twoFactorEnabled;
 
-    const updates = {};
-    if (theme) updates['preferences.theme'] = theme;
-    if (language) updates['preferences.language'] = language;
-    if (timezone) updates['preferences.timezone'] = timezone;
-
-    const user = await UserRepository.update(userId, updates);
+    const user = await UserRepository.updateUserPreferences(userId, patch);
     if (!user) {
       throw new Error('User not found');
     }

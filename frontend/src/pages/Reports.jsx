@@ -34,6 +34,7 @@ import {
 import { useGetBanksQuery } from '../store/services/banksApi';
 import DateFilter from '../components/DateFilter';
 import PrintReportModal from '../components/PrintReportModal';
+import PageShell from '../components/PageShell';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
@@ -746,7 +747,7 @@ export const Reports = () => {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6 bg-gray-50 min-h-screen">
+    <PageShell className="bg-gray-50" contentClassName="space-y-6 p-4 md:p-6">
       {/* Header & Global Filters */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
         <div>
@@ -1462,7 +1463,7 @@ export const Reports = () => {
                       showPresets={true}
                     />
                   )}
-                  <div className="min-w-[260px] rounded-md border border-gray-300 bg-white p-2">
+                  <div className="w-full sm:w-auto min-w-[220px] rounded-md border border-gray-300 bg-white p-2">
                     <div className="mb-2 flex items-center justify-between">
                       <span className="text-xs font-medium text-gray-600">Banks</span>
                       <div className="flex items-center gap-2 text-xs">
@@ -1632,7 +1633,7 @@ export const Reports = () => {
         }}
         summaryData={getSummaryData()}
       />
-    </div>
+    </PageShell>
   );
 };
 

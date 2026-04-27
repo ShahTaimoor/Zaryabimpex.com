@@ -208,7 +208,7 @@ const AccountLedger = () => {
                 </div>
               </div>
 
-              <div className="max-h-[calc(100vh-300px)] overflow-y-auto">
+              <div className="max-h-[calc(100dvh-300px)] overflow-y-auto">
                 {Object.entries(groupedAccounts).map(([type, accountsList]) => {
                   // Filter accounts based on search query
                   const filteredAccounts = accountsList.filter(account => {

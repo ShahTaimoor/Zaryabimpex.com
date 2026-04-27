@@ -13,6 +13,7 @@
   html {
     overflow-x: hidden;
     max-width: 100vw;
+    min-height: 100dvh;
     font-size: 16px;
   }
 
@@ -45,6 +46,7 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     overflow-x: hidden;
     max-width: 100vw;
+    min-height: 100dvh;
     position: relative;
   }
 
@@ -52,6 +54,7 @@
   #root {
     overflow-x: hidden;
     max-width: 100vw;
+    min-height: 100dvh;
   }
 
   :root {

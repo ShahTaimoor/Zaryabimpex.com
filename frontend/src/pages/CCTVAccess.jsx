@@ -20,6 +20,7 @@ import {
 import { useGetCCTVOrdersQuery } from '../store/services/salesApi';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import DateFilter from '../components/DateFilter';
+import PageShell from '../components/PageShell';
 import { getDatePresets } from '../utils/dateUtils';
 import { showSuccessToast, showErrorToast } from '../utils/errorHandler';
 
@@ -207,7 +208,7 @@ const CCTVAccess = ({ tabId }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-100/90 via-slate-50 to-white">
+    <PageShell className="bg-gradient-to-b from-slate-100/90 via-slate-50 to-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -350,7 +351,7 @@ const CCTVAccess = ({ tabId }) => {
                   onScroll={updateTableScrollState}
                   className="flex-1 min-w-0 overflow-x-auto scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
                 >
-                  <table className="w-full min-w-[900px] table-auto">
+                  <table className="w-full min-w-[760px] md:min-w-[900px] table-auto">
                     <thead className="bg-slate-50/90 border-b border-slate-200">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[140px]">
@@ -676,7 +677,7 @@ const CCTVAccess = ({ tabId }) => {
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 };
 

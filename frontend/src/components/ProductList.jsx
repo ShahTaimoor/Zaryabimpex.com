@@ -51,7 +51,7 @@ export const ProductList = ({
     <div className="w-full min-w-0 max-w-full">
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto max-w-full">
         {/* Desktop Table Header - Hidden on mobile/tablet - Responsive scaling */}
-        <div className="hidden lg:block bg-gray-50 border-b border-gray-200 min-w-[960px]">
+        <div className="hidden lg:block bg-gray-50 border-b border-gray-200 min-w-[840px] xl:min-w-[960px]">
           <div className="px-3 py-2 xl:px-4 xl:py-3 2xl:px-6 2xl:py-4">
             <div className="grid grid-cols-12 gap-2 xl:gap-3 2xl:gap-4 items-center">
               <div className="col-span-1">
@@ -116,7 +116,7 @@ export const ProductList = ({
           {products.map((product, idx) => (
             <div key={product._id}>
               {/* Desktop Table Row - Responsive scaling */}
-              <div className="hidden lg:block px-3 py-2 xl:px-4 xl:py-3 2xl:px-6 2xl:py-4 hover:bg-gray-50 transition-colors min-w-[960px]">
+              <div className="hidden lg:block px-3 py-2 xl:px-4 xl:py-3 2xl:px-6 2xl:py-4 hover:bg-gray-50 transition-colors min-w-[840px] xl:min-w-[960px]">
                 <div className="grid grid-cols-12 gap-2 xl:gap-3 2xl:gap-4 items-center">
                   <div className="col-span-1 text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-500">
                     {idx + 1}

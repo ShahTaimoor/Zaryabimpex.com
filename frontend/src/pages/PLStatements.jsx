@@ -10,6 +10,7 @@ import {
 import { useGetSummaryQuery } from '../store/services/plStatementsApi';
 import { handleApiError } from '../utils/errorHandler';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import PageShell from '../components/PageShell';
 import { formatCurrency } from '../utils/formatters';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getStartOfMonth, formatDatePakistan } from '../utils/dateUtils';
@@ -101,7 +102,7 @@ export const PLStatements = () => {
     (rev > 0 ? (Number(netIncome) / rev) * 100 : 0);
 
   return (
-    <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 min-h-screen bg-gray-100">
+    <PageShell className="bg-gray-100" maxWidthClassName="max-w-6xl" contentClassName="p-4 sm:p-6 lg:p-8">
       {/* Step 1: Header */}
       <header className="mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -366,7 +367,7 @@ export const PLStatements = () => {
           </p>
         </section>
       )}
-    </div>
+    </PageShell>
   );
 };
 

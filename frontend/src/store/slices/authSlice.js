@@ -90,6 +90,34 @@ const authSlice = createSlice({
         state.error = action.error?.message || 'Login failed';
         state.isAuthenticated = false;
       })
+      .addMatcher(authApi.endpoints.verifyTwoFactor.matchPending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addMatcher(authApi.endpoints.verifyTwoFactor.matchFulfilled, (state, { payload }) => {
+        state.user = payload.user || payload;
+        state.token = payload.token || state.token || 'cookie';
+        state.isAuthenticated = true;
+        state.status = 'succeeded';
+        state.error = null;
+        if (typeof window !== 'undefined') {
+          try {
+            if (payload?.token) {
+              localStorage.setItem('authToken', payload.token);
+            }
+            if (state.user) {
+              localStorage.setItem('authUser', JSON.stringify(state.user));
+            }
+          } catch {
+            // ignore storage errors
+          }
+        }
+      })
+      .addMatcher(authApi.endpoints.verifyTwoFactor.matchRejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.error?.message || '2FA verification failed';
+        state.isAuthenticated = false;
+      })
       .addMatcher(authApi.endpoints.currentUser.matchFulfilled, (state, { payload }) => {
         state.user = payload.user || payload;
         state.token = state.token || 'cookie';

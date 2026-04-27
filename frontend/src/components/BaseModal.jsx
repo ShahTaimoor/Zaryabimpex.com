@@ -88,7 +88,7 @@ const BaseModal = ({
 
   const wrapperClasses =
     variant === 'centered'
-      ? 'flex items-center justify-center p-4 min-h-screen'
+      ? 'flex items-center justify-center p-4 min-h-[100dvh]'
       : 'overflow-y-auto h-full w-full p-4';
 
   const modalContent = (

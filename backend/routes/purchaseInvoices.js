@@ -72,7 +72,7 @@ router.get('/', [
   ...validateDateParams,
   handleValidationErrors,
   processDateFilter(['invoiceDate', 'createdAt']),
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -93,15 +93,14 @@ router.get('/', [
       pagination: result.pagination
     });
   } catch (error) {
-    console.error('Error fetching purchase invoices:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    return next(error);
   }
 });
 
 // @route   POST /api/purchase-invoices/sync-ledger
 // @desc    Sync purchase invoices to ledger: update existing entries + post missing
 // @access  Private
-router.post('/sync-ledger', auth, requirePermission('view_reports'), async (req, res) => {
+router.post('/sync-ledger', auth, requirePermission('view_reports'), async (req, res, next) => {
   try {
     const dateFrom = req.query.dateFrom || req.body?.dateFrom;
     const dateTo = req.query.dateTo || req.body?.dateTo;
@@ -112,8 +111,7 @@ router.post('/sync-ledger', auth, requirePermission('view_reports'), async (req,
       ...result
     });
   } catch (error) {
-    console.error('Sync purchase invoices ledger error:', error);
-    return res.status(500).json({ success: false, message: error.message || 'Failed to sync purchase invoices ledger.' });
+    return next(error);
   }
 });
 
@@ -124,7 +122,7 @@ router.get('/:id', [
   auth,
   validateUuidParam('id'),
   handleValidationErrors
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const invoice = await purchaseInvoiceService.getPurchaseInvoiceById(req.params.id);
 
@@ -133,8 +131,7 @@ router.get('/:id', [
     if (error.message === 'Purchase invoice not found') {
       return res.status(404).json({ message: 'Purchase invoice not found' });
     }
-    console.error('Error fetching purchase invoice:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    return next(error);
   }
 });
 
@@ -165,7 +162,7 @@ router.post('/', [
     }),
   body('invoiceDate').optional().isISO8601().withMessage('Valid invoice date required (ISO 8601 format)'),
   handleValidationErrors
-], async (req, res) => {
+], async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -326,8 +323,7 @@ router.post('/', [
       inventoryUpdates: inventoryUpdates
     });
   } catch (error) {
-    console.error('Error creating purchase invoice:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    return next(error);
   }
 });
 

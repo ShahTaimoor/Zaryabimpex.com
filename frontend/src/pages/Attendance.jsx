@@ -31,6 +31,7 @@ import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { formatDate, formatTime } from '../utils/formatters';
 import { toast } from 'sonner';
+import PageShell from '../components/PageShell';
 
 const Attendance = () => {
   const { user, hasPermission } = useAuth();
@@ -318,7 +319,7 @@ const Attendance = () => {
   const lateArrivals = getLateArrivals();
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-8 bg-gray-50/30 min-h-screen">
+    <PageShell className="bg-gray-50/30" maxWidthClassName="max-w-7xl" contentClassName="space-y-6 p-4 md:p-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -682,7 +683,7 @@ const Attendance = () => {
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 };
 
