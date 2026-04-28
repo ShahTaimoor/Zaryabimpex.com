@@ -51,7 +51,7 @@ router.put('/:id', [
   body('firstName').optional().trim().isLength({ min: 1 }).withMessage('First name is required'),
   body('lastName').optional().trim().isLength({ min: 1 }).withMessage('Last name is required'),
   body('email').optional().isEmail().normalizeEmail().withMessage('Valid email is required'),
-  body('role').optional().isIn(['admin', 'manager', 'cashier', 'inventory', 'viewer', 'employee']).withMessage('Invalid role'),
+  body('role').optional().isIn(['admin', 'manager', 'cashier', 'inventory', 'viewer', 'employee', 'sales_person']).withMessage('Invalid role'),
   body('status').optional().isIn(['active', 'inactive', 'suspended']).withMessage('Invalid status'),
 ], async (req, res) => {
   try {

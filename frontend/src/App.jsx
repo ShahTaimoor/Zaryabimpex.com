@@ -88,11 +88,11 @@ function App() {
                     <Routes>
                       <Route path="/" element={<Navigate to="/dashboard" replace />} />
                       <Route path="/dashboard" element={<Suspense fallback={<LoadingPage />}><Dashboard /></Suspense>} />
-                      <Route path="/sales-orders" element={<Suspense fallback={<LoadingPage />}><SalesOrders /></Suspense>} />
-                      <Route path="/sales" element={<Suspense fallback={<LoadingPage />}><Sales /></Suspense>} />
-                      <Route path="/purchase-orders" element={<Suspense fallback={<LoadingPage />}><PurchaseOrders /></Suspense>} />
-                      <Route path="/purchase-invoices" element={<Suspense fallback={<LoadingPage />}><PurchaseInvoices /></Suspense>} />
-                      <Route path="/purchase" element={<Suspense fallback={<LoadingPage />}><Purchase /></Suspense>} />
+                      <Route path="/sales-orders" element={<ProtectedRoute permissionAny={[PERMISSIONS.VIEW_SALES_ORDERS, PERMISSIONS.CREATE_SALES_ORDERS, PERMISSIONS.EDIT_SALES_ORDERS]}><Suspense fallback={<LoadingPage />}><SalesOrders /></Suspense></ProtectedRoute>} />
+                      <Route path="/sales" element={<ProtectedRoute permissionAny={[PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS, PERMISSIONS.MANAGE_SALES]}><Suspense fallback={<LoadingPage />}><Sales /></Suspense></ProtectedRoute>} />
+                      <Route path="/purchase-orders" element={<ProtectedRoute permissionAny={[PERMISSIONS.VIEW_PURCHASE_ORDERS, PERMISSIONS.CREATE_PURCHASE_ORDERS, PERMISSIONS.EDIT_PURCHASE_ORDERS]}><Suspense fallback={<LoadingPage />}><PurchaseOrders /></Suspense></ProtectedRoute>} />
+                      <Route path="/purchase-invoices" element={<ProtectedRoute permissionAny={[PERMISSIONS.VIEW_PURCHASE_INVOICES, PERMISSIONS.CREATE_PURCHASE_INVOICES, PERMISSIONS.EDIT_PURCHASE_INVOICES]}><Suspense fallback={<LoadingPage />}><PurchaseInvoices /></Suspense></ProtectedRoute>} />
+                      <Route path="/purchase" element={<ProtectedRoute permissionAny={[PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS]}><Suspense fallback={<LoadingPage />}><Purchase /></Suspense></ProtectedRoute>} />
                       <Route path="/products" element={<ProtectedRoute permission={PERMISSIONS.VIEW_PRODUCTS}><Suspense fallback={<LoadingPage />}><Products /></Suspense></ProtectedRoute>} />
                       <Route path="/product-variants" element={<ProtectedRoute permission={PERMISSIONS.VIEW_PRODUCTS}><Suspense fallback={<LoadingPage />}><ProductVariants /></Suspense></ProtectedRoute>} />
                       <Route path="/product-transformations" element={<ProtectedRoute permission={PERMISSIONS.VIEW_PRODUCTS}><Suspense fallback={<LoadingPage />}><ProductTransformations /></Suspense></ProtectedRoute>} />
@@ -101,7 +101,7 @@ function App() {
                       <Route path="/suppliers" element={<ProtectedRoute permission={PERMISSIONS.VIEW_PRODUCTS}><Suspense fallback={<LoadingPage />}><Suppliers /></Suspense></ProtectedRoute>} />
                       <Route path="/investors" element={<ProtectedRoute permission={PERMISSIONS.VIEW_REPORTS}><Suspense fallback={<LoadingPage />}><Investors /></Suspense></ProtectedRoute>} />
                       <Route path="/drop-shipping" element={<ProtectedRoute permission={PERMISSIONS.VIEW_SALES}><Suspense fallback={<LoadingPage />}><DropShipping /></Suspense></ProtectedRoute>} />
-                      <Route path="/sales-invoices" element={<ProtectedRoute permission={PERMISSIONS.VIEW_SALES}><Suspense fallback={<LoadingPage />}><SalesInvoices /></Suspense></ProtectedRoute>} />
+                      <Route path="/sales-invoices" element={<ProtectedRoute permissionAny={[PERMISSIONS.VIEW_SALES_INVOICES, PERMISSIONS.CREATE_SALES_INVOICES, PERMISSIONS.EDIT_SALES_INVOICES]}><Suspense fallback={<LoadingPage />}><SalesInvoices /></Suspense></ProtectedRoute>} />
                       <Route path="/inventory" element={<ProtectedRoute permission={PERMISSIONS.VIEW_INVENTORY}><Suspense fallback={<LoadingPage />}><Inventory /></Suspense></ProtectedRoute>} />
                       <Route path="/inventory-alerts" element={<ProtectedRoute permission={PERMISSIONS.VIEW_INVENTORY}><Suspense fallback={<LoadingPage />}><InventoryAlerts /></Suspense></ProtectedRoute>} />
                       <Route path="/customer-analytics" element={<ProtectedRoute permission={PERMISSIONS.VIEW_REPORTS}><Suspense fallback={<LoadingPage />}><CustomerAnalytics /></Suspense></ProtectedRoute>} />

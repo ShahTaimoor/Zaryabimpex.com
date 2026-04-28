@@ -88,14 +88,18 @@ export const useAuth = () => {
   };
 
   const logout = async () => {
+    // Clear local session first to avoid role-specific UI race conditions
+    // where user state can appear "stuck" during async logout calls.
+    dispatch(logoutAction());
+    dispatch(authApi.util.resetApiState());
+    navigate('/login', { replace: true });
+    toast.success('Logged out successfully');
+
     try {
       await logoutMutation().unwrap();
     } catch (error) {
       // Continue with logout even if API call fails
     }
-    dispatch(logoutAction());
-    toast.success('Logged out successfully');
-    navigate('/login', { replace: true });
   };
 
   const updateUser = (userData) => {

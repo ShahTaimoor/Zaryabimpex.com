@@ -10,46 +10,52 @@ import { toast } from 'sonner';
 export const BarcodeGenerator = ({ 
   product, 
   barcodeValue, 
-  format = 'CODE128',
   onClose 
 }) => {
   const canvasRef = useRef(null);
   const [copied, setCopied] = useState(false);
-  const [barcodeFormat, setBarcodeFormat] = useState(format);
   const [displayValue, setDisplayValue] = useState(barcodeValue || product?.barcode || '');
 
-  const formats = [
-    { value: 'CODE128', label: 'CODE128 (Recommended)' },
-    { value: 'CODE39', label: 'CODE39' },
-    { value: 'EAN13', label: 'EAN-13' },
-    { value: 'EAN8', label: 'EAN-8' },
-    { value: 'UPC', label: 'UPC-A' },
-    { value: 'ITF14', label: 'ITF-14' },
-    { value: 'MSI', label: 'MSI' },
-    { value: 'pharmacode', label: 'Pharmacode' },
-    { value: 'codabar', label: 'Codabar' }
-  ];
+  const normalizeBarcodeValue = (value) => {
+    return String(value || '').trim().replace(/\s+/g, '');
+  };
+
+  const getSafeBarcodeValue = (value) => {
+    const normalized = normalizeBarcodeValue(value);
+    // CODE128 supports full ASCII; remove control chars for printer/scanner stability.
+    return normalized.replace(/[\x00-\x1F\x7F]/g, '');
+  };
 
   useEffect(() => {
     generateBarcode();
-  }, [displayValue, barcodeFormat]);
+  }, [displayValue]);
 
   const generateBarcode = () => {
     if (!canvasRef.current || !displayValue) return;
 
     try {
-      JsBarcode(canvasRef.current, displayValue, {
-        format: barcodeFormat,
-        width: 2,
-        height: 100,
+      const safeValue = getSafeBarcodeValue(displayValue);
+      if (!safeValue) return;
+
+      // Keep scan reliability high by forcing CODE128 and print-safe dimensions.
+      JsBarcode(canvasRef.current, safeValue, {
+        format: 'CODE128',
+        width: 2.5,
+        height: 70,
         displayValue: true,
-        fontSize: 16,
-        margin: 10,
+        fontSize: 14,
+        margin: 8, // Quiet zone around bars for scanner reliability
+        marginLeft: 8,
+        marginRight: 8,
+        marginTop: 8,
+        marginBottom: 8,
         background: '#ffffff',
-        lineColor: '#000000'
+        lineColor: '#000000',
+        textAlign: 'center',
+        flat: true
       });
     } catch (error) {
-      toast.error(`Invalid barcode format for ${barcodeFormat}. Please try a different format.`);
+      toast.error('Unable to generate barcode. Please use letters/numbers only.');
     }
   };
 
@@ -72,27 +78,66 @@ export const BarcodeGenerator = ({
 
     const canvas = canvasRef.current;
     const printWindow = window.open('', '_blank');
+    const barcodeDataUrl = canvas.toDataURL('image/png');
+    const printWidth = canvas.width;
+    const printHeight = canvas.height;
     printWindow.document.write(`
       <html>
         <head>
           <title>Barcode Print</title>
           <style>
+            @page {
+              size: 80mm auto;
+              margin: 0;
+            }
+            @media print {
+              html,
+              body {
+                width: 80mm;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+                background: #fff !important;
+                print-color-adjust: exact !important;
+                -webkit-print-color-adjust: exact !important;
+              }
+            }
             body {
               margin: 0;
-              padding: 20px;
+              padding: 0;
               display: flex;
               justify-content: center;
               align-items: center;
-              min-height: 100dvh;
+              min-height: 100%;
+              background: #fff;
             }
-            img {
-              max-width: 100%;
-              height: auto;
+            .print-container {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              width: 76mm;
+              padding: 2mm;
+              margin: 0 auto;
+              box-sizing: border-box;
+              background: #fff;
+              page-break-after: avoid;
+              page-break-inside: avoid;
+            }
+            img.barcode-img {
+              width: ${printWidth}px;
+              height: ${printHeight}px;
+              object-fit: contain;
+              image-rendering: pixelated;
+              image-rendering: crisp-edges;
+              transform: none !important;
+              filter: contrast(100%) brightness(100%);
             }
           </style>
         </head>
         <body>
-          <img src="${canvas.toDataURL('image/png')}" alt="Barcode" />
+          <div class="print-container">
+            <img class="barcode-img" src="${barcodeDataUrl}" alt="Barcode" />
+          </div>
           <script>
             window.onload = function() {
               window.print();
@@ -105,8 +150,8 @@ export const BarcodeGenerator = ({
   };
 
   const generateRandomBarcode = () => {
-    // Generate a random 13-digit barcode (EAN-13 format)
-    const random = Math.floor(1000000000000 + Math.random() * 9000000000000);
+    // Generate a random value suitable for CODE128.
+    const random = Math.floor(100000000 + Math.random() * 900000000);
     setDisplayValue(random.toString());
   };
 
@@ -146,7 +191,7 @@ export const BarcodeGenerator = ({
           <div className="flex space-x-2">
             <input
               type="text"
-              value={displayValue}
+            value={displayValue}
               onChange={(e) => setDisplayValue(e.target.value)}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="Enter barcode value"
@@ -166,21 +211,27 @@ export const BarcodeGenerator = ({
             Barcode Format
           </label>
           <select
-            value={barcodeFormat}
-            onChange={(e) => setBarcodeFormat(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            value="CODE128"
+            onChange={() => {}}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-gray-50"
+            disabled
           >
-            {formats.map(format => (
-              <option key={format.value} value={format.value}>
-                {format.label}
-              </option>
-            ))}
+            <option value="CODE128">CODE128 (Scanner-safe default)</option>
           </select>
         </div>
 
         {/* Barcode Display */}
-        <div className="flex justify-center p-4 bg-gray-50 rounded-lg">
-          <canvas ref={canvasRef} className="max-w-full" />
+        <div className="flex justify-center p-4 bg-gray-50 rounded-lg overflow-auto">
+          <canvas
+            ref={canvasRef}
+            style={{
+              maxWidth: 'none',
+              width: 'auto',
+              height: 'auto',
+              imageRendering: 'pixelated',
+              transform: 'none'
+            }}
+          />
         </div>
 
         {/* Actions */}

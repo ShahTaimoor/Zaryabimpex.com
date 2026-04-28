@@ -682,6 +682,25 @@ export const Settings2 = () => {
       view_reports: true,
       view_pl_statements: true, view_balance_sheets: true, view_general_reports: true
     },
+    sales_person: {
+      // Sales Person - sales and purchase transaction workflow only
+      create_sales_orders: true,
+      edit_sales_orders: true,
+      create_orders: true,
+      edit_orders: true,
+      create_sales_invoices: true,
+      edit_sales_invoices: true,
+      create_purchase_orders: true,
+      edit_purchase_orders: true,
+      create_purchase_invoices: true,
+      edit_purchase_invoices: true,
+      // View permissions so allowed pages/modules are visible
+      view_orders: true,
+      view_sales_orders: true,
+      view_sales_invoices: true,
+      view_purchase_orders: true,
+      view_purchase_invoices: true
+    },
     employee: {
       view_sales: true,
       manage_sales: true
@@ -1819,6 +1838,7 @@ export const Settings2 = () => {
                           <option value="employee">Employee — Restricted access to Sales only</option>
                           <option value="manager">Manager — Full back-office operations</option>
                           <option value="inventory">Inventory — Manage stock & ledgers</option>
+                          <option value="sales_person">Sales Person — Sales & purchase transaction workflow</option>
                           <option value="admin">Administrator — Full uninhibited access</option>
                           <option value="viewer">Viewer — Readonly reporting access</option>
                         </select>

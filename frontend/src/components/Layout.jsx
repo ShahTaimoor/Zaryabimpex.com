@@ -38,7 +38,6 @@ import {
   ClipboardList
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { toast } from 'sonner';
 import ErrorBoundary from './ErrorBoundary';
 import MobileNavigation from './MobileNavigation';
 import { loadSidebarConfig } from './MultiTabLayout';
@@ -55,22 +54,40 @@ export const navigation = [
   {
     name: 'Sales',
     icon: ShoppingCart,
-    permission: PERMISSIONS.VIEW_SALES,
+    permissionAny: [
+      PERMISSIONS.VIEW_SALES_ORDERS,
+      PERMISSIONS.VIEW_SALES_INVOICES,
+      PERMISSIONS.CREATE_SALES_ORDERS,
+      PERMISSIONS.EDIT_SALES_ORDERS,
+      PERMISSIONS.CREATE_SALES_INVOICES,
+      PERMISSIONS.EDIT_SALES_INVOICES,
+      PERMISSIONS.CREATE_ORDERS,
+      PERMISSIONS.EDIT_ORDERS,
+    ],
     children: [
       { name: 'Sales Orders', href: '/sales-orders', icon: FileText, permission: PERMISSIONS.VIEW_SALES_ORDERS },
-      { name: 'Sales', href: '/sales', icon: CreditCard, permission: PERMISSIONS.MANAGE_SALES },
-      { name: 'Sales Invoices', href: '/sales-invoices', icon: Search, permission: PERMISSIONS.VIEW_SALES_ORDERS },
+      { name: 'Sales', href: '/sales', icon: CreditCard, permissionAny: [PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS, PERMISSIONS.MANAGE_SALES] },
+      { name: 'Sales Invoices', href: '/sales-invoices', icon: Search, permission: PERMISSIONS.VIEW_SALES_INVOICES },
     ]
   },
 
   {
     name: 'Purchase',
     icon: Truck,
-    permission: PERMISSIONS.MANAGE_INVENTORY,
+    permissionAny: [
+      PERMISSIONS.VIEW_PURCHASE_ORDERS,
+      PERMISSIONS.VIEW_PURCHASE_INVOICES,
+      PERMISSIONS.CREATE_PURCHASE_ORDERS,
+      PERMISSIONS.EDIT_PURCHASE_ORDERS,
+      PERMISSIONS.CREATE_PURCHASE_INVOICES,
+      PERMISSIONS.EDIT_PURCHASE_INVOICES,
+      PERMISSIONS.CREATE_ORDERS,
+      PERMISSIONS.EDIT_ORDERS,
+    ],
     children: [
-      { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText, permission: PERMISSIONS.MANAGE_INVENTORY },
-      { name: 'Purchase', href: '/purchase', icon: Truck, permission: PERMISSIONS.MANAGE_INVENTORY },
-      { name: 'Purchase Invoices', href: '/purchase-invoices', icon: Search, permission: PERMISSIONS.MANAGE_INVENTORY },
+      { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText, permissionAny: [PERMISSIONS.VIEW_PURCHASE_ORDERS, PERMISSIONS.CREATE_PURCHASE_ORDERS, PERMISSIONS.EDIT_PURCHASE_ORDERS] },
+      { name: 'Purchase', href: '/purchase', icon: Truck, permissionAny: [PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS] },
+      { name: 'Purchase Invoices', href: '/purchase-invoices', icon: Search, permissionAny: [PERMISSIONS.VIEW_PURCHASE_INVOICES, PERMISSIONS.CREATE_PURCHASE_INVOICES, PERMISSIONS.EDIT_PURCHASE_INVOICES] },
       { name: 'Products by Supplier', href: '/purchase-by-supplier', icon: BarChart3, permission: PERMISSIONS.VIEW_REPORTS },
     ]
   },
@@ -209,18 +226,28 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, level = 0, categoryTre
     }
   }, [item, isActivePath, hasChildren]);
 
+  const canViewItem = (target) => {
+    if (target.permissionAny?.length) {
+      return target.permissionAny.some((permissionKey) => hasPermission(user, permissionKey));
+    }
+    if (target.permission) {
+      return hasPermission(user, target.permission);
+    }
+    return true;
+  };
+
   // Check visibility based on config
   if (sidebarConfig && sidebarConfig[item.name] === false) return null;
 
   // Check visibility based on RBAC permissions
-  if (item.permission && !hasPermission(user, item.permission)) return null;
+  if (!canViewItem(item)) return null;
 
   // If group, check if any child is visible
   if (hasChildren) {
     const hasVisibleChild = item.children.some(child => {
       // Must pass both sidebarConfig and RBAC permission check
       const configVisible = sidebarConfig?.[child.name] !== false;
-      const permissionVisible = !child.permission || hasPermission(user, child.permission);
+      const permissionVisible = canViewItem(child);
       return configVisible && permissionVisible;
     });
     if (!hasVisibleChild) return null;
@@ -409,9 +436,8 @@ export const Layout = ({ children }) => {
     return adaptApiCategoryTreeForSidebar(roots);
   }, [categoryTreeRaw]);
 
-  const handleLogout = () => {
-    logout();
-    toast.success('Logged out successfully');
+  const handleLogout = async () => {
+    await logout();
   };
 
   const isActivePath = (path) => location.pathname === path;

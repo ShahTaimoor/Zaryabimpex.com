@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Camera, X, AlertCircle, CheckCircle } from 'lucide-react';
 
 /**
@@ -81,8 +81,17 @@ export const BarcodeScanner = ({
         },
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 }
-          // formatsToSupport is optional - library supports all formats by default
+          qrbox: { width: 250, height: 250 },
+          // Bias toward 1D barcode reliability while keeping broad scanner compatibility.
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.QR_CODE,
+          ]
         },
         (decodedText, decodedResult) => {
           // Success callback

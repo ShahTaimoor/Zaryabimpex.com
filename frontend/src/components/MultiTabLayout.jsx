@@ -502,9 +502,8 @@ export const MultiTabLayout = ({ children }) => {
   }, [location.pathname, sidebarConfig, flattenedNavigation, user, hasPermission, navigate]);
 
 
-  const handleLogout = () => {
-    logout();
-    toast.success('Logged out successfully');
+  const handleLogout = async () => {
+    await logout();
   };
 
   const reuseNavigationPaths = new Set([

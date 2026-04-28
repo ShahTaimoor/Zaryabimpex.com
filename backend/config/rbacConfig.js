@@ -9,7 +9,8 @@ const ROLES = {
   CASHIER: 'cashier',
   EMPLOYEE: 'employee',
   INVENTORY: 'inventory',
-  VIEWER: 'viewer'
+  VIEWER: 'viewer',
+  SALES_PERSON: 'sales_person'
 };
 
 const PERMISSIONS = {
@@ -88,6 +89,11 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.VIEW_PRODUCTS,
     PERMISSIONS.VIEW_INVENTORY,
     PERMISSIONS.VIEW_SALES
+  ],
+
+  [ROLES.SALES_PERSON]: [
+    PERMISSIONS.VIEW_DASHBOARD,
+    PERMISSIONS.VIEW_SALES_ORDERS
   ]
 };
 
