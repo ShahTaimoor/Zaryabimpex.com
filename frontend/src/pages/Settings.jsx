@@ -1191,12 +1191,22 @@ export const Settings2 = () => {
     }
   };
 
-  const handlePermissionChange = (permissionKey, isChecked) => {
+  const handlePermissionChange = (permissionKey, isChecked, subcategoryKeys = []) => {
+    const permissionUpdates = {
+      [permissionKey]: isChecked
+    };
+
+    if (subcategoryKeys.length > 0) {
+      subcategoryKeys.forEach((subcategoryKey) => {
+        permissionUpdates[subcategoryKey] = isChecked;
+      });
+    }
+
     setNewUserData(prev => ({
       ...prev,
       permissions: {
         ...prev.permissions,
-        [permissionKey]: isChecked
+        ...permissionUpdates
       }
     }));
 
@@ -1206,7 +1216,7 @@ export const Settings2 = () => {
         ...prev,
         [newUserData.role]: {
           ...prev[newUserData.role],
-          [permissionKey]: isChecked
+          ...permissionUpdates
         }
       }));
     }
@@ -1947,7 +1957,11 @@ export const Settings2 = () => {
                                           <input
                                             type="checkbox"
                                             checked={newUserData.permissions[permission.key] || false}
-                                            onChange={(e) => handlePermissionChange(permission.key, e.target.checked)}
+                                            onChange={(e) => handlePermissionChange(
+                                              permission.key,
+                                              e.target.checked,
+                                              permission.subcategories?.map((subcategory) => subcategory.key) || []
+                                            )}
                                             className="w-4 h-4 rounded border-2 border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 transition-all checked:border-blue-600 cursor-pointer"
                                           />
                                         </div>
