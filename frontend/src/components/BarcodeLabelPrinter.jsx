@@ -278,7 +278,7 @@ export const BarcodeLabelPrinter = ({
                     <img class="barcode-image" width="${canvas.width}" height="${canvas.height}" src="${barcodeDataUrl}" alt="Barcode" />
                   </div>
                   ${includePrice && product.pricing?.retail ? 
-                    `<div class="label-price">$${product.pricing.retail.toFixed(2)}</div>` : ''}
+                    `<div class="label-price">${Number(product.pricing.retail).toFixed(2)}</div>` : ''}
                 </div>
               `;
             }).join('')}
@@ -395,7 +395,7 @@ export const BarcodeLabelPrinter = ({
                     <img class="barcode-image" width="${canvas.width}" height="${canvas.height}" src="${barcodeDataUrl}" alt="Barcode" />
                   </div>
                   ${includePrice && product.pricing?.retail ? 
-                    `<div class="label-price">$${product.pricing.retail.toFixed(2)}</div>` : ''}
+                    `<div class="label-price">${Number(product.pricing.retail).toFixed(2)}</div>` : ''}
                 </div>
               `;
             }).join('')}
