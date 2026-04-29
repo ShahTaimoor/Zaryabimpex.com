@@ -250,6 +250,7 @@ export const {
   useGetSalesOrdersQuery,
   useLazyGetSalesOrdersQuery,
   useGetSalesOrderQuery,
+  useLazyGetSalesOrderQuery,
   useLazyGetStockStatusQuery,
   useCreateSalesOrderMutation,
   useUpdateSalesOrderMutation,
