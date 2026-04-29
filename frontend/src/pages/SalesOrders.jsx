@@ -67,7 +67,7 @@ import {
   useConfirmSalesOrderMutation,
   useCancelSalesOrderMutation,
   useCloseSalesOrderMutation,
-
+  useLazyGetSalesOrderQuery,
 } from '../store/services/salesOrdersApi';
 import {
   OrderConfirmationStatusBadge,
@@ -138,6 +138,7 @@ const SalesOrders = ({ tabId }) => {
   const taxSystemEnabled = companySettings.taxEnabled === true;
   const globalTaxPct = Math.min(100, Math.max(0, Number(companySettings.defaultTaxRate ?? 0)));
   const effectiveGlobalTaxPct = taxSystemEnabled ? globalTaxPct : 0;
+  const [fetchSalesOrderById] = useLazyGetSalesOrderQuery();
 
   // Calculate default date range (14 days ago to today) using Pakistan timezone
   const today = getCurrentDatePakistan();
@@ -3153,18 +3154,35 @@ const SalesOrders = ({ tabId }) => {
                               <Printer className="h-4 w-4" />
                             </button>
                             <ExcelExportButton
-                              getData={() => {
-                                const payload = getInvoicePdfPayload(order, companySettings, 'Sales Order', 'Customer');
-                                return {
-                                  ...payload,
-                                  filename: `Sales_Order_${order.soNumber || order.orderNumber || order._id}.xlsx`
-                                };
+                              getData={async () => {
+                                try {
+                                  const result = await fetchSalesOrderById(order.id || order._id).unwrap();
+                                  const freshOrder = result?.order || result?.data?.salesOrder || result?.data || result || order;
+                                  const payload = getInvoicePdfPayload(freshOrder, companySettings, 'Sales Order', 'Customer');
+                                  return {
+                                    ...payload,
+                                    filename: `Sales_Order_${order.soNumber || order.orderNumber || order._id}.xlsx`
+                                  };
+                                } catch (err) {
+                                  return {
+                                    ...getInvoicePdfPayload(order, companySettings, 'Sales Order', 'Customer'),
+                                    filename: `Sales_Order_${order.soNumber || order.orderNumber || order._id}.xlsx`
+                                  };
+                                }
                               }}
                               label=""
                               className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-green-600 hover:text-green-800 px-1 py-1"
                             />
                             <PdfExportButton
-                              getData={() => getInvoicePdfPayload(order, companySettings, 'Sales Order', 'Customer')}
+                              getData={async () => {
+                                try {
+                                  const result = await fetchSalesOrderById(order.id || order._id).unwrap();
+                                  const freshOrder = result?.order || result?.data?.salesOrder || result?.data || result || order;
+                                  return getInvoicePdfPayload(freshOrder, companySettings, 'Sales Order', 'Customer');
+                                } catch (err) {
+                                  return getInvoicePdfPayload(order, companySettings, 'Sales Order', 'Customer');
+                                }
+                              }}
                               label=""
                               className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-red-600 hover:text-red-800 px-1 py-1"
                             />

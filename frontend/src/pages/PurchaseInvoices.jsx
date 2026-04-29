@@ -810,18 +810,35 @@ export const PurchaseInvoices = () => {
                         <Printer className="h-4 w-4" />
                       </button>
                       <ExcelExportButton
-                        getData={() => {
-                          const payload = getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier');
-                          return {
-                            ...payload,
-                            filename: `Purchase_Invoice_${invoice.invoiceNumber}.xlsx`
-                          };
+                        getData={async () => {
+                          try {
+                            const result = await getPurchaseInvoiceById(invoice.id || invoice._id).unwrap();
+                            const fullInvoice = result?.invoice || result?.data?.invoice || result?.data || result || invoice;
+                            const payload = getInvoicePdfPayload(fullInvoice, companySettings, 'Purchase Invoice', 'Supplier');
+                            return {
+                              ...payload,
+                              filename: `Purchase_Invoice_${invoice.invoiceNumber}.xlsx`
+                            };
+                          } catch (err) {
+                            return {
+                              ...getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier'),
+                              filename: `Purchase_Invoice_${invoice.invoiceNumber}.xlsx`
+                            };
+                          }
                         }}
                         label=""
                         className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-green-600 hover:text-green-800 px-1 py-1"
                       />
                       <PdfExportButton
-                        getData={() => getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier')}
+                        getData={async () => {
+                          try {
+                            const result = await getPurchaseInvoiceById(invoice.id || invoice._id).unwrap();
+                            const fullInvoice = result?.invoice || result?.data?.invoice || result?.data || result || invoice;
+                            return getInvoicePdfPayload(fullInvoice, companySettings, 'Purchase Invoice', 'Supplier');
+                          } catch (err) {
+                            return getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier');
+                          }
+                        }}
                         label=""
                         className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-red-600 hover:text-red-800 px-1 py-1"
                       />

@@ -733,18 +733,35 @@ export const Orders = () => {
                       <button onClick={() => handleView(order)} className="p-1 text-primary-600 hover:text-primary-800" title="View"><Eye className="h-4 w-4" /></button>
                       <button onClick={() => handlePrint(order)} className="p-1 text-green-600 hover:text-green-800" title="Print"><Printer className="h-4 w-4" /></button>
                       <ExcelExportButton
-                        getData={() => {
-                          const payload = getInvoicePdfPayload(order, companySettings, 'Sales Invoice', 'Customer');
-                          return {
-                            ...payload,
-                            filename: `Invoice_${order.order_number ?? order.orderNumber}.xlsx`
-                          };
+                        getData={async () => {
+                          try {
+                            const result = await fetchOrderById(order._id || order.id).unwrap();
+                            const freshOrder = result?.order || result?.data?.order || result || order;
+                            const payload = getInvoicePdfPayload(freshOrder, companySettings, 'Sales Invoice', 'Customer');
+                            return {
+                              ...payload,
+                              filename: `Invoice_${order.order_number ?? order.orderNumber}.xlsx`
+                            };
+                          } catch (err) {
+                            return {
+                              ...getInvoicePdfPayload(order, companySettings, 'Sales Invoice', 'Customer'),
+                              filename: `Invoice_${order.order_number ?? order.orderNumber}.xlsx`
+                            };
+                          }
                         }}
                         label=""
                         className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-green-600 hover:text-green-800 px-1 py-1"
                       />
                       <PdfExportButton
-                        getData={() => getInvoicePdfPayload(order, companySettings, 'Sales Invoice', 'Customer')}
+                        getData={async () => {
+                          try {
+                            const result = await fetchOrderById(order._id || order.id).unwrap();
+                            const freshOrder = result?.order || result?.data?.order || result || order;
+                            return getInvoicePdfPayload(freshOrder, companySettings, 'Sales Invoice', 'Customer');
+                          } catch (err) {
+                            return getInvoicePdfPayload(order, companySettings, 'Sales Invoice', 'Customer');
+                          }
+                        }}
                         label=""
                         className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-red-600 hover:text-red-800 px-1 py-1"
                       />
