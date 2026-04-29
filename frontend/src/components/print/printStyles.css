@@ -21,20 +21,10 @@
     display: none !important;
   }
 
-  /* Reset page */
+  /* Reset page to auto to allow component-specific overrides */
   @page {
-    size: A4 portrait;
+    size: auto;
     margin: 10mm;
-  }
-
-  @page.a4-landscape {
-    size: A4 landscape;
-    margin: 10mm;
-  }
-
-  @page.thermal {
-    size: 80mm auto;
-    margin: 2mm;
   }
 
   /* Base body reset */

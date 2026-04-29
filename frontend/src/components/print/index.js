@@ -8,6 +8,7 @@
 export { default as PrintModal } from './PrintModal';
 export { default as ReturnPrintContent } from './ReturnPrintContent';
 export { default as PrintWrapper } from './PrintWrapper';
+export { default as ThermalReceipt } from './ThermalReceipt';
 export { default as PrintTrigger } from './PrintTrigger';
 export { PrintLayoutA4, PrintLayoutThermal, getPrintLayout } from './PrintLayout';
 export { useReactToPrint } from './PrintWrapper';

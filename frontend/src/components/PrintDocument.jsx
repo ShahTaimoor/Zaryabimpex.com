@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { formatQuantityDisplay } from '../utils/dualUnitUtils';
+import ThermalReceipt from './print/ThermalReceipt';
 
 const PrintDocument = ({
     companySettings,
@@ -51,7 +52,9 @@ const PrintDocument = ({
     const saleOrPurchaseClass = !isReceipt ? (isSale ? ' print-document--sale' : isPurchase ? ' print-document--purchase' : '') : '';
     const receiptTypeClass = isReceipt ? (isBank ? ' print-document--bank' : isCash ? ' print-document--cash' : '') : '';
 
-    const printClassName = `print-document${invoiceLayout === 'layout2' ? ' print-document--layout2' : ''}${isReceipt ? ' print-document--receipt' : ''}${isMobileLayout ? ' print-document--mobile' : ''}${saleOrPurchaseClass}${receiptTypeClass}`;
+    const isCompact = invoiceLayout === 'compact';
+
+    const printClassName = `print-document${invoiceLayout === 'layout2' ? ' print-document--layout2' : ''}${isReceipt ? ' print-document--receipt' : ''}${isCompact ? ' print-document--compact' : ''}${isMobileLayout ? ' print-document--mobile' : ''}${saleOrPurchaseClass}${receiptTypeClass}`;
 
     const formatDate = (date) =>
         new Date(date || new Date()).toLocaleDateString('en-GB', {
@@ -628,6 +631,23 @@ const PrintDocument = ({
                         </table>
                     </div>
                 </div>
+            </div>
+        );
+    }
+
+    // ==========================================
+    // Layout: Compact Thermal Receipt
+    // ==========================================
+    if (invoiceLayout === 'compact') {
+        return (
+            <div className={printClassName}>
+                {children}
+                <ThermalReceipt
+                    companySettings={safeCompanySettings}
+                    orderData={orderData}
+                    printSettings={printSettings}
+                    documentTitle={resolvedDocumentTitle}
+                />
             </div>
         );
     }

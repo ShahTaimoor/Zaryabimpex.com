@@ -28,7 +28,8 @@ const PrintModal = ({
   autoPrint = false,
   zIndex = 50,
   getPdfData,
-  onAfterPrint
+  onAfterPrint,
+  pageStyle = PRINT_PAGE_STYLE
 }) => {
   const printRef = useRef(null);
 
@@ -81,7 +82,7 @@ const PrintModal = ({
       <PrintWrapper
         ref={printRef}
         documentTitle={documentTitle}
-        pageStyle={PRINT_PAGE_STYLE}
+        pageStyle={pageStyle}
         onAfterPrint={onAfterPrint}
       >
         {hasData ? (

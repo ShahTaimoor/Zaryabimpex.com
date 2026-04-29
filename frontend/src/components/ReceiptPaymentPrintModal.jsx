@@ -4,6 +4,7 @@ import { useGetBalanceSummaryQuery } from '../store/services/customerBalancesApi
 import { useGetBalanceSummaryQuery as useGetSupplierBalanceSummaryQuery } from '../store/services/supplierBalancesApi';
 import PrintDocument from './PrintDocument';
 import { PrintModal } from './print';
+import { PRINT_PAGE_STYLE, THERMAL_PRINT_PAGE_STYLE } from './print/printPageStyle';
 
 /**
  * Modal for printing receipt/payment vouchers (Cash Receipt, Bank Receipt, Cash Payment, Bank Payment).
@@ -82,10 +83,14 @@ const ReceiptPaymentPrintModal = ({
 
   const partyLabel =
     receiptData?.supplier && !receiptData?.customer ? 'Supplier' : 'Customer';
+    
+  const isCompact = companySettings?.printSettings?.invoiceLayout === 'compact';
   const printSettings = {
     ...companySettings?.printSettings,
-    invoiceLayout: 'receipt'
+    invoiceLayout: isCompact ? 'compact' : 'receipt'
   };
+
+  const pageStyle = isCompact ? THERMAL_PRINT_PAGE_STYLE : PRINT_PAGE_STYLE;
 
   return (
     <PrintModal
@@ -94,6 +99,7 @@ const ReceiptPaymentPrintModal = ({
       documentTitle={resolvedDocumentTitle}
       hasData={!!orderData}
       emptyMessage="No receipt data to print."
+      pageStyle={pageStyle}
     >
       <PrintDocument
         companySettings={companySettings || {}}

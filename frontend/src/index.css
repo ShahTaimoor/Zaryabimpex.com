@@ -288,6 +288,15 @@
   color: #111827;
 }
 
+.print-document--compact {
+  width: 72mm;
+  max-width: 100%;
+  padding: 8px;
+  border-radius: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  font-family: 'Courier New', Courier, monospace;
+}
+
 .print-document--mobile {
   width: 100%;
   max-width: 420px;
@@ -638,11 +647,6 @@
 }
 
 @media print {
-  @page {
-    size: A4 landscape;
-    margin: 10mm;
-  }
-
   /* Reset for print */
   body {
     background: white !important;

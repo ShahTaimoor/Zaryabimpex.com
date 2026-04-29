@@ -133,6 +133,7 @@ export const Settings2 = () => {
     autoPrintAfterSale: true,
     autoCompleteSaleAfterPrint: true,
     mobilePrintPreview: false,
+    printSize: 'standard',
     headerText: '',
     footerText: '',
     invoiceLayout: 'standard',
@@ -775,9 +776,10 @@ export const Settings2 = () => {
           autoPrintAfterSale: settings.printSettings.autoPrintAfterSale ?? true,
           autoCompleteSaleAfterPrint: settings.printSettings.autoCompleteSaleAfterPrint ?? true,
           mobilePrintPreview: settings.printSettings.mobilePrintPreview ?? false,
+          invoiceLayout: settings.printSettings.invoiceLayout || 'standard',
+          printSize: (settings.printSettings.invoiceLayout || 'standard') === 'compact' ? '80mm' : 'standard',
           headerText: settings.printSettings.headerText || '',
-          footerText: settings.printSettings.footerText || '',
-          invoiceLayout: settings.printSettings.invoiceLayout || 'standard'
+          footerText: settings.printSettings.footerText || ''
         }));
       }
     }
@@ -1243,10 +1245,17 @@ export const Settings2 = () => {
 
   const handlePrintSettingsChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setPrintSettings(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : (type === 'number' || type === 'range' ? Number(value) : value)
-    }));
+    const raw = type === 'checkbox' ? checked : (type === 'number' || type === 'range' ? Number(value) : value);
+    setPrintSettings(prev => {
+      const next = { ...prev, [name]: raw };
+      if (name === 'invoiceLayout') {
+        next.printSize = raw === 'compact' ? '80mm' : 'standard';
+      }
+      if (name === 'printSize' && raw === '80mm') {
+        next.invoiceLayout = 'compact';
+      }
+      return next;
+    });
   };
 
   const resetNewUserForm = () => {
@@ -1484,7 +1493,7 @@ export const Settings2 = () => {
           <div className="space-y-8 max-w-full mx-auto">
             {/* Users List Card */}
             <div className="bg-white border text-gray-900 shadow-sm border-gray-200 rounded-2xl overflow-hidden relative">
-              
+
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-6 border-b border-gray-100 bg-gray-50/50">
                 <div className="flex items-center space-x-3">
                   <div className="p-2.5 bg-gray-900 text-white rounded-xl shadow-sm">
@@ -1556,11 +1565,10 @@ export const Settings2 = () => {
                       >
                         <div className="flex items-center space-x-5 flex-1 min-w-0">
                           {/* Avatar */}
-                          <div className={`h-14 w-14 rounded-2xl flex items-center justify-center flex-shrink-0 text-white font-bold text-xl shadow-sm ${
-                            systemUser.role === 'admin' ? 'bg-gradient-to-br from-gray-700 to-gray-900' :
-                            systemUser.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
-                            'bg-gradient-to-br from-emerald-400 to-emerald-600'
-                          }`}>
+                          <div className={`h-14 w-14 rounded-2xl flex items-center justify-center flex-shrink-0 text-white font-bold text-xl shadow-sm ${systemUser.role === 'admin' ? 'bg-gradient-to-br from-gray-700 to-gray-900' :
+                              systemUser.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
+                                'bg-gradient-to-br from-emerald-400 to-emerald-600'
+                            }`}>
                             {systemUser.firstName?.charAt(0) || ''}{systemUser.lastName?.charAt(0) || ''}
                           </div>
 
@@ -1578,27 +1586,25 @@ export const Settings2 = () => {
                             <p className="text-sm text-gray-500 mt-0.5 truncate font-medium flex items-center gap-1.5">
                               {systemUser.email}
                             </p>
-                            
+
                             <div className="flex flex-wrap items-center gap-2 mt-2.5">
                               {/* Role Badge */}
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold shadow-sm border ${
-                                systemUser.role === 'admin' ? 'bg-gray-900 text-white border-gray-900' :
-                                systemUser.role === 'manager' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                systemUser.role === 'cashier' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                'bg-gray-50 text-gray-700 border-gray-200'
-                              }`}>
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold shadow-sm border ${systemUser.role === 'admin' ? 'bg-gray-900 text-white border-gray-900' :
+                                  systemUser.role === 'manager' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                    systemUser.role === 'cashier' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                      'bg-gray-50 text-gray-700 border-gray-200'
+                                }`}>
                                 <Shield className="w-3.5 h-3.5 mr-1.5 opacity-70" />
                                 {systemUser.role.charAt(0).toUpperCase() + systemUser.role.slice(1)}
                               </span>
 
                               {/* Status Badge */}
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold shadow-sm border ${
-                                systemUser.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
-                              }`}>
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold shadow-sm border ${systemUser.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
+                                }`}>
                                 <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${systemUser.status === 'active' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></div>
                                 {systemUser.status === 'active' ? 'Active' : 'Inactive'}
                               </span>
-                              
+
                               {systemUser.loginCount > 0 && (
                                 <span className="text-xs text-gray-400 font-medium ml-2 px-2 border-l border-gray-200">
                                   {systemUser.loginCount} logins
@@ -1655,7 +1661,7 @@ export const Settings2 = () => {
             {/* Add/Edit User Form */}
             <div id="add-edit-user-form" className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden relative mt-8">
               <div className="absolute top-0 left-0 w-full h-1.5 bg-gray-900"></div>
-              
+
               <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 md:p-8 border-b border-gray-100 bg-white">
                 <div className="flex items-center space-x-4">
                   <div className="p-3 bg-gray-100 text-gray-900 rounded-xl shadow-sm">
@@ -1684,14 +1690,14 @@ export const Settings2 = () => {
 
               <div className="p-6 md:p-8 bg-gray-50/30">
                 <form key={editingUser?._id || 'new-user'} onSubmit={editingUser ? handleUpdateUserSubmit : handleCreateUser} className="space-y-8">
-                  
+
                   {/* Row 1: Profile Information container */}
                   <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="text-md font-bold text-gray-900 border-b border-gray-100 pb-4 mb-6 flex items-center">
                       <User className="h-5 w-5 mr-2 text-gray-500" />
                       Profile Details
                     </h3>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                       {/* First Name */}
                       <div className="group">
@@ -1812,7 +1818,7 @@ export const Settings2 = () => {
                       <Shield className="h-5 w-5 mr-2 text-indigo-500" />
                       Access & Authorizations
                     </h3>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       {/* Role selection */}
                       <div className="flex flex-col space-y-2">
@@ -1937,7 +1943,7 @@ export const Settings2 = () => {
                         </p>
                       </div>
                       <div className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 shadow-sm whitespace-nowrap">
-                        {Object.keys(newUserData.permissions || {}).filter(k=>newUserData.permissions[k]).length} Allowed Rules
+                        {Object.keys(newUserData.permissions || {}).filter(k => newUserData.permissions[k]).length} Allowed Rules
                       </div>
                     </div>
 
@@ -1957,10 +1963,10 @@ export const Settings2 = () => {
                           {Object.entries(permissionCategories).map(([categoryKey, category]) => {
                             // Check if all permissions in category are active to show a nice global indicator
                             const totalPerms = category.permissions.length + category.permissions.reduce((acc, p) => acc + (p.subcategories?.length || 0), 0);
-                            const activePermsCount = category.permissions.filter(p => newUserData.permissions[p.key]).length + 
-                                                   category.permissions.reduce((acc, p) => acc + (p.subcategories?.filter(s => newUserData.permissions[s.key]).length || 0), 0);
+                            const activePermsCount = category.permissions.filter(p => newUserData.permissions[p.key]).length +
+                              category.permissions.reduce((acc, p) => acc + (p.subcategories?.filter(s => newUserData.permissions[s.key]).length || 0), 0);
                             const percentActive = totalPerms > 0 ? (activePermsCount / totalPerms) : 0;
-                            
+
                             return (
                               <div key={categoryKey} className="bg-white border border-gray-200 hover:border-blue-300 rounded-xl overflow-hidden shadow-sm hover:shadow transition-all duration-300 pb-2">
                                 <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/80 flex items-center justify-between">
@@ -1989,7 +1995,7 @@ export const Settings2 = () => {
                                           {permission.name}
                                         </span>
                                       </label>
-                                      
+
                                       {permission.subcategories && permission.subcategories.length > 0 && (
                                         <div className="ml-7 mt-0.5 space-y-0.5 border-l-2 border-gray-100 pl-3 pt-1 pb-2">
                                           {permission.subcategories.map((subcategory, index) => (
@@ -2067,66 +2073,121 @@ export const Settings2 = () => {
 
             <div className="card-content">
               <div className="space-y-6">
+                {/* Print Size Design */}
+                <div className="space-y-4">
+                  <label className="block text-sm font-semibold text-gray-800">
+                    Print Size
+                  </label>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="border border-gray-200 rounded-2xl bg-white p-4 sm:p-5 shadow-sm space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-900">Thermal Receipt Style</h3>
+                          <p className="text-xs text-gray-500 mt-1">Optimized for restaurant and retail POS printing.</p>
+                        </div>
+                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-700">
+                          Monochrome
+                        </span>
+                      </div>
+
+                      <div className="flex items-start space-x-3 p-3.5 border border-gray-200 rounded-xl bg-gray-50/50">
+                        <Checkbox
+                          id="compactMode"
+                          className="mt-0.5 w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-gray-900 data-[state=checked]:border-gray-900"
+                          checked={printSettings.invoiceLayout === 'compact'}
+                          onCheckedChange={(checked) => handlePrintSettingsChange({
+                            target: {
+                              name: 'invoiceLayout',
+                              value: checked ? 'compact' : 'standard',
+                              type: 'text'
+                            }
+                          })}
+                        />
+                        <Label htmlFor="compactMode" className="flex flex-col cursor-pointer">
+                          <span className="text-sm font-semibold text-gray-800">Compact Thermal Print Preview</span>
+                          <span className="text-xs text-gray-500 mt-1">
+                            Optimized for 80mm printers. Minimal, fast, and scanner-friendly.
+                          </span>
+                        </Label>
+                      </div>
+
+                      <div className={`flex items-start space-x-3 p-3.5 rounded-xl transition-colors ${printSettings.invoiceLayout === 'compact' ? 'border border-gray-900 bg-gray-900/5' : 'border border-gray-200 bg-white'}`}>
+                        <input
+                          type="radio"
+                          name="printSize"
+                          value="80mm"
+                          id="receipt80mm"
+                          checked={printSettings.invoiceLayout === 'compact'}
+                          onChange={handlePrintSettingsChange}
+                          className="mt-0.5 h-4 w-4 accent-gray-900"
+                        />
+                        <label htmlFor="receipt80mm" className="flex flex-col cursor-pointer">
+                          <span className="text-sm font-semibold text-gray-900">80mm Thermal Receipt</span>
+                          <span className="text-xs text-gray-600 mt-1">Professional POS paper width (only supported size).</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="border border-dashed border-gray-300 rounded-2xl p-4 sm:p-5 bg-gradient-to-br from-gray-50 to-white">
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-700">Receipt Layout Notes</h4>
+                      <ul className="mt-3 space-y-2 text-xs text-gray-600">
+                        <li>- Shop heading and identity at top</li>
+                        <li>- Item lines with qty and price alignment</li>
+                        <li>- Total block with strong visual hierarchy</li>
+                        <li>- Thank-you footer and invoice/barcode strip</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Layout Options */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-4">
+                  <label className="block text-sm font-semibold text-gray-800 mb-3">
                     Invoice/Sale Receipt Layout
                   </label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <label className="flex items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <label className={`flex items-center p-3.5 border rounded-xl cursor-pointer transition-all ${printSettings.invoiceLayout === 'standard' ? 'border-gray-900 bg-gray-900/5' : 'border-gray-200 hover:bg-gray-50'}`}>
                       <input
                         type="radio"
                         name="invoiceLayout"
                         value="standard"
                         checked={printSettings.invoiceLayout === 'standard'}
                         onChange={handlePrintSettingsChange}
-                        className="mr-3"
+                        className="mr-3 h-4 w-4 accent-gray-900"
                       />
                       <div>
-                        <div className="text-sm font-medium text-gray-900">Standard</div>
-                        <div className="text-xs text-gray-500">Basic layout with company info</div>
+                        <div className="text-sm font-semibold text-gray-900">Standard</div>
+                        <div className="text-xs text-gray-500">Balanced layout for regular invoices</div>
                       </div>
                     </label>
-                    <label className="flex items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="invoiceLayout"
-                        value="compact"
-                        checked={printSettings.invoiceLayout === 'compact'}
-                        onChange={handlePrintSettingsChange}
-                        className="mr-3"
-                      />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">Compact</div>
-                        <div className="text-xs text-gray-500">Condensed layout for small receipts</div>
-                      </div>
-                    </label>
-                    <label className="flex items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+
+                    <label className={`flex items-center p-3.5 border rounded-xl cursor-pointer transition-all ${printSettings.invoiceLayout === 'detailed' ? 'border-gray-900 bg-gray-900/5' : 'border-gray-200 hover:bg-gray-50'}`}>
                       <input
                         type="radio"
                         name="invoiceLayout"
                         value="detailed"
                         checked={printSettings.invoiceLayout === 'detailed'}
                         onChange={handlePrintSettingsChange}
-                        className="mr-3"
+                        className="mr-3 h-4 w-4 accent-gray-900"
                       />
                       <div>
-                        <div className="text-sm font-medium text-gray-900">Detailed</div>
-                        <div className="text-xs text-gray-500">Full layout with all information</div>
+                        <div className="text-sm font-semibold text-gray-900">Detailed</div>
+                        <div className="text-xs text-gray-500">Extended receipt with additional information</div>
                       </div>
                     </label>
-                    <label className="flex items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+
+                    <label className={`flex items-center p-3.5 border rounded-xl cursor-pointer transition-all ${printSettings.invoiceLayout === 'layout2' ? 'border-gray-900 bg-gray-900/5' : 'border-gray-200 hover:bg-gray-50'}`}>
                       <input
                         type="radio"
                         name="invoiceLayout"
                         value="layout2"
                         checked={printSettings.invoiceLayout === 'layout2'}
                         onChange={handlePrintSettingsChange}
-                        className="mr-3"
+                        className="mr-3 h-4 w-4 accent-gray-900"
                       />
                       <div>
-                        <div className="text-sm font-medium text-gray-900">Layout 2 (Professional)</div>
-                        <div className="text-xs text-gray-500">Boxed layout with totals summary</div>
+                        <div className="text-sm font-semibold text-gray-900">Layout 2 (Professional)</div>
+                        <div className="text-xs text-gray-500">Professional boxed layout</div>
                       </div>
                     </label>
                   </div>
@@ -2353,28 +2414,45 @@ export const Settings2 = () => {
 
                 {/* Print Preview */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Print Preview
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    Live Receipt Preview
                   </label>
                   <p className="text-xs text-gray-500 mb-4">
-                    This preview shows how your receipts will appear with the actual saved company information.
+                    Preview changes by selected layout: Standard, Compact (80mm thermal), or Layout 2 (Professional).
                     {(!companyData.companyName && !companyData.address && !companyData.contactNumber) && (
                       <span className="text-orange-600 font-medium"> Please save your company information first to see the preview.</span>
                     )}
                   </p>
-                  <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 md:p-8 overflow-auto flex justify-center items-start min-h-[420px] max-h-[80dvh] shadow-inner">
-                    <div
-                      style={printSettings.mobilePrintPreview ? { maxWidth: 420, width: '100%' } : { maxWidth: 900, width: '100%' }}
-                      className="transition-all duration-300 ease-in-out"
-                    >
-                      <PrintDocument
-                        companySettings={{ ...companyData, logo: companyProfile.logo || companyData.logo }}
-                        orderData={sampleOrderData}
-                        printSettings={printSettings}
-                        documentTitle="Receipt Preview"
-                      />
+
+                  {printSettings.invoiceLayout === 'compact' ? (
+                    <div className="bg-gray-200 border border-gray-300 rounded-2xl p-3 sm:p-6 overflow-auto flex justify-center items-start min-h-[460px] shadow-inner">
+                      <div
+                        style={{ width: '80mm', maxWidth: '100%' }}
+                        className="bg-white text-black border border-black/30 rounded-md shadow-lg mx-auto transition-all duration-300 overflow-hidden"
+                      >
+                        <PrintDocument
+                          companySettings={{ ...companyData, logo: companyProfile.logo || companyData.logo }}
+                          orderData={sampleOrderData}
+                          printSettings={printSettings}
+                          documentTitle="Receipt Preview"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 md:p-8 overflow-auto flex justify-center items-start min-h-[420px] max-h-[80dvh] shadow-inner">
+                      <div
+                        style={printSettings.mobilePrintPreview ? { maxWidth: 420, width: '100%' } : { maxWidth: 900, width: '100%' }}
+                        className="transition-all duration-300 ease-in-out"
+                      >
+                        <PrintDocument
+                          companySettings={{ ...companyData, logo: companyProfile.logo || companyData.logo }}
+                          orderData={sampleOrderData}
+                          printSettings={printSettings}
+                          documentTitle="Receipt Preview"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Save Button */}
@@ -2699,22 +2777,22 @@ export const Settings2 = () => {
               toast.error('Item already in bottom navigation.');
               return;
             }
-            
+
             // Get icon name
             let iconName = 'Circle';
             if (typeof item.icon === 'string') {
-                iconName = item.icon;
+              iconName = item.icon;
             } else if (item.icon && item.icon.name) {
-                iconName = item.icon.name;
+              iconName = item.icon.name;
             } else {
-                const info = getComponentInfo(item.href);
-                if (info && info.icon) iconName = info.icon;
+              const info = getComponentInfo(item.href);
+              if (info && info.icon) iconName = info.icon;
             }
 
-            const newConfig = [...bottomNavConfig, { 
-              name: item.name, 
-              href: item.href, 
-              icon: iconName 
+            const newConfig = [...bottomNavConfig, {
+              name: item.name,
+              href: item.href,
+              icon: iconName
             }];
             setBottomNavConfig(newConfig);
           };
@@ -2763,38 +2841,38 @@ export const Settings2 = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="card-content p-6 flex flex-col lg:flex-row gap-8">
                 <div className="flex-1 space-y-4">
                   <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
                     Current Order ({bottomNavConfig.length}/5)
                   </h3>
-                  
+
                   <div className="space-y-3 bg-gray-50/50 p-4 rounded-2xl border border-gray-100 min-h-[300px]">
                     {bottomNavConfig.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-center py-12">
                         <Plus className="h-12 w-12 text-gray-300 mb-2" />
-                        <p className="text-gray-400 font-medium">No items added yet.<br/>Select from the right to begin.</p>
+                        <p className="text-gray-400 font-medium">No items added yet.<br />Select from the right to begin.</p>
                       </div>
                     ) : (
                       bottomNavConfig.map((item, index) => {
                         const IconComponent = item.icon && Icons[item.icon] ? Icons[item.icon] : Smartphone;
                         return (
-                          <div 
+                          <div
                             key={`${item.href}-${index}`}
                             className="flex items-center justify-between p-3.5 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all group"
                           >
                             <div className="flex items-center gap-4">
                               <div className="flex flex-col gap-1">
-                                <button 
+                                <button
                                   onClick={() => handleMoveUp(index)}
                                   disabled={index === 0}
                                   className="p-1 hover:bg-gray-100 rounded disabled:opacity-30"
                                 >
                                   <ChevronUp className="h-3.5 w-3.5 text-gray-500" />
                                 </button>
-                                <button 
+                                <button
                                   onClick={() => handleMoveDown(index)}
                                   disabled={index === bottomNavConfig.length - 1}
                                   className="p-1 hover:bg-gray-100 rounded disabled:opacity-30"
@@ -2810,7 +2888,7 @@ export const Settings2 = () => {
                                 <p className="text-[10px] font-medium text-gray-400 truncate">{item.href}</p>
                               </div>
                             </div>
-                            <button 
+                            <button
                               onClick={() => handleRemoveFromNav(index)}
                               className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                             >
@@ -2823,7 +2901,7 @@ export const Settings2 = () => {
                   </div>
 
                   <div className="flex justify-end pt-2">
-                    <LoadingButton 
+                    <LoadingButton
                       onClick={handleSaveBottomNav}
                       className="bg-gray-900 text-white hover:bg-gray-800 rounded-xl px-10 h-11 font-bold shadow-md"
                     >
@@ -2838,14 +2916,14 @@ export const Settings2 = () => {
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                     Available Modules
                   </h3>
-                  
+
                   <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
                     <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
                       {allAvailableItems.map((item) => {
                         const isAdded = bottomNavConfig.some(row => row.href === item.href);
                         const IconComp = item.icon || Smartphone;
                         return (
-                          <div 
+                          <div
                             key={item.href}
                             className={`flex items-center justify-between p-3.5 border-b border-gray-50 last:border-0 transition-colors ${isAdded ? 'bg-gray-50/80 opacity-60' : 'hover:bg-blue-50/30'}`}
                           >
@@ -2860,13 +2938,12 @@ export const Settings2 = () => {
                             <button
                               onClick={() => handleAddToNav(item)}
                               disabled={isAdded || bottomNavConfig.length >= 5}
-                              className={`p-1.5 rounded-lg transition-all ${
-                                isAdded 
-                                  ? 'text-green-500 cursor-default' 
+                              className={`p-1.5 rounded-lg transition-all ${isAdded
+                                  ? 'text-green-500 cursor-default'
                                   : bottomNavConfig.length >= 5
                                     ? 'text-gray-300 cursor-not-allowed'
                                     : 'text-blue-600 hover:bg-blue-100 bg-blue-50'
-                              }`}
+                                }`}
                             >
                               {isAdded ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                             </button>
