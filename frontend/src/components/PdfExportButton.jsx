@@ -4,48 +4,54 @@ import { toast } from 'sonner';
 
 /**
  * A professional Export PDF button component
- * @param {Object} props
- * @param {Function} props.getData - Function that returns the payload { title, columns, data, summary, filename }
- * @param {string} props.label - Button label
- * @param {string} props.className - Custom CSS classes
+ * Supports professional invoice layouts with company/party headers.
  */
 const PdfExportButton = ({ getData, label = "PDF", className = "" }) => {
     const [isExporting, setIsExporting] = useState(false);
 
     const loadImage = (url) => {
-      return new Promise((resolve) => {
-        if (!url) return resolve(null);
-        const img = new Image();
-        img.crossOrigin = 'Anonymous';
-        img.onload = () => {
-          const MAX_DIM = 100;
-          let width = img.width;
-          let height = img.height;
-          if (width > height) {
-            if (width > MAX_DIM) {
-              height *= MAX_DIM / width;
-              width = MAX_DIM;
-            }
-          } else {
-            if (height > MAX_DIM) {
-              width *= MAX_DIM / height;
-              height = MAX_DIM;
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.max(width, 1);
-          canvas.height = Math.max(height, 1);
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          try {
-            resolve(canvas.toDataURL('image/jpeg', 0.6));
-          } catch (e) {
-            resolve(null);
-          }
-        };
-        img.onerror = () => resolve(null);
-        img.src = url;
-      });
+        return new Promise((resolve) => {
+            if (!url) return resolve(null);
+
+            const timeout = setTimeout(() => {
+                resolve(null);
+            }, 3000);
+
+            const img = new Image();
+            img.crossOrigin = 'Anonymous';
+            img.onload = () => {
+                clearTimeout(timeout);
+                const MAX_DIM = 100;
+                let width = img.width;
+                let height = img.height;
+                if (width > height) {
+                    if (width > MAX_DIM) {
+                        height *= MAX_DIM / width;
+                        width = MAX_DIM;
+                    }
+                } else {
+                    if (height > MAX_DIM) {
+                        width *= MAX_DIM / height;
+                        height = MAX_DIM;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.max(width, 1);
+                canvas.height = Math.max(height, 1);
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                try {
+                    resolve(canvas.toDataURL('image/jpeg', 0.6));
+                } catch (e) {
+                    resolve(null);
+                }
+            };
+            img.onerror = () => {
+                clearTimeout(timeout);
+                resolve(null);
+            };
+            img.src = url;
+        });
     };
 
     const handleExport = async () => {
@@ -59,9 +65,67 @@ const PdfExportButton = ({ getData, label = "PDF", className = "" }) => {
             const { jsPDF } = await import('jspdf');
             const autoTable = (await import('jspdf-autotable')).default;
 
-            const doc = new jsPDF(payload.orientation || 'landscape');
-            doc.setFontSize(14);
-            doc.text(payload.title || "Report", 14, 16);
+            const doc = new jsPDF(payload.orientation || 'portrait');
+            let currentY = 10;
+            const startX = 5;
+
+            // 1. Company Header
+            if (payload.company) {
+                doc.setFontSize(20);
+                doc.setTextColor(41, 128, 185);
+                doc.setFont('helvetica', 'bold');
+                doc.text(payload.company.name || '', startX, currentY);
+                currentY += 8;
+
+                doc.setFontSize(9);
+                doc.setTextColor(80, 80, 80);
+                doc.setFont('helvetica', 'normal');
+                if (payload.company.address) {
+                    doc.text(payload.company.address, startX, currentY);
+                    currentY += 5;
+                }
+                if (payload.company.contact) {
+                    doc.text(payload.company.contact, startX, currentY);
+                    currentY += 5;
+                }
+                currentY += 5;
+            }
+
+            // 2. Document Title
+            doc.setFontSize(16);
+            doc.setTextColor(0, 0, 0);
+            doc.setFont('helvetica', 'bold');
+            // Remove the long ID from the title as requested
+            const cleanTitle = (payload.title || "Report").split(':')[0].trim();
+            doc.text(cleanTitle, startX, currentY);
+            currentY += 10;
+
+            // 3. Bill To / Party Details
+            if (payload.party) {
+                doc.setFontSize(10);
+                doc.setTextColor(100, 100, 100);
+                doc.text(payload.party.label || 'Bill To:', startX, currentY);
+                currentY += 5;
+
+                doc.setTextColor(0, 0, 0);
+                doc.setFont('helvetica', 'bold');
+                doc.text(payload.party.name || '', startX, currentY);
+                currentY += 5;
+
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9);
+                if (payload.party.address) {
+                    const addrStr = String(payload.party.address);
+                    const splitAddress = doc.splitTextToSize(addrStr, 90);
+                    doc.text(splitAddress, startX, currentY);
+                    currentY += (splitAddress.length * 4) + 2;
+                }
+                if (payload.party.phone) {
+                    doc.text(`Phone: ${payload.party.phone}`, startX, currentY);
+                    currentY += 5;
+                }
+                currentY += 5;
+            }
 
             const heads = [payload.columns.map(c => c.header)];
             const imageColumnsIndices = [];
@@ -72,59 +136,68 @@ const PdfExportButton = ({ getData, label = "PDF", className = "" }) => {
             });
 
             const rows = [];
-            const imagesMap = {}; // rowIndex_colIndex -> base64
-            const BATCH_SIZE = 5;
+            const imagesMap = {};
+            const BATCH_SIZE = 10;
 
             // Generate rows
-            for (let i = 0; i < payload.data.length; i += BATCH_SIZE) {
-                const batch = payload.data.slice(i, i + BATCH_SIZE);
-                await Promise.all(
-                    batch.map(async (item, idx) => {
-                        const absoluteIdx = i + idx;
-                        const rowData = [];
-                        
-                        for (let c = 0; c < payload.columns.length; c++) {
-                            const col = payload.columns[c];
-                            let val = item[col.key] ?? '';
-                            
-                            if (imageColumnsIndices.includes(c)) {
-                                const imgData = await loadImage(val);
+            payload.data.forEach((item, rowIndex) => {
+                const rowData = [];
+                payload.columns.forEach((col, colIndex) => {
+                    if (imageColumnsIndices.includes(colIndex)) {
+                        rowData.push('');
+                    } else {
+                        rowData.push(String(item[col.key] ?? ''));
+                    }
+                });
+                rows[rowIndex] = rowData;
+            });
+
+            if (imageColumnsIndices.length > 0) {
+                toast.loading(`Generating PDF: Processing images...`, { id: toastId });
+                for (let i = 0; i < payload.data.length; i += BATCH_SIZE) {
+                    const batch = payload.data.slice(i, i + BATCH_SIZE);
+                    await Promise.all(
+                        batch.map(async (item, idx) => {
+                            const rowIndex = i + idx;
+                            for (const colIndex of imageColumnsIndices) {
+                                const col = payload.columns[colIndex];
+                                const imgData = await loadImage(item[col.key]);
                                 if (imgData) {
-                                    imagesMap[`${absoluteIdx}_${c}`] = imgData;
+                                    imagesMap[`${rowIndex}_${colIndex}`] = imgData;
                                 }
-                                rowData.push(''); // Empty string so autoTable doesn't print base64
-                            } else {
-                                rowData.push(String(val));
                             }
-                        }
-                        rows[absoluteIdx] = rowData;
-                    })
-                );
-                await new Promise(resolve => setTimeout(resolve, 10));
-                const progress = Math.floor(5 + ((i + BATCH_SIZE) / payload.data.length) * 80);
-                toast.loading(`Generating PDF: ${Math.min(progress, 85)}%`, { id: toastId });
+                        })
+                    );
+                }
             }
 
             toast.loading(`Generating PDF: Finalizing...`, { id: toastId });
 
             const columnStyles = {};
-            imageColumnsIndices.forEach(idx => {
-                columnStyles[idx] = { cellWidth: 20, minCellHeight: 20, halign: 'center' };
+            payload.columns.forEach((col, idx) => {
+                if (col.width) {
+                    columnStyles[idx] = { cellWidth: col.width };
+                }
+                if (imageColumnsIndices.includes(idx)) {
+                    columnStyles[idx] = { ...columnStyles[idx], cellWidth: 20, minCellHeight: 20, halign: 'center' };
+                }
             });
 
             autoTable(doc, {
-                startY: 24,
+                startY: currentY,
                 head: heads,
                 body: rows,
-                styles: { fontSize: 8, cellPadding: 3, valign: 'middle' },
-                headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold', halign: 'center' },
+                theme: 'grid',
+                margin: { left: 5, right: 5 },
+                styles: { fontSize: 8, cellPadding: 1.5, valign: 'middle', halign: 'left' },
+                headStyles: { fillColor: [243, 244, 246], textColor: 31, fontStyle: 'bold', halign: 'center' },
                 columnStyles: columnStyles,
-                didDrawCell: function(data) {
+                didDrawCell: function (data) {
                     if (data.cell.section === 'body' && imageColumnsIndices.includes(data.column.index)) {
                         const rowIndex = data.row.index;
                         const imgData = imagesMap[`${rowIndex}_${data.column.index}`];
                         if (imgData) {
-                            const dim = 16;
+                            const dim = 14;
                             const x = data.cell.x + (data.cell.width - dim) / 2;
                             const y = data.cell.y + (data.cell.height - dim) / 2;
                             doc.addImage(imgData, 'JPEG', x, y, dim, dim);
@@ -133,19 +206,41 @@ const PdfExportButton = ({ getData, label = "PDF", className = "" }) => {
                 }
             });
 
-            // If there's a summary row, print it
+            // Summary Table
             if (payload.summary && payload.summary.rows && payload.summary.rows.length > 0) {
-               const summaryBody = payload.summary.rows.map(row => {
-                   return payload.columns.map(col => row[col.key] ?? '');
-               });
-               autoTable(doc, {
-                   startY: doc.lastAutoTable.finalY + 5,
-                   head: [], // No header for summary
-                   body: summaryBody,
-                   styles: { fontSize: 9, fontStyle: 'bold', textColor: [0,0,0], cellPadding: 4, fillColor: [240, 240, 240] },
-                   theme: 'plain'
-               });
+                const summaryBody = payload.summary.rows.map(row => {
+                    return payload.columns.map(col => row[col.key] ?? '');
+                });
+
+                autoTable(doc, {
+                    startY: (doc.lastAutoTable ? doc.lastAutoTable.finalY : currentY) + 5,
+                    head: [],
+                    body: summaryBody,
+                    styles: { fontSize: 9, fontStyle: 'bold', textColor: [0, 0, 0], cellPadding: 2, fillColor: [248, 250, 252] },
+                    theme: 'plain',
+                    margin: { left: 105 } // Shift summary to right half (centered on A4)
+                });
             }
+
+            // Footer / Signatures
+            let finalY = (doc.lastAutoTable ? doc.lastAutoTable.finalY : currentY) + 25;
+            const pageWidth = doc.internal.pageSize.width;
+            const pageHeight = doc.internal.pageSize.height;
+
+            if (finalY + 20 > pageHeight) {
+                doc.addPage();
+                finalY = 30;
+            }
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(0, 0, 0);
+
+            doc.line(startX, finalY, startX + 60, finalY);
+            doc.text("Customer Signature", startX, finalY + 5);
+
+            doc.line(pageWidth - 65, finalY, pageWidth - startX, finalY);
+            doc.text("Authorized Signature", pageWidth - 65, finalY + 5);
 
             let filename = payload.filename || `Export_${new Date().toLocaleDateString()}.pdf`;
             filename = filename.replace(/\.xlsx$/, '.pdf').replace(/\//g, '-');

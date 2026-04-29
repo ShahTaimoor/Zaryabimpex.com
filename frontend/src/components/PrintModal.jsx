@@ -130,7 +130,7 @@ const InvoicePrintModal = ({
       autoPrint={autoPrint}
       onAfterPrint={onAfterPrint}
       pageStyle={pageStyle}
-      getPdfData={() => getInvoicePdfPayload(orderData, companySettings, resolvedDocumentTitle, partyLabel)}
+      getPdfData={() => getInvoicePdfPayload(orderData, companySettings, resolvedDocumentTitle, partyLabel, ledgerBalance)}
     >
       <PrintDocument
         companySettings={companySettings || {}}

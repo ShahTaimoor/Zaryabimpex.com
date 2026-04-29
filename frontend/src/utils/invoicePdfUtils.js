@@ -8,7 +8,7 @@ import { formatQuantityDisplay } from './dualUnitUtils';
  * @param {string} partyLabel - 'Customer' or 'Supplier'
  * @returns {Object} Payload for PdfExportButton
  */
-export const getInvoicePdfPayload = (orderData, companySettings, documentTitle = 'Invoice', partyLabel = 'Customer') => {
+export const getInvoicePdfPayload = (orderData, companySettings, documentTitle = 'Invoice', partyLabel = 'Customer', ledgerBalanceProp = null) => {
   if (!orderData) return null;
 
   const isSale = partyLabel.toLowerCase().includes('customer');
@@ -48,30 +48,37 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
 
   const partyName = name || (isSale ? 'Walk-in Customer' : 'Supplier');
 
-  // Columns for the items table
+  // Columns for the items table to match Layout 2
   const columns = [
-    { header: 'S.No', key: 'sno', width: 10 },
-    { header: 'Image', key: 'imageUrl', width: 20, type: 'image' },
-    { header: 'Product Name', key: 'name', width: 45 },
-    { header: 'Quantity', key: 'qty', width: 20 },
-    { header: 'Unit Price', key: 'price', width: 25 },
+    { header: 'Item', key: 'name', width: 85 },
+    { header: 'Description', key: 'description', width: 45 },
+    { header: 'Qty', key: 'qty', width: 20 },
+    { header: 'Price', key: 'price', width: 25 },
     { header: 'Total', key: 'total', width: 25 }
   ];
 
-  // Map items to rows
-  const items = Array.isArray(orderData.items) ? orderData.items : [];
+  // Map items to rows - look in various common fields and nested data
+  const rawData = orderData.data || orderData;
+  const items = Array.isArray(rawData.items) ? rawData.items : 
+                Array.isArray(rawData.orderItems) ? rawData.orderItems :
+                Array.isArray(rawData.products) ? rawData.products :
+                Array.isArray(rawData.invoiceItems) ? rawData.invoiceItems : 
+                Array.isArray(orderData.items) ? orderData.items : [];
+
   const data = items.map((item, index) => {
     const product = item.product || item.productData || {};
-    const name = product.name || item.name || `Item ${index + 1}`;
+    const sku = item.sku || product.sku || '';
+    const brand = item.brand || product.brand || '';
+    let displayName = product.name || item.name || `Item ${index + 1}`;
+    if (sku) displayName += ` (SKU: ${sku})`;
+    
     const qty = item.quantity ?? item.qty ?? 0;
     const price = item.unitPrice ?? item.price ?? item.unitCost ?? 0;
     const total = item.total ?? item.lineTotal ?? (qty * price);
-    const imageUrl = product.imageUrl || item.imageUrl || item.image_url || null;
 
     return {
-      sno: index + 1,
-      name: name,
-      imageUrl: imageUrl,
+      name: displayName,
+      description: item.description || product.description || '—',
       qty: formatQuantityDisplay(qty, product, null, { boxes: item.boxes, pieces: item.pieces }),
       price: Math.round(price).toLocaleString(),
       total: Math.round(total).toLocaleString()
@@ -89,12 +96,18 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
   const showTaxInSummary =
     companySettings?.taxEnabled === true && printShowTax && tax > 0;
 
-  summaryRows.push({ name: 'Subtotal:', total: Math.round(subtotal).toLocaleString() });
-  if (discount > 0) summaryRows.push({ name: 'Discount:', total: `-${Math.round(discount).toLocaleString()}` });
+  summaryRows.push({ name: 'Subtotal', total: Math.round(subtotal).toLocaleString() });
+  if (discount > 0) summaryRows.push({ name: 'Discount', total: `-${Math.round(discount).toLocaleString()}` });
   if (showTaxInSummary) {
-    summaryRows.push({ name: 'Tax:', total: Math.round(tax).toLocaleString() });
+    summaryRows.push({ name: 'Tax', total: Math.round(tax).toLocaleString() });
   }
-  summaryRows.push({ name: 'Grand Total:', total: Math.round(total).toLocaleString() });
+  summaryRows.push({ name: 'Total', total: Math.round(total).toLocaleString() });
+
+  // Add Ledger Balance if available
+  const ledgerBalance = ledgerBalanceProp ?? orderData.ledgerBalance ?? orderData.customer?.balance ?? null;
+  if (ledgerBalance !== null) {
+      summaryRows.push({ name: 'Ledger Balance', total: Math.round(ledgerBalance).toLocaleString() });
+  }
 
   // Add party details if needed - currently PdfExportButton only supports one table
   // We can add them to the title or use a multi-table approach if we improve PdfExportButton
@@ -102,12 +115,27 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
   const orderId = orderData.invoiceNumber || orderData.soNumber || orderData.orderNumber || orderData.id || orderData._id || 'Draft';
   const filename = `${documentTitle.replace(/\s+/g, '_')}_${orderId}.pdf`;
 
+  // Resolve party details for "Bill To"
+  const partyInfo = orderData.customerInfo || orderData.supplierInfo || orderData.customer || orderData.supplier || {};
+  let partyAddress = partyInfo.address || '';
+  if (typeof partyAddress === 'object') {
+      partyAddress = Object.values(partyAddress).filter(v => typeof v === 'string').join(', ');
+  }
+  const partyPhone = partyInfo.phone || partyInfo.contactNumber || '';
+
   return {
-    title: `${partyLabel}: ${partyName}`,
+    title: `${documentTitle}: #${orderId}`,
+    orientation: 'portrait',
     company: {
       name: companySettings?.companyName || 'ZARYAB IMPEX',
       address: companySettings?.address || companySettings?.billingAddress || '',
       contact: `${companySettings?.contactNumber || ''} ${companySettings?.email ? '| ' + companySettings.email : ''}`.trim()
+    },
+    party: {
+      label: `${partyLabel} Details:`,
+      name: partyName,
+      address: partyAddress,
+      phone: partyPhone
     },
     columns,
     data,
