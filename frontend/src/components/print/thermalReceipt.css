@@ -148,6 +148,15 @@
   font-size: 11px;
 }
 
+.thermal-receipt__custom-footer {
+  margin-top: 2.5mm;
+  padding-top: 2mm;
+  border-top: 1px dashed #000;
+  white-space: pre-line;
+  text-align: center;
+  line-height: 1.35;
+}
+
 .thermal-receipt__barcode {
   display: flex;
   justify-content: center;

@@ -191,8 +191,13 @@ export const BarcodeGenerator = ({
           <div className="flex space-x-2">
             <input
               type="text"
-            value={displayValue}
-              onChange={(e) => setDisplayValue(e.target.value)}
+              value={displayValue}
+              onChange={(e) => {
+                const val = e.target.value;
+                // Automatically replace risky characters like + and * with - for better scanner compatibility
+                const normalizedValue = val.replace(/[+*]/g, '-');
+                setDisplayValue(normalizedValue);
+              }}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="Enter barcode value"
             />

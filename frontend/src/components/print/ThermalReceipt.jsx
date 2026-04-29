@@ -16,6 +16,7 @@ const ThermalReceipt = ({
     contactNumber = '',
     email = ''
   } = companySettings;
+  const receiptFooterText = printSettings?.receiptFooterText || '';
 
   const {
     createdAt = new Date(),
@@ -36,7 +37,6 @@ const ThermalReceipt = ({
     orderData?._id ||
     'N/A';
 
-  const subtotal = pricing.subtotal || orderData.subtotal || 0;
   const discount = pricing.discountAmount || pricing.discount || orderData.discount || 0;
   const tax = pricing.taxAmount || orderData.tax || 0;
   const shipping = pricing.shipping || 0;
@@ -137,10 +137,6 @@ const ThermalReceipt = ({
       </table>
 
       <div className="thermal-receipt__summary">
-        <div className="thermal-receipt__summary-row">
-          <span>Subtotal:</span>
-          <span>{formatCurrency(subtotal)}</span>
-        </div>
         {discount > 0 && (
           <div className="thermal-receipt__summary-row">
             <span>Discount:</span>
@@ -176,7 +172,12 @@ const ThermalReceipt = ({
         <div className="thermal-receipt__barcode">
           <canvas ref={barcodeRef}></canvas>
         </div>
-        <div>Thank You for Shopping!</div>
+        {receiptFooterText && (
+          <div className="thermal-receipt__custom-footer">
+            {receiptFooterText}
+          </div>
+        )}
+        {!receiptFooterText && <div>Thank You for Shopping!</div>}
         <div style={{ fontSize: '9px', marginTop: '2mm' }}>
           {new Date().toLocaleString()}
         </div>

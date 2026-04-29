@@ -2268,8 +2268,8 @@ const SalesOrders = ({ tabId }) => {
                         <div className="min-w-0 flex justify-start">
                           <span
                             className={`text-sm font-medium px-0.5 py-1 rounded border block text-center h-8 flex items-center justify-center transition-colors duration-300 ${serialHighlight
-                                ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
-                                : 'text-gray-700 bg-gray-50 border-gray-200'
+                              ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
+                              : 'text-gray-700 bg-gray-50 border-gray-200'
                               }`}
                           >
                             {index + 1}
@@ -2532,8 +2532,8 @@ const SalesOrders = ({ tabId }) => {
                               <div className="flex items-center gap-2 mb-1">
                                 <span
                                   className={`text-xs font-semibold px-2 py-0.5 rounded transition-colors duration-300 ${serialHighlight
-                                      ? 'bg-green-100 text-green-800 border border-green-400 ring-2 ring-green-300/80'
-                                      : 'text-gray-500 bg-gray-100'
+                                    ? 'bg-green-100 text-green-800 border border-green-400 ring-2 ring-green-300/80'
+                                    : 'text-gray-500 bg-gray-100'
                                     }`}
                                 >
                                   #{index + 1}
@@ -3484,13 +3484,13 @@ const SalesOrders = ({ tabId }) => {
                   </div>
                   {taxSystemEnabled &&
                     Number(selectedOrder.tax ?? selectedOrder.pricing?.taxAmount ?? 0) > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Tax:</span>
-                      <span className="font-medium">
-                        {Math.round(Number(selectedOrder.tax ?? selectedOrder.pricing?.taxAmount ?? 0))}
-                      </span>
-                    </div>
-                  )}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Tax:</span>
+                        <span className="font-medium">
+                          {Math.round(Number(selectedOrder.tax ?? selectedOrder.pricing?.taxAmount ?? 0))}
+                        </span>
+                      </div>
+                    )}
                   {selectedOrder.discount && selectedOrder.discount > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Discount:</span>

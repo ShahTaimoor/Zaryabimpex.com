@@ -49,6 +49,11 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
     const { name, value, type, checked } = event.target;
     let fieldValue = type === 'checkbox' ? checked : value;
 
+    // Standardize barcode and SKU separators as per scanner best practices (+ and * are risky)
+    if ((name === 'barcode' || name === 'sku') && typeof fieldValue === 'string') {
+      fieldValue = fieldValue.replace(/[+*]/g, '-');
+    }
+
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
       setFormData(prev => ({

@@ -36,6 +36,7 @@ const PrintDocument = ({
         showPrintPaymentAmount = true,
         headerText = '',
         footerText = '',
+        receiptFooterText = '',
         invoiceLayout = 'standard',
         logoSize = 100
     } = printSettings || {};
@@ -876,6 +877,19 @@ const PrintDocument = ({
                     {footerText && (
                         <div className="mt-2 text-gray-500">
                             {footerText}
+                        </div>
+                    )}
+                    {receiptFooterText && (
+                        <div
+                            className="mt-3 pt-2"
+                            style={{
+                                borderTop: '1px dashed #9ca3af',
+                                textAlign: 'center',
+                                whiteSpace: 'pre-line',
+                                lineHeight: 1.35
+                            }}
+                        >
+                            {receiptFooterText}
                         </div>
                     )}
                 </div>

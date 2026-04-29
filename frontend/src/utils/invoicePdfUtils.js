@@ -59,11 +59,11 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
 
   // Map items to rows - look in various common fields and nested data
   const rawData = orderData.data || orderData;
-  const items = Array.isArray(rawData.items) ? rawData.items : 
-                Array.isArray(rawData.orderItems) ? rawData.orderItems :
-                Array.isArray(rawData.products) ? rawData.products :
-                Array.isArray(rawData.invoiceItems) ? rawData.invoiceItems : 
-                Array.isArray(orderData.items) ? orderData.items : [];
+  const items = Array.isArray(rawData.items) ? rawData.items :
+    Array.isArray(rawData.orderItems) ? rawData.orderItems :
+      Array.isArray(rawData.products) ? rawData.products :
+        Array.isArray(rawData.invoiceItems) ? rawData.invoiceItems :
+          Array.isArray(orderData.items) ? orderData.items : [];
 
   const data = items.map((item, index) => {
     const product = item.product || item.productData || {};
@@ -71,7 +71,7 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
     const brand = item.brand || product.brand || '';
     let displayName = product.name || item.name || `Item ${index + 1}`;
     if (sku) displayName += ` (SKU: ${sku})`;
-    
+
     const qty = item.quantity ?? item.qty ?? 0;
     const price = item.unitPrice ?? item.price ?? item.unitCost ?? 0;
     const total = item.total ?? item.lineTotal ?? (qty * price);
@@ -106,7 +106,7 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
   // Add Ledger Balance if available
   const ledgerBalance = ledgerBalanceProp ?? orderData.ledgerBalance ?? orderData.customer?.balance ?? null;
   if (ledgerBalance !== null) {
-      summaryRows.push({ name: 'Ledger Balance', total: Math.round(ledgerBalance).toLocaleString() });
+    summaryRows.push({ name: 'Ledger Balance', total: Math.round(ledgerBalance).toLocaleString() });
   }
 
   // Add party details if needed - currently PdfExportButton only supports one table
@@ -119,7 +119,7 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
   const partyInfo = orderData.customerInfo || orderData.supplierInfo || orderData.customer || orderData.supplier || {};
   let partyAddress = partyInfo.address || '';
   if (typeof partyAddress === 'object') {
-      partyAddress = Object.values(partyAddress).filter(v => typeof v === 'string').join(', ');
+    partyAddress = Object.values(partyAddress).filter(v => typeof v === 'string').join(', ');
   }
   const partyPhone = partyInfo.phone || partyInfo.contactNumber || '';
 
