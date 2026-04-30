@@ -52,7 +52,7 @@ const ThermalReceipt = ({
   };
 
   const formatCurrency = (value) => {
-    return Number(value).toLocaleString(undefined, {
+    return Number(value).toLocaleString('en-US', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2
     });
@@ -63,12 +63,20 @@ const ThermalReceipt = ({
       try {
         JsBarcode(barcodeRef.current, invoiceNumber, {
           format: 'CODE128',
-          width: 1.5,
-          height: 60,
+          width: 2,
+          height: 56,
           displayValue: true,
-          fontSize: 12,
-          margin: 0,
-          background: 'transparent'
+          fontSize: 11,
+          margin: 4,
+          marginLeft: 6,
+          marginRight: 6,
+          marginTop: 4,
+          marginBottom: 4,
+          textMargin: 2,
+          lineColor: '#000000',
+          background: '#ffffff',
+          textAlign: 'center',
+          flat: true
         });
       } catch (error) {
         console.error('Barcode generation failed:', error);
@@ -170,7 +178,7 @@ const ThermalReceipt = ({
         )}
         <div className="thermal-receipt__divider"></div>
         <div className="thermal-receipt__barcode">
-          <canvas ref={barcodeRef}></canvas>
+          <canvas ref={barcodeRef} width="520" height="140"></canvas>
         </div>
         {receiptFooterText && (
           <div className="thermal-receipt__custom-footer">

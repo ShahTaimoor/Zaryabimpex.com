@@ -32,6 +32,8 @@
   font-family: Arial, Helvetica, sans-serif;
   font-size: 13px;
   line-height: 1.2;
+  transform: none !important;
+  zoom: 1;
 }
 
 .thermal-receipt * {
@@ -124,8 +126,8 @@
 
 .thermal-receipt__summary {
   margin-top: 2mm;
-  border-top: 1px solid #000;
-  padding-top: 1mm;
+  border-top: none;
+  padding-top: 0;
 }
 
 .thermal-receipt__summary-row {
@@ -137,9 +139,13 @@
 .thermal-receipt__summary-row--total {
   font-size: 16px;
   font-weight: bold;
-  border-top: 1px double #000;
+  border-top: 1px solid #000;
   margin-top: 1mm;
   padding-top: 1mm;
+}
+
+.thermal-receipt__table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .thermal-receipt__footer {
@@ -164,8 +170,13 @@
 }
 
 .thermal-receipt__barcode canvas {
-  max-width: 100%;
-  height: 60px;
+  width: 52mm;
+  max-width: 52mm;
+  height: 14mm;
+  display: block;
+  margin: 0 auto;
+  image-rendering: auto;
+  transform: none !important;
 }
 
 .break-inside-avoid {

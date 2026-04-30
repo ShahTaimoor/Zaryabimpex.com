@@ -50,23 +50,6 @@ export const PRINT_PAGE_STYLE = `
     background-color: #dbeafe !important;
     -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
   }
-  /* 80mm Thermal Receipt Overrides */
-  .print-wrapper:has(.thermal-receipt),
-  .print-wrapper .thermal-receipt {
-    width: 72mm !important;
-    margin: 0 auto !important;
-    padding: 0 !important;
-    font-family: 'Courier New', Courier, monospace !important;
-  }
-  .print-wrapper:has(.thermal-receipt) .no-print { display: none !important; }
-  
-  @page { size: A4 portrait; margin: 10mm; }
-  /* Conditional page size for thermal */
-  @media print {
-    .print-wrapper:has(.thermal-receipt) {
-      width: 72mm !important;
-    }
-  }
 `;
 
 export const THERMAL_PRINT_PAGE_STYLE = `
@@ -82,6 +65,8 @@ export const THERMAL_PRINT_PAGE_STYLE = `
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     overflow: hidden !important;
+    -webkit-text-size-adjust: 100% !important;
+    zoom: 1 !important;
   }
   * { 
     box-sizing: border-box !important; 
@@ -99,6 +84,7 @@ export const THERMAL_PRINT_PAGE_STYLE = `
     line-height: 1.1 !important;
     display: block !important;
     color: #000 !important;
+    transform: none !important;
   }
   .thermal-receipt table { 
     border-collapse: collapse !important; 
@@ -129,9 +115,12 @@ export const THERMAL_PRINT_PAGE_STYLE = `
   .thermal-receipt__summary-row--total { 
     font-size: 16px !important; 
     font-weight: bold !important; 
-    border-top: 1px double #000 !important; 
+    border-top: 1px solid #000 !important; 
     margin-top: 1mm !important;
     padding-top: 1mm !important;
+  }
+  .thermal-receipt tbody tr:last-child td {
+    border-bottom: none !important;
   }
   /* Remove any transforms that might shrink content */
   .print-wrapper, .print-preview-scale, .print-modal-preview, .print-document {
@@ -144,7 +133,11 @@ export const THERMAL_PRINT_PAGE_STYLE = `
     border: none !important;
   }
   .thermal-receipt canvas {
-    max-width: 60mm !important;
-    height: 50px !important;
+    width: 52mm !important;
+    max-width: 52mm !important;
+    height: 14mm !important;
+    display: block !important;
+    margin: 0 auto !important;
+    image-rendering: auto !important;
   }
 `;

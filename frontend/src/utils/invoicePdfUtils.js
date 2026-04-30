@@ -80,8 +80,8 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
       name: displayName,
       description: item.description || product.description || '—',
       qty: formatQuantityDisplay(qty, product, null, { boxes: item.boxes, pieces: item.pieces }),
-      price: Math.round(price).toLocaleString(),
-      total: Math.round(total).toLocaleString()
+      price: Math.round(price).toLocaleString('en-US'),
+      total: Math.round(total).toLocaleString('en-US')
     };
   });
 
@@ -96,17 +96,17 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
   const showTaxInSummary =
     companySettings?.taxEnabled === true && printShowTax && tax > 0;
 
-  summaryRows.push({ name: 'Subtotal', total: Math.round(subtotal).toLocaleString() });
-  if (discount > 0) summaryRows.push({ name: 'Discount', total: `-${Math.round(discount).toLocaleString()}` });
+  summaryRows.push({ name: 'Subtotal', total: Math.round(subtotal).toLocaleString('en-US') });
+  if (discount > 0) summaryRows.push({ name: 'Discount', total: `-${Math.round(discount).toLocaleString('en-US')}` });
   if (showTaxInSummary) {
-    summaryRows.push({ name: 'Tax', total: Math.round(tax).toLocaleString() });
+    summaryRows.push({ name: 'Tax', total: Math.round(tax).toLocaleString('en-US') });
   }
-  summaryRows.push({ name: 'Total', total: Math.round(total).toLocaleString() });
+  summaryRows.push({ name: 'Total', total: Math.round(total).toLocaleString('en-US') });
 
   // Add Ledger Balance if available
   const ledgerBalance = ledgerBalanceProp ?? orderData.ledgerBalance ?? orderData.customer?.balance ?? null;
   if (ledgerBalance !== null) {
-    summaryRows.push({ name: 'Ledger Balance', total: Math.round(ledgerBalance).toLocaleString() });
+    summaryRows.push({ name: 'Ledger Balance', total: Math.round(ledgerBalance).toLocaleString('en-US') });
   }
 
   // Add party details if needed - currently PdfExportButton only supports one table
