@@ -22,7 +22,15 @@ export const BarcodeLabelPrinter = ({
   const labelFormat = 'CODE128';
   const [includePrice, setIncludePrice] = useState(false);
   const [includeName, setIncludeName] = useState(true);
-  const [labelsPerRow, setLabelsPerRow] = useState(2);
+  const [includeBarcode, setIncludeBarcode] = useState(true);
+  const [showBarcodeValue, setShowBarcodeValue] = useState(true);
+  const [nameSize, setNameSize] = useState(10);
+  const [priceSize, setPriceSize] = useState(9);
+  const [barcodeHeight, setBarcodeHeight] = useState(50);
+  const [labelPadding, setLabelPadding] = useState(0);
+  const [nameMargin, setNameMargin] = useState(2);
+  const [priceMargin, setPriceMargin] = useState(2);
+  const [labelsPerRow, setLabelsPerRow] = useState(1);
   const [productSearch, setProductSearch] = useState('');
   const printRef = useRef(null);
   const formatLabelPrice = (value) =>
@@ -37,6 +45,20 @@ export const BarcodeLabelPrinter = ({
   };
 
   const getLabelSpec = (size) => {
+    if (size === 'thermal_50x30') {
+      return {
+        page: '50mm 29mm', // Slightly less than 30mm to fool printer driver
+        pageWidth: '50mm',
+        labelWidthMm: 46,
+        labelHeightMm: 24, // Even smaller to ensure it fits in one sticker
+        labelWidthPx: 380, // High res for 50mm
+        labelHeightPx: 220, // High res for 30mm
+        barcodeWidth: 1.6, // Optimal for 50mm at 203 DPI
+        barcodeHeight: 52,
+        fontSize: 10,
+        margin: 5,
+      };
+    }
     if (size === 'small') {
       return {
         page: '58mm 30mm',
@@ -98,6 +120,14 @@ export const BarcodeLabelPrinter = ({
     }
   }, [products]);
 
+  // Update custom sizes when labelSize changes
+  useEffect(() => {
+    const spec = getLabelSpec(labelSize);
+    setNameSize(labelSize === 'large' ? 16 : labelSize === 'standard' ? 12 : 10);
+    setPriceSize(labelSize === 'large' ? 14 : labelSize === 'standard' ? 11 : 9);
+    setBarcodeHeight(spec.barcodeHeight);
+  }, [labelSize]);
+
   const toggleProduct = (productId) => {
     setSelectedProducts(prev => 
       prev.includes(productId)
@@ -144,25 +174,27 @@ export const BarcodeLabelPrinter = ({
 
     const canvas = document.createElement('canvas');
     const spec = getLabelSpec(labelSize);
+    
+    // Use a higher scale for crisper barcodes (important for thermal printers)
+    const scale = 2; 
+    
     try {
       JsBarcode(canvas, safeValue, {
         format: 'CODE128',
-        width: spec.barcodeWidth,
-        height: spec.barcodeHeight,
-        displayValue: true,
-        fontSize: spec.fontSize,
-        margin: spec.margin,
-        marginLeft: spec.margin,
-        marginRight: spec.margin,
-        marginTop: 8,
-        marginBottom: 8,
+        width: spec.barcodeWidth * scale,
+        height: barcodeHeight * scale, // Use custom height
+        displayValue: showBarcodeValue,
+        fontSize: spec.fontSize * scale,
+        margin: spec.margin * scale,
         background: '#ffffff',
         lineColor: '#000000',
         textAlign: 'center',
+        textMargin: 4 * scale,
         flat: true
       });
       return canvas;
     } catch (error) {
+      console.error('Barcode generation error:', error);
       return null;
     }
   };
@@ -213,26 +245,24 @@ export const BarcodeLabelPrinter = ({
             body {
               font-family: Arial, sans-serif;
               margin: 0;
-              padding: 0.8mm;
+              padding: ${labelPadding}mm;
               background: #fff;
             }
             .labels-container {
-              display: grid;
-              grid-template-columns: repeat(${Math.max(1, Math.min(labelsPerRow, 4))}, minmax(0, max-content));
-              gap: 1mm;
               width: 100%;
               margin: 0;
-              justify-content: start;
+              padding: ${labelPadding}mm;
             }
             .label {
-              border: 1px solid #000;
+              border: none;
               box-sizing: border-box;
-              width: ${spec.labelWidthMm}mm;
-              min-height: ${spec.labelHeightMm}mm;
-              padding: 2mm 1mm;
+              width: 100%;
+              height: ${spec.labelHeightMm}mm;
+              padding: ${labelPadding}mm;
               text-align: center;
               page-break-inside: avoid;
-              break-inside: avoid;
+              page-break-after: always;
+              break-after: page;
               display: flex;
               flex-direction: column;
               align-items: center;
@@ -241,31 +271,35 @@ export const BarcodeLabelPrinter = ({
               background: #fff;
             }
             .label-name {
-              font-size: ${labelSize === 'small' ? '10px' : labelSize === 'large' ? '16px' : '12px'};
+              font-size: ${nameSize}px;
               font-weight: bold;
-              margin-bottom: 5px;
+              margin-bottom: ${nameMargin}px;
               word-wrap: break-word;
+              max-width: 100%;
+              line-height: 1;
             }
             .label-price {
-              font-size: ${labelSize === 'small' ? '9px' : labelSize === 'large' ? '14px' : '11px'};
-              color: #666;
-              margin-top: 5px;
+              font-size: ${priceSize}px;
+              color: #000;
+              margin-top: ${priceMargin}px;
+              font-weight: bold;
             }
             .barcode-container {
-              margin: 2px 0;
+              margin: 0;
               background: #fff;
-              display: inline-block;
-              padding: 1mm;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              width: 100%;
             }
             .barcode-image {
               display: block;
-              width: auto;
+              width: 100%;
               height: auto;
-              max-width: none;
-              max-height: none;
-              transform: none !important;
-              image-rendering: auto;
-              filter: contrast(100%) brightness(100%);
+              max-width: ${spec.labelWidthMm - 4}mm;
+              image-rendering: -webkit-optimize-contrast;
+              image-rendering: crisp-edges;
+              image-rendering: pixelated;
             }
             @media print {
               .labels-container {
@@ -288,9 +322,11 @@ export const BarcodeLabelPrinter = ({
               return `
                 <div class="label">
                   ${includeName ? `<div class="label-name">${product.name || 'Product'}</div>` : ''}
-                  <div class="barcode-container">
-                    <img class="barcode-image" width="${canvas.width}" height="${canvas.height}" src="${barcodeDataUrl}" alt="Barcode" />
-                  </div>
+                  ${includeBarcode ? `
+                    <div class="barcode-container">
+                      <img class="barcode-image" width="${canvas.width}" height="${canvas.height}" src="${barcodeDataUrl}" alt="Barcode" />
+                    </div>
+                  ` : ''}
                   ${includePrice && product.pricing?.retail ? 
                     `<div class="label-price">PKR ${formatLabelPrice(product.pricing.retail)}</div>` : ''}
                 </div>
@@ -349,11 +385,11 @@ export const BarcodeLabelPrinter = ({
               justify-content: start;
             }
             .label {
-              border: 1px solid #000;
+              border: none;
               box-sizing: border-box;
               width: ${spec.labelWidthMm}mm;
               min-height: ${spec.labelHeightMm}mm;
-              padding: 2mm 1mm;
+              padding: 1mm;
               text-align: center;
               display: flex;
               flex-direction: column;
@@ -363,30 +399,35 @@ export const BarcodeLabelPrinter = ({
               background: #fff;
             }
             .label-name {
-              font-size: ${labelSize === 'small' ? '10px' : labelSize === 'large' ? '16px' : '12px'};
+              font-size: ${nameSize}px;
               font-weight: bold;
-              margin-bottom: 5px;
+              margin-bottom: ${nameMargin}px;
               word-wrap: break-word;
+              max-width: 100%;
+              line-height: 1;
             }
             .label-price {
-              font-size: ${labelSize === 'small' ? '9px' : labelSize === 'large' ? '14px' : '11px'};
-              color: #666;
-              margin-top: 5px;
+              font-size: ${priceSize}px;
+              color: #000;
+              margin-top: ${priceMargin}px;
+              font-weight: bold;
             }
             .barcode-container {
-              margin: 2px 0;
+              margin: 0;
               background: #fff;
-              display: inline-block;
-              padding: 1mm;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              width: 100%;
             }
             .barcode-image {
               display: block;
-              width: auto;
+              width: 100%;
               height: auto;
-              max-width: none;
-              max-height: none;
-              transform: none !important;
-              image-rendering: auto;
+              max-width: ${spec.labelWidthMm - 4}mm;
+              image-rendering: -webkit-optimize-contrast;
+              image-rendering: crisp-edges;
+              image-rendering: pixelated;
             }
           </style>
         </head>
@@ -404,9 +445,11 @@ export const BarcodeLabelPrinter = ({
               return `
                 <div class="label">
                   ${includeName ? `<div class="label-name">${product.name || 'Product'}</div>` : ''}
-                  <div class="barcode-container">
-                    <img class="barcode-image" width="${canvas.width}" height="${canvas.height}" src="${barcodeDataUrl}" alt="Barcode" />
-                  </div>
+                  ${includeBarcode ? `
+                    <div class="barcode-container">
+                      <img class="barcode-image" width="${canvas.width}" height="${canvas.height}" src="${barcodeDataUrl}" alt="Barcode" />
+                    </div>
+                  ` : ''}
                   ${includePrice && product.pricing?.retail ? 
                     `<div class="label-price">PKR ${formatLabelPrice(product.pricing.retail)}</div>` : ''}
                 </div>
@@ -476,27 +519,29 @@ export const BarcodeLabelPrinter = ({
           }
 
           const x = marginX + col * (labelW + gapX);
-          pdf.rect(x, y, labelW, labelH);
+          // pdf.rect(x, y, labelW, labelH); // Removed border
 
           let cursorY = y + 2.2;
           if (includeName) {
             const title = (product.name || 'Product').slice(0, 48);
             pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(labelSize === 'large' ? 9 : 8);
+            pdf.setFontSize(nameSize * 0.75); // Convert px to pt approx
             pdf.text(title, x + (labelW / 2), cursorY, { align: 'center', baseline: 'top' });
-            cursorY += labelSize === 'large' ? 5.2 : 4.6;
+            cursorY += (nameSize * 0.35) + 2;
           }
 
-          const barcodeDataUrl = canvas.toDataURL('image/png');
-          const barcodeW = Math.max(18, labelW - 4);
-          const barcodeH = Math.min(14, labelH * 0.48);
-          pdf.addImage(barcodeDataUrl, 'PNG', x + ((labelW - barcodeW) / 2), cursorY, barcodeW, barcodeH);
-          cursorY += barcodeH + 2;
+          if (includeBarcode) {
+            const barcodeDataUrl = canvas.toDataURL('image/png');
+            const barcodeW = Math.max(18, labelW - 4);
+            const barcodeH = Math.min(14, barcodeHeight * 0.26); // Use custom height
+            pdf.addImage(barcodeDataUrl, 'PNG', x + ((labelW - barcodeW) / 2), cursorY, barcodeW, barcodeH);
+            cursorY += barcodeH + 1.5;
+          }
 
           if (includePrice && product.pricing?.retail != null) {
             pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(labelSize === 'large' ? 8.5 : 7.5);
-            pdf.text(`PKR ${formatLabelPrice(product.pricing.retail)}`, x + (labelW / 2), Math.min(y + labelH - 2, cursorY), { align: 'center' });
+            pdf.setFontSize(priceSize * 0.75);
+            pdf.text(`PKR ${formatLabelPrice(product.pricing.retail)}`, x + (labelW / 2), Math.min(y + labelH - 1, cursorY), { align: 'center' });
           }
 
           index += 1;
@@ -551,9 +596,10 @@ export const BarcodeLabelPrinter = ({
                       onChange={(e) => setLabelSize(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                     >
-                      <option value="small">Small</option>
-                      <option value="standard">Standard</option>
-                      <option value="large">Large</option>
+                      <option value="thermal_50x30">50mm x 30mm (Thermal)</option>
+                      <option value="small">58mm x 30mm</option>
+                      <option value="standard">80mm x 40mm</option>
+                      <option value="large">100mm x 50mm</option>
                     </select>
                   </div>
 
@@ -606,6 +652,102 @@ export const BarcodeLabelPrinter = ({
                       />
                       <span className="text-sm text-gray-700">Include Price</span>
                     </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={includeBarcode}
+                        onChange={(e) => setIncludeBarcode(e.target.checked)}
+                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-gray-700">Include Barcode</span>
+                    </label>
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={showBarcodeValue}
+                        onChange={(e) => setShowBarcodeValue(e.target.checked)}
+                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-gray-700">Show Barcode Value</span>
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        Name Size (px)
+                      </label>
+                      <input
+                        type="number"
+                        value={nameSize}
+                        onChange={(e) => setNameSize(Number(e.target.value))}
+                        className="w-full px-2 py-1 border rounded text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        Price Size (px)
+                      </label>
+                      <input
+                        type="number"
+                        value={priceSize}
+                        onChange={(e) => setPriceSize(Number(e.target.value))}
+                        className="w-full px-2 py-1 border rounded text-sm"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        Barcode Height
+                      </label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="80"
+                        value={barcodeHeight}
+                        onChange={(e) => setBarcodeHeight(Number(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        Padding (mm)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        value={labelPadding}
+                        onChange={(e) => setLabelPadding(Number(e.target.value))}
+                        className="w-full px-2 py-1 border rounded text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        Name Gap (px)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="20"
+                        value={nameMargin}
+                        onChange={(e) => setNameMargin(Number(e.target.value))}
+                        className="w-full px-2 py-1 border rounded text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        Price Gap (px)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="20"
+                        value={priceMargin}
+                        onChange={(e) => setPriceMargin(Number(e.target.value))}
+                        className="w-full px-2 py-1 border rounded text-sm"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
