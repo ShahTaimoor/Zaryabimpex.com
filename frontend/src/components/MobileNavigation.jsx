@@ -32,8 +32,9 @@ import {
 import { useResponsive } from './ResponsiveContainer';
 import { useAuth } from '../contexts/AuthContext';
 import { loadSidebarConfig } from './MultiTabLayout';
+import { canAccessRoute } from '../config/routeAccess';
 
-const MobileNavigation = ({ user, onLogout }) => {
+const MobileNavigation = ({ user, onLogout, isLoggingOut = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const location = useLocation();
@@ -72,42 +73,42 @@ const MobileNavigation = ({ user, onLogout }) => {
   }, [isOpen]);
 
   const navigationItems = [
-    { path: '/', icon: Home, label: 'Dashboard', badge: null, permission: null }, // Always visible
-    { path: '/sales', icon: ShoppingCart, label: 'Sales', badge: null, permission: 'view_sales_orders' },
-    { path: '/sales-orders', icon: FileText, label: 'Sales Orders', badge: null, permission: 'view_sales_orders' },
-    { path: '/sales-invoices', icon: FileText, label: 'Sales Invoices', badge: null, permission: 'view_sales_invoices' },
-    { path: '/purchase', icon: Truck, label: 'Purchase', badge: null, permission: 'view_purchase_orders' },
-    { path: '/purchase-orders', icon: FileText, label: 'Purchase Orders', badge: null, permission: 'view_purchase_orders' },
-    { path: '/purchase-invoices', icon: FileText, label: 'Purchase Invoices', badge: null, permission: 'view_purchase_invoices' },
-    { path: '/purchase-by-supplier', icon: BarChart3, label: 'Products by Supplier', badge: null, permission: 'view_reports' },
-    { path: '/products', icon: Package, label: 'Products', badge: null, permission: 'view_products' },
-    { path: '/customers', icon: Users, label: 'Customers', badge: null, permission: 'view_customers' },
-    { path: '/suppliers', icon: Truck, label: 'Suppliers', badge: null, permission: 'view_suppliers' },
-    { path: '/banks', icon: Building2, label: 'Bank & cash opening', badge: null, permission: null },
-    { path: '/investors', icon: TrendingUp, label: 'Investors', badge: null, permission: 'view_investors' },
-    { path: '/drop-shipping', icon: ArrowRight, label: 'Drop Shipping', badge: null, permission: 'create_drop_shipping' },
-    { path: '/inventory', icon: Package, label: 'Inventory', badge: null, permission: 'view_inventory' },
-    { path: '/stock-movements', icon: ArrowUpDown, label: 'Stock Movements', badge: null, permission: 'view_stock_movements' },
-    { path: '/stock-ledger', icon: FileText, label: 'Stock Ledger', badge: null, permission: 'view_reports' },
-    { path: '/sale-returns', icon: RotateCcw, label: 'Sale Returns', badge: null, permission: 'view_returns' },
-    { path: '/purchase-returns', icon: RotateCcw, label: 'Purchase Returns', badge: null, permission: 'view_returns' },
-    { path: '/discounts', icon: Tag, label: 'Discounts', badge: null, permission: 'view_discounts' },
-    { path: '/pl-statements', icon: BarChart3, label: 'P&L Statements', badge: null, permission: 'view_pl_statements' },
-    { path: '/balance-sheet-statement', icon: FileText, label: 'Balance Sheet', badge: null, permission: 'view_balance_sheets' },
-    { path: '/sales-performance', icon: TrendingUp, label: 'Sales Performance', badge: null, permission: 'view_sales_performance' },
-    { path: '/inventory-reports', icon: Warehouse, label: 'Inventory Reports', badge: null, permission: 'view_inventory_reports' },
-    { path: '/reports', icon: BarChart3, label: 'Reports', badge: null, permission: 'view_general_reports' },
-    { path: '/backdate-report', icon: Clock, label: 'Backdate Report', badge: null, permission: 'view_backdate_report' },
-    { path: '/chart-of-accounts', icon: FolderTree, label: 'Chart of Accounts', badge: null, permission: 'view_chart_of_accounts' },
-    { path: '/journal-vouchers', icon: FileText, label: 'Journal Vouchers', badge: null, permission: 'view_reports' },
-    { path: '/account-ledger', icon: FileText, label: 'Account Ledger Summary', badge: null, permission: 'view_reports' },
-    { path: '/employees', icon: Users, label: 'Employees', badge: null, permission: 'manage_users' },
-    { path: '/attendance', icon: Clock, label: 'Attendance', badge: null, permission: 'view_own_attendance' },
-    { path: '/settings', icon: Settings, label: 'Settings', badge: null, permission: 'manage_users' },
-    { path: '/expenses', icon: Wallet, label: 'Record Expense', badge: null, permission: 'view_reports' },
-    { path: '/cash-receipts', icon: Receipt, label: 'Cash Receipts', badge: null, permission: 'view_reports' },
-    { path: '/cash-payments', icon: CreditCard, label: 'Cash Payments', badge: null, permission: 'view_reports' },
-    { path: '/cctv-access', icon: Camera, label: 'CCTV Access', badge: null, permission: 'view_sales_invoices' }
+    { path: '/', icon: Home, label: 'Dashboard', badge: null },
+    { path: '/sales', icon: ShoppingCart, label: 'Sales', badge: null },
+    { path: '/sales-orders', icon: FileText, label: 'Sales Orders', badge: null },
+    { path: '/sales-invoices', icon: FileText, label: 'Sales Invoices', badge: null },
+    { path: '/purchase', icon: Truck, label: 'Purchase', badge: null },
+    { path: '/purchase-orders', icon: FileText, label: 'Purchase Orders', badge: null },
+    { path: '/purchase-invoices', icon: FileText, label: 'Purchase Invoices', badge: null },
+    { path: '/purchase-by-supplier', icon: BarChart3, label: 'Products by Supplier', badge: null },
+    { path: '/products', icon: Package, label: 'Products', badge: null },
+    { path: '/customers', icon: Users, label: 'Customers', badge: null },
+    { path: '/suppliers', icon: Truck, label: 'Suppliers', badge: null },
+    { path: '/banks', icon: Building2, label: 'Bank & cash opening', badge: null },
+    { path: '/investors', icon: TrendingUp, label: 'Investors', badge: null },
+    { path: '/drop-shipping', icon: ArrowRight, label: 'Drop Shipping', badge: null },
+    { path: '/inventory', icon: Package, label: 'Inventory', badge: null },
+    { path: '/stock-movements', icon: ArrowUpDown, label: 'Stock Movements', badge: null },
+    { path: '/stock-ledger', icon: FileText, label: 'Stock Ledger', badge: null },
+    { path: '/sale-returns', icon: RotateCcw, label: 'Sale Returns', badge: null },
+    { path: '/purchase-returns', icon: RotateCcw, label: 'Purchase Returns', badge: null },
+    { path: '/discounts', icon: Tag, label: 'Discounts', badge: null },
+    { path: '/pl-statements', icon: BarChart3, label: 'P&L Statements', badge: null },
+    { path: '/balance-sheet-statement', icon: FileText, label: 'Balance Sheet', badge: null },
+    { path: '/sales-performance', icon: TrendingUp, label: 'Sales Performance', badge: null },
+    { path: '/inventory-reports', icon: Warehouse, label: 'Inventory Reports', badge: null },
+    { path: '/reports', icon: BarChart3, label: 'Reports', badge: null },
+    { path: '/backdate-report', icon: Clock, label: 'Backdate Report', badge: null },
+    { path: '/chart-of-accounts', icon: FolderTree, label: 'Chart of Accounts', badge: null },
+    { path: '/journal-vouchers', icon: FileText, label: 'Journal Vouchers', badge: null },
+    { path: '/account-ledger', icon: FileText, label: 'Account Ledger Summary', badge: null },
+    { path: '/employees', icon: Users, label: 'Employees', badge: null },
+    { path: '/attendance', icon: Clock, label: 'Attendance', badge: null },
+    { path: '/settings2', icon: Settings, label: 'Settings', badge: null },
+    { path: '/expenses', icon: Wallet, label: 'Record Expense', badge: null },
+    { path: '/cash-receipts', icon: Receipt, label: 'Cash Receipts', badge: null },
+    { path: '/cash-payments', icon: CreditCard, label: 'Cash Payments', badge: null },
+    { path: '/cctv-access', icon: Camera, label: 'CCTV Access', badge: null }
   ];
 
   // Sidebar visibility state
@@ -129,9 +130,7 @@ const MobileNavigation = ({ user, onLogout }) => {
     if (sidebarConfig[item.label] === false) return false;
 
     // 2. Check permissions
-    if (!item.permission) return true; // Always show items without permission requirement
-    if (user?.role === 'admin') return true; // Admin users see everything
-    return hasPermission(item.permission);
+    return canAccessRoute(item.path, user, hasPermission);
   });
 
   const isActive = (path) => {
@@ -240,11 +239,15 @@ const MobileNavigation = ({ user, onLogout }) => {
             {/* Footer */}
             <div className="p-4 border-t border-gray-200">
               <button
-                onClick={onLogout}
-                className="w-full flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors"
+                onClick={() => {
+                  if (isLoggingOut) return;
+                  onLogout();
+                }}
+                disabled={isLoggingOut}
+                className="w-full flex items-center px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <LogOut className="mr-3 h-5 w-5 text-gray-400" />
-                Sign out
+                {isLoggingOut ? 'Signing out...' : 'Sign out'}
               </button>
             </div>
           </div>

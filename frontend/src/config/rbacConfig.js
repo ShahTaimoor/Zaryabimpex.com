@@ -46,7 +46,20 @@ export const PERMISSIONS = {
   
   // Accounting
   VIEW_ACCOUNTING: 'view_accounting',
-  MANAGE_ACCOUNTING: 'manage_accounting'
+  MANAGE_ACCOUNTING: 'manage_accounting',
+
+  // Additional route/menu permissions
+  VIEW_BACKDATE_REPORT: 'view_backdate_report',
+  VIEW_OWN_ATTENDANCE: 'view_own_attendance',
+  VIEW_TEAM_ATTENDANCE: 'view_team_attendance',
+  VIEW_CHART_OF_ACCOUNTS: 'view_chart_of_accounts',
+  VIEW_ACCOUNTING_TRANSACTIONS: 'view_accounting_transactions',
+  VIEW_ACCOUNTING_SUMMARY: 'view_accounting_summary',
+  VIEW_CASH_RECEIPTS: 'view_cash_receipts',
+  VIEW_CASH_PAYMENTS: 'view_cash_payments',
+  VIEW_BANK_RECEIPTS: 'view_bank_receipts',
+  VIEW_BANK_PAYMENTS: 'view_bank_payments',
+  VIEW_EXPENSES: 'view_expenses'
 };
 
 /**

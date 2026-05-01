@@ -4,6 +4,7 @@ import * as Icons from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../utils/componentUtils';
+import { canAccessRoute } from '../config/routeAccess';
 
 const MobileBottomNav = () => {
   const navigate = useNavigate();
@@ -102,9 +103,7 @@ const MobileBottomNav = () => {
 
   // Filter items based on permissions
   const visibleItems = config.filter(item => {
-    const componentInfo = getComponentInfo(item.href);
-    const permission = componentInfo?.permission || item.permission;
-    return !permission || user?.role === 'admin' || hasPermission(permission);
+    return canAccessRoute(item.href, user, hasPermission);
   });
 
   if (visibleItems.length === 0) return null;

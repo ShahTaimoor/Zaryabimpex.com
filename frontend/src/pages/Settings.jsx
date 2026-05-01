@@ -2683,7 +2683,27 @@ export const Settings2 = () => {
                                   </div>
                                   <span className="text-sm font-bold text-gray-800 uppercase tracking-tight">{item.name}</span>
                                 </div>
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter bg-gray-100/50 px-2 py-0.5 rounded">Module Links</span>
+                                <div className="flex items-center gap-4">
+                                  <label className="flex items-center gap-2 text-[11px] font-semibold text-gray-600 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200">
+                                    <Checkbox
+                                      id={`sidebar-group-${item.name}`.replace(/\s+/g, '-')}
+                                      checked={item.children.every((child) => sidebarConfig[child.name] !== false)}
+                                      onCheckedChange={(checked) => {
+                                        const newConfig = { ...sidebarConfig };
+                                        item.children.forEach((child) => {
+                                          newConfig[child.name] = !!checked;
+                                        });
+                                        setSidebarConfig(newConfig);
+                                        localStorage.setItem('sidebarConfig', JSON.stringify(newConfig));
+                                        toast.success(`${item.name} submenu ${checked ? 'enabled' : 'disabled'}`);
+                                        window.dispatchEvent(new Event('sidebarConfigChanged'));
+                                      }}
+                                      className="w-4 h-4 rounded border-2 border-gray-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600 transition-colors"
+                                    />
+                                    <span>Select All</span>
+                                  </label>
+                                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter bg-gray-100/50 px-2 py-0.5 rounded">Module Links</span>
+                                </div>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                                 {item.children.map((child) => {

@@ -9,7 +9,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import NetworkStatus from './components/NetworkStatus';
 import OfflineIndicator from './components/OfflineIndicator';
 import { LoadingPage } from './components/LoadingSpinner';
-import { PERMISSIONS } from './config/rbacConfig';
+import { getRouteAccess } from './config/routeAccess';
 import SyncManager from './services/SyncManager';
 
 // Critical components - load immediately (small, frequently used)
@@ -66,6 +66,16 @@ const ProductVariants = lazy(() => import('./pages/ProductVariants'));
 const ProductTransformations = lazy(() => import('./pages/ProductTransformations'));
 const CCTVAccess = lazy(() => import('./pages/CCTVAccess'));
 
+const withRouteGuard = (path, element) => {
+  const access = getRouteAccess(path);
+  if (!access) return element;
+  return (
+    <ProtectedRoute permission={access.permission} permissionAny={access.permissionAny || []}>
+      {element}
+    </ProtectedRoute>
+  );
+};
+
 function App() {
   useEffect(() => {
     // Initialize offline sync manager
@@ -87,55 +97,55 @@ function App() {
                   <MultiTabLayout>
                     <Routes>
                       <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                      <Route path="/dashboard" element={<Suspense fallback={<LoadingPage />}><Dashboard /></Suspense>} />
-                      <Route path="/sales-orders" element={<ProtectedRoute permissionAny={[PERMISSIONS.VIEW_SALES_ORDERS, PERMISSIONS.CREATE_SALES_ORDERS, PERMISSIONS.EDIT_SALES_ORDERS]}><Suspense fallback={<LoadingPage />}><SalesOrders /></Suspense></ProtectedRoute>} />
-                      <Route path="/sales" element={<ProtectedRoute permissionAny={[PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS, PERMISSIONS.MANAGE_SALES]}><Suspense fallback={<LoadingPage />}><Sales /></Suspense></ProtectedRoute>} />
-                      <Route path="/purchase-orders" element={<ProtectedRoute permissionAny={[PERMISSIONS.VIEW_PURCHASE_ORDERS, PERMISSIONS.CREATE_PURCHASE_ORDERS, PERMISSIONS.EDIT_PURCHASE_ORDERS]}><Suspense fallback={<LoadingPage />}><PurchaseOrders /></Suspense></ProtectedRoute>} />
-                      <Route path="/purchase-invoices" element={<ProtectedRoute permissionAny={[PERMISSIONS.VIEW_PURCHASE_INVOICES, PERMISSIONS.CREATE_PURCHASE_INVOICES, PERMISSIONS.EDIT_PURCHASE_INVOICES]}><Suspense fallback={<LoadingPage />}><PurchaseInvoices /></Suspense></ProtectedRoute>} />
-                      <Route path="/purchase" element={<ProtectedRoute permissionAny={[PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS]}><Suspense fallback={<LoadingPage />}><Purchase /></Suspense></ProtectedRoute>} />
-                      <Route path="/products" element={<ProtectedRoute permission={PERMISSIONS.VIEW_PRODUCTS}><Suspense fallback={<LoadingPage />}><Products /></Suspense></ProtectedRoute>} />
-                      <Route path="/product-variants" element={<ProtectedRoute permission={PERMISSIONS.VIEW_PRODUCTS}><Suspense fallback={<LoadingPage />}><ProductVariants /></Suspense></ProtectedRoute>} />
-                      <Route path="/product-transformations" element={<ProtectedRoute permission={PERMISSIONS.VIEW_PRODUCTS}><Suspense fallback={<LoadingPage />}><ProductTransformations /></Suspense></ProtectedRoute>} />
-                      <Route path="/categories" element={<ProtectedRoute permission={PERMISSIONS.VIEW_PRODUCTS}><Suspense fallback={<LoadingPage />}><Categories /></Suspense></ProtectedRoute>} />
-                      <Route path="/customers" element={<ProtectedRoute permission={PERMISSIONS.VIEW_PRODUCTS}><Suspense fallback={<LoadingPage />}><Customers /></Suspense></ProtectedRoute>} />
-                      <Route path="/suppliers" element={<ProtectedRoute permission={PERMISSIONS.VIEW_PRODUCTS}><Suspense fallback={<LoadingPage />}><Suppliers /></Suspense></ProtectedRoute>} />
-                      <Route path="/investors" element={<ProtectedRoute permission={PERMISSIONS.VIEW_REPORTS}><Suspense fallback={<LoadingPage />}><Investors /></Suspense></ProtectedRoute>} />
-                      <Route path="/drop-shipping" element={<ProtectedRoute permission={PERMISSIONS.VIEW_SALES}><Suspense fallback={<LoadingPage />}><DropShipping /></Suspense></ProtectedRoute>} />
-                      <Route path="/sales-invoices" element={<ProtectedRoute permissionAny={[PERMISSIONS.VIEW_SALES_INVOICES, PERMISSIONS.CREATE_SALES_INVOICES, PERMISSIONS.EDIT_SALES_INVOICES]}><Suspense fallback={<LoadingPage />}><SalesInvoices /></Suspense></ProtectedRoute>} />
-                      <Route path="/inventory" element={<ProtectedRoute permission={PERMISSIONS.VIEW_INVENTORY}><Suspense fallback={<LoadingPage />}><Inventory /></Suspense></ProtectedRoute>} />
-                      <Route path="/inventory-alerts" element={<ProtectedRoute permission={PERMISSIONS.VIEW_INVENTORY}><Suspense fallback={<LoadingPage />}><InventoryAlerts /></Suspense></ProtectedRoute>} />
-                      <Route path="/customer-analytics" element={<ProtectedRoute permission={PERMISSIONS.VIEW_REPORTS}><Suspense fallback={<LoadingPage />}><CustomerAnalytics /></Suspense></ProtectedRoute>} />
-                      <Route path="/anomaly-detection" element={<ProtectedRoute permission={PERMISSIONS.VIEW_REPORTS}><Suspense fallback={<LoadingPage />}><AnomalyDetection /></Suspense></ProtectedRoute>} />
-                      <Route path="/warehouses" element={<ProtectedRoute permission={PERMISSIONS.VIEW_INVENTORY}><Suspense fallback={<LoadingPage />}><Warehouses /></Suspense></ProtectedRoute>} />
-                      <Route path="/stock-movements" element={<ProtectedRoute permission={PERMISSIONS.VIEW_INVENTORY}><Suspense fallback={<LoadingPage />}><StockMovements /></Suspense></ProtectedRoute>} />
+                      <Route path="/dashboard" element={withRouteGuard('/dashboard', <Suspense fallback={<LoadingPage />}><Dashboard /></Suspense>)} />
+                      <Route path="/sales-orders" element={withRouteGuard('/sales-orders', <Suspense fallback={<LoadingPage />}><SalesOrders /></Suspense>)} />
+                      <Route path="/sales" element={withRouteGuard('/sales', <Suspense fallback={<LoadingPage />}><Sales /></Suspense>)} />
+                      <Route path="/purchase-orders" element={withRouteGuard('/purchase-orders', <Suspense fallback={<LoadingPage />}><PurchaseOrders /></Suspense>)} />
+                      <Route path="/purchase-invoices" element={withRouteGuard('/purchase-invoices', <Suspense fallback={<LoadingPage />}><PurchaseInvoices /></Suspense>)} />
+                      <Route path="/purchase" element={withRouteGuard('/purchase', <Suspense fallback={<LoadingPage />}><Purchase /></Suspense>)} />
+                      <Route path="/products" element={withRouteGuard('/products', <Suspense fallback={<LoadingPage />}><Products /></Suspense>)} />
+                      <Route path="/product-variants" element={withRouteGuard('/product-variants', <Suspense fallback={<LoadingPage />}><ProductVariants /></Suspense>)} />
+                      <Route path="/product-transformations" element={withRouteGuard('/product-transformations', <Suspense fallback={<LoadingPage />}><ProductTransformations /></Suspense>)} />
+                      <Route path="/categories" element={withRouteGuard('/categories', <Suspense fallback={<LoadingPage />}><Categories /></Suspense>)} />
+                      <Route path="/customers" element={withRouteGuard('/customers', <Suspense fallback={<LoadingPage />}><Customers /></Suspense>)} />
+                      <Route path="/suppliers" element={withRouteGuard('/suppliers', <Suspense fallback={<LoadingPage />}><Suppliers /></Suspense>)} />
+                      <Route path="/investors" element={withRouteGuard('/investors', <Suspense fallback={<LoadingPage />}><Investors /></Suspense>)} />
+                      <Route path="/drop-shipping" element={withRouteGuard('/drop-shipping', <Suspense fallback={<LoadingPage />}><DropShipping /></Suspense>)} />
+                      <Route path="/sales-invoices" element={withRouteGuard('/sales-invoices', <Suspense fallback={<LoadingPage />}><SalesInvoices /></Suspense>)} />
+                      <Route path="/inventory" element={withRouteGuard('/inventory', <Suspense fallback={<LoadingPage />}><Inventory /></Suspense>)} />
+                      <Route path="/inventory-alerts" element={withRouteGuard('/inventory-alerts', <Suspense fallback={<LoadingPage />}><InventoryAlerts /></Suspense>)} />
+                      <Route path="/customer-analytics" element={withRouteGuard('/customer-analytics', <Suspense fallback={<LoadingPage />}><CustomerAnalytics /></Suspense>)} />
+                      <Route path="/anomaly-detection" element={withRouteGuard('/anomaly-detection', <Suspense fallback={<LoadingPage />}><AnomalyDetection /></Suspense>)} />
+                      <Route path="/warehouses" element={withRouteGuard('/warehouses', <Suspense fallback={<LoadingPage />}><Warehouses /></Suspense>)} />
+                      <Route path="/stock-movements" element={withRouteGuard('/stock-movements', <Suspense fallback={<LoadingPage />}><StockMovements /></Suspense>)} />
 
-                      <Route path="/pl-statements" element={<ProtectedRoute permission={PERMISSIONS.VIEW_FINANCIAL_DATA}><Suspense fallback={<LoadingPage />}><PLStatements /></Suspense></ProtectedRoute>} />
-                      <Route path="/balance-sheet-statement" element={<ProtectedRoute permission={PERMISSIONS.VIEW_FINANCIAL_DATA}><Suspense fallback={<LoadingPage />}><BalanceSheetStatement /></Suspense></ProtectedRoute>} />
-                      <Route path="/sale-returns" element={<ProtectedRoute permission={PERMISSIONS.MANAGE_SALES}><Suspense fallback={<LoadingPage />}><SaleReturns /></Suspense></ProtectedRoute>} />
-                      <Route path="/purchase-returns" element={<ProtectedRoute permission={PERMISSIONS.MANAGE_INVENTORY}><Suspense fallback={<LoadingPage />}><PurchaseReturns /></Suspense></ProtectedRoute>} />
-                      <Route path="/purchase-by-supplier" element={<ProtectedRoute permission={PERMISSIONS.VIEW_REPORTS}><Suspense fallback={<LoadingPage />}><PurchaseBySupplierReport /></Suspense></ProtectedRoute>} />
-                      <Route path="/discounts" element={<ProtectedRoute permission={PERMISSIONS.MANAGE_SETTINGS}><Suspense fallback={<LoadingPage />}><Discounts /></Suspense></ProtectedRoute>} />
-                      <Route path="/sales-performance" element={<ProtectedRoute permission={PERMISSIONS.VIEW_REPORTS}><Suspense fallback={<LoadingPage />}><SalesPerformanceReports /></Suspense></ProtectedRoute>} />
-                      <Route path="/inventory-reports" element={<ProtectedRoute permission={PERMISSIONS.VIEW_REPORTS}><Suspense fallback={<LoadingPage />}><InventoryReports /></Suspense></ProtectedRoute>} />
-                      <Route path="/cash-receipts" element={<ProtectedRoute permission={PERMISSIONS.VIEW_ACCOUNTING}><Suspense fallback={<LoadingPage />}><CashReceipts /></Suspense></ProtectedRoute>} />
-                      <Route path="/cash-receiving" element={<ProtectedRoute permission={PERMISSIONS.VIEW_ACCOUNTING}><Suspense fallback={<LoadingPage />}><CashReceiving /></Suspense></ProtectedRoute>} />
-                      <Route path="/cash-payments" element={<ProtectedRoute permission={PERMISSIONS.VIEW_ACCOUNTING}><Suspense fallback={<LoadingPage />}><CashPayments /></Suspense></ProtectedRoute>} />
-                      <Route path="/cities" element={<ProtectedRoute permission={PERMISSIONS.MANAGE_SETTINGS}><Suspense fallback={<LoadingPage />}><Cities /></Suspense></ProtectedRoute>} />
-                      <Route path="/expenses" element={<ProtectedRoute permission={PERMISSIONS.VIEW_ACCOUNTING}><Suspense fallback={<LoadingPage />}><Expenses /></Suspense></ProtectedRoute>} />
-                      <Route path="/bank-receipts" element={<ProtectedRoute permission={PERMISSIONS.VIEW_ACCOUNTING}><Suspense fallback={<LoadingPage />}><BankReceipts /></Suspense></ProtectedRoute>} />
-                      <Route path="/bank-payments" element={<ProtectedRoute permission={PERMISSIONS.VIEW_ACCOUNTING}><Suspense fallback={<LoadingPage />}><BankPayments /></Suspense></ProtectedRoute>} />
-                      <Route path="/journal-vouchers" element={<ProtectedRoute permission={PERMISSIONS.VIEW_ACCOUNTING}><Suspense fallback={<LoadingPage />}><JournalVouchers /></Suspense></ProtectedRoute>} />
-                      <Route path="/chart-of-accounts" element={<ProtectedRoute permission={PERMISSIONS.VIEW_ACCOUNTING}><Suspense fallback={<LoadingPage />}><ChartOfAccounts /></Suspense></ProtectedRoute>} />
-                      <Route path="/account-ledger" element={<ProtectedRoute permission={PERMISSIONS.VIEW_ACCOUNTING}><Suspense fallback={<LoadingPage />}><AccountLedgerSummary /></Suspense></ProtectedRoute>} />
-                      <Route path="/reports" element={<ProtectedRoute permission={PERMISSIONS.VIEW_REPORTS}><Suspense fallback={<LoadingPage />}><Reports /></Suspense></ProtectedRoute>} />
-                      <Route path="/backdate-report" element={<Suspense fallback={<LoadingPage />}><BackdateReport /></Suspense>} />
-                      <Route path="/settings" element={<Suspense fallback={<LoadingPage />}><Settings2 /></Suspense>} />
-                      <Route path="/migration" element={<Suspense fallback={<LoadingPage />}><Migration /></Suspense>} />
-                      <Route path="/settings2" element={<Suspense fallback={<LoadingPage />}><Settings2 /></Suspense>} />
-                      <Route path="/attendance" element={<Suspense fallback={<LoadingPage />}><Attendance /></Suspense>} />
-                      <Route path="/employees" element={<Suspense fallback={<LoadingPage />}><Employees /></Suspense>} />
-                      <Route path="/cctv-access" element={<Suspense fallback={<LoadingPage />}><CCTVAccess /></Suspense>} />
-                      <Route path="/help" element={<Suspense fallback={<LoadingPage />}><Help /></Suspense>} />
+                      <Route path="/pl-statements" element={withRouteGuard('/pl-statements', <Suspense fallback={<LoadingPage />}><PLStatements /></Suspense>)} />
+                      <Route path="/balance-sheet-statement" element={withRouteGuard('/balance-sheet-statement', <Suspense fallback={<LoadingPage />}><BalanceSheetStatement /></Suspense>)} />
+                      <Route path="/sale-returns" element={withRouteGuard('/sale-returns', <Suspense fallback={<LoadingPage />}><SaleReturns /></Suspense>)} />
+                      <Route path="/purchase-returns" element={withRouteGuard('/purchase-returns', <Suspense fallback={<LoadingPage />}><PurchaseReturns /></Suspense>)} />
+                      <Route path="/purchase-by-supplier" element={withRouteGuard('/purchase-by-supplier', <Suspense fallback={<LoadingPage />}><PurchaseBySupplierReport /></Suspense>)} />
+                      <Route path="/discounts" element={withRouteGuard('/discounts', <Suspense fallback={<LoadingPage />}><Discounts /></Suspense>)} />
+                      <Route path="/sales-performance" element={withRouteGuard('/sales-performance', <Suspense fallback={<LoadingPage />}><SalesPerformanceReports /></Suspense>)} />
+                      <Route path="/inventory-reports" element={withRouteGuard('/inventory-reports', <Suspense fallback={<LoadingPage />}><InventoryReports /></Suspense>)} />
+                      <Route path="/cash-receipts" element={withRouteGuard('/cash-receipts', <Suspense fallback={<LoadingPage />}><CashReceipts /></Suspense>)} />
+                      <Route path="/cash-receiving" element={withRouteGuard('/cash-receiving', <Suspense fallback={<LoadingPage />}><CashReceiving /></Suspense>)} />
+                      <Route path="/cash-payments" element={withRouteGuard('/cash-payments', <Suspense fallback={<LoadingPage />}><CashPayments /></Suspense>)} />
+                      <Route path="/cities" element={withRouteGuard('/cities', <Suspense fallback={<LoadingPage />}><Cities /></Suspense>)} />
+                      <Route path="/expenses" element={withRouteGuard('/expenses', <Suspense fallback={<LoadingPage />}><Expenses /></Suspense>)} />
+                      <Route path="/bank-receipts" element={withRouteGuard('/bank-receipts', <Suspense fallback={<LoadingPage />}><BankReceipts /></Suspense>)} />
+                      <Route path="/bank-payments" element={withRouteGuard('/bank-payments', <Suspense fallback={<LoadingPage />}><BankPayments /></Suspense>)} />
+                      <Route path="/journal-vouchers" element={withRouteGuard('/journal-vouchers', <Suspense fallback={<LoadingPage />}><JournalVouchers /></Suspense>)} />
+                      <Route path="/chart-of-accounts" element={withRouteGuard('/chart-of-accounts', <Suspense fallback={<LoadingPage />}><ChartOfAccounts /></Suspense>)} />
+                      <Route path="/account-ledger" element={withRouteGuard('/account-ledger', <Suspense fallback={<LoadingPage />}><AccountLedgerSummary /></Suspense>)} />
+                      <Route path="/reports" element={withRouteGuard('/reports', <Suspense fallback={<LoadingPage />}><Reports /></Suspense>)} />
+                      <Route path="/backdate-report" element={withRouteGuard('/backdate-report', <Suspense fallback={<LoadingPage />}><BackdateReport /></Suspense>)} />
+                      <Route path="/settings" element={withRouteGuard('/settings', <Suspense fallback={<LoadingPage />}><Settings2 /></Suspense>)} />
+                      <Route path="/migration" element={withRouteGuard('/migration', <Suspense fallback={<LoadingPage />}><Migration /></Suspense>)} />
+                      <Route path="/settings2" element={withRouteGuard('/settings2', <Suspense fallback={<LoadingPage />}><Settings2 /></Suspense>)} />
+                      <Route path="/attendance" element={withRouteGuard('/attendance', <Suspense fallback={<LoadingPage />}><Attendance /></Suspense>)} />
+                      <Route path="/employees" element={withRouteGuard('/employees', <Suspense fallback={<LoadingPage />}><Employees /></Suspense>)} />
+                      <Route path="/cctv-access" element={withRouteGuard('/cctv-access', <Suspense fallback={<LoadingPage />}><CCTVAccess /></Suspense>)} />
+                      <Route path="/help" element={withRouteGuard('/help', <Suspense fallback={<LoadingPage />}><Help /></Suspense>)} />
                     </Routes>
                   </MultiTabLayout>
                 </ProtectedRoute>

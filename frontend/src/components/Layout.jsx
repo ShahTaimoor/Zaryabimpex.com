@@ -396,7 +396,7 @@ const CategoryTreeItem = ({ category, subcategories, isActive, level = 0 }) => {
 
 export const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, logout, isLoggingOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
@@ -445,7 +445,7 @@ export const Layout = ({ children }) => {
   return (
     <div className="min-h-[100dvh] bg-gray-50">
       {/* Mobile Navigation */}
-      <MobileNavigation user={user} onLogout={handleLogout} />
+      <MobileNavigation user={user} onLogout={handleLogout} isLoggingOut={isLoggingOut} />
 
       {/* Mobile sidebar */}
       <div className={`fixed inset-0 z-[60] lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
@@ -586,8 +586,12 @@ export const Layout = ({ children }) => {
                   </div>
                 </div>
                 <button
-                  onClick={logout}
-                  className="text-gray-400 hover:text-gray-600"
+                  onClick={() => {
+                    if (isLoggingOut) return;
+                    logout();
+                  }}
+                  disabled={isLoggingOut}
+                  className="text-gray-400 hover:text-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
                   title="Logout"
                 >
                   <LogOut className="h-5 w-5" />
