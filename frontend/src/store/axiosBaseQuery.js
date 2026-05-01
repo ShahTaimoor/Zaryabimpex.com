@@ -83,18 +83,9 @@ const axiosBaseQuery = ({ baseUrl = '' } = {}) => {
       return response;
     },
     (error) => {
-      // Handle authentication errors
+      // Do not force a hard redirect on every 401 here.
+      // Let auth state handling decide when a session is truly invalid.
       if (error.response?.status === 401) {
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.removeItem('authToken');
-          } catch {
-            // ignore storage errors
-          }
-        }
-        // Token is in HTTP-only cookie, backend should clear it on logout
-        // Just redirect to login
-        window.location.href = '/login';
         return Promise.reject(error);
       }
 

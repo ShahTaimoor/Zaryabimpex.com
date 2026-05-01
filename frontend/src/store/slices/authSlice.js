@@ -125,9 +125,13 @@ const authSlice = createSlice({
         state.status = 'succeeded';
         state.error = null;
       })
-      .addMatcher(authApi.endpoints.currentUser.matchRejected, (state) => {
-        // If offline, we don't want to clear the session just because the request failed
-        if (navigator.onLine) {
+      .addMatcher(authApi.endpoints.currentUser.matchRejected, (state, action) => {
+        // Only clear auth when backend explicitly says the session is invalid.
+        // Keep users logged in during transient API/server failures.
+        const status = action?.payload?.status;
+        const isSessionInvalid = status === 401 || status === 403;
+
+        if (navigator.onLine && isSessionInvalid) {
           state.user = null;
           state.isAuthenticated = false;
           state.token = null;
