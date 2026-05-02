@@ -1290,7 +1290,8 @@ export const Dashboard = () => {
                     })),
                     format: 'currency',
                     icon: TrendingUp,
-                    iconColor: 'bg-green-500'
+                    iconColor: 'bg-green-100',
+                    iconTextColor: 'text-green-700'
                   },
                   {
                     title: 'Total Orders',
@@ -1299,7 +1300,8 @@ export const Dashboard = () => {
                     })),
                     format: 'number',
                     icon: ShoppingCart,
-                    iconColor: 'bg-blue-500'
+                    iconColor: 'bg-blue-100',
+                    iconTextColor: 'text-blue-700'
                   },
                   {
                     title: 'Average Order Value',
@@ -1308,7 +1310,8 @@ export const Dashboard = () => {
                     })),
                     format: 'currency',
                     icon: TrendingUp,
-                    iconColor: 'bg-purple-500'
+                    iconColor: 'bg-purple-100',
+                    iconTextColor: 'text-purple-700'
                   },
                   {
                     title: 'Total Items Sold',
@@ -1317,7 +1320,8 @@ export const Dashboard = () => {
                     })),
                     format: 'number',
                     icon: Package,
-                    iconColor: 'bg-orange-500'
+                    iconColor: 'bg-orange-100',
+                    iconTextColor: 'text-orange-700'
                   }
                 ]}
                 additionalCards={[
@@ -1327,7 +1331,8 @@ export const Dashboard = () => {
                     currentValue: summary.totalOrders || 0,
                     format: 'number',
                     icon: ShoppingCart,
-                    iconColor: 'bg-cyan-500',
+                    iconColor: 'bg-cyan-100',
+                    iconTextColor: 'text-cyan-700',
                     hideComparisonDetails: true
                   },
                   {
@@ -1339,7 +1344,8 @@ export const Dashboard = () => {
                     currentValue: Object.values(summary.paymentMethods || {}).reduce((acc, val) => acc + Number(val || 0), 0),
                     format: 'number',
                     icon: CreditCard,
-                    iconColor: 'bg-emerald-500',
+                    iconColor: 'bg-emerald-100',
+                    iconTextColor: 'text-emerald-700',
                     hideComparisonDetails: true
                   }
                 ]}

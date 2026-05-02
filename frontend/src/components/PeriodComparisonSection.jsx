@@ -138,6 +138,7 @@ export const PeriodComparisonSection = ({
                 format={comparison.format || 'currency'}
                 icon={comparison.icon}
                 iconColor={comparison.iconColor}
+                iconTextColor={comparison.iconTextColor || 'text-white'}
                 showTarget={comparison.showTarget}
               />
             ))}
@@ -151,6 +152,7 @@ export const PeriodComparisonSection = ({
                 format={card.format || 'number'}
                 icon={card.icon}
                 iconColor={card.iconColor || 'bg-slate-500'}
+                iconTextColor={card.iconTextColor || 'text-white'}
                 hideComparisonDetails={card.hideComparisonDetails !== false}
               />
             ))}

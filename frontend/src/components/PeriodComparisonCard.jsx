@@ -16,6 +16,7 @@ export const PeriodComparisonCard = ({
   format = 'currency', // 'currency', 'number', 'percentage'
   icon: Icon,
   iconColor = 'bg-blue-500',
+  iconTextColor = 'text-white',
   showTarget = false,
   targetValue = null,
   className = '',
@@ -79,8 +80,8 @@ export const PeriodComparisonCard = ({
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center space-x-3">
           {Icon && (
-            <div className={`${iconColor} p-2`}>
-              <Icon className={`${classes.icon} text-white`} />
+            <div className={`${iconColor} p-2 rounded-lg`}>
+              <Icon className={`${classes.icon} ${iconTextColor}`} />
             </div>
           )}
           <div>
