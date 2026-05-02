@@ -25,7 +25,8 @@ function rowToProduct(row) {
     grossWeightKg: row.gross_weight_kg != null ? parseFloat(row.gross_weight_kg) : null,
     importRefNo: row.import_ref_no ?? null,
     gdNumber: row.gd_number ?? null,
-    invoiceRef: row.invoice_ref ?? null
+    invoiceRef: row.invoice_ref ?? null,
+    lastSalePrice: parseFloat(row.last_sale_price) || 0
   };
 }
 
@@ -154,8 +155,8 @@ class ProductRepository {
     const q = client ? client.query.bind(client) : query;
     const result = await q(
       `INSERT INTO products (name, sku, barcode, hs_code, description, category_id, cost_price, selling_price, wholesale_price,
-       stock_quantity, min_stock_level, unit, pieces_per_box, is_active, created_by, image_url, country_of_origin, net_weight_kg, gross_weight_kg, import_ref_no, gd_number, invoice_ref)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+       stock_quantity, min_stock_level, unit, pieces_per_box, is_active, created_by, image_url, country_of_origin, net_weight_kg, gross_weight_kg, import_ref_no, gd_number, invoice_ref, last_sale_price)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
        RETURNING *`,
       [
         data.name,
@@ -183,7 +184,8 @@ class ProductRepository {
         data.grossWeightKg ?? data.gross_weight_kg ?? null,
         data.importRefNo ?? data.import_ref_no ?? null,
         data.gdNumber ?? data.gd_number ?? null,
-        data.invoiceRef ?? data.invoice_ref ?? null
+        data.invoiceRef ?? data.invoice_ref ?? null,
+        data.lastSalePrice ?? data.last_sale_price ?? 0
       ]
     );
     const created = rowToProduct(result.rows[0]);
@@ -239,7 +241,9 @@ class ProductRepository {
       invoiceRef: 'invoice_ref',
       invoice_ref: 'invoice_ref',
       hsCode: 'hs_code',
-      hs_code: 'hs_code'
+      hs_code: 'hs_code',
+      lastSalePrice: 'last_sale_price',
+      last_sale_price: 'last_sale_price'
     };
     for (const [k, col] of Object.entries(map)) {
       if (data[k] !== undefined) {

@@ -22,7 +22,8 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
     pricing: {
       cost: '',
       retail: '',
-      wholesale: ''
+      wholesale: '',
+      lastSale: ''
     },
     inventory: {
       currentStock: '',
@@ -181,6 +182,10 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       newErrors.name = 'Product name must be at least 2 characters';
     }
 
+    if (!formData.pricing.cost || formData.pricing.cost === '') {
+      newErrors.cost = 'Cost price is required';
+    }
+
     // Validate price hierarchy (only show toast if not already shown)
     const retailPrice = parseFloat(formData.pricing.retail) || 0;
     const wholesalePrice = parseFloat(formData.pricing.wholesale) || 0;
@@ -250,7 +255,8 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       pricing: {
         cost: newData.pricing?.cost || '',
         retail: newData.pricing?.retail || '',
-        wholesale: newData.pricing?.wholesale || ''
+        wholesale: newData.pricing?.wholesale || '',
+        lastSale: newData.pricing?.lastSale || 0
       },
       inventory: {
         currentStock: newData.inventory?.currentStock || '',
@@ -540,8 +546,11 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                   onChange={handleChange}
                   onBlur={handleBlur}
                   placeholder="0.00"
-                  className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                  className={`w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0 ${errors.cost ? 'border-red-300' : 'border-gray-300'}`}
                 />
+                {errors.cost && (
+                  <p className="mt-0.5 sm:mt-1 text-xs text-red-600">{errors.cost}</p>
+                )}
                 <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Product cost</p>
               </div>
             )}
@@ -578,6 +587,20 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                 className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
               />
               <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Wholesale price</p>
+            </div>
+            <div>
+              <label htmlFor="pricing.lastSale" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
+                Last Sale Price
+              </label>
+              <input
+                id="pricing.lastSale"
+                name="pricing.lastSale"
+                type="number"
+                value={formData.pricing.lastSale || 0}
+                readOnly
+                className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-200 bg-gray-50 text-gray-500 rounded-md shadow-sm focus:outline-none min-h-[2rem] sm:min-h-0 cursor-not-allowed"
+              />
+              <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Read-only tracking</p>
             </div>
             <div>
               <label htmlFor="inventory.currentStock" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">

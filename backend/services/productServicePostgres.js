@@ -75,7 +75,8 @@ function toApiProduct(row, categoryMap = null) {
     pricing: {
       cost: parseFloat(row.cost_price) || 0,
       wholesale: row.wholesale_price != null ? parseFloat(row.wholesale_price) : (parseFloat(row.selling_price) || 0),
-      retail: parseFloat(row.selling_price) || 0
+      retail: parseFloat(row.selling_price) || 0,
+      lastSale: parseFloat(row.last_sale_price) || 0
     },
     inventory: {
       currentStock: parseFloat(row.stock_quantity) || 0,
@@ -279,9 +280,10 @@ class ProductServicePostgres {
     const cost = pricing.cost !== undefined && pricing.cost !== null ? Number(pricing.cost) : 0;
     const retail = pricing.retail !== undefined && pricing.retail !== null ? Number(pricing.retail) : 0;
     const wholesale = pricing.wholesale !== undefined && pricing.wholesale !== null ? Number(pricing.wholesale) : retail;
+    const lastSale = pricing.lastSale !== undefined && pricing.lastSale !== null ? Number(pricing.lastSale) : 0;
 
     if (cost < 0) throw new Error('Cost price is required and must be non-negative');
-    if (retail < 0) throw new Error('Retail price is required and must be non-negative');
+    if (retail < 0) throw new Error('Retail price must be non-negative');
     if (wholesale < 0) throw new Error('Wholesale price must be non-negative');
 
     if (productData.name) {
@@ -319,6 +321,7 @@ class ProductServicePostgres {
           costPrice: cost,
           sellingPrice: retail,
           wholesalePrice: wholesale,
+          lastSalePrice: lastSale,
           stockQuantity: openingQty,
           minStockLevel: inv.reorderPoint ?? inv.minStock ?? inv.minStockLevel ?? 0,
           unit: productData.unit,
@@ -428,9 +431,11 @@ class ProductServicePostgres {
       const retail = pricing.retail !== undefined && pricing.retail !== null ? Number(pricing.retail) : current.selling_price;
       const currentWholesale = current.wholesale_price ?? current.wholesalePrice ?? current.selling_price;
       const wholesale = pricing.wholesale !== undefined && pricing.wholesale !== null ? Number(pricing.wholesale) : currentWholesale;
+      const lastSale = pricing.lastSale !== undefined && pricing.lastSale !== null ? Number(pricing.lastSale) : current.last_sale_price;
       data.costPrice = cost;
       data.sellingPrice = retail;
       data.wholesalePrice = wholesale;
+      data.lastSalePrice = lastSale;
     }
 
     const inv = updateData.inventory;

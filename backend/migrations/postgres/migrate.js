@@ -87,7 +87,8 @@ const MIGRATIONS = [
   '065_search_uniqueness_and_ledger_indexes.sql',
   '066_cleanup_soft_deleted_duplicates_for_unique_indexes.sql',
   '067_add_user_preferences_and_two_factor_auth.sql',
-  '068_settings_tax_enabled.sql'
+  '068_settings_tax_enabled.sql',
+  '069_add_last_sale_price_to_products.sql'
 ];
 
 async function ensureMigrationsTable() {

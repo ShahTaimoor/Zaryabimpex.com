@@ -791,6 +791,39 @@ class SalesService {
         }
       });
 
+      // Smart Pricing Logic: Update last_sale_price and auto-save retail price if empty
+      addPostCommit(async () => {
+        const productService = require('./productServicePostgres');
+        for (const item of orderItems) {
+          if (item.isManual || !item.product) continue;
+          
+          try {
+            const product = await productService.getProductById(item.product);
+            if (!product) continue;
+
+            const updates = {
+              pricing: {
+                ...product.pricing,
+                lastSale: item.unitPrice
+              }
+            };
+
+            // If retail price is not set (0), save this sale price as the permanent retail price
+            if (!product.pricing?.retail || product.pricing.retail === 0) {
+              updates.pricing.retail = item.unitPrice;
+              // Also update wholesale to match if it was also 0/not set
+              if (!product.pricing?.wholesale || product.pricing.wholesale === 0) {
+                updates.pricing.wholesale = item.unitPrice;
+              }
+            }
+
+            await productService.updateProduct(item.product, updates, user.id || user._id);
+          } catch (err) {
+            console.error(`Failed to update smart pricing for product ${item.product}:`, err.message);
+          }
+        }
+      });
+
       return createdOrder;
     });
 
