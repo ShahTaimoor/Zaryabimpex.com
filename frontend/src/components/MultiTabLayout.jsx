@@ -283,20 +283,21 @@ export function loadBottomNavConfig() {
   }
 }
 
-// Sidebar header colors per section
+// Sidebar header colors per section - Black and White theme
 const sidebarHeaderColors = {
-  Sales: { bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100', border: 'border-emerald-200' },
-  Purchase: { bg: 'bg-amber-50', hover: 'hover:bg-amber-100', border: 'border-amber-200' },
-  Operations: { bg: 'bg-violet-50', hover: 'hover:bg-violet-100', border: 'border-violet-200' },
-  Financials: { bg: 'bg-sky-50', hover: 'hover:bg-sky-100', border: 'border-sky-200' },
-  'Master Data': { bg: 'bg-teal-50', hover: 'hover:bg-teal-100', border: 'border-teal-200' },
-  Inventory: { bg: 'bg-cyan-50', hover: 'hover:bg-cyan-100', border: 'border-cyan-200' },
-  Accounting: { bg: 'bg-indigo-50', hover: 'hover:bg-indigo-100', border: 'border-indigo-200' },
-  Analytics: { bg: 'bg-rose-50', hover: 'hover:bg-rose-100', border: 'border-rose-200' },
-  'HR/Admin': { bg: 'bg-lime-50', hover: 'hover:bg-lime-100', border: 'border-lime-200' },
-  System: { bg: 'bg-slate-50', hover: 'hover:bg-slate-100', border: 'border-slate-200' },
+  Dashboard: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
+  Sales: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
+  Purchase: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
+  Operations: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
+  Financials: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
+  'Master Data': { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
+  Inventory: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
+  Accounting: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
+  Analytics: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
+  'HR/Admin': { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
+  System: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
 };
-const getHeaderColors = (name) => sidebarHeaderColors[name] || { bg: 'bg-slate-50', hover: 'hover:bg-slate-100', border: 'border-slate-200' };
+const getHeaderColors = (name) => sidebarHeaderColors[name] || { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' };
 const defaultOpenSections = ['Sales', 'Purchase', 'Operations'];
 const isItemPermitted = (item, user, hasPermission) => {
   if (!item) return false;
@@ -349,11 +350,11 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
             return (
               <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 ${isOpen ? `text-gray-900 ${colors.bg}` : `text-gray-600 ${colors.bg} ${colors.hover} hover:text-gray-900`
+                className={`w-full group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 ${isOpen ? `${colors.text || 'text-white'} ${colors.bg}` : `text-gray-600 hover:bg-gray-100 hover:text-gray-900`
                   }`}
               >
                 <div className="flex items-center">
-                  {item.icon && <item.icon className="mr-3 h-4 w-4 text-gray-400" />}
+                  {item.icon && <item.icon className={`mr-3 h-4 w-4 ${isOpen ? 'text-white' : 'text-gray-400 group-hover:text-gray-500'}`} />}
                   <span>{item.name}</span>
                 </div>
                 {isOpen ? (
@@ -385,11 +386,11 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
         <button
           onClick={() => onNavigate(item)}
           className={`w-full group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-150 ${isActive
-            ? 'bg-primary-50 text-primary-700'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            ? (level === 0 ? 'bg-black text-white' : 'bg-primary-50 text-primary-700')
+            : (level === 0 ? 'text-gray-600 hover:bg-black hover:text-white' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900')
             }`}
         >
-          {item.icon && <item.icon className={`mr-3 h-4 w-4 ${isActive ? 'text-primary-500' : 'text-gray-400 group-hover:text-gray-500'}`} />}
+          {item.icon && <item.icon className={`mr-3 h-4 w-4 ${isActive ? (level === 0 ? 'text-white' : 'text-primary-500') : 'text-gray-400 group-hover:text-gray-500'}`} />}
           <span>{item.name}</span>
         </button>
       )}
@@ -628,9 +629,12 @@ export const MultiTabLayout = ({ children }) => {
       {/* Mobile sidebar */}
       <div className={`fixed inset-0 z-[60] lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
-        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white shadow-xl">
-          <div className="flex h-16 items-center justify-between px-4 border-b border-gray-100">
-            <h1 className="text-xl font-bold text-gray-900">POS System</h1>
+        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-gray-100 shadow-xl">
+          <div className="flex h-16 items-center justify-between px-4 bg-gray-100">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded bg-black font-black text-white">Z</div>
+              <h1 className="text-lg font-bold tracking-tight text-gray-900">ZARYAB IMPEX</h1>
+            </div>
             <button
               onClick={() => setSidebarOpen(false)}
               className="text-gray-400 hover:text-gray-600"
@@ -659,9 +663,12 @@ export const MultiTabLayout = ({ children }) => {
 
       {/* Desktop sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex flex-col flex-grow bg-white border-r border-gray-200">
-          <div className="flex h-16 items-center px-6 border-b border-gray-100">
-            <h1 className="text-xl font-bold text-gray-900">POS System</h1>
+        <div className="flex flex-col flex-grow bg-gray-100">
+          <div className="flex h-16 items-center px-6 bg-gray-100">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded bg-black font-black text-white">Z</div>
+              <h1 className="text-lg font-bold tracking-tight text-gray-900">ZARYAB IMPEX</h1>
+            </div>
           </div>
           <nav className="flex-1 space-y-1 px-3 py-6 overflow-y-auto max-h-[calc(100dvh-4rem)] scrollbar-thin scrollbar-thumb-gray-200">
             {navigation.map((item) => (
@@ -683,7 +690,7 @@ export const MultiTabLayout = ({ children }) => {
       <div className="lg:pl-64">
         {/* Top bar - Professional Design with Solid White Background */}
         {showTopBar && (
-          <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center border-b border-gray-200 bg-white px-3 sm:px-4 lg:px-6 shadow-sm overflow-visible">
+          <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center bg-gray-100 px-3 sm:px-4 lg:px-6 shadow-sm overflow-visible">
           {/* Mobile Menu Button */}
           <button
             type="button"
@@ -700,7 +707,7 @@ export const MultiTabLayout = ({ children }) => {
               {sidebarConfig['Cash Receipts'] !== false && isItemPermitted({ permission: 'view_cash_receipts' }, user, hasPermission) && (
                 <button
                   onClick={() => handleNavigationClick({ href: '/cash-receipts', name: 'Cash Receipts' })}
-                  className="bg-green-600 hover:bg-green-700 text-white px-2.5 py-2 rounded-md shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-1.5 text-xs font-medium whitespace-nowrap"
+                  className="bg-black hover:bg-gray-800 text-white px-2.5 py-2 rounded-md shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-1.5 text-xs font-medium whitespace-nowrap"
                 >
                   <Receipt className="h-3.5 w-3.5 flex-shrink-0" />
                   <span>Receiving</span>
@@ -709,7 +716,7 @@ export const MultiTabLayout = ({ children }) => {
               {sidebarConfig['Record Expense'] !== false && isItemPermitted({ permission: 'view_expenses' }, user, hasPermission) && (
                 <button
                   onClick={() => handleNavigationClick({ href: '/expenses', name: 'Record Expense' })}
-                  className="bg-red-500 hover:bg-red-600 text-white px-2.5 py-2 rounded-md shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-1.5 text-xs font-medium whitespace-nowrap"
+                  className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-900 px-2.5 py-2 rounded-md shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-1.5 text-xs font-medium whitespace-nowrap"
                 >
                   <CreditCard className="h-3.5 w-3.5 flex-shrink-0" />
                   <span>Expense</span>
@@ -722,10 +729,10 @@ export const MultiTabLayout = ({ children }) => {
               {sidebarConfig['Cash Receiving'] !== false && isItemPermitted({ permission: 'view_accounting' }, user, hasPermission) && (
                 <button
                   onClick={() => handleNavigationClick({ href: '/cash-receiving', name: 'Cash Receiving' })}
-                  className="bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0"
+                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
                 >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-teal-200/60 flex-shrink-0">
-                    <Receipt className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-teal-700" />
+                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
+                    <Receipt className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
                   </span>
                   <span>Multiple Cash Receipt</span>
                 </button>
@@ -733,10 +740,10 @@ export const MultiTabLayout = ({ children }) => {
               {sidebarConfig['Cash Receipts'] !== false && isItemPermitted({ permission: 'view_cash_receipts' }, user, hasPermission) && (
                 <button
                   onClick={() => handleNavigationClick({ href: '/cash-receipts', name: 'Cash Receipts' })}
-                  className="bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0"
+                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
                 >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-green-200/60 flex-shrink-0">
-                    <ArrowDown className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-green-700" />
+                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
+                    <ArrowDown className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
                   </span>
                   <span className="hidden sm:inline">Cash Receipt</span>
                   <span className="sm:hidden">Cash R.</span>
@@ -745,10 +752,10 @@ export const MultiTabLayout = ({ children }) => {
               {sidebarConfig['Bank Receipts'] !== false && isItemPermitted({ permission: 'view_bank_receipts' }, user, hasPermission) && (
                 <button
                   onClick={() => handleNavigationClick({ href: '/bank-receipts', name: 'Bank Receipts' })}
-                  className="bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100 px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0"
+                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
                 >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-cyan-200/60 flex-shrink-0">
-                    <ArrowDown className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-cyan-700" />
+                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
+                    <ArrowDown className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
                   </span>
                   <span className="hidden sm:inline">Bank Receipt</span>
                   <span className="sm:hidden">Bank R.</span>
@@ -757,10 +764,10 @@ export const MultiTabLayout = ({ children }) => {
               {sidebarConfig['Cash Payments'] !== false && isItemPermitted({ permission: 'view_cash_payments' }, user, hasPermission) && (
                 <button
                   onClick={() => handleNavigationClick({ href: '/cash-payments', name: 'Cash Payments' })}
-                  className="bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0"
+                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
                 >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-indigo-200/60 flex-shrink-0">
-                    <ArrowUp className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-indigo-700" />
+                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
+                    <ArrowUp className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
                   </span>
                   <span className="hidden sm:inline">Cash Payment</span>
                   <span className="sm:hidden">Cash P.</span>
@@ -769,10 +776,10 @@ export const MultiTabLayout = ({ children }) => {
               {sidebarConfig['Bank Payments'] !== false && isItemPermitted({ permission: 'view_bank_payments' }, user, hasPermission) && (
                 <button
                   onClick={() => handleNavigationClick({ href: '/bank-payments', name: 'Bank Payments' })}
-                  className="bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0"
+                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
                 >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-violet-200/60 flex-shrink-0">
-                    <ArrowUp className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-violet-700" />
+                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
+                    <ArrowUp className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
                   </span>
                   <span className="hidden sm:inline">Bank Payment</span>
                   <span className="sm:hidden">Bank P.</span>
@@ -781,10 +788,10 @@ export const MultiTabLayout = ({ children }) => {
               {sidebarConfig['Record Expense'] !== false && isItemPermitted({ permission: 'view_expenses' }, user, hasPermission) && (
                 <button
                   onClick={() => handleNavigationClick({ href: '/expenses', name: 'Record Expense' })}
-                  className="bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0"
+                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
                 >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-red-200/60 flex-shrink-0">
-                    <Wallet className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-red-700" />
+                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
+                    <Wallet className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
                   </span>
                   <span className="hidden sm:inline">Record Expense</span>
                   <span className="sm:hidden">Expense</span>

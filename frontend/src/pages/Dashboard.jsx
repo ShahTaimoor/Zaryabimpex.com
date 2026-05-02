@@ -57,7 +57,7 @@ import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan } from '../utils/dateUtils';
 import { toast } from 'sonner';
 
-const StatCard = ({ title, value, icon: Icon, color, change, changeType, onClick }) => (
+const StatCard = ({ title, value, icon: Icon, color, iconColor = 'text-white', change, changeType, onClick }) => (
   <div
     className={`bg-white rounded-lg shadow-sm border border-gray-200 p-2 sm:p-2.5 xl:p-3 2xl:p-4 h-full min-w-0 ${onClick ? 'cursor-pointer hover:border-gray-300 hover:shadow-md transition-all' : ''}`}
     onClick={onClick}
@@ -65,7 +65,7 @@ const StatCard = ({ title, value, icon: Icon, color, change, changeType, onClick
     <div className="text-center flex flex-col justify-center items-center h-full">
       <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2 2xl:mb-3">
         <div className={`p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 rounded-full ${color}`}>
-          <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+          <Icon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 ${iconColor}`} />
         </div>
       </div>
       <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-600 mb-0.5 sm:mb-1 line-clamp-2">{title}</p>
@@ -818,7 +818,7 @@ export const Dashboard = () => {
       className: 'h-7 px-2 text-[10px] sm:text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 cursor-default',
       isVisible: isCompletedSalesRow,
       isDisabled: () => true,
-      onClick: () => {}
+      onClick: () => { }
     },
     {
       label: 'Invoice Cancel',
@@ -826,7 +826,7 @@ export const Dashboard = () => {
       className: 'h-7 px-2 text-[10px] sm:text-xs text-red-700 bg-red-50 border border-red-200 cursor-default',
       isVisible: isCancelledSalesRow,
       isDisabled: () => true,
-      onClick: () => {}
+      onClick: () => { }
     }
   ];
 
@@ -851,7 +851,7 @@ export const Dashboard = () => {
       className: 'h-7 px-2 text-[10px] sm:text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 cursor-default',
       isVisible: isCompletedPurchaseRow,
       isDisabled: () => true,
-      onClick: () => {}
+      onClick: () => { }
     },
     {
       label: 'Invoice Cancel',
@@ -859,7 +859,7 @@ export const Dashboard = () => {
       className: 'h-7 px-2 text-[10px] sm:text-xs text-red-700 bg-red-50 border border-red-200 cursor-default',
       isVisible: isCancelledPurchaseRow,
       isDisabled: () => true,
-      onClick: () => {}
+      onClick: () => { }
     }
   ];
 
@@ -1049,8 +1049,8 @@ export const Dashboard = () => {
                       <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
                     </div>
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-green-500 rounded-full">
-                        <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-green-100 rounded-full">
+                        <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-green-700" />
                       </div>
                     </div>
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Sales (Revenue)</p>
@@ -1068,8 +1068,8 @@ export const Dashboard = () => {
                       <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
                     </div>
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-purple-500 rounded-full">
-                        <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-purple-100 rounded-full">
+                        <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-purple-700" />
                       </div>
                     </div>
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Purchase (COGS)</p>
@@ -1086,8 +1086,8 @@ export const Dashboard = () => {
                       <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
                     </div>
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-red-500 rounded-full">
-                        <Tag className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-red-100 rounded-full">
+                        <Tag className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-red-700" />
                       </div>
                     </div>
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Discount Given</p>
@@ -1100,8 +1100,8 @@ export const Dashboard = () => {
                     onClick={() => setShowSalesOrdersModal(true)}
                   >
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-cyan-500 rounded-full">
-                        <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-cyan-100 rounded-full">
+                        <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-cyan-700" />
                       </div>
                     </div>
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Pending Sales Orders</p>
@@ -1114,8 +1114,8 @@ export const Dashboard = () => {
                     onClick={() => setShowPurchaseOrdersModal(true)}
                   >
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-indigo-500 rounded-full">
-                        <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-indigo-100 rounded-full">
+                        <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-indigo-700" />
                       </div>
                     </div>
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Pending Purchase Orders</p>
@@ -1132,8 +1132,8 @@ export const Dashboard = () => {
                   {/* Gross Profit */}
                   <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-blue-500 rounded-full">
-                        <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-blue-100 rounded-full">
+                        <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-blue-700" />
                       </div>
                     </div>
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Gross Profit</p>
@@ -1152,8 +1152,8 @@ export const Dashboard = () => {
                       <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
                     </div>
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-emerald-500 rounded-full">
-                        <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-emerald-100 rounded-full">
+                        <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-emerald-700" />
                       </div>
                     </div>
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Receipts</p>
@@ -1174,8 +1174,8 @@ export const Dashboard = () => {
                       <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
                     </div>
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-orange-500 rounded-full">
-                        <Banknote className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-orange-100 rounded-full">
+                        <Banknote className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-orange-700" />
                       </div>
                     </div>
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Payments</p>
@@ -1190,8 +1190,8 @@ export const Dashboard = () => {
                   {/* Net Cash Flow */}
                   <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                      <div className={`p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 rounded-full ${netCashFlow >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
-                        <Wallet className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      <div className={`p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 rounded-full ${netCashFlow >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                        <Wallet className={`h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 ${netCashFlow >= 0 ? 'text-green-700' : 'text-red-700'}`} />
                       </div>
                     </div>
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Net Cash Flow</p>
@@ -1204,8 +1204,8 @@ export const Dashboard = () => {
                   {/* Total Orders */}
                   <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
-                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-yellow-500 rounded-full">
-                        <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-white" />
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-yellow-100 rounded-full">
+                        <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-yellow-700" />
                       </div>
                     </div>
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Transactions</p>
@@ -1223,7 +1223,8 @@ export const Dashboard = () => {
               title="Today's Revenue"
               value={`${summary.totalRevenue?.toFixed(2) || '0.00'}`}
               icon={TrendingUp}
-              color="bg-success-500"
+              color="bg-green-100"
+              iconColor="text-green-700"
               change="12%"
               changeType="positive"
             />
@@ -1231,7 +1232,8 @@ export const Dashboard = () => {
               title="Orders Today"
               value={summary.totalOrders || 0}
               icon={ShoppingCart}
-              color="bg-primary-500"
+              color="bg-blue-100"
+              iconColor="text-blue-700"
               change="8%"
               changeType="positive"
             />
@@ -1239,13 +1241,15 @@ export const Dashboard = () => {
               title="Total Products"
               value={inventorySummary.totalProducts ?? inventorySummary.total_products ?? 0}
               icon={Package}
-              color="bg-warning-500"
+              color="bg-yellow-100"
+              iconColor="text-yellow-700"
             />
             <StatCard
               title="Active Customers"
               value={activeCustomersCount.toLocaleString()}
               icon={Users}
-              color="bg-purple-500"
+              color="bg-purple-100"
+              iconColor="text-purple-700"
               change="5%"
               changeType="positive"
             />
@@ -1253,19 +1257,22 @@ export const Dashboard = () => {
               title="Items Sold Today"
               value={summary.totalItems || 0}
               icon={TrendingUp}
-              color="bg-blue-500"
+              color="bg-blue-100"
+              iconColor="text-blue-700"
             />
             <StatCard
               title="Average Order Value"
               value={`${summary.averageOrderValue?.toFixed(2) || '0.00'}`}
               icon={BarChart3}
-              color="bg-indigo-500"
+              color="bg-indigo-100"
+              iconColor="text-indigo-700"
             />
             <StatCard
               title="Low Stock Items"
               value={lowStockCount}
               icon={AlertTriangle}
-              color="bg-danger-500"
+              color="bg-red-100"
+              iconColor="text-red-700"
               onClick={() => setShowLowStockModal(true)}
             />
           </div>
