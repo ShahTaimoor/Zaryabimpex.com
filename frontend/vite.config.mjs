@@ -17,8 +17,8 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['favicon.png', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'Zaryab Impex POS',
-        short_name: 'Zaryab POS',
+        name: 'Smart Business POS',
+        short_name: 'Smart Business POS',
         description: 'Wholesale & Retail POS System with Offline Support',
         theme_color: '#ffffff',
         background_color: '#ffffff',

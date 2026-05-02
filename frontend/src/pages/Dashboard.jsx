@@ -171,13 +171,9 @@ export const Dashboard = () => {
     }
   };
 
-  const { data: todaySummary, isLoading: summaryLoading, error: todaySummaryError } = useGetTodaySummaryQuery(undefined, {
+  const { data: todaySummary, isLoading: summaryLoading } = useGetTodaySummaryQuery(undefined, {
     pollingInterval: 60000,
   });
-
-  if (todaySummaryError) {
-    console.error('Today Summary Error:', todaySummaryError);
-  }
 
   const { data: lowStockData, isLoading: lowStockLoading } = useGetLowStockItemsQuery();
   const { data: lowStockAlertsData, isLoading: lowStockAlertsLoading } = useGetLowStockAlertsQuery(

@@ -36,9 +36,10 @@ export const useAuth = () => {
     error: currentUserErrorData,
     refetch: refetchCurrentUser,
   } = useCurrentUserQuery(undefined, {
-    // Skip when: on login page, already authenticated with user, or no local session hint exists.
-    // This avoids unnecessary /auth/me 401 calls after explicit logout.
-    skip: isLoginPage || (isAuthenticated && !!user) || (!isAuthenticated && !hasStoredSessionHint),
+    // Skip only on login or when there is no session hint and Redux says logged out.
+    // Do NOT skip just because user + token exist in storage — we must validate the JWT on load
+    // or expired tokens let ProtectedRoute render the app while every API call returns 401.
+    skip: isLoginPage || (!isAuthenticated && !hasStoredSessionHint),
     // Disable retries completely to prevent infinite loading
     retry: false,
     // Don't refetch on window focus to prevent unnecessary requests
