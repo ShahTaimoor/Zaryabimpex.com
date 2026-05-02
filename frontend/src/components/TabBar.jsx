@@ -20,9 +20,9 @@ const TabBar = () => {
   }
 
   return (
-    <div className="bg-white border-b border-gray-200 shadow-sm overflow-x-hidden print:hidden">
+    <div className="bg-gray-100 border-t-0 border-b border-gray-200 overflow-x-hidden print:hidden">
       <div className="flex flex-col">
-        <div className="flex items-center justify-between px-2 sm:px-4 py-2 gap-2 min-w-0">
+        <div className="flex items-center justify-between px-2 sm:px-4 pt-1 pb-1 gap-2 min-w-0">
           {/* Tabs */}
           <div
             ref={tabListRef}
@@ -40,11 +40,11 @@ const TabBar = () => {
                   aria-selected={isActive}
                   tabIndex={isActive ? 0 : -1}
                   className={`
-                    flex items-center space-x-2 px-3 py-2 rounded-t-lg cursor-pointer transition-all
+                    flex items-center space-x-2 px-3 py-1.5 rounded-t-lg cursor-pointer transition-all
                     min-w-0 max-w-48 shrink-0
                     ${isActive
-                      ? 'bg-primary-50 text-primary-700 border-b-2 border-primary-600'
-                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                      ? 'bg-primary-50 text-primary-700 border border-gray-200 border-b-2 border-b-primary-600 shadow-sm'
+                      : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 hover:border-gray-300'
                     }
                     ${isHighlighted ? 'ring-2 ring-primary-400 animate-pulse' : ''}
                   `}
@@ -60,8 +60,8 @@ const TabBar = () => {
                     }}
                     aria-label={`Close ${tab.title} tab`}
                     className={`
-                      p-2 sm:p-1 rounded-full hover:bg-gray-200 transition-colors flex items-center justify-center
-                      ${isActive ? 'text-primary-600' : 'text-gray-400'}
+                      p-2 sm:p-1 rounded-full hover:bg-black/5 transition-colors flex items-center justify-center
+                      ${isActive ? 'text-primary-600' : 'text-gray-500'}
                     `}
                     title="Close tab"
                   >

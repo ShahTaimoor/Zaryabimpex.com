@@ -55,6 +55,8 @@ import MobileBottomNav from './MobileBottomNav';
 import { useResponsive } from './ResponsiveContainer';
 import { useGetAlertSummaryQuery } from '../store/services/inventoryAlertsApi';
 import { Button } from '@/components/ui/button';
+import PresenceHeartbeat from './PresenceHeartbeat';
+import OnlineAvatarStack from './OnlineAvatarStack';
 
 // Helper for Database icon
 function DatabaseIcon(props) {
@@ -414,13 +416,13 @@ const InventoryAlertsBadge = ({ onNavigate }) => {
   return (
     <button
       onClick={() => onNavigate({ href: '/inventory-alerts', name: 'Inventory Alerts' })}
-      className="relative flex items-center justify-center px-2 py-2 rounded-md bg-gray-50 hover:bg-gray-100 text-gray-900 transition-colors border border-gray-200 shadow-sm"
+      className="relative flex items-center justify-center h-10 w-10 rounded-xl bg-white hover:bg-gray-50 text-gray-900 transition-all border border-gray-200 shadow-sm hover:shadow-md group/alert"
       title={`${criticalCount} critical alert(s), ${outOfStockCount} out of stock`}
     >
-      <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
+      <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 transition-transform group-hover/alert:scale-110" />
       {displayCount > 0 && (
-        <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center flex-shrink-0 min-w-[1.25rem]">
-          {displayCount}
+        <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold rounded-full h-5 w-7 flex items-center justify-center border-2 border-white shadow-sm ring-1 ring-red-100">
+          {displayCount > 99 ? '99+' : (displayCount < 10 ? `00${displayCount}` : (displayCount < 100 ? `0${displayCount}` : displayCount))}
         </span>
       )}
     </button>
@@ -623,6 +625,7 @@ export const MultiTabLayout = ({ children }) => {
 
   return (
     <div className="min-h-[100dvh] bg-gray-50">
+      {user ? <PresenceHeartbeat /> : null}
       {/* Mobile Navigation */}
       <MobileNavigation user={user} onLogout={handleLogout} isLoggingOut={isLoggingOut} />
 
@@ -630,7 +633,7 @@ export const MultiTabLayout = ({ children }) => {
       <div className={`fixed inset-0 z-[60] lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
         <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-gray-100 shadow-xl">
-          <div className="flex h-16 items-center justify-between px-4 bg-gray-100">
+          <div className="flex h-14 items-center justify-between px-4 bg-gray-100">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded bg-black font-black text-white">Z</div>
               <h1 className="text-lg font-bold tracking-tight text-gray-900">ZARYAB IMPEX</h1>
@@ -642,7 +645,7 @@ export const MultiTabLayout = ({ children }) => {
               <X className="h-6 w-6" />
             </button>
           </div>
-          <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto max-h-[calc(100dvh-4rem)] scrollbar-thin scrollbar-thumb-gray-200">
+          <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto max-h-[calc(100dvh-3.5rem)] scrollbar-thin scrollbar-thumb-gray-200">
             {navigation.map((item) => (
               <SidebarItem
                 key={item.name}
@@ -664,13 +667,13 @@ export const MultiTabLayout = ({ children }) => {
       {/* Desktop sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
         <div className="flex flex-col flex-grow bg-gray-100">
-          <div className="flex h-16 items-center px-6 bg-gray-100">
+          <div className="flex h-14 items-center px-6 bg-gray-100">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded bg-black font-black text-white">Z</div>
               <h1 className="text-lg font-bold tracking-tight text-gray-900">ZARYAB IMPEX</h1>
             </div>
           </div>
-          <nav className="flex-1 space-y-1 px-3 py-6 overflow-y-auto max-h-[calc(100dvh-4rem)] scrollbar-thin scrollbar-thumb-gray-200">
+          <nav className="flex-1 space-y-1 px-3 py-6 overflow-y-auto max-h-[calc(100dvh-3.5rem)] scrollbar-thin scrollbar-thumb-gray-200">
             {navigation.map((item) => (
               <SidebarItem
                 key={item.name}
@@ -688,9 +691,9 @@ export const MultiTabLayout = ({ children }) => {
 
       {/* Main content */}
       <div className="lg:pl-64">
-        {/* Top bar - Professional Design with Solid White Background */}
+        {/* Top bar — matches TabBar (bg-gray-100) */}
         {showTopBar && (
-          <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center bg-gray-100 px-3 sm:px-4 lg:px-6 shadow-sm overflow-visible">
+          <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center bg-gray-100 px-3 sm:px-4 lg:px-6 overflow-visible">
           {/* Mobile Menu Button */}
           <button
             type="button"
@@ -801,10 +804,17 @@ export const MultiTabLayout = ({ children }) => {
 
 
             {/* User Profile Section - Right Aligned with Dropdown */}
-            <div className="relative flex items-center gap-2 sm:gap-3 ml-auto flex-shrink-0 overflow-visible" ref={userMenuRef}>
+            <div className="relative flex items-center gap-2 sm:gap-4 ml-auto flex-shrink-0 overflow-visible" ref={userMenuRef}>
+              {/* Presence Hook */}
+              <PresenceHeartbeat />
+              
+              <div className="hidden min-[1100px]:block">
+                <OnlineAvatarStack />
+              </div>
+
               {/* Alerts Button - Right side, left of Admin user */}
               {sidebarConfig['Inventory Alerts'] !== false && isItemPermitted({ permission: 'view_inventory' }, user, hasPermission) && (
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 ml-1">
                   <InventoryAlertsBadge onNavigate={handleNavigationClick} />
                 </div>
               )}

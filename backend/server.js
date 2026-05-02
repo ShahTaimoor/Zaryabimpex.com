@@ -263,6 +263,7 @@ app.use('/api/investors', require('./routes/investors'));
 app.use('/api/drop-shipping', require('./routes/dropShipping'));
 app.use('/api/customer-balances', require('./routes/customerBalances'));
 app.use('/api/supplier-balances', require('./routes/supplierBalances'));
+app.use('/api/presence', require('./routes/presence'));
 
 // Health check endpoint (API version) - PostgreSQL only
 app.get('/api/health', (req, res) => {
