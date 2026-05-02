@@ -1015,29 +1015,30 @@ export const Dashboard = () => {
 
           {/* Financial Dashboard */}
           <div className="card">
-            <div className="card-header">
-              <div className="flex flex-col items-center space-y-2 sm:space-y-4">
-                <h2 className="text-sm sm:text-lg font-medium text-gray-900">Financial Overview</h2>
-                {/* Date Filter - Mobile only */}
-                <div className="flex flex-row items-center space-x-1.5 sm:space-x-4 w-full sm:w-auto lg:hidden">
-                  <div className="w-full sm:w-auto">
-                    <DateFilter
-                      startDate={startDate}
-                      endDate={endDate}
-                      onDateChange={handleDateChange}
-                      compact={true}
-                      showPresets={true}
-                      className="w-full"
-                    />
-                  </div>
+            <div className="card-content flex flex-col gap-6 pt-6">
+              {/* Date Filter - Mobile only (moved from header to save space) */}
+              <div className="flex flex-row items-center space-x-1.5 sm:space-x-4 w-full sm:w-auto lg:hidden">
+                <div className="w-full sm:w-auto">
+                  <DateFilter
+                    startDate={startDate}
+                    endDate={endDate}
+                    onDateChange={handleDateChange}
+                    compact={true}
+                    showPresets={true}
+                    className="w-full"
+                  />
                 </div>
               </div>
-            </div>
-            <div className="card-content space-y-6">
 
               {/* REVENUE, COST & DISCOUNT SECTION - Responsive scaling */}
               <div>
-                <h3 className="text-[10px] sm:text-xs xl:text-sm font-semibold text-gray-700 mb-2 xl:mb-3 uppercase tracking-wide">Revenue, Cost & Discounts</h3>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex-grow h-px bg-gray-200"></div>
+                  <h3 className="text-[10px] sm:text-xs xl:text-sm font-semibold text-gray-700 uppercase tracking-wide whitespace-nowrap">
+                    Revenue, Cost & Discounts
+                  </h3>
+                  <div className="flex-grow h-px bg-gray-200"></div>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 sm:gap-2 xl:gap-3 2xl:gap-4">
 
                   {/* Sales */}
@@ -1126,7 +1127,13 @@ export const Dashboard = () => {
 
               {/* PROFITABILITY & CASH FLOW SECTION - Responsive scaling */}
               <div>
-                <h3 className="text-[10px] sm:text-xs xl:text-sm font-semibold text-gray-700 mb-2 xl:mb-3 uppercase tracking-wide">Profitability & Cash Flow</h3>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex-grow h-px bg-gray-200"></div>
+                  <h3 className="text-[10px] sm:text-xs xl:text-sm font-semibold text-gray-700 uppercase tracking-wide whitespace-nowrap">
+                    Profitability & Cash Flow
+                  </h3>
+                  <div className="flex-grow h-px bg-gray-200"></div>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2 xl:gap-3 2xl:gap-4">
 
                   {/* Gross Profit */}
