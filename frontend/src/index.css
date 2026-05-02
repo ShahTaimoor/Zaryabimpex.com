@@ -755,6 +755,32 @@
     print-color-adjust: exact;
   }
 
+  .account-ledger-print--expense .account-ledger-print-thead th {
+    background-color: #d97706 !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .account-ledger-print--expense .account-ledger-print-opening td {
+    background-color: #fffbeb !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .account-ledger-print--expense .account-ledger-print-subtotal td {
+    background-color: #fef3c7 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .account-ledger-print--expense .account-ledger-print-total td {
+    background-color: #fde68a !important;
+    font-weight: bold;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   /* Sale invoice print - emerald (override default gray, must come after table th rules) */
   .print-document.print-document--sale .print-document__table th,
   .print-document.print-document--sale .layout2-table th {

@@ -19,11 +19,12 @@ import {
   User,
   TrendingUp,
   FileText,
+  FileCheck,
   CheckCircle,
   Clock,
   XCircle,
-  Phone,
   Receipt,
+  Phone,
   X,
   History,
   Info,
@@ -65,6 +66,7 @@ import {
   useUpdateSalesOrderItemsConfirmationMutation,
   useDeleteSalesOrderMutation,
   useConfirmSalesOrderMutation,
+  useCreateInvoiceFromSalesOrderMutation,
   useCancelSalesOrderMutation,
   useCloseSalesOrderMutation,
   useLazyGetSalesOrderQuery,
@@ -438,9 +440,30 @@ const SalesOrders = ({ tabId }) => {
   const [deleteSalesOrderMutation, { isLoading: deleting }] = useDeleteSalesOrderMutation();
   const [confirmSalesOrderMutation, { isLoading: confirming }] = useConfirmSalesOrderMutation();
   const [updateItemsConfirmationMutation, { isLoading: updatingItemsConfirmation }] = useUpdateSalesOrderItemsConfirmationMutation();
+  const [createInvoiceFromSOMutation, { isLoading: creatingInvoiceFromSO }] = useCreateInvoiceFromSalesOrderMutation();
   const [cancelSalesOrderMutation, { isLoading: cancelling }] = useCancelSalesOrderMutation();
   const [closeSalesOrderMutation, { isLoading: closing }] = useCloseSalesOrderMutation();
 
+  const hasPendingSalesOrderLines = (order) => {
+    const items = Array.isArray(order?.items) ? order.items : [];
+    return items.some((i) => {
+      const c = (i.confirmationStatus ?? i.confirmation_status ?? 'pending').toLowerCase();
+      return c === 'pending';
+    });
+  };
+
+  /** How to finish invoicing: confirm remaining SO lines, or post invoice when order is already fully confirmed at line level. */
+  const getSalesOrderInvoiceCompleteAction = (order) => {
+    if (!order) return null;
+    const st = order.status;
+    if (['fully_invoiced', 'cancelled', 'closed', 'draft'].includes(st)) return null;
+    if (st === 'partially_invoiced') return 'confirmAll';
+    if (st === 'confirmed') {
+      if (hasPendingSalesOrderLines(order)) return 'confirmAll';
+      return 'createInvoice';
+    }
+    return null;
+  };
 
   // Helper functions
   const resetForm = () => {
@@ -1441,6 +1464,8 @@ const SalesOrders = ({ tabId }) => {
     }
   };
 
+  const CREDIT_LIMIT_TOAST = 'Credit limit exceeded. Invoice cannot be created';
+
   const doConfirm = (id) => {
     confirmSalesOrderMutation(id)
       .unwrap()
@@ -1449,7 +1474,12 @@ const SalesOrders = ({ tabId }) => {
         setOutOfStockItems([]);
         setPendingConfirmId(null);
         if (response.invoiceError) {
-          showSuccessToast(`Sales order confirmed but failed to generate invoice: ${response.invoiceError}`);
+          const errText = String(response.invoiceError || '');
+          if (errText.includes('Credit limit') || errText.includes('credit limit')) {
+            showErrorToast(CREDIT_LIMIT_TOAST);
+          } else {
+            showSuccessToast(`Sales order confirmed but failed to generate invoice: ${response.invoiceError}`);
+          }
         } else {
           showSuccessToast('Sales order confirmed and invoice generated successfully');
         }
@@ -1460,7 +1490,18 @@ const SalesOrders = ({ tabId }) => {
         setShowOutOfStockModal(false);
         setOutOfStockItems([]);
         setPendingConfirmId(null);
-        showErrorToast(handleApiError(error));
+        const apiMsg =
+          error?.data?.message ||
+          error?.response?.data?.message ||
+          handleApiError(error);
+        if (
+          error?.data?.error === 'CREDIT_LIMIT_EXCEEDED' ||
+          (typeof apiMsg === 'string' && apiMsg.includes('Credit limit'))
+        ) {
+          showErrorToast(CREDIT_LIMIT_TOAST);
+        } else {
+          showErrorToast(typeof apiMsg === 'string' ? apiMsg : handleApiError(error));
+        }
       });
   };
 
@@ -1505,10 +1546,16 @@ const SalesOrders = ({ tabId }) => {
     }
   };
 
-  const handleUpdateItemsConfirmation = (itemUpdates, confirmAll, cancelAll) => {
-    const id = selectedOrder?._id ?? selectedOrder?.id;
+  const handleUpdateItemsConfirmation = (itemUpdates, confirmAll, cancelAll, orderOverride = null) => {
+    const orderRef = orderOverride || selectedOrder;
+    const id = orderRef?._id ?? orderRef?.id;
     if (!id) return;
-    updateItemsConfirmationMutation({ id, itemUpdates, confirmAll, cancelAll })
+    updateItemsConfirmationMutation({
+      id,
+      itemUpdates: itemUpdates ?? [],
+      confirmAll,
+      cancelAll,
+    })
       .unwrap()
       .then((response) => {
         const msg = response?.sale
@@ -1516,7 +1563,11 @@ const SalesOrders = ({ tabId }) => {
           : response?.invoiceError
             ? 'Items confirmed but invoice creation failed'
             : 'Items confirmation updated';
-        showSuccessToast(msg);
+        if (response?.invoiceError && String(response.invoiceError).includes('Credit limit')) {
+          showErrorToast(CREDIT_LIMIT_TOAST);
+        } else {
+          showSuccessToast(msg);
+        }
         if (response?.salesOrder) {
           setSelectedOrder(response.salesOrder);
         }
@@ -1525,7 +1576,65 @@ const SalesOrders = ({ tabId }) => {
         refreshProductCatalogCache();
       })
       .catch((error) => {
-        showErrorToast(handleApiError(error));
+        const apiMsg =
+          error?.data?.message ||
+          error?.response?.data?.message ||
+          handleApiError(error);
+        if (
+          error?.data?.error === 'CREDIT_LIMIT_EXCEEDED' ||
+          (typeof apiMsg === 'string' && apiMsg.includes('Credit limit'))
+        ) {
+          showErrorToast(CREDIT_LIMIT_TOAST);
+        } else {
+          showErrorToast(typeof apiMsg === 'string' ? apiMsg : handleApiError(error));
+        }
+      });
+  };
+
+  const completeSalesOrderToFullInvoice = (order) => {
+    const action = getSalesOrderInvoiceCompleteAction(order);
+    if (!action) return;
+    const id = order?.id ?? order?._id;
+    if (!id) return;
+
+    if (action === 'confirmAll') {
+      if (!window.confirm('Confirm all remaining lines and create the full sales invoice?')) return;
+      handleUpdateItemsConfirmation([], true, false, order);
+      return;
+    }
+
+    if (
+      !window.confirm(
+        'Create the sales invoice now? Inventory was already reduced when this order was confirmed.'
+      )
+    ) {
+      return;
+    }
+
+    createInvoiceFromSOMutation(id)
+      .unwrap()
+      .then((res) => {
+        showSuccessToast(res?.message || 'Sales invoice created successfully');
+        refetch();
+        refreshProductCatalogCache();
+        const updated = res?.salesOrder;
+        if (updated && selectedOrder && (selectedOrder.id === id || selectedOrder._id === id)) {
+          setSelectedOrder(updated);
+        }
+      })
+      .catch((error) => {
+        const apiMsg =
+          error?.data?.message ||
+          error?.response?.data?.message ||
+          handleApiError(error);
+        if (
+          error?.data?.error === 'CREDIT_LIMIT_EXCEEDED' ||
+          (typeof apiMsg === 'string' && apiMsg.includes('Credit limit'))
+        ) {
+          showErrorToast(CREDIT_LIMIT_TOAST);
+        } else {
+          showErrorToast(typeof apiMsg === 'string' ? apiMsg : handleApiError(error));
+        }
       });
   };
 
@@ -1797,20 +1906,39 @@ const SalesOrders = ({ tabId }) => {
   };
 
 
-  const getStatusIcon = (status) => {
+  /** Order lifecycle label + icon (distinct from per-line item “Confirmed”). */
+  const getSalesOrderStatusPresentation = (order) => {
+    const status = order?.status;
     switch (status) {
-      case 'closed':
-      case 'fully_invoiced':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'confirmed':
-      case 'partially_invoiced':
-        return <Clock className="h-4 w-4 text-yellow-500" />;
-      case 'cancelled':
-        return <XCircle className="h-4 w-4 text-red-500" />;
       case 'draft':
-        return <Clock className="h-4 w-4 text-blue-500" />;
+        return { icon: <Clock className="h-4 w-4 text-blue-500 shrink-0" />, label: 'Pending' };
+      case 'confirmed':
+        return {
+          icon: <FileCheck className="h-4 w-4 text-amber-600 shrink-0" />,
+          label: 'Order confirmed',
+        };
+      case 'partially_invoiced':
+        return {
+          icon: <Clock className="h-4 w-4 text-yellow-500 shrink-0" />,
+          label: 'Partially invoiced',
+        };
+      case 'fully_invoiced':
+        return {
+          icon: <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />,
+          label: 'Fully invoiced',
+        };
+      case 'closed':
+        return {
+          icon: <CheckCircle className="h-4 w-4 text-gray-600 shrink-0" />,
+          label: 'Closed',
+        };
+      case 'cancelled':
+        return { icon: <XCircle className="h-4 w-4 text-red-500 shrink-0" />, label: 'Cancelled' };
       default:
-        return <Clock className="h-4 w-4 text-gray-500" />;
+        return {
+          icon: <Clock className="h-4 w-4 text-gray-500 shrink-0" />,
+          label: String(status ?? '—').replace(/_/g, ' '),
+        };
     }
   };
 
@@ -2991,7 +3119,7 @@ const SalesOrders = ({ tabId }) => {
               >
                 <option value="">All Statuses</option>
                 <option value="draft">Pending</option>
-                <option value="confirmed">Confirmed</option>
+                <option value="confirmed">Order confirmed</option>
                 <option value="partially_invoiced">Partially Invoiced</option>
                 <option value="fully_invoiced">Fully Invoiced</option>
                 <option value="cancelled">Cancelled</option>
@@ -3110,11 +3238,16 @@ const SalesOrders = ({ tabId }) => {
                           {order?.order_type ?? order?.orderType ?? '—'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div className="flex items-center space-x-1">
-                            {getStatusIcon(order?.status)}
-                            <span className="capitalize">
-                              {order?.status === 'draft' ? 'Pending' : (order?.status ?? '').replace(/_/g, ' ')}
-                            </span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {(() => {
+                              const pres = getSalesOrderStatusPresentation(order);
+                              return (
+                                <>
+                                  {pres.icon}
+                                  <span className="text-sm">{pres.label}</span>
+                                </>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -3186,6 +3319,25 @@ const SalesOrders = ({ tabId }) => {
                               label=""
                               className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-red-600 hover:text-red-800 px-1 py-1"
                             />
+                            {getSalesOrderInvoiceCompleteAction(order) && (
+                              <LoadingButton
+                                type="button"
+                                onClick={() => completeSalesOrderToFullInvoice(order)}
+                                isLoading={updatingItemsConfirmation || creatingInvoiceFromSO}
+                                size="icon-sm"
+                                iconOnly
+                                variant="ghost"
+                                className="text-teal-600 hover:text-teal-900 shrink-0"
+                                title={
+                                  getSalesOrderInvoiceCompleteAction(order) === 'createInvoice'
+                                    ? 'Create sales invoice (fully invoiced)'
+                                    : 'Convert to full invoice'
+                                }
+                                disabled={updatingItemsConfirmation || creatingInvoiceFromSO}
+                              >
+                                <Receipt className="h-4 w-4" />
+                              </LoadingButton>
+                            )}
                             {order.status === 'draft' && (
                               <>
                                 <button
@@ -3272,6 +3424,25 @@ const SalesOrders = ({ tabId }) => {
               Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
             </div>
             <div className="flex flex-wrap gap-2 justify-end">
+              {selectedOrder && getSalesOrderInvoiceCompleteAction(selectedOrder) && (
+                <LoadingButton
+                  type="button"
+                  onClick={() => completeSalesOrderToFullInvoice(selectedOrder)}
+                  isLoading={updatingItemsConfirmation || creatingInvoiceFromSO}
+                  disabled={updatingItemsConfirmation || creatingInvoiceFromSO}
+                  className="inline-flex items-center bg-teal-600 hover:bg-teal-700 text-white"
+                  title={
+                    getSalesOrderInvoiceCompleteAction(selectedOrder) === 'createInvoice'
+                      ? 'Create sales invoice (fully invoiced)'
+                      : 'Convert to full invoice'
+                  }
+                >
+                  <Receipt className="h-4 w-4 mr-2 shrink-0" />
+                  {getSalesOrderInvoiceCompleteAction(selectedOrder) === 'createInvoice'
+                    ? 'Create sales invoice'
+                    : 'Convert to full invoice'}
+                </LoadingButton>
+              )}
               <Button
                 type="button"
                 onClick={() => handlePrint(selectedOrder)}
@@ -3319,13 +3490,13 @@ const SalesOrders = ({ tabId }) => {
                   <p><span className="font-medium">Order Type:</span> {selectedOrder.orderType || 'Standard'}</p>
                   <p><span className="font-medium">Status:</span>
                     <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${selectedOrder.status === 'draft' ? 'bg-gray-100 text-gray-800' :
-                      selectedOrder.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                      selectedOrder.status === 'confirmed' ? 'bg-amber-100 text-amber-900' :
                         selectedOrder.status === 'partially_invoiced' ? 'bg-yellow-100 text-yellow-800' :
                           selectedOrder.status === 'fully_invoiced' ? 'bg-green-100 text-green-800' :
                             selectedOrder.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                               'bg-gray-100 text-gray-800'
                       }`}>
-                      {selectedOrder.status === 'draft' ? 'Pending' : selectedOrder.status.replace('_', ' ')}
+                      {getSalesOrderStatusPresentation(selectedOrder).label}
                     </span>
                   </p>
                   {itemWiseConfirmationEnabled && (

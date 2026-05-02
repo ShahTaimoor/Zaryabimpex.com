@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { Users, Building2, Calendar, FileText, ChevronDown, Printer } from 'lucide-react';
+import { Users, Building2, Calendar, FileText, ChevronDown, Printer, Wallet } from 'lucide-react';
 import { useGetLedgerSummaryQuery, useGetCustomerDetailedTransactionsQuery, useGetSupplierDetailedTransactionsQuery, useGetAllEntriesQuery } from '../store/services/accountLedgerApi';
 import { useGetCustomersQuery } from '../store/services/customersApi';
 import { useGetSuppliersQuery } from '../store/services/suppliersApi';
@@ -58,6 +58,7 @@ const AccountLedgerSummary = () => {
   const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
   const [debouncedSupplierQuery, setDebouncedSupplierQuery] = useState('');
   const [selectedBankId, setSelectedBankId] = useState('');
+  const [selectedExpenseAccountCode, setSelectedExpenseAccountCode] = useState('');
   const supplierDropdownRef = useRef(null);
   const printRef = useRef(null);
 
@@ -178,8 +179,11 @@ const AccountLedgerSummary = () => {
     if (selectedSupplierId) {
       params.supplierId = selectedSupplierId;
     }
+    if (selectedExpenseAccountCode) {
+      params.expenseAccountCode = selectedExpenseAccountCode;
+    }
     return params;
-  }, [filters, selectedCustomerId, selectedSupplierId]);
+  }, [filters, selectedCustomerId, selectedSupplierId, selectedExpenseAccountCode]);
 
   // Fetch ledger summary - refetch on mount and when args change to ensure fresh data
   const { data: summaryData, isLoading, error, refetch } = useGetLedgerSummaryQuery(queryParams, {
@@ -282,7 +286,65 @@ const AccountLedgerSummary = () => {
   const customerTotals = summaryData?.data?.customers?.totals || {};
   const supplierTotals = summaryData?.data?.suppliers?.totals || {};
   const bankTotals = summaryData?.data?.banks?.totals || {};
+  const expenseSummaries = summaryData?.data?.expenses?.summary || [];
+  const expenseTotals = summaryData?.data?.expenses?.totals || {};
+  const expenseAccountDetail = summaryData?.data?.expenseAccount;
+  const expenseLedgerEntries = selectedExpenseAccountCode ? (summaryData?.data?.entries || []) : [];
   const period = summaryData?.data?.period || {};
+
+  const printLedgerRows = useMemo(() => {
+    if (selectedExpenseAccountCode) return expenseLedgerEntries;
+    if (selectedCustomerId) return customerDetail?.entries ?? detailedTransactionsData?.data?.entries ?? [];
+    return supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries ?? [];
+  }, [
+    selectedExpenseAccountCode,
+    expenseLedgerEntries,
+    selectedCustomerId,
+    customerDetail?.entries,
+    detailedTransactionsData?.data?.entries,
+    supplierDetail?.entries,
+    detailedSupplierTransactionsData?.data?.entries,
+  ]);
+
+  const printOpeningBal = useMemo(() => {
+    if (selectedExpenseAccountCode) return expenseAccountDetail?.openingBalance ?? 0;
+    if (selectedCustomerId) return customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0;
+    return supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0;
+  }, [
+    selectedExpenseAccountCode,
+    expenseAccountDetail?.openingBalance,
+    selectedCustomerId,
+    customerDetail?.openingBalance,
+    detailedTransactionsData?.data?.openingBalance,
+    supplierDetail?.openingBalance,
+    detailedSupplierTransactionsData?.data?.openingBalance,
+  ]);
+
+  const printPartyHeader = useMemo(() => {
+    if (selectedExpenseAccountCode) {
+      const code = expenseAccountDetail?.accountCode || selectedExpenseAccountCode;
+      return {
+        line1: expenseAccountDetail?.accountName || 'Expense account',
+        line2: code ? `Account code: ${code}` : '',
+      };
+    }
+    if (selectedCustomerId) {
+      return {
+        line1: customerDetail?.customer?.name || detailedTransactionsData?.data?.customer?.name || 'Customer Receivables',
+        line2: (customerDetail?.customer?.accountCode ?? detailedTransactionsData?.data?.customer?.accountCode)
+          ? `Account code: ${customerDetail?.customer?.accountCode ?? detailedTransactionsData?.data?.customer?.accountCode}`
+          : '',
+      };
+    }
+    return {
+      line1: supplierDetail?.supplier?.name || detailedSupplierTransactionsData?.data?.supplier?.name || 'Supplier Payables',
+      line2: (supplierDetail?.supplier?.accountCode ?? detailedSupplierTransactionsData?.data?.supplier?.accountCode)
+        ? `Account code: ${supplierDetail?.supplier?.accountCode ?? detailedSupplierTransactionsData?.data?.supplier?.accountCode}`
+        : '',
+    };
+  }, [selectedExpenseAccountCode, expenseAccountDetail, selectedCustomerId, customerDetail, detailedTransactionsData, supplierDetail, detailedSupplierTransactionsData]);
+
+  const printShowReturnCol = showReturnColumn && !!selectedCustomerId && !selectedExpenseAccountCode;
 
   // Filter customers based on selection (must be before early return)
   const customers = useMemo(() => {
@@ -500,6 +562,13 @@ const AccountLedgerSummary = () => {
     estimateSize: 48,
   });
 
+  const virtualizeExpenseLedgerRows = Boolean(selectedExpenseAccountCode && expenseLedgerEntries.length > 35);
+  const { scrollRef: expenseLedgerScrollRef, virtualizer: expenseLedgerVirtualizer } = useTableRowVirtualizer({
+    rowCount: expenseLedgerEntries.length,
+    enabled: virtualizeExpenseLedgerRows,
+    estimateSize: 52,
+  });
+
   const handleClearFilters = () => {
     setFilters({
       startDate: defaultDates.startDate,
@@ -513,6 +582,21 @@ const AccountLedgerSummary = () => {
     setSupplierSearchQuery('');
     setDebouncedSupplierQuery('');
     setSelectedBankId('');
+    setSelectedExpenseAccountCode('');
+  };
+
+  const handleExpenseAccountChange = (code) => {
+    const next = code || '';
+    setSelectedExpenseAccountCode(next);
+    if (next) {
+      setSelectedCustomerId('');
+      setCustomerSearchQuery('');
+      setDebouncedCustomerQuery('');
+      setSelectedSupplierId('');
+      setSupplierSearchQuery('');
+      setDebouncedSupplierQuery('');
+      setSelectedBankId('');
+    }
   };
 
   const handleCustomerSelect = (customer) => {
@@ -527,6 +611,7 @@ const AccountLedgerSummary = () => {
     setSupplierSearchQuery('');
     setDebouncedSupplierQuery('');
     setSelectedBankId('');
+    setSelectedExpenseAccountCode('');
   };
 
   const handleSupplierSelect = (supplier) => {
@@ -535,6 +620,7 @@ const AccountLedgerSummary = () => {
     setDebouncedSupplierQuery((supplier.companyName || supplier.name || '').trim());
     setShowSupplierDropdown(false);
     // Clear other selections when supplier is selected
+    setSelectedExpenseAccountCode('');
     setSelectedCustomerId('');
     setCustomerSearchQuery('');
     setDebouncedCustomerQuery('');
@@ -711,16 +797,18 @@ const AccountLedgerSummary = () => {
     }
   };
 
-  const customerName = selectedCustomerId
-    ? (customerDetail?.customer?.name || detailedTransactionsData?.data?.customer?.name || 'Customer Receivables')
-    : (supplierDetail?.supplier?.name || detailedSupplierTransactionsData?.data?.supplier?.name || 'Supplier Payables');
+  const ledgerPartyName = selectedExpenseAccountCode
+    ? (expenseAccountDetail?.accountName || summaryData?.data?.expenseAccount?.accountName || 'Expense account')
+    : selectedCustomerId
+      ? (customerDetail?.customer?.name || detailedTransactionsData?.data?.customer?.name || 'Customer Receivables')
+      : (supplierDetail?.supplier?.name || detailedSupplierTransactionsData?.data?.supplier?.name || 'Supplier Payables');
 
   const handleLedgerPrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: `Account Ledger Summary - ${customerName}`,
+    documentTitle: `Account Ledger Summary - ${ledgerPartyName}`,
     onBeforeGetContent: () => {
       if (!printRef.current) {
-        toast.error('No content to print. Please select a customer or supplier.');
+        toast.error('No content to print. Please select a customer, supplier, or expense account.');
         return Promise.reject();
       }
       return Promise.resolve();
@@ -728,8 +816,8 @@ const AccountLedgerSummary = () => {
   });
 
   const handlePrint = () => {
-    if (!selectedCustomerId && !selectedSupplierId) {
-      toast.error('Please select a customer or supplier to print.');
+    if (!selectedCustomerId && !selectedSupplierId && !selectedExpenseAccountCode) {
+      toast.error('Please select a customer, supplier, or expense account to print.');
       return;
     }
     handleLedgerPrint();
@@ -756,7 +844,7 @@ const AccountLedgerSummary = () => {
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
               <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Account Ledger Summary</h1>
-              <p className="text-sm text-gray-500 mt-0.5">Customer receivables and supplier payables</p>
+              <p className="text-sm text-gray-500 mt-0.5">Customer receivables, supplier payables, banks, and expense accounts</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button
@@ -797,8 +885,12 @@ const AccountLedgerSummary = () => {
                 variant="outline"
                 size="sm"
                 className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
-                disabled={!selectedCustomerId && !selectedSupplierId}
-                title={!selectedCustomerId && !selectedSupplierId ? 'Select a customer or supplier to print' : 'Print ledger summary'}
+                disabled={!selectedCustomerId && !selectedSupplierId && !selectedExpenseAccountCode}
+                title={
+                  !selectedCustomerId && !selectedSupplierId && !selectedExpenseAccountCode
+                    ? 'Select a customer, supplier, or expense account to print'
+                    : 'Print ledger summary'
+                }
               >
                 <Printer className="h-4 w-4" />
                 Print
@@ -811,7 +903,7 @@ const AccountLedgerSummary = () => {
         {/* Filters - clean card */}
         <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
           <h2 className="text-sm font-medium text-gray-700 mb-4 uppercase tracking-wide">Filters</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             {/* Customer Dropdown */}
             <div className="relative" ref={customerDropdownRef}>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Customer</label>
@@ -924,13 +1016,14 @@ const AccountLedgerSummary = () => {
                   const val = e.target.value;
                   setSelectedBankId(val);
                   if (val) {
-                    // Clear customer/supplier selections when bank is selected
+                    // Clear customer/supplier/expense selections when bank is selected
                     setSelectedCustomerId('');
                     setCustomerSearchQuery('');
                     setDebouncedCustomerQuery('');
                     setSelectedSupplierId('');
                     setSupplierSearchQuery('');
                     setDebouncedSupplierQuery('');
+                    setSelectedExpenseAccountCode('');
                   }
                 }}
                 autoComplete="off"
@@ -941,6 +1034,24 @@ const AccountLedgerSummary = () => {
                 {(banks || []).map((bank) => (
                   <option key={bank._id || bank.id} value={bank._id || bank.id}>
                     {bank.bankName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Expense account (GL) */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Expense account</label>
+              <select
+                value={selectedExpenseAccountCode}
+                onChange={(e) => handleExpenseAccountChange(e.target.value)}
+                autoComplete="off"
+                className="w-full h-9 border border-gray-300 rounded-md px-2 text-sm bg-white"
+              >
+                <option value="">None</option>
+                {(expenseSummaries || []).map((row) => (
+                  <option key={row.accountCode} value={row.accountCode}>
+                    {row.accountCode} — {row.accountName || 'Expense'}
                   </option>
                 ))}
               </select>
@@ -967,7 +1078,7 @@ const AccountLedgerSummary = () => {
         ) : (
           <div className="space-y-6">
             {/* Customers Section - Show only if customer is selected and supplier is not */}
-            {selectedCustomerId && !selectedSupplierId && (
+            {selectedCustomerId && !selectedSupplierId && !selectedExpenseAccountCode && (
               <div className="bg-white border border-emerald-200 rounded-lg shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-emerald-200 bg-emerald-50">
                   <div className="flex items-start gap-3">
@@ -1196,7 +1307,7 @@ const AccountLedgerSummary = () => {
             )}
 
             {/* Suppliers Section - Show only if supplier is selected and customer is not */}
-            {selectedSupplierId && !selectedCustomerId && !selectedBankId && (
+            {selectedSupplierId && !selectedCustomerId && !selectedBankId && !selectedExpenseAccountCode && (
               <div className="bg-white border border-blue-200 rounded-lg shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-blue-200 bg-blue-50">
                   <div className="flex items-start gap-3">
@@ -1381,7 +1492,125 @@ const AccountLedgerSummary = () => {
               </div>
             )}
 
-            {(selectedBankId || selectedBankId === ALL_BANKS_VALUE) && !selectedCustomerId && !selectedSupplierId && (
+            {selectedExpenseAccountCode && !selectedCustomerId && !selectedSupplierId && !selectedBankId && (
+              <div className="bg-white border border-amber-200 rounded-lg shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-amber-200 bg-amber-50">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-200">
+                      <Wallet className="h-5 w-5 text-amber-800" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        {expenseAccountDetail?.accountName || 'Expense account'} ({expenseAccountDetail?.accountCode || selectedExpenseAccountCode})
+                      </h2>
+                      {filters.startDate && filters.endDate && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {formatDate(filters.startDate)} – {formatDate(filters.endDate)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  ref={expenseLedgerScrollRef}
+                  className={`overflow-x-auto ${virtualizeExpenseLedgerRows ? 'max-h-[min(70vh,560px)] overflow-y-auto' : ''}`}
+                >
+                  <table className="min-w-full account-ledger-table">
+                    <thead>
+                      <tr className="bg-amber-600 border-b border-amber-700">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Voucher No</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Particular</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Debits</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Credits</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white">
+                      <tr className="bg-amber-50/50">
+                        <td colSpan="3" className="px-4 py-3 text-sm font-medium text-gray-900">Opening Balance:</td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900">0</td>
+                        <td className="px-4 py-3 text-sm text-right text-gray-900">0</td>
+                        <td className={`px-4 py-3 text-sm text-right font-bold ${(expenseAccountDetail?.openingBalance ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                          {formatCurrency(expenseAccountDetail?.openingBalance ?? 0)}
+                        </td>
+                      </tr>
+                      {expenseLedgerEntries.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
+                            <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                            <p>No transactions for this expense account in the selected period</p>
+                          </td>
+                        </tr>
+                      ) : !virtualizeExpenseLedgerRows ? (
+                        expenseLedgerEntries.map((entry, index) => (
+                          <tr key={index} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 text-sm text-gray-900">{formatDate(entry.date)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-900">{entry.voucherNo || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700 max-w-md whitespace-normal break-words">{entry.particular || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-right text-gray-900">{entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}</td>
+                            <td className="px-4 py-3 text-sm text-right text-gray-900">{entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}</td>
+                            <td className={`px-4 py-3 text-sm text-right font-semibold ${(entry.balance || 0) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                              {formatCurrency(entry.balance || 0)}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        (() => {
+                          const vItems = expenseLedgerVirtualizer.getVirtualItems();
+                          const totalH = expenseLedgerVirtualizer.getTotalSize();
+                          const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
+                          return (
+                            <>
+                              {padTop > 0 ? (
+                                <tr aria-hidden className="pointer-events-none">
+                                  <td colSpan={6} className="p-0 border-0" style={{ height: padTop }} />
+                                </tr>
+                              ) : null}
+                              {vItems.map((vr) => {
+                                const entry = expenseLedgerEntries[vr.index];
+                                return (
+                                  <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
+                                    <td className="px-4 py-3 text-sm text-gray-900">{formatDate(entry.date)}</td>
+                                    <td className="px-4 py-3 text-sm text-gray-900">{entry.voucherNo || '-'}</td>
+                                    <td className="px-4 py-3 text-sm text-gray-700 max-w-md whitespace-normal break-words">{entry.particular || '-'}</td>
+                                    <td className="px-4 py-3 text-sm text-right text-gray-900">{entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}</td>
+                                    <td className="px-4 py-3 text-sm text-right text-gray-900">{entry.creditAmount > 0 ? formatCurrency(entry.creditAmount) : '0'}</td>
+                                    <td className={`px-4 py-3 text-sm text-right font-semibold ${(entry.balance || 0) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                      {formatCurrency(entry.balance || 0)}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {padBottom > 0 ? (
+                                <tr aria-hidden className="pointer-events-none">
+                                  <td colSpan={6} className="p-0 border-0" style={{ height: padBottom }} />
+                                </tr>
+                              ) : null}
+                            </>
+                          );
+                        })()
+                      )}
+                      {expenseLedgerEntries.length > 0 && (
+                        <tr className="bg-amber-100 font-semibold border-t-2 border-amber-200">
+                          <td className="px-4 py-3 text-sm text-gray-900"></td>
+                          <td className="px-4 py-3 text-sm text-gray-900"></td>
+                          <td className="px-4 py-3 text-sm text-gray-900">Period total</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900">{formatCurrency(sumDebits(expenseLedgerEntries))}</td>
+                          <td className="px-4 py-3 text-sm text-right text-gray-900">{formatCurrency(sumCredits(expenseLedgerEntries))}</td>
+                          <td className={`px-4 py-3 text-sm text-right font-bold ${(expenseAccountDetail?.closingBalance ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                            {formatCurrency(expenseAccountDetail?.closingBalance ?? 0)}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {(selectedBankId || selectedBankId === ALL_BANKS_VALUE) && !selectedCustomerId && !selectedSupplierId && !selectedExpenseAccountCode && (
               <div className="bg-white border border-indigo-200 rounded-lg shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-indigo-200 bg-indigo-50">
                   <div className="flex items-start gap-3">
@@ -1535,15 +1764,58 @@ const AccountLedgerSummary = () => {
               </div>
             )}
 
-            {!selectedCustomerId && !selectedSupplierId && !selectedBankId && (
-              <div className="bg-white border border-gray-200 rounded-lg shadow-sm py-20 px-6 text-center">
-                <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 mb-4">
-                  <FileText className="h-7 w-7 text-gray-400" />
+            {!selectedCustomerId && !selectedSupplierId && !selectedBankId && !selectedExpenseAccountCode && (
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 space-y-6">
+                <div className="text-center py-6 px-4 border-b border-gray-100">
+                  <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 mb-4">
+                    <FileText className="h-7 w-7 text-gray-400" />
+                  </div>
+                  <h3 className="text-base font-medium text-gray-900 mb-1">No party ledger selected</h3>
+                  <p className="text-sm text-gray-500 max-w-md mx-auto">
+                    Select a customer, supplier, bank, or expense account above to view detailed ledger lines.
+                  </p>
                 </div>
-                <h3 className="text-base font-medium text-gray-900 mb-1">No ledger selected</h3>
-                <p className="text-sm text-gray-500 max-w-sm mx-auto">
-                  Select a customer, supplier, or bank above to view their account ledger and transaction history.
-                </p>
+                {expenseSummaries.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                      <Wallet className="h-4 w-4 text-amber-600" />
+                      Expense accounts (period summary)
+                    </h4>
+                    <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                      <table className="min-w-full text-sm">
+                        <thead>
+                          <tr className="bg-amber-50 border-b border-amber-100">
+                            <th className="text-left px-3 py-2 font-medium text-gray-700">Code</th>
+                            <th className="text-left px-3 py-2 font-medium text-gray-700">Account</th>
+                            <th className="text-right px-3 py-2 font-medium text-gray-700">Debits</th>
+                            <th className="text-right px-3 py-2 font-medium text-gray-700">Credits</th>
+                            <th className="text-right px-3 py-2 font-medium text-gray-700">Net</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {expenseSummaries.map((row) => (
+                            <tr key={row.accountCode} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 font-mono text-gray-800">{row.accountCode}</td>
+                              <td className="px-3 py-2 text-gray-900">{row.accountName || '—'}</td>
+                              <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.totalDebits)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.totalCredits)}</td>
+                              <td className="px-3 py-2 text-right font-medium tabular-nums">{formatCurrency(row.netExpense)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-amber-50/80 font-semibold border-t border-amber-100">
+                            <td colSpan={2} className="px-3 py-2 text-gray-800">Total</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(expenseTotals.totalDebits)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(expenseTotals.totalCredits)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(expenseTotals.netExpense)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">Choose an expense account in filters to open the full transaction list.</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1590,21 +1862,15 @@ const AccountLedgerSummary = () => {
           />
         </BasePrintModal>
 
-        {/* Hidden Print Section - colored for customer (emerald) or supplier (blue) */}
+        {/* Hidden Print Section - customer (emerald), supplier (blue), expense (amber) */}
         <div
-          className={`hidden print:block account-ledger-print ${selectedCustomerId ? 'account-ledger-print--customer' : 'account-ledger-print--supplier'}`}
+          className={`hidden print:block account-ledger-print ${selectedExpenseAccountCode ? 'account-ledger-print--expense' : selectedCustomerId ? 'account-ledger-print--customer' : 'account-ledger-print--supplier'}`}
           ref={printRef}
         >
           <div className="print-header text-center mb-4">
             <h1 className="text-xl font-bold uppercase underline">Account Ledger Summary</h1>
-            <p className="font-bold">
-              {selectedCustomerId
-                ? (customerDetail?.customer?.name || detailedTransactionsData?.data?.customer?.name || 'Customer Receivables')
-                : (supplierDetail?.supplier?.name || detailedSupplierTransactionsData?.data?.supplier?.name || 'Supplier Payables')}
-              {(selectedCustomerId ? (customerDetail?.customer?.accountCode ?? detailedTransactionsData?.data?.customer?.accountCode) : (supplierDetail?.supplier?.accountCode ?? detailedSupplierTransactionsData?.data?.supplier?.accountCode))
-                ? ` - Account Code: ${selectedCustomerId ? (customerDetail?.customer?.accountCode ?? detailedTransactionsData?.data?.customer?.accountCode) : (supplierDetail?.supplier?.accountCode ?? detailedSupplierTransactionsData?.data?.supplier?.accountCode)}`
-                : ''}
-            </p>
+            <p className="font-bold">{printPartyHeader.line1}</p>
+            {printPartyHeader.line2 ? <p className="font-semibold">{printPartyHeader.line2}</p> : null}
             <p>Period: {formatDate(filters.startDate)} to {formatDate(filters.endDate)}</p>
           </div>
 
@@ -1613,8 +1879,8 @@ const AccountLedgerSummary = () => {
               <tr className="account-ledger-print-thead">
                 <th style={{ width: '4%', border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>S.NO</th>
                 <th style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>DATE</th>
-                <th style={{ width: showReturnColumn ? '52%' : '60%', border: '1px solid #000', padding: '6px 2px', textAlign: 'left' }}>DESCRIPTION</th>
-                {showReturnColumn && (
+                <th style={{ width: printShowReturnCol ? '52%' : '60%', border: '1px solid #000', padding: '6px 2px', textAlign: 'left' }}>DESCRIPTION</th>
+                {printShowReturnCol && (
                   <th style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>RETURN</th>
                 )}
                 <th className="print-amount" style={{ width: '8%', border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>DEBITS</th>
@@ -1628,20 +1894,18 @@ const AccountLedgerSummary = () => {
                 <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>-</td>
                 <td style={{ border: '1px solid #000', padding: '6px 2px' }}></td>
                 <td style={{ border: '1px solid #000', padding: '6px 2px', fontWeight: 'bold', fontSize: '11px' }}>Opening Balance</td>
-                {showReturnColumn && (
+                {printShowReturnCol && (
                   <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}></td>
                 )}
                 <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>0</td>
                 <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>0</td>
                 <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right', fontWeight: 'bold' }}>
-                  {formatCurrency(
-                    (selectedCustomerId ? (customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance) : (supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance)) ?? 0
-                  )}
+                  {formatCurrency(printOpeningBal)}
                 </td>
               </tr>
 
               {/* Transaction Rows */}
-              {(selectedCustomerId ? (customerDetail?.entries ?? detailedTransactionsData?.data?.entries) : (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries))?.map((entry, index) => (
+              {printLedgerRows?.map((entry, index) => (
                 <tr key={index}>
                   <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>{index + 1}</td>
                   <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>{formatDate(entry.date)}</td>
@@ -1653,7 +1917,7 @@ const AccountLedgerSummary = () => {
                       </span>
                     )}
                   </td>
-                  {showReturnColumn && (
+                  {printShowReturnCol && (
                     <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>
                       {selectedCustomerId && entry.source === 'Sale Return' ? 'Return' : ''}
                     </td>
@@ -1671,7 +1935,7 @@ const AccountLedgerSummary = () => {
               ))}
 
               {/* Return Total Row - customer only, when there are returns and return column visible */}
-              {showReturnColumn && selectedCustomerId && (customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0) > 0 && (
+              {printShowReturnCol && selectedCustomerId && (customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0) > 0 && (
                 <tr className="account-ledger-print-subtotal">
                   <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}></td>
                   <td style={{ border: '1px solid #000', padding: '6px 2px' }}></td>
@@ -1687,18 +1951,20 @@ const AccountLedgerSummary = () => {
 
               {/* Total Row */}
               <tr className="account-ledger-print-total">
-                <td colSpan={showReturnColumn ? 4 : 3} style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center', fontSize: '15px' }}>Total</td>
+                <td colSpan={printShowReturnCol ? 4 : 3} style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center', fontSize: '15px' }}>Total</td>
                 <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right', fontSize: '15px', fontWeight: 'bold' }}>
-                  {formatCurrency(sumDebits(selectedCustomerId ? (customerDetail?.entries ?? detailedTransactionsData?.data?.entries) : (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries)))}
+                  {formatCurrency(sumDebits(printLedgerRows))}
                 </td>
                 <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right', fontSize: '15px', fontWeight: 'bold' }}>
-                  {formatCurrency(sumCredits(selectedCustomerId ? (customerDetail?.entries ?? detailedTransactionsData?.data?.entries) : (supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries)))}
+                  {formatCurrency(sumCredits(printLedgerRows))}
                 </td>
                 <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right', fontSize: '15px', fontWeight: 'bold' }}>
                   {formatCurrency(
-                    selectedCustomerId
-                      ? closingBalanceFromEntries(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0, customerDetail?.entries ?? detailedTransactionsData?.data?.entries, false)
-                      : closingBalanceFromEntries(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0, supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries, true)
+                    selectedExpenseAccountCode
+                      ? (expenseAccountDetail?.closingBalance ?? 0)
+                      : selectedCustomerId
+                        ? closingBalanceFromEntries(customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0, customerDetail?.entries ?? detailedTransactionsData?.data?.entries, false)
+                        : closingBalanceFromEntries(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0, supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries, true)
                   )}
                 </td>
               </tr>

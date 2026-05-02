@@ -366,7 +366,7 @@ class AccountLedgerService {
    */
   async getLedgerSummary(queryParams) {
     try {
-      const { startDate, endDate, customerId, supplierId, search } = queryParams;
+      const { startDate, endDate, customerId, supplierId, search, expenseAccountCode } = queryParams;
 
       // Clamp date range
       const { start, end } = this.clampDateRange(startDate, endDate);
@@ -921,6 +921,114 @@ class AccountLedgerService {
           accountCode: one.accountCode || ''
         };
         data.entries = Array.isArray(one.entries) ? one.entries : [];
+      }
+
+      // Expense accounts (period) — all expense-type GL accounts except COGS (5000)
+      const expenseStart = start || new Date(0);
+      const expenseEnd = end || new Date();
+      let expenseSummaryRows = [];
+      try {
+        const expenseSummaryResult = await query(
+          `SELECT al.account_code AS "accountCode",
+                  MAX(coa.account_name) AS "accountName",
+                  COALESCE(SUM(al.debit_amount), 0)::float AS "totalDebits",
+                  COALESCE(SUM(al.credit_amount), 0)::float AS "totalCredits",
+                  COALESCE(SUM(al.debit_amount - al.credit_amount), 0)::float AS "netExpense"
+           FROM account_ledger al
+           INNER JOIN chart_of_accounts coa ON coa.account_code = al.account_code AND coa.deleted_at IS NULL
+           WHERE coa.account_type = 'expense'
+             AND coa.account_code != '5000'
+             AND coa.is_active IS NOT FALSE
+             AND al.status = 'completed'
+             AND al.reversed_at IS NULL
+             AND al.transaction_date >= $1 AND al.transaction_date <= $2
+           GROUP BY al.account_code
+           ORDER BY al.account_code`,
+          [expenseStart, expenseEnd]
+        );
+        expenseSummaryRows = expenseSummaryResult.rows || [];
+      } catch (expErr) {
+        console.error('Expense summary query failed:', expErr);
+      }
+
+      data.expenses = {
+        summary: expenseSummaryRows,
+        totals: {
+          totalDebits: expenseSummaryRows.reduce((s, r) => s + (parseFloat(r.totalDebits) || 0), 0),
+          totalCredits: expenseSummaryRows.reduce((s, r) => s + (parseFloat(r.totalCredits) || 0), 0),
+          netExpense: expenseSummaryRows.reduce((s, r) => s + (parseFloat(r.netExpense) || 0), 0)
+        }
+      };
+
+      // Single expense account detail (overrides data.entries when requested)
+      if (expenseAccountCode) {
+        const code = String(expenseAccountCode).trim();
+        let expenseOpening = 0;
+        try {
+          const obRes = await query(
+            `SELECT COALESCE(SUM(debit_amount - credit_amount), 0)::float AS ob
+             FROM account_ledger
+             WHERE account_code = $1 AND status = 'completed' AND reversed_at IS NULL
+               AND transaction_date < $2`,
+            [code, expenseStart]
+          );
+          expenseOpening = parseFloat(obRes.rows[0]?.ob || 0);
+        } catch (e) {
+          console.error('Expense opening balance:', e);
+        }
+
+        let expenseEntries = [];
+        let closingRun = expenseOpening;
+        try {
+          const linesRes = await query(
+            `SELECT transaction_date AS "transactionDate",
+                    reference_number AS "referenceNumber",
+                    description,
+                    debit_amount AS "debitAmount",
+                    credit_amount AS "creditAmount",
+                    reference_type AS "referenceType",
+                    id
+             FROM account_ledger
+             WHERE account_code = $1 AND status = 'completed' AND reversed_at IS NULL
+               AND transaction_date >= $2 AND transaction_date <= $3
+             ORDER BY transaction_date ASC, id ASC`,
+            [code, expenseStart, expenseEnd]
+          );
+
+          closingRun = expenseOpening;
+          expenseEntries = (linesRes.rows || []).map((row) => {
+            const d = parseFloat(row.debitAmount || 0);
+            const c = parseFloat(row.creditAmount || 0);
+            closingRun += d - c;
+            return {
+              date: row.transactionDate,
+              voucherNo: row.referenceNumber || String(row.id),
+              particular: row.description || row.referenceType || '-',
+              debitAmount: d,
+              creditAmount: c,
+              balance: closingRun,
+              source: row.referenceType || 'Expense',
+              referenceId: row.id
+            };
+          });
+        } catch (e) {
+          console.error('Expense lines:', e);
+        }
+
+        const meta = expenseSummaryRows.find((r) => String(r.accountCode) === code);
+        data.expenseAccount = {
+          accountCode: code,
+          accountName: meta?.accountName || code,
+          openingBalance: expenseOpening,
+          closingBalance: closingRun,
+          totalDebits: expenseEntries.reduce((s, e) => s + e.debitAmount, 0),
+          totalCredits: expenseEntries.reduce((s, e) => s + e.creditAmount, 0)
+        };
+        data.openingBalance = expenseOpening;
+        data.closingBalance = closingRun;
+        data.entries = expenseEntries;
+        delete data.customer;
+        delete data.supplier;
       }
 
       return {

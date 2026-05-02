@@ -17,6 +17,9 @@ const { getEffectiveGlobalTaxRate } = require('../utils/globalTax');
 const purchaseInvoiceRepository = require('../repositories/postgres/PurchaseInvoiceRepository');
 const { withBusinessTransaction } = require('./withBusinessTransaction');
 
+/** User-facing message when AR would exceed credit limit (sales order confirm / invoice). */
+const CREDIT_LIMIT_EXCEEDED_INVOICE_MESSAGE = 'Credit limit exceeded. Invoice cannot be created';
+
 // Helper function to parse date string as local date (not UTC)
 const parseLocalDate = (dateString) => {
   if (!dateString) return null;
@@ -520,6 +523,33 @@ class SalesService {
   // Duplicate method removed - using the one above
 
   /**
+   * Throws if posting this invoice on account would exceed the customer's credit limit.
+   * Uses ledger balance (AR) + unpaid invoice amount vs numeric credit_limit.
+   */
+  async assertCreditLimitForAccountInvoiceWithCustomer(customerData, orderTotal, payment) {
+    if (!customerData) return;
+    const creditLimit = Number(customerData.credit_limit ?? customerData.creditLimit ?? 0);
+    if (!Number.isFinite(creditLimit) || creditLimit <= 0) return;
+    const total = Number(orderTotal) || 0;
+    const amountPaid = parseFloat(payment?.amount ?? 0) || 0;
+    const unpaidAmount = total - amountPaid;
+    const method = String(payment?.method || '').toLowerCase();
+    if (method !== 'account' && unpaidAmount <= 0) return;
+    const customerId = customerData.id || customerData._id;
+    if (!customerId) return;
+    const currentBalance = await AccountingService.getCustomerBalance(customerId);
+    if (currentBalance + unpaidAmount > creditLimit) {
+      throw new Error(CREDIT_LIMIT_EXCEEDED_INVOICE_MESSAGE);
+    }
+  }
+
+  async assertCreditLimitForAccountInvoice(customerId, orderTotal, payment) {
+    if (!customerId) return;
+    const customerData = await customerRepository.findById(customerId);
+    await this.assertCreditLimitForAccountInvoiceWithCustomer(customerData, orderTotal, payment);
+  }
+
+  /**
    * Create a new sale (invoice)
    * @param {object} data - Sale data
    * @param {object} user - User creating the sale
@@ -666,23 +696,8 @@ class SalesService {
       else orderTotal = subtotal - finalDiscount + finalTax;
     }
 
-    // Check credit limit for credit sales (account payment or partial payment)
-    if (customerData && (customerData.credit_limit || customerData.creditLimit) > 0) {
-      const creditLimit = customerData.credit_limit || customerData.creditLimit;
-      const amountPaid = payment.amount || 0;
-      const unpaidAmount = orderTotal - amountPaid;
-
-      if (payment.method === 'account' || unpaidAmount > 0) {
-        // Fetch real-time balance from ledger for credit check
-        const customerId = customerData.id || customerData._id;
-        const currentBalance = await AccountingService.getCustomerBalance(customerId);
-        const newBalanceAfterOrder = currentBalance + unpaidAmount;
-
-        if (newBalanceAfterOrder > creditLimit) {
-          const customerName = customerData.business_name || customerData.businessName || customerData.name || 'Customer';
-          throw new Error(`Credit limit exceeded for customer ${customerName}. Available credit: ${creditLimit - currentBalance}`);
-        }
-      }
+    if (customerData) {
+      await this.assertCreditLimitForAccountInvoiceWithCustomer(customerData, orderTotal, payment);
     }
 
     let orderNumber = data.orderNumber;

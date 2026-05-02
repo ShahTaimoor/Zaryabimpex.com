@@ -135,6 +135,26 @@ export const salesOrdersApi = api.injectEndpoints({
         { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
       ],
     }),
+    createInvoiceFromSalesOrder: builder.mutation({
+      query: (id) => ({
+        url: `sales-orders/${id}/create-invoice`,
+        method: 'post',
+      }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'Orders', id },
+        { type: 'Orders', id: 'LIST' },
+        { type: 'Sales', id: 'LIST' },
+        { type: 'Sales', id: 'TODAY_SUMMARY' },
+        { type: 'Sales', id: 'PERIOD_SUMMARY' },
+        { type: 'Customers', id: 'LIST' },
+        { type: 'Accounting' },
+        { type: 'Accounting', id: 'LEDGER_SUMMARY' },
+        { type: 'Accounting', id: 'LEDGER_ENTRIES' },
+        { type: 'Reports', id: 'PARTY_BALANCE' },
+        { type: 'Reports', id: 'SUMMARY_CARDS' },
+        { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
+      ],
+    }),
     confirmSalesOrder: builder.mutation({
       query: (id) => ({
         url: `sales-orders/${id}/confirm`,
@@ -257,6 +277,7 @@ export const {
   useUpdateSalesOrderItemsConfirmationMutation,
   useDeleteSalesOrderMutation,
   useConfirmSalesOrderMutation,
+  useCreateInvoiceFromSalesOrderMutation,
   useCancelSalesOrderMutation,
   useCloseSalesOrderMutation,
   useGetConversionDataQuery,

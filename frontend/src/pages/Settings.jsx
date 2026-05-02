@@ -130,6 +130,7 @@ export const Settings2 = () => {
     showPrintPaymentStatus: true,
     showPrintPaymentMethod: true,
     showPrintPaymentAmount: true,
+    showPrintLedgerBalance: true,
     autoPrintAfterSale: true,
     autoCompleteSaleAfterPrint: true,
     mobilePrintPreview: false,
@@ -774,6 +775,7 @@ export const Settings2 = () => {
           showPrintPaymentStatus: settings.printSettings.showPrintPaymentStatus ?? true,
           showPrintPaymentMethod: settings.printSettings.showPrintPaymentMethod ?? true,
           showPrintPaymentAmount: settings.printSettings.showPrintPaymentAmount ?? true,
+          showPrintLedgerBalance: settings.printSettings.showPrintLedgerBalance ?? true,
           autoPrintAfterSale: settings.printSettings.autoPrintAfterSale ?? true,
           autoCompleteSaleAfterPrint: settings.printSettings.autoCompleteSaleAfterPrint ?? true,
           mobilePrintPreview: settings.printSettings.mobilePrintPreview ?? false,
@@ -897,6 +899,7 @@ export const Settings2 = () => {
           showPrintPaymentStatus: ps.showPrintPaymentStatus ?? true,
           showPrintPaymentMethod: ps.showPrintPaymentMethod ?? true,
           showPrintPaymentAmount: ps.showPrintPaymentAmount ?? true,
+          showPrintLedgerBalance: ps.showPrintLedgerBalance ?? true,
           autoPrintAfterSale: ps.autoPrintAfterSale ?? true,
           autoCompleteSaleAfterPrint: ps.autoCompleteSaleAfterPrint ?? true,
           mobilePrintPreview: ps.mobilePrintPreview ?? prev.mobilePrintPreview ?? false,
@@ -2389,6 +2392,7 @@ export const Settings2 = () => {
                           { id: 'showPrintPaymentStatus', label: 'Pay Status' },
                           { id: 'showPrintPaymentMethod', label: 'Pay Method' },
                           { id: 'showPrintPaymentAmount', label: 'Pay Amount' },
+                          { id: 'showPrintLedgerBalance', label: 'Ledger balance on invoice' },
                         ].map(item => (
                           <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-md transition-all duration-200 group">
                             <Checkbox

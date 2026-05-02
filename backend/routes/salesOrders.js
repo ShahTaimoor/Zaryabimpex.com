@@ -1,5 +1,6 @@
 const express = require('express');
 const { body, validationResult, query } = require('express-validator');
+const { query: runQuery } = require('../config/postgres');
 const fs = require('fs');
 const path = require('path');
 const { auth, requirePermission } = require('../middleware/auth');
@@ -485,6 +486,7 @@ router.patch('/:id/items-confirmation', [
 
     const userId = req.user?.id || req.user?._id;
     let items = Array.isArray(salesOrder.items) ? salesOrder.items : (typeof salesOrder.items === 'string' ? JSON.parse(salesOrder.items || '[]') : []);
+    const itemsSnapshot = JSON.parse(JSON.stringify(items));
 
     if (req.body.confirmAll === true) {
       items = items.map((i) => ({ ...i, confirmationStatus: 'confirmed', confirmation_status: 'confirmed' }));
@@ -494,8 +496,53 @@ router.patch('/:id/items-confirmation', [
       items = ensureItemConfirmationStatus(items);
       for (const { itemIndex, confirmationStatus } of req.body.itemUpdates) {
         if (itemIndex >= 0 && itemIndex < items.length) {
-          const prevStatus = items[itemIndex].confirmationStatus ?? items[itemIndex].confirmation_status ?? 'pending';
           items[itemIndex] = { ...items[itemIndex], confirmationStatus, confirmation_status: confirmationStatus };
+        }
+      }
+    } else {
+      return res.status(400).json({ message: 'Provide itemUpdates, confirmAll, or cancelAll' });
+    }
+
+    const companySettingsPatch = await settingsService.getCompanySettings();
+    const isExPatch = salesOrder.is_tax_exempt ?? salesOrder.isTaxExempt;
+    items = ensureItemConfirmationStatus(items);
+    const taxRecPatch = applyGlobalTaxToSalesOrderItems(items, isExPatch, companySettingsPatch);
+    items = taxRecPatch.items;
+
+    const customerIdItemsCredit = salesOrder.customer_id || salesOrder.customer;
+    let invoiceAmountThisRequest = 0;
+    if (req.body.confirmAll === true) {
+      invoiceAmountThisRequest = parseFloat(taxRecPatch.total) || 0;
+    } else if (Array.isArray(req.body.itemUpdates) && req.body.itemUpdates.length > 0) {
+      for (const u of req.body.itemUpdates) {
+        if (u.confirmationStatus !== 'confirmed') continue;
+        const idx = u.itemIndex;
+        if (idx < 0 || idx >= items.length) continue;
+        invoiceAmountThisRequest += parseFloat(items[idx].total) || 0;
+      }
+    }
+
+    if (customerIdItemsCredit && invoiceAmountThisRequest > 0) {
+      try {
+        await salesService.assertCreditLimitForAccountInvoice(customerIdItemsCredit, invoiceAmountThisRequest, {
+          method: 'account',
+          amount: 0
+        });
+      } catch (creditErr) {
+        return res.status(400).json({
+          message: creditErr.message || 'Credit limit exceeded. Invoice cannot be created',
+          error: 'CREDIT_LIMIT_EXCEEDED'
+        });
+      }
+    }
+
+    if (Array.isArray(req.body.itemUpdates) && req.body.itemUpdates.length > 0) {
+      for (const { itemIndex, confirmationStatus } of req.body.itemUpdates) {
+        if (itemIndex >= 0 && itemIndex < items.length) {
+          const prevStatus =
+            itemsSnapshot[itemIndex]?.confirmationStatus ??
+            itemsSnapshot[itemIndex]?.confirmation_status ??
+            'pending';
 
           const productId = items[itemIndex].product || items[itemIndex].product_id;
           const qty = Number(items[itemIndex].quantity) || 0;
@@ -542,15 +589,9 @@ router.patch('/:id/items-confirmation', [
           }
         }
       }
-    } else {
-      return res.status(400).json({ message: 'Provide itemUpdates, confirmAll, or cancelAll' });
     }
 
     const confirmationStatus = computeOrderConfirmationStatus(items);
-    const companySettingsPatch = await settingsService.getCompanySettings();
-    const isExPatch = salesOrder.is_tax_exempt ?? salesOrder.isTaxExempt;
-    const taxRecPatch = applyGlobalTaxToSalesOrderItems(items, isExPatch, companySettingsPatch);
-    items = taxRecPatch.items;
     const { subtotal, total, tax } = {
       subtotal: taxRecPatch.subtotal,
       total: taxRecPatch.total,
@@ -567,6 +608,7 @@ router.patch('/:id/items-confirmation', [
         : [];
 
     let automaticSale = null;
+    let partialSaleFailureMessage = null;
     let updatePayload = {
       items,
       subtotal,
@@ -598,6 +640,7 @@ router.patch('/:id/items-confirmation', [
           lastModifiedBy: userId
         };
       } catch (createSaleError) {
+        partialSaleFailureMessage = createSaleError.message || String(createSaleError);
         console.error('Failed to create invoice for confirmed items:', createSaleError);
       }
     }
@@ -618,7 +661,11 @@ router.patch('/:id/items-confirmation', [
       message: `Item confirmation updated successfully.${saleMessage}`,
       salesOrder: updatedSO,
       sale: automaticSale,
-      invoiceError: automaticSale ? null : (newlyConfirmedIndices.length > 0 ? 'Invoice creation failed' : null)
+      invoiceError: automaticSale
+        ? null
+        : newlyConfirmedIndices.length > 0
+          ? partialSaleFailureMessage || 'Invoice creation failed'
+          : null
     });
   } catch (error) {
     console.error('Items confirmation update error:', error);
@@ -730,6 +777,22 @@ router.put('/:id/confirm', [
       return res.status(400).json({
         message: 'Only draft sales orders can be confirmed'
       });
+    }
+
+    const customerIdCredit = salesOrder.customer_id || salesOrder.customer;
+    if (customerIdCredit) {
+      const invoiceTotalPre = parseFloat(salesOrder.total) || 0;
+      try {
+        await salesService.assertCreditLimitForAccountInvoice(customerIdCredit, invoiceTotalPre, {
+          method: 'account',
+          amount: 0
+        });
+      } catch (creditErr) {
+        return res.status(400).json({
+          message: creditErr.message || 'Credit limit exceeded. Invoice cannot be created',
+          error: 'CREDIT_LIMIT_EXCEEDED'
+        });
+      }
     }
 
     const userId = req.user?.id || req.user?._id;
@@ -904,6 +967,118 @@ router.put('/:id/confirm', [
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// @route   POST /api/sales-orders/:id/create-invoice
+// @desc    Post the sales invoice for an order that is already "Order confirmed" but has no invoice (e.g. first attempt failed)
+// @access  Private
+router.post(
+  '/:id/create-invoice',
+  [auth, requirePermission('confirm_sales_orders')],
+  async (req, res) => {
+    try {
+      const salesOrder = await salesOrderRepository.findById(req.params.id);
+      if (!salesOrder) {
+        return res.status(404).json({ message: 'Sales order not found' });
+      }
+
+      if (salesOrder.status !== 'confirmed') {
+        return res.status(400).json({
+          message:
+            'Create invoice is only for orders in Order confirmed status with no invoice yet. If the order is partially invoiced, use “convert to full invoice” (confirm all lines) instead.'
+        });
+      }
+
+      const soRef = String(salesOrder.so_number || salesOrder.soNumber || salesOrder.id || '').trim();
+      const notesPattern = `%From Sales Order ${soRef}%`;
+      const dup = await runQuery(
+        `SELECT id FROM sales WHERE deleted_at IS NULL AND notes ILIKE $1 LIMIT 1`,
+        [notesPattern]
+      );
+      if (dup.rows.length > 0) {
+        return res.status(400).json({
+          message:
+            'A sales invoice for this order already exists. Check Sales Invoices or refresh the list.'
+        });
+      }
+
+      const customerIdCredit = salesOrder.customer_id || salesOrder.customer;
+      if (customerIdCredit) {
+        const invoiceTotalPre = parseFloat(salesOrder.total) || 0;
+        try {
+          await salesService.assertCreditLimitForAccountInvoice(customerIdCredit, invoiceTotalPre, {
+            method: 'account',
+            amount: 0
+          });
+        } catch (creditErr) {
+          return res.status(400).json({
+            message: creditErr.message || 'Credit limit exceeded. Invoice cannot be created',
+            error: 'CREDIT_LIMIT_EXCEEDED'
+          });
+        }
+      }
+
+      let automaticSale;
+      try {
+        automaticSale = await salesService.createSaleFromSalesOrder(salesOrder, req.user);
+      } catch (createErr) {
+        if (
+          createErr.message === 'Credit limit exceeded. Invoice cannot be created' ||
+          String(createErr.message || '').includes('Credit limit')
+        ) {
+          return res.status(400).json({
+            message: createErr.message,
+            error: 'CREDIT_LIMIT_EXCEEDED'
+          });
+        }
+        throw createErr;
+      }
+
+      const rawItems = Array.isArray(salesOrder.items)
+        ? salesOrder.items
+        : typeof salesOrder.items === 'string'
+          ? JSON.parse(salesOrder.items || '[]')
+          : [];
+
+      const updatedItems = rawItems.map((item) => ({
+        ...item,
+        invoicedQuantity: item.quantity ?? 0,
+        remainingQuantity: 0
+      }));
+
+      const userId = req.user?.id || req.user?._id;
+
+      await salesOrderRepository.updateById(req.params.id, {
+        status: 'fully_invoiced',
+        items: updatedItems,
+        confirmationStatus: 'completed',
+        lastModifiedBy: userId
+      });
+
+      let salesOrderResult = await salesOrderRepository.findById(req.params.id);
+      if (salesOrderResult && salesOrderResult.customer_id) {
+        const customer = await customerRepository.findById(salesOrderResult.customer_id);
+        if (customer) salesOrderResult.customer = transformCustomerToUppercase(customer);
+      }
+      if (salesOrderResult?.customer) {
+        salesOrderResult.customer = transformCustomerToUppercase(salesOrderResult.customer);
+      }
+      if (salesOrderResult?.items && Array.isArray(salesOrderResult.items)) {
+        salesOrderResult.items.forEach((item) => {
+          if (item.product) item.product = transformProductToUppercase(item.product);
+        });
+      }
+
+      res.json({
+        message: 'Sales invoice created successfully',
+        sale: automaticSale,
+        salesOrder: salesOrderResult
+      });
+    } catch (error) {
+      console.error('Create invoice from sales order error:', error);
+      res.status(500).json({ message: error.message || 'Server error' });
+    }
+  }
+);
 
 // @route   PUT /api/sales-orders/:id/cancel
 // @desc    Cancel sales order and restore inventory if previously confirmed
