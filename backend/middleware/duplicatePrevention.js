@@ -76,6 +76,13 @@ const preventDuplicates = (options = {}) => {
       return next();
     }
 
+    // Presence heartbeats POST the same small body on a timer; duplicate prevention would
+    // treat every heartbeat within the window as a duplicate (409). Safe to skip.
+    const pathOrUrl = `${req.originalUrl || ''}${req.path || ''}`;
+    if (pathOrUrl.includes('/presence')) {
+      return next();
+    }
+
     const idempotencyKey = generateIdempotencyKey(req);
 
     if (!idempotencyKey) {

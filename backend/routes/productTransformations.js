@@ -141,7 +141,11 @@ router.post('/', [
     }
 
     const baseInventory = await inventoryRepository.findByProduct(baseProduct);
-    const baseStockCurrent = baseInventory ? Number(baseInventory.current_stock ?? baseInventory.currentStock ?? 0) : 0;
+    const productRowStock = Number(baseProductDoc.stock_quantity ?? baseProductDoc.stockQuantity ?? 0);
+    // Match product list API (getProducts): use inventory row when present, else products.stock_quantity
+    const baseStockCurrent = baseInventory != null
+      ? Number(baseInventory.current_stock ?? baseInventory.currentStock ?? 0)
+      : productRowStock;
     if (baseStockCurrent < quantity) {
       return res.status(400).json({
         message: `Insufficient stock. Available: ${baseStockCurrent}, Required: ${quantity}`
@@ -195,9 +199,21 @@ router.post('/', [
       createdBy: userId
     });
 
-    await inventoryRepository.updateByProductId(baseProduct, {
-      currentStock: baseStockAfter
-    });
+    if (baseInventory) {
+      await inventoryRepository.updateByProductId(baseProduct, {
+        currentStock: baseStockAfter
+      });
+    } else {
+      await inventoryRepository.create({
+        product: baseProduct,
+        productId: baseProduct,
+        productModel: 'Product',
+        currentStock: baseStockAfter,
+        reorderPoint: 10,
+        reorderQuantity: 50,
+        status: 'active'
+      });
+    }
 
     const productStockQty = Number(baseProductDoc.stock_quantity ?? baseProductDoc.stockQuantity ?? 0);
     if (productStockQty !== baseStockAfter) {

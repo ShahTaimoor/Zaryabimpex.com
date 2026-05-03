@@ -102,6 +102,7 @@ export const {
   useGetVariantsQuery,
   useLazyGetVariantsQuery,
   useGetVariantQuery,
+  useLazyGetVariantQuery,
   useCreateVariantMutation,
   useUpdateVariantMutation,
   useDeleteVariantMutation,

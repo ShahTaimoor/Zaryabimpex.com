@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import JsBarcode from 'jsbarcode';
 import { jsPDF } from 'jspdf';
 import { Printer, Eye, X, Package, Settings, Search, Download } from 'lucide-react';
@@ -556,8 +557,8 @@ export const BarcodeLabelPrinter = ({
     toast.success(`PDF downloaded (${toPrint.length} labels)`);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-75 flex items-center justify-center p-4">
+  const overlay = (
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-black bg-opacity-75 flex items-center justify-center p-4">
       <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
@@ -901,6 +902,11 @@ export const BarcodeLabelPrinter = ({
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined' && document.body) {
+    return createPortal(overlay, document.body);
+  }
+  return overlay;
 };
 
 export default BarcodeLabelPrinter;

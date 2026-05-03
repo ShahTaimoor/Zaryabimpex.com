@@ -171,9 +171,23 @@ class ProductServicePostgres {
     const getAll = queryParams.all === 'true' || queryParams.all === true ||
       (queryParams.limit && parseInt(queryParams.limit, 10) >= 999999);
     const page = getAll ? 1 : (parseInt(queryParams.page, 10) || 1);
-    let limit = getAll
-      ? Math.min(parseInt(queryParams.limit, 10) || MAX_EXPORT, MAX_EXPORT)
-      : Math.min(parseInt(queryParams.limit, 10) || 20, MAX_PAGE);
+
+    const requestedLimit = parseInt(queryParams.limit, 10);
+    const hasExplicitLimit =
+      queryParams.limit != null &&
+      String(queryParams.limit).trim() !== '' &&
+      Number.isFinite(requestedLimit) &&
+      requestedLimit > 0;
+
+    let limit;
+    if (getAll) {
+      limit = Math.min(requestedLimit || MAX_EXPORT, MAX_EXPORT);
+    } else if (hasExplicitLimit) {
+      // Explicit limit (e.g. pickers sending limit=10000) — honor up to route max, not MAX_PAGE (200).
+      limit = Math.min(requestedLimit, MAX_EXPORT);
+    } else {
+      limit = Math.min(20, MAX_PAGE);
+    }
     if (!getAll && (!Number.isFinite(limit) || limit < 1)) limit = 20;
 
     const filters = this.buildFilter(queryParams);

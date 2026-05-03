@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 const { body, validationResult, query } = require('express-validator');
@@ -6,6 +7,7 @@ const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const cashReceiptService = require('../services/cashReceiptService');
 const cashReceiptRepository = require('../repositories/postgres/CashReceiptRepository');
+const bankReceiptRepository = require('../repositories/postgres/BankReceiptRepository');
 const bankRepository = require('../repositories/postgres/BankRepository');
 const customerRepository = require('../repositories/postgres/CustomerRepository');
 const supplierRepository = require('../repositories/postgres/SupplierRepository');
@@ -481,7 +483,8 @@ router.post('/batch', [
       cashAccount,
       paymentType = 'cash',
       bankId,
-      receipts
+      receipts,
+      voucherNo,
     } = req.body;
 
     const ptUpper = String(paymentType || '').trim().toUpperCase();
@@ -533,46 +536,78 @@ router.post('/batch', [
       });
     }
 
-    // Create cash receipts
+    const useBankReceiptPath = ptUpper === 'BANK_TRANSFER' && bankId;
     const createdReceipts = [];
-    const CustomerBalanceService = require('../services/customerBalanceService');
 
-    for (const receiptData of receipts) {
-      if (!receiptData.amount || receiptData.amount <= 0) {
-        continue; // Skip zero amounts
+    if (useBankReceiptPath) {
+      const { transaction: runInTransaction } = require('../config/postgres');
+      // Bank receiving: use bank_receipts + ledger Dr 1001 with bank_id (not cash_receipt / 1000).
+      for (const receiptData of validReceipts) {
+        const receiptAmount = parseFloat(receiptData.amount);
+        if (!receiptAmount || receiptAmount <= 0) continue;
+
+        const uid = req.user.id || req.user._id;
+        const voucherSlug = String(voucherNo || 'CR')
+          .replace(/[^A-Za-z0-9-]/g, '')
+          .slice(0, 40);
+        const receiptNumber = `BR-${voucherSlug}-${crypto.randomUUID().slice(0, 13)}`;
+
+        const bankReceipt = await runInTransaction(async (client) => {
+          const br = await bankReceiptRepository.create(
+            {
+              receiptNumber,
+              date: new Date(voucherDate),
+              amount: receiptAmount,
+              particular: receiptData.particular ? receiptData.particular.trim() : 'Cash Receipt Voucher',
+              bankId,
+              customerId: receiptData.customer || null,
+              notes: receiptNotes,
+              createdBy: uid != null ? String(uid) : null,
+            },
+            client
+          );
+          await AccountingService.recordBankReceipt(br, client);
+          return br;
+        });
+        createdReceipts.push(bankReceipt);
       }
+    } else {
+      for (const receiptData of validReceipts) {
 
-      const uid = req.user.id || req.user._id;
-      const cashReceipt = await cashReceiptRepository.create({
-        date: new Date(voucherDate),
-        amount: parseFloat(receiptData.amount),
-        particular: receiptData.particular ? receiptData.particular.trim() : 'Cash Receipt',
-        customerId: receiptData.customer || null,
-        paymentMethod: paymentType.toLowerCase(),
-        notes: receiptNotes,
-        createdBy: uid != null ? String(uid) : null
-      });
+        const uid = req.user.id || req.user._id;
+        const cashReceipt = await cashReceiptRepository.create({
+          date: new Date(voucherDate),
+          amount: parseFloat(receiptData.amount),
+          particular: receiptData.particular ? receiptData.particular.trim() : 'Cash Receipt',
+          customerId: receiptData.customer || null,
+          paymentMethod: paymentType.toLowerCase(),
+          notes: receiptNotes,
+          createdBy: uid != null ? String(uid) : null,
+        });
 
-      // Create accounting entries
-      try {
-        await AccountingService.recordCashReceipt(cashReceipt);
-      } catch (error) {
-        console.error(`Error creating accounting entries for cash receipt ${cashReceipt.id}:`, error);
+        try {
+          await AccountingService.recordCashReceipt(cashReceipt);
+        } catch (error) {
+          console.error(`Error creating accounting entries for cash receipt ${cashReceipt.id}:`, error);
+        }
+
+        createdReceipts.push(cashReceipt);
       }
-
-      createdReceipts.push(cashReceipt);
     }
 
-    const totalAmount = createdReceipts.reduce((sum, r) => sum + r.amount, 0);
+    const totalAmount = createdReceipts.reduce((sum, r) => sum + Number(r.amount || 0), 0);
 
     res.status(201).json({
       success: true,
-      message: `Successfully created ${createdReceipts.length} cash receipt(s)`,
+      message: useBankReceiptPath
+        ? `Successfully created ${createdReceipts.length} bank receipt(s)`
+        : `Successfully created ${createdReceipts.length} cash receipt(s)`,
       data: {
         receipts: createdReceipts,
         count: createdReceipts.length,
-        totalAmount
-      }
+        totalAmount,
+        receiptKind: useBankReceiptPath ? 'bank_receipt' : 'cash_receipt',
+      },
     });
   } catch (error) {
     console.error('Batch create cash receipts error:', error);

@@ -14,7 +14,6 @@ import {
   useCitiesQuery, 
   useLazyGetCustomersByCitiesQuery 
 } from '../store/services/customersApi';
-import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useCreateBatchCashReceiptsMutation } from '../store/services/cashReceiptsApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
@@ -29,12 +28,12 @@ const CashReceiving = () => {
 
   // Voucher form state
   const [voucherData, setVoucherData] = useState({
-    cashAccount: 'CASH IN HAND',
     voucherDate: today,
     voucherNo: '',
-    paymentType: 'CASH'
   });
-  const [selectedBankId, setSelectedBankId] = useState('');
+  /** Same pattern as Sales: cash | bank (bank:<uuid> in UI) | credit_card | … */
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [selectedBankAccount, setSelectedBankAccount] = useState('');
 
   // City selection state
   const [cities, setCities] = useState([]);
@@ -61,29 +60,26 @@ const CashReceiving = () => {
     refetchOnMountOrArgChange: true,
   });
 
-  // Fetch cash accounts from chart of accounts
-  const { data: cashAccountsData } = useGetAccountsQuery(
-    { accountType: 'asset', accountCategory: 'current_assets', isActive: 'true' },
+  const { data: banksPayload, isLoading: banksLoading } = useGetBanksQuery(
+    { isActive: true },
     { refetchOnMountOrArgChange: true }
   );
-
-  const cashAccountsRaw = cashAccountsData?.data || cashAccountsData?.accounts || cashAccountsData || [];
-  const cashAccounts = Array.isArray(cashAccountsRaw)
-    ? cashAccountsRaw.filter(
-        (acc) =>
-          acc?.accountName?.toLowerCase().includes('cash') ||
-          acc?.accountName?.toLowerCase().includes('bank')
-      )
-    : [];
-  const defaultCashAccount =
-    cashAccounts.find((acc) => acc.accountName?.toLowerCase().includes('cash in hand'))?.accountName ||
-    'CASH IN HAND';
-
-  const { data: banksPayload } = useGetBanksQuery({ isActive: true }, { refetchOnMountOrArgChange: true });
   const banksList = useMemo(() => {
     const raw = banksPayload?.data?.banks ?? banksPayload?.banks ?? banksPayload?.data ?? banksPayload;
     return Array.isArray(raw) ? raw : [];
   }, [banksPayload]);
+
+  const activeBanks = useMemo(
+    () => banksList.filter((bank) => bank.isActive !== false),
+    [banksList]
+  );
+
+  useEffect(() => {
+    if (paymentMethod !== 'bank' || selectedBankAccount) return;
+    const first = activeBanks[0];
+    const id = first?._id || first?.id;
+    if (id) setSelectedBankAccount(id);
+  }, [paymentMethod, selectedBankAccount, activeBanks]);
 
   // Update cities when data is fetched
   useEffect(() => {
@@ -216,9 +212,31 @@ const CashReceiving = () => {
   const [createBatchCashReceipts, { isLoading: creating }] = useCreateBatchCashReceiptsMutation();
 
   // Handle save
+  const resolveBatchPayment = () => {
+    if (paymentMethod === 'bank') {
+      if (!selectedBankAccount) {
+        return { error: 'Select a bank account for this payment.' };
+      }
+      return { paymentType: 'BANK_TRANSFER', bankId: selectedBankAccount };
+    }
+    const upper = {
+      cash: 'CASH',
+      credit_card: 'CREDIT_CARD',
+      debit_card: 'DEBIT_CARD',
+      check: 'CHECK',
+      account: 'ACCOUNT',
+      split: 'SPLIT',
+    }[paymentMethod];
+    return {
+      paymentType: upper || String(paymentMethod || 'cash').toUpperCase(),
+      bankId: undefined,
+    };
+  };
+
   const handleSave = () => {
-    if (voucherData.paymentType === 'BANK_TRANSFER' && !selectedBankId) {
-      showErrorToast('Select the bank for this bank transfer');
+    const resolved = resolveBatchPayment();
+    if (resolved.error) {
+      showErrorToast(resolved.error);
       return;
     }
 
@@ -242,10 +260,9 @@ const CashReceiving = () => {
 
     const batchData = {
       voucherDate: voucherData.voucherDate,
-      cashAccount: voucherData.cashAccount,
-      paymentType: voucherData.paymentType,
+      paymentType: resolved.paymentType,
       voucherNo: voucherData.voucherNo,
-      ...(voucherData.paymentType === 'BANK_TRANSFER' && selectedBankId ? { bankId: selectedBankId } : {}),
+      ...(resolved.bankId ? { bankId: resolved.bankId } : {}),
       receipts
     };
 
@@ -279,7 +296,8 @@ const CashReceiving = () => {
 
   // Handle reset
   const handleReset = () => {
-    setSelectedBankId('');
+    setPaymentMethod('cash');
+    setSelectedBankAccount('');
     setCustomerEntries(prev => prev.map(entry => ({
       ...entry,
       particular: '',
@@ -322,15 +340,31 @@ const CashReceiving = () => {
           particular: entry.particular || ''
         })),
       notes: (() => {
-        const bank = banksList.find((b) => String(b.id || b._id) === String(selectedBankId));
+        const bank =
+          paymentMethod === 'bank' && selectedBankAccount
+            ? banksList.find((b) => String(b.id || b._id) === String(selectedBankAccount))
+            : null;
         const bankPart = bank
           ? ` | Bank: ${bank.bankName || bank.bank_name || 'Bank'}${bank.accountNumber || bank.account_number ? ` (${bank.accountNumber || bank.account_number})` : ''}`
           : '';
-        return `Payment Type: ${voucherData.paymentType} | Cash Account: ${voucherData.cashAccount}${bankPart}`;
+        const methodLabel =
+          paymentMethod === 'bank'
+            ? 'Bank transfer'
+            : paymentMethod.replace(/_/g, ' ');
+        return `Payment: ${methodLabel}${bankPart}`;
       })(),
       voucherNo: voucherData.voucherNo,
-      paymentType: voucherData.paymentType,
-      cashAccount: voucherData.cashAccount
+      paymentType:
+        paymentMethod === 'bank' && selectedBankAccount
+          ? 'BANK_TRANSFER'
+          : {
+              cash: 'CASH',
+              credit_card: 'CREDIT_CARD',
+              debit_card: 'DEBIT_CARD',
+              check: 'CHECK',
+              account: 'ACCOUNT',
+              split: 'SPLIT',
+            }[paymentMethod] || String(paymentMethod || 'cash').toUpperCase()
     };
 
     setPrintData(formattedData);
@@ -625,68 +659,61 @@ const CashReceiving = () => {
           <div className="space-y-3 sm:space-y-4">
             <div>
               <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                Cash Account
+                Payment Method
               </label>
               <select
-                value={voucherData.cashAccount}
-                onChange={(e) => setVoucherData(prev => ({ ...prev, cashAccount: e.target.value }))}
-                className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="CASH IN HAND">CASH IN HAND</option>
-                {cashAccounts.map(account => (
-                  <option key={account.id || account._id} value={account.accountName}>
-                    {account.accountName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                Payment Type
-              </label>
-              <select
-                value={voucherData.paymentType}
+                value={
+                  paymentMethod === 'bank' && selectedBankAccount
+                    ? `bank:${selectedBankAccount}`
+                    : paymentMethod
+                }
                 onChange={(e) => {
-                  const next = e.target.value;
-                  setVoucherData(prev => ({ ...prev, paymentType: next }));
-                  if (next !== 'BANK_TRANSFER') setSelectedBankId('');
+                  const v = e.target.value;
+                  if (v.startsWith('bank:')) {
+                    setPaymentMethod('bank');
+                    setSelectedBankAccount(v.slice(5));
+                  } else {
+                    setPaymentMethod(v);
+                    setSelectedBankAccount('');
+                  }
                 }}
                 className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="CASH">CASH</option>
-                <option value="CHECK">CHECK</option>
-                <option value="BANK_TRANSFER">BANK TRANSFER</option>
-                <option value="OTHER">OTHER</option>
-              </select>
-            </div>
-
-            {voucherData.paymentType === 'BANK_TRANSFER' && (
-              <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                  Bank (receiving account)
-                </label>
-                <select
-                  value={selectedBankId}
-                  onChange={(e) => setSelectedBankId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select bank…</option>
-                  {banksList.map((bank) => {
-                    const id = bank.id || bank._id;
-                    const label = [bank.bankName || bank.bank_name, bank.accountNumber || bank.account_number].filter(Boolean).join(' · ');
-                    return (
-                      <option key={id} value={id}>
-                        {label || 'Bank'}
-                      </option>
-                    );
-                  })}
-                </select>
-                {banksList.length === 0 && (
-                  <p className="text-xs text-amber-700 mt-1">No banks found. Add banks under Settings → Banks.</p>
+                <option value="cash">Cash</option>
+                {activeBanks.map((bank) => {
+                  const bid = bank._id || bank.id;
+                  if (!bid) return null;
+                  const label = [bank.bankName || bank.bank_name, bank.accountNumber || bank.account_number]
+                    .filter(Boolean)
+                    .join(' — ');
+                  const acc = bank.accountName ? ` (${bank.accountName})` : '';
+                  return (
+                    <option key={bid} value={`bank:${bid}`}>
+                      Bank · {label}
+                      {acc}
+                    </option>
+                  );
+                })}
+                {banksLoading && (
+                  <option value="" disabled>
+                    Loading banks…
+                  </option>
                 )}
-              </div>
-            )}
+                {!banksLoading && activeBanks.length === 0 && (
+                  <option value="" disabled>
+                    No bank accounts (add in Banks)
+                  </option>
+                )}
+                <option value="credit_card">Credit Card</option>
+                <option value="debit_card">Debit Card</option>
+                <option value="check">Check</option>
+                <option value="account">Account</option>
+                <option value="split">Split Payment</option>
+              </select>
+              {activeBanks.length === 0 && !banksLoading && (
+                <p className="text-xs text-amber-700 mt-1">No banks found. Add banks under Settings → Banks.</p>
+              )}
+            </div>
 
             <div className="bg-blue-50 p-3 sm:p-4 rounded-md">
               <div className="text-xs sm:text-sm text-gray-600">Total:</div>

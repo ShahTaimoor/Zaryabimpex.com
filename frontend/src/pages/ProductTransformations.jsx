@@ -10,27 +10,108 @@ import {
   TrendingUp,
   X,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Printer
 } from 'lucide-react';
 import {
   useGetTransformationsQuery,
   useCreateTransformationMutation,
   useCancelTransformationMutation,
 } from '../store/services/productTransformationsApi';
-import { useGetVariantsByBaseProductQuery } from '../store/services/productVariantsApi';
+import { useGetVariantsByBaseProductQuery, useLazyGetVariantQuery } from '../store/services/productVariantsApi';
 import { useGetProductsQuery } from '../store/services/productsApi';
+import { ProductSearchableSelect } from '../components/ProductSearchableSelect';
+import { VariantSearchableSelect } from '../components/VariantSearchableSelect';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import ValidatedInput, { ValidatedSelect } from '../components/ValidatedInput';
+import BarcodeLabelPrinter from '../components/BarcodeLabelPrinter';
+
+/** Rows for BarcodeLabelPrinter: base product + target variant (labels for both). */
+function buildLabelPrinterRows(baseProduct, variant, options = {}) {
+  const overrideBc =
+    options.optionalVariantBarcode != null
+      ? String(options.optionalVariantBarcode).trim()
+      : '';
+  const rows = [];
+  if (baseProduct) rows.push(baseProduct);
+  if (variant) {
+    const rawP = variant.pricing;
+    const pricing =
+      rawP && typeof rawP === 'object' && !Array.isArray(rawP)
+        ? rawP
+        : {
+            retail: Number(variant.retailPrice ?? variant.retail_price ?? 0),
+            wholesale: Number(variant.wholesalePrice ?? variant.wholesale_price ?? 0),
+            cost: Number(variant.cost ?? variant.costPrice ?? variant.cost_price ?? 0),
+          };
+    rows.push({
+      _id: variant._id ?? variant.id,
+      id: variant._id ?? variant.id,
+      name:
+        variant.displayName ??
+        variant.display_name ??
+        variant.variantName ??
+        variant.variant_name ??
+        'Variant',
+      barcode: overrideBc || (variant.barcode ?? ''),
+      sku: variant.sku ?? '',
+      pricing,
+    });
+  }
+  return rows;
+}
+
+function getTransformationBaseProductId(t) {
+  return (
+    t.base_product_id ??
+    t.baseProductId ??
+    t.baseProduct?.id ??
+    t.base_product?.id ??
+    (typeof t.baseProduct === 'string' ? t.baseProduct : null)
+  );
+}
+
+function getTransformationTargetVariantId(t) {
+  return (
+    t.target_variant_id ??
+    t.targetVariantId ??
+    t.targetVariant?.id ??
+    t.target_variant?.id ??
+    (typeof t.targetVariant === 'string' ? t.targetVariant : null)
+  );
+}
+
+/**
+ * Unit transformation cost for UI defaults: uses DB `transformation_cost` when &gt; 0;
+ * otherwise estimates from variant retail minus base product retail (how variants are priced in Product Variants).
+ */
+function getEffectiveVariantTransformationCost(variant, baseProduct) {
+  if (!variant) return 0;
+  const raw =
+    variant.transformationCost ?? variant.transformation_cost;
+  const stored = raw == null || raw === '' ? NaN : Number(raw);
+  if (Number.isFinite(stored) && stored > 0) return stored;
+
+  const vp = variant.pricing || {};
+  const bp = baseProduct?.pricing || {};
+  const vRetail = Number(vp.retail ?? vp.wholesale ?? 0);
+  const bRetail = Number(bp.retail ?? 0);
+  if (vRetail > 0 && bRetail >= 0 && vRetail > bRetail) {
+    return Math.round((vRetail - bRetail) * 100) / 100;
+  }
+  return Number.isFinite(stored) ? stored : 0;
+}
 
 const ProductTransformations = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBaseProduct, setSelectedBaseProduct] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [barcodePrintQueue, setBarcodePrintQueue] = useState(null);
 
   // Fetch transformations
   const { data: transformationsData, isLoading: transformationsLoading, refetch } = useGetTransformationsQuery({
@@ -42,14 +123,21 @@ const ProductTransformations = () => {
     return transformationsData?.data?.transformations || transformationsData?.transformations || [];
   }, [transformationsData]);
 
-  // Fetch products for base product selector
-  const { data: productsData } = useGetProductsQuery({});
+  const { data: productsData, isLoading: productsLoading } = useGetProductsQuery(
+    {
+      limit: 10000,
+      listMode: 'minimal',
+    },
+    { refetchOnMountOrArgChange: true }
+  );
   const products = React.useMemo(() => {
     return productsData?.data?.products || productsData?.products || [];
   }, [productsData]);
 
 
   const [cancelTransformation, { isLoading: isCancelling }] = useCancelTransformationMutation();
+  const [fetchVariantById] = useLazyGetVariantQuery();
+  const [printingLabelsRowId, setPrintingLabelsRowId] = useState(null);
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
@@ -62,6 +150,34 @@ const ProductTransformations = () => {
       refetch();
     } catch (error) {
       handleApiError(error, 'ProductTransformations');
+    }
+  };
+
+  const handlePrintLabelsFromRow = async (transformation) => {
+    const rowId = transformation._id ?? transformation.id;
+    const baseId = getTransformationBaseProductId(transformation);
+    const variantId = getTransformationTargetVariantId(transformation);
+    if (!variantId) {
+      showErrorToast('This row has no variant id — cannot load labels.');
+      return;
+    }
+    setPrintingLabelsRowId(rowId);
+    try {
+      const res = await fetchVariantById(variantId).unwrap();
+      const variant = res?.variant ?? res?.data?.variant ?? res;
+      const base = baseId
+        ? products.find((p) => String(p._id ?? p.id) === String(baseId))
+        : null;
+      const rows = buildLabelPrinterRows(base, variant);
+      if (rows.length === 0) {
+        showErrorToast('No label data available for this transformation.');
+        return;
+      }
+      setBarcodePrintQueue(rows);
+    } catch (error) {
+      handleApiError(error, 'ProductTransformations');
+    } finally {
+      setPrintingLabelsRowId(null);
     }
   };
 
@@ -123,13 +239,13 @@ const ProductTransformations = () => {
               className="pl-8 xl:pl-10 w-full text-sm min-h-[2rem] xl:min-h-9"
             />
           </div>
-          <ValidatedSelect
+          <ProductSearchableSelect
+            placeholder="All products — search to filter by base"
+            products={products}
             value={selectedBaseProduct}
-            onChange={(e) => setSelectedBaseProduct(e.target.value)}
-            options={[
-              { value: '', label: 'All Products' },
-              ...products.map(p => ({ value: p._id ?? p.id, label: p.name ?? p.productName }))
-            ]}
+            onValueChange={setSelectedBaseProduct}
+            loading={productsLoading}
+            allowClear
             className="w-full"
           />
           <ValidatedSelect
@@ -237,17 +353,33 @@ const ProductTransformations = () => {
                       </span>
                     </td>
                     <td className="px-2 py-2 xl:px-4 xl:py-3 2xl:px-6 2xl:py-4 whitespace-nowrap text-right text-[10px] xl:text-xs 2xl:text-sm font-medium">
-                      {canCancel && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleCancelTransformation(transformation._id ?? transformation.id)}
-                          disabled={isCancelling}
-                          className="text-[10px] xl:text-xs min-h-[1.75rem] xl:min-h-8"
-                        >
-                          Cancel
-                        </Button>
-                      )}
+                      <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                        {tStatus !== 'cancelled' && getTransformationTargetVariantId(transformation) && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            title="Print barcode labels for base product and target variant"
+                            onClick={() => handlePrintLabelsFromRow(transformation)}
+                            disabled={printingLabelsRowId === (transformation._id ?? transformation.id)}
+                            className="text-[10px] xl:text-xs min-h-[1.75rem] xl:min-h-8"
+                          >
+                            <Printer className="h-3 w-3 xl:h-3.5 xl:w-3.5 sm:mr-1" />
+                            <span className="hidden sm:inline">Labels</span>
+                          </Button>
+                        )}
+                        {canCancel && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleCancelTransformation(transformation._id ?? transformation.id)}
+                            disabled={isCancelling}
+                            className="text-[10px] xl:text-xs min-h-[1.75rem] xl:min-h-8"
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );})}
@@ -261,11 +393,21 @@ const ProductTransformations = () => {
       {isModalOpen && (
         <TransformationModal
           products={products}
+          productsLoading={productsLoading}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
           onSuccess={() => {
             refetch();
           }}
+          onOpenBarcodePrint={(items) => setBarcodePrintQueue(items)}
+        />
+      )}
+
+      {barcodePrintQueue?.length > 0 && (
+        <BarcodeLabelPrinter
+          products={barcodePrintQueue}
+          onClose={() => setBarcodePrintQueue(null)}
+          modalTitle="Print product / variant barcode labels"
         />
       )}
     </div>
@@ -273,55 +415,124 @@ const ProductTransformations = () => {
 };
 
 // Transformation Modal Component
-const TransformationModal = ({ products, isOpen, onClose, onSuccess }) => {
+const TransformationModal = ({ products, productsLoading, isOpen, onClose, onSuccess, onOpenBarcodePrint }) => {
   const [formData, setFormData] = useState({
     baseProduct: '',
     targetVariant: '',
     quantity: 1,
     unitTransformationCost: 0,
-    notes: ''
+    notes: '',
+    /** Not sent to API — used only for printed labels (variant row). */
+    optionalBarcode: '',
   });
-  const [availableVariants, setAvailableVariants] = useState([]);
   const [selectedBaseProductData, setSelectedBaseProductData] = useState(null);
   const [selectedVariantData, setSelectedVariantData] = useState(null);
+  /** Only reset variant when the user changes base product — not when `products` refetches (that was clearing state mid-request). */
+  const prevBaseProductIdRef = React.useRef('');
 
-  // Fetch variants when base product is selected
-  // Fetch variants when base product is selected
-  const { data: variantsData } = useGetVariantsByBaseProductQuery(
+  const { data: variantsData, isFetching: variantsForBaseLoading } = useGetVariantsByBaseProductQuery(
     formData.baseProduct,
     { skip: !formData.baseProduct }
   );
 
-  React.useEffect(() => {
-    const variants = variantsData?.data?.variants || variantsData?.variants || [];
-    setAvailableVariants(Array.isArray(variants) ? variants : []);
+  const selectableVariants = React.useMemo(() => {
+    const raw = variantsData?.data?.variants ?? variantsData?.variants ?? [];
+    const list = Array.isArray(raw) ? [...raw] : [];
+    list.sort((a, b) => {
+      const la = (
+        a.displayName ??
+        a.display_name ??
+        a.variantName ??
+        a.variant_name ??
+        ''
+      )
+        .toString()
+        .toLowerCase();
+      const lb = (
+        b.displayName ??
+        b.display_name ??
+        b.variantName ??
+        b.variant_name ??
+        ''
+      )
+        .toString()
+        .toLowerCase();
+      return la.localeCompare(lb);
+    });
+    return list;
   }, [variantsData]);
 
   React.useEffect(() => {
-    if (formData.baseProduct) {
-      const product = products.find(p => (p._id ?? p.id) === formData.baseProduct);
-      setSelectedBaseProductData(product);
-      setFormData(prev => ({ ...prev, targetVariant: '' }));
+    if (!formData.baseProduct) {
+      setSelectedBaseProductData(null);
+      prevBaseProductIdRef.current = '';
+      return;
+    }
+    const product = products.find(
+      (p) => String(p._id ?? p.id) === String(formData.baseProduct)
+    );
+    setSelectedBaseProductData(product);
+
+    if (prevBaseProductIdRef.current !== formData.baseProduct) {
+      const prevId = prevBaseProductIdRef.current;
+      prevBaseProductIdRef.current = formData.baseProduct;
+      if (prevId !== '') {
+        setFormData((prev) => ({ ...prev, targetVariant: '', optionalBarcode: '' }));
+      }
     }
   }, [formData.baseProduct, products]);
 
   React.useEffect(() => {
     if (formData.targetVariant) {
-      const variant = availableVariants.find(v => (v._id ?? v.id) === formData.targetVariant);
+      const variant = selectableVariants.find(
+        (v) => String(v._id ?? v.id) === String(formData.targetVariant)
+      );
       setSelectedVariantData(variant);
       if (variant) {
-        const cost = variant.transformationCost ?? variant.transformation_cost ?? 0;
+        const cost = getEffectiveVariantTransformationCost(variant, selectedBaseProductData);
         setFormData(prev => ({ ...prev, unitTransformationCost: cost }));
       }
+    } else {
+      setSelectedVariantData(null);
     }
-  }, [formData.targetVariant, availableVariants]);
+  }, [formData.targetVariant, selectableVariants, selectedBaseProductData]);
 
   const [createTransformation, { isLoading: isSubmitting }] = useCreateTransformationMutation();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await createTransformation(formData).unwrap();
+      if (!formData.baseProduct) {
+        showErrorToast('Please select a base product.');
+        return;
+      }
+      if (!formData.targetVariant) {
+        showErrorToast('Please select a target variant.');
+        return;
+      }
+      const baseSnap = selectedBaseProductData;
+      const variantSnap = selectedVariantData;
+      const labelOpts = { optionalVariantBarcode: formData.optionalBarcode };
+      await createTransformation({
+        baseProduct: formData.baseProduct,
+        targetVariant: formData.targetVariant,
+        quantity: formData.quantity,
+        unitTransformationCost: formData.unitTransformationCost,
+        notes: formData.notes,
+      }).unwrap();
+      let rows = buildLabelPrinterRows(baseSnap, variantSnap, labelOpts);
+      if (rows.length === 0) {
+        const p = products.find(
+          (x) => String(x._id ?? x.id) === String(formData.baseProduct)
+        );
+        const v = selectableVariants.find(
+          (x) => String(x._id ?? x.id) === String(formData.targetVariant)
+        );
+        rows = buildLabelPrinterRows(p, v, labelOpts);
+      }
+      if (rows.length > 0 && typeof onOpenBarcodePrint === 'function') {
+        onOpenBarcodePrint(rows);
+      }
       showSuccessToast('Transformation completed successfully');
       onClose();
       onSuccess();
@@ -330,7 +541,8 @@ const TransformationModal = ({ products, isOpen, onClose, onSuccess }) => {
         targetVariant: '',
         quantity: 1,
         unitTransformationCost: 0,
-        notes: ''
+        notes: '',
+        optionalBarcode: '',
       });
     } catch (error) {
       handleApiError(error, 'ProductTransformations');
@@ -345,6 +557,14 @@ const TransformationModal = ({ products, isOpen, onClose, onSuccess }) => {
     ?? selectedBaseProductData?.stock_quantity
     ?? 0;
 
+  const labelPrinterProducts = React.useMemo(
+    () =>
+      buildLabelPrinterRows(selectedBaseProductData, selectedVariantData, {
+        optionalVariantBarcode: formData.optionalBarcode,
+      }),
+    [selectedBaseProductData, selectedVariantData, formData.optionalBarcode]
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -358,18 +578,16 @@ const TransformationModal = ({ products, isOpen, onClose, onSuccess }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 xl:p-6 space-y-3 xl:space-y-4">
-          <ValidatedSelect
+          <ProductSearchableSelect
             label="Base Product"
+            placeholder="Search base product…"
+            products={products}
             value={formData.baseProduct}
-            onChange={(e) => setFormData({ ...formData, baseProduct: e.target.value })}
-            options={[
-              { value: '', label: 'Select Base Product' },
-              ...products.map(p => {
-                const stock = p.inventory?.currentStock ?? p.stockQuantity ?? p.stock_quantity ?? 0;
-                return { value: p._id ?? p.id, label: `${p.name ?? p.productName} (Stock: ${stock})` };
-              })
-            ]}
-            required
+            onValueChange={(id) =>
+              setFormData((prev) => ({ ...prev, baseProduct: id, optionalBarcode: '' }))
+            }
+            loading={productsLoading}
+            className="w-full"
           />
 
           {formData.baseProduct && (
@@ -384,24 +602,19 @@ const TransformationModal = ({ products, isOpen, onClose, onSuccess }) => {
                 </p>
               </div>
 
-              <ValidatedSelect
+              <VariantSearchableSelect
                 label="Target Variant"
+                placeholder="Search variant for this product…"
+                variants={selectableVariants}
                 value={formData.targetVariant}
-                onChange={(e) => setFormData({ ...formData, targetVariant: e.target.value })}
-                options={[
-                  { value: '', label: 'Select Variant' },
-                  ...availableVariants
-                    .filter(v => (v.status ?? (v.is_active === false ? 'inactive' : 'active')) === 'active')
-                    .map(v => {
-                      const stock = v.inventory?.currentStock ?? v.inventory_data?.current_stock ?? v.inventory_data?.currentStock ?? 0;
-                      const label = `${v.displayName ?? v.display_name ?? v.variant_name ?? ''} (Current Stock: ${stock})`;
-                      return { value: v._id ?? v.id, label };
-                    })
-                ]}
-                required
+                onValueChange={(id) =>
+                  setFormData((prev) => ({ ...prev, targetVariant: id, optionalBarcode: '' }))
+                }
+                loading={!!formData.baseProduct && variantsForBaseLoading}
+                className="w-full"
               />
 
-              {availableVariants.length === 0 && (
+              {!variantsForBaseLoading && selectableVariants.length === 0 && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 xl:p-4">
                   <div className="flex items-center gap-1.5 xl:gap-2">
                     <AlertCircle className="h-4 w-4 xl:h-5 xl:w-5 text-yellow-600" />
@@ -411,28 +624,101 @@ const TransformationModal = ({ products, isOpen, onClose, onSuccess }) => {
                   </div>
                 </div>
               )}
+
+              {formData.targetVariant && (
+                <>
+                  <ValidatedInput
+                    name="transformationQuantity"
+                    label="Quantity (units from base stock)"
+                    type="number"
+                    value={formData.quantity < 1 ? 1 : formData.quantity}
+                    onChange={(e) => {
+                      const n = parseInt(e.target.value, 10);
+                      setFormData({
+                        ...formData,
+                        quantity: Number.isFinite(n) && n >= 1 ? n : 1,
+                      });
+                    }}
+                    min="1"
+                    {...(availableStock > 0 ? { max: availableStock } : {})}
+                    required
+                    helpText={
+                      availableStock > 0
+                        ? `Cannot exceed available base stock (${availableStock}).`
+                        : 'No base stock on hand — add stock in Inventory (or receive on Purchase) before transforming.'
+                    }
+                  />
+
+                  <div>
+                    <label
+                      htmlFor="transformation-optional-barcode"
+                      className="block text-xs xl:text-sm font-medium text-gray-700 mb-0.5 xl:mb-1"
+                    >
+                      Barcode for labels (optional)
+                    </label>
+                    <Input
+                      id="transformation-optional-barcode"
+                      type="text"
+                      autoComplete="off"
+                      value={formData.optionalBarcode}
+                      onChange={(e) =>
+                        setFormData({ ...formData, optionalBarcode: e.target.value })
+                      }
+                      className="w-full text-sm"
+                      placeholder="Leave blank to use the variant’s saved barcode on printed labels"
+                    />
+                    <p className="mt-0.5 text-[10px] xl:text-xs text-gray-500">
+                      Only affects label printing here — does not change the variant in Product Variants.
+                    </p>
+                  </div>
+
+                  {formData.quantity > availableStock && availableStock >= 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 xl:p-4">
+                      <div className="flex items-center gap-1.5 xl:gap-2">
+                        <AlertCircle className="h-4 w-4 xl:h-5 xl:w-5 text-red-600" />
+                        <span className="text-xs xl:text-sm text-red-800">
+                          Insufficient stock. Available: {availableStock}, Requested: {formData.quantity}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedVariantData && labelPrinterProducts.length > 0 && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 xl:p-4 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs xl:text-sm font-medium text-gray-800">Barcodes &amp; SKUs</span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-xs min-h-[2rem]"
+                          onClick={() => onOpenBarcodePrint?.(labelPrinterProducts)}
+                        >
+                          <Printer className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+                          Print labels
+                        </Button>
+                      </div>
+                      <div className="text-[10px] xl:text-xs text-gray-600 space-y-1">
+                        <p>
+                          <span className="font-medium text-gray-700">Base:</span>{' '}
+                          {selectedBaseProductData?.barcode ? `BC ${selectedBaseProductData.barcode}` : 'No barcode'}{' '}
+                          · {selectedBaseProductData?.sku ? `SKU ${selectedBaseProductData.sku}` : 'No SKU'}
+                        </p>
+                        <p>
+                          <span className="font-medium text-gray-700">Variant:</span>{' '}
+                          {formData.optionalBarcode?.trim()
+                            ? `BC ${formData.optionalBarcode.trim()} (for labels)`
+                            : selectedVariantData.barcode
+                              ? `BC ${selectedVariantData.barcode}`
+                              : 'No barcode'}{' '}
+                          · {selectedVariantData.sku ? `SKU ${selectedVariantData.sku}` : 'No SKU'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </>
-          )}
-
-          <ValidatedInput
-            label="Quantity"
-            type="number"
-            value={formData.quantity}
-            onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 1 })}
-            min="1"
-            max={availableStock}
-            required
-          />
-
-          {formData.quantity > availableStock && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 xl:p-4">
-              <div className="flex items-center gap-1.5 xl:gap-2">
-                <AlertCircle className="h-4 w-4 xl:h-5 xl:w-5 text-red-600" />
-                <span className="text-xs xl:text-sm text-red-800">
-                  Insufficient stock. Available: {availableStock}, Requested: {formData.quantity}
-                </span>
-              </div>
-            </div>
           )}
 
           <ValidatedInput
@@ -450,12 +736,39 @@ const TransformationModal = ({ products, isOpen, onClose, onSuccess }) => {
               <div className="flex items-center justify-between mb-1.5 xl:mb-2">
                 <span className="text-xs xl:text-sm text-gray-600">Variant default cost:</span>
                 <span className="text-xs xl:text-sm font-medium text-gray-900">
-                  {Number(selectedVariantData.transformationCost ?? selectedVariantData.transformation_cost ?? 0).toFixed(2)}
+                  {getEffectiveVariantTransformationCost(selectedVariantData, selectedBaseProductData).toFixed(2)}
                 </span>
               </div>
+              {(() => {
+                const stored = Number(selectedVariantData.transformationCost ?? selectedVariantData.transformation_cost ?? 0);
+                const effective = getEffectiveVariantTransformationCost(selectedVariantData, selectedBaseProductData);
+                if (!Number.isFinite(stored) || stored <= 0) {
+                  if (effective > 0) {
+                    return (
+                      <p className="text-[10px] xl:text-xs text-blue-800 mb-1.5 xl:mb-2">
+                        Stored transformation cost is 0 — using retail difference (variant retail − base retail). Set a value in Product Variants to save it on the variant.
+                      </p>
+                    );
+                  }
+                  return (
+                    <p className="text-[10px] xl:text-xs text-blue-800 mb-1.5 xl:mb-2">
+                      No stored transformation cost (0). Enter a unit cost above or set &quot;Transformation cost&quot; on the variant in Product Variants.
+                    </p>
+                  );
+                }
+                return null;
+              })()}
               <button
                 type="button"
-                onClick={() => setFormData({ ...formData, unitTransformationCost: selectedVariantData.transformationCost ?? selectedVariantData.transformation_cost ?? 0 })}
+                onClick={() =>
+                  setFormData({
+                    ...formData,
+                    unitTransformationCost: getEffectiveVariantTransformationCost(
+                      selectedVariantData,
+                      selectedBaseProductData
+                    ),
+                  })
+                }
                 className="text-xs text-blue-600 hover:text-blue-800 underline"
               >
                 Use default cost

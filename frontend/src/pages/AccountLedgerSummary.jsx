@@ -567,6 +567,23 @@ const AccountLedgerSummary = () => {
       });
   }, [allEntries, banks, selectedBankId, selectedBank, ALL_BANKS_VALUE, banksSummary, bankTotals]);
 
+  /** Align footer with the last row's running Balance column. API `banksSummary.closingBalance` can be wrong/stale. */
+  const bankLedgerFinalClosingBalance = useMemo(() => {
+    if (bankLedgerRows.length > 0) {
+      return Number(bankLedgerRows[bankLedgerRows.length - 1].balance) || 0;
+    }
+    if (selectedBankId === ALL_BANKS_VALUE) {
+      return Number(bankTotals.openingBalance) || 0;
+    }
+    const bankSum = banksSummary.find((b) => String(b.id) === String(selectedBankId));
+    return Number(
+      bankSum?.openingBalance ??
+        selectedBank?.openingBalance ??
+        selectedBank?.opening_balance ??
+        0
+    );
+  }, [bankLedgerRows, selectedBankId, ALL_BANKS_VALUE, bankTotals, banksSummary, selectedBank]);
+
   const customerEntries = useMemo(
     () => customerDetail?.entries ?? detailedTransactionsData?.data?.entries ?? [],
     [customerDetail?.entries, detailedTransactionsData?.data?.entries]
@@ -1780,15 +1797,12 @@ const AccountLedgerSummary = () => {
                       {(selectedBank || selectedBankId === ALL_BANKS_VALUE) && (
                         <tr className="bg-indigo-200 font-bold border-t-2 border-indigo-300">
                           <td colSpan="6" className="px-4 py-3 text-right text-sm text-gray-900 uppercase tracking-wider">Final Closing Balance</td>
-                          <td className={`px-4 py-3 text-right text-lg ${(selectedBankId === ALL_BANKS_VALUE ? bankTotals.closingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.closingBalance || (parseFloat(selectedBank?.openingBalance || 0) +
-                              bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) -
-                              bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)))) < 0 ? 'text-red-700' : 'text-indigo-800'
-                            }`}>
-                            {formatCurrency(
-                              selectedBankId === ALL_BANKS_VALUE ? bankTotals.closingBalance : (banksSummary.find(b => String(b.id) === String(selectedBankId))?.closingBalance || (parseFloat(selectedBank?.openingBalance || 0) +
-                                bankLedgerRows.reduce((sum, r) => sum + (r.debitAmount || 0), 0) -
-                                bankLedgerRows.reduce((sum, r) => sum + (r.creditAmount || 0), 0)))
-                            )}
+                          <td
+                            className={`px-4 py-3 text-right text-lg ${
+                              bankLedgerFinalClosingBalance < 0 ? 'text-red-700' : 'text-indigo-800'
+                            }`}
+                          >
+                            {formatCurrency(bankLedgerFinalClosingBalance)}
                           </td>
                         </tr>
                       )}

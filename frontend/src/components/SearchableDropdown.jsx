@@ -177,7 +177,13 @@ export const SearchableDropdown = forwardRef(({
             item.sku,
             item.barcode,
             item.retail_code,
-            item.retailCode
+            item.retailCode,
+            item.variantName,
+            item.variant_name,
+            item.variantValue,
+            item.variant_value,
+            item.variantType,
+            item.variant_type,
           ].filter(Boolean); // Remove null/undefined values
 
           return searchableFields.some(field =>

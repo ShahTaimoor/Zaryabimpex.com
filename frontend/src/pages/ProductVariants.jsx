@@ -16,6 +16,7 @@ import {
   useDeleteVariantMutation,
 } from '../store/services/productVariantsApi';
 import { useGetProductsQuery } from '../store/services/productsApi';
+import { ProductSearchableSelect } from '../components/ProductSearchableSelect';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
@@ -38,8 +39,14 @@ const ProductVariants = () => {
     search: searchTerm || undefined
   });
 
-  // Fetch products for base product selector
-  const { data: productsData } = useGetProductsQuery({});
+  // Full catalog for pickers (API default limit is 20 without explicit limit)
+  const { data: productsData, isLoading: productsLoading } = useGetProductsQuery(
+    {
+      limit: 10000,
+      listMode: 'minimal',
+    },
+    { refetchOnMountOrArgChange: true }
+  );
 
   const variants = variantsData?.variants || variantsData?.data?.variants || [];
   const products = productsData?.products || productsData?.data?.products || [];
@@ -47,7 +54,9 @@ const ProductVariants = () => {
   const getBaseProductName = (variant) => {
     const baseProductId = variant.baseProduct?._id ?? variant.baseProduct ?? variant.base_product_id ?? variant.baseProductId;
     if (!baseProductId) return null;
-    const product = products.find(p => (p._id || p.id) === baseProductId);
+    const product = products.find(
+      (p) => String(p._id ?? p.id) === String(baseProductId)
+    );
     return product?.name ?? product?.productName ?? null;
   };
 
@@ -133,13 +142,13 @@ const ProductVariants = () => {
               className="input pl-10 w-full"
             />
           </div>
-          <ValidatedSelect
+          <ProductSearchableSelect
+            placeholder="All products — search to filter by base"
+            products={products}
             value={selectedBaseProduct}
-            onChange={(e) => setSelectedBaseProduct(e.target.value)}
-            options={[
-              { value: '', label: 'All Products' },
-              ...products.map(p => ({ value: p._id, label: p.name }))
-            ]}
+            onValueChange={setSelectedBaseProduct}
+            loading={productsLoading}
+            allowClear
             className="w-full"
           />
           <ValidatedSelect
@@ -250,6 +259,7 @@ const ProductVariants = () => {
         <VariantModal
           variant={editingVariant}
           products={products}
+          productsLoading={productsLoading}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
           onSuccess={() => {
@@ -271,7 +281,7 @@ const ProductVariants = () => {
 };
 
 // Variant Modal Component
-const VariantModal = ({ variant, products, isOpen, onClose, onSuccess }) => {
+const VariantModal = ({ variant, products, productsLoading, isOpen, onClose, onSuccess }) => {
   const [createVariant, { isLoading: isCreating }] = useCreateVariantMutation();
   const [updateVariant, { isLoading: isUpdating }] = useUpdateVariantMutation();
   const [formData, setFormData] = useState({
@@ -339,7 +349,9 @@ const VariantModal = ({ variant, products, isOpen, onClose, onSuccess }) => {
 
   React.useEffect(() => {
     if (formData.baseProduct && formData.variantValue) {
-      const baseProduct = products.find(p => p._id === formData.baseProduct);
+      const baseProduct = products.find(
+        (p) => String(p._id ?? p.id) === String(formData.baseProduct)
+      );
       if (baseProduct && !variant) {
         setFormData(prev => ({
           ...prev,
@@ -352,7 +364,9 @@ const VariantModal = ({ variant, products, isOpen, onClose, onSuccess }) => {
   // Auto-calculate pricing based on base product
   React.useEffect(() => {
     if (formData.baseProduct && !variant) {
-      const baseProduct = products.find(p => p._id === formData.baseProduct);
+      const baseProduct = products.find(
+        (p) => String(p._id ?? p.id) === String(formData.baseProduct)
+      );
       if (baseProduct) {
         setFormData(prev => ({
           ...prev,
@@ -370,6 +384,10 @@ const VariantModal = ({ variant, products, isOpen, onClose, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      if (!formData.baseProduct) {
+        showErrorToast('Please select a base product.');
+        return;
+      }
       // Ensure variantName is set (fallback to variantValue if empty)
       const trimmedVariantName = (formData.variantName || '').trim();
       const trimmedVariantValue = (formData.variantValue || '').trim();
@@ -427,16 +445,15 @@ const VariantModal = ({ variant, products, isOpen, onClose, onSuccess }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
-          <ValidatedSelect
+          <ProductSearchableSelect
             label="Base Product"
+            placeholder="Search base product…"
+            products={products}
             value={formData.baseProduct}
-            onChange={(e) => setFormData({ ...formData, baseProduct: e.target.value })}
-            options={[
-              { value: '', label: 'Select Base Product' },
-              ...products.map(p => ({ value: p._id, label: p.name }))
-            ]}
-            required
+            onValueChange={(id) => setFormData({ ...formData, baseProduct: id })}
+            loading={productsLoading}
             disabled={!!variant}
+            className="w-full"
           />
 
           <ValidatedSelect
