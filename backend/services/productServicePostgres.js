@@ -241,6 +241,14 @@ class ProductServicePostgres {
       products = products.map((p) => attachInvestorsToApiProduct(p, invMap.get(String(p.id)) || []));
     }
 
+    if (productIds.length > 0) {
+      const usedInSales = await productRepository.findProductIdsUsedInSales(productIds);
+      products = products.map((p) => ({
+        ...p,
+        canDelete: !usedInSales.has(String(p.id))
+      }));
+    }
+
     return {
       products,
       pagination: result.pagination
@@ -286,7 +294,12 @@ class ProductServicePostgres {
       };
     }
     const invMap = await productRepository.findInvestorsByProductIds([id]);
-    return attachInvestorsToApiProduct(product, invMap.get(String(id)) || []);
+    const withInvestors = attachInvestorsToApiProduct(product, invMap.get(String(id)) || []);
+    const usedInSales = await productRepository.findProductIdsUsedInSales([id]);
+    return {
+      ...withInvestors,
+      canDelete: !usedInSales.has(String(id))
+    };
   }
 
   async createProduct(productData, userId, req = null) {
@@ -556,6 +569,10 @@ class ProductServicePostgres {
   async deleteProduct(id, req = null) {
     const product = await productRepository.findById(id);
     if (!product) throw new Error('Product not found');
+    const usedInSales = await productRepository.findProductIdsUsedInSales([id]);
+    if (usedInSales.has(String(id))) {
+      throw new Error('Cannot delete this product because it has been used in a sale.');
+    }
     await transaction(async (client) => {
       await AccountingService.removeProductOpeningStockLedger(id, { client });
       await productRepository.delete(id, client);

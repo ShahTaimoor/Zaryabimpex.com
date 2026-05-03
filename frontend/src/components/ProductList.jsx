@@ -12,8 +12,10 @@ export const ProductList = ({
   onManageInvestors,
   onGenerateBarcode,
   showCostPrice = true,
-  /** When false, per-row delete (trash) is hidden — e.g. Products page policy */
+  /** When false, per-row delete (trash) is hidden */
   showDeleteButton = true,
+  /** When true, trash only shows if `product.canDelete === true` (e.g. never used on a sale) */
+  deleteRequiresCanDelete = false,
 }) => {
   const [showImages, setShowImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
   const [showHsCodeColumn, setShowHsCodeColumn] = useState(
@@ -282,7 +284,7 @@ export const ProductList = ({
                       >
                         <Edit className="h-3.5 w-3.5 xl:h-4 xl:w-4 2xl:h-5 2xl:w-5" />
                       </button>
-                      {showDeleteButton && (
+                      {showDeleteButton && (!deleteRequiresCanDelete || product.canDelete === true) && (
                         <button
                           type="button"
                           onClick={() => onDelete(product)}
@@ -465,7 +467,7 @@ export const ProductList = ({
                             >
                               <Edit className="h-4 w-4 xl:h-5 xl:w-5" />
                             </button>
-                            {showDeleteButton && (
+                            {showDeleteButton && (!deleteRequiresCanDelete || product.canDelete === true) && (
                               <button
                                 onClick={() => onDelete(product)}
                                 className="text-danger-600 hover:text-danger-800 p-1.5 xl:p-2 rounded hover:bg-red-50 transition-colors"

@@ -488,7 +488,8 @@ export const Products = () => {
         searchTerm={searchTerm}
         bulkOps={bulkOps}
         onEdit={productOps.handleEdit}
-        showDeleteButton={false}
+        showDeleteButton
+        deleteRequiresCanDelete
         onDelete={(product) => productOps.handleDelete(product, confirmDelete)}
         onManageInvestors={(product) => {
           productOps.setSelectedProductForInvestors(product);
