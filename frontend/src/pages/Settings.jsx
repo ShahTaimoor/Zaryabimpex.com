@@ -2668,87 +2668,87 @@ export const Settings2 = () => {
               <div className="border-t border-gray-100 pt-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4 px-1">Detailed Field Visibility</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[
-                  { id: 'reorderPoint', label: 'Reorder Point', sub: 'Min stock for reorder' },
-                  { id: 'unit', label: 'Unit of Measurement', sub: 'PCS, KG, etc.' },
-                  { id: 'piecesPerBox', label: 'Pieces per Box', sub: 'Box packing details' },
-                  { id: 'expiryDate', label: 'Expiry Date', sub: 'Product expiration' },
-                  { id: 'brand', label: 'Brand', sub: 'Product manufacturer' },
-                  { id: 'barcode', label: 'Barcode', sub: 'Scan or enter code' },
-                  { id: 'sku', label: 'SKU', sub: 'Stock keeping unit' },
-                  { id: 'hsCode', label: 'HS Code', sub: 'Customs code & list column' },
-                  { id: 'countryOfOrigin', label: 'Country of Origin', sub: 'Manufacturing country' },
-                  { id: 'netWeight', label: 'Net Weight (KG)', sub: 'Product weight only' },
-                  { id: 'grossWeight', label: 'Gross Weight (KG)', sub: 'Weight with packing' },
-                  { id: 'importRefNo', label: 'Import Ref No', sub: 'Tracking for imports' },
-                  { id: 'gdNumber', label: 'GD Number', sub: 'Goods declaration' },
-                  { id: 'invoiceRef', label: 'Invoice Ref', sub: 'Supplier invoice reference' },
-                ].map((item) => {
-                  const stateKey = `showProductSetting_${item.id}`;
-                  const states = {
-                    showProductSetting_reorderPoint,
-                    showProductSetting_unit,
-                    showProductSetting_piecesPerBox,
-                    showProductSetting_expiryDate,
-                    showProductSetting_brand,
-                    showProductSetting_barcode,
-                    showProductSetting_sku,
-                    showProductSetting_hsCode,
-                    showProductSetting_countryOfOrigin,
-                    showProductSetting_netWeight,
-                    showProductSetting_grossWeight,
-                    showProductSetting_importRefNo,
-                    showProductSetting_gdNumber,
-                    showProductSetting_invoiceRef
-                  };
-                  const setters = {
-                    showProductSetting_reorderPoint: setShowProductSetting_reorderPoint,
-                    showProductSetting_unit: setShowProductSetting_unit,
-                    showProductSetting_piecesPerBox: setShowProductSetting_piecesPerBox,
-                    showProductSetting_expiryDate: setShowProductSetting_expiryDate,
-                    showProductSetting_brand: setShowProductSetting_brand,
-                    showProductSetting_barcode: setShowProductSetting_barcode,
-                    showProductSetting_sku: setShowProductSetting_sku,
-                    showProductSetting_hsCode: setShowProductSetting_hsCode,
-                    showProductSetting_countryOfOrigin: setShowProductSetting_countryOfOrigin,
-                    showProductSetting_netWeight: setShowProductSetting_netWeight,
-                    showProductSetting_grossWeight: setShowProductSetting_grossWeight,
-                    showProductSetting_importRefNo: setShowProductSetting_importRefNo,
-                    showProductSetting_gdNumber: setShowProductSetting_gdNumber,
-                    showProductSetting_invoiceRef: setShowProductSetting_invoiceRef
-                  };
+                  {[
+                    { id: 'reorderPoint', label: 'Reorder Point', sub: 'Min stock for reorder' },
+                    { id: 'unit', label: 'Unit of Measurement', sub: 'PCS, KG, etc.' },
+                    { id: 'piecesPerBox', label: 'Pieces per Box', sub: 'Box packing details' },
+                    { id: 'expiryDate', label: 'Expiry Date', sub: 'Product expiration' },
+                    { id: 'brand', label: 'Brand', sub: 'Product manufacturer' },
+                    { id: 'barcode', label: 'Barcode', sub: 'Scan or enter code' },
+                    { id: 'sku', label: 'SKU', sub: 'Stock keeping unit' },
+                    { id: 'hsCode', label: 'HS Code', sub: 'Customs code & list column' },
+                    { id: 'countryOfOrigin', label: 'Country of Origin', sub: 'Manufacturing country' },
+                    { id: 'netWeight', label: 'Net Weight (KG)', sub: 'Product weight only' },
+                    { id: 'grossWeight', label: 'Gross Weight (KG)', sub: 'Weight with packing' },
+                    { id: 'importRefNo', label: 'Import Ref No', sub: 'Tracking for imports' },
+                    { id: 'gdNumber', label: 'GD Number', sub: 'Goods declaration' },
+                    { id: 'invoiceRef', label: 'Invoice Ref', sub: 'Supplier invoice reference' },
+                  ].map((item) => {
+                    const stateKey = `showProductSetting_${item.id}`;
+                    const states = {
+                      showProductSetting_reorderPoint,
+                      showProductSetting_unit,
+                      showProductSetting_piecesPerBox,
+                      showProductSetting_expiryDate,
+                      showProductSetting_brand,
+                      showProductSetting_barcode,
+                      showProductSetting_sku,
+                      showProductSetting_hsCode,
+                      showProductSetting_countryOfOrigin,
+                      showProductSetting_netWeight,
+                      showProductSetting_grossWeight,
+                      showProductSetting_importRefNo,
+                      showProductSetting_gdNumber,
+                      showProductSetting_invoiceRef
+                    };
+                    const setters = {
+                      showProductSetting_reorderPoint: setShowProductSetting_reorderPoint,
+                      showProductSetting_unit: setShowProductSetting_unit,
+                      showProductSetting_piecesPerBox: setShowProductSetting_piecesPerBox,
+                      showProductSetting_expiryDate: setShowProductSetting_expiryDate,
+                      showProductSetting_brand: setShowProductSetting_brand,
+                      showProductSetting_barcode: setShowProductSetting_barcode,
+                      showProductSetting_sku: setShowProductSetting_sku,
+                      showProductSetting_hsCode: setShowProductSetting_hsCode,
+                      showProductSetting_countryOfOrigin: setShowProductSetting_countryOfOrigin,
+                      showProductSetting_netWeight: setShowProductSetting_netWeight,
+                      showProductSetting_grossWeight: setShowProductSetting_grossWeight,
+                      showProductSetting_importRefNo: setShowProductSetting_importRefNo,
+                      showProductSetting_gdNumber: setShowProductSetting_gdNumber,
+                      showProductSetting_invoiceRef: setShowProductSetting_invoiceRef
+                    };
 
-                  return (
-                    <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
-                      <Checkbox
-                        id={stateKey}
-                        className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                        checked={states[stateKey]}
-                        onCheckedChange={(checked) => {
-                          setters[stateKey](checked);
-                          localStorage.setItem(stateKey, String(checked));
-                          toast.success(`${item.label} ${checked ? 'enabled' : 'disabled'}`);
-                          window.dispatchEvent(new Event('productVisibilitySettingsChanged'));
-                          // Also sync the legacy HS Code setting if this is HS Code
-                          if (item.id === 'hsCode') {
-                             localStorage.setItem('showProductHsCodeColumn', String(checked));
-                             window.dispatchEvent(new Event('productHsCodeColumnConfigChanged'));
-                             setShowProductHsCodeColumn(checked);
-                          }
-                        }}
-                      />
-                      <Label htmlFor={stateKey} className="flex flex-col cursor-pointer group-hover:text-blue-700">
-                        <span className="text-sm font-semibold">{item.label}</span>
-                        <span className="text-[10px] text-gray-400">{item.sub}</span>
-                      </Label>
-                    </div>
-                  );
-                })}
+                    return (
+                      <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                        <Checkbox
+                          id={stateKey}
+                          className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                          checked={states[stateKey]}
+                          onCheckedChange={(checked) => {
+                            setters[stateKey](checked);
+                            localStorage.setItem(stateKey, String(checked));
+                            toast.success(`${item.label} ${checked ? 'enabled' : 'disabled'}`);
+                            window.dispatchEvent(new Event('productVisibilitySettingsChanged'));
+                            // Also sync the legacy HS Code setting if this is HS Code
+                            if (item.id === 'hsCode') {
+                              localStorage.setItem('showProductHsCodeColumn', String(checked));
+                              window.dispatchEvent(new Event('productHsCodeColumnConfigChanged'));
+                              setShowProductHsCodeColumn(checked);
+                            }
+                          }}
+                        />
+                        <Label htmlFor={stateKey} className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                          <span className="text-sm font-semibold">{item.label}</span>
+                          <span className="text-[10px] text-gray-400">{item.sub}</span>
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
         {/* Sidebar Configuration Tab */}
         {activeTab === 'sidebar' && (
