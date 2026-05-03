@@ -6,6 +6,7 @@ const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const cashReceiptService = require('../services/cashReceiptService');
 const cashReceiptRepository = require('../repositories/postgres/CashReceiptRepository');
+const bankRepository = require('../repositories/postgres/BankRepository');
 const customerRepository = require('../repositories/postgres/CustomerRepository');
 const supplierRepository = require('../repositories/postgres/SupplierRepository');
 const AccountingService = require('../services/accountingService');
@@ -463,6 +464,7 @@ router.post('/batch', [
   body('voucherDate').isISO8601().withMessage('Voucher date must be a valid date'),
   body('cashAccount').optional().isString().trim().withMessage('Cash account must be a string'),
   body('paymentType').optional().isString().trim().withMessage('Payment type must be a string'),
+  body('bankId').optional({ nullable: true }).isUUID().withMessage('Bank ID must be a valid UUID'),
   body('receipts').isArray().withMessage('Receipts must be an array'),
   body('receipts.*.customer').isUUID().withMessage('Invalid customer ID'),
   body('receipts.*.amount').isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
@@ -478,8 +480,31 @@ router.post('/batch', [
       voucherDate,
       cashAccount,
       paymentType = 'cash',
+      bankId,
       receipts
     } = req.body;
+
+    const ptUpper = String(paymentType || '').trim().toUpperCase();
+    let receiptNotes = '';
+    const noteParts = [];
+    if (cashAccount) noteParts.push(`Cash Account: ${cashAccount}`);
+    if (bankId) {
+      const bank = await bankRepository.findById(bankId);
+      if (!bank) {
+        return res.status(400).json({
+          success: false,
+          message: 'Selected bank was not found'
+        });
+      }
+      const bankLabel = [bank.bank_name, bank.account_number || bank.accountNumber].filter(Boolean).join(' · ');
+      noteParts.push(`Bank: ${bankLabel}`);
+    } else if (ptUpper === 'BANK_TRANSFER') {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select the bank used for this transfer'
+      });
+    }
+    receiptNotes = noteParts.length ? noteParts.join(' | ') : null;
 
     if (!receipts || receipts.length === 0) {
       return res.status(400).json({ 
@@ -517,24 +542,15 @@ router.post('/batch', [
         continue; // Skip zero amounts
       }
 
-      const cashReceiptData = {
-        date: new Date(voucherDate),
-        amount: parseFloat(receiptData.amount),
-        particular: receiptData.particular ? receiptData.particular.trim() : 'Cash Receipt',
-        customer: receiptData.customer,
-        paymentMethod: paymentType.toLowerCase(),
-        notes: cashAccount ? `Cash Account: ${cashAccount}` : null,
-        createdBy: req.user._id
-      };
-
+      const uid = req.user.id || req.user._id;
       const cashReceipt = await cashReceiptRepository.create({
         date: new Date(voucherDate),
         amount: parseFloat(receiptData.amount),
         particular: receiptData.particular ? receiptData.particular.trim() : 'Cash Receipt',
         customerId: receiptData.customer || null,
         paymentMethod: paymentType.toLowerCase(),
-        notes: cashAccount ? `Cash Account: ${cashAccount}` : null,
-        createdBy: req.user._id.toString()
+        notes: receiptNotes,
+        createdBy: uid != null ? String(uid) : null
       });
 
       // Create accounting entries

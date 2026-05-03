@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Package,
   Plus,
@@ -28,6 +28,7 @@ import {
 } from '../store/services/purchaseInvoicesApi';
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import { useGetUnifiedBalanceQuery } from '../store/services/accountingApi';
+import { useGetBanksQuery } from '../store/services/banksApi';
 import { toast } from 'sonner';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import PrintModal, { DirectPrintInvoice } from '../components/PrintModal';
@@ -456,6 +457,7 @@ export const Purchase = ({ tabId, editData }) => {
 
   // Payment and discount state variables (matching Sales component)
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [selectedBankAccount, setSelectedBankAccount] = useState('');
   const [amountPaid, setAmountPaid] = useState(0);
   const [directDiscount, setDirectDiscount] = useState({ type: 'amount', value: 0 });
 
@@ -502,6 +504,22 @@ export const Purchase = ({ tabId, editData }) => {
   const [createPurchaseInvoice] = useCreatePurchaseInvoiceMutation();
   const [updatePurchaseInvoice] = useUpdatePurchaseInvoiceMutation();
 
+  const { data: banksData, isLoading: banksLoading } = useGetBanksQuery(
+    { isActive: true },
+    { staleTime: 5 * 60_000 }
+  );
+
+  const activeBanks = useMemo(() => {
+    const banks = banksData?.data?.banks || banksData?.banks || [];
+    return banks.filter((bank) => bank.isActive !== false);
+  }, [banksData]);
+
+  useEffect(() => {
+    if (paymentMethod !== 'bank' || selectedBankAccount) return;
+    const first = activeBanks[0];
+    const id = first?._id || first?.id;
+    if (id) setSelectedBankAccount(id);
+  }, [paymentMethod, selectedBankAccount, activeBanks]);
 
   // Focus on supplier selection field when component mounts
   useEffect(() => {
@@ -554,6 +572,11 @@ export const Purchase = ({ tabId, editData }) => {
         setAmountPaid(typeof amt === 'number' ? amt : parseFloat(amt) || 0);
         if (editData.payment.method) {
           setPaymentMethod(editData.payment.method);
+        }
+        if (editData.payment.method === 'bank') {
+          setSelectedBankAccount(editData.payment.bankAccount || '');
+        } else {
+          setSelectedBankAccount('');
         }
       }
 
@@ -1026,6 +1049,11 @@ export const Purchase = ({ tabId, editData }) => {
       return;
     }
 
+    if (paymentMethod === 'bank' && !selectedBankAccount) {
+      toast.error('Please select a bank account');
+      return;
+    }
+
     // Ensure invoice number is set (auto-generate if empty and auto-generate is enabled)
     // If auto-generate is enabled, let backend generate invoice number based on invoiceDate
     // Otherwise, use the manually entered invoice number
@@ -1073,6 +1101,7 @@ export const Purchase = ({ tabId, editData }) => {
       },
       payment: {
         method: paymentMethod,
+        bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
         amount: amountPaid,
         remainingBalance: Math.max(0, total - amountPaid),
         isPartialPayment: amountPaid > 0 && amountPaid < total,
@@ -1096,7 +1125,7 @@ export const Purchase = ({ tabId, editData }) => {
     } else {
       handleCreatePurchaseInvoice(invoiceData);
     }
-  }, [purchaseItems, selectedSupplier, invoiceNumber, autoGenerateInvoice, expectedDelivery, billDate, notes, taxSystemEnabled, subtotal, tax, total, directDiscountAmount, paymentMethod, amountPaid, editData, handleCreatePurchaseInvoice, handleUpdatePurchaseInvoice, printBarcodeLabelsAfterInvoice]);
+  }, [purchaseItems, selectedSupplier, invoiceNumber, autoGenerateInvoice, expectedDelivery, billDate, notes, taxSystemEnabled, subtotal, tax, total, directDiscountAmount, paymentMethod, selectedBankAccount, amountPaid, editData, handleCreatePurchaseInvoice, handleUpdatePurchaseInvoice, printBarcodeLabelsAfterInvoice]);
 
 
   return (
@@ -1625,14 +1654,53 @@ export const Purchase = ({ tabId, editData }) => {
                     <div className="flex flex-col md:col-start-2 md:row-start-1 w-full">
                       <label className="block text-sm font-medium text-foreground mb-2">Payment Method</label>
                       <select
-                        value={paymentMethod}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        value={
+                          paymentMethod === 'bank' && selectedBankAccount
+                            ? `bank:${selectedBankAccount}`
+                            : paymentMethod
+                        }
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v.startsWith('bank:')) {
+                            setPaymentMethod('bank');
+                            setSelectedBankAccount(v.slice(5));
+                          } else {
+                            setPaymentMethod(v);
+                            setSelectedBankAccount('');
+                          }
+                        }}
                         className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
                       >
                         <option value="cash">Cash</option>
+                        {activeBanks.map((bank) => {
+                          const bid = bank._id || bank.id;
+                          if (!bid) return null;
+                          const label = [bank.bankName, bank.accountNumber]
+                            .filter(Boolean)
+                            .join(' — ');
+                          const acc = bank.accountName ? ` (${bank.accountName})` : '';
+                          return (
+                            <option key={bid} value={`bank:${bid}`}>
+                              Bank · {label}
+                              {acc}
+                            </option>
+                          );
+                        })}
+                        {banksLoading && (
+                          <option value="" disabled>
+                            Loading banks…
+                          </option>
+                        )}
+                        {!banksLoading && activeBanks.length === 0 && (
+                          <option value="" disabled>
+                            No bank accounts (add in Banks)
+                          </option>
+                        )}
                         <option value="credit_card">Credit Card</option>
                         <option value="debit_card">Debit Card</option>
                         <option value="check">Check</option>
+                        <option value="account">Account</option>
+                        <option value="split">Split Payment</option>
                       </select>
                     </div>
 
@@ -1663,6 +1731,7 @@ export const Purchase = ({ tabId, editData }) => {
                         setDirectDiscount({ type: 'amount', value: 0 });
                         setAmountPaid(0);
                         setPaymentMethod('cash');
+                        setSelectedBankAccount('');
                         setBillDate(getLocalDateString());
                         toast.success('Cart cleared');
                       }}
@@ -1740,6 +1809,7 @@ export const Purchase = ({ tabId, editData }) => {
                               },
                               payment: {
                                 method: paymentMethod,
+                                bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
                                 amountPaid: amountPaid,
                                 remainingBalance: total - amountPaid,
                                 isPartialPayment: amountPaid < total
@@ -1813,6 +1883,7 @@ export const Purchase = ({ tabId, editData }) => {
                               },
                               payment: {
                                 method: paymentMethod,
+                                bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
                                 amountPaid: amountPaid,
                                 remainingBalance: total - amountPaid,
                                 isPartialPayment: amountPaid < total

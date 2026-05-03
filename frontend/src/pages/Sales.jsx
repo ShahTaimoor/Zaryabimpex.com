@@ -472,12 +472,10 @@ export const Sales = ({ tabId, editData }) => {
   );
 
   useEffect(() => {
-    if (paymentMethod === 'bank' && !selectedBankAccount) {
-      const defaultBank = activeBanks.find((bank) => bank?.isDefault) || activeBanks[0];
-      if (defaultBank?._id) {
-        setSelectedBankAccount(defaultBank._id);
-      }
-    }
+    if (paymentMethod !== 'bank' || selectedBankAccount) return;
+    const first = activeBanks[0];
+    const id = first?._id || first?.id;
+    if (id) setSelectedBankAccount(id);
   }, [paymentMethod, selectedBankAccount, activeBanks]);
 
   // Update selected customer when customers data changes (e.g., after cash receipt updates balance)
@@ -2670,52 +2668,54 @@ export const Sales = ({ tabId, editData }) => {
                         Payment Method
                       </label>
                       <select
-                        value={paymentMethod}
+                        value={
+                          paymentMethod === 'bank' && selectedBankAccount
+                            ? `bank:${selectedBankAccount}`
+                            : paymentMethod
+                        }
                         onChange={(e) => {
-                          const method = e.target.value;
-                          setPaymentMethod(method);
-                          if (method !== 'bank') {
+                          const v = e.target.value;
+                          if (v.startsWith('bank:')) {
+                            setPaymentMethod('bank');
+                            setSelectedBankAccount(v.slice(5));
+                          } else {
+                            setPaymentMethod(v);
                             setSelectedBankAccount('');
                           }
                         }}
                         className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
                       >
                         <option value="cash">Cash</option>
-                        <option value="bank">Bank Transfer</option>
+                        {activeBanks.map((bank) => {
+                          const bid = bank._id || bank.id;
+                          if (!bid) return null;
+                          const label = [bank.bankName, bank.accountNumber]
+                            .filter(Boolean)
+                            .join(' — ');
+                          const acc = bank.accountName ? ` (${bank.accountName})` : '';
+                          return (
+                            <option key={bid} value={`bank:${bid}`}>
+                              Bank · {label}
+                              {acc}
+                            </option>
+                          );
+                        })}
+                        {banksLoading && (
+                          <option value="" disabled>
+                            Loading banks…
+                          </option>
+                        )}
+                        {!banksLoading && activeBanks.length === 0 && (
+                          <option value="" disabled>
+                            No bank accounts (add in Banks)
+                          </option>
+                        )}
                         <option value="credit_card">Credit Card</option>
                         <option value="debit_card">Debit Card</option>
                         <option value="check">Check</option>
                         <option value="account">Account</option>
                         <option value="split">Split Payment</option>
                       </select>
-                      {paymentMethod === 'bank' && (
-                        <div className="mt-3">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Bank Account
-                          </label>
-                          <select
-                            value={selectedBankAccount}
-                            onChange={(e) => setSelectedBankAccount(e.target.value)}
-                            className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
-                          >
-                            <option value="">Select bank account...</option>
-                            {activeBanks.map((bank) => (
-                              <option key={bank._id} value={bank._id}>
-                                {bank.bankName} - {bank.accountNumber}
-                                {bank.accountName ? ` (${bank.accountName})` : ''}
-                              </option>
-                            ))}
-                          </select>
-                          {banksLoading && (
-                            <p className="text-xs text-gray-500 mt-1">Loading bank accounts...</p>
-                          )}
-                          {!banksLoading && activeBanks.length === 0 && (
-                            <p className="text-xs text-red-500 mt-1">
-                              No bank accounts available. Add one in Banks.
-                            </p>
-                          )}
-                        </div>
-                      )}
                     </div>
 
                     {/* Amount Paid */}
