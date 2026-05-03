@@ -78,6 +78,41 @@ const supplierDefaultValues = {
 };
 
 const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
+  const [visibilitySettings, setVisibilitySettings] = useState({
+    contactPerson: localStorage.getItem('showSupplierSetting_contactPerson') === 'true',
+    email: localStorage.getItem('showSupplierSetting_email') === 'true',
+    paymentTerms: localStorage.getItem('showSupplierSetting_paymentTerms') === 'true',
+    website: localStorage.getItem('showSupplierSetting_website') === 'true',
+    leadTime: localStorage.getItem('showSupplierSetting_leadTime') === 'true',
+    minOrder: localStorage.getItem('showSupplierSetting_minOrder') === 'true',
+    rating: localStorage.getItem('showSupplierSetting_rating') === 'true',
+    reliability: localStorage.getItem('showSupplierSetting_reliability') === 'true',
+    state: localStorage.getItem('showSupplierSetting_state') === 'true',
+    zipCode: localStorage.getItem('showSupplierSetting_zipCode') === 'true',
+    notes: localStorage.getItem('showSupplierSetting_notes') === 'true',
+  });
+
+  useEffect(() => {
+    const handleConfigChange = () => {
+      setVisibilitySettings({
+        contactPerson: localStorage.getItem('showSupplierSetting_contactPerson') === 'true',
+        email: localStorage.getItem('showSupplierSetting_email') === 'true',
+        paymentTerms: localStorage.getItem('showSupplierSetting_paymentTerms') === 'true',
+        website: localStorage.getItem('showSupplierSetting_website') === 'true',
+        leadTime: localStorage.getItem('showSupplierSetting_leadTime') === 'true',
+        minOrder: localStorage.getItem('showSupplierSetting_minOrder') === 'true',
+        rating: localStorage.getItem('showSupplierSetting_rating') === 'true',
+        reliability: localStorage.getItem('showSupplierSetting_reliability') === 'true',
+        state: localStorage.getItem('showSupplierSetting_state') === 'true',
+        zipCode: localStorage.getItem('showSupplierSetting_zipCode') === 'true',
+        notes: localStorage.getItem('showSupplierSetting_notes') === 'true',
+      });
+    };
+
+    window.addEventListener('supplierVisibilitySettingsChanged', handleConfigChange);
+    return () => window.removeEventListener('supplierVisibilitySettingsChanged', handleConfigChange);
+  }, []);
+
   const [formData, setFormData] = useState(() => ({ ...supplierDefaultValues }));
   const [emailChecking, setEmailChecking] = useState(false);
   const [emailExists, setEmailExists] = useState(false);
@@ -373,8 +408,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
       headerClassName="p-3 sm:p-4 xl:p-5"
     >
       <form onSubmit={handleSubmit} className="space-y-4 xl:space-y-6">
-        {/* Company Name + Contact Person */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 xl:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 xl:gap-4">
           <div className="min-w-0">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Company Name *
@@ -399,60 +433,63 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
               <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Company name already exists</p>
             )}
           </div>
-          <div className="min-w-0">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-              Contact Person *
-            </label>
-            <div className="relative">
-              <Input
-                type="text"
-                required
-                autoComplete="off"
-                value={formData.contactPerson?.name || ''}
-                onChange={(e) => setFormData({
-                  ...formData,
-                  contactPerson: { ...(formData.contactPerson || {}), name: e.target.value }
-                })}
-                className={`text-sm min-h-[2rem] xl:min-h-0 ${contactNameExists ? 'border-red-500' : ''}`}
-                placeholder="Enter full name"
-              />
-              {contactNameChecking && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <LoadingInline size="sm" />
-                </div>
-              )}
-            </div>
-            {contactNameExists && (
-              <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Contact name already exists</p>
-            )}
-          </div>
-        </div>
 
-        {/* Email, Phone, Business Type, Payment Terms */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 xl:gap-4">
-          <div className="min-w-0">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-              Email
-            </label>
-            <div className="relative">
-              <Input
-                type="email"
-                autoComplete="off"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className={`text-sm min-h-[2rem] xl:min-h-0 ${emailExists ? 'border-red-500' : ''}`}
-                placeholder="email@company.com (optional)"
-              />
-              {emailChecking && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <LoadingInline size="sm" />
-                </div>
+          {visibilitySettings.contactPerson && (
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                Contact Person *
+              </label>
+              <div className="relative">
+                <Input
+                  type="text"
+                  required
+                  autoComplete="off"
+                  value={formData.contactPerson?.name || ''}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    contactPerson: { ...(formData.contactPerson || {}), name: e.target.value }
+                  })}
+                  className={`text-sm min-h-[2rem] xl:min-h-0 ${contactNameExists ? 'border-red-500' : ''}`}
+                  placeholder="Enter full name"
+                />
+                {contactNameChecking && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <LoadingInline size="sm" />
+                  </div>
+                )}
+              </div>
+              {contactNameExists && (
+                <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Contact name already exists</p>
               )}
             </div>
-            {emailExists && (
-              <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Email already exists</p>
-            )}
-          </div>
+          )}
+
+          {visibilitySettings.email && (
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                Email
+              </label>
+              <div className="relative">
+                <Input
+                  type="email"
+                  autoComplete="off"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className={`text-sm min-h-[2rem] xl:min-h-0 ${emailExists ? 'border-red-500' : ''}`}
+                  placeholder="email@company.com (optional)"
+                />
+                {emailChecking && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <LoadingInline size="sm" />
+                  </div>
+                )}
+              </div>
+              {emailExists && (
+                <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Email already exists</p>
+              )}
+            </div>
+          )}
+
           <div className="min-w-0">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Phone
@@ -466,6 +503,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
               placeholder="(555) 123-4567"
             />
           </div>
+
           <div className="min-w-0">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Business Type
@@ -482,27 +520,27 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
               <option value="other">Other</option>
             </select>
           </div>
-          <div className="min-w-0">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-              Payment Terms
-            </label>
-            <select
-              value={formData.paymentTerms}
-              onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
-              className="input text-sm min-h-[2rem] xl:min-h-0"
-            >
-              <option value="cash">Cash</option>
-              <option value="net15">Net 15</option>
-              <option value="net30">Net 30</option>
-              <option value="net45">Net 45</option>
-              <option value="net60">Net 60</option>
-              <option value="net90">Net 90</option>
-            </select>
-          </div>
-        </div>
 
-        {/* Credit Limit, Opening Balance, Status */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 xl:gap-4">
+          {visibilitySettings.paymentTerms && (
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                Payment Terms
+              </label>
+              <select
+                value={formData.paymentTerms}
+                onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
+                className="input text-sm min-h-[2rem] xl:min-h-0"
+              >
+                <option value="cash">Cash</option>
+                <option value="net15">Net 15</option>
+                <option value="net30">Net 30</option>
+                <option value="net45">Net 45</option>
+                <option value="net60">Net 60</option>
+                <option value="net90">Net 90</option>
+              </select>
+            </div>
+          )}
+
           <div className="min-w-0">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Credit Limit
@@ -517,6 +555,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
               placeholder="0"
             />
           </div>
+
           <div className="min-w-0">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Opening Balance
@@ -534,6 +573,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
               Positive = you owe supplier. Negative = advance/credit.
             </p>
           </div>
+
           <div className="min-w-0">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Status
@@ -550,72 +590,83 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
               <option value="blacklisted">Blacklisted</option>
             </select>
           </div>
-        </div>
 
-        {/* Website, Lead Time, Min Order, Rating, Reliability */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 xl:gap-4">
-          <div className="min-w-0">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Website</label>
-            <Input
-              type="url"
-              autoComplete="off"
-              value={formData.website}
-              onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-              className="text-sm min-h-[2rem] xl:min-h-0"
-              placeholder="https://company.com"
-            />
-          </div>
-          <div className="min-w-0">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Lead Time (days)</label>
-            <Input
-              type="number"
-              min="0"
-              autoComplete="off"
-              value={formData.leadTime}
-              onChange={(e) => setFormData({ ...formData, leadTime: parseInt(e.target.value) || 0 })}
-              className="text-sm min-h-[2rem] xl:min-h-0"
-              placeholder="7"
-            />
-          </div>
-          <div className="min-w-0">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Min Order Amount</label>
-            <Input
-              type="number"
-              min="0"
-              autoComplete="off"
-              value={formData.minOrderAmount}
-              onChange={(e) => setFormData({ ...formData, minOrderAmount: parseFloat(e.target.value) || 0 })}
-              className="text-sm min-h-[2rem] xl:min-h-0"
-              placeholder="0"
-            />
-          </div>
-          <div className="min-w-0">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Rating (1-5)</label>
-            <select
-              value={formData.rating}
-              onChange={(e) => setFormData({ ...formData, rating: parseInt(e.target.value) })}
-              className="input text-sm min-h-[2rem] xl:min-h-0"
-            >
-              <option value={1}>1 Star</option>
-              <option value={2}>2 Stars</option>
-              <option value={3}>3 Stars</option>
-              <option value={4}>4 Stars</option>
-              <option value={5}>5 Stars</option>
-            </select>
-          </div>
-          <div className="min-w-0">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Reliability</label>
-            <select
-              value={formData.reliability}
-              onChange={(e) => setFormData({ ...formData, reliability: e.target.value })}
-              className="input text-sm min-h-[2rem] xl:min-h-0"
-            >
-              <option value="excellent">Excellent</option>
-              <option value="good">Good</option>
-              <option value="average">Average</option>
-              <option value="poor">Poor</option>
-            </select>
-          </div>
+          {visibilitySettings.website && (
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Website</label>
+              <Input
+                type="url"
+                autoComplete="off"
+                value={formData.website}
+                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                className="text-sm min-h-[2rem] xl:min-h-0"
+                placeholder="https://company.com"
+              />
+            </div>
+          )}
+
+          {visibilitySettings.leadTime && (
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Lead Time (days)</label>
+              <Input
+                type="number"
+                min="0"
+                autoComplete="off"
+                value={formData.leadTime}
+                onChange={(e) => setFormData({ ...formData, leadTime: parseInt(e.target.value) || 0 })}
+                className="text-sm min-h-[2rem] xl:min-h-0"
+                placeholder="7"
+              />
+            </div>
+          )}
+
+          {visibilitySettings.minOrder && (
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Min Order Amount</label>
+              <Input
+                type="number"
+                min="0"
+                autoComplete="off"
+                value={formData.minOrderAmount}
+                onChange={(e) => setFormData({ ...formData, minOrderAmount: parseFloat(e.target.value) || 0 })}
+                className="text-sm min-h-[2rem] xl:min-h-0"
+                placeholder="0"
+              />
+            </div>
+          )}
+
+          {visibilitySettings.rating && (
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Rating (1-5)</label>
+              <select
+                value={formData.rating}
+                onChange={(e) => setFormData({ ...formData, rating: parseInt(e.target.value) })}
+                className="input text-sm min-h-[2rem] xl:min-h-0"
+              >
+                <option value={1}>1 Star</option>
+                <option value={2}>2 Stars</option>
+                <option value={3}>3 Stars</option>
+                <option value={4}>4 Stars</option>
+                <option value={5}>5 Stars</option>
+              </select>
+            </div>
+          )}
+
+          {visibilitySettings.reliability && (
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Reliability</label>
+              <select
+                value={formData.reliability}
+                onChange={(e) => setFormData({ ...formData, reliability: e.target.value })}
+                className="input text-sm min-h-[2rem] xl:min-h-0"
+              >
+                <option value="excellent">Excellent</option>
+                <option value="good">Good</option>
+                <option value="average">Average</option>
+                <option value="poor">Poor</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Address */}
@@ -624,7 +675,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
           <div className="space-y-4">
             {formData.addresses.map((address, index) => (
               <div key={index} className="border border-gray-200 rounded-lg p-3 sm:p-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 xl:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 xl:gap-4">
                   <div className="min-w-0">
                     <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Street Address</label>
                     <Input
@@ -661,28 +712,32 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
                       </p>
                     )}
                   </div>
-                  <div className="min-w-0">
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">State</label>
-                    <Input
-                      type="text"
-                      autoComplete="off"
-                      value={address.state}
-                      onChange={(e) => handleAddressChange(index, 'state', e.target.value)}
-                      className="text-sm min-h-[2rem] xl:min-h-0"
-                      placeholder="State"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">ZIP Code</label>
-                    <Input
-                      type="text"
-                      autoComplete="off"
-                      value={address.zipCode}
-                      onChange={(e) => handleAddressChange(index, 'zipCode', e.target.value)}
-                      className="text-sm min-h-[2rem] xl:min-h-0"
-                      placeholder="12345"
-                    />
-                  </div>
+                  {visibilitySettings.state && (
+                    <div className="min-w-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">State</label>
+                      <Input
+                        type="text"
+                        autoComplete="off"
+                        value={address.state}
+                        onChange={(e) => handleAddressChange(index, 'state', e.target.value)}
+                        className="text-sm min-h-[2rem] xl:min-h-0"
+                        placeholder="State"
+                      />
+                    </div>
+                  )}
+                  {visibilitySettings.zipCode && (
+                    <div className="min-w-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">ZIP Code</label>
+                      <Input
+                        type="text"
+                        autoComplete="off"
+                        value={address.zipCode}
+                        onChange={(e) => handleAddressChange(index, 'zipCode', e.target.value)}
+                        className="text-sm min-h-[2rem] xl:min-h-0"
+                        placeholder="12345"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -690,17 +745,19 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
         </div>
 
         {/* Notes */}
-        <div>
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Notes</label>
-          <Textarea
-            value={formData.notes}
-            autoComplete="off"
-            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            rows={3}
-            className="text-sm min-h-[2rem] xl:min-h-0"
-            placeholder="Additional notes about this supplier..."
-          />
-        </div>
+        {visibilitySettings.notes && (
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">Notes</label>
+            <Textarea
+              value={formData.notes}
+              autoComplete="off"
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={3}
+              className="text-sm min-h-[2rem] xl:min-h-0"
+              placeholder="Additional notes about this supplier..."
+            />
+          </div>
+        )}
 
         {/* Form Actions */}
         <div className="flex flex-wrap justify-end gap-2 xl:gap-3 pt-4 xl:pt-6 border-t border-gray-200">
@@ -730,6 +787,27 @@ const LIMIT_OPTIONS = [50, 500, 1000, 5000];
 const DEFAULT_LIMIT = 50;
 
 export const Suppliers = () => {
+  const [visibilitySettings, setVisibilitySettings] = useState({
+    contactPerson: localStorage.getItem('showSupplierSetting_contactPerson') === 'true',
+    email: localStorage.getItem('showSupplierSetting_email') === 'true',
+    rating: localStorage.getItem('showSupplierSetting_rating') === 'true',
+    notes: localStorage.getItem('showSupplierSetting_notes') === 'true',
+  });
+
+  useEffect(() => {
+    const handleConfigChange = () => {
+      setVisibilitySettings({
+        contactPerson: localStorage.getItem('showSupplierSetting_contactPerson') === 'true',
+        email: localStorage.getItem('showSupplierSetting_email') === 'true',
+        rating: localStorage.getItem('showSupplierSetting_rating') === 'true',
+        notes: localStorage.getItem('showSupplierSetting_notes') === 'true',
+      });
+    };
+
+    window.addEventListener('supplierVisibilitySettingsChanged', handleConfigChange);
+    return () => window.removeEventListener('supplierVisibilitySettingsChanged', handleConfigChange);
+  }, []);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_LIMIT);
@@ -927,6 +1005,8 @@ export const Suppliers = () => {
   const [bulkCreateSuppliers] = useBulkCreateSuppliersMutation();
   const [autoCreateImportCities, setAutoCreateImportCities] = useState(true);
 
+  const companyColSpan = 4 + (visibilitySettings.email ? 0 : 2) + (visibilitySettings.rating ? 0 : 1);
+
   const handleImportData = async (data) => {
     if (!data || data.length === 0) {
       toast.error('No data rows found. Download Template, add at least one row with Company Name, and re-import.');
@@ -1057,13 +1137,17 @@ export const Suppliers = () => {
             {/* Table Header - Hidden on mobile/tablet */}
             <div className="hidden lg:block bg-gray-50 px-4 xl:px-8 py-3 xl:py-4 border-b border-gray-200 min-w-[760px] xl:min-w-[880px]">
               <div className="grid grid-cols-12 gap-3 xl:gap-6 items-center">
-                <div className="col-span-4">
+                <div className={`col-span-${companyColSpan}`}>
                   <h3 className="text-sm lg:text-base font-medium text-gray-700">Company Name</h3>
-                  <p className="text-xs lg:text-sm text-gray-500">Contact Person</p>
+                  {visibilitySettings.contactPerson && (
+                    <p className="text-xs lg:text-sm text-gray-500">Contact Person</p>
+                  )}
                 </div>
-                <div className="col-span-2">
-                  <h3 className="text-sm lg:text-base font-medium text-gray-700">Email</h3>
-                </div>
+                {visibilitySettings.email && (
+                  <div className="col-span-2">
+                    <h3 className="text-sm lg:text-base font-medium text-gray-700">Email</h3>
+                  </div>
+                )}
                 <div className="col-span-1">
                   <h3 className="text-sm lg:text-base font-medium text-gray-700">Phone</h3>
                 </div>
@@ -1073,9 +1157,11 @@ export const Suppliers = () => {
                 <div className="col-span-1">
                   <h3 className="text-sm lg:text-base font-medium text-gray-700">Type</h3>
                 </div>
-                <div className="col-span-1">
-                  <h3 className="text-sm lg:text-base font-medium text-gray-700">Rating</h3>
-                </div>
+                {visibilitySettings.rating && (
+                  <div className="col-span-1">
+                    <h3 className="text-sm lg:text-base font-medium text-gray-700">Rating</h3>
+                  </div>
+                )}
                 <div className="col-span-1">
                   <h3 className="text-sm lg:text-base font-medium text-gray-700">Credit</h3>
                 </div>
@@ -1098,9 +1184,11 @@ export const Suppliers = () => {
                           <h3 className="text-sm font-medium text-gray-900 truncate">
                             {supplier.companyName || supplier.company_name || supplier.businessName || '-'}
                           </h3>
-                          <p className="text-xs text-gray-500 truncate">
-                            {supplier.contactPerson?.name || supplier.contact_person || '-'}
-                          </p>
+                          {visibilitySettings.contactPerson && (
+                            <p className="text-xs text-gray-500 truncate">
+                              {supplier.contactPerson?.name || supplier.contact_person || '-'}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center space-x-2 ml-2">
@@ -1130,10 +1218,12 @@ export const Suppliers = () => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <p className="text-gray-500 mb-1">Email</p>
-                        <p className="text-gray-700 truncate">{supplier.email || '-'}</p>
-                      </div>
+                      {visibilitySettings.email && (
+                        <div>
+                          <p className="text-gray-500 mb-1">Email</p>
+                          <p className="text-gray-700 truncate">{supplier.email || '-'}</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-gray-500 mb-1">Phone</p>
                         <p className="text-gray-700">{supplier.phone || '-'}</p>
@@ -1154,19 +1244,21 @@ export const Suppliers = () => {
                           {supplier.businessType || supplier.supplier_type || 'other'}
                         </span>
                       </div>
-                      <div>
-                        <p className="text-gray-500 mb-1">Rating</p>
-                        <div className="flex items-center">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`h-3 w-3 ${i < supplier.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
-                                }`}
-                            />
-                          ))}
-                          <span className="ml-1 text-xs text-gray-600">({supplier.rating ?? 3})</span>
+                      {visibilitySettings.rating && (
+                        <div>
+                          <p className="text-gray-500 mb-1">Rating</p>
+                          <div className="flex items-center">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`h-3 w-3 ${i < supplier.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                                  }`}
+                              />
+                            ))}
+                            <span className="ml-1 text-xs text-gray-600">({supplier.rating ?? 3})</span>
+                          </div>
                         </div>
-                      </div>
+                      )}
                       <div>
                         <p className="text-gray-500 mb-1">Credit</p>
                         <p className="text-gray-700">{Math.round(supplier.creditLimit || 0)}</p>
@@ -1177,24 +1269,28 @@ export const Suppliers = () => {
                   {/* Desktop Table Layout */}
                   <div className="hidden lg:grid grid-cols-12 gap-3 xl:gap-6 items-center min-w-[760px] xl:min-w-[880px]">
                     {/* Company Name & Contact Person */}
-                    <div className="col-span-4">
+                    <div className={`col-span-${companyColSpan}`}>
                       <div className="flex items-center space-x-3 lg:space-x-4">
                         <Building className="h-5 w-5 lg:h-6 lg:w-6 text-gray-400 flex-shrink-0" />
                         <div className="min-w-0">
                           <h3 className="text-sm lg:text-base font-medium text-gray-900 truncate">
                             {supplier.companyName || supplier.company_name || supplier.businessName || '-'}
                           </h3>
-                          <p className="text-xs lg:text-sm text-gray-500 truncate">
-                            {supplier.contactPerson?.name || supplier.contact_person || '-'}
-                          </p>
+                          {visibilitySettings.contactPerson && (
+                            <p className="text-xs lg:text-sm text-gray-500 truncate">
+                              {supplier.contactPerson?.name || supplier.contact_person || '-'}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
 
                     {/* Email */}
-                    <div className="col-span-2">
-                      <p className="text-xs lg:text-sm text-gray-600 truncate">{supplier.email || '-'}</p>
-                    </div>
+                    {visibilitySettings.email && (
+                      <div className="col-span-2">
+                        <p className="text-xs lg:text-sm text-gray-600 truncate">{supplier.email || '-'}</p>
+                      </div>
+                    )}
 
                     {/* Phone */}
                     <div className="col-span-1">
@@ -1220,18 +1316,20 @@ export const Suppliers = () => {
                     </div>
 
                     {/* Rating */}
-                    <div className="col-span-1">
-                      <div className="flex items-center">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`h-3 w-3 ${i < supplier.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
-                              }`}
-                          />
-                        ))}
-                        <span className="ml-1 text-xs text-gray-600">({supplier.rating})</span>
+                    {visibilitySettings.rating && (
+                      <div className="col-span-1">
+                        <div className="flex items-center">
+                          {[...Array(5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`h-3 w-3 ${i < supplier.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                                }`}
+                            />
+                          ))}
+                          <span className="ml-1 text-xs text-gray-600">({supplier.rating})</span>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Credit */}
                     <div className="col-span-1">

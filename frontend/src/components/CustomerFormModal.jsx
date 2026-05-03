@@ -65,7 +65,8 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
     email: localStorage.getItem('showCustomerSetting_email') === 'true',
     customerTier: localStorage.getItem('showCustomerSetting_customerTier') === 'true',
     state: localStorage.getItem('showCustomerSetting_state') === 'true',
-    zipCode: localStorage.getItem('showCustomerSetting_zipCode') === 'true'
+    zipCode: localStorage.getItem('showCustomerSetting_zipCode') === 'true',
+    notes: localStorage.getItem('showCustomerSetting_notes') === 'true'
   });
 
   useEffect(() => {
@@ -75,7 +76,8 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
         email: localStorage.getItem('showCustomerSetting_email') === 'true',
         customerTier: localStorage.getItem('showCustomerSetting_customerTier') === 'true',
         state: localStorage.getItem('showCustomerSetting_state') === 'true',
-        zipCode: localStorage.getItem('showCustomerSetting_zipCode') === 'true'
+        zipCode: localStorage.getItem('showCustomerSetting_zipCode') === 'true',
+        notes: localStorage.getItem('showCustomerSetting_notes') === 'true'
       });
     };
 
@@ -601,7 +603,20 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
             ))}
           </div>
         </div>
-
+        {visibilitySettings.notes && (
+          <div className="pt-2 xl:pt-4">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+              Notes
+            </label>
+            <textarea
+              {...register('notes')}
+              rows={3}
+              autoComplete="off"
+              className="input w-full text-sm min-h-[60px] xl:min-h-0"
+              placeholder="Enter additional notes"
+            />
+          </div>
+        )}
         <input type="hidden" {...register('ledgerAccount')} />
         <div className="flex flex-wrap justify-end gap-2 xl:gap-3 pt-4 xl:pt-6 border-t border-gray-200">
           <Button

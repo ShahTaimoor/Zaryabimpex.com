@@ -143,6 +143,25 @@ export const Settings2 = () => {
     logoSize: 100
   });
 
+  const [showSupplierSetting_contactPerson, setShowSupplierSetting_contactPerson] = useState(localStorage.getItem('showSupplierSetting_contactPerson') === 'true');
+  const [showSupplierSetting_email, setShowSupplierSetting_email] = useState(localStorage.getItem('showSupplierSetting_email') === 'true');
+  const [showSupplierSetting_paymentTerms, setShowSupplierSetting_paymentTerms] = useState(localStorage.getItem('showSupplierSetting_paymentTerms') === 'true');
+  const [showSupplierSetting_website, setShowSupplierSetting_website] = useState(localStorage.getItem('showSupplierSetting_website') === 'true');
+  const [showSupplierSetting_leadTime, setShowSupplierSetting_leadTime] = useState(localStorage.getItem('showSupplierSetting_leadTime') === 'true');
+  const [showSupplierSetting_minOrder, setShowSupplierSetting_minOrder] = useState(localStorage.getItem('showSupplierSetting_minOrder') === 'true');
+  const [showSupplierSetting_rating, setShowSupplierSetting_rating] = useState(localStorage.getItem('showSupplierSetting_rating') === 'true');
+  const [showSupplierSetting_reliability, setShowSupplierSetting_reliability] = useState(localStorage.getItem('showSupplierSetting_reliability') === 'true');
+  const [showSupplierSetting_state, setShowSupplierSetting_state] = useState(localStorage.getItem('showSupplierSetting_state') === 'true');
+  const [showSupplierSetting_zipCode, setShowSupplierSetting_zipCode] = useState(localStorage.getItem('showSupplierSetting_zipCode') === 'true');
+  const [showSupplierSetting_notes, setShowSupplierSetting_notes] = useState(localStorage.getItem('showSupplierSetting_notes') === 'true');
+
+  const toggleSupplierSetting = (key, value, setter) => {
+    localStorage.setItem(key, value);
+    setter(value);
+    window.dispatchEvent(new Event('supplierVisibilitySettingsChanged'));
+    toast.success('Supplier settings updated');
+  };
+
   const sampleOrderData = useMemo(() => ({
     invoiceNumber: 'INV-PREVIEW',
     createdAt: new Date(),
@@ -1449,6 +1468,7 @@ export const Settings2 = () => {
     { id: 'mobile-nav', name: 'Mobile Nav', shortName: 'Mobile Nav', icon: Smartphone },
     { id: 'products', name: 'Product Settings', shortName: 'Products', icon: Package },
     { id: 'customers', name: 'Customer Settings', shortName: 'Customers', icon: UserPlus },
+    { id: 'suppliers', name: 'Supplier Settings', shortName: 'Suppliers', icon: Building },
     { id: 'other', name: 'Advanced', shortName: 'Advanced', icon: BarChart3 },
   ];
 
@@ -2779,6 +2799,7 @@ export const Settings2 = () => {
                     { id: 'customerTier', label: 'Customer Tier', sub: 'Bronze, Silver, Gold, etc.' },
                     { id: 'state', label: 'State / Province', sub: 'Part of address details' },
                     { id: 'zipCode', label: 'Zip Code', sub: 'Postal code for address' },
+                    { id: 'notes', label: 'Notes', sub: 'Additional information' },
                   ].map((item) => {
                     const stateKey = `showCustomerSetting_${item.id}`;
                     const states = {
@@ -2787,6 +2808,7 @@ export const Settings2 = () => {
                       showCustomerSetting_customerTier,
                       showCustomerSetting_state,
                       showCustomerSetting_zipCode,
+                      showCustomerSetting_notes,
                     };
                     const setters = {
                       showCustomerSetting_contactPerson: setShowCustomerSetting_contactPerson,
@@ -2794,6 +2816,7 @@ export const Settings2 = () => {
                       showCustomerSetting_customerTier: setShowCustomerSetting_customerTier,
                       showCustomerSetting_state: setShowCustomerSetting_state,
                       showCustomerSetting_zipCode: setShowCustomerSetting_zipCode,
+                      showCustomerSetting_notes: setShowCustomerSetting_notes,
                     };
 
                     return (
@@ -3576,7 +3599,46 @@ export const Settings2 = () => {
                   variant="default"
                 >
                   {isChangingMyPassword ? 'Changing...' : 'Change Password'}
-                </Button>
+                </Button>                        {activeTab === 'suppliers' && (
+                            <div className="space-y-6">
+                                <div>
+                                    <h3 className="text-lg font-medium text-gray-900 mb-1">Supplier Settings</h3>
+                                    <p className="text-sm text-gray-500 mb-6">Control which fields are visible in supplier forms and lists.</p>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {[
+                                            { id: 'showSupplierSetting_contactPerson', label: 'Contact Person', state: showSupplierSetting_contactPerson, setter: setShowSupplierSetting_contactPerson },
+                                            { id: 'showSupplierSetting_email', label: 'Email', state: showSupplierSetting_email, setter: setShowSupplierSetting_email },
+                                            { id: 'showSupplierSetting_paymentTerms', label: 'Payment Terms', state: showSupplierSetting_paymentTerms, setter: setShowSupplierSetting_paymentTerms },
+                                            { id: 'showSupplierSetting_website', label: 'Website', state: showSupplierSetting_website, setter: setShowSupplierSetting_website },
+                                            { id: 'showSupplierSetting_leadTime', label: 'Lead Time', state: showSupplierSetting_leadTime, setter: setShowSupplierSetting_leadTime },
+                                            { id: 'showSupplierSetting_minOrder', label: 'Min Order', state: showSupplierSetting_minOrder, setter: setShowSupplierSetting_minOrder },
+                                            { id: 'showSupplierSetting_rating', label: 'Rating', state: showSupplierSetting_rating, setter: setShowSupplierSetting_rating },
+                                            { id: 'showSupplierSetting_reliability', label: 'Reliability', state: showSupplierSetting_reliability, setter: setShowSupplierSetting_reliability },
+                                            { id: 'showSupplierSetting_state', label: 'State / Province', state: showSupplierSetting_state, setter: setShowSupplierSetting_state },
+                                            { id: 'showSupplierSetting_zipCode', label: 'Zip Code', state: showSupplierSetting_zipCode, setter: setShowSupplierSetting_zipCode },
+                                            { id: 'showSupplierSetting_notes', label: 'Notes', state: showSupplierSetting_notes, setter: setShowSupplierSetting_notes },
+                                        ].map((setting) => (
+                                            <div key={setting.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 transition-all hover:bg-gray-100/50">
+                                                <div className="space-y-0.5">
+                                                    <label htmlFor={setting.id} className="text-sm font-semibold text-gray-700 cursor-pointer">
+                                                        {setting.label}
+                                                    </label>
+                                                    <p className="text-xs text-gray-500">
+                                                        {setting.state ? 'Currently visible' : 'Currently hidden'}
+                                                    </p>
+                                                </div>
+                                                <Switch
+                                                    id={setting.id}
+                                                    checked={setting.state}
+                                                    onCheckedChange={(checked) => toggleSupplierSetting(setting.id, checked, setting.setter)}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
               </div>
             </div>
           </div>
