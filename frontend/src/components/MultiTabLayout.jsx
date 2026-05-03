@@ -252,7 +252,19 @@ export function migrateSidebarConfig(parsed) {
 
 export function loadSidebarConfig() {
   const saved = localStorage.getItem('sidebarConfig');
-  if (!saved) return {};
+  if (!saved) return {
+    'Product Variants': false,
+    'Product Transformations': false,
+    'Customer Analytics': false,
+    'Investors': false,
+    'Drop Shipping': false,
+    'CCTV Access': false,
+    'Warehouses': false,
+    'Stock Movements': false,
+    'Inventory Reports': false,
+    'Backdate Report': false,
+    'Sales Performance': false
+  };
   try {
     const parsed = JSON.parse(saved);
     const migrated = migrateSidebarConfig(parsed);
@@ -261,7 +273,19 @@ export function loadSidebarConfig() {
     }
     return migrated;
   } catch {
-    return {};
+    return {
+      'Product Variants': false,
+      'Product Transformations': false,
+      'Customer Analytics': false,
+      'Investors': false,
+      'Drop Shipping': false,
+      'CCTV Access': false,
+      'Warehouses': false,
+      'Stock Movements': false,
+      'Inventory Reports': false,
+      'Backdate Report': false,
+      'Sales Performance': false
+    };
   }
 }
 
