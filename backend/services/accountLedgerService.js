@@ -981,17 +981,46 @@ class AccountLedgerService {
         let closingRun = expenseOpening;
         try {
           const linesRes = await query(
-            `SELECT transaction_date AS "transactionDate",
-                    reference_number AS "referenceNumber",
-                    description,
-                    debit_amount AS "debitAmount",
-                    credit_amount AS "creditAmount",
-                    reference_type AS "referenceType",
-                    id
-             FROM account_ledger
-             WHERE account_code = $1 AND status = 'completed' AND reversed_at IS NULL
-               AND transaction_date >= $2 AND transaction_date <= $3
-             ORDER BY transaction_date ASC, id ASC`,
+            `SELECT al.transaction_date AS "transactionDate",
+                    al.reference_number AS "referenceNumber",
+                    COALESCE(
+                      NULLIF(BTRIM(al.description), ''),
+                      NULLIF(BTRIM(cp.particular), ''),
+                      NULLIF(BTRIM(cp.notes), ''),
+                      NULLIF(BTRIM(bp.particular), ''),
+                      NULLIF(BTRIM(bp.notes), ''),
+                      (SELECT NULLIF(BTRIM(jve.particulars), '')
+                       FROM journal_voucher_entries jve
+                       WHERE jve.journal_voucher_id = al.reference_id
+                         AND UPPER(BTRIM(jve.account_code)) = UPPER(BTRIM(al.account_code))
+                       ORDER BY jve.line_number
+                       LIMIT 1),
+                      NULLIF(BTRIM(jv.description), ''),
+                      NULLIF(BTRIM(jv.notes), ''),
+                      CONCAT(
+                        COALESCE(INITCAP(REPLACE(COALESCE(al.reference_type, 'entry'), '_', ' ')), 'Entry'),
+                        CASE
+                          WHEN al.reference_number IS NOT NULL AND BTRIM(al.reference_number) <> ''
+                          THEN CONCAT(' · ', BTRIM(al.reference_number))
+                          ELSE ''
+                        END
+                      )
+                    ) AS description,
+                    al.debit_amount AS "debitAmount",
+                    al.credit_amount AS "creditAmount",
+                    al.reference_type AS "referenceType",
+                    al.id
+             FROM account_ledger al
+             LEFT JOIN cash_payments cp
+               ON al.reference_type = 'cash_payment' AND cp.id = al.reference_id AND cp.deleted_at IS NULL
+             LEFT JOIN bank_payments bp
+               ON al.reference_type = 'bank_payment' AND bp.id = al.reference_id AND bp.deleted_at IS NULL
+             LEFT JOIN journal_vouchers jv
+               ON al.reference_type = 'journal_voucher' AND jv.id = al.reference_id AND jv.deleted_at IS NULL
+             WHERE UPPER(BTRIM(al.account_code)) = UPPER(BTRIM($1::text))
+               AND al.status = 'completed' AND al.reversed_at IS NULL
+               AND al.transaction_date >= $2 AND al.transaction_date <= $3
+             ORDER BY al.transaction_date ASC, al.id ASC`,
             [code, expenseStart, expenseEnd]
           );
 

@@ -27,20 +27,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTableRowVirtualizer, getVirtualTablePadding } from '../hooks/useTableRowVirtualizer';
 import PageShell from '../components/PageShell';
+import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 
 const AccountLedgerSummary = () => {
   const ALL_BANKS_VALUE = '__all_banks__';
 
-  // Function to get default date range (today for both)
+  // Default range: first day of current month → today (ledger reports expect history; "today only" hid prior expenses)
   const getDefaultDateRange = () => {
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
     const todayStr = `${year}-${month}-${day}`;
+    const startOfMonthStr = `${year}-${month}-01`;
 
     return {
-      startDate: todayStr,
+      startDate: startOfMonthStr,
       endDate: todayStr
     };
   };
@@ -193,6 +195,12 @@ const AccountLedgerSummary = () => {
     onError: (error) => handleApiError(error, 'Error fetching ledger summary')
   });
 
+  /** Expense account dropdown: must list all GL expense accounts from chart — not only accounts with postings in the filtered period (otherwise the select is empty/"None" when the period has no activity). */
+  const { data: expenseCoaRaw } = useGetAccountsQuery(
+    { accountType: 'expense', isActive: 'true', limit: 500 },
+    { refetchOnMountOrArgChange: false }
+  );
+
   // Refetch when sale return or other ledger-affecting action happens (e.g. from another tab)
   useEffect(() => {
     const handler = () => refetch();
@@ -288,6 +296,32 @@ const AccountLedgerSummary = () => {
   const bankTotals = summaryData?.data?.banks?.totals || {};
   const expenseSummaries = summaryData?.data?.expenses?.summary || [];
   const expenseTotals = summaryData?.data?.expenses?.totals || {};
+
+  const expenseDropdownAccounts = useMemo(() => {
+    let rows = [];
+    const raw = expenseCoaRaw;
+    if (Array.isArray(raw)) rows = raw;
+    else if (Array.isArray(raw?.data)) rows = raw.data;
+    else if (Array.isArray(raw?.accounts)) rows = raw.accounts;
+
+    const fromCoa = (rows || [])
+      .filter((a) => {
+        const code = String(a.accountCode ?? a.account_code ?? '').trim();
+        return code && code !== '5000';
+      })
+      .map((a) => ({
+        accountCode: String(a.accountCode ?? a.account_code ?? '').trim(),
+        accountName: a.accountName ?? a.account_name ?? 'Expense',
+      }))
+      .sort((x, y) => x.accountCode.localeCompare(y.accountCode, undefined, { numeric: true }));
+
+    if (fromCoa.length > 0) return fromCoa;
+
+    return (expenseSummaries || []).map((r) => ({
+      accountCode: r.accountCode,
+      accountName: r.accountName || 'Expense',
+    }));
+  }, [expenseCoaRaw, expenseSummaries]);
   const expenseAccountDetail = summaryData?.data?.expenseAccount;
   const expenseLedgerEntries = selectedExpenseAccountCode ? (summaryData?.data?.entries || []) : [];
   const period = summaryData?.data?.period || {};
@@ -1049,7 +1083,7 @@ const AccountLedgerSummary = () => {
                 className="w-full h-9 border border-gray-300 rounded-md px-2 text-sm bg-white"
               >
                 <option value="">None</option>
-                {(expenseSummaries || []).map((row) => (
+                {(expenseDropdownAccounts || []).map((row) => (
                   <option key={row.accountCode} value={row.accountCode}>
                     {row.accountCode} — {row.accountName || 'Expense'}
                   </option>
@@ -1775,6 +1809,14 @@ const AccountLedgerSummary = () => {
                     Select a customer, supplier, bank, or expense account above to view detailed ledger lines.
                   </p>
                 </div>
+                {expenseSummaries.length === 0 && (
+                  <div className="rounded-lg border border-amber-100 bg-amber-50/80 px-4 py-3 text-sm text-amber-950">
+                    <p className="font-medium text-amber-900">No expense postings in this date range</p>
+                    <p className="mt-1 text-amber-900/90">
+                      Try widening the start and end dates, or choose an <strong>Expense account</strong> from the list—the summary table only shows accounts that had activity in the selected period, but you can still open any expense GL account to see opening balance and lines.
+                    </p>
+                  </div>
+                )}
                 {expenseSummaries.length > 0 && (
                   <div>
                     <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
