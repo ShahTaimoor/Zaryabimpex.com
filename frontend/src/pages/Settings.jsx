@@ -156,8 +156,8 @@ export const Settings2 = () => {
   const [showSupplierSetting_notes, setShowSupplierSetting_notes] = useState(localStorage.getItem('showSupplierSetting_notes') === 'true');
 
   const toggleSupplierSetting = (key, value, setter) => {
-    localStorage.setItem(key, value);
-    setter(value);
+    localStorage.setItem(key, String(!!value));
+    setter(!!value);
     window.dispatchEvent(new Event('supplierVisibilitySettingsChanged'));
     toast.success('Supplier settings updated');
   };
@@ -1458,7 +1458,7 @@ export const Settings2 = () => {
   const [showCustomerSetting_customerTier, setShowCustomerSetting_customerTier] = useState(() => localStorage.getItem('showCustomerSetting_customerTier') === 'true');
   const [showCustomerSetting_state, setShowCustomerSetting_state] = useState(() => localStorage.getItem('showCustomerSetting_state') === 'true');
   const [showCustomerSetting_zipCode, setShowCustomerSetting_zipCode] = useState(() => localStorage.getItem('showCustomerSetting_zipCode') === 'true');
-
+  const [showCustomerSetting_notes, setShowCustomerSetting_notes] = useState(() => localStorage.getItem('showCustomerSetting_notes') === 'true');
 
   const tabs = [
     { id: 'company', name: 'Company Information', shortName: 'Company', icon: Building },
@@ -2845,6 +2845,53 @@ export const Settings2 = () => {
           </div>
         )}
 
+        {activeTab === 'suppliers' && (
+          <div className="card">
+            <div className="card-header">
+              <div className="flex items-center space-x-2">
+                <Building className="h-5 w-5 text-gray-600" />
+                <h2 className="text-lg font-semibold">Supplier Settings</h2>
+              </div>
+              <p className="text-sm text-gray-600 mt-1">
+                Control which fields are visible in supplier forms and lists
+              </p>
+            </div>
+            <div className="card-content">
+              <div className="space-y-6">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4 px-1">Field visibility</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[
+                    { id: 'showSupplierSetting_contactPerson', label: 'Contact Person', sub: 'Primary contact name', state: showSupplierSetting_contactPerson, setter: setShowSupplierSetting_contactPerson },
+                    { id: 'showSupplierSetting_email', label: 'Email', sub: 'Contact email', state: showSupplierSetting_email, setter: setShowSupplierSetting_email },
+                    { id: 'showSupplierSetting_paymentTerms', label: 'Payment Terms', sub: 'Default payment terms', state: showSupplierSetting_paymentTerms, setter: setShowSupplierSetting_paymentTerms },
+                    { id: 'showSupplierSetting_website', label: 'Website', sub: 'Company website', state: showSupplierSetting_website, setter: setShowSupplierSetting_website },
+                    { id: 'showSupplierSetting_leadTime', label: 'Lead Time', sub: 'Delivery lead time', state: showSupplierSetting_leadTime, setter: setShowSupplierSetting_leadTime },
+                    { id: 'showSupplierSetting_minOrder', label: 'Min Order', sub: 'Minimum order quantity', state: showSupplierSetting_minOrder, setter: setShowSupplierSetting_minOrder },
+                    { id: 'showSupplierSetting_rating', label: 'Rating', sub: 'Supplier rating', state: showSupplierSetting_rating, setter: setShowSupplierSetting_rating },
+                    { id: 'showSupplierSetting_reliability', label: 'Reliability', sub: 'Reliability score', state: showSupplierSetting_reliability, setter: setShowSupplierSetting_reliability },
+                    { id: 'showSupplierSetting_state', label: 'State / Province', sub: 'Part of address', state: showSupplierSetting_state, setter: setShowSupplierSetting_state },
+                    { id: 'showSupplierSetting_zipCode', label: 'Zip Code', sub: 'Postal code', state: showSupplierSetting_zipCode, setter: setShowSupplierSetting_zipCode },
+                    { id: 'showSupplierSetting_notes', label: 'Notes', sub: 'Additional information', state: showSupplierSetting_notes, setter: setShowSupplierSetting_notes },
+                  ].map((item) => (
+                    <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                      <Checkbox
+                        id={item.id}
+                        className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                        checked={item.state}
+                        onCheckedChange={(checked) => toggleSupplierSetting(item.id, checked === true, item.setter)}
+                      />
+                      <Label htmlFor={item.id} className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                        <span className="text-sm font-semibold">{item.label}</span>
+                        <span className="text-[10px] text-gray-400">{item.sub}</span>
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Sidebar Configuration Tab */}
         {activeTab === 'sidebar' && (
           <div className="card shadow-lg border-gray-100">
@@ -3599,46 +3646,7 @@ export const Settings2 = () => {
                   variant="default"
                 >
                   {isChangingMyPassword ? 'Changing...' : 'Change Password'}
-                </Button>                        {activeTab === 'suppliers' && (
-                            <div className="space-y-6">
-                                <div>
-                                    <h3 className="text-lg font-medium text-gray-900 mb-1">Supplier Settings</h3>
-                                    <p className="text-sm text-gray-500 mb-6">Control which fields are visible in supplier forms and lists.</p>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {[
-                                            { id: 'showSupplierSetting_contactPerson', label: 'Contact Person', state: showSupplierSetting_contactPerson, setter: setShowSupplierSetting_contactPerson },
-                                            { id: 'showSupplierSetting_email', label: 'Email', state: showSupplierSetting_email, setter: setShowSupplierSetting_email },
-                                            { id: 'showSupplierSetting_paymentTerms', label: 'Payment Terms', state: showSupplierSetting_paymentTerms, setter: setShowSupplierSetting_paymentTerms },
-                                            { id: 'showSupplierSetting_website', label: 'Website', state: showSupplierSetting_website, setter: setShowSupplierSetting_website },
-                                            { id: 'showSupplierSetting_leadTime', label: 'Lead Time', state: showSupplierSetting_leadTime, setter: setShowSupplierSetting_leadTime },
-                                            { id: 'showSupplierSetting_minOrder', label: 'Min Order', state: showSupplierSetting_minOrder, setter: setShowSupplierSetting_minOrder },
-                                            { id: 'showSupplierSetting_rating', label: 'Rating', state: showSupplierSetting_rating, setter: setShowSupplierSetting_rating },
-                                            { id: 'showSupplierSetting_reliability', label: 'Reliability', state: showSupplierSetting_reliability, setter: setShowSupplierSetting_reliability },
-                                            { id: 'showSupplierSetting_state', label: 'State / Province', state: showSupplierSetting_state, setter: setShowSupplierSetting_state },
-                                            { id: 'showSupplierSetting_zipCode', label: 'Zip Code', state: showSupplierSetting_zipCode, setter: setShowSupplierSetting_zipCode },
-                                            { id: 'showSupplierSetting_notes', label: 'Notes', state: showSupplierSetting_notes, setter: setShowSupplierSetting_notes },
-                                        ].map((setting) => (
-                                            <div key={setting.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 transition-all hover:bg-gray-100/50">
-                                                <div className="space-y-0.5">
-                                                    <label htmlFor={setting.id} className="text-sm font-semibold text-gray-700 cursor-pointer">
-                                                        {setting.label}
-                                                    </label>
-                                                    <p className="text-xs text-gray-500">
-                                                        {setting.state ? 'Currently visible' : 'Currently hidden'}
-                                                    </p>
-                                                </div>
-                                                <Switch
-                                                    id={setting.id}
-                                                    checked={setting.state}
-                                                    onCheckedChange={(checked) => toggleSupplierSetting(setting.id, checked, setting.setter)}
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                </Button>
               </div>
             </div>
           </div>
