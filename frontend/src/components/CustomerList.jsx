@@ -8,6 +8,23 @@ export const CustomerList = ({
   onDelete,
   onShowNotes
 }) => {
+  const [visibilitySettings, setVisibilitySettings] = React.useState({
+    contactPerson: localStorage.getItem('showCustomerSetting_contactPerson') === 'true',
+    customerTier: localStorage.getItem('showCustomerSetting_customerTier') === 'true',
+  });
+
+  React.useEffect(() => {
+    const handleConfigChange = () => {
+      setVisibilitySettings({
+        contactPerson: localStorage.getItem('showCustomerSetting_contactPerson') === 'true',
+        customerTier: localStorage.getItem('showCustomerSetting_customerTier') === 'true',
+      });
+    };
+
+    window.addEventListener('customerVisibilitySettingsChanged', handleConfigChange);
+    return () => window.removeEventListener('customerVisibilitySettingsChanged', handleConfigChange);
+  }, []);
+
   if (customers.length === 0) {
     return (
       <div className="text-center py-12">
@@ -26,9 +43,11 @@ export const CustomerList = ({
         <div className="hidden md:block bg-gray-50 px-4 lg:px-8 py-4 lg:py-6 border-b border-gray-200">
           <div className="grid grid-cols-12 gap-3 lg:gap-4 items-center">
 
-            <div className="col-span-4">
+            <div className={visibilitySettings.customerTier ? "col-span-4" : "col-span-5"}>
               <h3 className="text-sm lg:text-base font-medium text-gray-700">Business Name</h3>
-              <p className="text-xs lg:text-sm text-gray-500">Contact Person</p>
+              {visibilitySettings.contactPerson && (
+                <p className="text-xs lg:text-sm text-gray-500">Contact Person</p>
+              )}
             </div>
             <div className="col-span-1">
               <h3 className="text-sm lg:text-base font-medium text-gray-700">Phone</h3>
@@ -39,9 +58,11 @@ export const CustomerList = ({
             <div className="col-span-1">
               <h3 className="text-sm lg:text-base font-medium text-gray-700">Type</h3>
             </div>
-            <div className="col-span-1">
-              <h3 className="text-sm lg:text-base font-medium text-gray-700">Tier</h3>
-            </div>
+            {visibilitySettings.customerTier && (
+              <div className="col-span-1">
+                <h3 className="text-sm lg:text-base font-medium text-gray-700">Tier</h3>
+              </div>
+            )}
             <div className="col-span-1">
               <h3 className="text-sm lg:text-base font-medium text-gray-700">Opening</h3>
             </div>
@@ -70,9 +91,11 @@ export const CustomerList = ({
                       <h3 className="text-sm font-medium text-gray-900 truncate">
                         {customer.businessName || customer.business_name || customer.displayName}
                       </h3>
-                      <p className="text-xs text-gray-500 truncate">
-                        {customer.name}
-                      </p>
+                      {visibilitySettings.contactPerson && (
+                        <p className="text-xs text-gray-500 truncate">
+                          {customer.name}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center space-x-2 ml-2">
@@ -118,14 +141,16 @@ export const CustomerList = ({
                       {customer.businessType}
                     </span>
                   </div>
-                  <div>
-                    <p className="text-gray-500 mb-1">Tier</p>
-                    <span className={`badge ${customer.customerTier === 'gold' ? 'badge-warning' :
-                      customer.customerTier === 'platinum' ? 'badge-info' : 'badge-gray'
-                      }`}>
-                      {customer.customerTier}
-                    </span>
-                  </div>
+                  {visibilitySettings.customerTier && (
+                    <div>
+                      <p className="text-gray-500 mb-1">Tier</p>
+                      <span className={`badge ${customer.customerTier === 'gold' ? 'badge-warning' :
+                        customer.customerTier === 'platinum' ? 'badge-info' : 'badge-gray'
+                        }`}>
+                        {customer.customerTier}
+                      </span>
+                    </div>
+                  )}
                   <div>
                     <p className="text-gray-500 mb-1">Opening</p>
                     <p className="text-gray-700">{Math.round(customer.openingBalance || customer.opening_balance || 0)}</p>
@@ -143,7 +168,7 @@ export const CustomerList = ({
               <div className="hidden md:grid grid-cols-12 gap-3 lg:gap-4 items-center">
 
 
-                <div className="col-span-4 min-w-0">
+                <div className={visibilitySettings.customerTier ? "col-span-4 min-w-0" : "col-span-5 min-w-0"}>
                   <div className="flex items-center space-x-3 lg:space-x-4">
                     {customer.businessType === 'individual' ? (
                       <User className="h-5 w-5 lg:h-6 lg:w-6 text-gray-400 flex-shrink-0" />
@@ -154,9 +179,11 @@ export const CustomerList = ({
                       <h3 className="text-sm lg:text-base font-medium text-gray-900 truncate" title={customer.businessName || customer.business_name || customer.displayName}>
                         {customer.businessName || customer.business_name || customer.displayName}
                       </h3>
-                      <p className="text-xs lg:text-sm text-gray-500 truncate" title={customer.name}>
-                        {customer.name}
-                      </p>
+                      {visibilitySettings.contactPerson && (
+                        <p className="text-xs lg:text-sm text-gray-500 truncate" title={customer.name}>
+                          {customer.name}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -179,13 +206,15 @@ export const CustomerList = ({
                   </span>
                 </div>
 
-                <div className="col-span-1">
-                  <span className={`badge ${customer.customerTier === 'gold' ? 'badge-warning' :
-                    customer.customerTier === 'platinum' ? 'badge-info' : 'badge-gray'
-                    }`}>
-                    {customer.customerTier}
-                  </span>
-                </div>
+                {visibilitySettings.customerTier && (
+                  <div className="col-span-1">
+                    <span className={`badge ${customer.customerTier === 'gold' ? 'badge-warning' :
+                      customer.customerTier === 'platinum' ? 'badge-info' : 'badge-gray'
+                      }`}>
+                      {customer.customerTier}
+                    </span>
+                  </div>
+                )}
 
                 <div className="col-span-1">
                   <p className="text-xs lg:text-sm text-gray-600">{Math.round(customer.openingBalance || customer.opening_balance || 0)}</p>

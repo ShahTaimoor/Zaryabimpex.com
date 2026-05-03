@@ -1433,6 +1433,13 @@ export const Settings2 = () => {
   const [showProductSetting_gdNumber, setShowProductSetting_gdNumber] = useState(() => localStorage.getItem('showProductSetting_gdNumber') === 'true');
   const [showProductSetting_invoiceRef, setShowProductSetting_invoiceRef] = useState(() => localStorage.getItem('showProductSetting_invoiceRef') === 'true');
 
+  // Customer Visibility Settings
+  const [showCustomerSetting_contactPerson, setShowCustomerSetting_contactPerson] = useState(() => localStorage.getItem('showCustomerSetting_contactPerson') === 'true');
+  const [showCustomerSetting_email, setShowCustomerSetting_email] = useState(() => localStorage.getItem('showCustomerSetting_email') === 'true');
+  const [showCustomerSetting_customerTier, setShowCustomerSetting_customerTier] = useState(() => localStorage.getItem('showCustomerSetting_customerTier') === 'true');
+  const [showCustomerSetting_state, setShowCustomerSetting_state] = useState(() => localStorage.getItem('showCustomerSetting_state') === 'true');
+  const [showCustomerSetting_zipCode, setShowCustomerSetting_zipCode] = useState(() => localStorage.getItem('showCustomerSetting_zipCode') === 'true');
+
 
   const tabs = [
     { id: 'company', name: 'Company Information', shortName: 'Company', icon: Building },
@@ -1441,6 +1448,7 @@ export const Settings2 = () => {
     { id: 'sidebar', name: 'Sidebar Configuration', shortName: 'Sidebar', icon: LayoutDashboard },
     { id: 'mobile-nav', name: 'Mobile Nav', shortName: 'Mobile Nav', icon: Smartphone },
     { id: 'products', name: 'Product Settings', shortName: 'Products', icon: Package },
+    { id: 'customers', name: 'Customer Settings', shortName: 'Customers', icon: UserPlus },
     { id: 'other', name: 'Advanced', shortName: 'Advanced', icon: BarChart3 },
   ];
 
@@ -2735,6 +2743,70 @@ export const Settings2 = () => {
                               window.dispatchEvent(new Event('productHsCodeColumnConfigChanged'));
                               setShowProductHsCodeColumn(checked);
                             }
+                          }}
+                        />
+                        <Label htmlFor={stateKey} className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                          <span className="text-sm font-semibold">{item.label}</span>
+                          <span className="text-[10px] text-gray-400">{item.sub}</span>
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'customers' && (
+          <div className="card">
+            <div className="card-header">
+              <div className="flex items-center space-x-2">
+                <Users className="h-5 w-5 text-gray-600" />
+                <h2 className="text-lg font-semibold">Customer Settings</h2>
+              </div>
+              <p className="text-sm text-gray-600 mt-1">
+                Customize which fields are visible in the customer entry form
+              </p>
+            </div>
+            <div className="card-content">
+              <div className="space-y-6">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4 px-1">Field Visibility</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[
+                    { id: 'contactPerson', label: 'Contact Person', sub: 'Name of the person' },
+                    { id: 'email', label: 'Email', sub: 'Primary contact email' },
+                    { id: 'customerTier', label: 'Customer Tier', sub: 'Bronze, Silver, Gold, etc.' },
+                    { id: 'state', label: 'State / Province', sub: 'Part of address details' },
+                    { id: 'zipCode', label: 'Zip Code', sub: 'Postal code for address' },
+                  ].map((item) => {
+                    const stateKey = `showCustomerSetting_${item.id}`;
+                    const states = {
+                      showCustomerSetting_contactPerson,
+                      showCustomerSetting_email,
+                      showCustomerSetting_customerTier,
+                      showCustomerSetting_state,
+                      showCustomerSetting_zipCode,
+                    };
+                    const setters = {
+                      showCustomerSetting_contactPerson: setShowCustomerSetting_contactPerson,
+                      showCustomerSetting_email: setShowCustomerSetting_email,
+                      showCustomerSetting_customerTier: setShowCustomerSetting_customerTier,
+                      showCustomerSetting_state: setShowCustomerSetting_state,
+                      showCustomerSetting_zipCode: setShowCustomerSetting_zipCode,
+                    };
+
+                    return (
+                      <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                        <Checkbox
+                          id={stateKey}
+                          className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                          checked={states[stateKey]}
+                          onCheckedChange={(checked) => {
+                            setters[stateKey](checked);
+                            localStorage.setItem(stateKey, String(checked));
+                            toast.success(`${item.label} ${checked ? 'shown' : 'hidden'}`);
+                            window.dispatchEvent(new Event('customerVisibilitySettingsChanged'));
                           }}
                         />
                         <Label htmlFor={stateKey} className="flex flex-col cursor-pointer group-hover:text-blue-700">

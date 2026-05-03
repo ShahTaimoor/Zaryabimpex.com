@@ -59,6 +59,30 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
   const emailValue = watch('email');
   const businessNameValue = watch('businessName');
 
+  // Field Visibility Settings
+  const [visibilitySettings, setVisibilitySettings] = useState({
+    contactPerson: localStorage.getItem('showCustomerSetting_contactPerson') === 'true',
+    email: localStorage.getItem('showCustomerSetting_email') === 'true',
+    customerTier: localStorage.getItem('showCustomerSetting_customerTier') === 'true',
+    state: localStorage.getItem('showCustomerSetting_state') === 'true',
+    zipCode: localStorage.getItem('showCustomerSetting_zipCode') === 'true'
+  });
+
+  useEffect(() => {
+    const handleConfigChange = () => {
+      setVisibilitySettings({
+        contactPerson: localStorage.getItem('showCustomerSetting_contactPerson') === 'true',
+        email: localStorage.getItem('showCustomerSetting_email') === 'true',
+        customerTier: localStorage.getItem('showCustomerSetting_customerTier') === 'true',
+        state: localStorage.getItem('showCustomerSetting_state') === 'true',
+        zipCode: localStorage.getItem('showCustomerSetting_zipCode') === 'true'
+      });
+    };
+
+    window.addEventListener('customerVisibilitySettingsChanged', handleConfigChange);
+    return () => window.removeEventListener('customerVisibilitySettingsChanged', handleConfigChange);
+  }, []);
+
   useEffect(() => {
     if (!emailValue || emailValue.trim() === '') {
       setEmailExists(false);
@@ -327,7 +351,7 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
       headerClassName="p-3 sm:p-4 xl:p-5"
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 xl:space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 xl:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 xl:gap-4">
           <div className="min-w-0">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Business Name *
@@ -353,54 +377,58 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
               <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Business name already exists</p>
             )}
           </div>
-          <div className="min-w-0">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Contact Person *
-            </label>
-            <input
-              {...register('name', { required: 'Contact person is required' })}
-              autoComplete="off"
-              className="input w-full"
-              placeholder="Enter contact person name"
-            />
-            {errors.name && (
-              <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">{errors.name.message}</p>
-            )}
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 xl:gap-4">
-          <div className="min-w-0">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-              Email
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-2 xl:left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 xl:h-4 xl:w-4 text-gray-400" />
+          {visibilitySettings.contactPerson && (
+            <div className="min-w-0">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Contact Person *
+              </label>
               <input
-                {...register('email', {
-                  pattern: {
-                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                    message: 'Invalid email address'
-                  }
-                })}
-                type="text"
+                {...register('name', { required: visibilitySettings.contactPerson ? 'Contact person is required' : false })}
                 autoComplete="off"
-                className={`input pl-8 xl:pl-10 text-sm min-h-[2rem] xl:min-h-0 ${emailExists ? 'border-red-500' : ''}`}
-                placeholder="Enter email address (optional)"
+                className="input w-full"
+                placeholder="Enter contact person name"
               />
-              {emailChecking && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <LoadingInline size="sm" />
-                </div>
+              {errors.name && (
+                <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">{errors.name.message}</p>
               )}
             </div>
-            {errors.email && (
-              <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">{errors.email.message}</p>
-            )}
-            {emailExists && !errors.email && (
-              <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Email already exists</p>
-            )}
-          </div>
+          )}
+
+          {visibilitySettings.email && (
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                Email
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-2 xl:left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 xl:h-4 xl:w-4 text-gray-400" />
+                <input
+                  {...register('email', {
+                    pattern: {
+                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                      message: 'Invalid email address'
+                    }
+                  })}
+                  type="text"
+                  autoComplete="off"
+                  className={`input pl-8 xl:pl-10 text-sm min-h-[2rem] xl:min-h-0 ${emailExists ? 'border-red-500' : ''}`}
+                  placeholder="Enter email address (optional)"
+                />
+                {emailChecking && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <LoadingInline size="sm" />
+                  </div>
+                )}
+              </div>
+              {errors.email && (
+                <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">{errors.email.message}</p>
+              )}
+              {emailExists && !errors.email && (
+                <p className="text-red-500 text-xs sm:text-sm mt-0.5 sm:mt-1">Email already exists</p>
+              )}
+            </div>
+          )}
+
           <div className="min-w-0">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Phone
@@ -416,6 +444,7 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
               />
             </div>
           </div>
+
           <div className="min-w-0">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Business Type
@@ -427,20 +456,21 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
               <option value="distributor">Distributor</option>
             </select>
           </div>
-          <div className="min-w-0">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-              Customer Tier
-            </label>
-            <select {...register('customerTier')} className="input text-sm min-h-[2rem] xl:min-h-0">
-              <option value="bronze">Bronze</option>
-              <option value="silver">Silver</option>
-              <option value="gold">Gold</option>
-              <option value="platinum">Platinum</option>
-            </select>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 xl:gap-4">
+          {visibilitySettings.customerTier && (
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                Customer Tier
+              </label>
+              <select {...register('customerTier')} className="input text-sm min-h-[2rem] xl:min-h-0">
+                <option value="bronze">Bronze</option>
+                <option value="silver">Silver</option>
+                <option value="gold">Gold</option>
+                <option value="platinum">Platinum</option>
+              </select>
+            </div>
+          )}
+
           <div className="min-w-0">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Credit Limit
@@ -477,6 +507,7 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
               Positive = customer owes you. Negative = you owe them.
             </p>
           </div>
+
           <div className="min-w-0">
             <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Status
@@ -535,32 +566,36 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
                       </p>
                     )}
                   </div>
-                  <div className="min-w-0">
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-                      State
-                    </label>
-                    <input
-                      type="text"
-                      value={address.state || ''}
-                      autoComplete="off"
-                      onChange={(e) => handleAddressChange(index, 'state', e.target.value)}
-                      className="input text-sm min-h-[2rem] xl:min-h-0"
-                      placeholder="State"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-                      ZIP Code
-                    </label>
-                    <input
-                      type="text"
-                      value={address.zipCode || ''}
-                      autoComplete="off"
-                      onChange={(e) => handleAddressChange(index, 'zipCode', e.target.value)}
-                      className="input text-sm min-h-[2rem] xl:min-h-0"
-                      placeholder="12345"
-                    />
-                  </div>
+                  {visibilitySettings.state && (
+                    <div className="min-w-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                        State
+                      </label>
+                      <input
+                        type="text"
+                        value={address.state || ''}
+                        autoComplete="off"
+                        onChange={(e) => handleAddressChange(index, 'state', e.target.value)}
+                        className="input text-sm min-h-[2rem] xl:min-h-0"
+                        placeholder="State"
+                      />
+                    </div>
+                  )}
+                  {visibilitySettings.zipCode && (
+                    <div className="min-w-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                        ZIP Code
+                      </label>
+                      <input
+                        type="text"
+                        value={address.zipCode || ''}
+                        autoComplete="off"
+                        onChange={(e) => handleAddressChange(index, 'zipCode', e.target.value)}
+                        className="input text-sm min-h-[2rem] xl:min-h-0"
+                        placeholder="12345"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
