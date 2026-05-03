@@ -29,7 +29,8 @@ import {
   AlertCircle,
   UserPlus,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Package
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -1416,12 +1417,30 @@ export const Settings2 = () => {
     return saved === null ? true : saved === 'true';
   });
 
+  // Product Visibility Settings
+  const [showProductSetting_reorderPoint, setShowProductSetting_reorderPoint] = useState(() => localStorage.getItem('showProductSetting_reorderPoint') === 'true');
+  const [showProductSetting_unit, setShowProductSetting_unit] = useState(() => localStorage.getItem('showProductSetting_unit') === 'true');
+  const [showProductSetting_piecesPerBox, setShowProductSetting_piecesPerBox] = useState(() => localStorage.getItem('showProductSetting_piecesPerBox') === 'true');
+  const [showProductSetting_expiryDate, setShowProductSetting_expiryDate] = useState(() => localStorage.getItem('showProductSetting_expiryDate') === 'true');
+  const [showProductSetting_brand, setShowProductSetting_brand] = useState(() => localStorage.getItem('showProductSetting_brand') === 'true');
+  const [showProductSetting_barcode, setShowProductSetting_barcode] = useState(() => localStorage.getItem('showProductSetting_barcode') === 'true');
+  const [showProductSetting_sku, setShowProductSetting_sku] = useState(() => localStorage.getItem('showProductSetting_sku') === 'true');
+  const [showProductSetting_hsCode, setShowProductSetting_hsCode] = useState(() => localStorage.getItem('showProductSetting_hsCode') === 'true');
+  const [showProductSetting_countryOfOrigin, setShowProductSetting_countryOfOrigin] = useState(() => localStorage.getItem('showProductSetting_countryOfOrigin') === 'true');
+  const [showProductSetting_netWeight, setShowProductSetting_netWeight] = useState(() => localStorage.getItem('showProductSetting_netWeight') === 'true');
+  const [showProductSetting_grossWeight, setShowProductSetting_grossWeight] = useState(() => localStorage.getItem('showProductSetting_grossWeight') === 'true');
+  const [showProductSetting_importRefNo, setShowProductSetting_importRefNo] = useState(() => localStorage.getItem('showProductSetting_importRefNo') === 'true');
+  const [showProductSetting_gdNumber, setShowProductSetting_gdNumber] = useState(() => localStorage.getItem('showProductSetting_gdNumber') === 'true');
+  const [showProductSetting_invoiceRef, setShowProductSetting_invoiceRef] = useState(() => localStorage.getItem('showProductSetting_invoiceRef') === 'true');
+
+
   const tabs = [
     { id: 'company', name: 'Company Information', shortName: 'Company', icon: Building },
     { id: 'users', name: 'Users', shortName: 'Users', icon: Users },
     { id: 'print', name: 'Print Preview Settings', shortName: 'Print', icon: Printer },
     { id: 'sidebar', name: 'Sidebar Configuration', shortName: 'Sidebar', icon: LayoutDashboard },
     { id: 'mobile-nav', name: 'Mobile Nav', shortName: 'Mobile Nav', icon: Smartphone },
+    { id: 'products', name: 'Product Settings', shortName: 'Products', icon: Package },
     { id: 'other', name: 'Advanced', shortName: 'Advanced', icon: BarChart3 },
   ];
 
@@ -2529,41 +2548,22 @@ export const Settings2 = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* Show Product Images */}
+                  {/* Show Return Column */}
                   <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
                     <Checkbox
-                      id="showProductImagesUI"
+                      id="accountLedgerShowReturn"
                       className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                      checked={showProductImagesUI}
+                      checked={accountLedgerShowReturn}
                       onCheckedChange={(checked) => {
-                        setShowProductImagesUI(checked);
-                        localStorage.setItem('showProductImagesUI', String(checked));
-                        toast.success(`Product images ${checked ? 'shown' : 'hidden'} in UI tables`);
-                        window.dispatchEvent(new Event('productImagesConfigChanged'));
+                        setAccountLedgerShowReturn(checked);
+                        localStorage.setItem('accountLedgerShowReturnColumn', String(checked));
+                        toast.success(`Return column ${checked ? 'shown' : 'hidden'} in Account Ledger Summary`);
+                        window.dispatchEvent(new Event('accountLedgerConfigChanged'));
                       }}
                     />
-                    <Label htmlFor="showProductImagesUI" className="flex flex-col cursor-pointer group-hover:text-blue-700">
-                      <span className="text-sm font-semibold">Show Product Images</span>
-                      <span className="text-[10px] text-gray-400">Thumbnails in lists & POS</span>
-                    </Label>
-                  </div>
-
-                  {/* Show HS Code */}
-                  <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
-                    <Checkbox
-                      id="showProductHsCodeColumn"
-                      className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                      checked={showProductHsCodeColumn}
-                      onCheckedChange={(checked) => {
-                        setShowProductHsCodeColumn(checked);
-                        localStorage.setItem('showProductHsCodeColumn', String(checked));
-                        toast.success(`HS Code column ${checked ? 'shown' : 'hidden'} on Products list`);
-                        window.dispatchEvent(new Event('productHsCodeColumnConfigChanged'));
-                      }}
-                    />
-                    <Label htmlFor="showProductHsCodeColumn" className="flex flex-col cursor-pointer group-hover:text-blue-700">
-                      <span className="text-sm font-semibold">Show HS Code Column</span>
-                      <span className="text-[10px] text-gray-400">Include in product lists</span>
+                    <Label htmlFor="accountLedgerShowReturn" className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                      <span className="text-sm font-semibold">Show Ledger Return</span>
+                      <span className="text-[10px] text-gray-400">Column in Ledger Summary</span>
                     </Label>
                   </div>
 
@@ -2631,6 +2631,124 @@ export const Settings2 = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'products' && (
+          <div className="card">
+            <div className="card-header">
+              <div className="flex items-center space-x-2">
+                <Package className="h-5 w-5 text-gray-600" />
+                <h2 className="text-lg font-semibold">Product Settings</h2>
+              </div>
+              <p className="text-sm text-gray-600 mt-1">
+                Customize which fields are visible in the product entry form and lists
+              </p>
+            </div>
+            <div className="card-content">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                {/* Show Product Images */}
+                <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                  <Checkbox
+                    id="showProductImagesUI_tab"
+                    className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                    checked={showProductImagesUI}
+                    onCheckedChange={(checked) => {
+                      setShowProductImagesUI(checked);
+                      localStorage.setItem('showProductImagesUI', String(checked));
+                      toast.success(`Product images ${checked ? 'shown' : 'hidden'} in UI tables`);
+                      window.dispatchEvent(new Event('productImagesConfigChanged'));
+                    }}
+                  />
+                  <Label htmlFor="showProductImagesUI_tab" className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                    <span className="text-sm font-semibold">Show Product Images</span>
+                    <span className="text-[10px] text-gray-400">Thumbnails in lists & POS</span>
+                  </Label>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-100 pt-6">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4 px-1">Detailed Field Visibility</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[
+                  { id: 'reorderPoint', label: 'Reorder Point', sub: 'Min stock for reorder' },
+                  { id: 'unit', label: 'Unit of Measurement', sub: 'PCS, KG, etc.' },
+                  { id: 'piecesPerBox', label: 'Pieces per Box', sub: 'Box packing details' },
+                  { id: 'expiryDate', label: 'Expiry Date', sub: 'Product expiration' },
+                  { id: 'brand', label: 'Brand', sub: 'Product manufacturer' },
+                  { id: 'barcode', label: 'Barcode', sub: 'Scan or enter code' },
+                  { id: 'sku', label: 'SKU', sub: 'Stock keeping unit' },
+                  { id: 'hsCode', label: 'HS Code', sub: 'Customs code & list column' },
+                  { id: 'countryOfOrigin', label: 'Country of Origin', sub: 'Manufacturing country' },
+                  { id: 'netWeight', label: 'Net Weight (KG)', sub: 'Product weight only' },
+                  { id: 'grossWeight', label: 'Gross Weight (KG)', sub: 'Weight with packing' },
+                  { id: 'importRefNo', label: 'Import Ref No', sub: 'Tracking for imports' },
+                  { id: 'gdNumber', label: 'GD Number', sub: 'Goods declaration' },
+                  { id: 'invoiceRef', label: 'Invoice Ref', sub: 'Supplier invoice reference' },
+                ].map((item) => {
+                  const stateKey = `showProductSetting_${item.id}`;
+                  const states = {
+                    showProductSetting_reorderPoint,
+                    showProductSetting_unit,
+                    showProductSetting_piecesPerBox,
+                    showProductSetting_expiryDate,
+                    showProductSetting_brand,
+                    showProductSetting_barcode,
+                    showProductSetting_sku,
+                    showProductSetting_hsCode,
+                    showProductSetting_countryOfOrigin,
+                    showProductSetting_netWeight,
+                    showProductSetting_grossWeight,
+                    showProductSetting_importRefNo,
+                    showProductSetting_gdNumber,
+                    showProductSetting_invoiceRef
+                  };
+                  const setters = {
+                    showProductSetting_reorderPoint: setShowProductSetting_reorderPoint,
+                    showProductSetting_unit: setShowProductSetting_unit,
+                    showProductSetting_piecesPerBox: setShowProductSetting_piecesPerBox,
+                    showProductSetting_expiryDate: setShowProductSetting_expiryDate,
+                    showProductSetting_brand: setShowProductSetting_brand,
+                    showProductSetting_barcode: setShowProductSetting_barcode,
+                    showProductSetting_sku: setShowProductSetting_sku,
+                    showProductSetting_hsCode: setShowProductSetting_hsCode,
+                    showProductSetting_countryOfOrigin: setShowProductSetting_countryOfOrigin,
+                    showProductSetting_netWeight: setShowProductSetting_netWeight,
+                    showProductSetting_grossWeight: setShowProductSetting_grossWeight,
+                    showProductSetting_importRefNo: setShowProductSetting_importRefNo,
+                    showProductSetting_gdNumber: setShowProductSetting_gdNumber,
+                    showProductSetting_invoiceRef: setShowProductSetting_invoiceRef
+                  };
+
+                  return (
+                    <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                      <Checkbox
+                        id={stateKey}
+                        className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                        checked={states[stateKey]}
+                        onCheckedChange={(checked) => {
+                          setters[stateKey](checked);
+                          localStorage.setItem(stateKey, String(checked));
+                          toast.success(`${item.label} ${checked ? 'enabled' : 'disabled'}`);
+                          window.dispatchEvent(new Event('productVisibilitySettingsChanged'));
+                          // Also sync the legacy HS Code setting if this is HS Code
+                          if (item.id === 'hsCode') {
+                             localStorage.setItem('showProductHsCodeColumn', String(checked));
+                             window.dispatchEvent(new Event('productHsCodeColumnConfigChanged'));
+                             setShowProductHsCodeColumn(checked);
+                          }
+                        }}
+                      />
+                      <Label htmlFor={stateKey} className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                        <span className="text-sm font-semibold">{item.label}</span>
+                        <span className="text-[10px] text-gray-400">{item.sub}</span>
+                      </Label>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
         {/* Sidebar Configuration Tab */}
         {activeTab === 'sidebar' && (
