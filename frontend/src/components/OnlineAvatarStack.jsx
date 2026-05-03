@@ -6,12 +6,7 @@ import { getRoleLabel } from '../utils/roleLabels';
 import { cn } from '@/lib/utils';
 
 const BG_CLASSES = [
-  'bg-blue-600',
-  'bg-emerald-600',
-  'bg-violet-600',
-  'bg-amber-600',
-  'bg-rose-600',
-  'bg-teal-600',
+  'bg-gray-100',
 ];
 
 function hashPick(str, mod) {
@@ -55,7 +50,7 @@ export default function OnlineAvatarStack({ className = '' }) {
   const overflow = online.length - visible.length;
 
   return (
-    <div className={cn("flex items-center gap-3 px-2 py-1 rounded-full bg-gray-50/50 border border-gray-100/50 backdrop-blur-sm transition-all hover:bg-gray-100/50", className)}>
+    <div className={cn("flex items-center gap-3 px-2 py-1 rounded-full bg-gray-50/50 backdrop-blur-sm transition-all hover:bg-gray-100/50", className)}>
       <div className="flex items-center -space-x-3">
         <AnimatePresence mode="popLayout">
           {visible.map((u, idx) => {
@@ -63,7 +58,7 @@ export default function OnlineAvatarStack({ className = '' }) {
             const isSelf = user?.id != null && String(user.id) === uid;
             const initials = getInitials(u.fullName);
             const bg = BG_CLASSES[hashPick(uid, BG_CLASSES.length)];
-            
+
             return (
               <motion.div
                 key={uid}
@@ -73,38 +68,30 @@ export default function OnlineAvatarStack({ className = '' }) {
                 exit={{ opacity: 0, scale: 0.8, x: 10 }}
                 title={`${u.fullName} (${getRoleLabel(u.role)})${isSelf ? ' - You' : ''}`}
                 className={cn(
-                  "relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[10px] font-bold text-white shadow-sm cursor-pointer transition-transform hover:scale-110 hover:z-50",
+                  "relative flex h-8 w-8 items-center justify-center rounded-full border border-black text-[10px] font-bold text-black shadow-sm cursor-pointer transition-transform hover:scale-110 hover:z-50",
                   bg,
-                  isSelf && "ring-2 ring-blue-500 ring-offset-1 z-40"
+                  isSelf && "z-40"
                 )}
               >
                 {initials}
                 {isSelf && (
                   <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500 border border-white"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500 border border-black"></span>
                   </span>
                 )}
               </motion.div>
             );
           })}
         </AnimatePresence>
-        
+
         {overflow > 0 && (
-          <div className="relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-gray-800 text-[10px] font-bold text-white shadow-sm z-0">
+          <div className="relative flex h-8 w-8 items-center justify-center rounded-full border border-black bg-gray-100 text-[10px] font-bold text-black shadow-sm z-0">
             +{overflow}
           </div>
         )}
       </div>
 
-      <div className="flex items-center gap-1.5 pr-1">
-        <div className="flex h-1.5 w-1.5 rounded-full bg-green-500">
-           <span className="animate-ping absolute h-1.5 w-1.5 rounded-full bg-green-400 opacity-75"></span>
-        </div>
-        <span className="text-[11px] font-bold text-gray-500 tracking-tight uppercase">
-          Online
-        </span>
-      </div>
     </div>
   );
 }
