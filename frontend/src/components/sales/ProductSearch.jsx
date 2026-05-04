@@ -924,16 +924,26 @@ function ProductSearchComponent({
         </div>
 
         {/* Desktop Layout — items-start for quantity column alignment */}
-        <div className="hidden md:grid grid-cols-12 gap-x-3 gap-y-3 items-start">
-          {/* Product Search - 7 columns */}
-          <div className={isManualMode ? 'col-span-7' : searchColClass}>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {isManualMode ? 'Manual Item Details' : 'Product Search'}
+        <div 
+          className={`hidden md:grid gap-x-1 items-start pb-2 border-b border-gray-200 mb-1 ${
+            dualUnitShowBoxInput
+              ? (showCostPrice && hasCostPricePermission
+                  ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                  : 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]')
+              : (showCostPrice && hasCostPricePermission
+                  ? 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'
+                  : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]')
+          }`}
+        >
+          {/* 1 & 2. Product Search (spanning S.NO and Product columns) */}
+          <div className="col-span-2 min-w-0">
+            <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2 text-left">
+              {isManualMode ? 'MANUAL ITEM DETAILS' : 'PRODUCT SEARCH'}
             </label>
-            <div className="relative flex space-x-2">
+            <div className="relative flex space-x-1">
               {!isManualMode ? (
                 <>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <SearchableDropdown
                       key={searchKey}
                       ref={productSearchRef}
@@ -951,10 +961,10 @@ function ProductSearchComponent({
                   <button
                     type="button"
                     onClick={() => setShowBarcodeScanner(true)}
-                    className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center flex-shrink-0"
-                    title="Scan barcode to search product"
+                    className="h-10 px-2 border border-gray-300 rounded-md hover:bg-gray-100 hover:border-gray-400 transition-all flex items-center justify-center flex-shrink-0 bg-white"
+                    title="Scan barcode"
                   >
-                    <Camera className="h-5 w-5 text-gray-600" />
+                    <Camera className="h-4 w-4 text-gray-600" />
                   </button>
                   {allowSaleWithoutProduct && (
                     <button
@@ -966,24 +976,23 @@ function ProductSearchComponent({
                         setCalculatedRate(0);
                         setTimeout(() => manualNameRef.current?.focus({ preventScroll: true }), 100);
                       }}
-                      className="px-3 py-2 border border-blue-300 text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors flex items-center justify-center flex-shrink-0 text-sm font-medium"
-                      title="Add manual item"
+                      className="h-10 px-2 border border-blue-200 text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-all flex items-center justify-center flex-shrink-0 text-[10px] font-bold"
+                      title="Add manual"
                     >
-                      <Plus className="h-4 w-4 mr-1" />
-                      <span>Manual</span>
+                      <span>MANUAL</span>
                     </button>
                   )}
                 </>
               ) : (
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <div className="flex space-x-2">
+                  <div className="flex space-x-1">
                     <Input
                       ref={manualNameRef}
-                      placeholder="Enter manual product name..."
+                      placeholder="Product name..."
                       value={manualName}
                       onChange={(e) => setManualName(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      className="min-w-0 flex-1"
+                      className="min-w-0 flex-1 h-10 bg-white"
                     />
                     <button
                       type="button"
@@ -995,170 +1004,78 @@ function ProductSearchComponent({
                         setManualProductImage(null);
                         setTimeout(() => productSearchRef.current?.focus({ preventScroll: true }), 100);
                       }}
-                      className="shrink-0 rounded-md border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50"
+                      className="shrink-0 rounded-md border border-gray-300 px-2 h-10 text-[10px] font-bold uppercase hover:bg-gray-50 bg-white"
                     >
                       Cancel
                     </button>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      ref={manualImageInputRef}
-                      type="file"
-                      accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
-                      className="sr-only"
-                      onChange={handleManualImageFile}
-                    />
-                    {manualProductImage ? (
-                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
-                        <img src={manualProductImage} alt="" width={40} height={40} loading="lazy" decoding="async" className="h-full w-full object-cover" />
-                        <button
-                          type="button"
-                          className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80"
-                          onClick={() => setManualProductImage(null)}
-                          aria-label="Remove photo"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => manualImageInputRef.current?.click()}
-                      className="rounded-md border border-dashed border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
-                    >
-                      {manualProductImage ? 'Change photo' : 'Photo (optional)'}
-                    </button>
-                    <span className="text-[10px] text-gray-400">Max 5 MB</span>
-                  </div>
-                </div>
-              )}
-              {selectedProduct?.imageUrl && !isManualMode && showProductImages && (
-                <div 
-                  className="h-10 w-10 flex-shrink-0 bg-gray-50 rounded-md overflow-hidden border border-gray-300 cursor-pointer hover:border-primary-500 transition-colors group relative"
-                  onClick={() => setShowImagePreview(true)}
-                  title="Click to view full size"
-                >
-                  <img src={selectedProduct.imageUrl} alt="" width={40} height={40} loading="lazy" decoding="async" className="h-full w-full object-cover" />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
-                    <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Manual Mode Cost Field (Desktop specific if needed, but it currently shares responsive logic) */}
-          {isManualMode && allowManualCostPrice && hasCostPricePermission && showCostPrice && (
-            <div className="col-span-1 min-w-0">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cost
-              </label>
+          {/* 3. Box (Conditional) */}
+          {dualUnitShowBoxInput && (
+            <div className="min-w-0">
+              <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2 text-center">BOX</label>
+              {!isManualMode && hasDualUnit(selectedProduct) ? (
+                <Input
+                  type="number"
+                  min="0"
+                  value={quantity === 0 ? '' : selectedBoxCount}
+                  onChange={(e) => {
+                    const boxVal = Math.max(0, parseInt(e.target.value, 10) || 0);
+                    const currentPieces = dualUnitShowPiecesInput
+                      ? piecesToBoxesAndPieces(quantity, selectedPpb || 1).pieces
+                      : 0;
+                    const raw = boxVal * (selectedPpb || 1) + currentPieces;
+                    const capped = allowOutOfStock ? raw : Math.min(raw, selectedStockPieces);
+                    setQuantity(Math.max(1, capped || 0));
+                  }}
+                  onFocus={(e) => e.target.select()}
+                  onKeyDown={handleKeyDown}
+                  className="text-center h-10 bg-white"
+                />
+              ) : (
+                <span className="text-sm font-semibold px-2 py-1 rounded border block text-center h-10 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200">
+                  —
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* 4. Stock */}
+          <div className="min-w-0">
+            <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2 text-center">STOCK</label>
+            <span
+              className="text-sm font-semibold text-gray-700 bg-slate-50 px-2 py-2 rounded border border-gray-200 block text-center h-10 flex flex-col items-center justify-center leading-snug"
+              title={selectedProduct ? 'Available stock' : ''}
+            >
+              {!isManualMode && selectedProduct ? (
+                dualUnit ? formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct) : selectedProduct.inventory?.currentStock ?? 0
+              ) : (
+                '0'
+              )}
+            </span>
+          </div>
+
+          {/* 5. Qty */}
+          <div className="min-w-0">
+            <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2 text-center">QTY</label>
+            {!isManualMode && dualUnit ? (
               <Input
                 type="number"
-                step="1"
-                autoComplete="off"
-                value={manualCost}
-                onChange={(e) => setManualCost(e.target.value)}
-                onKeyDown={handleKeyDown}
+                min="1"
+                value={quantity || ''}
+                onChange={(e) => {
+                  const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                  const capped = allowOutOfStock ? raw : Math.min(raw, selectedStockPieces);
+                  setQuantity(Math.max(1, capped || 0));
+                }}
                 onFocus={(e) => e.target.select()}
-                className="text-center h-10 bg-red-50 border-red-200 text-red-700 font-semibold"
-                placeholder="0"
+                onKeyDown={handleKeyDown}
+                className="text-center h-10 bg-white"
               />
-            </div>
-          )}
-
-          {/* Stock - 1 column */}
-          {!isManualMode && (
-            <div className="col-span-1 min-w-0">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Stock
-              </label>
-              <span
-                className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center min-h-[2.75rem] flex flex-col items-center justify-center gap-0.5 leading-snug"
-                title={selectedProduct ? 'Available stock (pieces)' : ''}
-              >
-                {selectedProduct ? (
-                  dualUnit ? (
-                    <>
-                      <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
-                     
-                    </>
-                  ) : (
-                    <span>{selectedProduct.inventory?.currentStock ?? 0} pcs</span>
-                  )
-                ) : (
-                  '0'
-                )}
-              </span>
-            </div>
-          )}
-
-          {/* Box + Qty (dual unit): no parent "Quantity" label — matches cart columns */}
-          <div className={`${isManualMode ? 'col-span-1' : quantityColClass} min-w-0`}>
-            {(!isManualMode && !dualUnit) || isManualMode ? (
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Quantity
-              </label>
-            ) : null}
-            {!isManualMode && dualUnit ? (
-              (dualUnitShowBoxInput || dualUnitShowPiecesInput) ? (
-                <div className={`grid ${dualUnitShowBoxInput && dualUnitShowPiecesInput ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
-                  {dualUnitShowBoxInput && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Box</label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={quantity === 0 ? '' : selectedBoxCount}
-                        onChange={(e) => {
-                          const boxVal = Math.max(0, parseInt(e.target.value, 10) || 0);
-                          const currentPieces = dualUnitShowPiecesInput
-                            ? piecesToBoxesAndPieces(quantity, selectedPpb || 1).pieces
-                            : 0;
-                          const raw = boxVal * (selectedPpb || 1) + currentPieces;
-                          const capped = allowOutOfStock ? raw : Math.min(raw, selectedStockPieces);
-                          setQuantity(Math.max(1, capped || 0));
-                        }}
-                        onFocus={(e) => e.target.select()}
-                        onKeyDown={handleKeyDown}
-                        className="text-center h-10"
-                      />
-                    </div>
-                  )}
-                  {dualUnitShowPiecesInput && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Qty</label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={quantity || ''}
-                        onChange={(e) => {
-                          const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                          const capped = allowOutOfStock ? raw : Math.min(raw, selectedStockPieces);
-                          setQuantity(Math.max(1, capped || 0));
-                        }}
-                        onFocus={(e) => e.target.select()}
-                        onKeyDown={handleKeyDown}
-                        className="text-center h-10"
-                      />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <DualUnitQuantityInput
-                  product={selectedProduct}
-                  quantity={quantity}
-                  onChange={(q) => setQuantity(q)}
-                  max={quantityInputMax}
-                  showRemainingAfterSale={false}
-                  showPiecesUnitLabel={false}
-                  showBoxInput={false}
-                  showPiecesInput={false}
-                  onKeyDown={handleKeyDown}
-                  inputClassName="text-center border border-gray-300 rounded px-2 h-10"
-                  compact
-                />
-              )
             ) : (
               <Input
                 type="number"
@@ -1167,32 +1084,40 @@ function ProductSearchComponent({
                 onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 0))}
                 onFocus={(e) => e.target.select()}
                 onKeyDown={handleKeyDown}
-                className="text-center h-10"
+                className="text-center h-10 bg-white"
               />
             )}
           </div>
 
-          {/* Purchase Price - 1 column (conditional) - Between Quantity and Rate */}
-          {!isManualMode && showCostPrice && hasCostPricePermission && (
-            <div className="col-span-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cost
-              </label>
-              <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-2 rounded border border-red-200 block text-center min-h-[2.75rem] flex items-center justify-center" title="Cost Price">
-                {lastPurchasePrice !== null
-                  ? `${Math.round(lastPurchasePrice)}`
-                  : (selectedProduct?.pricing?.cost !== undefined && selectedProduct?.pricing?.cost !== null)
-                    ? `${Math.round(selectedProduct.pricing.cost)}`
-                    : selectedProduct ? 'N/A' : '0'}
-              </span>
+          {/* 6. Cost (Conditional) */}
+          {showCostPrice && hasCostPricePermission && (
+            <div className="min-w-0">
+              <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2 text-center">COST</label>
+              {isManualMode && allowManualCostPrice ? (
+                <Input
+                  type="number"
+                  step="1"
+                  autoComplete="off"
+                  value={manualCost}
+                  onChange={(e) => setManualCost(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onFocus={(e) => e.target.select()}
+                  className="text-center h-10 bg-red-50 border-red-200 text-red-700 font-semibold"
+                  placeholder="0"
+                />
+              ) : (
+                <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-2 rounded border border-red-200 block text-center h-10 flex items-center justify-center" title="Cost Price">
+                  {!isManualMode && selectedProduct ? (
+                    lastPurchasePrice !== null ? Math.round(lastPurchasePrice) : (selectedProduct?.pricing?.cost ? Math.round(selectedProduct.pricing.cost) : 'N/A')
+                  ) : '0'}
+                </span>
+              )}
             </div>
           )}
 
-          {/* Rate - 1 column */}
-          <div className="col-span-1 min-w-0">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Rate
-            </label>
+          {/* 7. Rate */}
+          <div className="min-w-0">
+            <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2 text-center">RATE</label>
             <Input
               type="number"
               step="1"
@@ -1201,41 +1126,36 @@ function ProductSearchComponent({
               onChange={(e) => setCustomRate(e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={(e) => e.target.select()}
-              className="text-center h-10"
+              className="text-center h-10 bg-white"
               placeholder="0"
               required
             />
           </div>
 
-          {/* Amount - 1 column */}
-          <div className="col-span-1 min-w-0">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Amount
-            </label>
+          {/* 8. Total Amount */}
+          <div className="min-w-0">
+            <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2 text-center">AMOUNT</label>
             <Input
               type="text"
               readOnly
               value={isAddingProduct ? Math.round(quantity * parseInt(customRate || 0)) : 0}
-              onFocus={(e) => e.target.select()}
-              className="text-center h-10 bg-gray-100 font-semibold text-gray-700"
+              className="text-center h-10 bg-slate-50 font-semibold text-gray-700 border-gray-200"
             />
           </div>
 
-          {/* Add Button - 1 column */}
-          <div className="col-span-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2 opacity-0">
-              Action
-            </label>
+          {/* 9. Action (Add Button) */}
+          <div className="w-[2.25rem] flex flex-col items-center">
+            <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-2 opacity-0">ACTION</label>
             <LoadingButton
               type="button"
               onClick={handleAddToCart}
               isLoading={isAddingToCart}
               variant="default"
-              className="w-full flex items-center justify-center px-4 h-10"
+              className="h-10 w-10 p-0 flex items-center justify-center bg-slate-600 hover:bg-slate-700 shadow-sm"
               disabled={(!selectedProduct && !isManualMode) || isAddingToCart}
-              title="Add to cart (or press Enter in Quantity/Rate fields - focus returns to search)"
+              title="Add to cart (Enter)"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-6 w-6" strokeWidth={3} />
             </LoadingButton>
           </div>
         </div>

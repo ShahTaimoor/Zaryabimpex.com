@@ -210,15 +210,15 @@ const PurchaseItem = ({
       <div className={`hidden md:block py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
         <div
           className={`grid gap-x-1 items-center ${dualUnitShowBoxInputEnabled
-              ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-              : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+            ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+            : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
             }`}
         >
           <div className="min-w-0 flex justify-start">
             <span
               className={`text-sm font-medium px-0.5 py-1 rounded border block w-8 text-center h-8 flex items-center justify-center transition-colors duration-300 ${highlightSerial
-                  ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
-                  : 'text-gray-700 bg-gray-50 border-gray-200'
+                ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
+                : 'text-gray-700 bg-gray-50 border-gray-200'
                 }`}
             >
               {index + 1}
@@ -277,10 +277,10 @@ const PurchaseItem = ({
                       onChange={(e) => onUpdateCartBoxCount(item.product?._id, e.target.value)}
                       onFocus={(e) => e.target.select()}
                       className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(product.inventory?.currentStock || 0) === 0
-                          ? 'text-red-700 bg-red-50 border-red-200'
-                          : (product.inventory?.currentStock || 0) <= (product.inventory?.reorderPoint || 0)
-                            ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                            : 'text-gray-700 bg-gray-100 border-gray-200'
+                        ? 'text-red-700 bg-red-50 border-red-200'
+                        : (product.inventory?.currentStock || 0) <= (product.inventory?.reorderPoint || 0)
+                          ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                          : 'text-gray-700 bg-gray-100 border-gray-200'
                         }`}
                       title="Full boxes"
                     />
@@ -300,10 +300,10 @@ const PurchaseItem = ({
           <div className="min-w-0">
             <span
               className={`text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center ${(product.inventory?.currentStock || 0) === 0
-                  ? 'text-red-700 bg-red-50 border-red-200'
-                  : (product.inventory?.currentStock || 0) <= (product.inventory?.reorderPoint || 0)
-                    ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
-                    : 'text-gray-700 bg-gray-100 border-gray-200'
+                ? 'text-red-700 bg-red-50 border-red-200'
+                : (product.inventory?.currentStock || 0) <= (product.inventory?.reorderPoint || 0)
+                  ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
+                  : 'text-gray-700 bg-gray-100 border-gray-200'
                 }`}
             >
               {hasDualUnit(product) ? formatStockDualLabel(currentStock, product) : currentStock}
@@ -1293,24 +1293,7 @@ export const Purchase = ({ tabId, editData }) => {
           emptyText="No items in cart"
         >
           <CartItemsTableSection
-            desktopHeader={(
-              <CartTableHeader
-                className={`hidden md:grid gap-x-1 items-center pb-2 border-b border-gray-300 mb-2 ${dualUnitShowBoxInputEnabledPage
-                    ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                    : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
-                  }`}
-                columns={[
-                  { key: 'sno', label: 'S.NO', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-left' },
-                  { key: 'product', label: 'Product' },
-                  ...(dualUnitShowBoxInputEnabledPage ? [{ key: 'box', label: 'Box' }] : []),
-                  { key: 'stock', label: 'Stock' },
-                  { key: 'qty', label: 'Qty' },
-                  { key: 'cost', label: 'Cost' },
-                  { key: 'total', label: 'Total', labelClassName: 'text-xs font-semibold text-gray-600 uppercase block text-center' },
-                  { key: 'action', label: 'Action', wrapperClassName: 'min-w-0 flex justify-end', labelClassName: 'text-xs font-semibold text-gray-600 uppercase text-right' },
-                ]}
-              />
-            )}
+            desktopHeader={null}
           >
             <div
               ref={purchaseCartScrollRef}
@@ -1555,142 +1538,119 @@ export const Purchase = ({ tabId, editData }) => {
                       <span className="text-xl font-semibold tabular-nums text-foreground">{tax.toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="mt-2">
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-4 md:gap-4">
-                      <div className="flex items-center justify-between md:block">
-                        <span className="text-sm font-medium text-muted-foreground">Subtotal:</span>
-                        <div className="text-2xl font-semibold tabular-nums text-foreground md:mt-1">{subtotal.toFixed(2)}</div>
-                      </div>
-                      <div className="flex items-center justify-between md:block">
-                        <span className="text-sm font-medium text-muted-foreground">Purchase Total:</span>
-                        <div className="text-2xl font-bold tabular-nums text-primary md:mt-1">{total.toFixed(2)}</div>
-                      </div>
-                      <div className="flex items-center justify-between md:block">
-                        <span className="text-sm font-medium text-muted-foreground">Previous Outstanding:</span>
-                        <div
-                          className={`text-2xl font-semibold tabular-nums md:mt-1 ${supplierOutstanding > 0 ? 'text-red-600' : 'text-green-600'
-                            }`}
-                        >
-                          {supplierOutstanding.toFixed(2)}
+                  {selectedSupplier && (() => {
+                    return (
+                      <div className="mt-2">
+                        <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-start">
+                          {/* 1. Subtotal */}
+                          <div className="flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Subtotal</span>
+                            <div className="h-8 flex items-center px-2 bg-slate-50 border border-gray-200 rounded-md text-xl font-semibold tabular-nums text-foreground">
+                              {subtotal.toFixed(2)}
+                            </div>
+                          </div>
+
+                          {/* 2. Manual Discount */}
+                          <div className="flex flex-col">
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Discount</label>
+                              <select
+                                value={directDiscount.type}
+                                onChange={(e) => setDirectDiscount({ ...directDiscount, type: e.target.value })}
+                                className="border-none bg-transparent p-0 text-[10px] font-bold text-primary-600 focus:ring-0 cursor-pointer"
+                              >
+                                <option value="amount">Amt</option>
+                                <option value="percentage">%</option>
+                              </select>
+                            </div>
+                            <Input
+                              type="number"
+                              autoComplete="off"
+                              placeholder="0"
+                              value={directDiscount.value || ''}
+                              onChange={(e) => {
+                                const value = parseFloat(e.target.value) || 0;
+                                setDirectDiscount({ ...directDiscount, value });
+                              }}
+                              onFocus={(e) => e.target.select()}
+                              className="w-full h-8 px-2 border-gray-200 rounded-md bg-white focus:ring-1 focus:ring-primary-400 text-sm font-medium shadow-none"
+                            />
+                          </div>
+
+                          {/* 3. Purchase Total */}
+                          <div className="flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Total</span>
+                            <div className="h-8 flex items-center px-2 bg-slate-50 border border-gray-200 rounded-md text-xl font-bold tabular-nums text-primary">
+                              {total.toFixed(2)}
+                            </div>
+                          </div>
+
+                          {/* 4. Previous Outstanding */}
+                          <div className="flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Outstanding</span>
+                            <div className="h-8 flex items-center px-2 bg-slate-50 border border-gray-200 rounded-md text-xl font-semibold tabular-nums text-foreground">
+                              {supplierOutstanding.toFixed(2)}
+                            </div>
+                          </div>
+
+                          {/* 5. Payment Method & Amount Paid */}
+                          <div className="flex flex-col">
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Payment</label>
+                              <select
+                                value={paymentMethod === 'bank' && selectedBankAccount ? `bank:${selectedBankAccount}` : paymentMethod}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v.startsWith('bank:')) {
+                                    setPaymentMethod('bank');
+                                    setSelectedBankAccount(v.slice(5));
+                                  } else {
+                                    setPaymentMethod(v);
+                                    setSelectedBankAccount('');
+                                  }
+                                }}
+                                className="border-none bg-transparent p-0 text-[10px] font-bold text-primary-600 focus:ring-0 cursor-pointer max-w-[60px] overflow-hidden text-ellipsis"
+                              >
+                                <option value="cash">Cash</option>
+                                <optgroup label="Banks">
+                                  {activeBanks.map((bank) => {
+                                    const bid = bank._id || bank.id;
+                                    if (!bid) return null;
+                                    const label = [bank.bankName, bank.accountNumber].filter(Boolean).join(' - ');
+                                    return <option key={bid} value={`bank:${bid}`}>{label}</option>;
+                                  })}
+                                </optgroup>
+                                <option value="credit_card">Card</option>
+                                <option value="debit_card">Debit</option>
+                                <option value="check">Check</option>
+                                <option value="account">Acc</option>
+                                <option value="split">Split</option>
+                              </select>
+                            </div>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              autoComplete="off"
+                              value={amountPaid}
+                              onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
+                              onFocus={(e) => e.target.select()}
+                              className="w-full h-8 px-2 border-gray-200 rounded-md bg-white focus:ring-1 focus:ring-primary-400 text-sm font-medium shadow-none"
+                              placeholder="0"
+                            />
+                          </div>
+
+                          {/* 6. Total Payables */}
+                          <div className="flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-foreground mb-1">Payables</span>
+                            <div className="h-8 flex items-center px-2 bg-slate-50 border border-gray-200 rounded-md text-xl font-bold tabular-nums text-primary">
+                              {totalPayables.toFixed(2)}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between md:block">
-                        <span className="text-sm font-semibold text-foreground">Total Payables:</span>
-                        <div className="text-2xl font-bold tabular-nums text-primary md:mt-1">{totalPayables.toFixed(2)}</div>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
-
-                <OrderInsetPanel>
-                  <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 items-start">
-                    <div className="flex flex-col">
-                      <label className="block text-sm font-medium text-foreground mb-2">Apply Discount (manual)</label>
-                      <div className="flex space-x-2">
-                        <select
-                          value={directDiscount.type}
-                          onChange={(e) => setDirectDiscount({ ...directDiscount, type: e.target.value })}
-                          className="h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium"
-                        >
-                          <option value="amount">Amount</option>
-                          <option value="percentage">%</option>
-                        </select>
-                        <Input
-                          type="number"
-                          autoComplete="off"
-                          placeholder={directDiscount.type === 'amount' ? 'Enter amount...' : 'Enter percentage...'}
-                          value={directDiscount.value || ''}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value) || 0;
-                            setDirectDiscount({ ...directDiscount, value });
-                          }}
-                          onFocus={(e) => e.target.select()}
-                          className="flex-1 h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
-                          min="0"
-                          step={directDiscount.type === 'percentage' ? '0.1' : '0.01'}
-                        />
-                      </div>
-                      {directDiscount.value > 0 && (
-                        <div className="mt-2">
-                          <Button
-                            onClick={() => setDirectDiscount({ type: 'amount', value: 0 })}
-                            variant="destructive"
-                            size="sm"
-                          >
-                            Clear Discount
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col md:col-start-2 md:row-start-1 w-full">
-                      <label className="block text-sm font-medium text-foreground mb-2">Payment Method</label>
-                      <select
-                        value={
-                          paymentMethod === 'bank' && selectedBankAccount
-                            ? `bank:${selectedBankAccount}`
-                            : paymentMethod
-                        }
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          if (v.startsWith('bank:')) {
-                            setPaymentMethod('bank');
-                            setSelectedBankAccount(v.slice(5));
-                          } else {
-                            setPaymentMethod(v);
-                            setSelectedBankAccount('');
-                          }
-                        }}
-                        className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground"
-                      >
-                        <option value="cash">Cash</option>
-                        {activeBanks.map((bank) => {
-                          const bid = bank._id || bank.id;
-                          if (!bid) return null;
-                          const label = [bank.bankName, bank.accountNumber]
-                            .filter(Boolean)
-                            .join(' — ');
-                          const acc = bank.accountName ? ` (${bank.accountName})` : '';
-                          return (
-                            <option key={bid} value={`bank:${bid}`}>
-                              Bank · {label}
-                              {acc}
-                            </option>
-                          );
-                        })}
-                        {banksLoading && (
-                          <option value="" disabled>
-                            Loading banks…
-                          </option>
-                        )}
-                        {!banksLoading && activeBanks.length === 0 && (
-                          <option value="" disabled>
-                            No bank accounts (add in Banks)
-                          </option>
-                        )}
-                        <option value="credit_card">Credit Card</option>
-                        <option value="debit_card">Debit Card</option>
-                        <option value="check">Check</option>
-                        <option value="account">Account</option>
-                        <option value="split">Split Payment</option>
-                      </select>
-                    </div>
-
-                    <div className="flex flex-col">
-                      <label className="block text-sm font-medium text-foreground mb-2">Amount Paid</label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        autoComplete="off"
-                        value={amountPaid}
-                        onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
-                        onFocus={(e) => e.target.select()}
-                        className="w-full h-10 px-3 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-medium text-foreground text-lg"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                </OrderInsetPanel>
 
                 <OrderCheckoutActions>
                   {purchaseItems.length > 0 && (
