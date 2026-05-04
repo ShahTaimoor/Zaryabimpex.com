@@ -7,6 +7,15 @@ import { Input } from '@/components/ui/input';
 const EMPTY_ARRAY = [];
 
 const DEFAULT_INITIAL_LIMIT = 20;
+
+/** Lowercased tokens from whitespace; used so "air hd717" matches "AIR FLOW HD717". */
+function splitSearchTokensLower(term) {
+  return String(term ?? '')
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+}
 /** Initial estimate before measure; customer rows can be multi-line (name + balance). */
 const DROPDOWN_ROW_ESTIMATE = 72;
 
@@ -161,6 +170,7 @@ export const SearchableDropdown = forwardRef(({
     const currentDisplayKey = displayKeyRef.current;
 
     if (currentSearchTerm) {
+      const tokensLower = splitSearchTokensLower(currentSearchTerm);
       const filtered = items.filter(item => {
         // If displayKey is a function, try to filter by common searchable fields
         if (typeof currentDisplayKey === 'function') {
@@ -186,8 +196,9 @@ export const SearchableDropdown = forwardRef(({
             item.variant_type,
           ].filter(Boolean); // Remove null/undefined values
 
-          return searchableFields.some(field =>
-            String(field).toLowerCase().includes(currentSearchTerm.toLowerCase())
+          // Each token must match at least one field (same idea as server-side POS search).
+          return tokensLower.every((token) =>
+            searchableFields.some((field) => String(field).toLowerCase().includes(token))
           );
         }
 
@@ -196,7 +207,8 @@ export const SearchableDropdown = forwardRef(({
         if (!displayValue) {
           return false;
         }
-        return displayValue.toLowerCase().includes(currentSearchTerm.toLowerCase());
+        const hay = displayValue.toLowerCase();
+        return tokensLower.every((token) => hay.includes(token));
       });
       setFilteredItems(filtered);
       setSelectedIndex(-1);

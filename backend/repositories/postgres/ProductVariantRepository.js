@@ -1,4 +1,5 @@
 const { query } = require('../../config/postgres');
+const { splitSearchTokens } = require('../../utils/searchTokens');
 
 class ProductVariantRepository {
   async findById(id, includeDeleted = false) {
@@ -76,10 +77,12 @@ class ProductVariantRepository {
     } else if (filter.search || (filter.$or && filter.$or.length)) {
       const term = filter.search || (filter.$or && filter.$or[0] && (filter.$or[0].variantName || filter.$or[0].displayName || filter.$or[0].variantValue));
       if (term && typeof term === 'string') {
-        const like = `%${term}%`;
-        sql += ` AND (variant_name ILIKE $${paramCount} OR display_name ILIKE $${paramCount} OR variant_value ILIKE $${paramCount})`;
-        params.push(like);
-        paramCount++;
+        const tokens = splitSearchTokens(term);
+        for (const token of tokens) {
+          sql += ` AND (variant_name ILIKE $${paramCount} OR display_name ILIKE $${paramCount} OR variant_value ILIKE $${paramCount} OR sku ILIKE $${paramCount} OR barcode ILIKE $${paramCount})`;
+          params.push(`%${token}%`);
+          paramCount++;
+        }
       }
     }
     sql += ' ORDER BY created_at DESC';

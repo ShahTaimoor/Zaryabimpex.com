@@ -1,6 +1,7 @@
 const { query } = require('../../config/postgres');
 const inventoryBalanceRepository = require('./InventoryBalanceRepository');
 const { decodeCursor, encodeCursor } = require('../../utils/keysetCursor');
+const { splitSearchTokens } = require('../../utils/searchTokens');
 
 
 function rowToProduct(row) {
@@ -101,7 +102,9 @@ class ProductRepository {
         paramCount++;
       }
     } else if (filters.search) {
-      sql += ` AND (
+      const tokens = splitSearchTokens(filters.search);
+      for (const token of tokens) {
+        sql += ` AND (
         name ILIKE $${paramCount}
         OR sku ILIKE $${paramCount}
         OR barcode ILIKE $${paramCount}
@@ -110,8 +113,9 @@ class ProductRepository {
         OR gd_number ILIKE $${paramCount}
         OR invoice_ref ILIKE $${paramCount}
       )`;
-      params.push(`%${filters.search}%`);
-      paramCount++;
+        params.push(`%${token}%`);
+        paramCount++;
+      }
     }
     if (filters.lowStock) {
       sql += ' AND stock_quantity <= min_stock_level';
@@ -356,7 +360,9 @@ class ProductRepository {
         cn++;
       }
     } else if (filters.search) {
-      countSql += ` AND (
+      const tokens = splitSearchTokens(filters.search);
+      for (const token of tokens) {
+        countSql += ` AND (
         name ILIKE $${cn}
         OR sku ILIKE $${cn}
         OR barcode ILIKE $${cn}
@@ -365,8 +371,9 @@ class ProductRepository {
         OR gd_number ILIKE $${cn}
         OR invoice_ref ILIKE $${cn}
       )`;
-      countParams.push(`%${filters.search}%`);
-      cn++;
+        countParams.push(`%${token}%`);
+        cn++;
+      }
     }
     if (filters.lowStock) {
       countSql += ' AND stock_quantity <= min_stock_level';
