@@ -3,7 +3,6 @@ import {
   Calendar,
   Search,
   Filter,
-  Plus,
   Edit,
   Trash2,
   Eye,
@@ -644,23 +643,8 @@ const CashReceipts = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Cash Receipts</h1>
-          <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">Manage and view all cash receipt transactions</p>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0 overflow-x-auto">
-
-          <Button
-            onClick={resetForm}
-            variant="default"
-            size="default"
-            className="flex items-center justify-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            <span>New Receipt</span>
-          </Button>
-        </div>
+      <div className="min-w-0">
+        <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Cash Receipts</h1>
       </div>
 
       {/* Cash Receipt Form */}

@@ -81,7 +81,6 @@ import { useResponsive, ResponsiveGrid } from '../components/ResponsiveContainer
 import RecommendationSection from '../components/RecommendationSection';
 import useBehaviorTracking from '../hooks/useBehaviorTracking';
 import { useTab } from '../contexts/TabContext';
-import { getComponentInfo } from '../components/ComponentRegistry';
 import { useAuth } from '../contexts/AuthContext';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 
@@ -163,7 +162,7 @@ export const Sales = ({ tabId, editData }) => {
 
   const { isMobile, isTablet } = useResponsive();
   const { trackAddToCart, trackProductView, trackPageView } = useBehaviorTracking();
-  const { activeTabId, updateTabTitle, getActiveTab, openTab } = useTab();
+  const { activeTabId, updateTabTitle, getActiveTab } = useTab();
   const { hasPermission, user } = useAuth();
   const { companyInfo: companySettings } = useCompanyInfo();
 
@@ -1428,35 +1427,8 @@ export const Sales = ({ tabId, editData }) => {
   return (
     <AsyncErrorBoundary>
       <div className="space-y-4 lg:space-y-6">
-        <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start justify-between'}`}>
-          <div>
-            <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Point of Sales</h1>
-            <p className="text-gray-600">Process sales transactions</p>
-          </div>
-          <div className="flex items-center space-x-2">
-
-            <Button
-              onClick={() => {
-                const componentInfo = getComponentInfo('/sales');
-                if (componentInfo) {
-                  const newTabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                  openTab({
-                    title: 'Sales',
-                    path: '/sales',
-                    component: componentInfo.component,
-                    icon: componentInfo.icon,
-                    allowMultiple: true,
-                    props: { tabId: newTabId }
-                  });
-                }
-              }}
-              variant="default"
-              size="default"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              New Sales
-            </Button>
-          </div>
+        <div>
+          <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Point of Sales</h1>
         </div>
 
         {/* Customer Selection and Information Row */}

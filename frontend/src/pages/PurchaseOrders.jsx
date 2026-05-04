@@ -1264,24 +1264,8 @@ export const PurchaseOrders = ({ tabId }) => {
 
   return (
     <div className="space-y-4 lg:space-y-6">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Purchase Orders</h1>
-          <p className="hidden sm:block text-sm sm:text-base text-gray-600">Process purchase order transactions</p>
-        </div>
-        <div className="flex items-center space-x-2 flex-shrink-0">
-
-          <Button
-            onClick={resetForm}
-            variant="default"
-            size="default"
-            className="px-3 sm:px-4"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">New Purchase Order</span>
-            <span className="sm:hidden">New PO</span>
-          </Button>
-        </div>
+      <div className="min-w-0">
+        <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Purchase Orders</h1>
       </div>
 
       {/* Supplier Selection and Information Row */}

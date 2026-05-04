@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Package,
-  Plus,
   Trash2,
   Building,
   Truck,
@@ -1131,35 +1130,8 @@ export const Purchase = ({ tabId, editData }) => {
   return (
     <AsyncErrorBoundary>
       <div className="space-y-4 lg:space-y-6">
-        <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start justify-between'}`}>
-          <div>
-            <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Purchase</h1>
-            <p className="text-gray-600">Process purchase transactions</p>
-          </div>
-          <div className="flex items-center space-x-2">
-
-            <Button
-              onClick={() => {
-                const componentInfo = getComponentInfo('/purchase');
-                if (componentInfo) {
-                  const newTabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                  openTab({
-                    title: 'Purchase',
-                    path: '/purchase',
-                    component: componentInfo.component,
-                    icon: componentInfo.icon,
-                    allowMultiple: true,
-                    props: { tabId: newTabId }
-                  });
-                }
-              }}
-              variant="default"
-              size="default"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              New Purchase
-            </Button>
-          </div>
+        <div>
+          <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Purchase</h1>
         </div>
 
         {/* Supplier Selection and Information Row */}

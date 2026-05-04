@@ -553,7 +553,6 @@ export const PurchaseInvoices = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Purchase Invoices</h1>
-          <p className="text-sm sm:text-base text-gray-600">Track and manage supplier invoices and receipts</p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto items-stretch sm:items-center">

@@ -29,7 +29,6 @@ import { handleApiError, showSuccessToast, showErrorToast } from '../utils/error
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingTable } from '../components/LoadingSpinner';
 import { useResponsive } from '../components/ResponsiveContainer';
 import { useTab } from '../contexts/TabContext';
-import { getComponentInfo } from '../components/ComponentRegistry';
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import CreateSaleReturnModal from '../components/CreateSaleReturnModal';
 import ReturnDetailModal from '../components/ReturnDetailModal';
@@ -88,7 +87,7 @@ const SaleReturns = () => {
   };
 
   const { isMobile } = useResponsive();
-  const { openTab, getActiveTab, updateTabTitle } = useTab();
+  const { getActiveTab, updateTabTitle } = useTab();
 
   const {
     customers,
@@ -537,20 +536,12 @@ const SaleReturns = () => {
     );
   };
 
-  const handleNewReturn = () => {
-    setSelectedCustomer(null);
-    setCustomerSearchTerm('');
-    setProductSearchTerm('');
-    setStep('customer');
-  };
-
   return (
     <div className="space-y-4 lg:space-y-6 w-full max-w-full overflow-x-hidden px-2 sm:px-0">
       {/* Header - same layout as Sales page */}
-      <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start justify-between'}`}>
+      <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start justify-between'} gap-4`}>
         <div>
           <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Sale Returns</h1>
-          <p className="text-gray-600">Manage customer returns and refunds</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DateFilter
@@ -561,29 +552,6 @@ const SaleReturns = () => {
             showPresets={true}
             className="w-full sm:w-auto"
           />
-          <Button
-            onClick={() => {
-              const componentInfo = getComponentInfo('/sale-returns');
-              if (componentInfo) {
-                const newTabId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                openTab({
-                  title: 'Sale Returns',
-                  path: '/sale-returns',
-                  component: componentInfo.component,
-                  icon: componentInfo.icon,
-                  allowMultiple: true,
-                  props: { tabId: newTabId }
-                });
-              } else {
-                handleNewReturn();
-              }
-            }}
-            variant="default"
-            size="default"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Sale Return
-          </Button>
         </div>
       </div>
 

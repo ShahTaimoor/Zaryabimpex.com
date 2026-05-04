@@ -414,12 +414,6 @@ const PurchaseReturns = () => {
     setProductSearchTerm('');
   };
 
-  const handleNewReturn = () => {
-    setSelectedSupplier(null);
-    setSupplierSearchTerm('');
-    setProductSearchTerm('');
-  };
-
   // Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
@@ -479,10 +473,9 @@ const PurchaseReturns = () => {
   return (
     <div className="space-y-4 lg:space-y-6 w-full max-w-full overflow-x-hidden px-2 sm:px-0">
       {/* Header - same layout as Sale Returns */}
-      <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start justify-between'}`}>
+      <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start justify-between'} gap-4`}>
         <div>
           <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Purchase Returns</h1>
-          <p className="text-gray-600">Manage supplier returns and refunds</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DateFilter
@@ -493,14 +486,6 @@ const PurchaseReturns = () => {
             showPresets={true}
             className="w-full sm:w-auto"
           />
-          <Button
-            onClick={handleNewReturn}
-            variant="default"
-            size="default"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Purchase Return
-          </Button>
         </div>
       </div>
 

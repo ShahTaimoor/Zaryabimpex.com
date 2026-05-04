@@ -3,6 +3,9 @@ import {
   Plus,
   Search,
   Download,
+  MoreHorizontal,
+  RefreshCw,
+  BarChart3,
 } from 'lucide-react';
 import {
   useGetCustomersQuery,
@@ -11,6 +14,13 @@ import {
 import { LoadingPage } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import ExcelImportButton from '../components/ExcelImportButton';
@@ -172,9 +182,9 @@ export const Customers = () => {
   return (
     <div className="space-y-6 w-full ">
       <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex items-center gap-2">
+          <BarChart3 className="h-7 w-7 text-primary-600 shrink-0 hidden sm:block" aria-hidden />
           <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Customers</h1>
-          <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">Manage your customer database</p>
         </div>
         <div className="flex-shrink-0 flex items-center gap-2 overflow-x-auto">
           <Button
@@ -189,24 +199,50 @@ export const Customers = () => {
           <ExcelExportButton getData={getExportData} label="Export" />
           <PdfExportButton getData={getExportData} label="PDF" />
           <ExcelImportButton onDataImported={handleImportData} label="Import" />
-          <label className="inline-flex items-center gap-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
-            <input
-              type="checkbox"
-              checked={autoCreateImportCities}
-              onChange={(e) => setAutoCreateImportCities(e.target.checked)}
-              className="h-4 w-4"
-            />
-            Auto-create city
-          </label>
-          <Button
-            onClick={handleDownloadTemplate}
-            variant="outline"
-            size="sm"
-            className="group flex items-center justify-center gap-2 border-orange-200 bg-white text-orange-600 hover:bg-orange-50 hover:border-orange-500 h-9 px-3 rounded-lg shadow-sm transition-all duration-200"
-          >
-            <Download className="h-3.5 w-3.5 group-hover:-translate-y-0.5 transition-transform" />
-            <span className="text-xs font-semibold tracking-tight uppercase">Template</span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="default"
+                className="flex items-center justify-center gap-2 border-gray-200 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-all shadow-sm"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="font-semibold">More</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  refetch();
+                }}
+              >
+                <RefreshCw className="h-4 w-4 mr-2 text-teal-600" />
+                Refresh list
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  handleDownloadTemplate();
+                }}
+              >
+                <Download className="h-4 w-4 mr-2 text-orange-600" />
+                Download Template
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-default">
+                <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={autoCreateImportCities}
+                    onChange={(e) => setAutoCreateImportCities(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Auto-create city
+                </label>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

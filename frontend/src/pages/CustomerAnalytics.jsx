@@ -1,20 +1,15 @@
 import React, { useState } from 'react';
-import { 
-  Users, 
-  TrendingUp, 
-  TrendingDown,
+import {
+  Users,
+  TrendingUp,
   AlertTriangle,
-  Target,
-  PieChart,
-  BarChart3,
   Filter,
   Crown,
   Star,
   Heart,
   User,
-  Clock,
   XCircle,
-  Sparkles
+  Sparkles,
 } from 'lucide-react';
 import { useGetSummaryQuery, useGetAnalyticsQuery } from '../store/services/customerAnalyticsApi';
 import { formatCurrency } from '../utils/formatters';
