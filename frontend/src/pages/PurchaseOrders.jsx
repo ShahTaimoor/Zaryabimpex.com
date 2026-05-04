@@ -2041,7 +2041,69 @@ export const PurchaseOrders = ({ tabId }) => {
             )}
           </OrderDetailsSection>
 
-          <OrderSummaryBar />
+          <OrderSummaryBar>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleCreate}
+                disabled={creating || formData.items.length === 0}
+                variant="default"
+                size="sm"
+                className="bg-slate-900 hover:bg-slate-800 text-white border-none h-8 px-4 font-bold"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {creating ? 'Creating...' : 'Create PO'}
+              </Button>
+              <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+                {formData.items.length > 0 && !showEditModal && (
+                  <Button
+                    onClick={resetForm}
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    title="Clear Cart"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+                {formData.items.length > 0 && (
+                  <Button
+                    onClick={() => {
+                      const tempOrder = {
+                        poNumber: `PO-${Date.now()}`,
+                        supplier: selectedSupplier,
+                        items: formData.items.map(item => {
+                          const product =
+                            item.productData ||
+                            (typeof item.product === 'object' ? item.product : null);
+                          return {
+                            product: product,
+                            quantity: item.quantity,
+                            unitCost: item.costPerUnit,
+                            totalCost: item.quantity * item.costPerUnit
+                          };
+                        }),
+                        subtotal: subtotal,
+                        discount: 0,
+                        tax: tax,
+                        total: total,
+                        expectedDelivery: formData.expectedDelivery,
+                        notes: formData.notes,
+                        terms: formData.terms,
+                        createdAt: new Date().toISOString()
+                      };
+                      handlePrint(tempOrder);
+                    }}
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    title="Print Preview"
+                  >
+                    <Printer className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </OrderSummaryBar>
           <OrderSummaryContent>
             <div className="mb-6 space-y-3">
               <div className="flex justify-between items-center">
@@ -2070,65 +2132,6 @@ export const PurchaseOrders = ({ tabId }) => {
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <OrderCheckoutActions className="mt-6 border-0 pt-0">
-              {formData.items.length > 0 && !showEditModal && (
-                <Button
-                  onClick={resetForm}
-                  variant="secondary"
-                  className="flex-1"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear Cart
-                </Button>
-              )}
-              {formData.items.length > 0 && (
-                <Button
-                  onClick={() => {
-                    // Create temporary order data for print preview
-                    const tempOrder = {
-                      poNumber: `PO-${Date.now()}`,
-                      supplier: selectedSupplier,
-                      items: formData.items.map(item => {
-                        const product =
-                          item.productData ||
-                          (typeof item.product === 'object' ? item.product : null);
-                        return {
-                          product: product,
-                          quantity: item.quantity,
-                          unitCost: item.costPerUnit,
-                          totalCost: item.quantity * item.costPerUnit
-                        };
-                      }),
-                      subtotal: subtotal,
-                      discount: 0,
-                      tax: tax,
-                      total: total,
-                      expectedDelivery: formData.expectedDelivery,
-                      notes: formData.notes,
-                      terms: formData.terms,
-                      createdAt: new Date().toISOString()
-                    };
-                    handlePrint(tempOrder);
-                  }}
-                  variant="secondary"
-                  className="flex-1"
-                >
-                  <Receipt className="h-4 w-4 mr-2" />
-                  Print Preview
-                </Button>
-              )}
-              <Button
-                onClick={handleCreate}
-                disabled={creating || formData.items.length === 0}
-                variant="default"
-                size="lg"
-                className="flex-2"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {creating ? 'Creating...' : 'Create Purchase Order'}
-              </Button>
-            </OrderCheckoutActions>
           </OrderSummaryContent>
         </OrderCheckoutCard>
       )}

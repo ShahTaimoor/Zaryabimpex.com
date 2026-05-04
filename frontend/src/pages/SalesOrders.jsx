@@ -49,6 +49,7 @@ import {
   OrderCheckoutCard,
   OrderDetailsSection,
   OrderSummaryContent,
+  OrderSummaryBar,
   OrderCheckoutActions,
 } from '../components/order/OrderCheckoutLayout';
 import { useGetCustomerQuery } from '../store/services/customersApi';
@@ -2289,12 +2290,12 @@ const SalesOrders = ({ tabId }) => {
 
           {/* Cart Items */}
           {formData.items.length === 0 ? (
-            <div className="p-8 text-center text-gray-500 border-t border-gray-200">
+            <div className="p-8 text-center text-gray-500">
               <ShoppingCart className="mx-auto h-12 w-12 text-gray-400" />
               <p className="mt-2">No items in cart</p>
             </div>
           ) : (
-            <div className="border-t border-gray-200 pt-6 overflow-x-hidden">
+            <div className="pt-6 overflow-x-hidden">
               {isLastPricesApplied && Object.keys(priceStatus).length > 0 && (
                 <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 mb-3 text-xs">
                   <span className="text-gray-600 font-medium">Price Status:</span>
@@ -2872,6 +2873,89 @@ const SalesOrders = ({ tabId }) => {
             className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${showSalesOrderDetailsFields ? 'order-2' : 'order-1'
               }`}
           >
+            <OrderSummaryBar>
+              <div className="flex items-center gap-3">
+                {selectedOrder ? (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      onClick={cancelEdit}
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-slate-600 hover:bg-slate-100"
+                    >
+                      Cancel
+                    </Button>
+                    <LoadingButton
+                      onClick={handleUpdate}
+                      isLoading={updating}
+                      disabled={updating || formData.items.length === 0}
+                      variant="default"
+                      size="sm"
+                      className="bg-slate-900 hover:bg-slate-800 text-white border-none h-8 px-4 font-bold"
+                    >
+                      <Receipt className="h-4 w-4 mr-2" />
+                      {updating ? 'Updating...' : 'Update SO'}
+                    </LoadingButton>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={handleCreate}
+                    disabled={creating || formData.items.length === 0}
+                    variant="default"
+                    size="sm"
+                    className="bg-slate-900 hover:bg-slate-800 text-white border-none h-8 px-4 font-bold"
+                  >
+                    <Receipt className="h-4 w-4 mr-2" />
+                    {creating ? 'Creating...' : 'Create SO'}
+                  </Button>
+                )}
+
+                <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+                  {formData.items.length > 0 && (
+                    <Button
+                      onClick={resetForm}
+                      variant="ghost"
+                      size="icon-sm"
+                      className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      title="Clear Cart"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {formData.items.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                          title="Print Options"
+                        >
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setDirectPrintOrder(buildDraftSalesOrderPrintOrder());
+                          }}
+                        >
+                          <Printer className="h-4 w-4 mr-2" />
+                          Print
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handlePrint(buildDraftSalesOrderPrintOrder())}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Print Preview
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              </div>
+            </OrderSummaryBar>
             <OrderSummaryContent className="bg-none bg-slate-50">
               <div className="space-y-2">
                 {totalDiscount > 0 && (
@@ -2934,91 +3018,6 @@ const SalesOrders = ({ tabId }) => {
                 )}
               </div>
 
-              <OrderCheckoutActions>
-                {formData.items.length > 0 && (
-                  <Button
-                    onClick={resetForm}
-                    variant="secondary"
-                    className="flex-1"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Clear Cart
-                  </Button>
-                )}
-                {formData.items.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="secondary" className="flex-1">
-                        <Printer className="h-4 w-4 mr-2" />
-                        Print
-                        <ChevronDown className="h-4 w-4 ml-2" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setDirectPrintOrder(buildDraftSalesOrderPrintOrder());
-                        }}
-                      >
-                        <Printer className="h-4 w-4 mr-2" />
-                        Print
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handlePrint(buildDraftSalesOrderPrintOrder())}
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        Print Preview
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                <div className="flex items-center space-x-2 px-2">
-                  <Input
-                    type="checkbox"
-                    id="soAutoPrint"
-                    checked={autoPrint}
-                    onChange={(e) => setAutoPrint(e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="soAutoPrint" className="text-sm font-medium text-gray-700 cursor-pointer">
-                    Print after sale
-                  </label>
-                </div>
-                {selectedOrder ? (
-                  <>
-                    <Button
-                      type="button"
-                      onClick={cancelEdit}
-                      variant="secondary"
-                      className="flex-1"
-                    >
-                      Cancel Edit
-                    </Button>
-                    <LoadingButton
-                      onClick={handleUpdate}
-                      isLoading={updating}
-                      disabled={updating || formData.items.length === 0}
-                      variant="default"
-                      size="lg"
-                      className="flex-2"
-                    >
-                      <Receipt className="h-4 w-4 mr-2" />
-                      {updating ? 'Updating...' : 'Update Sales Order'}
-                    </LoadingButton>
-                  </>
-                ) : (
-                  <Button
-                    onClick={handleCreate}
-                    disabled={creating || formData.items.length === 0}
-                    variant="default"
-                    size="lg"
-                    className="flex-2"
-                  >
-                    <Receipt className="h-4 w-4 mr-2" />
-                    {creating ? 'Creating...' : 'Create Sales Order'}
-                  </Button>
-                )}
-              </OrderCheckoutActions>
             </OrderSummaryContent>
           </OrderCheckoutCard>
         </div>

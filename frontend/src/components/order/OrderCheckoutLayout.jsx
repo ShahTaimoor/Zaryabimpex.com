@@ -52,17 +52,20 @@ export function OrderDetailsSection({
 }
 
 /** Blue gradient bar with “Order Summary” (or custom) title. */
-export function OrderSummaryBar({ title = 'Order Summary', className }) {
+export function OrderSummaryBar({ title = 'Order Summary', className, children }) {
   return (
     <div
       className={cn(
-        'bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-700 px-5 py-3.5 shadow-[inset_0_-1px_0_rgba(0,0,0,0.06)] sm:px-7',
+        'flex items-center justify-between bg-white border-b border-slate-200 px-5 py-3 sm:px-7',
         className
       )}
     >
-      <h3 className="text-base font-semibold tracking-tight text-white sm:text-lg">
+      <h3 className="text-base font-bold tracking-tight text-slate-900 sm:text-lg">
         {title}
       </h3>
+      <div className="flex items-center gap-2">
+        {children}
+      </div>
     </div>
   );
 }

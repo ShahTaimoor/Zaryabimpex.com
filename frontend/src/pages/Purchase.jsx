@@ -47,6 +47,7 @@ import {
   OrderCheckoutCard,
   OrderDetailsSection,
   OrderSummaryContent,
+  OrderSummaryBar,
   OrderInsetPanel,
   OrderCheckoutActions,
 } from '../components/order/OrderCheckoutLayout';
@@ -1522,6 +1523,210 @@ export const Purchase = ({ tabId, editData }) => {
               className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${showPurchaseDetailsFields ? 'order-2' : 'order-1'
                 }`}
             >
+              <OrderSummaryBar>
+                <div className="flex items-center gap-3">
+                  <LoadingButton
+                    onClick={handleProcessPurchase}
+                    isLoading={false}
+                    variant="default"
+                    size="sm"
+                    className="bg-slate-900 hover:bg-slate-800 text-white border-none h-8 px-4 font-bold"
+                  >
+                    <Truck className="h-4 w-4 mr-2" />
+                    {editData?.isEditMode ? 'Update' : 'Complete'}
+                  </LoadingButton>
+
+                  <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+                    {purchaseItems.length > 0 && (
+                      <Button
+                        onClick={() => {
+                          setPurchaseItems([]);
+                          setHighlightedPurchaseLineIndex(null);
+                          setSelectedSupplier(null);
+                          setSupplierSearchTerm('');
+                          setDirectDiscount({ type: 'amount', value: 0 });
+                          setAmountPaid(0);
+                          setPaymentMethod('cash');
+                          setSelectedBankAccount('');
+                          setBillDate(getLocalDateString());
+                          toast.success('Cart cleared');
+                        }}
+                        variant="ghost"
+                        size="icon-sm"
+                        className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                        title="Clear Cart"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {purchaseItems.length > 0 && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                            title="Print Options"
+                          >
+                            <Printer className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              const supplierInfoForPrint = selectedSupplier ? {
+                                name: selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name,
+                                email: selectedSupplier.email,
+                                phone: selectedSupplier.phone,
+                                address: (() => {
+                                  if (typeof selectedSupplier.address === 'string' && selectedSupplier.address.trim()) return selectedSupplier.address.trim();
+                                  const addr = selectedSupplier.address || selectedSupplier.companyAddress || selectedSupplier.location;
+                                  if (addr && typeof addr === 'object') {
+                                    const parts = [addr.street || addr.address_line1 || addr.addressLine1 || addr.line1, addr.address_line2 || addr.addressLine2, addr.city, addr.province || addr.state, addr.country, addr.zipCode || addr.zip || addr.postalCode || addr.postal_code].filter(Boolean);
+                                    if (parts.length) return parts.join(', ');
+                                  }
+                                  if (selectedSupplier.addresses?.length) {
+                                    const a = selectedSupplier.addresses.find(x => x.isDefault) || selectedSupplier.addresses.find(x => x.type === 'billing' || x.type === 'both') || selectedSupplier.addresses[0];
+                                    const parts = [a.street || a.address_line1 || a.addressLine1, a.city, a.province || a.state, a.country, a.zipCode || a.zip].filter(Boolean);
+                                    if (parts.length) return parts.join(', ');
+                                  }
+                                  return null;
+                                })(),
+                                businessName: selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.companyName
+                              } : null;
+                              const tempOrder = {
+                                orderNumber: `PO-${Date.now()}`,
+                                orderType: 'purchase',
+                                supplier: selectedSupplier,
+                                supplierInfo: supplierInfoForPrint,
+                                customer: selectedSupplier,
+                                customerInfo: supplierInfoForPrint,
+                                items: purchaseItems.map(item => {
+                                  const product = item.product || {};
+                                  const displayName = product.isVariant
+                                    ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
+                                    : (product.name || 'Unknown Product');
+
+                                  return {
+                                    product: {
+                                      name: displayName,
+                                      isVariant: product.isVariant,
+                                      variantType: product.variantType,
+                                      variantValue: product.variantValue,
+                                      ...(product.barcode ? { barcode: product.barcode } : {}),
+                                      ...(product.sku ? { sku: product.sku } : {})
+                                    },
+                                    quantity: item.quantity,
+                                    unitPrice: item.costPerUnit
+                                  };
+                                }),
+                                pricing: {
+                                  subtotal: subtotal,
+                                  discountAmount: directDiscountAmount,
+                                  taxAmount: tax,
+                                  isTaxExempt: !taxSystemEnabled,
+                                  total: total
+                                },
+                                payment: {
+                                  method: paymentMethod,
+                                  bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
+                                  amountPaid: amountPaid,
+                                  remainingBalance: total - amountPaid,
+                                  isPartialPayment: amountPaid < total
+                                },
+                                createdAt: new Date(),
+                                createdBy: { name: 'Current User' },
+                                invoiceNumber: invoiceNumber,
+                                expectedDelivery: expectedDelivery,
+                                notes: notes
+                              };
+                              setDirectPrintOrder(tempOrder);
+                            }}
+                          >
+                            <Printer className="h-4 w-4 mr-2" />
+                            Print
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              const supplierInfoForPrint = selectedSupplier ? {
+                                name: selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name,
+                                email: selectedSupplier.email,
+                                phone: selectedSupplier.phone,
+                                address: (() => {
+                                  if (typeof selectedSupplier.address === 'string' && selectedSupplier.address.trim()) return selectedSupplier.address.trim();
+                                  const addr = selectedSupplier.address || selectedSupplier.companyAddress || selectedSupplier.location;
+                                  if (addr && typeof addr === 'object') {
+                                    const parts = [addr.street || addr.address_line1 || addr.addressLine1 || addr.line1, addr.address_line2 || addr.addressLine2, addr.city, addr.province || addr.state, addr.country, addr.zipCode || addr.zip || addr.postalCode || addr.postal_code].filter(Boolean);
+                                    if (parts.length) return parts.join(', ');
+                                  }
+                                  if (selectedSupplier.addresses?.length) {
+                                    const a = selectedSupplier.addresses.find(x => x.isDefault) || selectedSupplier.addresses.find(x => x.type === 'billing' || x.type === 'both') || selectedSupplier.addresses[0];
+                                    const parts = [a.street || a.address_line1 || a.addressLine1, a.city, a.province || a.state, a.country, a.zipCode || a.zip].filter(Boolean);
+                                    if (parts.length) return parts.join(', ');
+                                  }
+                                  return null;
+                                })(),
+                                businessName: selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.companyName
+                              } : null;
+                              const tempOrder = {
+                                orderNumber: `PO-${Date.now()}`,
+                                orderType: 'purchase',
+                                supplier: selectedSupplier,
+                                supplierInfo: supplierInfoForPrint,
+                                customer: selectedSupplier,
+                                customerInfo: supplierInfoForPrint,
+                                items: purchaseItems.map(item => {
+                                  const product = item.product || {};
+                                  const displayName = product.isVariant
+                                    ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
+                                    : (product.name || 'Unknown Product');
+
+                                  return {
+                                    product: {
+                                      name: displayName,
+                                      isVariant: product.isVariant,
+                                      variantType: product.variantType,
+                                      variantValue: product.variantValue,
+                                      ...(product.barcode ? { barcode: product.barcode } : {}),
+                                      ...(product.sku ? { sku: product.sku } : {})
+                                    },
+                                    quantity: item.quantity,
+                                    unitPrice: item.costPerUnit
+                                  };
+                                }),
+                                pricing: {
+                                  subtotal: subtotal,
+                                  discountAmount: directDiscountAmount,
+                                  taxAmount: tax,
+                                  isTaxExempt: !taxSystemEnabled,
+                                  total: total
+                                },
+                                payment: {
+                                  method: paymentMethod,
+                                  bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
+                                  amountPaid: amountPaid,
+                                  remainingBalance: total - amountPaid,
+                                  isPartialPayment: amountPaid < total
+                                },
+                                createdAt: new Date(),
+                                createdBy: { name: 'Current User' },
+                                invoiceNumber: invoiceNumber,
+                                expectedDelivery: expectedDelivery,
+                                notes: notes
+                              };
+                              setCurrentOrder(tempOrder);
+                              setShowPrintModal(true);
+                            }}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Print Preview
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                </div>
+              </OrderSummaryBar>
               <OrderSummaryContent className="bg-none bg-slate-50">
                 <div className="space-y-2">
                   {directDiscountAmount > 0 && (
@@ -1652,211 +1857,21 @@ export const Purchase = ({ tabId, editData }) => {
                   })()}
                 </div>
 
-                <OrderCheckoutActions>
-                  {purchaseItems.length > 0 && (
-                    <Button
-                      onClick={() => {
-                        setPurchaseItems([]);
-                        setHighlightedPurchaseLineIndex(null);
-                        setSelectedSupplier(null);
-                        setSupplierSearchTerm('');
-                        setDirectDiscount({ type: 'amount', value: 0 });
-                        setAmountPaid(0);
-                        setPaymentMethod('cash');
-                        setSelectedBankAccount('');
-                        setBillDate(getLocalDateString());
-                        toast.success('Cart cleared');
-                      }}
-                      variant="secondary"
-                      className="flex-1"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Clear Cart
-                    </Button>
-                  )}
-                  {purchaseItems.length > 0 && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="secondary" className="flex-1">
-                          <Printer className="h-4 w-4 mr-2" />
-                          Print
-                          <ChevronDown className="h-4 w-4 ml-2" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            const supplierInfoForPrint = selectedSupplier ? {
-                              name: selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name,
-                              email: selectedSupplier.email,
-                              phone: selectedSupplier.phone,
-                              address: (() => {
-                                if (typeof selectedSupplier.address === 'string' && selectedSupplier.address.trim()) return selectedSupplier.address.trim();
-                                const addr = selectedSupplier.address || selectedSupplier.companyAddress || selectedSupplier.location;
-                                if (addr && typeof addr === 'object') {
-                                  const parts = [addr.street || addr.address_line1 || addr.addressLine1 || addr.line1, addr.address_line2 || addr.addressLine2, addr.city, addr.province || addr.state, addr.country, addr.zipCode || addr.zip || addr.postalCode || addr.postal_code].filter(Boolean);
-                                  if (parts.length) return parts.join(', ');
-                                }
-                                if (selectedSupplier.addresses?.length) {
-                                  const a = selectedSupplier.addresses.find(x => x.isDefault) || selectedSupplier.addresses.find(x => x.type === 'billing' || x.type === 'both') || selectedSupplier.addresses[0];
-                                  const parts = [a.street || a.address_line1 || a.addressLine1, a.city, a.province || a.state, a.country, a.zipCode || a.zip].filter(Boolean);
-                                  if (parts.length) return parts.join(', ');
-                                }
-                                return null;
-                              })(),
-                              businessName: selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.companyName
-                            } : null;
-                            const tempOrder = {
-                              orderNumber: `PO-${Date.now()}`,
-                              orderType: 'purchase',
-                              supplier: selectedSupplier,
-                              supplierInfo: supplierInfoForPrint,
-                              customer: selectedSupplier,
-                              customerInfo: supplierInfoForPrint,
-                              items: purchaseItems.map(item => {
-                                const product = item.product || {};
-                                const displayName = product.isVariant
-                                  ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
-                                  : (product.name || 'Unknown Product');
-
-                                return {
-                                  product: {
-                                    name: displayName,
-                                    isVariant: product.isVariant,
-                                    variantType: product.variantType,
-                                    variantValue: product.variantValue,
-                                    ...(product.barcode ? { barcode: product.barcode } : {}),
-                                    ...(product.sku ? { sku: product.sku } : {})
-                                  },
-                                  quantity: item.quantity,
-                                  unitPrice: item.costPerUnit
-                                };
-                              }),
-                              pricing: {
-                                subtotal: subtotal,
-                                discountAmount: directDiscountAmount,
-                                taxAmount: tax,
-                                isTaxExempt: !taxSystemEnabled,
-                                total: total
-                              },
-                              payment: {
-                                method: paymentMethod,
-                                bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
-                                amountPaid: amountPaid,
-                                remainingBalance: total - amountPaid,
-                                isPartialPayment: amountPaid < total
-                              },
-                              createdAt: new Date(),
-                              createdBy: { name: 'Current User' },
-                              invoiceNumber: invoiceNumber,
-                              expectedDelivery: expectedDelivery,
-                              notes: notes
-                            };
-                            setDirectPrintOrder(tempOrder);
-                          }}
-                        >
-                          <Printer className="h-4 w-4 mr-2" />
-                          Print
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            const supplierInfoForPrint = selectedSupplier ? {
-                              name: selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name,
-                              email: selectedSupplier.email,
-                              phone: selectedSupplier.phone,
-                              address: (() => {
-                                if (typeof selectedSupplier.address === 'string' && selectedSupplier.address.trim()) return selectedSupplier.address.trim();
-                                const addr = selectedSupplier.address || selectedSupplier.companyAddress || selectedSupplier.location;
-                                if (addr && typeof addr === 'object') {
-                                  const parts = [addr.street || addr.address_line1 || addr.addressLine1 || addr.line1, addr.address_line2 || addr.addressLine2, addr.city, addr.province || addr.state, addr.country, addr.zipCode || addr.zip || addr.postalCode || addr.postal_code].filter(Boolean);
-                                  if (parts.length) return parts.join(', ');
-                                }
-                                if (selectedSupplier.addresses?.length) {
-                                  const a = selectedSupplier.addresses.find(x => x.isDefault) || selectedSupplier.addresses.find(x => x.type === 'billing' || x.type === 'both') || selectedSupplier.addresses[0];
-                                  const parts = [a.street || a.address_line1 || a.addressLine1, a.city, a.province || a.state, a.country, a.zipCode || a.zip].filter(Boolean);
-                                  if (parts.length) return parts.join(', ');
-                                }
-                                return null;
-                              })(),
-                              businessName: selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.companyName
-                            } : null;
-                            const tempOrder = {
-                              orderNumber: `PO-${Date.now()}`,
-                              orderType: 'purchase',
-                              supplier: selectedSupplier,
-                              supplierInfo: supplierInfoForPrint,
-                              customer: selectedSupplier,
-                              customerInfo: supplierInfoForPrint,
-                              items: purchaseItems.map(item => {
-                                const product = item.product || {};
-                                const displayName = product.isVariant
-                                  ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
-                                  : (product.name || 'Unknown Product');
-
-                                return {
-                                  product: {
-                                    name: displayName,
-                                    isVariant: product.isVariant,
-                                    variantType: product.variantType,
-                                    variantValue: product.variantValue,
-                                    ...(product.barcode ? { barcode: product.barcode } : {}),
-                                    ...(product.sku ? { sku: product.sku } : {})
-                                  },
-                                  quantity: item.quantity,
-                                  unitPrice: item.costPerUnit
-                                };
-                              }),
-                              pricing: {
-                                subtotal: subtotal,
-                                discountAmount: directDiscountAmount,
-                                taxAmount: tax,
-                                isTaxExempt: !taxSystemEnabled,
-                                total: total
-                              },
-                              payment: {
-                                method: paymentMethod,
-                                bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
-                                amountPaid: amountPaid,
-                                remainingBalance: total - amountPaid,
-                                isPartialPayment: amountPaid < total
-                              },
-                              createdAt: new Date(),
-                              createdBy: { name: 'Current User' },
-                              invoiceNumber: invoiceNumber,
-                              expectedDelivery: expectedDelivery,
-                              notes: notes
-                            };
-                            setCurrentOrder(tempOrder);
-                            setShowPrintModal(true);
-                          }}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Print Preview
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                <OrderCheckoutActions className="mt-4 border-0 pt-0">
                   {!editData?.isEditMode && purchaseItems.length > 0 && (
-                    <label className="flex items-center space-x-2 px-2 text-sm font-medium text-gray-700 cursor-pointer">
+                    <div className="flex items-center space-x-2 px-2 mb-2">
                       <Input
                         type="checkbox"
+                        id="printLabelsAfterPurchase"
                         checked={printBarcodeLabelsAfterInvoice}
                         onChange={(e) => setPrintBarcodeLabelsAfterInvoice(e.target.checked)}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
-                      <span>Print labels after purchase</span>
-                    </label>
+                      <label htmlFor="printLabelsAfterPurchase" className="text-sm font-medium text-gray-700 cursor-pointer">
+                        Print labels after purchase
+                      </label>
+                    </div>
                   )}
-                  <LoadingButton
-                    onClick={handleProcessPurchase}
-                    isLoading={false}
-                    variant="default"
-                    size="lg"
-                    className="flex-2"
-                  >
-                    <Truck className="h-4 w-4 mr-2" />
-                    {editData?.isEditMode ? 'Update Purchase Invoice' : 'Complete Purchase & Update Inventory'}
-                  </LoadingButton>
                 </OrderCheckoutActions>
               </OrderSummaryContent>
             </OrderCheckoutCard>
