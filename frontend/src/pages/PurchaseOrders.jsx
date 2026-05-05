@@ -1264,84 +1264,88 @@ export const PurchaseOrders = ({ tabId }) => {
 
   return (
     <div className="space-y-4 lg:space-y-6">
-      <div className="min-w-0">
-        <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Purchase Orders</h1>
-      </div>
-
-      {/* Supplier Selection and Information Row */}
-      <div className="flex flex-col md:flex-row items-start space-y-4 md:space-y-0 md:space-x-12">
-        {/* Supplier Selection */}
-        <div className="w-full max-w-3xl flex-shrink-0">
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Select Supplier
-            </label>
-            {selectedSupplier && (
-              <button
-                onClick={() => {
-                  setSelectedSupplier(null);
-                  setSupplierSearchTerm('');
-                  setFormData(prev => ({ ...prev, supplier: '' }));
-                  if (updateTabTitle && getActiveTab) {
-                    const activeTab = getActiveTab();
-                    if (activeTab) {
-                      updateTabTitle(activeTab.id, 'PO');
-                    }
-                  }
-                }}
-                className="text-xs text-blue-600 hover:text-blue-800 underline"
-              >
-                Change Supplier
-              </button>
-            )}
+      {/* Modern Header Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center flex-1 gap-3">
+            <div className="flex-shrink-0">
+              <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Purchase Orders</h1>
+            </div>
+            <div className="hidden sm:block h-7 w-px bg-gray-200"></div>
+            <div className="flex-1 min-w-0 sm:min-w-[220px] lg:max-w-lg">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  Select Supplier
+                </label>
+                {selectedSupplier && (
+                  <button
+                    onClick={() => {
+                      setSelectedSupplier(null);
+                      setSupplierSearchTerm('');
+                      setFormData(prev => ({ ...prev, supplier: '' }));
+                      if (updateTabTitle && getActiveTab) {
+                        const activeTab = getActiveTab();
+                        if (activeTab) {
+                          updateTabTitle(activeTab.id, 'PO');
+                        }
+                      }
+                    }}
+                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold uppercase tracking-wider underline"
+                  >
+                    Change
+                  </button>
+                )}
+              </div>
+              <SearchableDropdown
+                ref={supplierSearchRef}
+                placeholder="Search suppliers by name, email, or business..."
+                items={suppliers || []}
+                onSelect={handleSupplierSelect}
+                onSearch={handleSupplierSearch}
+                displayKey={supplierDisplayKey}
+                selectedItem={selectedSupplier}
+                loading={suppliersLoading || suppliersFetching}
+                emptyMessage={supplierSearchTerm.length > 0 ? "No suppliers found" : "Start typing to search suppliers..."}
+                value={supplierSearchTerm}
+              />
+            </div>
           </div>
-          <SearchableDropdown
-            ref={supplierSearchRef}
-            placeholder="Search suppliers by name, email, or business..."
-            items={suppliers || []}
-            onSelect={handleSupplierSelect}
-            onSearch={handleSupplierSearch}
-            displayKey={supplierDisplayKey}
-            selectedItem={selectedSupplier}
-            loading={suppliersLoading || suppliersFetching}
-            emptyMessage={supplierSearchTerm.length > 0 ? "No suppliers found" : "Start typing to search suppliers..."}
-            value={supplierSearchTerm}
-          />
-        </div>
 
-        {/* Supplier Information - Right Side */}
-        <div className="flex-1">
-          {selectedSupplier ? (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-              <div className="flex items-center space-x-3">
-                <Building className="h-5 w-5 text-gray-400" />
-                <div className="flex-1">
-                  <p className="font-medium">{selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name || 'Unknown'}</p>
-                  <p className="text-sm text-gray-600 capitalize">
-                    {selectedSupplier.businessType || 'Business'} • {selectedSupplier.reliability || 'Standard'}
-                  </p>
-                  <div className="flex items-center space-x-4 mt-2">
-                    <div className="flex items-center space-x-1">
-                      <span className="text-xs text-gray-500">Outstanding Balance:</span>
-                      <span className={`text-sm font-medium ${(Number(selectedSupplier.pendingBalance ?? selectedSupplier.outstandingBalance ?? 0) || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {(Number(selectedSupplier.pendingBalance ?? selectedSupplier.outstandingBalance ?? 0) || 0).toFixed(2)}
-                      </span>
-                    </div>
+          <div className="lg:w-auto w-full lg:min-w-[360px] lg:max-w-xl">
+            {selectedSupplier ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-2.5">
+                <div className="flex items-center gap-2 text-xs whitespace-nowrap overflow-hidden">
+                  <span className="font-bold text-gray-900 truncate">
+                    {selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name || 'Unknown'}
+                  </span>
+                  <span className="text-gray-400">|</span>
+                  <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded font-bold uppercase border border-blue-100">
+                    PO
+                  </span>
+                  <span className="text-gray-400">|</span>
+                    <span className="text-gray-600 capitalize">
+                      {selectedSupplier.businessType || 'Wholesaler'}
+                    </span>
+                    <span className="text-gray-400">|</span>
+                    <span className="text-gray-500 uppercase font-semibold">Outstanding</span>
+                    <span className={`font-bold ${(Number(selectedSupplier.pendingBalance ?? selectedSupplier.outstandingBalance ?? 0) || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {(Number(selectedSupplier.pendingBalance ?? selectedSupplier.outstandingBalance ?? 0) || 0).toFixed(2)}
+                    </span>
                     {selectedSupplier.phone && (
-                      <div className="flex items-center space-x-1">
-                        <Phone className="h-3 w-3 text-gray-400" />
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-400">|</span>
+                        <Phone className="h-3 w-3 text-gray-400 flex-shrink-0" />
                         <span className="text-xs text-gray-500">{selectedSupplier.phone}</span>
                       </div>
                     )}
-                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="hidden lg:block">
-              {/* Empty space to maintain layout consistency */}
-            </div>
-          )}
+            ) : (
+              <div className="hidden lg:flex items-center justify-center h-full px-8 border-2 border-dashed border-gray-100 rounded-xl">
+                <span className="text-gray-400 text-sm font-medium italic">No supplier selected</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1352,7 +1356,7 @@ export const PurchaseOrders = ({ tabId }) => {
         </div>
         <div className="card-content">
           {/* Product Search */}
-          <div className="mb-6">
+          <div className="mb-2">
             <div className="space-y-4">
               {/* Mobile Layout */}
               <div className="md:hidden space-y-3">
@@ -1577,7 +1581,7 @@ export const PurchaseOrders = ({ tabId }) => {
               <p className="mt-2">No items in cart</p>
             </div>
           ) : (
-            <div className="space-y-4 border-t border-gray-200 pt-6">
+            <div className="space-y-3 border-t border-gray-200 pt-2">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-base sm:text-md font-medium text-gray-700">Cart Items</h4>
                 <Button

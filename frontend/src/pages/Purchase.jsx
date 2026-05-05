@@ -9,7 +9,6 @@ import {
   Eye,
   ChevronDown,
   Phone,
-  Mail,
   MapPin,
   ArrowUpDown,
   Download,
@@ -1131,142 +1130,120 @@ export const Purchase = ({ tabId, editData }) => {
   return (
     <AsyncErrorBoundary>
       <div className="space-y-4 lg:space-y-6">
-        <div>
-          <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Purchase</h1>
-        </div>
-
-        {/* Supplier Selection and Information Row */}
-        <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start space-x-12'}`}>
-          {/* Supplier Selection */}
-          <div className={`${isMobile ? 'w-full' : 'w-full max-w-3xl flex-shrink-0'}`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Select Supplier
-                </label>
-                {selectedSupplier && (
-                  <button
-                    onClick={() => {
-                      setSelectedSupplier(null);
-                      setSupplierSearchTerm('');
-                      setTimeout(() => {
-                        if (supplierSearchRef.current) {
-                          supplierSearchRef.current.focus();
-                        }
-                      }, 100);
-                    }}
-                    className="text-xs text-blue-600 hover:text-blue-800 underline"
-                    title="Change supplier"
-                  >
-                    Change Supplier
-                  </button>
-                )}
+        {/* Modern Header Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center flex-1 gap-3">
+              <div className="flex-shrink-0">
+                <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Purchase</h1>
               </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (supplierSearchTerm) {
-                      try {
-                        await refetchSuppliers?.();
-                      } catch {
-                        /* ignore */
-                      }
-                    }
-                    if ((selectedSupplier?.id || selectedSupplier?._id) && refetchSupplier) {
-                      try {
-                        const result = await refetchSupplier();
-                        const s =
-                          result?.data?.supplier ??
-                          result?.data?.data?.supplier ??
-                          result?.data?.data;
-                        if (s && (s._id || s.id)) {
-                          setSelectedSupplier(s);
-                        }
-                      } catch {
-                        /* ignore */
-                      }
-                    }
-                  }}
-                  className="text-xs text-blue-600 hover:text-blue-800 underline"
-                  title="Refresh supplier list and outstanding balance"
-                >
-                  Refresh
-                </button>
-              </div>
-            </div>
-            <SearchableDropdown
-              ref={supplierSearchRef}
-              placeholder="Search suppliers by name, email, or business..."
-              items={suppliers?.data?.suppliers || suppliers?.suppliers || []}
-              onSelect={handleSupplierSelect}
-              onSearch={setSupplierSearchTerm}
-              displayKey={supplierDisplayKey}
-              selectedItem={selectedSupplier}
-              loading={suppliersLoading}
-              emptyMessage={supplierSearchTerm.length > 0 ? "No suppliers found" : "Start typing to search suppliers..."}
-            />
-          </div>
-
-          {/* Supplier Information - Right Side */}
-          <div className={`${isMobile ? 'w-full' : 'flex-1'}`}>
-            {selectedSupplier ? (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                <div className="flex items-center space-x-3">
-                  <Building className="h-5 w-5 text-gray-400" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name || 'Unknown Supplier'}</p>
-                    <p className="text-sm text-gray-600 capitalize mt-1">
-                      {selectedSupplier.businessType && selectedSupplier.reliability
-                        ? `${selectedSupplier.businessType} • ${selectedSupplier.reliability}`
-                        : selectedSupplier.businessType || selectedSupplier.reliability || 'Supplier Information'
-                      }
-                    </p>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:space-x-4 mt-2">
-                      <div className="flex items-center space-x-1">
-                        <span className="text-xs text-gray-500">Outstanding Balance:</span>
-                        <span className={`text-xs sm:text-sm font-medium ${supplierOutstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {Math.round(supplierOutstanding)}
-                        </span>
-                      </div>
-                      {selectedSupplier.phone && (
-                        <div className="flex items-center space-x-1">
-                          <Phone className="h-3 w-3 text-gray-400" />
-                          <span className="text-xs text-gray-500 truncate">{selectedSupplier.phone}</span>
-                        </div>
-                      )}
-                      {selectedSupplier.email && (
-                        <div className="flex items-center space-x-1 min-w-0">
-                          <Mail className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                          <span className="text-xs text-gray-500 truncate">{selectedSupplier.email}</span>
-                        </div>
-                      )}
-                    </div>
-                    {selectedSupplier.address && (
-                      <div className="flex items-start space-x-1 mt-1">
-                        <MapPin className="h-3 w-3 text-gray-400 flex-shrink-0 mt-0.5" />
-                        <span className="text-xs text-gray-500 break-words">
-                          {(() => {
-                            const addr = selectedSupplier.address;
-                            if (typeof addr === 'string') return addr;
-                            return [addr.street, addr.city, addr.province || addr.state, addr.country].filter(Boolean).join(', ');
-                          })()}
-                        </span>
-                      </div>
+              <div className="hidden sm:block h-7 w-px bg-gray-200"></div>
+              <div className="flex-1 min-w-0 sm:min-w-[220px] lg:max-w-lg">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      Select Supplier
+                    </label>
+                    {selectedSupplier && (
+                      <button
+                        onClick={() => {
+                          setSelectedSupplier(null);
+                          setSupplierSearchTerm('');
+                          setTimeout(() => {
+                            if (supplierSearchRef.current) {
+                              supplierSearchRef.current.focus();
+                            }
+                          }, 100);
+                        }}
+                        className="text-[10px] text-blue-600 hover:text-blue-800 font-bold uppercase tracking-wider underline"
+                        title="Change supplier"
+                      >
+                        Change
+                      </button>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (supplierSearchTerm) {
+                        try {
+                          await refetchSuppliers?.();
+                        } catch {
+                          /* ignore */
+                        }
+                      }
+                      if ((selectedSupplier?.id || selectedSupplier?._id) && refetchSupplier) {
+                        try {
+                          const result = await refetchSupplier();
+                          const s =
+                            result?.data?.supplier ??
+                            result?.data?.data?.supplier ??
+                            result?.data?.data;
+                          if (s && (s._id || s.id)) {
+                            setSelectedSupplier(s);
+                          }
+                        } catch {
+                          /* ignore */
+                        }
+                      }
+                    }}
+                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold uppercase tracking-wider underline"
+                    title="Refresh supplier list and outstanding balance"
+                  >
+                    Refresh
+                  </button>
                 </div>
+                <SearchableDropdown
+                  ref={supplierSearchRef}
+                  placeholder="Search suppliers by name, email, or business..."
+                  items={suppliers?.data?.suppliers || suppliers?.suppliers || []}
+                  onSelect={handleSupplierSelect}
+                  onSearch={setSupplierSearchTerm}
+                  displayKey={supplierDisplayKey}
+                  selectedItem={selectedSupplier}
+                  loading={suppliersLoading}
+                  emptyMessage={supplierSearchTerm.length > 0 ? "No suppliers found" : "Start typing to search suppliers..."}
+                />
               </div>
-            ) : (
-              <div className="hidden lg:block">
-                {/* Empty space to maintain layout consistency */}
-              </div>
-            )}
+            </div>
+
+            <div className="lg:w-auto w-full lg:min-w-[360px] lg:max-w-xl">
+              {selectedSupplier ? (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-2.5">
+                  <div className="flex items-center gap-2 text-xs whitespace-nowrap overflow-hidden">
+                    <span className="font-bold text-gray-900 truncate">
+                      {selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name || 'Unknown Supplier'}
+                    </span>
+                    <span className="text-gray-400">|</span>
+                      <span className="text-gray-600 capitalize">
+                        {selectedSupplier.businessType || 'Wholesaler'}
+                      </span>
+                      <span className="text-gray-400">|</span>
+                      <span className="text-gray-500 uppercase font-semibold">Outstanding</span>
+                      <span className={`font-bold ${supplierOutstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {Math.round(supplierOutstanding)}
+                      </span>
+                      {selectedSupplier.phone && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">|</span>
+                          <Phone className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                          <span className="text-xs text-gray-500">{selectedSupplier.phone}</span>
+                        </div>
+                      )}
+                  </div>
+                </div>
+              ) : (
+                <div className="hidden lg:flex items-center justify-center h-full px-8 border-2 border-dashed border-gray-100 rounded-xl">
+                  <span className="text-gray-400 text-sm font-medium italic">No supplier selected</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Combined Product Selection and Cart Section */}
         <ProductSelectionCartSection
+          searchSectionClassName="mb-2"
           headerActions={
             purchaseItems.length > 0 ? (
               <Button
@@ -1294,6 +1271,7 @@ export const Purchase = ({ tabId, editData }) => {
           emptyText="No items in cart"
         >
           <CartItemsTableSection
+            className="pt-2"
             desktopHeader={null}
           >
             <div

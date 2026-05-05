@@ -4,6 +4,7 @@ export function ProductSelectionCartSection({
   title = 'Product Selection & Cart',
   headerActions = null,
   searchSection = null,
+  searchSectionClassName = 'mb-6',
   isEmpty = false,
   emptyIcon: EmptyIcon = null,
   emptyText = 'No items in cart',
@@ -20,7 +21,7 @@ export function ProductSelectionCartSection({
         </div>
       </div>
       <div className="card-content">
-        {searchSection ? <div className="mb-6">{searchSection}</div> : null}
+        {searchSection ? <div className={searchSectionClassName}>{searchSection}</div> : null}
 
         {isEmpty ? (
           <div className="p-8 text-center text-gray-500">

@@ -1428,154 +1428,126 @@ export const Sales = ({ tabId, editData }) => {
   return (
     <AsyncErrorBoundary>
       <div className="space-y-4 lg:space-y-6">
-        <div>
-          <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Point of Sales</h1>
-        </div>
-
-        {/* Customer Selection and Information Row */}
-        <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start space-x-12'}`}>
-          {/* Customer Selection */}
-          <div className={`${isMobile ? 'w-full' : 'w-full max-w-3xl flex-shrink-0'}`}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Select Customer
-                </label>
-                {selectedCustomer && (
-                  <button
-                    onClick={() => {
-                      setSelectedCustomer(null);
-                      setCustomerSearchTerm('');
-                    }}
-                    className="text-xs text-blue-600 hover:text-blue-800 underline"
-                    title="Change customer"
-                  >
-                    Change Customer
-                  </button>
-                )}
+        {/* Modern Header Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4">
+            {/* Title & Customer Selection */}
+            <div className="flex flex-col sm:flex-row sm:items-center flex-1 gap-3">
+              <div className="flex-shrink-0">
+                <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Point of Sales</h1>
               </div>
-              <div className="flex items-center space-x-2">
-                <div className="flex items-center space-x-2">
-                  <label className="text-xs font-normal text-gray-400">Price Type:</label>
-                  <select
-                    value={priceType}
-                    onChange={(e) => setPriceType(e.target.value)}
-                    className="border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-primary-400 focus:border-primary-400"
-                  >
-                    <option value="wholesale">Wholesale</option>
-                    <option value="retail">Retail</option>
-                    <option value="distributor">Distributor</option>
-                    <option value="custom">Custom</option>
-                  </select>
+              <div className="hidden sm:block h-7 w-px bg-gray-200"></div>
+              <div className="flex-1 min-w-0 sm:min-w-[300px]">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      Select Customer
+                    </label>
+                    {selectedCustomer && (
+                      <button
+                        onClick={() => {
+                          setSelectedCustomer(null);
+                          setCustomerSearchTerm('');
+                        }}
+                        className="text-[10px] text-blue-600 hover:text-blue-800 font-bold uppercase tracking-wider underline"
+                      >
+                        Change
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price Type:</label>
+                    <select
+                      value={priceType}
+                      onChange={(e) => setPriceType(e.target.value)}
+                      className="bg-gray-50 border-none text-[11px] font-bold text-gray-700 rounded-md py-0 px-2 h-5 focus:ring-0 cursor-pointer"
+                    >
+                      <option value="wholesale">Wholesale</option>
+                      <option value="retail">Retail</option>
+                      <option value="distributor">Distributor</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                  </div>
                 </div>
+                <SearchableDropdown
+                  placeholder="Search customers by name, email, or business..."
+                  items={customers || []}
+                  onSelect={handleCustomerSelect}
+                  onSearch={setCustomerSearchTerm}
+                  selectedItem={selectedCustomer}
+                  rightContentKey="city"
+                  displayKey={(customer) => {
+                    const name = customer?.displayName ?? customer?.display_name ?? customer?.businessName ?? customer?.business_name ?? customer?.name ?? 'Customer';
+                    const totalBalance = customer?.currentBalance !== undefined && customer?.currentBalance !== null
+                      ? Number(customer.currentBalance)
+                      : (Number(customer?.pendingBalance ?? 0) - Number(customer?.advanceBalance ?? 0));
+                    const hasBalance = totalBalance !== 0 && !Number.isNaN(totalBalance);
+                    const isPayable = totalBalance < 0;
+                    const isReceivable = totalBalance > 0;
+
+                    return (
+                      <div>
+                        <div className="font-medium">{name}</div>
+                        {hasBalance ? (
+                          <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
+                            Total Balance: {isPayable ? '-' : '+'}{Math.abs(totalBalance).toFixed(2)}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  }}
+                  loading={customersLoading || customersFetching}
+                  emptyMessage="No customers found"
+                />
               </div>
             </div>
-            <SearchableDropdown
-              placeholder="Search customers by name, email, or business..."
-              items={customers || []}
-              onSelect={handleCustomerSelect}
-              onSearch={setCustomerSearchTerm}
-              selectedItem={selectedCustomer}
-              rightContentKey="city"
-              displayKey={(customer) => {
-                const name = customer?.displayName ?? customer?.display_name ?? customer?.businessName ?? customer?.business_name ?? customer?.name ?? 'Customer';
-                const totalBalance = customer?.currentBalance !== undefined && customer?.currentBalance !== null
-                  ? Number(customer.currentBalance)
-                  : (Number(customer?.pendingBalance ?? 0) - Number(customer?.advanceBalance ?? 0));
-                const hasBalance = totalBalance !== 0 && !Number.isNaN(totalBalance);
-                const isPayable = totalBalance < 0;
-                const isReceivable = totalBalance > 0;
+
+            {/* Customer Information - Right Side */}
+            <div className="lg:w-auto w-full lg:max-w-md">
+              {selectedCustomer ? (() => {
+                const balanceSource = selectedCustomer ?? customerWithBalance;
+                const creditLimitNum = Math.max(0, Number(selectedCustomer?.creditLimit ?? selectedCustomer?.credit_limit ?? balanceSource?.creditLimit ?? balanceSource?.credit_limit ?? 0) || 0);
+                const availableCreditNum = Math.max(0, creditLimitNum - currentBalanceNum);
+                const isPayable = currentBalanceNum < 0;
+                const isReceivable = currentBalanceNum > 0;
 
                 return (
-                  <div>
-                    <div className="font-medium">{name}</div>
-                    {hasBalance ? (
-                      <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
-                        Total Balance: {isPayable ? '-' : '+'}{Math.abs(totalBalance).toFixed(2)}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              }}
-              loading={customersLoading || customersFetching}
-              emptyMessage="No customers found"
-            />
-          </div>
-
-          {/* Customer Information - Right Side */}
-          <div className={`${isMobile ? 'w-full' : 'flex-1'}`}>
-            {selectedCustomer ? (() => {
-              // Prioritize balance from selectedCustomer (from list with bulk balances - already correct)
-              // Then fallback to customerWithBalance (from detail query) if needed
-              const balanceSource = selectedCustomer ?? customerWithBalance;
-              const creditLimitNum = Math.max(0, Number(selectedCustomer?.creditLimit ?? selectedCustomer?.credit_limit ?? balanceSource?.creditLimit ?? balanceSource?.credit_limit ?? 0) || 0);
-              const availableCreditNum = Math.max(0, creditLimitNum - currentBalanceNum);
-              return (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                  <div className="flex items-center space-x-3">
-                    <User className="h-5 w-5 text-gray-400" />
-                    <div className="flex-1">
-                      <p className="font-medium">{selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name}</p>
-                      <p className="text-sm text-gray-600 capitalize">
-                        {selectedCustomer.businessType ?? '—'} • {selectedCustomer.phone || 'No phone'}
-                      </p>
-                      <div className="flex items-center space-x-4 mt-2 flex-wrap gap-y-1">
-                        {(() => {
-                          const isPayable = currentBalanceNum < 0;
-                          const isReceivable = currentBalanceNum > 0;
-                          return (
-                            <div className="flex items-center space-x-1">
-                              <span className="text-xs text-gray-500">Balance:</span>
-                              <span className={`text-sm font-medium ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'}`}>
-                                {isPayable ? '-' : ''}{Math.abs(currentBalanceNum).toFixed(2)}
-                              </span>
-                            </div>
-                          );
-                        })()}
-                        <div className="flex items-center space-x-1">
-                          <span className="text-xs text-gray-500">Credit Limit:</span>
-                          <span className={`text-sm font-medium ${(creditLimitNum > 0) ? (
-                            currentBalanceNum >= creditLimitNum * 0.9
-                              ? 'text-red-600'
-                              : currentBalanceNum >= creditLimitNum * 0.7
-                                ? 'text-yellow-600'
-                                : 'text-blue-600'
-                          ) : 'text-gray-600'
-                            }`}>
-                            {creditLimitNum.toFixed(2)}
-                          </span>
-                          {creditLimitNum > 0 && currentBalanceNum >= creditLimitNum * 0.9 && (
-                            <span className="text-xs text-red-600 font-bold ml-1">⚠️</span>
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <span className="text-xs text-gray-500">Available Credit:</span>
-                          <span className={`text-sm font-medium ${creditLimitNum > 0 ? (
-                            availableCreditNum <= creditLimitNum * 0.1
-                              ? 'text-red-600'
-                              : availableCreditNum <= creditLimitNum * 0.3
-                                ? 'text-yellow-600'
-                                : 'text-green-600'
-                          ) : 'text-gray-600'
-                            }`}>
-                            {availableCreditNum.toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-2.5">
+                    <div className="flex items-center gap-2 text-xs whitespace-nowrap overflow-hidden">
+                      <span className="text-gray-500 uppercase font-semibold">Balance</span>
+                      <span className={`font-bold ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'}`}>
+                        {isPayable ? '-' : ''}{Math.abs(currentBalanceNum).toFixed(2)}
+                      </span>
+                      <span className="text-gray-400">|</span>
+                      <span className="text-gray-500 uppercase font-semibold">Credit</span>
+                      <span className={`font-bold ${(creditLimitNum > 0) ? (
+                        currentBalanceNum >= creditLimitNum * 0.9 ? 'text-red-600' : currentBalanceNum >= creditLimitNum * 0.7 ? 'text-yellow-600' : 'text-blue-600'
+                      ) : 'text-gray-600'}`}>
+                        {creditLimitNum.toFixed(2)}
+                        {creditLimitNum > 0 && currentBalanceNum >= creditLimitNum * 0.9 && <span className="ml-1">⚠️</span>}
+                      </span>
+                      <span className="text-gray-400">|</span>
+                      <span className="text-gray-500 uppercase font-semibold">Available</span>
+                      <span className={`font-bold ${creditLimitNum > 0 ? (
+                        availableCreditNum <= creditLimitNum * 0.1 ? 'text-red-600' : availableCreditNum <= creditLimitNum * 0.3 ? 'text-yellow-600' : 'text-green-600'
+                      ) : 'text-gray-600'}`}>
+                        {availableCreditNum.toFixed(2)}
+                      </span>
                     </div>
                   </div>
+                );
+              })() : (
+                <div className="hidden lg:flex items-center justify-center h-full px-8 border-2 border-dashed border-gray-100 rounded-xl">
+                  <span className="text-gray-400 text-sm font-medium italic">No customer selected</span>
                 </div>
-              );
-            })() : (
-              <div className="hidden lg:block">
-                {/* Empty space to maintain layout consistency */}
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
         {/* Combined Product Selection and Cart Section */}
         <ProductSelectionCartSection
+          searchSectionClassName="mb-2"
           headerActions={
             <>
               <div className="flex flex-wrap items-center gap-2">
@@ -1695,6 +1667,7 @@ export const Sales = ({ tabId, editData }) => {
           emptyText="No items in cart"
         >
           <CartItemsTableSection
+            className="pt-2"
             topContent={isLastPricesApplied && Object.keys(priceStatus).length > 0 ? (
               <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 mb-3 text-xs">
                 <span className="text-gray-600 font-medium">Price Status:</span>
