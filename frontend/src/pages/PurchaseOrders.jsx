@@ -1331,7 +1331,7 @@ export const PurchaseOrders = ({ tabId }) => {
         <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-2">
           <div className="flex flex-col sm:flex-row sm:items-center flex-1 gap-3">
             <div className="flex-shrink-0">
-              <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Purchase Orders</h1>
+              <h1 className="text-base sm:text-xl font-bold text-gray-900 truncate">Purchase Orders</h1>
             </div>
             <div className="hidden sm:block h-7 w-px bg-gray-200"></div>
             <div className="flex-1 min-w-0 sm:min-w-[220px] lg:max-w-lg">
@@ -1359,6 +1359,7 @@ export const PurchaseOrders = ({ tabId }) => {
                 )}
               </div>
               <SearchableDropdown
+                className="[&_input]:h-8"
                 ref={supplierSearchRef}
                 placeholder="Search suppliers by name, email, or business..."
                 items={suppliers || []}
@@ -1373,16 +1374,12 @@ export const PurchaseOrders = ({ tabId }) => {
             </div>
           </div>
 
-          <div className="lg:w-auto w-full lg:min-w-[360px] lg:max-w-xl">
+          <div className="lg:w-auto w-full lg:min-w-[360px] lg:max-w-xl lg:self-end">
             {selectedSupplier ? (
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-2.5">
+              <div className="bg-gray-50 border border-gray-200 rounded-xl h-8 px-2 flex items-center">
                 <div className="flex items-center gap-2 text-xs whitespace-nowrap overflow-hidden">
                   <span className="font-bold text-gray-900 truncate">
                     {selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name || 'Unknown'}
-                  </span>
-                  <span className="text-gray-400">|</span>
-                  <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded font-bold uppercase border border-blue-100">
-                    PO
                   </span>
                   <span className="text-gray-400">|</span>
                     <span className="text-gray-600 capitalize">

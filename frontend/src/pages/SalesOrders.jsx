@@ -2025,7 +2025,7 @@ const SalesOrders = ({ tabId }) => {
           {/* Title & Customer Selection */}
           <div className="flex flex-col sm:flex-row sm:items-center flex-1 gap-3">
             <div className="flex-shrink-0">
-              <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Sales Orders</h1>
+              <h1 className="text-base sm:text-xl font-bold text-gray-900 truncate">Sales Orders</h1>
             </div>
             <div className="hidden sm:block h-7 w-px bg-gray-200"></div>
             <div className="flex-1 min-w-0 sm:min-w-[300px]">
@@ -2065,6 +2065,7 @@ const SalesOrders = ({ tabId }) => {
                 </div>
               </div>
               <SearchableDropdown
+                className="[&_input]:h-8"
                 ref={customerSearchRef}
                 placeholder="Search customers by name, email, or business..."
                 items={customers}
@@ -2081,7 +2082,7 @@ const SalesOrders = ({ tabId }) => {
           </div>
 
           {/* Customer Information - Right Side */}
-          <div className="lg:w-auto w-full lg:max-w-md">
+          <div className="lg:w-auto w-full lg:max-w-md lg:self-end">
             {selectedCustomer ? (() => {
               const balanceNum = Number(displayBalance);
               const totalBalance = (isNaN(balanceNum) || balanceNum === null || balanceNum === undefined) ? 0 : balanceNum;
@@ -2091,7 +2092,7 @@ const SalesOrders = ({ tabId }) => {
               const isReceivable = totalBalance > 0;
 
               return (
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-2.5">
+                <div className="bg-gray-50 border border-gray-200 rounded-xl h-8 px-2 flex items-center">
                   <div className="flex items-center gap-2 text-xs whitespace-nowrap overflow-hidden">
                     <span className="text-gray-500 uppercase font-semibold">Balance</span>
                     <span className={`font-bold ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'}`}>

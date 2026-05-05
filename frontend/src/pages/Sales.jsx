@@ -1434,7 +1434,7 @@ export const Sales = ({ tabId, editData }) => {
             {/* Title & Customer Selection */}
             <div className="flex flex-col sm:flex-row sm:items-center flex-1 gap-3">
               <div className="flex-shrink-0">
-                <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>Point of Sales</h1>
+                <h1 className={`${isMobile ? 'text-base' : 'text-xl'} font-bold text-gray-900`}>Point of Sales</h1>
               </div>
               <div className="hidden sm:block h-7 w-px bg-gray-200"></div>
               <div className="flex-1 min-w-0 sm:min-w-[300px]">
@@ -1470,6 +1470,7 @@ export const Sales = ({ tabId, editData }) => {
                   </div>
                 </div>
                 <SearchableDropdown
+                  className="[&_input]:h-8"
                   placeholder="Search customers by name, email, or business..."
                   items={customers || []}
                   onSelect={handleCustomerSelect}
@@ -1503,7 +1504,7 @@ export const Sales = ({ tabId, editData }) => {
             </div>
 
             {/* Customer Information - Right Side */}
-            <div className="lg:w-auto w-full lg:max-w-md">
+            <div className="lg:w-auto w-full lg:max-w-md lg:self-end">
               {selectedCustomer ? (() => {
                 const balanceSource = selectedCustomer ?? customerWithBalance;
                 const creditLimitNum = Math.max(0, Number(selectedCustomer?.creditLimit ?? selectedCustomer?.credit_limit ?? balanceSource?.creditLimit ?? balanceSource?.credit_limit ?? 0) || 0);
@@ -1512,7 +1513,7 @@ export const Sales = ({ tabId, editData }) => {
                 const isReceivable = currentBalanceNum > 0;
 
                 return (
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-2.5">
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl h-8 px-2 flex items-center">
                     <div className="flex items-center gap-2 text-xs whitespace-nowrap overflow-hidden">
                       <span className="text-gray-500 uppercase font-semibold">Balance</span>
                       <span className={`font-bold ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'}`}>
