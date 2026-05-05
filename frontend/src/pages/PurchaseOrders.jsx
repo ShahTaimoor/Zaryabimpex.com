@@ -55,6 +55,7 @@ import {
 } from '../components/OrderItemConfirmationCell';
 import { useDebouncedPosProductSearch } from '../hooks/useDebouncedPosProductSearch';
 import { SearchableDropdown } from '../components/SearchableDropdown';
+import { ProductSearch as SharedSalesProductSearch } from '../components/sales/ProductSearch';
 import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
 import { hasDualUnit, getPiecesPerBox, piecesToBoxesAndPieces, formatStockDualLabel } from '../utils/dualUnitUtils';
 import { toast } from 'sonner';
@@ -288,6 +289,32 @@ const PurchaseOrderCard = ({ po, onEdit, onDelete, onConfirm, onCancel, onClose,
   </div>
 );
 
+const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
+  const { companyInfo: companySettings } = useCompanyInfo();
+  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
+  const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
+  const allowManualCostPriceEnabled = companySettings.orderSettings?.allowManualCostPrice === true;
+
+  return (
+    <SharedSalesProductSearch
+      onAddProduct={(item) =>
+        onAddProduct({
+          ...item,
+          costPerUnit: Number(item.costPerUnit ?? item.unitPrice ?? 0),
+        })
+      }
+      selectedCustomer={null}
+      showCostPrice={false}
+      hasCostPricePermission={false}
+      priceType="cost"
+      dualUnitShowBoxInput={dualUnitShowBoxInputEnabled}
+      dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
+      allowOutOfStock
+      allowManualCostPrice={allowManualCostPriceEnabled}
+      onRefetchReady={onRefetchReady}
+    />
+  );
+};
 
 export const PurchaseOrders = ({ tabId }) => {
   const { updateTabTitle, getActiveTab, openTab } = useTab();
@@ -376,6 +403,7 @@ export const PurchaseOrders = ({ tabId }) => {
   const [customCost, setCustomCost] = useState('');
   const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
   const [searchKey, setSearchKey] = useState(0); // Key to force re-render
+  const [, setRefetchProducts] = useState(null);
 
   // Modal-specific product selection state
   const [modalProductSearchTerm, setModalProductSearchTerm] = useState('');
@@ -770,6 +798,40 @@ export const PurchaseOrders = ({ tabId }) => {
       }
     }, 100);
   };
+
+  const handleAddItemFromProductSearch = useCallback((item) => {
+    const productObj = item?.product;
+    const productId = productObj?._id || productObj?.id || item?.product;
+    const qty = Number(item?.quantity) || 1;
+    const costPerUnit = Number(item?.costPerUnit ?? item?.unitPrice ?? 0);
+    const totalCost = costPerUnit * qty;
+
+    if (!productId || !productObj || qty <= 0) {
+      return;
+    }
+
+    const newItem = {
+      product: productId,
+      productData: productObj,
+      quantity: qty,
+      ...(item?.boxes !== undefined && item?.pieces !== undefined ? { boxes: item.boxes, pieces: item.pieces } : {}),
+      costPerUnit,
+      totalCost,
+    };
+
+    let addedLineIndex = null;
+    setFormData(prev => {
+      addedLineIndex = prev.items.length;
+      return {
+        ...prev,
+        items: [...prev.items, newItem],
+      };
+    });
+
+    if (addedLineIndex !== null && addedLineIndex >= 0) {
+      setHighlightedPoLineIndex(addedLineIndex);
+    }
+  }, []);
 
   const handleRemoveItem = (index) => {
     setFormData(prev => ({
@@ -1352,226 +1414,30 @@ export const PurchaseOrders = ({ tabId }) => {
       {/* Combined Product Selection and Cart Section */}
       <div className="card">
         <div className="card-header">
-          <h3 className="text-lg font-medium text-gray-900">Product Selection & Cart</h3>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+            <h3 className="text-lg font-medium text-gray-900">Product Selection & Cart</h3>
+            {formData.items.length > 0 && (
+              <Button
+                type="button"
+                onClick={handleSortCartItems}
+                variant="secondary"
+                size="sm"
+                className="flex items-center space-x-2 w-fit"
+                title="Sort products alphabetically"
+              >
+                <ArrowUpDown className="h-4 w-4" />
+                <span>Sort A-Z</span>
+              </Button>
+            )}
+          </div>
         </div>
         <div className="card-content">
           {/* Product Search */}
           <div className="mb-2">
-            <div className="space-y-4">
-              {/* Mobile Layout */}
-              <div className="md:hidden space-y-3">
-                {/* Product Search */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Product Search
-                  </label>
-                  <SearchableDropdown
-                    key={searchKey}
-                    ref={productSearchRef}
-                    placeholder="Search or select product..."
-                    items={productsData || []}
-                    onSelect={handleProductSelect}
-                    onSearch={handleProductSearch}
-                    displayKey={productDisplayKey}
-                    selectedItem={selectedProduct}
-                    loading={lineProductSearchLoading}
-                    emptyMessage={lineProductEmptyMessage}
-                    value={productSearchTerm}
-                  />
-                </div>
-
-                {/* Fields Grid - 2 columns on mobile */}
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Stock */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Stock
-                    </label>
-                    <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center min-h-[2.5rem] flex flex-col items-center justify-center gap-0.5 leading-tight">
-                      {selectedProduct ? (
-                        hasDualUnit(selectedProduct) ? (
-                          <>
-                            <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock || 0, selectedProduct)}</span>
-                            <span className="text-[10px] font-normal text-gray-500">available</span>
-                          </>
-                        ) : (
-                          <span>{selectedProduct.inventory?.currentStock || 0} pcs</span>
-                        )
-                      ) : (
-                        '0'
-                      )}
-                    </span>
-                  </div>
-
-                  {/* Amount */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Amount
-                    </label>
-                    <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
-                      {selectedProduct ? Math.round(quantity * parseFloat(customCost || 0)) : 0}
-                    </span>
-                  </div>
-
-                  {/* Quantity — full width on mobile when dual (box + pcs + total) */}
-                  <div className={hasDualUnit(selectedProduct) ? 'col-span-2' : ''}>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Quantity
-                    </label>
-                    <DualUnitQuantityInput
-                      product={selectedProduct}
-                      quantity={quantity}
-                      onChange={(q) => setQuantity(q)}
-                      showBoxInput={dualUnitShowBoxInputEnabled}
-                      showPiecesInput={dualUnitShowPiecesInputEnabled}
-                      onKeyDown={handleInputKeyDown}
-                      inputClassName="text-center h-10 w-full border border-gray-300 rounded px-2"
-                      compact={hasDualUnit(selectedProduct)}
-                    />
-                  </div>
-
-                  {/* Cost */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Cost
-                    </label>
-                    <Input
-                      type="number"
-                      step="1"
-                      value={customCost}
-                      onChange={(e) => setCustomCost(e.target.value)}
-                      onFocus={(e) => e.target.select()}
-                      onKeyDown={handleInputKeyDown}
-                      className="text-center h-10 w-full"
-                      placeholder="0"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Add Button - Full width on mobile */}
-                <div>
-                  <Button
-                    type="button"
-                    onClick={handleAddItem}
-                    variant="default"
-                    className="w-full flex items-center justify-center px-4 py-2.5 h-11"
-                    disabled={!selectedProduct}
-                    title="Add to cart (or press Enter in Quantity/Cost fields - focus returns to search)"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add
-                  </Button>
-                </div>
-              </div>
-
-              {/* Desktop Layout — column spans sum to 12; wider qty when dual (box + pcs + total) */}
-              <div className="hidden md:grid grid-cols-12 gap-x-3 gap-y-3 items-start">
-                {/* Product Search */}
-                <div className={hasDualUnit(selectedProduct) ? 'col-span-5 min-w-0' : 'col-span-7 min-w-0'}>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Product Search
-                  </label>
-                  <SearchableDropdown
-                    key={searchKey}
-                    ref={productSearchRef}
-                    placeholder="Search or select product..."
-                    items={productsData || []}
-                    onSelect={handleProductSelect}
-                    onSearch={handleProductSearch}
-                    displayKey={productDisplayKey}
-                    selectedItem={selectedProduct}
-                    loading={lineProductSearchLoading}
-                    emptyMessage={lineProductEmptyMessage}
-                    value={productSearchTerm}
-                  />
-                </div>
-
-                {/* Stock - 1 column */}
-                <div className="col-span-1 min-w-0">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Stock
-                  </label>
-                  <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1.5 rounded border border-gray-200 block text-center min-h-[3rem] flex flex-col items-center justify-center gap-0.5 leading-snug">
-                    {selectedProduct ? (
-                      hasDualUnit(selectedProduct) ? (
-                        <>
-                          <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock || 0, selectedProduct)}</span>
-                          <span className="text-[10px] font-normal text-gray-500">available</span>
-                        </>
-                      ) : (
-                        <span>{selectedProduct.inventory?.currentStock || 0} pcs</span>
-                      )
-                    ) : (
-                      '0'
-                    )}
-                  </span>
-                </div>
-
-                {/* Quantity — col-span-3 when dual so Box + Pcs + Total fit (matches compact dual UI) */}
-                <div className={hasDualUnit(selectedProduct) ? 'col-span-3 min-w-0' : 'col-span-1 min-w-0'}>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Quantity
-                  </label>
-                  <DualUnitQuantityInput
-                    product={selectedProduct}
-                    quantity={quantity}
-                    onChange={(q) => setQuantity(q)}
-                    showBoxInput={dualUnitShowBoxInputEnabled}
-                    showPiecesInput={dualUnitShowPiecesInputEnabled}
-                    onKeyDown={handleInputKeyDown}
-                    inputClassName="text-center h-10 border border-gray-300 rounded px-2"
-                    compact={hasDualUnit(selectedProduct)}
-                  />
-                </div>
-
-                {/* Cost - 1 column */}
-                <div className="col-span-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cost
-                  </label>
-                  <Input
-                    type="number"
-                    step="1"
-                    value={customCost}
-                    onChange={(e) => setCustomCost(e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                    onKeyDown={handleInputKeyDown}
-                    className="text-center h-10"
-                    placeholder="0 (Enter to add & focus search)"
-                    required
-                  />
-                </div>
-
-                {/* Amount - 1 column */}
-                <div className="col-span-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Amount
-                  </label>
-                  <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1.5 rounded border border-gray-200 block text-center h-10 flex items-center justify-center">
-                    {selectedProduct ? Math.round(quantity * parseFloat(customCost || 0)) : 0}
-                  </span>
-                </div>
-
-                {/* Add Button - 1 column */}
-                <div className="col-span-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-2 invisible select-none" aria-hidden="true">
-                    Add
-                  </label>
-                  <Button
-                    type="button"
-                    onClick={handleAddItem}
-                    variant="default"
-                    className="w-full flex items-center justify-center px-3 h-10"
-                    disabled={!selectedProduct}
-                    title="Add to cart (or press Enter in Quantity/Cost fields - focus returns to search)"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <ProductSearch
+              onAddProduct={handleAddItemFromProductSearch}
+              onRefetchReady={setRefetchProducts}
+            />
           </div>
 
           {/* Cart Items */}
@@ -1581,48 +1447,7 @@ export const PurchaseOrders = ({ tabId }) => {
               <p className="mt-2">No items in cart</p>
             </div>
           ) : (
-            <div className="space-y-3 border-t border-gray-200 pt-2">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-base sm:text-md font-medium text-gray-700">Cart Items</h4>
-                <Button
-                  type="button"
-                  onClick={handleSortCartItems}
-                  variant="secondary"
-                  size="sm"
-                  className="flex items-center space-x-2"
-                  title="Sort products alphabetically"
-                >
-                  <ArrowUpDown className="h-4 w-4" />
-                  <span className="hidden sm:inline">Sort A-Z</span>
-                  <span className="sm:hidden">Sort</span>
-                </Button>
-              </div>
-
-              {/* Desktop Table Header — 1+4+1+3+1+1+1 = 12 */}
-              <div className="hidden md:grid grid-cols-12 gap-4 items-center pb-2 border-b border-gray-300 mb-2">
-                <div className="col-span-1 flex justify-center">
-                  <span className="text-xs font-semibold text-gray-600 uppercase w-1/2 min-w-[56px] text-center">S.NO</span>
-                </div>
-                <div className="col-span-4">
-                  <span className="text-xs font-semibold text-gray-600 uppercase">Product</span>
-                </div>
-                <div className="col-span-1">
-                  <span className="text-xs font-semibold text-gray-600 uppercase">Stock</span>
-                </div>
-                <div className="col-span-3">
-                  <span className="text-xs font-semibold text-gray-600 uppercase">Qty</span>
-                </div>
-                <div className="col-span-1">
-                  <span className="text-xs font-semibold text-gray-600 uppercase">Cost</span>
-                </div>
-                <div className="col-span-1">
-                  <span className="text-xs font-semibold text-gray-600 uppercase">Total</span>
-                </div>
-                <div className="col-span-1 flex justify-center">
-                  <span className="text-xs font-semibold text-gray-600 uppercase w-1/2 min-w-[56px] text-center">Action</span>
-                </div>
-              </div>
-
+            <div className="space-y-3 pt-2">
               <div
                 ref={poCartScrollRef}
                 className={
@@ -1801,11 +1626,16 @@ export const PurchaseOrders = ({ tabId }) => {
 
                       {/* Desktop Table Row */}
                       <div className={`hidden md:block py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                        <div className="grid grid-cols-12 gap-4 items-center">
+                        <div
+                          className={`grid gap-x-1 items-center ${dualUnitShowBoxInputEnabled
+                            ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                            : 'grid-cols-[2.25rem_minmax(0,1fr)_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem]'
+                            }`}
+                        >
                           {/* Serial Number - 1 column (new field) */}
-                          <div className="col-span-1 flex justify-center">
+                          <div className="min-w-0 flex justify-start">
                             <span
-                              className={`text-sm font-medium px-0.5 py-1 rounded border block text-center h-8 w-1/2 min-w-[56px] flex items-center justify-center transition-colors duration-300 ${serialHighlight
+                              className={`text-sm font-medium px-0.5 py-1 rounded border block w-8 text-center h-8 flex items-center justify-center transition-colors duration-300 ${serialHighlight
                                   ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
                                   : 'text-gray-700 bg-gray-50 border-gray-200'
                                 }`}
@@ -1815,7 +1645,7 @@ export const PurchaseOrders = ({ tabId }) => {
                           </div>
 
                           {/* Product Name — col-span-4 so Qty can use 3 cols for dual units */}
-                          <div className="col-span-4 flex items-center gap-2 min-h-8 min-w-0">
+                          <div className="min-w-0 flex items-center h-8 gap-2 pl-1">
                             {product?.imageUrl && showProductImages && (
                               <div
                                 className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
@@ -1843,8 +1673,60 @@ export const PurchaseOrders = ({ tabId }) => {
                             </div>
                           </div>
 
+                          {dualUnitShowBoxInputEnabled && (
+                            <div className="min-w-0">
+                              {hasDualUnit(product) ? (
+                                (() => {
+                                  const ppb = getPiecesPerBox(product);
+                                  const boxVal =
+                                    item.boxes != null
+                                      ? item.boxes
+                                      : ppb
+                                        ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
+                                        : 0;
+                                  return (
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      value={item.quantity === 0 ? '' : boxVal}
+                                      onChange={(e) => {
+                                        const newBoxes = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                        const currentPieces = piecesToBoxesAndPieces(item.quantity, ppb || 1).pieces;
+                                        const nextQty = (newBoxes * (ppb || 1)) + currentPieces;
+                                        setFormData(prev => ({
+                                          ...prev,
+                                          items: prev.items.map((itm, i) =>
+                                            i === index
+                                              ? {
+                                                ...itm,
+                                                boxes: newBoxes,
+                                                quantity: nextQty,
+                                                totalCost: nextQty * itm.costPerUnit
+                                              }
+                                              : itm
+                                          )
+                                        }));
+                                      }}
+                                      onFocus={(e) => e.target.select()}
+                                      className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(product.inventory?.currentStock || 0) === 0
+                                        ? 'text-red-700 bg-red-50 border-red-200'
+                                        : (product.inventory?.currentStock || 0) <= (product.inventory?.reorderPoint || 0)
+                                          ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
+                                          : 'text-gray-700 bg-gray-100 border-gray-200'
+                                        }`}
+                                    />
+                                  );
+                                })()
+                              ) : (
+                                <span className="text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200">
+                                  —
+                                </span>
+                              )}
+                            </div>
+                          )}
+
                           {/* Stock - 1 column (matches Product Selection Stock) */}
-                          <div className="col-span-1 min-w-0">
+                          <div className="min-w-0">
                             <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center min-h-8 flex items-center justify-center leading-tight text-xs">
                               {hasDualUnit(product)
                                 ? formatStockDualLabel(product?.inventory?.currentStock || 0, product)
@@ -1852,13 +1734,15 @@ export const PurchaseOrders = ({ tabId }) => {
                             </span>
                           </div>
 
-                          {/* Quantity — 3 cols so Box + Pcs + Total fit */}
-                          <div className="col-span-3 min-w-0">
+                          {/* Quantity */}
+                          <div className="min-w-0">
                             <DualUnitQuantityInput
                               product={product}
                               quantity={item.quantity}
-                              showBoxInput={dualUnitShowBoxInputEnabled}
+                              showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
                               showPiecesInput={dualUnitShowPiecesInputEnabled}
+                              showRemainingAfterSale={false}
+                              showPiecesUnitLabel={false}
                               onChange={(newQuantity, dual) => {
                                 if (newQuantity <= 0) {
                                   handleRemoveItem(index);
@@ -1879,13 +1763,13 @@ export const PurchaseOrders = ({ tabId }) => {
                                 }));
                               }}
                               min={1}
-                              inputClassName="text-center h-8 border border-gray-300 rounded px-2"
+                              inputClassName="w-full min-w-0 text-center h-8 border border-gray-300 rounded px-2"
                               compact={hasDualUnit(product)}
                             />
                           </div>
 
                           {/* Cost - 1 column (matches Product Selection Cost) */}
-                          <div className="col-span-1">
+                          <div className="min-w-0">
                             <Input
                               type="number"
                               step="0.01"
@@ -1906,19 +1790,19 @@ export const PurchaseOrders = ({ tabId }) => {
                           </div>
 
                           {/* Total - 1 column (matches Product Selection Amount) */}
-                          <div className="col-span-1">
-                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
-                              {Math.round(totalPrice)}
+                          <div className="min-w-0">
+                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block w-full min-w-0 text-center h-8 flex items-center justify-center">
+                              {Number.isFinite(totalPrice) ? totalPrice.toFixed(2) : '0.00'}
                             </span>
                           </div>
 
                           {/* Delete Button - 1 column (matches Product Selection Add Button) */}
-                          <div className="col-span-1 flex justify-center">
+                          <div className="min-w-0 flex justify-end">
                             <Button
                               onClick={() => handleRemoveItem(index)}
                               variant="destructive"
                               size="sm"
-                              className="h-8 w-1/2 min-w-[56px]"
+                              className="h-8 w-8 p-0"
                               title="Delete"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -1938,206 +1822,269 @@ export const PurchaseOrders = ({ tabId }) => {
 
       {/* Purchase Order Details - Create Mode */}
       {formData.items.length > 0 && !showEditModal && (
-        <OrderCheckoutCard>
-          <OrderDetailsSection
-            detailsTitle="Purchase Order Details"
-            showDetails={showPurchaseOrderDetailsFields}
-            onShowDetailsChange={setShowPurchaseOrderDetailsFields}
-            checkboxId="showPurchaseOrderDetailsFields"
-            headerClassName="mb-0"
+        <div
+          className={`mt-4 grid w-full min-w-0 grid-cols-1 gap-4 lg:gap-5 lg:items-start ${showPurchaseOrderDetailsFields ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
+            }`}
+        >
+          <OrderCheckoutCard
+            className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${showPurchaseOrderDetailsFields ? 'order-1' : 'order-2'
+              }`}
           >
-            {showPurchaseOrderDetailsFields && (
-              <>
-                {/* Mobile Layout - Stacked */}
-                <div className="md:hidden space-y-3">
-                  {/* Invoice Number */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Invoice Number
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.invoiceNumber || "Auto-generated"}
-                      onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
-                      className="h-10 text-sm w-full"
-                      placeholder="Auto-generated"
-                      disabled
-                    />
+            <OrderDetailsSection
+              detailsTitle="Purchase Details"
+              showDetails={showPurchaseOrderDetailsFields}
+              onShowDetailsChange={setShowPurchaseOrderDetailsFields}
+              checkboxId="showPurchaseOrderDetailsFields"
+            >
+              {showPurchaseOrderDetailsFields && (
+                <>
+                  {/* Mobile Layout - Stacked */}
+                  <div className="md:hidden space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Invoice Number
+                      </label>
+                      <Input
+                        type="text"
+                        value={formData.invoiceNumber || "Auto-generated"}
+                        onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
+                        className="h-10 text-sm w-full"
+                        placeholder="Auto-generated"
+                        disabled
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Expected Delivery
+                      </label>
+                      <div className="relative">
+                        <Input
+                          type="date"
+                          value={formData.expectedDelivery}
+                          onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
+                          className="h-10 text-sm w-full pr-8"
+                        />
+                        <Calendar className="absolute right-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none sm:hidden" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Notes
+                      </label>
+                      <Input
+                        type="text"
+                        value={formData.notes}
+                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                        className="h-10 text-sm w-full"
+                        placeholder="Additional notes..."
+                      />
+                    </div>
                   </div>
 
-                  {/* Expected Delivery */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Expected Delivery
-                    </label>
-                    <div className="relative">
+                  {/* Desktop Layout - Horizontal */}
+                  <div className="hidden md:flex flex-nowrap gap-3 items-end justify-end">
+                    <div className="flex flex-col w-44">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Invoice Number
+                      </label>
+                      <Input
+                        type="text"
+                        value={formData.invoiceNumber || "Auto-generated"}
+                        onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
+                        className="h-8 text-sm"
+                        placeholder="Auto-generated"
+                        disabled
+                      />
+                    </div>
+                    <div className="flex flex-col w-48">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Expected Delivery
+                      </label>
                       <Input
                         type="date"
                         value={formData.expectedDelivery}
                         onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
-                        className="h-10 text-sm w-full pr-8"
+                        className="h-8 text-sm"
                       />
-                      <Calendar className="absolute right-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none sm:hidden" />
+                    </div>
+                    <div className="flex flex-col w-[28rem]">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Notes
+                      </label>
+                      <Input
+                        type="text"
+                        autoComplete="off"
+                        value={formData.notes}
+                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                        className="h-8 text-sm"
+                        placeholder="Additional notes..."
+                      />
                     </div>
                   </div>
-
-                  {/* Notes */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Notes
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.notes}
-                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                      className="h-10 text-sm w-full"
-                      placeholder="Additional notes..."
-                    />
-                  </div>
-                </div>
-
-                {/* Desktop Layout - Horizontal */}
-                <div className="hidden md:flex flex-nowrap gap-3 items-end justify-end">
-                  {/* Invoice Number */}
-                  <div className="flex flex-col w-44">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Invoice Number
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.invoiceNumber || "Auto-generated"}
-                      onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
-                      className="h-8 text-sm"
-                      placeholder="Auto-generated"
-                      disabled
-                    />
-                  </div>
-
-                  {/* Expected Delivery */}
-                  <div className="flex flex-col w-48">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Expected Delivery
-                    </label>
-                    <Input
-                      type="date"
-                      value={formData.expectedDelivery}
-                      onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-
-                  {/* Notes */}
-                  <div className="flex flex-col w-[28rem]">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Notes
-                    </label>
-                    <Input
-                      type="text"
-                      autoComplete="off"
-                      value={formData.notes}
-                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                      className="h-8 text-sm"
-                      placeholder="Additional notes..."
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-          </OrderDetailsSection>
-
-          <OrderSummaryBar>
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={handleCreate}
-                disabled={creating || formData.items.length === 0}
-                variant="default"
-                size="sm"
-                className="bg-slate-900 hover:bg-slate-800 text-white border-none h-8 px-4 font-bold"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {creating ? 'Creating...' : 'Create PO'}
-              </Button>
-              <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
-                {formData.items.length > 0 && !showEditModal && (
-                  <Button
-                    onClick={resetForm}
-                    variant="ghost"
-                    size="icon-sm"
-                    className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    title="Clear Cart"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-                {formData.items.length > 0 && (
-                  <Button
-                    onClick={() => {
-                      const tempOrder = {
-                        poNumber: `PO-${Date.now()}`,
-                        supplier: selectedSupplier,
-                        items: formData.items.map(item => {
-                          const product =
-                            item.productData ||
-                            (typeof item.product === 'object' ? item.product : null);
-                          return {
-                            product: product,
-                            quantity: item.quantity,
-                            unitCost: item.costPerUnit,
-                            totalCost: item.quantity * item.costPerUnit
-                          };
-                        }),
-                        subtotal: subtotal,
-                        discount: 0,
-                        tax: tax,
-                        total: total,
-                        expectedDelivery: formData.expectedDelivery,
-                        notes: formData.notes,
-                        terms: formData.terms,
-                        createdAt: new Date().toISOString()
-                      };
-                      handlePrint(tempOrder);
-                    }}
-                    variant="ghost"
-                    size="icon-sm"
-                    className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    title="Print Preview"
-                  >
-                    <Printer className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </OrderSummaryBar>
-          <OrderSummaryContent>
-            <div className="mb-6 space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-800 font-semibold">Subtotal:</span>
-                <span className="text-xl font-bold text-gray-900">{Math.round(subtotal)}</span>
-              </div>
-              {taxSystemEnabled && tax > 0 && (
-              <div className="flex justify-between items-center">
-                <span className="text-gray-800 font-semibold">
-                  {`Tax (${effectiveGlobalTaxPct}%):`}
-                </span>
-                <span className="text-xl font-bold text-gray-900">{Math.round(tax)}</span>
-              </div>
+                </>
               )}
-              <div className="flex justify-between items-center">
-                <span className="text-gray-800 font-semibold">PO Total:</span>
-                <span className="text-xl font-bold text-gray-900">{Math.round(total)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-800 font-semibold">Previous Outstanding:</span>
-                <span className="text-xl font-bold text-red-600">{Math.round(supplierOutstanding)}</span>
-              </div>
-              <div className="flex justify-between items-center text-xl font-bold border-t-2 border-blue-400 pt-3 mt-2">
-                <span className="text-blue-900">Total Payables:</span>
-                <span className="text-blue-900 text-3xl">{Math.round(totalPayables)}</span>
-              </div>
-            </div>
+            </OrderDetailsSection>
+          </OrderCheckoutCard>
 
-          </OrderSummaryContent>
-        </OrderCheckoutCard>
+          <OrderCheckoutCard
+            className={`mt-0 ml-0 max-w-none min-w-0 w-full border-slate-200 bg-none bg-slate-50 shadow-sm ring-0 ${showPurchaseOrderDetailsFields ? 'order-2' : 'order-1'
+              }`}
+          >
+            <OrderSummaryBar>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={handleCreate}
+                  disabled={creating || formData.items.length === 0}
+                  variant="default"
+                  size="sm"
+                  className="bg-slate-900 hover:bg-slate-800 text-white border-none h-8 px-4 font-bold"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {creating ? 'Creating...' : 'Create PO'}
+                </Button>
+                <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+                  {formData.items.length > 0 && !showEditModal && (
+                    <Button
+                      onClick={resetForm}
+                      variant="ghost"
+                      size="icon-sm"
+                      className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      title="Clear Cart"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {formData.items.length > 0 && (
+                    <Button
+                      onClick={() => {
+                        const tempOrder = {
+                          poNumber: `PO-${Date.now()}`,
+                          supplier: selectedSupplier,
+                          items: formData.items.map(item => {
+                            const product =
+                              item.productData ||
+                              (typeof item.product === 'object' ? item.product : null);
+                            return {
+                              product: product,
+                              quantity: item.quantity,
+                              unitCost: item.costPerUnit,
+                              totalCost: item.quantity * item.costPerUnit
+                            };
+                          }),
+                          subtotal: subtotal,
+                          discount: 0,
+                          tax: tax,
+                          total: total,
+                          expectedDelivery: formData.expectedDelivery,
+                          notes: formData.notes,
+                          terms: formData.terms,
+                          createdAt: new Date().toISOString()
+                        };
+                        handlePrint(tempOrder);
+                      }}
+                      variant="ghost"
+                      size="icon-sm"
+                      className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      title="Print Preview"
+                    >
+                      <Printer className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </OrderSummaryBar>
+            <OrderSummaryContent className="bg-none bg-slate-50">
+              <div className="space-y-2">
+                {taxSystemEnabled && tax > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {`Tax (${effectiveGlobalTaxPct}%):`}
+                    </span>
+                    <span className="text-xl font-semibold tabular-nums text-foreground">
+                      {tax.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                {selectedSupplier && (
+                  <div className="mt-2">
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-start">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Subtotal</span>
+                        <div className="h-8 flex items-center px-2 bg-slate-50 border border-gray-200 rounded-md text-xl font-semibold tabular-nums text-foreground">
+                          {subtotal.toFixed(2)}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Discount</label>
+                          <span className="text-[10px] font-bold text-primary-600">Amt</span>
+                        </div>
+                        <Input
+                          type="number"
+                          value={0}
+                          readOnly
+                          className="w-full h-8 px-2 border-gray-200 rounded-md bg-white text-sm font-medium shadow-none"
+                        />
+                      </div>
+
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Total</span>
+                        <div className="h-8 flex items-center px-2 bg-slate-50 border border-gray-200 rounded-md text-xl font-bold tabular-nums text-primary">
+                          {total.toFixed(2)}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Outstanding</span>
+                        <div className="h-8 flex items-center px-2 bg-slate-50 border border-gray-200 rounded-md text-xl font-semibold tabular-nums text-foreground">
+                          {supplierOutstanding.toFixed(2)}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Payment</label>
+                          <span className="text-[10px] font-bold text-primary-600">Cash</span>
+                        </div>
+                        <Input
+                          type="number"
+                          value={0}
+                          readOnly
+                          className="w-full h-8 px-2 border-gray-200 rounded-md bg-white text-sm font-medium shadow-none"
+                        />
+                      </div>
+
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-foreground mb-1">Payables</span>
+                        <div className="h-8 flex items-center px-2 bg-slate-50 border border-gray-200 rounded-md text-xl font-bold tabular-nums text-primary">
+                          {totalPayables.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <OrderCheckoutActions className="mt-4 border-0 pt-0">
+                {formData.items.length > 0 && (
+                  <div className="flex items-center space-x-2 px-2 mb-2">
+                    <Input
+                      type="checkbox"
+                      id="printLabelsAfterPoConfirm"
+                      checked={printBarcodeLabelsAfterPoConfirm}
+                      onChange={(e) => setPrintBarcodeLabelsAfterPoConfirm(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="printLabelsAfterPoConfirm" className="text-sm font-medium text-gray-700 cursor-pointer">
+                      Print labels after purchase order
+                    </label>
+                  </div>
+                )}
+              </OrderCheckoutActions>
+            </OrderSummaryContent>
+          </OrderCheckoutCard>
+        </div>
       )}
 
       {/* Edit Modal */}
