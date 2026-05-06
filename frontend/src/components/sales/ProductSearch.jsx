@@ -33,6 +33,9 @@ function ProductSearchComponent({
   allowOutOfStock = false,
   allowSaleWithoutProduct = false,
   allowManualCostPrice = false,
+  itemsOverride = null,
+  loadingOverride = null,
+  emptyMessageOverride = null,
 }) {
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -65,6 +68,10 @@ function ProductSearchComponent({
     isLoading: productsLoading,
     emptyMessage: emptySearchMessage,
   } = useDebouncedPosProductSearch(productSearchTerm, { dropdownLimit: PRODUCT_DROPDOWN_LIMIT });
+
+  const dropdownItems = itemsOverride ?? (products || []);
+  const dropdownLoading = loadingOverride ?? productsLoading;
+  const dropdownEmptyMessage = emptyMessageOverride ?? emptySearchMessage;
 
   const refreshProductSearchCache = useCallback(() => {
     dispatch(
@@ -627,13 +634,13 @@ function ProductSearchComponent({
                       key={searchKey}
                       ref={productSearchRef}
                       placeholder="Search or select product..."
-                      items={products || []}
+                      items={dropdownItems}
                       onSelect={handleProductSelect}
                       onSearch={setProductSearchTerm}
                       displayKey={productDisplayKey}
                       selectedItem={selectedProduct}
-                      loading={productsLoading}
-                      emptyMessage={emptySearchMessage}
+                      loading={dropdownLoading}
+                      emptyMessage={dropdownEmptyMessage}
                       value={productSearchTerm}
                     />
                   </div>
@@ -948,13 +955,13 @@ function ProductSearchComponent({
                       key={searchKey}
                       ref={productSearchRef}
                       placeholder="Search or select product..."
-                      items={products || []}
+                      items={dropdownItems}
                       onSelect={handleProductSelect}
                       onSearch={setProductSearchTerm}
                       displayKey={productDisplayKey}
                       selectedItem={selectedProduct}
-                      loading={productsLoading}
-                      emptyMessage={emptySearchMessage}
+                      loading={dropdownLoading}
+                      emptyMessage={dropdownEmptyMessage}
                       value={productSearchTerm}
                     />
                   </div>

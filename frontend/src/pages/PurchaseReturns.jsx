@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   RotateCcw,
   Plus,
@@ -36,6 +35,9 @@ import { ClearConfirmationDialog } from '../components/ConfirmationDialog';
 import { useClearConfirmation } from '../hooks/useConfirmation';
 import { getCurrentDatePakistan } from '../utils/dateUtils';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useGetBanksQuery } from '../store/services/banksApi';
+import { ProductSearch } from '../components/sales/ProductSearch';
 
 const PurchaseReturns = () => {
   const today = getCurrentDatePakistan();
@@ -47,15 +49,14 @@ const PurchaseReturns = () => {
   const [selectedReturn, setSelectedReturn] = useState(null);
   const [selectedPurchase, setSelectedPurchase] = useState(null);
   const [searchSuggestions, setSearchSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-  const [suggestionsPosition, setSuggestionsPosition] = useState({ top: 0, left: 0, width: 300 });
-  const searchInputRef = useRef(null);
-  const suggestionsRef = useRef(null);
 
   // Return cart - items selected for return (same as Sale Returns)
   const [returnCart, setReturnCart] = useState([]);
   const [returnNotes, setReturnNotes] = useState('');
+  const [refundMethod, setRefundMethod] = useState('cash');
+  const [selectedBankAccount, setSelectedBankAccount] = useState('');
+  const [returnAmount, setReturnAmount] = useState(0);
   const { confirmation: clearConfirmation, confirmClear, handleConfirm: handleClearConfirm, handleCancel: handleClearCancel } = useClearConfirmation();
 
   // Date filter states using Pakistan timezone
@@ -103,7 +104,6 @@ const PurchaseReturns = () => {
   useEffect(() => {
     if (!selectedSupplier?._id) {
       setSearchSuggestions([]);
-      setShowSuggestions(false);
       setIsSearching(false);
       return;
     }
@@ -148,50 +148,6 @@ const PurchaseReturns = () => {
     };
   }, [productSearchTerm, selectedSupplier?._id, searchSupplierProducts]);
 
-  // Calculate suggestions position (useLayoutEffect for correct position before paint)
-  useLayoutEffect(() => {
-    if (showSuggestions && searchInputRef.current) {
-      const updatePosition = () => {
-        if (searchInputRef.current) {
-          const rect = searchInputRef.current.getBoundingClientRect();
-          setSuggestionsPosition({
-            top: rect.bottom + 4,
-            left: rect.left,
-            width: Math.max(rect.width, 280)
-          });
-        }
-      };
-
-      updatePosition();
-
-      window.addEventListener('scroll', updatePosition, true);
-      window.addEventListener('resize', updatePosition);
-
-      return () => {
-        window.removeEventListener('scroll', updatePosition, true);
-        window.removeEventListener('resize', updatePosition);
-      };
-    }
-  }, [showSuggestions]);
-
-  // Close suggestions when clicking outside
-  useEffect(() => {
-    if (!showSuggestions) return;
-
-    const handleClickOutside = (event) => {
-      const target = event.target;
-      const isClickInSuggestions = suggestionsRef.current?.contains(target);
-      const isClickInInput = searchInputRef.current?.contains(target);
-
-      if (!isClickInSuggestions && !isClickInInput) {
-        setShowSuggestions(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showSuggestions]);
-
   // Fetch purchase returns (use dates from filters)
   const {
     data: returnsData,
@@ -227,6 +183,17 @@ const PurchaseReturns = () => {
   );
 
   const stats = statsData?.data || {};
+  const { data: banksData } = useGetBanksQuery(
+    { isActive: true },
+    { staleTime: 5 * 60_000 }
+  );
+  const activeBanks = useMemo(
+    () => {
+      const banks = banksData?.data?.banks || banksData?.banks || [];
+      return banks.filter((bank) => bank?.isActive !== false);
+    },
+    [banksData]
+  );
 
   // Create return mutation
   const [createPurchaseReturn, { isLoading: isCreatingReturn }] = useCreatePurchaseReturnMutation();
@@ -269,7 +236,9 @@ const PurchaseReturns = () => {
       refundAmount: 0,
       restockingFee: 0,
       maxQuantity: maxForThisInvoice,
-      productName: product?.name || 'Unknown Product'
+      productName: product?.name || 'Unknown Product',
+      productImage: product?.imageUrl || '',
+      currentStock: Number(product?.inventory?.currentStock ?? remaining ?? 0)
     };
 
     setReturnCart(prev => {
@@ -287,15 +256,59 @@ const PurchaseReturns = () => {
       return [...prev, returnItem];
     });
 
-    setShowSuggestions(false);
     setProductSearchTerm('');
     showSuccessToast('Product added to return');
   };
 
-  const handleSuggestionSelect = (suggestion) => {
-    if (!suggestion?.productData) return;
-    handleAddToReturnCart(suggestion.productData);
+  const handleAddFromPurchaseProductSearch = async ({ product, quantity = 1 }) => {
+    if (!selectedSupplier?._id || !product) {
+      showErrorToast('Please select supplier first');
+      return;
+    }
+
+    const attachedReturnData = product.__returnProductData;
+    if (attachedReturnData) {
+      const qty = Math.max(1, Number(quantity) || 1);
+      for (let i = 0; i < qty; i += 1) {
+        handleAddToReturnCart(attachedReturnData);
+      }
+      return;
+    }
   };
+
+  const supplierPurchasedProductsForSearch = useMemo(
+    () =>
+      (searchSuggestions || [])
+        .map((suggestion) => {
+          const pd = suggestion?.productData;
+          const p = pd?.product ?? pd;
+          const pid = p?._id || p?.id || suggestion?.id;
+          if (!pid) return null;
+          const remaining = Number(suggestion?.remainingQuantity ?? pd?.remainingReturnableQuantity ?? pd?.remainingQuantity ?? 0);
+          return {
+            ...p,
+            _id: p?._id || p?.id || pid,
+            id: p?.id || p?._id || pid,
+            name: suggestion?.name || p?.name || 'Unknown Product',
+            sku: suggestion?.sku || p?.sku || '',
+            barcode: suggestion?.barcode || p?.barcode || '',
+            pricing: {
+              ...(p?.pricing || {}),
+              retail: Number(pd?.previousPrice ?? p?.pricing?.retail ?? 0) || 0,
+              wholesale: Number(pd?.previousPrice ?? p?.pricing?.wholesale ?? 0) || 0,
+              cost: Number(pd?.previousPrice ?? p?.pricing?.cost ?? 0) || 0,
+            },
+            inventory: {
+              ...(p?.inventory || {}),
+              currentStock: remaining,
+              reorderPoint: Number(p?.inventory?.reorderPoint ?? 0) || 0,
+            },
+            __returnProductData: pd,
+          };
+        })
+        .filter(Boolean),
+    [searchSuggestions]
+  );
 
   const handleRemoveFromReturnCart = (idx) => {
     setReturnCart(prev => prev.filter((_, i) => i !== idx));
@@ -317,6 +330,9 @@ const PurchaseReturns = () => {
     confirmClear(returnCart.length, 'return items', () => {
       setReturnCart([]);
       setReturnNotes('');
+      setRefundMethod('cash');
+      setSelectedBankAccount('');
+      setReturnAmount(0);
     });
   };
 
@@ -352,11 +368,23 @@ const PurchaseReturns = () => {
 
     try {
       for (const [orderId, items] of Object.entries(itemsByOrder)) {
+        const normalizeRefundMethod = (method, bankId) => {
+          if (bankId) return 'bank_transfer';
+          if (method === 'bank' || method === 'bank_transfer') return 'bank_transfer';
+          if (method === 'credit_card' || method === 'debit_card') return 'bank_transfer';
+          if (method === 'check') return 'check';
+          if (method === 'store_credit') return 'store_credit';
+          if (method === 'deferred') return 'deferred';
+          return 'cash';
+        };
+        const effectiveRefundMethod = normalizeRefundMethod(refundMethod, selectedBankAccount);
         const returnData = {
           originalOrder: orderId,
           returnType: 'return',
           priority: 'normal',
-          refundMethod: 'original_payment',
+          refundMethod: effectiveRefundMethod,
+          ...(effectiveRefundMethod === 'bank_transfer' && selectedBankAccount ? { bankAccount: selectedBankAccount } : {}),
+          returnAmount: Math.max(0, Number(returnAmount) || 0),
           items: items.map(({ productName, maxQuantity, ...rest }) => rest),
           generalNotes: returnNotes,
           origin: 'purchase',
@@ -369,6 +397,9 @@ const PurchaseReturns = () => {
       showSuccessToast('Purchase return(s) created successfully');
       setReturnCart([]);
       setReturnNotes('');
+      setRefundMethod('cash');
+      setSelectedBankAccount('');
+      setReturnAmount(0);
       // Refetch product list so remaining quantities update
       if (selectedSupplier?._id) {
         searchSupplierProducts({ supplierId: selectedSupplier._id, search: productSearchTerm.trim() })
@@ -412,6 +443,7 @@ const PurchaseReturns = () => {
     setSelectedSupplier(null);
     setSupplierSearchTerm('');
     setProductSearchTerm('');
+    setReturnAmount(0);
   };
 
   // Format currency
@@ -520,88 +552,83 @@ const PurchaseReturns = () => {
         </div>
       </div>
 
-      {/* Supplier Selection - same layout as Sale Returns customer selection */}
-      <div className={`flex ${isMobile ? 'flex-col space-y-4' : 'items-start space-x-12'}`}>
-        <div className={`${isMobile ? 'w-full' : 'w-full max-w-3xl flex-shrink-0'}`}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Select Supplier
-              </label>
-              {selectedSupplier && (
-                <button
-                  onClick={handleBackToSupplier}
-                  className="text-xs text-blue-600 hover:text-blue-800 underline"
-                  title="Change supplier"
-                >
-                  Change Supplier
-                </button>
-              )}
-            </div>
-          </div>
-          {suppliersLoading ? (
-            <LoadingSpinner />
-          ) : (
-            <SearchableDropdown
-              placeholder="Search supplier by name, phone, or email..."
-              items={suppliers}
-              onSelect={handleSupplierSelect}
-              onSearch={setSupplierSearchTerm}
-              value={supplierSearchTerm}
-              loading={suppliersLoading || suppliersFetching}
-              emptyMessage="No suppliers found"
-              displayKey={(supplier) => {
-                const name = supplier.companyName || supplier.businessName || supplier.name || 'Unknown';
-                return (
-                  <div>
-                    <div className="font-medium">{name}</div>
-                    {supplier.phone && (
-                      <div className="text-xs text-gray-500">Phone: {supplier.phone}</div>
-                    )}
-                  </div>
-                );
-              }}
-              selectedItem={selectedSupplier}
-              className="w-full"
-            />
-          )}
-        </div>
-
-        {/* Supplier Information - Right Side */}
-        <div className={`${isMobile ? 'w-full' : 'flex-1'}`}>
-          {selectedSupplier && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-              <div className="flex items-center space-x-3">
-                <User className="h-5 w-5 text-gray-400" />
-                <div className="flex-1">
-                  <p className="font-medium">
-                    {selectedSupplier.companyName || selectedSupplier.businessName || selectedSupplier.name || 'Supplier'}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {selectedSupplier.phone || 'No phone'}
-                  </p>
-                  <div className="mt-2">
-                    {(() => {
-                      const rawBalance = selectedSupplier.currentBalance !== undefined && selectedSupplier.currentBalance !== null
-                        ? Number(selectedSupplier.currentBalance)
-                        : (Number(selectedSupplier.pendingBalance ?? 0) - Number(selectedSupplier.advanceBalance ?? 0));
-                      const currentBalance = isNaN(rawBalance) ? 0 : rawBalance;
-                      const isPayable = currentBalance > 0;
-                      const isReceivable = currentBalance < 0;
-                      return (
-                        <div className="flex items-center space-x-1">
-                          <span className="text-xs text-gray-500">Balance:</span>
-                          <span className={`text-sm font-medium ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'}`}>
-                            {isPayable ? '' : '-'}{Math.abs(currentBalance).toFixed(2)}
-                          </span>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
+      {/* Supplier Selection - compact modern header */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-2">
+          <div className="flex-1 min-w-0 sm:min-w-[300px] lg:max-w-lg">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  Select Supplier
+                </label>
+                {selectedSupplier && (
+                  <button
+                    onClick={handleBackToSupplier}
+                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold uppercase tracking-wider underline"
+                    title="Change supplier"
+                  >
+                    Change
+                  </button>
+                )}
               </div>
             </div>
-          )}
+            {suppliersLoading ? (
+              <LoadingSpinner />
+            ) : (
+              <SearchableDropdown
+                className="[&_input]:h-8"
+                placeholder="Search supplier by name, phone, or email..."
+                items={suppliers}
+                onSelect={handleSupplierSelect}
+                onSearch={setSupplierSearchTerm}
+                value={supplierSearchTerm}
+                loading={suppliersLoading || suppliersFetching}
+                emptyMessage="No suppliers found"
+                displayKey={(supplier) => {
+                  const name = supplier.companyName || supplier.businessName || supplier.name || 'Unknown';
+                  return (
+                    <div>
+                      <div className="font-medium">{name}</div>
+                      {supplier.phone && (
+                        <div className="text-xs text-gray-500">Phone: {supplier.phone}</div>
+                      )}
+                    </div>
+                  );
+                }}
+                selectedItem={selectedSupplier}
+              />
+            )}
+          </div>
+          <div className="lg:w-auto w-full lg:max-w-md lg:self-end">
+            {selectedSupplier ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl h-8 px-2 flex items-center">
+                {(() => {
+                  const rawBalance = selectedSupplier.currentBalance !== undefined && selectedSupplier.currentBalance !== null
+                    ? Number(selectedSupplier.currentBalance)
+                    : (Number(selectedSupplier.pendingBalance ?? 0) - Number(selectedSupplier.advanceBalance ?? 0));
+                  const currentBalance = isNaN(rawBalance) ? 0 : rawBalance;
+                  const isPayable = currentBalance > 0;
+                  const isReceivable = currentBalance < 0;
+                  return (
+                    <div className="flex items-center gap-2 text-xs whitespace-nowrap overflow-hidden">
+                      <span className="font-bold text-gray-900 truncate">
+                        {selectedSupplier.companyName || selectedSupplier.businessName || selectedSupplier.name || 'Supplier'}
+                      </span>
+                      <span className="text-gray-400">|</span>
+                      <span className="text-gray-500 uppercase font-semibold">Balance</span>
+                      <span className={`font-bold ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'}`}>
+                        {isPayable ? '' : '-'}{Math.abs(currentBalance).toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="hidden lg:flex items-center justify-center h-8 px-8 border-2 border-dashed border-gray-100 rounded-xl">
+                <span className="text-gray-400 text-sm font-medium italic">No supplier selected</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -613,78 +640,19 @@ const PurchaseReturns = () => {
           </div>
           <div className="card-content">
             <div className="mb-6">
-              <p className="text-sm text-gray-600 mb-3">
-                Search by Product Name, SKU, or Barcode (products previously purchased from this supplier)
-              </p>
-              <div className="flex gap-3 relative flex-col sm:flex-row">
-                <div className="flex-1 relative">
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    value={productSearchTerm}
-                    onChange={(e) => {
-                      setProductSearchTerm(e.target.value);
-                      setShowSuggestions(true);
-                    }}
-                    onFocus={() => {
-                      setShowSuggestions(true); // Show all products on focus (even without typing)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (searchSuggestions.length > 0) {
-                          handleSuggestionSelect(searchSuggestions[0]);
-                        }
-                      }
-                    }}
-                    placeholder="Search product name, SKU, or barcode - click suggestion to add"
-                    className="input w-full"
-                  />
-                </div>
-              </div>
-              {showSuggestions && createPortal(
-                <div
-                  ref={suggestionsRef}
-                  className="fixed z-[9999] bg-white shadow-lg max-h-96 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm border border-gray-200"
-                  style={{
-                    top: `${suggestionsPosition.top}px`,
-                    left: `${suggestionsPosition.left}px`,
-                    width: `${suggestionsPosition.width}px`
-                  }}
-                >
-                  {isSearching ? (
-                    <div className="px-4 py-8 text-center">
-                      <LoadingSpinner size="sm" />
-                      <p className="text-sm text-gray-500 mt-2">Searching...</p>
-                    </div>
-                  ) : searchSuggestions.length > 0 ? (
-                    <>
-                      <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase border-b border-gray-200">
-                        Suggestions ({searchSuggestions.length})
-                      </div>
-                      {searchSuggestions.map((suggestion) => (
-                        <button
-                          key={suggestion.id}
-                          onClick={() => handleSuggestionSelect(suggestion)}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-gray-100 last:border-b-0"
-                        >
-                          <div className="font-medium">{suggestion.name}</div>
-                          <div className="flex gap-4 text-xs text-gray-500 mt-1">
-                            {suggestion.sku && <span>SKU: {suggestion.sku}</span>}
-                            {suggestion.barcode && <span>Barcode: {suggestion.barcode}</span>}
-                            <span className="text-green-600">Available: {suggestion.remainingQuantity}</span>
-                          </div>
-                        </button>
-                      ))}
-                    </>
-                  ) : (
-                    <div className="px-4 py-8 text-center text-gray-500 text-sm">
-                      No products found
-                    </div>
-                  )}
-                </div>,
-                document.body
-              )}
+              <ProductSearch
+                onAddProduct={handleAddFromPurchaseProductSearch}
+                selectedCustomer={selectedSupplier}
+                showCostPrice={false}
+                hasCostPricePermission={false}
+                priceType="cost"
+                allowOutOfStock={true}
+                allowSaleWithoutProduct={false}
+                allowManualCostPrice={false}
+                itemsOverride={supplierPurchasedProductsForSearch}
+                loadingOverride={isSearching}
+                emptyMessageOverride="No purchased products found for this supplier"
+              />
             </div>
 
             {returnCart.length === 0 ? (
@@ -693,75 +661,88 @@ const PurchaseReturns = () => {
                 <p className="mt-2">No items in return cart</p>
               </div>
             ) : (
-              <div className="space-y-4 border-t border-gray-200 pt-6">
-                <h4 className="text-md font-medium text-gray-700">Return Items</h4>
+              <div className="space-y-4 border-t border-gray-200 pt-2">
                 <div className="hidden md:block overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">#</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Product</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Qty</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Rate</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Total</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {returnCart.map((item, index) => {
-                        const total = (item.quantity || 1) * (item.originalPrice || 0);
-                        return (
-                          <tr key={`${item.product}-${item.originalOrder}-${index}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td className="px-4 py-3 text-sm font-medium text-gray-700">{index + 1}</td>
-                            <td className="px-4 py-3 font-medium text-sm text-gray-900">{item.productName || 'Unknown'}</td>
-                            <td className="px-4 py-3 text-sm">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateReturnQuantity(index, (item.quantity || 1) - 1)}
-                                  disabled={(item.quantity || 1) <= 1}
-                                  className="p-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Decrease quantity"
-                                >
-                                  <Minus className="h-4 w-4" />
-                                </button>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={item.maxQuantity || 999}
-                                  value={item.quantity || 1}
-                                  onChange={(e) => handleUpdateReturnQuantity(index, e.target.value)}
-                                  className="input text-center h-8 w-20"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateReturnQuantity(index, (item.quantity || 1) + 1)}
-                                  disabled={(item.quantity || 1) >= (item.maxQuantity || 999)}
-                                  className="p-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Increase quantity"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </button>
+                  <div className="min-w-[980px] space-y-1">
+                    {returnCart.map((item, index) => {
+                      const total = (item.quantity || 1) * (item.originalPrice || 0);
+                      return (
+                        <div
+                          key={`${item.product}-${item.originalOrder}-${index}`}
+                          className="grid grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem] gap-x-1 items-center py-1"
+                        >
+                          <div className="min-w-0 flex justify-start">
+                            <span className="text-sm font-medium px-0.5 py-1 rounded border block w-8 text-center h-8 flex items-center justify-center text-green-800 bg-green-100 border-green-300">
+                              {index + 1}
+                            </span>
+                          </div>
+
+                          <div className="min-w-0 flex items-center h-8 gap-2">
+                            {item.productImage ? (
+                              <div className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200">
+                                <img src={item.productImage} alt="" className="h-full w-full object-cover shadow-sm" />
                               </div>
-                            </td>
-                            <td className="px-4 py-3 text-sm font-medium">{formatCurrency(item.originalPrice)}</td>
-                            <td className="px-4 py-3 text-sm font-semibold text-gray-900">{formatCurrency(total)}</td>
-                            <td className="px-4 py-3">
-                              <Button
-                                onClick={() => handleRemoveFromReturnCart(index)}
-                                variant="destructive"
-                                size="sm"
-                                title="Remove"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            ) : null}
+                            <span className="font-medium text-sm text-gray-900 truncate">{item.productName || 'Unknown'}</span>
+                          </div>
+
+                          <div className="min-w-0">
+                            <span className="text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200">
+                              -
+                            </span>
+                          </div>
+
+                          <div className="min-w-0">
+                            <span className={`text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center ${(item.currentStock || 0) === 0
+                              ? 'text-red-700 bg-red-50 border-red-200'
+                              : (item.currentStock || 0) <= 5
+                                ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
+                                : 'text-gray-700 bg-gray-100 border-gray-200'
+                              }`}>
+                              {item.currentStock ?? item.maxQuantity ?? 0}
+                            </span>
+                          </div>
+
+                          <div className="min-w-0">
+                            <Input
+                              type="number"
+                              min={1}
+                              max={item.maxQuantity || 999}
+                              value={item.quantity || 1}
+                              onChange={(e) => handleUpdateReturnQuantity(index, e.target.value)}
+                              className="w-full min-w-0 text-center h-8 border border-gray-300 rounded px-2"
+                            />
+                          </div>
+
+                          <div className="min-w-0">
+                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block w-full text-center h-8 flex items-center justify-center">
+                              {(item.originalPrice || 0).toFixed(2)}
+                            </span>
+                          </div>
+
+                          <div className="min-w-0">
+                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block w-full text-center h-8 flex items-center justify-center">
+                              {total.toFixed(2)}
+                            </span>
+                          </div>
+
+                          <div className="min-w-0 flex justify-end">
+                            <Button
+                              onClick={() => handleRemoveFromReturnCart(index)}
+                              variant="destructive"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              title="Remove"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
+
                 <div className="md:hidden space-y-3">
                   {returnCart.map((item, index) => {
                     const total = (item.quantity || 1) * (item.originalPrice || 0);
@@ -776,6 +757,7 @@ const PurchaseReturns = () => {
                             onClick={() => handleRemoveFromReturnCart(index)}
                             variant="destructive"
                             size="sm"
+                            className="h-8 w-8 p-0"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -783,32 +765,14 @@ const PurchaseReturns = () => {
                         <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
                           <div>
                             <span className="text-gray-500 block mb-1">Qty:</span>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateReturnQuantity(index, (item.quantity || 1) - 1)}
-                                disabled={(item.quantity || 1) <= 1}
-                                className="p-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50"
-                              >
-                                <Minus className="h-4 w-4" />
-                              </button>
-                              <input
-                                type="number"
-                                min={1}
-                                max={item.maxQuantity || 999}
-                                value={item.quantity || 1}
-                                onChange={(e) => handleUpdateReturnQuantity(index, e.target.value)}
-                                className="input text-center h-8 w-16 flex-1"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateReturnQuantity(index, (item.quantity || 1) + 1)}
-                                disabled={(item.quantity || 1) >= (item.maxQuantity || 999)}
-                                className="p-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50"
-                              >
-                                <Plus className="h-4 w-4" />
-                              </button>
-                            </div>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={item.maxQuantity || 999}
+                              value={item.quantity || 1}
+                              onChange={(e) => handleUpdateReturnQuantity(index, e.target.value)}
+                              className="text-center h-8 w-full"
+                            />
                           </div>
                           <div><span className="text-gray-500">Rate:</span> <span className="font-medium">{formatCurrency(item.originalPrice)}</span></div>
                           <div className="col-span-2"><span className="text-gray-500">Total:</span> <span className="font-semibold">{formatCurrency(total)}</span></div>
@@ -823,57 +787,119 @@ const PurchaseReturns = () => {
         </div>
       )}
 
-      {/* Return Summary - gradient panel */}
+      {/* Return Summary - compact style aligned with Sale Returns */}
       {returnCart.length > 0 && selectedSupplier && (() => {
         const subtotal = returnCart.reduce((sum, item) => sum + (item.quantity || 1) * (item.originalPrice || 0), 0);
         return (
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg max-w-5xl ml-auto mt-4">
-            <div className="px-4 sm:px-6 py-4 border-b border-blue-200">
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 text-left sm:text-right mb-4">Return Details</h3>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
-                <input
-                  type="text"
-                  value={returnNotes}
-                  onChange={(e) => setReturnNotes(e.target.value)}
-                  className="input h-10 text-sm w-full md:max-w-md ml-auto block md:float-right"
-                  placeholder="Additional notes..."
-                />
-              </div>
-            </div>
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4">
-              <h3 className="text-lg font-semibold text-white">Return Summary</h3>
-            </div>
-            <div className="px-6 py-4">
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-800 font-semibold">Subtotal:</span>
-                  <span className="text-xl font-bold text-gray-900">{formatCurrency(subtotal)}</span>
-                </div>
-                <div className="flex justify-between items-center text-xl font-bold border-t-2 border-blue-400 pt-3 mt-2">
-                  <span className="text-blue-900">Total Refund:</span>
-                  <span className="text-blue-900 text-3xl">{formatCurrency(subtotal)}</span>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-3 mt-6">
-                <LoadingButton
-                  onClick={handleClearReturnCart}
-                  isLoading={false}
-                  variant="secondary"
-                  className="flex-1"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear Return Items
-                </LoadingButton>
+          <div className="border border-slate-200 rounded-xl bg-slate-50 shadow-sm mt-4">
+            <div className="flex items-center justify-between bg-white border-b border-slate-200 px-5 py-3">
+              <h3 className="text-base font-bold tracking-tight text-slate-900 sm:text-lg">Order Summary</h3>
+              <div className="flex items-center gap-2">
                 <LoadingButton
                   onClick={handleCompleteReturn}
                   isLoading={isCreatingReturn}
                   variant="default"
-                  className="flex-2"
+                  size="sm"
+                  className="bg-slate-900 hover:bg-slate-800 text-white border-none h-8 px-4 font-bold"
                 >
                   <Receipt className="h-4 w-4 mr-2" />
                   Complete Return
                 </LoadingButton>
+                <Button
+                  onClick={handleClearReturnCart}
+                  variant="ghost"
+                  size="icon-sm"
+                  className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  title="Clear Return Items"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 sm:px-7 bg-slate-50">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-start">
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Subtotal</span>
+                  <div className="h-8 flex items-center px-2 bg-white border border-gray-200 rounded-md text-xl font-semibold tabular-nums text-foreground">
+                    {subtotal.toFixed(2)}
+                  </div>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Return Amount</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max={subtotal}
+                    autoComplete="off"
+                    value={returnAmount}
+                    onChange={(e) => {
+                      const next = parseFloat(e.target.value);
+                      if (!Number.isFinite(next)) {
+                        setReturnAmount(0);
+                        return;
+                      }
+                      setReturnAmount(Math.max(0, Math.min(next, subtotal)));
+                    }}
+                    onFocus={(e) => e.target.select()}
+                    className="w-full h-8 px-2 border-gray-200 rounded-md bg-white focus:ring-1 focus:ring-primary-400 text-sm font-medium shadow-none"
+                    placeholder="0"
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-1">Notes</span>
+                  <Input
+                    type="text"
+                    value={returnNotes}
+                    onChange={(e) => setReturnNotes(e.target.value)}
+                    className="w-full h-8 px-2 border-gray-200 rounded-md bg-white focus:ring-1 focus:ring-primary-400 text-sm shadow-none"
+                    placeholder="Additional notes..."
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Payment</span>
+                    <select
+                      value={refundMethod === 'bank' && selectedBankAccount ? `bank:${selectedBankAccount}` : refundMethod}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v.startsWith('bank:')) {
+                          setRefundMethod('bank');
+                          setSelectedBankAccount(v.slice(5));
+                        } else {
+                          setRefundMethod(v);
+                          setSelectedBankAccount('');
+                        }
+                      }}
+                      className="border-none bg-transparent p-0 text-[10px] font-bold text-primary-600 focus:ring-0 cursor-pointer max-w-[70px] overflow-hidden text-ellipsis"
+                    >
+                      <option value="cash">Cash</option>
+                      <optgroup label="Banks">
+                        {activeBanks.map((bank) => {
+                          const bid = bank._id || bank.id;
+                          if (!bid) return null;
+                          const label = [bank.bankName, bank.accountNumber].filter(Boolean).join(' - ');
+                          return <option key={bid} value={`bank:${bid}`}>{label}</option>;
+                        })}
+                      </optgroup>
+                      <option value="credit_card">Card</option>
+                      <option value="debit_card">Debit</option>
+                      <option value="check">Check</option>
+                    </select>
+                  </div>
+                  <div className="h-8 flex items-center px-2 bg-slate-50 border border-gray-200 rounded-md text-sm font-semibold text-foreground">
+                    {refundMethod === 'bank'
+                      ? (activeBanks.find((b) => (b._id || b.id) === selectedBankAccount)?.bankName || 'Bank Transfer')
+                      : refundMethod === 'credit_card'
+                        ? 'Card Refund'
+                        : refundMethod === 'debit_card'
+                          ? 'Debit Refund'
+                          : refundMethod === 'check'
+                            ? 'Check Refund'
+                            : 'Cash Refund'}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

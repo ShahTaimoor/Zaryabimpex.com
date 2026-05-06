@@ -152,9 +152,10 @@ class ReturnManagementService {
 
     await this.calculateRefundAmounts(returnRequest);
 
+    // Per line, refundAmount is already (gross line - restocking fee). Do not subtract restocking again.
     const totalRefundAmount = returnRequest.items.reduce((s, i) => s + (Number(i.refundAmount) || 0), 0);
     const totalRestockingFee = returnRequest.items.reduce((s, i) => s + (Number(i.restockingFee) || 0), 0);
-    const netRefundAmount = totalRefundAmount - totalRestockingFee;
+    const netRefundAmount = Math.max(0, totalRefundAmount);
     returnRequest.totalRefundAmount = totalRefundAmount;
     returnRequest.totalRestockingFee = totalRestockingFee;
     returnRequest.netRefundAmount = netRefundAmount;
@@ -786,6 +787,16 @@ class ReturnManagementService {
   // Process Sale Return refund with accounting entries
   async processSaleReturnRefund(returnRequest, refundAmount, client = null) {
     try {
+      /** Net cash/collected refund to customer (after restocking); can be 0 when full restocking / no payout */
+      const amt = Math.max(0, Number(refundAmount) || 0);
+      /** Gross selling value of returned lines — AR & ledger must reflect this even when cash refund is 0 */
+      const items = returnRequest.items || [];
+      const grossReturnAmount = items.reduce(
+        (s, i) => s + (Number(i.originalPrice) || 0) * (Number(i.quantity) || 0),
+        0
+      );
+      const ledgerReturnAmount = Math.max(0, Math.round(grossReturnAmount * 100) / 100);
+
       const accountCodes = await AccountingService.getDefaultAccountCodes();
       const customerId = toUuid(returnRequest.customer_id ?? returnRequest.customer);
       const salesReturnAccount = await AccountingService.getAccountCode('Sales Returns', 'revenue', 'sales_revenue').catch(() => accountCodes.salesRevenue);
@@ -804,41 +815,43 @@ class ReturnManagementService {
 
       const returnDate = returnRequest.returnDate || returnRequest.return_date || new Date();
 
-      // 1) Always post Sale Return to AR (1100) with customerId so it shows in Account Ledger and reduces receivable
-      await this.createDoubleEntry(
-        {
-          accountCode: salesReturnAccount,
-          debitAmount: refundAmount,
-          creditAmount: 0,
-          description: `Sale Return ${returnRequest.returnNumber}`,
-          reference: returnRequest.returnNumber,
-          returnId: returnRequest._id,
-          referenceType: 'Sale Return',
-          customerId: customerId || null,
-          transactionDate: returnDate
-        },
-        {
-          accountCode: arAccount,
-          debitAmount: 0,
-          creditAmount: refundAmount,
-          description: `Sale Return ${returnRequest.returnNumber}`,
-          reference: returnRequest.returnNumber,
-          returnId: returnRequest._id,
-          referenceType: 'Sale Return',
-          customerId: customerId || null,
-          transactionDate: returnDate
-        },
-        client
-      );
+      // 1) Post Sale Return ↔ AR at gross returned value (shows in ledger; updates receivable even when net cash refund is 0)
+      if (ledgerReturnAmount > 0) {
+        await this.createDoubleEntry(
+          {
+            accountCode: salesReturnAccount,
+            debitAmount: ledgerReturnAmount,
+            creditAmount: 0,
+            description: `Sale Return ${returnRequest.returnNumber}`,
+            reference: returnRequest.returnNumber,
+            returnId: returnRequest._id,
+            referenceType: 'Sale Return',
+            customerId: customerId || null,
+            transactionDate: returnDate
+          },
+          {
+            accountCode: arAccount,
+            debitAmount: 0,
+            creditAmount: ledgerReturnAmount,
+            description: `Sale Return ${returnRequest.returnNumber}`,
+            reference: returnRequest.returnNumber,
+            returnId: returnRequest._id,
+            referenceType: 'Sale Return',
+            customerId: customerId || null,
+            transactionDate: returnDate
+          },
+          client
+        );
+      }
 
       // 2) For cash/bank refund: record the payment out (Dr AR, Cr Cash/Bank)
       // Skip this step for 'deferred' (no refund at this time - only record the return)
       const refundMethod = returnRequest.refundMethod || 'original_payment';
-      if (refundMethod === 'cash' || refundMethod === 'original_payment') {
+      if (amt > 0 && (refundMethod === 'cash' || refundMethod === 'original_payment')) {
         await this.createDoubleEntry(
           {
             accountCode: arAccount,
-            debitAmount: refundAmount,
+            debitAmount: amt,
             creditAmount: 0,
             description: `Cash Refund for Return ${returnRequest.returnNumber}`,
             reference: returnRequest.returnNumber,
@@ -850,7 +863,7 @@ class ReturnManagementService {
           {
             accountCode: accountCodes.cash,
             debitAmount: 0,
-            creditAmount: refundAmount,
+            creditAmount: amt,
             description: `Cash Refund for Return ${returnRequest.returnNumber}`,
             reference: returnRequest.returnNumber,
             returnId: returnRequest._id,
@@ -859,11 +872,11 @@ class ReturnManagementService {
           },
           client
         );
-      } else if (refundMethod === 'bank_transfer' || refundMethod === 'check') {
+      } else if (amt > 0 && (refundMethod === 'bank_transfer' || refundMethod === 'check')) {
         await this.createDoubleEntry(
           {
             accountCode: arAccount,
-            debitAmount: refundAmount,
+            debitAmount: amt,
             creditAmount: 0,
             description: `Bank Refund for Return ${returnRequest.returnNumber}`,
             reference: returnRequest.returnNumber,
@@ -875,7 +888,7 @@ class ReturnManagementService {
           {
             accountCode: accountCodes.bank,
             debitAmount: 0,
-            creditAmount: refundAmount,
+            creditAmount: amt,
             description: `Bank Refund for Return ${returnRequest.returnNumber}`,
             reference: returnRequest.returnNumber,
             returnId: returnRequest._id,
@@ -887,10 +900,10 @@ class ReturnManagementService {
       } else if (refundMethod === 'deferred' || refundMethod === 'none') {
         // No cash/bank/store_credit - only Step 1 (Sales Return to AR) was posted above.
         // Refund will be processed later when the user issues payment.
-      } else if (refundMethod === 'store_credit') {
+      } else if (amt > 0 && refundMethod === 'store_credit') {
         await CustomerBalanceService.recordRefund(
           returnRequest.customer,
-          refundAmount,
+          amt,
           returnRequest.originalOrder,
           null,
           { returnId: returnRequest._id, returnNumber: returnRequest.returnNumber }
@@ -922,11 +935,14 @@ class ReturnManagementService {
         );
       }
 
-      // Update customer balance if sale was on credit
-      if (originalSale.payment?.status === 'pending' || originalSale.payment?.status === 'partial') {
+      // Customer-facing balance is ledger-derived; recordRefund is a no-op but call preserves hooks/logging for non-zero movement
+      if (
+        ledgerReturnAmount > 0 &&
+        (originalSale.payment?.status === 'pending' || originalSale.payment?.status === 'partial')
+      ) {
         await CustomerBalanceService.recordRefund(
           returnRequest.customer,
-          refundAmount,
+          ledgerReturnAmount,
           returnRequest.originalOrder,
           null,
           { returnId: returnRequest._id, returnNumber: returnRequest.returnNumber }
