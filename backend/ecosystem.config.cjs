@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'pos-backend',
+      name: process.env.PM2_APP_NAME || 'pos-backend',
       script: 'server.js',
       instances: 'max',
       exec_mode: 'cluster',
