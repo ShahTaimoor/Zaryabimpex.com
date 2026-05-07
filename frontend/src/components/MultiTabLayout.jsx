@@ -54,6 +54,7 @@ import MobileNavigation from './MobileNavigation';
 import MobileBottomNav from './MobileBottomNav';
 import { useResponsive } from './ResponsiveContainer';
 import { useGetAlertSummaryQuery } from '../store/services/inventoryAlertsApi';
+import { POLLING_INTERVALS } from '../config/polling';
 import { Button } from '@/components/ui/button';
 import PresenceHeartbeat from './PresenceHeartbeat';
 import OnlineAvatarStack from './OnlineAvatarStack';
@@ -439,7 +440,9 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
 // Inventory Alerts Badge Component - Always visible with professional design
 const InventoryAlertsBadge = ({ onNavigate }) => {
   const { data: summaryData } = useGetAlertSummaryQuery(undefined, {
-    pollingInterval: 60000, // Refetch every minute
+    pollingInterval: POLLING_INTERVALS.INVENTORY_ALERT_SUMMARY_MS,
+    skipPollingIfUnfocused: true,
+    refetchOnFocus: true,
     skip: false,
   });
 
@@ -516,7 +519,9 @@ export const MultiTabLayout = ({ children }) => {
 
   // Get alert summary for mobile bottom navbar
   const { data: summaryData } = useGetAlertSummaryQuery(undefined, {
-    pollingInterval: 60000,
+    pollingInterval: POLLING_INTERVALS.INVENTORY_ALERT_SUMMARY_MS,
+    skipPollingIfUnfocused: true,
+    refetchOnFocus: true,
     skip: false,
   });
   const summary = summaryData?.data || summaryData || {};

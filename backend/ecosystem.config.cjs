@@ -1,0 +1,36 @@
+module.exports = {
+  apps: [
+    {
+      name: 'pos-backend',
+      script: 'server.js',
+      instances: 'max',
+      exec_mode: 'cluster',
+      watch: false,
+      autorestart: true,
+      max_memory_restart: '700M',
+      node_args: '--max-old-space-size=1024',
+      env: {
+        NODE_ENV: 'development',
+        LOG_LEVEL: 'debug',
+        LOG_TO_FILE: 'false',
+        PG_POOL_DEBUG: 'false',
+      },
+      env_production: {
+        NODE_ENV: 'production',
+        LOG_LEVEL: 'warn',
+        LOG_TO_FILE: 'true',
+        PG_POOL_DEBUG: 'false',
+      },
+      error_file: './logs/pm2-error.log',
+      out_file: './logs/pm2-out.log',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      time: true,
+      kill_timeout: 5000,
+      listen_timeout: 10000,
+      min_uptime: '10s',
+      max_restarts: 10,
+      exp_backoff_restart_delay: 100,
+    },
+  ],
+};

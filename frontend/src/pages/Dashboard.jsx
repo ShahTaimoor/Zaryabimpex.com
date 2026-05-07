@@ -56,6 +56,7 @@ import { usePeriodComparison } from '../hooks/usePeriodComparison';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan } from '../utils/dateUtils';
 import { toast } from 'sonner';
+import { POLLING_INTERVALS } from '../config/polling';
 
 const StatCard = ({ title, value, icon: Icon, color, iconColor = 'text-white', change, changeType, onClick }) => (
   <div
@@ -172,7 +173,8 @@ export const Dashboard = () => {
   };
 
   const { data: todaySummary, isLoading: summaryLoading } = useGetTodaySummaryQuery(undefined, {
-    pollingInterval: 60000,
+    pollingInterval: POLLING_INTERVALS.HEALTH_MS,
+    skipPollingIfUnfocused: true,
   });
 
   const { data: lowStockData, isLoading: lowStockLoading } = useGetLowStockItemsQuery();
@@ -185,11 +187,13 @@ export const Dashboard = () => {
       limit: 5000,
     },
     {
-      pollingInterval: 30000,
+      pollingInterval: POLLING_INTERVALS.LOW_STOCK_ALERTS_MS,
+      skipPollingIfUnfocused: true,
     }
   );
   const { data: alertSummaryData } = useGetAlertSummaryQuery(undefined, {
-    pollingInterval: 30000,
+    pollingInterval: POLLING_INTERVALS.INVENTORY_ALERT_SUMMARY_MS,
+    skipPollingIfUnfocused: true,
   });
 
   const { data: inventoryData, isLoading: inventoryLoading } = useGetInventorySummaryQuery();

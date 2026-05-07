@@ -13,6 +13,7 @@ const safePassword = process.env.POSTGRES_PASSWORD != null
   ? String(process.env.POSTGRES_PASSWORD)
   : '';
 
+const env = process.env.NODE_ENV || 'development';
 const poolConfig = {
   host: process.env.POSTGRES_HOST,
   port: process.env.POSTGRES_PORT,
@@ -23,8 +24,8 @@ const poolConfig = {
   // 1. Connection Limits
   // A safe limit for most PostgreSQL installations. 
   // 2000 was causing crashes; 20 is a robust starting point for Node.js.
-  max: 20, 
-  min: 2, // Keep at least 2 connections ready
+  max: Number(process.env.PG_POOL_MAX) || (env === 'production' ? 30 : 15),
+  min: Number(process.env.PG_POOL_MIN) || (env === 'production' ? 4 : 1),
   
   // 2. Timeouts
   connectionTimeoutMillis: 5000, // Wait 5s for a connection before failing
@@ -52,9 +53,11 @@ pool.on('error', (err, client) => {
   });
 });
 
-pool.on('connect', (client) => {
-  logger.debug('PostgreSQL: New client checked out from pool');
-});
+if (process.env.PG_POOL_DEBUG === 'true') {
+  pool.on('connect', () => {
+    logger.debug('PostgreSQL: New client checked out from pool');
+  });
+}
 
 // --- HELPER WRAPPERS ---
 

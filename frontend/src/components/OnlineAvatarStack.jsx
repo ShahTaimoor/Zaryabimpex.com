@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useGetOnlineUsersQuery } from '../store/services/presenceApi';
 import { getRoleLabel } from '../utils/roleLabels';
 import { cn } from '@/lib/utils';
+import { POLLING_INTERVALS } from '../config/polling';
 
 const BG_CLASSES = [
   'bg-gray-100',
@@ -37,7 +38,9 @@ export default function OnlineAvatarStack({ className = '' }) {
   const { user } = useAuth();
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
   const { data, isFetching } = useGetOnlineUsersQuery(undefined, {
-    pollingInterval: 25_000,
+    pollingInterval: POLLING_INTERVALS.ONLINE_USERS_MS,
+    skipPollingIfUnfocused: true,
+    refetchOnFocus: true,
     skip: !user || !isAdmin,
   });
 

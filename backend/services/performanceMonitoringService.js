@@ -157,40 +157,8 @@ class PerformanceMonitoringService {
    * Schedule performance monitoring
    */
   scheduleMonitoring() {
-    const cron = require('node-cron');
-    
-    // Check performance every 5 minutes
-    cron.schedule('*/5 * * * *', async () => {
-      try {
-        const alerts = await this.checkPerformanceThresholds();
-        
-        if (alerts.length > 0) {
-          console.warn('Performance alerts:', alerts);
-          
-          // TODO: Send alerts
-          // for (const alert of alerts) {
-          //   await sendAlert(alert);
-          // }
-        }
-      } catch (error) {
-        console.error('Error in performance monitoring:', error);
-      }
-    });
-    
-    // Monitor database daily at midnight
-    cron.schedule('0 0 * * *', async () => {
-      try {
-        const stats = await this.monitorDatabasePerformance();
-        if (stats) {
-          console.log('Daily database stats:', stats);
-          
-          // TODO: Store in metrics collection
-          // await DatabaseMetric.create(stats);
-        }
-      } catch (error) {
-        console.error('Error in database monitoring:', error);
-      }
-    });
+    // Cron scheduling removed by request. Keep function for API compatibility.
+    return;
   }
 }
 

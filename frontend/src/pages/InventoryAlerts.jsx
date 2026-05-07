@@ -21,6 +21,7 @@ import {
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { POLLING_INTERVALS } from '../config/polling';
 
 const LIMIT_OPTIONS = [50, 500, 1000, 5000];
 
@@ -66,7 +67,8 @@ const InventoryAlerts = () => {
       ...(searchTerm.trim() && { search: searchTerm.trim() })
     },
     {
-      pollingInterval: 30000, // Refetch every 30 seconds
+      pollingInterval: POLLING_INTERVALS.LOW_STOCK_ALERTS_MS,
+      skipPollingIfUnfocused: true,
     }
   );
 
@@ -90,7 +92,8 @@ const InventoryAlerts = () => {
 
   // Fetch alert summary
   const { data: summaryResponse } = useGetAlertSummaryQuery(undefined, {
-    pollingInterval: 30000,
+    pollingInterval: POLLING_INTERVALS.INVENTORY_ALERT_SUMMARY_MS,
+    skipPollingIfUnfocused: true,
   });
 
   // Generate purchase orders mutation

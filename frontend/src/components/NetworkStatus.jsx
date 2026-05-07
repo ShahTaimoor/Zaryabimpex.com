@@ -2,18 +2,23 @@ import React, { useState, useEffect, useRef } from 'react';
 import { WifiOff } from 'lucide-react';
 import { showWarningToast, showSuccessToast } from '../utils/errorHandler';
 import { useHealthQuery } from '../store/api';
+import usePageVisibility from '../hooks/usePageVisibility';
+import { POLLING_INTERVALS } from '../config/polling';
 
 const NetworkStatus = () => {
   const [wasOffline, setWasOffline] = useState(false);
   const [showOfflineBanner, setShowOfflineBanner] = useState(false);
   const failureCountRef = useRef(0);
   const lastSuccessTimeRef = useRef(Date.now());
+  const isPageVisible = usePageVisibility();
   
-  // Use RTK Query health check with polling every 30 seconds
-  const { data, error, isLoading, isError, isSuccess } = useHealthQuery(undefined, {
-    pollingInterval: 30000, // Poll every 30 seconds
+  // Use RTK Query health check with polling every 60 seconds
+  const { data, isLoading, isError, isSuccess } = useHealthQuery(undefined, {
+    pollingInterval: POLLING_INTERVALS.HEALTH_MS,
+    skipPollingIfUnfocused: true,
+    refetchOnFocus: true,
     refetchOnMountOrArgChange: true,
-    skip: false,
+    skip: !isPageVisible,
     // Don't show error toasts for health check failures
     errorPolicy: 'all',
   });
