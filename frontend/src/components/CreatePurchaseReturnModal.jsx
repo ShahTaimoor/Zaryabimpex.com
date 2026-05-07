@@ -50,7 +50,13 @@ const CreatePurchaseReturnModal = ({ isOpen, onClose, onSuccess, purchaseInvoice
       return;
     }
 
-    const itemPrice = orderItem.price || orderItem.unitPrice || orderItem.costPerUnit || orderItem.unitCost || 0;
+    const itemPrice =
+      orderItem.unit_cost ||
+      orderItem.unitCost ||
+      orderItem.price ||
+      orderItem.unitPrice ||
+      orderItem.costPerUnit ||
+      0;
     
     const newItem = {
       product: orderItem.product?._id || orderItem.product,
@@ -221,7 +227,13 @@ const CreatePurchaseReturnModal = ({ isOpen, onClose, onSuccess, purchaseInvoice
                         const availableQuantity = getAvailableQuantity(item);
                         const isAlreadyAdded = formData.items.some(i => i.originalOrderItem === item._id);
                         const productName = item.product?.name || item.product?.displayName || 'Unknown Product';
-                        const itemPrice = item.price || item.unitPrice || item.costPerUnit || item.unitCost || 0;
+                        const itemPrice =
+                          item.unit_cost ||
+                          item.unitCost ||
+                          item.price ||
+                          item.unitPrice ||
+                          item.costPerUnit ||
+                          0;
 
                     return (
                       <div key={item._id} className="flex items-center justify-between p-2 bg-gray-50 rounded">

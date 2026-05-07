@@ -150,6 +150,21 @@ class ReturnManagementService {
       items: returnData.items.map(item => ({ ...item }))
     };
 
+    // For purchase returns, always derive originalPrice from the original order cost basis.
+    // This prevents zero-value returns when frontend sends mismatched field names.
+    if (isPurchaseReturn) {
+      for (const item of returnRequest.items) {
+        const orderItem = originalOrder.items?.find(oi =>
+          String(oi._id || oi.id) === String(item.originalOrderItem)
+        );
+        if (!orderItem) continue;
+        const productId = orderItem?.product && (orderItem.product.id || orderItem.product._id);
+        const product = productId ? await ProductRepository.findById(productId) : null;
+        const derivedUnitCost = this.extractCostBasis(orderItem, product);
+        item.originalPrice = derivedUnitCost;
+      }
+    }
+
     await this.calculateRefundAmounts(returnRequest);
 
     // Per line, refundAmount is already (gross line - restocking fee). Do not subtract restocking again.
@@ -254,7 +269,12 @@ class ReturnManagementService {
 
       await this.updateInventoryForReturn(returnRequestForDownstream, requestedBy, client);
 
-      if (returnRequestForDownstream.returnType === 'return') {
+      const normalizedImmediateReturnType = String(returnRequestForDownstream.returnType || '').toLowerCase();
+      const isImmediateStandardReturn =
+        normalizedImmediateReturnType === 'return' ||
+        normalizedImmediateReturnType === 'purchase_return' ||
+        normalizedImmediateReturnType === 'sale_return';
+      if (isImmediateStandardReturn) {
         await this.processRefund(returnRequestForDownstream, client);
       } else if (returnRequestForDownstream.returnType === 'exchange') {
         await this.processExchange(returnRequestForDownstream, client);
@@ -313,7 +333,12 @@ class ReturnManagementService {
 
     return await transaction(async (client) => {
       await this.updateInventoryForReturn(returnRequest, userId, client);
-      if (returnRequest.returnType === 'return') {
+      const normalizedReturnType = String(returnRequest.returnType || '').toLowerCase();
+      const isStandardReturn =
+        normalizedReturnType === 'return' ||
+        normalizedReturnType === 'purchase_return' ||
+        normalizedReturnType === 'sale_return';
+      if (isStandardReturn) {
         await this.processRefund(returnRequest, client);
       } else if (returnRequest.returnType === 'exchange') {
         await this.processExchange(returnRequest, client);
@@ -970,26 +995,39 @@ class ReturnManagementService {
 
       // Calculate COGS adjustment (reverse COGS for returned items)
       const cogsAdjustment = await this.calculatePurchaseCOGSAdjustment(returnRequest, originalInvoice);
+      // Hard safeguard: purchase return must carry value. If upstream refund amount is 0/null,
+      // derive ledger amount from invoice cost basis so AP (liabilities) is always impacted.
+      const effectiveRefundAmount = (Number(refundAmount) || 0) > 0
+        ? Number(refundAmount)
+        : (Number(cogsAdjustment) || 0);
+      if (effectiveRefundAmount <= 0) {
+        throw new Error('Purchase return amount is zero. Cannot post accounting entries for liabilities.');
+      }
+      const returnDate = returnRequest.returnDate || returnRequest.return_date || new Date();
 
       // Accounting Entry: Dr Supplier Accounts Payable, Cr Purchase Returns
       const supplierId = toUuid(returnRequest.supplier_id ?? returnRequest.supplier);
       await this.createDoubleEntry(
         {
           accountCode: accountCodes.accountsPayable,
-          debitAmount: refundAmount,
+          debitAmount: effectiveRefundAmount,
           creditAmount: 0,
           description: `Purchase Return ${returnRequest.returnNumber} - Supplier Credit`,
           reference: returnRequest.returnNumber,
           returnId: returnRequest._id,
-          supplierId
+          supplierId,
+          referenceType: 'Purchase Return',
+          transactionDate: returnDate
         },
         {
           accountCode: await AccountingService.getAccountCode('Purchase Returns', 'expense', 'cost_of_goods_sold').catch(() => accountCodes.costOfGoodsSold),
           debitAmount: 0,
-          creditAmount: refundAmount,
+          creditAmount: effectiveRefundAmount,
           description: `Purchase Return ${returnRequest.returnNumber}`,
           reference: returnRequest.returnNumber,
-          returnId: returnRequest._id
+          returnId: returnRequest._id,
+          referenceType: 'Purchase Return',
+          transactionDate: returnDate
         },
         client
       );
@@ -1003,7 +1041,9 @@ class ReturnManagementService {
             creditAmount: 0,
             description: `COGS Adjusted - Purchase Return ${returnRequest.returnNumber}`,
             reference: returnRequest.returnNumber,
-            returnId: returnRequest._id
+            returnId: returnRequest._id,
+            referenceType: 'Purchase Return',
+            transactionDate: returnDate
           },
           {
             accountCode: accountCodes.inventory,
@@ -1011,41 +1051,23 @@ class ReturnManagementService {
             creditAmount: cogsAdjustment,
             description: `Inventory Reduced - Purchase Return ${returnRequest.returnNumber}`,
             reference: returnRequest.returnNumber,
-            returnId: returnRequest._id
-          }
-        );
-      }
-
-      // Handle payment method
-      const refundMethod = returnRequest.refundMethod || 'original_payment';
-      if (refundMethod === 'cash' || refundMethod === 'bank_transfer') {
-        // If cash/bank refund received from supplier
-        const cashAccount = refundMethod === 'cash' ? accountCodes.cash : accountCodes.bank;
-
-        await this.createDoubleEntry(
-          {
-            accountCode: cashAccount,
-            debitAmount: refundAmount,
-            creditAmount: 0,
-            description: `Cash/Bank Refund Received - Purchase Return ${returnRequest.returnNumber}`,
-            reference: returnRequest.returnNumber,
-            returnId: returnRequest._id
-          },
-          {
-            accountCode: accountCodes.accountsPayable,
-            debitAmount: 0,
-            creditAmount: refundAmount,
-            description: `Supplier Payable Reduced - Purchase Return ${returnRequest.returnNumber}`,
-            reference: returnRequest.returnNumber,
-            returnId: returnRequest._id
+            returnId: returnRequest._id,
+            referenceType: 'Purchase Return',
+            transactionDate: returnDate
           },
           client
         );
       }
 
+      // NOTE:
+      // For purchase returns, we only post supplier credit impact (Dr AP / Cr Purchase Returns)
+      // during return processing so liabilities decrease and reflect in Balance Sheet immediately.
+      // If/when cash or bank is actually received from supplier, it should be recorded as a
+      // separate receipt transaction, not auto-settled inside the return posting.
+
       // Update supplier balance
       if (supplierId) {
-        await this.updateSupplierBalance(supplierId, refundAmount, returnRequest.originalOrder);
+        await this.updateSupplierBalance(supplierId, effectiveRefundAmount, returnRequest.originalOrder);
       }
 
     } catch (error) {
