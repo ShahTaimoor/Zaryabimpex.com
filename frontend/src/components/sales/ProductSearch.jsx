@@ -37,6 +37,12 @@ function ProductSearchComponent({
   loadingOverride = null,
   emptyMessageOverride = null,
 }) {
+  const formatDisplayNumber = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return '0';
+    return Number.isInteger(num) ? String(num) : String(num.toFixed(2).replace(/\.?0+$/, ''));
+  };
+
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [quantity, setQuantity] = useState(0);
@@ -152,13 +158,15 @@ function ProductSearchComponent({
     // For variants, use the base product ID to get purchase price
     const productIdForPrice = product.isVariant ? product.baseProductId : product._id;
 
+    let fetchedLastPurchasePrice = null;
     if (productIdForPrice) {
       try {
         const response = await getLastPurchasePrice(productIdForPrice).unwrap();
         if (response && response.lastPurchasePrice !== null) {
-          setLastPurchasePrice(response.lastPurchasePrice);
+          fetchedLastPurchasePrice = Number(response.lastPurchasePrice);
+          setLastPurchasePrice(fetchedLastPurchasePrice);
           if (onLastPurchasePriceFetched) {
-            onLastPurchasePriceFetched(productIdForPrice, response.lastPurchasePrice);
+            onLastPurchasePriceFetched(productIdForPrice, fetchedLastPurchasePrice);
           }
         } else {
           setLastPurchasePrice(null);
@@ -172,7 +180,10 @@ function ProductSearchComponent({
     }
 
     // Calculate the rate based on selected price type
-    const calculatedPrice = calculatePrice(product, priceType);
+    const calculatedPrice =
+      priceType === 'cost' && fetchedLastPurchasePrice !== null && Number.isFinite(fetchedLastPurchasePrice)
+        ? fetchedLastPurchasePrice
+        : calculatePrice(product, priceType);
 
     setCalculatedRate(calculatedPrice);
     setCustomRate(calculatedPrice.toString());
@@ -230,7 +241,21 @@ function ProductSearchComponent({
       }
 
       // Calculate price based on type
-      const unitPrice = calculatePrice(product, priceType);
+      let unitPrice = calculatePrice(product, priceType);
+      if (priceType === 'cost') {
+        try {
+          const productIdForPrice = product.isVariant ? product.baseProductId : product._id;
+          if (productIdForPrice) {
+            const response = await getLastPurchasePrice(productIdForPrice).unwrap();
+            const fetched = Number(response?.lastPurchasePrice);
+            if (response && response.lastPurchasePrice !== null && Number.isFinite(fetched)) {
+              unitPrice = fetched;
+            }
+          }
+        } catch (_) {
+          // Keep fallback calculated unitPrice when lookup fails.
+        }
+      }
       
       // Check for loss warning (sale < cost)
       const costPrice = getCostPrice(product); // Simplified for auto-add to avoid blocking confirm dialogs
@@ -366,15 +391,15 @@ function ProductSearchComponent({
         toast.error('Please enter a valid quantity');
         return;
       }
-      if (!customRate || parseInt(customRate) < 0) {
+      if (!customRate || parseFloat(customRate) < 0) {
         toast.error('Please enter a valid rate');
         return;
       }
 
       setIsAddingToCart(true);
       try {
-        const unitPrice = parseInt(customRate) || 0;
-        const unitCost = (allowManualCostPrice && manualCost) ? parseInt(manualCost) : 0;
+        const unitPrice = parseFloat(customRate) || 0;
+        const unitCost = (allowManualCostPrice && manualCost) ? (parseFloat(manualCost) || 0) : 0;
 
         const manualProduct = {
           _id: `manual_${Date.now()}`,
@@ -416,7 +441,7 @@ function ProductSearchComponent({
     if (!selectedProduct) return;
 
     // Validate that rate is filled
-    if (!customRate || parseInt(customRate) < 0) {
+    if (!customRate || parseFloat(customRate) < 0) {
       toast.error('Please enter a valid rate');
       return;
     }
@@ -445,7 +470,7 @@ function ProductSearchComponent({
     setIsAddingToCart(true);
     try {
       // Use the rate from the input field
-      const unitPrice = parseInt(customRate) || Math.round(calculatedRate);
+      const unitPrice = parseFloat(customRate) || Number(calculatedRate) || 0;
 
       // Check if sale price is less than cost price (always check, regardless of showCostPrice)
       const costPrice = lastPurchasePrice !== null ? lastPurchasePrice : getCostPrice(selectedProduct);
@@ -778,7 +803,7 @@ function ProductSearchComponent({
               <Input
                 type="text"
                 readOnly
-                value={isAddingProduct ? Math.round(quantity * parseInt(customRate || 0)) : 0}
+                value={isAddingProduct ? formatDisplayNumber(quantity * (parseFloat(customRate || 0) || 0)) : 0}
                 onFocus={(e) => e.target.select()}
                 className="text-center h-10 bg-gray-100 font-semibold text-gray-700"
               />
@@ -1145,7 +1170,7 @@ function ProductSearchComponent({
             <Input
               type="text"
               readOnly
-              value={isAddingProduct ? Math.round(quantity * parseInt(customRate || 0)) : 0}
+              value={isAddingProduct ? formatDisplayNumber(quantity * (parseFloat(customRate || 0) || 0)) : 0}
               className="text-center h-10 bg-slate-50 font-semibold text-gray-700 border-gray-200"
             />
           </div>

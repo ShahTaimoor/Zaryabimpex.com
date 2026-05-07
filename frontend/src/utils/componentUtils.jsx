@@ -114,6 +114,12 @@ export const componentRegistry = {
     icon: 'Search',
     component: () => import('../pages/PurchaseInvoices').then(m => m.default || m.PurchaseInvoices)
   },
+  '/market-prices': {
+    title: 'Current Market Prices',
+    icon: 'Tag',
+    allowMultiple: true,
+    component: () => import('../pages/MarketPrices').then(m => m.default || m.MarketPrices)
+  },
   '/purchase-by-supplier': {
     title: 'Products by Supplier',
     icon: 'BarChart3',

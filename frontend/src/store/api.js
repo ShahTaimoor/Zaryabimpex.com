@@ -45,6 +45,7 @@ export const api = createApi({
     'Admins',
     'StockLedger',
     'Presence',
+    'MarketPrices',
   ],
   endpoints: (builder) => ({
     health: builder.query({

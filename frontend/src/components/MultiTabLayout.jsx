@@ -128,6 +128,7 @@ export const navigation = withRouteAccess([
       { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText, permission: 'view_purchase_orders' },
       { name: 'Purchase', href: '/purchase', icon: Truck, permission: 'view_purchase_orders' },
       { name: 'Purchase Invoices', href: '/purchase-invoices', icon: Search, permission: 'view_purchase_invoices' },
+      { name: 'Current Market Prices', href: '/market-prices', icon: Tag, permissionAny: ['view_market_prices', 'manage_market_prices', 'import_market_prices'] },
       { name: 'Products by Supplier', href: '/purchase-by-supplier', icon: BarChart3, permission: 'view_reports' },
     ]
   },

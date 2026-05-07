@@ -7,6 +7,8 @@ const { validateUuidParam } = require('../middleware/validation');
 const { sanitizeRequest, handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const purchaseInvoiceService = require('../services/purchaseInvoiceService');
+const marketPriceService = require('../services/marketPriceService');
+const settingsService = require('../services/settingsService');
 const purchaseInvoiceRepository = require('../repositories/postgres/PurchaseInvoiceRepository');
 const supplierRepository = require('../repositories/postgres/SupplierRepository');
 const AccountingService = require('../services/accountingService');
@@ -197,11 +199,30 @@ router.post('/', [
         // Ignore - use whatever supplierInfo was provided
       }
     }
+    const companySettings = await settingsService.getCompanySettings();
+    const useMarketPurchasePrices = companySettings?.orderSettings?.useMarketPurchasePrices === true;
+    const marketAdjustedItems = useMarketPurchasePrices
+      ? await marketPriceService.applyLatestMarketPricesToPurchaseItems(items)
+      : items;
+    const recalculatedSubtotal = marketAdjustedItems.reduce((sum, item) => {
+      const qty = parseFloat(item.quantity) || 0;
+      const cost = parseFloat(item.unitCost) || 0;
+      return sum + (qty * cost);
+    }, 0);
+    const originalPricing = pricing || {};
+    const discountAmount = parseFloat(originalPricing.discountAmount) || 0;
+    const taxAmount = parseFloat(originalPricing.taxAmount) || 0;
+    const recalculatedTotal = recalculatedSubtotal - discountAmount + taxAmount;
+
     const invoiceData = {
       supplier,
       supplierInfo: enrichedSupplierInfo,
-      items,
-      pricing,
+      items: marketAdjustedItems,
+      pricing: {
+        ...originalPricing,
+        subtotal: recalculatedSubtotal,
+        total: recalculatedTotal
+      },
       payment: {
         ...payment,
         status: payment?.status || 'pending',
@@ -223,7 +244,7 @@ router.post('/', [
     const inventoryUpdates = [];
     let inventoryUpdateFailed = false;
 
-    for (const item of items) {
+    for (const item of marketAdjustedItems) {
       try {
 
         const inventoryUpdate = await inventoryService.updateStock({
@@ -279,7 +300,7 @@ router.post('/', [
     // 1. Add invoice total to pendingBalance (we owe this amount)
     // 2. Record payment which will reduce pendingBalance and handle overpayments (add to advanceBalance)
 
-    if (supplier && pricing && pricing.total > 0) {
+    if (supplier && invoiceData.pricing && invoiceData.pricing.total > 0) {
       try {
         const SupplierBalanceService = require('../services/supplierBalanceService');
         const supplierExists = await supplierRepository.findById(supplier);

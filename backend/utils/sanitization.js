@@ -6,16 +6,11 @@ const sanitizeInput = (input) => {
   
   return input
     .trim()
-    .replace(/[<>]/g, '') // Remove potential HTML tags
-    .replace(/javascript:/gi, '') // Remove javascript: protocols
-    .replace(/on\w+=/gi, '') // Remove event handlers
-    .replace(/script/gi, '') // Remove script tags
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
+    // Keep normal product characters like / * & intact for search and names.
+    // We only strip obvious XSS vectors, not encode user text.
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+=/gi, '')
+    .replace(/[\u0000-\u001F\u007F]/g, '');
 };
 
 // Sanitize object recursively

@@ -18,6 +18,7 @@ const componentLoader = {
   '/sales-orders': () => import('../pages/SalesOrders').then(module => module.SalesOrders),
   '/purchase-orders': () => import('../pages/PurchaseOrders').then(module => module.PurchaseOrders),
   '/purchase-invoices': () => import('../pages/PurchaseInvoices').then(module => module.default || module.PurchaseInvoices),
+  '/market-prices': () => import('../pages/MarketPrices').then(module => module.default || module.MarketPrices),
   '/purchase-by-supplier': () => import('../pages/PurchaseBySupplierReport').then(module => module.default),
   '/reports': () => import('../pages/Reports').then(module => module.Reports),
   '/pl-statements': () => import('../pages/PLStatements').then(module => module.PLStatements),
@@ -115,6 +116,11 @@ export const componentRegistry = {
   '/purchase-invoices': {
     title: 'Purchase Invoices',
     icon: 'Search',
+    allowMultiple: true
+  },
+  '/market-prices': {
+    title: 'Current Market Prices',
+    icon: 'Tag',
     allowMultiple: true
   },
   '/purchase-by-supplier': {

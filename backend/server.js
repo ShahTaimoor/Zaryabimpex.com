@@ -220,6 +220,7 @@ app.use('/api/cities', require('./routes/cities'));
 app.use('/api/purchase-orders', require('./routes/purchaseOrders'));
 app.use('/api/inventory-alerts', require('./routes/inventoryAlerts'));
 app.use('/api/purchase-invoices', require('./routes/purchaseInvoices'));
+app.use('/api/market-prices', require('./routes/marketPrices'));
 app.use('/api/purchase-returns', require('./routes/purchaseReturns'));
 app.use('/api/sale-returns', require('./routes/saleReturns'));
 app.use('/api/sales-orders', require('./routes/salesOrders'));

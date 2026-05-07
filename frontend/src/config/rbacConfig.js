@@ -31,6 +31,9 @@ export const PERMISSIONS = {
   EDIT_PRODUCTS: 'edit_products',
   DELETE_PRODUCTS: 'delete_products',
   VIEW_PRODUCT_COSTS: 'view_product_costs',
+  VIEW_MARKET_PRICES: 'view_market_prices',
+  MANAGE_MARKET_PRICES: 'manage_market_prices',
+  IMPORT_MARKET_PRICES: 'import_market_prices',
   
   // Reports & Analytics
   VIEW_REPORTS: 'view_reports',

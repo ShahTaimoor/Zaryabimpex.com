@@ -65,6 +65,7 @@ const Employees = lazy(() => import('./pages/Employees'));
 const ProductVariants = lazy(() => import('./pages/ProductVariants'));
 const ProductTransformations = lazy(() => import('./pages/ProductTransformations'));
 const CCTVAccess = lazy(() => import('./pages/CCTVAccess'));
+const MarketPrices = lazy(() => import('./pages/MarketPrices'));
 
 const withRouteGuard = (path, element) => {
   const access = getRouteAccess(path);
@@ -102,6 +103,7 @@ function App() {
                       <Route path="/sales" element={withRouteGuard('/sales', <Suspense fallback={<LoadingPage />}><Sales /></Suspense>)} />
                       <Route path="/purchase-orders" element={withRouteGuard('/purchase-orders', <Suspense fallback={<LoadingPage />}><PurchaseOrders /></Suspense>)} />
                       <Route path="/purchase-invoices" element={withRouteGuard('/purchase-invoices', <Suspense fallback={<LoadingPage />}><PurchaseInvoices /></Suspense>)} />
+                      <Route path="/market-prices" element={withRouteGuard('/market-prices', <Suspense fallback={<LoadingPage />}><MarketPrices /></Suspense>)} />
                       <Route path="/purchase" element={withRouteGuard('/purchase', <Suspense fallback={<LoadingPage />}><Purchase /></Suspense>)} />
                       <Route path="/products" element={withRouteGuard('/products', <Suspense fallback={<LoadingPage />}><Products /></Suspense>)} />
                       <Route path="/product-variants" element={withRouteGuard('/product-variants', <Suspense fallback={<LoadingPage />}><ProductVariants /></Suspense>)} />

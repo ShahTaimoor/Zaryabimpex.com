@@ -4,6 +4,7 @@ const categoryRepository = require('../repositories/postgres/CategoryRepository'
 const inventoryRepository = require('../repositories/postgres/InventoryRepository');
 const investorRepository = require('../repositories/postgres/InvestorRepository');
 const AccountingService = require('./accountingService');
+const settingsService = require('./settingsService');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -626,6 +627,29 @@ class ProductServicePostgres {
     const ids = [...new Set(productIds.map(id => String(id)).filter(Boolean))];
     if (ids.length === 0) return prices;
     try {
+      const companySettings = await settingsService.getCompanySettings();
+      const useMarketPurchasePrices = companySettings?.orderSettings?.useMarketPurchasePrices === true;
+      if (useMarketPurchasePrices) {
+        const marketResult = await query(
+          `SELECT DISTINCT ON (product_id) product_id, purchase_price, effective_date
+           FROM market_purchase_prices
+           WHERE product_id = ANY($1::uuid[])
+           ORDER BY product_id, created_at DESC, id DESC`,
+          [ids]
+        );
+        for (const row of marketResult.rows || []) {
+          const pid = row.product_id && (row.product_id.toString ? row.product_id.toString() : String(row.product_id));
+          if (pid) {
+            prices[pid] = {
+              productId: pid,
+              lastPurchasePrice: parseFloat(row.purchase_price) || 0,
+              invoiceNumber: null,
+              purchaseDate: row.effective_date || null
+            };
+          }
+        }
+      }
+
       const result = await query(
         `SELECT DISTINCT ON (product_id) product_id, unit_cost as last_purchase_price, reference_number as invoice_number, created_at as purchase_date
          FROM stock_movements
@@ -635,7 +659,7 @@ class ProductServicePostgres {
       );
       for (const row of result.rows || []) {
         const pid = row.product_id && (row.product_id.toString ? row.product_id.toString() : String(row.product_id));
-        if (pid) {
+        if (pid && !prices[pid]) {
           prices[pid] = {
             productId: pid,
             lastPurchasePrice: parseFloat(row.last_purchase_price) || 0,
