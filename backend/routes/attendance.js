@@ -232,7 +232,8 @@ router.get('/team', [
       message: 'Access denied. You need "view_team_attendance" permission to view team attendance.'
     });
   },
-  query('limit').optional().isInt({ min: 1, max: 100 }),
+  // Allow larger page sizes than /me — Attendance UI requests limit=200 for daily team stats
+  query('limit').optional().isInt({ min: 1, max: 500 }),
   query('employeeId').optional().isUUID(4),
   ...validateDateParams,
   query('status').optional().isIn(['open', 'closed']),
@@ -240,7 +241,7 @@ router.get('/team', [
   processDateFilter('createdAt'),
 ], async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit || '50');
+    const limit = parseInt(req.query.limit || '50', 10);
     const filterQuery = {};
     if (req.query.employeeId) filterQuery.employeeId = req.query.employeeId;
     if (req.query.status) filterQuery.status = req.query.status;

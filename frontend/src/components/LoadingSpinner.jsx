@@ -18,7 +18,17 @@ export const LoadingSpinner = ({ size = 'md', className = '', inline = false }) 
   );
 };
 
-export const LoadingButton = ({ isLoading, loading, children, disabled, className = '', variant = 'default', size, ...props }) => {
+export const LoadingButton = ({
+  isLoading,
+  loading,
+  children,
+  disabled,
+  className = '',
+  variant = 'default',
+  size,
+  iconOnly,
+  ...props
+}) => {
   const busy = isLoading || loading;
   return (
     <Button
@@ -29,10 +39,16 @@ export const LoadingButton = ({ isLoading, loading, children, disabled, classNam
       className={className}
     >
       {busy ? (
-        <div className="flex items-center justify-center">
-          <LoadingSpinner size="sm" className="mr-2" />
-          <span>Loading...</span>
-        </div>
+        iconOnly ? (
+          <span className="inline-flex items-center justify-center" aria-hidden>
+            <LoadingSpinner size="sm" />
+          </span>
+        ) : (
+          <div className="flex items-center justify-center">
+            <LoadingSpinner size="sm" className="mr-2" />
+            <span>Loading...</span>
+          </div>
+        )
       ) : (
         children
       )}

@@ -1,6 +1,7 @@
 const inventoryRepository = require('../repositories/InventoryRepository');
 const stockAdjustmentRepository = require('../repositories/StockAdjustmentRepository');
 const productRepository = require('../repositories/ProductRepository');
+const { query: pgQuery } = require('../config/postgres');
 const productVariantRepository = require('../repositories/ProductVariantRepository');
 const AccountingService = require('./accountingService');
 
@@ -244,42 +245,43 @@ const getInventoryHistory = async ({ productId, limit = 50, offset = 0, type, st
   }
 };
 
-// Get inventory summary: counts across ALL products (inventory table when present, else product.stock_quantity).
+// Get inventory summary: counts across ALL products (inventory table when present; no row => 0 stock).
 const getInventorySummary = async () => {
   try {
-    const totalProducts = await productRepository.count({});
-    const allProducts = await productRepository.findAll({}, { limit: 50000 });
-    const allInventoryRows = await inventoryRepository.findAll({}, { limit: 50000 });
-
-    const invByProductId = new Map();
-    (allInventoryRows || []).forEach((r) => {
-      const pid = (r.product_id ?? r.productId ?? r.product)?.toString?.() ?? r.product_id;
-      if (pid) invByProductId.set(pid, r);
-    });
-
-    let outOfStock = 0;
-    let lowStock = 0;
-    let totalValue = 0;
-
-    for (const product of allProducts || []) {
-      const pid = (product.id ?? product._id)?.toString?.();
-      const inv = pid ? invByProductId.get(pid) : null;
-      // Use inventory table as source of truth: no inventory row = treat as 0 stock (out of stock)
-      const currentStock = inv != null
-        ? getCurrentStock(inv)
-        : Number(0);
-      const reorderPoint = inv != null
-        ? Number(inv.reorder_point ?? inv.reorderPoint ?? 0)
-        : Number(product.min_stock_level ?? product.minStockLevel ?? product.minStock ?? 0);
-
-      if (currentStock <= 0) outOfStock += 1;
-      else if (reorderPoint > 0 && currentStock <= reorderPoint) lowStock += 1;
-
-      const cost = Number(product.cost_price ?? product.costPrice ?? 0) || (product.pricing?.cost ?? 0);
-      totalValue += currentStock * cost;
-    }
-
-    return { totalProducts, outOfStock, lowStock, totalValue };
+    const result = await pgQuery(
+      `WITH base AS (
+         SELECT
+           CASE WHEN i.id IS NOT NULL THEN COALESCE(i.current_stock::numeric, 0) ELSE 0::numeric END AS current_stock,
+           CASE WHEN i.id IS NOT NULL THEN COALESCE(i.reorder_point::numeric, 0)
+                ELSE COALESCE(p.min_stock_level::numeric, 0) END AS reorder_point,
+           COALESCE(p.cost_price::numeric, 0) AS unit_cost
+         FROM products p
+         LEFT JOIN inventory i ON i.product_id = p.id AND i.deleted_at IS NULL
+         WHERE (p.is_deleted = FALSE OR p.is_deleted IS NULL)
+       ),
+       pc AS (
+         SELECT COUNT(*)::int AS total_products
+         FROM products p
+         WHERE (p.is_deleted = FALSE OR p.is_deleted IS NULL)
+       )
+       SELECT
+         MAX(pc.total_products)::int AS total_products,
+         COUNT(*) FILTER (WHERE b.current_stock <= 0)::int AS out_of_stock,
+         COUNT(*) FILTER (
+           WHERE b.current_stock > 0 AND b.reorder_point > 0 AND b.current_stock <= b.reorder_point
+         )::int AS low_stock,
+         COALESCE(SUM(b.current_stock * b.unit_cost), 0)::float AS total_value
+       FROM base b
+       CROSS JOIN pc`,
+      []
+    );
+    const row = result.rows[0] || {};
+    return {
+      totalProducts: parseInt(row.total_products, 10) || 0,
+      outOfStock: parseInt(row.out_of_stock, 10) || 0,
+      lowStock: parseInt(row.low_stock, 10) || 0,
+      totalValue: parseFloat(row.total_value) || 0,
+    };
   } catch (error) {
     console.error('Error getting inventory summary:', error);
     throw error;

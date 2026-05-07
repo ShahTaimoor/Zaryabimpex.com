@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import * as Icons from 'lucide-react';
+import { LUCIDE_ICON_MAP } from '../utils/lucideIconMap';
 import { useAuth } from '../contexts/AuthContext';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../utils/componentUtils';
@@ -112,7 +112,7 @@ const MobileBottomNav = () => {
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 border-t border-gray-200 backdrop-blur-md pb-safe">
       <div className="flex items-center justify-around px-2 py-2 max-w-screen-sm mx-auto h-16">
         {visibleItems.map((item) => {
-          const IconComponent = Icons[item.icon] || Icons.Circle;
+          const IconComponent = LUCIDE_ICON_MAP[item.icon] || LUCIDE_ICON_MAP.Circle;
           const isActive = isActivePath(item.href);
           
           // Determine color based on path (matching the dashboard's emerald/blue theme if possible)

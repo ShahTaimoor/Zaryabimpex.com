@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import * as Icons from 'lucide-react';
 import {
   Smartphone,
   Building,
@@ -63,6 +62,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { LUCIDE_ICON_MAP } from '../utils/lucideIconMap';
 
 export const Settings2 = () => {
   const { user } = useAuth();
@@ -3219,7 +3219,8 @@ export const Settings2 = () => {
                       </div>
                     ) : (
                       bottomNavConfig.map((item, index) => {
-                        const IconComponent = item.icon && Icons[item.icon] ? Icons[item.icon] : Smartphone;
+                        const IconComponent =
+                          item.icon && LUCIDE_ICON_MAP[item.icon] ? LUCIDE_ICON_MAP[item.icon] : Smartphone;
                         return (
                           <div
                             key={`${item.href}-${index}`}
@@ -3291,7 +3292,11 @@ export const Settings2 = () => {
                           >
                             <div className="flex items-center gap-3 min-w-0">
                               <div className={`p-1.5 rounded-lg ${isAdded ? 'bg-gray-200 text-gray-500' : 'bg-gray-50 text-gray-400'}`}>
-                                {typeof IconComp === 'string' ? (Icons[IconComp] ? React.createElement(Icons[IconComp], { className: "h-4 w-4" }) : IconComp) : <IconComp className="h-4 w-4" />}
+                                {typeof IconComp === 'string'
+                                  ? LUCIDE_ICON_MAP[IconComp]
+                                    ? React.createElement(LUCIDE_ICON_MAP[IconComp], { className: 'h-4 w-4' })
+                                    : IconComp
+                                  : <IconComp className="h-4 w-4" />}
                               </div>
                               <div className="min-w-0">
                                 <p className="text-xs font-bold text-gray-700 truncate">{item.name}</p>

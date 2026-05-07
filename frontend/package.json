@@ -32,7 +32,6 @@
         "jspdf-autotable": "^5.0.7",
         "lucide-react": "^0.294.0",
         "motion": "^12.35.2",
-        "node-cron": "^4.2.1",
         "postcss": "^8.4.32",
         "react": "^18.2.0",
         "react-day-picker": "^9.14.0",

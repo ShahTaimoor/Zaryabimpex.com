@@ -88,6 +88,100 @@ router.get('/', [
   }
 });
 
+// Static GET routes must be registered before `/:discountId` so paths like `/stats` are not matched as a UUID param.
+
+// @route   GET /api/discounts/stats
+// @desc    Get discount statistics
+// @access  Private (requires 'view_discounts' permission)
+router.get('/stats', [
+  auth,
+  requirePermission('view_discounts'),
+  sanitizeRequest,
+  query('startDate').optional({ checkFalsy: true }).isISO8601().toDate(),
+  query('endDate').optional({ checkFalsy: true }).isISO8601().toDate(),
+  handleValidationErrors,
+], async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const period = startDate && endDate ? { startDate, endDate } : {};
+    const stats = await discountService.getDiscountStats(period);
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching discount stats:', error);
+    res.status(500).json({ message: 'Server error fetching discount stats', error: error.message });
+  }
+});
+
+// @route   GET /api/discounts/active
+// @desc    Get all active discounts
+// @access  Private (requires 'view_discounts' permission)
+router.get('/active', [
+  auth,
+  requirePermission('view_discounts'),
+  sanitizeRequest,
+], async (req, res) => {
+  try {
+    const discounts = await discountService.getActiveDiscounts();
+
+    res.json(discounts);
+  } catch (error) {
+    console.error('Error fetching active discounts:', error);
+    res.status(500).json({ message: 'Server error fetching active discounts', error: error.message });
+  }
+});
+
+// @route   GET /api/discounts/code/:code/availability
+// @desc    Check if discount code is available
+// @access  Private (requires 'view_discounts' permission)
+router.get('/code/:code/availability', [
+  auth,
+  requirePermission('view_discounts'),
+  sanitizeRequest,
+  param('code').trim().isLength({ min: 1, max: 20 }).withMessage('Valid discount code is required'),
+  handleValidationErrors,
+], async (req, res) => {
+  try {
+    const { code } = req.params;
+
+    const isAvailable = await discountService.isDiscountCodeAvailable(code);
+
+    res.json({
+      code: code.toUpperCase(),
+      available: isAvailable
+    });
+  } catch (error) {
+    console.error('Error checking discount code availability:', error);
+    res.status(500).json({ message: 'Server error checking code availability', error: error.message });
+  }
+});
+
+// @route   GET /api/discounts/code/:code
+// @desc    Get discount by code
+// @access  Private (requires 'view_discounts' permission)
+router.get('/code/:code', [
+  auth,
+  requirePermission('view_discounts'),
+  sanitizeRequest,
+  param('code').trim().isLength({ min: 1, max: 20 }).withMessage('Valid discount code is required'),
+  handleValidationErrors,
+], async (req, res) => {
+  try {
+    const { code } = req.params;
+
+    const discount = await discountService.getDiscountByCode(code);
+    if (!discount) {
+      return res.status(404).json({ message: 'Discount not found' });
+    }
+
+    res.json(discount);
+  } catch (error) {
+    console.error('Error fetching discount by code:', error);
+    res.status(500).json({ message: 'Server error fetching discount', error: error.message });
+  }
+});
+
 // @route   GET /api/discounts/:discountId
 // @desc    Get detailed discount information
 // @access  Private (requires 'view_discounts' permission)
@@ -301,56 +395,6 @@ router.post('/check-applicable', [
   }
 });
 
-// @route   GET /api/discounts/code/:code
-// @desc    Get discount by code
-// @access  Private (requires 'view_discounts' permission)
-router.get('/code/:code', [
-  auth,
-  requirePermission('view_discounts'),
-  sanitizeRequest,
-  param('code').trim().isLength({ min: 1, max: 20 }).withMessage('Valid discount code is required'),
-  handleValidationErrors,
-], async (req, res) => {
-  try {
-    const { code } = req.params;
-    
-    const discount = await discountService.getDiscountByCode(code);
-    if (!discount) {
-      return res.status(404).json({ message: 'Discount not found' });
-    }
-    
-    res.json(discount);
-  } catch (error) {
-    console.error('Error fetching discount by code:', error);
-    res.status(500).json({ message: 'Server error fetching discount', error: error.message });
-  }
-});
-
-// @route   GET /api/discounts/code/:code/availability
-// @desc    Check if discount code is available
-// @access  Private (requires 'view_discounts' permission)
-router.get('/code/:code/availability', [
-  auth,
-  requirePermission('view_discounts'),
-  sanitizeRequest,
-  param('code').trim().isLength({ min: 1, max: 20 }).withMessage('Valid discount code is required'),
-  handleValidationErrors,
-], async (req, res) => {
-  try {
-    const { code } = req.params;
-    
-    const isAvailable = await discountService.isDiscountCodeAvailable(code);
-    
-    res.json({
-      code: code.toUpperCase(),
-      available: isAvailable
-    });
-  } catch (error) {
-    console.error('Error checking discount code availability:', error);
-    res.status(500).json({ message: 'Server error checking code availability', error: error.message });
-  }
-});
-
 // @route   POST /api/discounts/generate-code-suggestions
 // @desc    Generate discount code suggestions
 // @access  Private (requires 'view_discounts' permission)
@@ -373,48 +417,6 @@ router.post('/generate-code-suggestions', [
   } catch (error) {
     console.error('Error generating code suggestions:', error);
     res.status(500).json({ message: 'Server error generating suggestions', error: error.message });
-  }
-});
-
-// @route   GET /api/discounts/stats
-// @desc    Get discount statistics
-// @access  Private (requires 'view_discounts' permission)
-router.get('/stats', [
-  auth,
-  requirePermission('view_discounts'),
-  sanitizeRequest,
-  query('startDate').optional({ checkFalsy: true }).isISO8601().toDate(),
-  query('endDate').optional({ checkFalsy: true }).isISO8601().toDate(),
-  handleValidationErrors,
-], async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-    
-    const period = startDate && endDate ? { startDate, endDate } : {};
-    const stats = await discountService.getDiscountStats(period);
-    
-    res.json(stats);
-  } catch (error) {
-    console.error('Error fetching discount stats:', error);
-    res.status(500).json({ message: 'Server error fetching discount stats', error: error.message });
-  }
-});
-
-// @route   GET /api/discounts/active
-// @desc    Get all active discounts
-// @access  Private (requires 'view_discounts' permission)
-router.get('/active', [
-  auth,
-  requirePermission('view_discounts'),
-  sanitizeRequest,
-], async (req, res) => {
-  try {
-    const discounts = await discountService.getActiveDiscounts();
-    
-    res.json(discounts);
-  } catch (error) {
-    console.error('Error fetching active discounts:', error);
-    res.status(500).json({ message: 'Server error fetching active discounts', error: error.message });
   }
 });
 

@@ -195,10 +195,10 @@ router.delete('/:id', [
 // @access  Private
 router.get('/departments/list', auth, async (req, res) => {
   try {
-    const departments = await Employee.distinct('department', { department: { $ne: null, $ne: '' } });
+    const departments = await EmployeeRepository.getDistinctDepartments();
     res.json({
       success: true,
-      data: { departments: departments.sort() }
+      data: { departments: [...departments].sort() }
     });
   } catch (error) {
     console.error('Get departments error:', error);

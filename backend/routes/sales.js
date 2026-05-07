@@ -220,18 +220,15 @@ router.get('/period-summary', [
     dateTo.setDate(dateTo.getDate() + 1);
     dateTo.setHours(0, 0, 0, 0);
 
-    const raw = await salesRepository.findByDateRange(dateFrom, dateTo);
-    const orders = Array.isArray(raw) ? raw : [];
-    const totalRevenue = orders.reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0);
-    const totalOrders = orders.length;
-    const itemsArr = (o) => (o && Array.isArray(o.items) ? o.items : []);
-    const totalItems = orders.reduce((sum, order) =>
-      sum + itemsArr(order).reduce((itemSum, item) => itemSum + (item.quantity || 0), 0), 0);
+    const agg = await salesRepository.getDashboardSaleAggregates(dateFrom, dateTo);
+    const totalRevenue = agg.totalRevenue;
+    const totalOrders = agg.totalOrders;
+    const totalItems = agg.totalItems;
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    const totalDiscounts = orders.reduce((sum, order) => sum + (parseFloat(order?.discount) || 0), 0);
+    const totalDiscounts = agg.totalDiscounts;
     const revenueByType = {
-      retail: orders.filter(o => o && o.order_type === 'retail').reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0),
-      wholesale: orders.filter(o => o && o.order_type === 'wholesale').reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0)
+      retail: agg.revRetail,
+      wholesale: agg.revWholesale
     };
     const summary = {
       total: totalRevenue,
@@ -1162,29 +1159,20 @@ router.get('/today/summary', [
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
 
-    const raw = await salesRepository.findByDateRange(startOfDay, endOfDay);
-    const orders = Array.isArray(raw) ? raw : [];
-
-    const totalRev = orders.reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0);
-    const itemsArr = (o) => (o && Array.isArray(o.items) ? o.items : []);
-    const totalItems = orders.reduce((sum, order) =>
-      sum + itemsArr(order).reduce((itemSum, item) => itemSum + (item.quantity || 0), 0), 0);
+    const agg = await salesRepository.getDashboardSaleAggregates(startOfDay, endOfDay);
+    const totalRev = agg.totalRevenue;
     const summary = {
-      totalOrders: orders.length,
+      totalOrders: agg.totalOrders,
       totalRevenue: totalRev,
-      totalItems: totalItems,
-      averageOrderValue: orders.length > 0 ? totalRev / orders.length : 0,
+      totalItems: agg.totalItems,
+      averageOrderValue: agg.totalOrders > 0 ? totalRev / agg.totalOrders : 0,
       orderTypes: {
-        retail: orders.filter(o => o && o.order_type === 'retail').length,
-        wholesale: orders.filter(o => o && o.order_type === 'wholesale').length,
-        return: orders.filter(o => o && o.order_type === 'return').length,
-        exchange: orders.filter(o => o && o.order_type === 'exchange').length
+        retail: agg.cntRetail,
+        wholesale: agg.cntWholesale,
+        return: agg.cntReturn,
+        exchange: agg.cntExchange
       },
-      paymentMethods: orders.reduce((acc, order) => {
-        const m = order?.payment_method || 'cash';
-        acc[m] = (acc[m] || 0) + 1;
-        return acc;
-      }, {})
+      paymentMethods: agg.paymentMethods
     };
 
     res.json({ summary });
@@ -1214,18 +1202,15 @@ router.get('/period/summary', [
     dateTo.setDate(dateTo.getDate() + 1);
     dateTo.setHours(0, 0, 0, 0);
 
-    const raw = await salesRepository.findByDateRange(dateFrom, dateTo);
-    const orders = Array.isArray(raw) ? raw : [];
-    const totalRevenue = orders.reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0);
-    const totalOrders = orders.length;
-    const itemsArr = (o) => (o && Array.isArray(o.items) ? o.items : []);
-    const totalItems = orders.reduce((sum, order) =>
-      sum + itemsArr(order).reduce((itemSum, item) => itemSum + (item.quantity || 0), 0), 0);
+    const agg = await salesRepository.getDashboardSaleAggregates(dateFrom, dateTo);
+    const totalRevenue = agg.totalRevenue;
+    const totalOrders = agg.totalOrders;
+    const totalItems = agg.totalItems;
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    const totalDiscounts = orders.reduce((sum, order) => sum + (parseFloat(order?.discount) || 0), 0);
+    const totalDiscounts = agg.totalDiscounts;
     const revenueByType = {
-      retail: orders.filter(o => o && o.order_type === 'retail').reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0),
-      wholesale: orders.filter(o => o && o.order_type === 'wholesale').reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0)
+      retail: agg.revRetail,
+      wholesale: agg.revWholesale
     };
     const summary = {
       total: totalRevenue,

@@ -35,12 +35,13 @@ const requestLogger = (req, res, next) => {
   // Log response when finished
   res.on('finish', () => {
     const duration = Date.now() - startTime;
-    const isError = res.statusCode >= 400;
+    const isError = res.statusCode >= 500;
+    const isWarn = res.statusCode >= 400 && res.statusCode < 500;
     const isSlow = duration >= 1500;
     if (isNoisyPath && !isError && !isSlow) return;
 
-    const logLevel = isError ? 'error' : res.statusCode >= 300 ? 'warn' : 'http';
-    if (env === 'production' && !isError && !isSlow) return;
+    const logLevel = isError ? 'error' : isWarn ? 'warn' : 'http';
+    if (env === 'production' && !isError && !isWarn && !isSlow) return;
 
     logger[logLevel](`${req.method} ${req.path} ${res.statusCode} - ${duration}ms`, {
       requestId: req.id,

@@ -1,6 +1,7 @@
 const ProductRepository = require('../repositories/ProductRepository');
 const InventoryRepository = require('../repositories/InventoryRepository');
 const SalesRepository = require('../repositories/SalesRepository');
+const { query: pgQuery } = require('../config/postgres');
 
 class InventoryAlertService {
   /**
@@ -200,20 +201,51 @@ class InventoryAlertService {
    */
   static async getAlertSummary() {
     try {
-      const alerts = await this.getLowStockAlerts();
-      
-      const outOfStock = alerts.filter(a => a.stockStatus === 'out_of_stock').length;
-      const belowMinimum = alerts.filter(a => a.stockStatus === 'critical').length;
+      // Fast path: compute inventory alert summary with a single aggregate query.
+      // This avoids building full alert objects and N+1 lookups for every product.
+      const result = await pgQuery(
+        `WITH base AS (
+           SELECT
+             p.id AS product_id,
+             COALESCE(i.current_stock, p.stock_quantity, 0)::numeric AS current_stock,
+             COALESCE(i.reorder_point, p.min_stock_level, 10)::numeric AS reorder_point,
+             COALESCE(i.reorder_point, p.min_stock_level, 0)::numeric AS min_stock
+           FROM products p
+           LEFT JOIN inventory i ON i.product_id = p.id AND i.deleted_at IS NULL
+           WHERE (p.is_deleted = FALSE OR p.is_deleted IS NULL)
+             AND p.is_active = true
+         )
+         SELECT
+           COUNT(*) FILTER (
+             WHERE current_stock = 0
+                OR current_stock <= min_stock
+                OR current_stock <= reorder_point
+           )::int AS total,
+           COUNT(*) FILTER (
+             WHERE current_stock = 0 OR current_stock <= min_stock
+           )::int AS critical,
+           COUNT(*) FILTER (
+             WHERE current_stock > min_stock AND current_stock <= reorder_point
+           )::int AS warning,
+           COUNT(*) FILTER (WHERE current_stock = 0)::int AS out_of_stock,
+           COUNT(*) FILTER (
+             WHERE current_stock > 0 AND current_stock <= min_stock
+           )::int AS below_minimum,
+           COUNT(*) FILTER (
+             WHERE current_stock > min_stock AND current_stock <= reorder_point
+           )::int AS low_stock
+         FROM base`,
+        []
+      );
 
+      const row = result.rows?.[0] || {};
       return {
-        total: alerts.length,
-        critical: alerts.filter(a => a.alertLevel === 'critical').length,
-        warning: alerts.filter(a => a.alertLevel === 'warning').length,
-        outOfStock,
-        /** In stock but at or below minimum (not zero stock). */
-        belowMinimum,
-        /** Warning tier: above minimum but at/below reorder point (`stockStatus === 'low_stock'`). */
-        lowStock: alerts.filter(a => a.stockStatus === 'low_stock').length
+        total: Number(row.total) || 0,
+        critical: Number(row.critical) || 0,
+        warning: Number(row.warning) || 0,
+        outOfStock: Number(row.out_of_stock) || 0,
+        belowMinimum: Number(row.below_minimum) || 0,
+        lowStock: Number(row.low_stock) || 0
       };
     } catch (error) {
       console.error('Error getting alert summary:', error);

@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const AccountCategory = require("../models/AccountCategory"); // Still needed for static methods
-const { auth, requirePermission } = require("../middleware/auth");
+const { auth } = require("../middleware/auth");
 const { validateAccountCategory } = require("../middleware/validation");
 const accountCategoryRepository = require("../repositories/AccountCategoryRepository");
 const chartOfAccountsRepository = require("../repositories/ChartOfAccountsRepository");

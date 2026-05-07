@@ -483,29 +483,17 @@ class SalesService {
    * @returns {Promise<object>}
    */
   async getPeriodSummary(dateFrom, dateTo) {
-    const raw = await salesRepository.findByDateRange(dateFrom, dateTo);
-    const orders = Array.isArray(raw) ? raw : [];
-
-    const totalRevenue = orders.reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0);
-    const totalOrders = orders.length;
-    const totalItems = orders.reduce((sum, order) => {
-      const items = Array.isArray(order?.items) ? order.items : [];
-      return sum + items.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0);
-    }, 0);
+    const agg = await salesRepository.getDashboardSaleAggregates(dateFrom, dateTo);
+    const totalRevenue = agg.totalRevenue;
+    const totalOrders = agg.totalOrders;
+    const totalItems = agg.totalItems;
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const totalDiscounts = agg.totalDiscounts;
 
-    // Calculate discounts
-    const totalDiscounts = orders.reduce((sum, order) =>
-      sum + (parseFloat(order?.discount) || 0), 0);
-
-    // Calculate by payment status (orderType not in PostgreSQL schema, using payment_status)
     const revenueByPaymentStatus = {
-      paid: orders.filter(o => o && (o.payment_status === 'paid'))
-        .reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0),
-      pending: orders.filter(o => o && (o.payment_status === 'pending'))
-        .reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0),
-      partial: orders.filter(o => o && (o.payment_status === 'partial'))
-        .reduce((sum, order) => sum + (parseFloat(order?.total) || 0), 0)
+      paid: agg.revPaid,
+      pending: agg.revPending,
+      partial: agg.revPartial
     };
 
     return {
@@ -514,8 +502,16 @@ class SalesService {
       totalItems,
       averageOrderValue,
       totalDiscounts,
-      revenueByType: {}, // Not available in PostgreSQL schema
-      ordersByType: {}, // Not available in PostgreSQL schema
+      revenueByType: {
+        retail: agg.revRetail,
+        wholesale: agg.revWholesale
+      },
+      ordersByType: {
+        retail: agg.cntRetail,
+        wholesale: agg.cntWholesale,
+        return: agg.cntReturn,
+        exchange: agg.cntExchange
+      },
       revenueByPaymentStatus
     };
   }

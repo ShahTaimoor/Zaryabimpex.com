@@ -484,6 +484,102 @@ class SalesRepository {
   }
 
   /**
+   * Single-query aggregates for dashboard summaries (avoids loading full sales rows + items JSON).
+   * Date bounds match findAll: sale_date >= dateFrom AND sale_date <= dateTo (inclusive).
+   */
+  async getDashboardSaleAggregates(dateFrom, dateTo) {
+    const sql = `
+      WITH filtered AS (
+        SELECT *
+        FROM sales s
+        WHERE s.deleted_at IS NULL
+          AND s.sale_date >= $1::timestamptz
+          AND s.sale_date <= $2::timestamptz
+      )
+      SELECT
+        COUNT(*)::int AS total_orders,
+        COALESCE(SUM(s.total), 0)::float AS total_revenue,
+        COALESCE(SUM(s.discount), 0)::float AS total_discounts,
+        COALESCE(SUM(line_tot.qty), 0)::float AS total_items,
+        COUNT(*) FILTER (WHERE s.order_type = 'retail')::int AS cnt_retail,
+        COUNT(*) FILTER (WHERE s.order_type = 'wholesale')::int AS cnt_wholesale,
+        COUNT(*) FILTER (WHERE s.order_type = 'return')::int AS cnt_return,
+        COUNT(*) FILTER (WHERE s.order_type = 'exchange')::int AS cnt_exchange,
+        COALESCE(SUM(s.total) FILTER (WHERE s.order_type = 'retail'), 0)::float AS rev_retail,
+        COALESCE(SUM(s.total) FILTER (WHERE s.order_type = 'wholesale'), 0)::float AS rev_wholesale,
+        COALESCE(SUM(s.total) FILTER (WHERE s.payment_status = 'paid'), 0)::float AS rev_ps_paid,
+        COALESCE(SUM(s.total) FILTER (WHERE s.payment_status = 'pending'), 0)::float AS rev_ps_pending,
+        COALESCE(SUM(s.total) FILTER (WHERE s.payment_status = 'partial'), 0)::float AS rev_ps_partial,
+        (
+          SELECT COALESCE(json_object_agg(pm_key, pm_cnt), '{}'::json)::jsonb
+          FROM (
+            SELECT COALESCE(NULLIF(TRIM(payment_method), ''), 'cash') AS pm_key, COUNT(*)::int AS pm_cnt
+            FROM filtered
+            GROUP BY 1
+          ) pm_sub
+        ) AS payment_methods
+      FROM filtered s
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(SUM(
+          COALESCE(NULLIF(elem->>'quantity','')::numeric, NULLIF(elem->>'qty','')::numeric, 0)
+        ), 0)::numeric AS qty
+        FROM jsonb_array_elements(
+          CASE WHEN jsonb_typeof(COALESCE(s.items, '[]'::jsonb)) = 'array' THEN s.items ELSE '[]'::jsonb END
+        ) AS elem
+      ) line_tot ON true
+    `;
+    const result = await query(sql, [dateFrom, dateTo]);
+    const row = result.rows[0];
+    if (!row) {
+      return {
+        totalOrders: 0,
+        totalRevenue: 0,
+        totalDiscounts: 0,
+        totalItems: 0,
+        cntRetail: 0,
+        cntWholesale: 0,
+        cntReturn: 0,
+        cntExchange: 0,
+        revRetail: 0,
+        revWholesale: 0,
+        revPaid: 0,
+        revPending: 0,
+        revPartial: 0,
+        paymentMethods: {},
+      };
+    }
+    let pm = row.payment_methods;
+    if (pm == null) pm = {};
+    if (typeof pm === 'string') {
+      try {
+        pm = JSON.parse(pm);
+      } catch (_) {
+        pm = {};
+      }
+    }
+    const paymentMethods = {};
+    for (const [k, v] of Object.entries(pm)) {
+      paymentMethods[k] = typeof v === 'number' ? v : parseInt(v, 10) || 0;
+    }
+    return {
+      totalOrders: parseInt(row.total_orders, 10) || 0,
+      totalRevenue: parseFloat(row.total_revenue) || 0,
+      totalDiscounts: parseFloat(row.total_discounts) || 0,
+      totalItems: parseFloat(row.total_items) || 0,
+      cntRetail: parseInt(row.cnt_retail, 10) || 0,
+      cntWholesale: parseInt(row.cnt_wholesale, 10) || 0,
+      cntReturn: parseInt(row.cnt_return, 10) || 0,
+      cntExchange: parseInt(row.cnt_exchange, 10) || 0,
+      revRetail: parseFloat(row.rev_retail) || 0,
+      revWholesale: parseFloat(row.rev_wholesale) || 0,
+      revPaid: parseFloat(row.rev_ps_paid) || 0,
+      revPending: parseFloat(row.rev_ps_pending) || 0,
+      revPartial: parseFloat(row.rev_ps_partial) || 0,
+      paymentMethods,
+    };
+  }
+
+  /**
    * Get sales summary statistics
    */
   async getSummary(filters = {}) {

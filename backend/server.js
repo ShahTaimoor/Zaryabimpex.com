@@ -184,6 +184,7 @@ app.use('/api/returns', require('./routes/returns')); // Legacy route - kept for
 app.use('/api/recurring-expenses', require('./routes/recurringExpenses'));
 app.use('/api/balance-sheets', require('./routes/balanceSheets'));
 app.use('/api/chart-of-accounts', require('./routes/chartOfAccounts'));
+app.use('/api/account-categories', require('./routes/accountCategories'));
 app.use('/api/account-ledger', require('./routes/accountLedger'));
 app.use('/api/journal-vouchers', require('./routes/journalVouchers'));
 app.use('/api/discounts', require('./routes/discounts'));
