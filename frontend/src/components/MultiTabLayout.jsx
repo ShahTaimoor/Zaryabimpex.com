@@ -264,11 +264,15 @@ export function loadSidebarConfig() {
     'Stock Movements': false,
     'Inventory Reports': false,
     'Backdate Report': false,
-    'Sales Performance': false
+    'Sales Performance': false,
+    'Current Market Prices': false
   };
   try {
     const parsed = JSON.parse(saved);
     const migrated = migrateSidebarConfig(parsed);
+    if (migrated['Current Market Prices'] === undefined) {
+      migrated['Current Market Prices'] = false;
+    }
     if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
       localStorage.setItem('sidebarConfig', JSON.stringify(migrated));
     }
@@ -285,7 +289,8 @@ export function loadSidebarConfig() {
       'Stock Movements': false,
       'Inventory Reports': false,
       'Backdate Report': false,
-      'Sales Performance': false
+      'Sales Performance': false,
+      'Current Market Prices': false
     };
   }
 }

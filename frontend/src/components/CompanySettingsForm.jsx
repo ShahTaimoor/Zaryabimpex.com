@@ -26,7 +26,6 @@ export function CompanySettingsForm() {
     taxRegistrationNumber: '',
     taxEnabled: false,
     defaultTaxRate: 0,
-    useMarketPurchasePrices: false,
   });
   const [logoPreview, setLogoPreview] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -56,7 +55,6 @@ export function CompanySettingsForm() {
         settings.defaultTaxRate != null && settings.defaultTaxRate !== ''
           ? Number(settings.defaultTaxRate)
           : 0,
-      useMarketPurchasePrices: settings.orderSettings?.useMarketPurchasePrices === true,
     }));
   }, [
     company.companyName,
@@ -83,44 +81,6 @@ export function CompanySettingsForm() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const syncMarketPricesSidebarVisibility = (enabled) => {
-    const savedSidebarRaw = localStorage.getItem('sidebarConfig');
-    let savedSidebar = {};
-    if (savedSidebarRaw) {
-      try {
-        savedSidebar = JSON.parse(savedSidebarRaw) || {};
-      } catch (_) {
-        savedSidebar = {};
-      }
-    }
-    const nextSidebar = {
-      ...savedSidebar,
-      'Current Market Prices': !!enabled,
-    };
-    localStorage.setItem('sidebarConfig', JSON.stringify(nextSidebar));
-    window.dispatchEvent(new Event('sidebarConfigChanged'));
-  };
-
-  const handleMarketPriceToggle = async (checked) => {
-    const nextChecked = !!checked;
-    const previousChecked = !!form.useMarketPurchasePrices;
-    setForm((prev) => ({ ...prev, useMarketPurchasePrices: nextChecked }));
-    syncMarketPricesSidebarVisibility(nextChecked);
-    try {
-      await updateSettings({
-        orderSettings: {
-          ...orderSettings,
-          useMarketPurchasePrices: nextChecked,
-        },
-      }).unwrap();
-      toast.success(`Market purchase prices ${nextChecked ? 'enabled' : 'disabled'}.`);
-    } catch (err) {
-      setForm((prev) => ({ ...prev, useMarketPurchasePrices: previousChecked }));
-      syncMarketPricesSidebarVisibility(previousChecked);
-      handleApiError(err, 'Update Market Purchase Price Setting');
-    }
   };
 
   const handleLogoSelect = (e) => {
@@ -161,10 +121,8 @@ export function CompanySettingsForm() {
         orderSettings: {
           ...orderSettings,
           dashboardLogoSize: dashboardLogoSize,
-          useMarketPurchasePrices: !!form.useMarketPurchasePrices,
         },
       }).unwrap();
-      syncMarketPricesSidebarVisibility(!!form.useMarketPurchasePrices);
       if (selectedFile) {
         const formData = new FormData();
         formData.append('logo', selectedFile);
@@ -309,25 +267,6 @@ export function CompanySettingsForm() {
             />
           </div>
         )}
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-slate-50 p-4 space-y-4">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900">Purchase market price behavior</h3>
-          <p className="text-xs text-gray-600 mt-1">
-            When enabled, Purchase uses latest prices from Current Market Prices. When disabled, Purchase uses the old purchase pricing behavior.
-          </p>
-        </div>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            name="useMarketPurchasePrices"
-            checked={!!form.useMarketPurchasePrices}
-            onChange={(e) => handleMarketPriceToggle(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-          />
-          <span className="text-sm font-medium text-gray-800">Enable market purchase prices in Purchase</span>
-        </label>
       </div>
 
       <div className="space-y-4">

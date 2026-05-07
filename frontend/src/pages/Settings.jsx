@@ -1435,6 +1435,7 @@ export const Settings2 = () => {
     const saved = localStorage.getItem('showTopBarUI');
     return saved === null ? true : saved === 'true';
   });
+  const [useMarketPurchasePrices, setUseMarketPurchasePrices] = useState(false);
 
   // Product Visibility Settings
   const [showProductSetting_reorderPoint, setShowProductSetting_reorderPoint] = useState(() => localStorage.getItem('showProductSetting_reorderPoint') === 'true');
@@ -1471,6 +1472,51 @@ export const Settings2 = () => {
     { id: 'suppliers', name: 'Supplier Settings', shortName: 'Suppliers', icon: Building },
     { id: 'other', name: 'Advanced', shortName: 'Advanced', icon: BarChart3 },
   ];
+
+  useEffect(() => {
+    const enabled = settings?.orderSettings?.useMarketPurchasePrices === true;
+    setUseMarketPurchasePrices(enabled);
+  }, [settings?.orderSettings?.useMarketPurchasePrices]);
+
+  const syncMarketPricesSidebarVisibility = (enabled) => {
+    const savedSidebarRaw = localStorage.getItem('sidebarConfig');
+    let savedSidebar = {};
+    if (savedSidebarRaw) {
+      try {
+        savedSidebar = JSON.parse(savedSidebarRaw) || {};
+      } catch (_) {
+        savedSidebar = {};
+      }
+    }
+    const nextSidebar = {
+      ...savedSidebar,
+      'Current Market Prices': !!enabled,
+    };
+    localStorage.setItem('sidebarConfig', JSON.stringify(nextSidebar));
+    setSidebarConfig(nextSidebar);
+    window.dispatchEvent(new Event('sidebarConfigChanged'));
+  };
+
+  const handleMarketPriceFeatureToggle = async (checked) => {
+    const nextChecked = !!checked;
+    const previousChecked = useMarketPurchasePrices;
+    setUseMarketPurchasePrices(nextChecked);
+    syncMarketPricesSidebarVisibility(nextChecked);
+    try {
+      await updateCompanySettings({
+        orderSettings: {
+          ...(settings?.orderSettings || {}),
+          useMarketPurchasePrices: nextChecked,
+        },
+      }).unwrap();
+      toast.success(`Market purchase prices ${nextChecked ? 'enabled' : 'disabled'}.`);
+      refetchSettings();
+    } catch (error) {
+      setUseMarketPurchasePrices(previousChecked);
+      syncMarketPricesSidebarVisibility(previousChecked);
+      handleApiError(error, 'Update Market Purchase Price Setting');
+    }
+  };
 
   return (
     <div className="space-y-6 overflow-x-hidden">
@@ -2630,6 +2676,19 @@ export const Settings2 = () => {
                     <Label htmlFor="showTopBarUI" className="flex flex-col cursor-pointer group-hover:text-blue-700">
                       <span className="text-sm font-semibold">Show Top Bar</span>
                       <span className="text-[10px] text-gray-400">Header visibility across pages</span>
+                    </Label>
+                  </div>
+
+                  <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                    <Checkbox
+                      id="useMarketPurchasePrices"
+                      className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                      checked={useMarketPurchasePrices}
+                      onCheckedChange={(checked) => handleMarketPriceFeatureToggle(!!checked)}
+                    />
+                    <Label htmlFor="useMarketPurchasePrices" className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                      <span className="text-sm font-semibold">Enable Market Purchase Prices</span>
+                      <span className="text-[10px] text-gray-400">Uses Current Market Prices in Purchase and shows sidebar link</span>
                     </Label>
                   </div>
                 </div>
