@@ -57,7 +57,7 @@ export const DirectPrintInvoice = ({
   if (!orderData) return null;
 
   const isCompact = companySettings?.printSettings?.invoiceLayout === 'compact' || orderData?.invoiceLayout === 'compact';
-  const selectedPageStyle = isCompact ? THERMAL_PRINT_PAGE_STYLE : (pageStyle || PRINT_PAGE_STYLE);
+  const selectedPageStyle = isCompact ? THERMAL_PRINT_PAGE_STYLE : PRINT_PAGE_STYLE;
 
   return (
     <div style={{ position: 'fixed', left: '-9999px', top: 0, visibility: 'hidden' }} aria-hidden="true">

@@ -712,6 +712,21 @@ const AccountLedgerSummary = () => {
     return `${day}-${month}-${year}`;
   };
 
+  const isSaleLikeSource = (source) => {
+    const src = String(source || '').toLowerCase().trim();
+    return src === 'sale' || src === 'sales' || src === 'sale_invoice' || src === 'sales_invoice' || src === 'sale_payment';
+  };
+
+  const isPrintableCustomerRow = (entry) => {
+    const src = String(entry?.source || '').toLowerCase().trim();
+    return (
+      isSaleLikeSource(src) ||
+      src === 'sale return' ||
+      src === 'cash_receipt' ||
+      src === 'bank_receipt'
+    );
+  };
+
   const handlePrintEntry = async (entry) => {
     if (!entry?.referenceId || !entry?.source) {
       toast.error('Print not available for this row.');
@@ -726,7 +741,7 @@ const AccountLedgerSummary = () => {
     setPrintData(null);
     try {
       const src = (entry.source || '').toLowerCase();
-      if (src === 'sale' || src === 'sale_payment') {
+      if (isSaleLikeSource(src)) {
         const result = await getOrderById(refId).unwrap();
         const order = result?.order || result?.data?.order || result;
         if (order) {
@@ -770,7 +785,7 @@ const AccountLedgerSummary = () => {
         }
       } else if (src === 'cash_payment' || src === 'bank_payment') {
         toast('Print this payment from Cash Payments or Bank Payments page.');
-      } else if (entry.source === 'Sale Return') {
+      } else if (src === 'sale return') {
         const result = await getSaleReturnById(refId).unwrap();
         const saleReturn = result?.data || result;
         if (saleReturn) {
@@ -1232,13 +1247,13 @@ const AccountLedgerSummary = () => {
                                 {formatCurrency(entry.balance || 0)}
                               </td>
                               <td className="px-4 py-3 text-center no-print">
-                                {entry.referenceId && entry.source && ['sale', 'Sale Return', 'cash_receipt', 'bank_receipt', 'sale_payment'].includes((entry.source || '').toString()) ? (
+                                {entry.referenceId && entry.source && isPrintableCustomerRow(entry) ? (
                                   <button
                                     type="button"
                                     onClick={() => handlePrintEntry(entry)}
                                     disabled={printLoading}
                                     className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
-                                    title={entry.source === 'Sale Return' ? 'Print return' : (entry.source === 'cash_receipt' || entry.source === 'bank_receipt') ? 'Print receipt' : 'Print sale invoice'}
+                                    title={String(entry.source || '').toLowerCase() === 'sale return' ? 'Print return' : (entry.source === 'cash_receipt' || entry.source === 'bank_receipt') ? 'Print receipt' : 'Print sale invoice'}
                                   >
                                     <Printer className="h-4 w-4" />
                                   </button>
@@ -1288,13 +1303,13 @@ const AccountLedgerSummary = () => {
                                         {formatCurrency(entry.balance || 0)}
                                       </td>
                                       <td className="px-4 py-3 text-center no-print">
-                                        {entry.referenceId && entry.source && ['sale', 'Sale Return', 'cash_receipt', 'bank_receipt', 'sale_payment'].includes((entry.source || '').toString()) ? (
+                                        {entry.referenceId && entry.source && isPrintableCustomerRow(entry) ? (
                                           <button
                                             type="button"
                                             onClick={() => handlePrintEntry(entry)}
                                             disabled={printLoading}
                                             className="inline-flex items-center justify-center p-1.5 rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
-                                            title={entry.source === 'Sale Return' ? 'Print return' : (entry.source === 'cash_receipt' || entry.source === 'bank_receipt') ? 'Print receipt' : 'Print sale invoice'}
+                                            title={String(entry.source || '').toLowerCase() === 'sale return' ? 'Print return' : (entry.source === 'cash_receipt' || entry.source === 'bank_receipt') ? 'Print receipt' : 'Print sale invoice'}
                                           >
                                             <Printer className="h-4 w-4" />
                                           </button>
