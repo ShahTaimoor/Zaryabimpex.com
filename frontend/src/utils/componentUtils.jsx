@@ -115,7 +115,7 @@ export const componentRegistry = {
     component: () => import('../pages/PurchaseInvoices').then(m => m.default || m.PurchaseInvoices)
   },
   '/market-prices': {
-    title: 'Current Market Prices',
+    title: 'Current Purchase Market Prices',
     icon: 'Tag',
     allowMultiple: true,
     component: () => import('../pages/MarketPrices').then(m => m.default || m.MarketPrices)

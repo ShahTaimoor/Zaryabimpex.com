@@ -1490,8 +1490,9 @@ export const Settings2 = () => {
     }
     const nextSidebar = {
       ...savedSidebar,
-      'Current Market Prices': !!enabled,
+      'Current Purchase Market Prices': !!enabled,
     };
+    delete nextSidebar['Current Market Prices'];
     localStorage.setItem('sidebarConfig', JSON.stringify(nextSidebar));
     setSidebarConfig(nextSidebar);
     window.dispatchEvent(new Event('sidebarConfigChanged'));
@@ -2688,7 +2689,7 @@ export const Settings2 = () => {
                     />
                     <Label htmlFor="useMarketPurchasePrices" className="flex flex-col cursor-pointer group-hover:text-blue-700">
                       <span className="text-sm font-semibold">Enable Market Purchase Prices</span>
-                      <span className="text-[10px] text-gray-400">Uses Current Market Prices in Purchase and shows sidebar link</span>
+                      <span className="text-[10px] text-gray-400">Uses Current Purchase Market Prices in Purchase and shows sidebar link</span>
                     </Label>
                   </div>
                 </div>

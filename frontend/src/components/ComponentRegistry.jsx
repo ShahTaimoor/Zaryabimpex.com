@@ -119,7 +119,7 @@ export const componentRegistry = {
     allowMultiple: true
   },
   '/market-prices': {
-    title: 'Current Market Prices',
+    title: 'Current Purchase Market Prices',
     icon: 'Tag',
     allowMultiple: true
   },

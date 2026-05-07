@@ -128,7 +128,7 @@ export const navigation = withRouteAccess([
       { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText, permission: 'view_purchase_orders' },
       { name: 'Purchase', href: '/purchase', icon: Truck, permission: 'view_purchase_orders' },
       { name: 'Purchase Invoices', href: '/purchase-invoices', icon: Search, permission: 'view_purchase_invoices' },
-      { name: 'Current Market Prices', href: '/market-prices', icon: Tag, permissionAny: ['view_market_prices', 'manage_market_prices', 'import_market_prices'] },
+      { name: 'Current Purchase Market Prices', href: '/market-prices', icon: Tag, permissionAny: ['view_market_prices', 'manage_market_prices', 'import_market_prices'] },
       { name: 'Products by Supplier', href: '/purchase-by-supplier', icon: BarChart3, permission: 'view_reports' },
     ]
   },
@@ -265,14 +265,20 @@ export function loadSidebarConfig() {
     'Inventory Reports': false,
     'Backdate Report': false,
     'Sales Performance': false,
-    'Current Market Prices': false
+    'Current Purchase Market Prices': false
   };
   try {
     const parsed = JSON.parse(saved);
     const migrated = migrateSidebarConfig(parsed);
-    if (migrated['Current Market Prices'] === undefined) {
-      migrated['Current Market Prices'] = false;
+    // Carry over old key if it exists.
+    if (migrated['Current Purchase Market Prices'] === undefined) {
+      if (migrated['Current Market Prices'] !== undefined) {
+        migrated['Current Purchase Market Prices'] = migrated['Current Market Prices'];
+      } else {
+        migrated['Current Purchase Market Prices'] = false;
+      }
     }
+    delete migrated['Current Market Prices'];
     if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
       localStorage.setItem('sidebarConfig', JSON.stringify(migrated));
     }
@@ -290,7 +296,7 @@ export function loadSidebarConfig() {
       'Inventory Reports': false,
       'Backdate Report': false,
       'Sales Performance': false,
-      'Current Market Prices': false
+      'Current Purchase Market Prices': false
     };
   }
 }

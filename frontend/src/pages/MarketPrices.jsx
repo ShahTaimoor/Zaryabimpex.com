@@ -90,7 +90,7 @@ export default function MarketPrices() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border bg-white p-4">
-        <h2 className="text-lg font-semibold">Current Market Prices</h2>
+        <h2 className="text-lg font-semibold">Current Purchase Market Prices</h2>
         <p className="text-sm text-gray-600">Manual update for a single product purchase price.</p>
         <form className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-5" onSubmit={handleManualSubmit}>
           <input
