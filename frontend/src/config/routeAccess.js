@@ -8,6 +8,7 @@ export const ROUTE_ACCESS = {
   '/purchase-invoices': { permissionAny: [PERMISSIONS.VIEW_PURCHASE_INVOICES, PERMISSIONS.CREATE_PURCHASE_INVOICES, PERMISSIONS.EDIT_PURCHASE_INVOICES] },
   '/market-prices': { permissionAny: [PERMISSIONS.VIEW_MARKET_PRICES, PERMISSIONS.MANAGE_MARKET_PRICES, PERMISSIONS.IMPORT_MARKET_PRICES] },
   '/purchase': { permissionAny: [PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS] },
+  '/import-purchase': { permissionAny: [PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS] },
   '/products': { permission: PERMISSIONS.VIEW_PRODUCTS },
   '/product-variants': { permission: PERMISSIONS.VIEW_PRODUCTS },
   '/product-transformations': { permission: PERMISSIONS.VIEW_PRODUCTS },

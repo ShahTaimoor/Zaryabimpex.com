@@ -23,6 +23,7 @@ const Sales = lazy(() => import('./pages/Sales').then(m => ({ default: m.Sales }
 const PurchaseOrders = lazy(() => import('./pages/PurchaseOrders').then(m => ({ default: m.PurchaseOrders })));
 const PurchaseInvoices = lazy(() => import('./pages/PurchaseInvoices').then(m => ({ default: m.PurchaseInvoices })));
 const Purchase = lazy(() => import('./pages/Purchase').then(m => ({ default: m.Purchase })));
+const ImportPurchase = lazy(() => import('./pages/ImportPurchase').then(m => ({ default: m.ImportPurchase })));
 const Products = lazy(() => import('./pages/Products'));
 const Customers = lazy(() => import('./pages/Customers').then(m => ({ default: m.Customers })));
 const Suppliers = lazy(() => import('./pages/Suppliers').then(m => ({ default: m.Suppliers })));
@@ -105,6 +106,7 @@ function App() {
                       <Route path="/purchase-invoices" element={withRouteGuard('/purchase-invoices', <Suspense fallback={<LoadingPage />}><PurchaseInvoices /></Suspense>)} />
                       <Route path="/market-prices" element={withRouteGuard('/market-prices', <Suspense fallback={<LoadingPage />}><MarketPrices /></Suspense>)} />
                       <Route path="/purchase" element={withRouteGuard('/purchase', <Suspense fallback={<LoadingPage />}><Purchase /></Suspense>)} />
+                      <Route path="/import-purchase" element={withRouteGuard('/import-purchase', <Suspense fallback={<LoadingPage />}><ImportPurchase /></Suspense>)} />
                       <Route path="/products" element={withRouteGuard('/products', <Suspense fallback={<LoadingPage />}><Products /></Suspense>)} />
                       <Route path="/product-variants" element={withRouteGuard('/product-variants', <Suspense fallback={<LoadingPage />}><ProductVariants /></Suspense>)} />
                       <Route path="/product-transformations" element={withRouteGuard('/product-transformations', <Suspense fallback={<LoadingPage />}><ProductTransformations /></Suspense>)} />

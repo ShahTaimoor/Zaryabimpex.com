@@ -128,6 +128,7 @@ export const navigation = withRouteAccess([
     children: [
       { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText, permission: 'view_purchase_orders' },
       { name: 'Purchase', href: '/purchase', icon: Truck, permission: 'view_purchase_orders' },
+      { name: 'Import Purchase', href: '/import-purchase', icon: Truck, permission: 'view_purchase_orders' },
       { name: 'Purchase Invoices', href: '/purchase-invoices', icon: Search, permission: 'view_purchase_invoices' },
       { name: 'Current Purchase Market Prices', href: '/market-prices', icon: Tag, permissionAny: ['view_market_prices', 'manage_market_prices', 'import_market_prices'] },
       { name: 'Products by Supplier', href: '/purchase-by-supplier', icon: BarChart3, permission: 'view_reports' },
@@ -260,6 +261,7 @@ export function loadSidebarConfig() {
     'Customer Analytics': false,
     'Investors': false,
     'Drop Shipping': false,
+    'Import Purchase': false,
     'CCTV Access': false,
     'Warehouses': false,
     'Stock Movements': false,
@@ -279,6 +281,9 @@ export function loadSidebarConfig() {
         migrated['Current Purchase Market Prices'] = false;
       }
     }
+    if (migrated['Import Purchase'] === undefined) {
+      migrated['Import Purchase'] = false;
+    }
     delete migrated['Current Market Prices'];
     if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
       localStorage.setItem('sidebarConfig', JSON.stringify(migrated));
@@ -291,6 +296,7 @@ export function loadSidebarConfig() {
       'Customer Analytics': false,
       'Investors': false,
       'Drop Shipping': false,
+      'Import Purchase': false,
       'CCTV Access': false,
       'Warehouses': false,
       'Stock Movements': false,

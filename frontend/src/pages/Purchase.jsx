@@ -397,7 +397,25 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
   );
 };
 
-export const Purchase = ({ tabId, editData }) => {
+const DEFAULT_IMPORT_CHARGES = {
+  customDuty: 0,
+  salesTax: 0,
+  gst: 0,
+  additionalSalesTax: 0,
+  freight: 0,
+  demurrage: 0,
+  loadingUnloading: 0,
+  otherDuties: 0,
+  otherCharges: 0,
+};
+
+const IMPORT_ALLOCATION_METHODS = {
+  BY_VALUE: 'by_value',
+  BY_QTY: 'by_quantity',
+};
+
+export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
+  const isImportPurchase = purchaseMode === 'import';
   const [purchaseItems, setPurchaseItems] = useState([]);
   const purchaseCartScrollRef = useRef(null);
   const purchaseCartLineElRefs = useRef(new Map());
@@ -447,6 +465,8 @@ export const Purchase = ({ tabId, editData }) => {
 
   const { isMobile } = useResponsive();
   const { companyInfo: companySettings } = useCompanyInfo();
+  const importPurchaseFeatureEnabled = companySettings.orderSettings?.enableImportPurchaseLandedCost === true;
+  const isEnhancedImportPurchase = isImportPurchase && importPurchaseFeatureEnabled;
   const dualUnitShowBoxInputEnabledPage = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const taxSystemEnabled = companySettings.taxEnabled === true;
   const globalTaxPct = Math.min(100, Math.max(0, Number(companySettings.defaultTaxRate ?? 0)));
@@ -459,6 +479,8 @@ export const Purchase = ({ tabId, editData }) => {
   const [selectedBankAccount, setSelectedBankAccount] = useState('');
   const [amountPaid, setAmountPaid] = useState(0);
   const [directDiscount, setDirectDiscount] = useState({ type: 'amount', value: 0 });
+  const [importCharges, setImportCharges] = useState(DEFAULT_IMPORT_CHARGES);
+  const [importAllocationMethod, setImportAllocationMethod] = useState(IMPORT_ALLOCATION_METHODS.BY_VALUE);
 
   // Print modal state
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -546,6 +568,17 @@ export const Purchase = ({ tabId, editData }) => {
         setNotes(editData.notes);
       }
 
+      if (isEnhancedImportPurchase) {
+        const existingImportCharges = editData?.pricing?.importCharges;
+        if (existingImportCharges && typeof existingImportCharges === 'object') {
+          setImportCharges((prev) => ({ ...prev, ...existingImportCharges }));
+        }
+        const existingAllocationMethod = editData?.pricing?.importAllocationMethod;
+        if (existingAllocationMethod) {
+          setImportAllocationMethod(existingAllocationMethod);
+        }
+      }
+
       // Set bill date (same as Sale page; API returns invoiceDate)
       if (editData.invoiceDate || editData.billDate) {
         const d = editData.invoiceDate || editData.billDate;
@@ -581,7 +614,7 @@ export const Purchase = ({ tabId, editData }) => {
 
       // Data loaded successfully (no toast needed as PurchaseInvoices already shows opening message)
     }
-  }, [editData?.invoiceId]); // Only depend on invoiceId to prevent multiple executions
+  }, [editData?.invoiceId, isEnhancedImportPurchase]); // Only depend on invoiceId to prevent multiple executions
 
   // Fetch complete supplier data when supplier is selected (for immediate balance updates)
   const { data: completeSupplierData, refetch: refetchSupplier } = useGetSupplierQuery(
@@ -875,18 +908,65 @@ export const Purchase = ({ tabId, editData }) => {
 
   const subtotal = purchaseItems.reduce((sum, item) => sum + (item.costPerUnit * item.quantity), 0);
   const tax = calculateTax();
+  const importChargesTotal = isEnhancedImportPurchase
+    ? Object.values(importCharges).reduce((sum, value) => sum + (Number(value) || 0), 0)
+    : 0;
 
   // Calculate discount amount
   const directDiscountAmount = directDiscount.type === 'percentage'
     ? (subtotal * directDiscount.value / 100)
     : directDiscount.value;
 
-  const total = subtotal + tax - directDiscountAmount;
+  const total = subtotal + tax - directDiscountAmount + importChargesTotal;
   // Use centralized ledger balance if available, fallback to entity balance
   const supplierOutstanding = unifiedBalanceData?.balance ?? (
     Number(selectedSupplier?.pendingBalance ?? selectedSupplier?.outstandingBalance ?? 0) || 0
   );
   const totalPayables = total + supplierOutstanding;
+
+  const getImportAllocatedItems = useCallback(() => {
+    if (!isEnhancedImportPurchase || importChargesTotal <= 0 || purchaseItems.length === 0) {
+      return purchaseItems.map((item) => ({
+        ...item,
+        allocatedCharge: 0,
+        landedUnitCost: Number(item.costPerUnit) || 0,
+      }));
+    }
+
+    const qtyDenominator = purchaseItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    const valueDenominator = purchaseItems.reduce((sum, item) => {
+      const qty = Number(item.quantity) || 0;
+      const cost = Number(item.costPerUnit) || 0;
+      return sum + (qty * cost);
+    }, 0);
+
+    const denominator = importAllocationMethod === IMPORT_ALLOCATION_METHODS.BY_QTY
+      ? qtyDenominator
+      : valueDenominator;
+
+    if (denominator <= 0) {
+      return purchaseItems.map((item) => ({
+        ...item,
+        allocatedCharge: 0,
+        landedUnitCost: Number(item.costPerUnit) || 0,
+      }));
+    }
+
+    return purchaseItems.map((item) => {
+      const qty = Number(item.quantity) || 0;
+      const unitCost = Number(item.costPerUnit) || 0;
+      const itemBaseValue = qty * unitCost;
+      const weight = importAllocationMethod === IMPORT_ALLOCATION_METHODS.BY_QTY ? qty : itemBaseValue;
+      const allocatedCharge = importChargesTotal * (weight / denominator);
+      const landedUnitCost = qty > 0 ? (itemBaseValue + allocatedCharge) / qty : unitCost;
+
+      return {
+        ...item,
+        allocatedCharge,
+        landedUnitCost,
+      };
+    });
+  }, [isEnhancedImportPurchase, importChargesTotal, purchaseItems, importAllocationMethod]);
 
   const addToPurchase = (newItem) => {
     let highlightLineIndex = null;
@@ -1065,6 +1145,7 @@ export const Purchase = ({ tabId, editData }) => {
     }
 
     // Create purchase invoice data
+    const importAllocatedItems = getImportAllocatedItems();
     const invoiceData = {
       supplier: selectedSupplier.id || selectedSupplier._id,
       supplierInfo: {
@@ -1085,11 +1166,13 @@ export const Purchase = ({ tabId, editData }) => {
           return null;
         })()
       },
-      items: purchaseItems.map(item => ({
+      items: importAllocatedItems.map(item => ({
         product: item.product?.id || item.product?._id,
         quantity: item.quantity,
-        unitCost: item.costPerUnit,
-        totalCost: item.quantity * item.costPerUnit
+        unitCost: isEnhancedImportPurchase ? item.landedUnitCost : item.costPerUnit,
+        totalCost: isEnhancedImportPurchase
+          ? (item.quantity * item.landedUnitCost)
+          : (item.quantity * item.costPerUnit)
       })),
       pricing: {
         subtotal: subtotal,
@@ -1113,6 +1196,24 @@ export const Purchase = ({ tabId, editData }) => {
       terms: ''
     };
 
+    if (isEnhancedImportPurchase) {
+      invoiceData.pricing = {
+        ...invoiceData.pricing,
+        importCharges,
+        importChargesTotal,
+        landedCostTotal: total,
+        importAllocationMethod,
+        landedCostBreakdown: importAllocatedItems.map((item) => ({
+          product: item.product?.id || item.product?._id,
+          quantity: item.quantity,
+          baseUnitCost: item.costPerUnit,
+          allocatedCharge: item.allocatedCharge,
+          landedUnitCost: item.landedUnitCost,
+        })),
+      };
+      invoiceData.notes = [notes, '[Import Purchase]'].filter(Boolean).join(' ').trim();
+    }
+
     pendingReceiptLabelPayloadRef.current = null;
     if (printBarcodeLabelsAfterInvoice && !editData?.isEditMode && purchaseItems.length > 0) {
       pendingReceiptLabelPayloadRef.current = { items: [...purchaseItems] };
@@ -1124,7 +1225,7 @@ export const Purchase = ({ tabId, editData }) => {
     } else {
       handleCreatePurchaseInvoice(invoiceData);
     }
-  }, [purchaseItems, selectedSupplier, invoiceNumber, autoGenerateInvoice, expectedDelivery, billDate, notes, taxSystemEnabled, subtotal, tax, total, directDiscountAmount, paymentMethod, selectedBankAccount, amountPaid, editData, handleCreatePurchaseInvoice, handleUpdatePurchaseInvoice, printBarcodeLabelsAfterInvoice]);
+  }, [purchaseItems, selectedSupplier, invoiceNumber, autoGenerateInvoice, expectedDelivery, billDate, notes, taxSystemEnabled, subtotal, tax, total, directDiscountAmount, paymentMethod, selectedBankAccount, amountPaid, editData, handleCreatePurchaseInvoice, handleUpdatePurchaseInvoice, printBarcodeLabelsAfterInvoice, isEnhancedImportPurchase, importCharges, importChargesTotal, importAllocationMethod, getImportAllocatedItems]);
 
 
   return (
@@ -1135,7 +1236,9 @@ export const Purchase = ({ tabId, editData }) => {
           <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-2">
             <div className="flex flex-col sm:flex-row sm:items-center flex-1 gap-3">
               <div className="flex-shrink-0">
-                <h1 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold text-gray-900`}>Purchase</h1>
+                <h1 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold text-gray-900`}>
+                  {isImportPurchase ? 'Import Purchase' : 'Purchase'}
+                </h1>
               </div>
               <div className="hidden sm:block h-7 w-px bg-gray-200"></div>
               <div className="flex-1 min-w-0 sm:min-w-[220px] lg:max-w-lg">
@@ -1241,6 +1344,12 @@ export const Purchase = ({ tabId, editData }) => {
             </div>
           </div>
         </div>
+
+        {isImportPurchase && !isEnhancedImportPurchase && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Import duties and landed-cost allocation are currently OFF in Settings. This form is using old purchase behavior.
+          </div>
+        )}
 
         {/* Combined Product Selection and Cart Section */}
         <ProductSelectionCartSection
@@ -1708,6 +1817,58 @@ export const Purchase = ({ tabId, editData }) => {
               </OrderSummaryBar>
               <OrderSummaryContent className="bg-none bg-slate-50">
                 <div className="space-y-2">
+                  {isEnhancedImportPurchase && (
+                    <div className="mt-2 rounded-md border border-slate-200 bg-white p-2">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Import Duties & Charges</div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Allocate By</label>
+                          <select
+                            value={importAllocationMethod}
+                            onChange={(e) => setImportAllocationMethod(e.target.value)}
+                            className="h-8 rounded border border-gray-200 bg-white px-2 text-xs font-medium text-gray-700"
+                          >
+                            <option value={IMPORT_ALLOCATION_METHODS.BY_VALUE}>Value</option>
+                            <option value={IMPORT_ALLOCATION_METHODS.BY_QTY}>Quantity</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                        {[
+                          { key: 'customDuty', label: 'Custom Duty' },
+                          { key: 'salesTax', label: 'Sales Tax' },
+                          { key: 'gst', label: 'GST' },
+                          { key: 'additionalSalesTax', label: 'Additional Sales Tax' },
+                          { key: 'freight', label: 'Freight' },
+                          { key: 'demurrage', label: 'Demurrage' },
+                          { key: 'loadingUnloading', label: 'Loading/Unloading' },
+                          { key: 'otherDuties', label: 'Other Duties' },
+                          { key: 'otherCharges', label: 'Other Charges' },
+                        ].map((field) => (
+                          <div key={field.key} className="flex flex-col">
+                            <label className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">{field.label}</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={importCharges[field.key] ?? 0}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                setImportCharges((prev) => ({ ...prev, [field.key]: Number.isFinite(val) ? val : 0 }));
+                              }}
+                              className="h-8"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
+                        <span className="text-xs font-medium text-slate-600">Import Charges Total</span>
+                        <span className="text-sm font-bold text-slate-900">{importChargesTotal.toFixed(2)}</span>
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        Charges will be allocated into item landed unit cost by {importAllocationMethod === IMPORT_ALLOCATION_METHODS.BY_QTY ? 'quantity' : 'item value'}.
+                      </div>
+                    </div>
+                  )}
                   {directDiscountAmount > 0 && (
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-muted-foreground">Discount:</span>
@@ -1763,7 +1924,9 @@ export const Purchase = ({ tabId, editData }) => {
 
                           {/* 3. Purchase Total */}
                           <div className="flex flex-col">
-                            <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Total</span>
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">
+                              {isEnhancedImportPurchase ? 'Landed Total' : 'Total'}
+                            </span>
                             <div className="h-8 flex items-center px-2 bg-slate-50 border border-gray-200 rounded-md text-xl font-bold tabular-nums text-primary">
                               {total.toFixed(2)}
                             </div>
@@ -1831,6 +1994,11 @@ export const Purchase = ({ tabId, editData }) => {
                             </div>
                           </div>
                         </div>
+                        {isEnhancedImportPurchase && (
+                          <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600">
+                            Landed cost includes item subtotal, tax, and all import duties/charges.
+                          </div>
+                        )}
                       </div>
                     );
                   })()}

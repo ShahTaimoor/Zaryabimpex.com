@@ -66,6 +66,18 @@ import { LUCIDE_ICON_MAP } from '../utils/lucideIconMap';
 
 export const Settings2 = () => {
   const { user } = useAuth();
+  const sidebarDefaultHiddenItems = useMemo(() => new Set([
+    'Import Purchase',
+    'Current Purchase Market Prices',
+  ]), []);
+
+  const isSidebarItemEnabled = (itemName) => {
+    const current = sidebarConfig?.[itemName];
+    if (current === undefined && sidebarDefaultHiddenItems.has(itemName)) {
+      return false;
+    }
+    return current !== false;
+  };
 
   // Active tab state
   const [activeTab, setActiveTab] = useState('company');
@@ -1436,6 +1448,7 @@ export const Settings2 = () => {
     return saved === null ? true : saved === 'true';
   });
   const [useMarketPurchasePrices, setUseMarketPurchasePrices] = useState(false);
+  const [enableImportPurchaseLandedCost, setEnableImportPurchaseLandedCost] = useState(false);
 
   // Product Visibility Settings
   const [showProductSetting_reorderPoint, setShowProductSetting_reorderPoint] = useState(() => localStorage.getItem('showProductSetting_reorderPoint') === 'true');
@@ -1478,6 +1491,11 @@ export const Settings2 = () => {
     setUseMarketPurchasePrices(enabled);
   }, [settings?.orderSettings?.useMarketPurchasePrices]);
 
+  useEffect(() => {
+    const enabled = settings?.orderSettings?.enableImportPurchaseLandedCost === true;
+    setEnableImportPurchaseLandedCost(enabled);
+  }, [settings?.orderSettings?.enableImportPurchaseLandedCost]);
+
   const syncMarketPricesSidebarVisibility = (enabled) => {
     const savedSidebarRaw = localStorage.getItem('sidebarConfig');
     let savedSidebar = {};
@@ -1516,6 +1534,25 @@ export const Settings2 = () => {
       setUseMarketPurchasePrices(previousChecked);
       syncMarketPricesSidebarVisibility(previousChecked);
       handleApiError(error, 'Update Market Purchase Price Setting');
+    }
+  };
+
+  const handleImportPurchaseFeatureToggle = async (checked) => {
+    const nextChecked = !!checked;
+    const previousChecked = enableImportPurchaseLandedCost;
+    setEnableImportPurchaseLandedCost(nextChecked);
+    try {
+      await updateCompanySettings({
+        orderSettings: {
+          ...(settings?.orderSettings || {}),
+          enableImportPurchaseLandedCost: nextChecked,
+        },
+      }).unwrap();
+      toast.success(`Import purchase landed-cost ${nextChecked ? 'enabled' : 'disabled'}.`);
+      refetchSettings();
+    } catch (error) {
+      setEnableImportPurchaseLandedCost(previousChecked);
+      handleApiError(error, 'Update Import Purchase Landed Cost Setting');
     }
   };
 
@@ -2692,6 +2729,19 @@ export const Settings2 = () => {
                       <span className="text-[10px] text-gray-400">Uses Current Purchase Market Prices in Purchase and shows sidebar link</span>
                     </Label>
                   </div>
+
+                  <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                    <Checkbox
+                      id="enableImportPurchaseLandedCost"
+                      className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                      checked={enableImportPurchaseLandedCost}
+                      onCheckedChange={(checked) => handleImportPurchaseFeatureToggle(!!checked)}
+                    />
+                    <Label htmlFor="enableImportPurchaseLandedCost" className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                      <span className="text-sm font-semibold">Enable Import Purchase Duties & Landed Cost</span>
+                      <span className="text-[10px] text-gray-400">When off (default), Import Purchase works like old purchase flow</span>
+                    </Label>
+                  </div>
                 </div>
 
                 <div className="pt-4 border-t border-gray-100">
@@ -3011,7 +3061,7 @@ export const Settings2 = () => {
                                   <label className="flex items-center gap-2 text-[11px] font-semibold text-gray-600 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200">
                                     <Checkbox
                                       id={`sidebar-group-${item.name}`.replace(/\s+/g, '-')}
-                                      checked={item.children.every((child) => sidebarConfig[child.name] !== false)}
+                                      checked={item.children.every((child) => isSidebarItemEnabled(child.name))}
                                       onCheckedChange={(checked) => {
                                         const newConfig = { ...sidebarConfig };
                                         item.children.forEach((child) => {
@@ -3039,7 +3089,7 @@ export const Settings2 = () => {
                                     >
                                       <Checkbox
                                         id={childId}
-                                        checked={sidebarConfig[child.name] !== false}
+                                        checked={isSidebarItemEnabled(child.name)}
                                         onCheckedChange={(checked) => {
                                           const newConfig = { ...sidebarConfig, [child.name]: checked };
                                           setSidebarConfig(newConfig);
@@ -3071,7 +3121,7 @@ export const Settings2 = () => {
                           >
                             <Checkbox
                               id={singleId}
-                              checked={sidebarConfig[item.name] !== false}
+                              checked={isSidebarItemEnabled(item.name)}
                               onCheckedChange={(checked) => {
                                 const newConfig = { ...sidebarConfig, [item.name]: checked };
                                 setSidebarConfig(newConfig);

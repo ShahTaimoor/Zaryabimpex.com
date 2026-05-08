@@ -5,6 +5,7 @@ const componentLoader = {
   '/dashboard': () => import('../pages/Dashboard').then(module => module.default || module.Dashboard),
   '/sales': () => import('../pages/Sales').then(module => module.Sales),
   '/purchase': () => import('../pages/Purchase').then(module => module.Purchase),
+  '/import-purchase': () => import('../pages/ImportPurchase').then(module => module.default || module.ImportPurchase),
   '/products': () => import('../pages/Products').then(module => module.default || module.Products),
   '/customers': () => import('../pages/Customers').then(module => module.Customers),
   '/customer-analytics': () => import('../pages/CustomerAnalytics').then(module => module.default || module.CustomerAnalytics),
@@ -58,6 +59,11 @@ export const componentRegistry = {
   },
   '/purchase': {
     title: 'Purchase',
+    icon: 'Truck',
+    allowMultiple: true
+  },
+  '/import-purchase': {
+    title: 'Import Purchase',
     icon: 'Truck',
     allowMultiple: true
   },

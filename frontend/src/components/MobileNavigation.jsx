@@ -78,6 +78,7 @@ const MobileNavigation = ({ user, onLogout, isLoggingOut = false }) => {
     { path: '/sales-orders', icon: FileText, label: 'Sales Orders', badge: null },
     { path: '/sales-invoices', icon: FileText, label: 'Sales Invoices', badge: null },
     { path: '/purchase', icon: Truck, label: 'Purchase', badge: null },
+    { path: '/import-purchase', icon: Truck, label: 'Import Purchase', badge: null },
     { path: '/purchase-orders', icon: FileText, label: 'Purchase Orders', badge: null },
     { path: '/purchase-invoices', icon: FileText, label: 'Purchase Invoices', badge: null },
     { path: '/purchase-by-supplier', icon: BarChart3, label: 'Products by Supplier', badge: null },

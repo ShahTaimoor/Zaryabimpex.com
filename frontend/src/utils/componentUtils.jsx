@@ -21,6 +21,12 @@ export const componentRegistry = {
     allowMultiple: true,
     component: () => import('../pages/Purchase').then(m => m.default || m.Purchase)
   },
+  '/import-purchase': {
+    title: 'Import Purchase',
+    icon: 'Truck',
+    allowMultiple: true,
+    component: () => import('../pages/ImportPurchase').then(m => m.default || m.ImportPurchase)
+  },
   '/products': {
     title: 'Products',
     icon: 'Package',
