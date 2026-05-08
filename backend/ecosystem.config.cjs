@@ -3,8 +3,8 @@ module.exports = {
     {
       name: process.env.PM2_APP_NAME || 'pos-backend',
       script: 'server.js',
-      instances: 'max',
-      exec_mode: 'cluster',
+      instances: 1,
+      exec_mode: 'fork',
       watch: false,
       autorestart: true,
       max_memory_restart: '700M',
