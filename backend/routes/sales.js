@@ -5,6 +5,7 @@ const path = require('path');
 const StockMovementService = require('../services/stockMovementService');
 const salesService = require('../services/salesService');
 const AccountingService = require('../services/accountingService');
+const { query: pgQuery } = require('../config/postgres');
 const profitDistributionService = require('../services/profitDistributionService');
 const salesRepository = require('../repositories/SalesRepository');
 const productRepository = require('../repositories/ProductRepository');
@@ -651,6 +652,9 @@ router.put('/:id', [
       order.payment.amountPaid = amt;
       order.payment.status = amt >= (parseFloat(order.pricing?.total ?? order.total) || 0) ? 'paid' : (amt > 0 ? 'partial' : 'pending');
     }
+    if (req.body.paymentMethod !== undefined) {
+      order.payment.method = req.body.paymentMethod || order.payment.method || 'cash';
+    }
 
     if (req.body.isTaxExempt !== undefined) {
       order.pricing.isTaxExempt = !!req.body.isTaxExempt;
@@ -849,6 +853,9 @@ router.put('/:id', [
       updateData.amountPaid = parseFloat(req.body.amountReceived) || 0;
       updateData.paymentStatus = order.payment?.status ?? (updateData.amountPaid >= (parseFloat(order.pricing?.total ?? order.total) || 0) ? 'paid' : (updateData.amountPaid > 0 ? 'partial' : 'pending'));
     }
+    if (req.body.paymentMethod !== undefined) {
+      updateData.paymentMethod = req.body.paymentMethod || order.payment?.method || order.payment_method || 'cash';
+    }
     if (req.body.orderType !== undefined) {
       updateData.orderType = req.body.orderType;
     }
@@ -888,6 +895,10 @@ router.put('/:id', [
     if (!customerChanged && req.body.amountReceived !== undefined) {
       const oldAmountPaid = parseFloat(order.amount_paid) || 0;
       const newAmountPaid = parseFloat(req.body.amountReceived) || 0;
+      const paymentMethodForAdjustment = req.body.paymentMethod || order.payment_method || order.payment?.method || 'cash';
+      const bankIdForAdjustment = paymentMethodForAdjustment === 'bank'
+        ? (req.body.bankAccount || req.body.payment?.bankAccount || null)
+        : null;
       if (Math.abs(newAmountPaid - oldAmountPaid) >= 0.01) {
         try {
           await AccountingService.recordSalePaymentAdjustment({
@@ -896,12 +907,33 @@ router.put('/:id', [
             customerId: order.customer_id,
             oldAmountPaid,
             newAmountPaid,
-            paymentMethod: order.payment_method || order.payment?.method || 'cash',
+            paymentMethod: paymentMethodForAdjustment,
+            bankId: bankIdForAdjustment,
             createdBy: req.user?.id || req.user?._id
           });
         } catch (ledgerErr) {
           console.error('Failed to post sale payment adjustment to ledger:', ledgerErr);
         }
+      }
+    }
+
+    // Keep sale-payment ledger bank mapping in sync even when amount does not change.
+    if (req.body.paymentMethod !== undefined) {
+      const paymentMethodForBankSync = req.body.paymentMethod || order.payment_method || order.payment?.method || 'cash';
+      const bankIdForBankSync = paymentMethodForBankSync === 'bank'
+        ? (req.body.bankAccount || req.body.payment?.bankAccount || null)
+        : null;
+      try {
+        await pgQuery(
+          `UPDATE account_ledger
+           SET bank_id = $1
+           WHERE reference_type = 'sale_payment'
+             AND reference_id::text = $2
+             AND reversed_at IS NULL`,
+          [bankIdForBankSync, String(req.params.id)]
+        );
+      } catch (bankSyncErr) {
+        console.error('Failed to sync sale payment bank mapping on edit:', bankSyncErr);
       }
     }
 

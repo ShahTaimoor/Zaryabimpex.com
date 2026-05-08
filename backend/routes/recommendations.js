@@ -45,7 +45,7 @@ router.post('/generate', [
 
     // Track recommendation request
     try {
-      await UserBehavior.trackBehavior({
+      await userBehaviorService.trackBehavior({
         user: userId,
         sessionId,
         action: 'recommendation_view',
@@ -154,7 +154,7 @@ router.post('/:recommendationId/interact', [
     );
 
     // Also track in user behavior
-    await UserBehavior.trackBehavior({
+    await userBehaviorService.trackBehavior({
       user: userId,
       sessionId: recommendation.sessionId,
       action: `recommendation_${action}`,
@@ -231,7 +231,7 @@ router.get('/frequently-bought/:productId', [
     const { productId } = req.params;
     const { limit = 10 } = req.query;
 
-    const frequentlyBought = await UserBehavior.getFrequentlyBoughtTogether(productId, limit);
+    const frequentlyBought = await userBehaviorService.getFrequentlyBoughtTogether(productId, limit);
 
     res.json({
       product: productId,

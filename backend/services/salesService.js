@@ -458,10 +458,27 @@ class SalesService {
     if (amountPaid === 0 && normalizedPaymentStatus === 'paid') {
       amountPaid = parseFloat(order.total) || 0;
     }
+    let bankAccount = null;
+    try {
+      const bankResult = await query(
+        `SELECT bank_id
+         FROM account_ledger
+         WHERE reference_type = 'sale_payment'
+           AND reference_id::text = $1
+           AND bank_id IS NOT NULL
+           AND status = 'completed'
+           AND reversed_at IS NULL
+         ORDER BY transaction_date DESC, created_at DESC
+         LIMIT 1`,
+        [String(orderId)]
+      );
+      bankAccount = bankResult.rows[0]?.bank_id || null;
+    } catch (_) { /* ignore */ }
     order.payment = {
       ...(order.payment || {}),
       amountPaid,
       method: order.payment?.method || order.payment_method || 'N/A',
+      bankAccount,
       status: order.payment?.status || order.payment_status || 'pending',
     };
 
@@ -768,6 +785,7 @@ class SalesService {
           oldAmountPaid: 0,
           newAmountPaid: amountPaidAtCreate,
           paymentMethod: payment?.method || 'cash',
+          bankId: payment?.method === 'bank' ? (payment?.bankAccount || null) : null,
           createdBy: user?.id || user?._id
         }, { client });
       }

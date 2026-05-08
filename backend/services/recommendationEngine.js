@@ -79,17 +79,24 @@ class RecommendationEngine {
         position: index + 1
       }));
 
-      const created = await RecommendationRepository.create({
-        user: userId,
-        sessionId: sessionId || null,
-        algorithm,
-        context: context || {},
-        recommendations: recsPayload
-      });
+      let created = null;
+      try {
+        created = await RecommendationRepository.create({
+          user: userId,
+          sessionId: sessionId || null,
+          algorithm,
+          context: context || {},
+          recommendations: recsPayload
+        });
+      } catch (persistError) {
+        // Recommendation persistence is optional for serving results.
+        // If DB schema constraints fail, still return generated recommendations.
+        console.warn('Failed to persist recommendation record:', persistError?.message || persistError);
+      }
 
       return {
-        ...created,
-        id: created.id,
+        ...(created || {}),
+        id: created?.id || null,
         recommendations: recommendations.map((r, i) => ({
           product: r.product,
           score: r.score,

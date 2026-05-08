@@ -340,7 +340,7 @@ export const Sales = ({ tabId, editData }) => {
         const normalizedPaid = Number(paidFromPayload);
         setAmountPaid(Number.isFinite(normalizedPaid) && normalizedPaid >= 0 ? normalizedPaid : 0);
         if (editData.payment.method === 'bank') {
-          setSelectedBankAccount(editData.payment.bankAccount || '');
+          setSelectedBankAccount(editData.payment.bankAccount || editData.payment.bank_id || '');
         } else {
           setSelectedBankAccount('');
         }
@@ -472,11 +472,12 @@ export const Sales = ({ tabId, editData }) => {
   );
 
   useEffect(() => {
+    if (editData?.isEditMode) return;
     if (paymentMethod !== 'bank' || selectedBankAccount) return;
     const first = activeBanks[0];
     const id = first?._id || first?.id;
     if (id) setSelectedBankAccount(id);
-  }, [paymentMethod, selectedBankAccount, activeBanks]);
+  }, [paymentMethod, selectedBankAccount, activeBanks, editData?.isEditMode]);
 
   // Update selected customer when customers data changes (e.g., after cash receipt updates balance)
   useEffect(() => {
@@ -1382,6 +1383,8 @@ export const Sales = ({ tabId, editData }) => {
         }),
         notes: notes || '',
         amountReceived: amountPaid ?? 0,
+        paymentMethod: paymentMethod,
+        bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
         billDate: billDate || undefined,
         discount: totalDiscountAmount > 0 ? totalDiscountAmount : undefined
       };
@@ -2649,6 +2652,9 @@ export const Sales = ({ tabId, editData }) => {
                                 className="border-none bg-transparent p-0 text-[10px] font-bold text-primary-600 focus:ring-0 cursor-pointer max-w-[60px] overflow-hidden text-ellipsis"
                               >
                                 <option value="cash">Cash</option>
+                                <option value="bank" disabled>
+                                  Select Bank
+                                </option>
                                 <optgroup label="Banks">
                                   {activeBanks.map((bank) => {
                                     const bid = bank._id || bank.id;

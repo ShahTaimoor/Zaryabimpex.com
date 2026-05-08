@@ -1767,11 +1767,20 @@ class AccountingService {
    * Posts the delta to account_ledger so balance reflects the change.
    * - Delta > 0: Dr Cash/Bank, Cr AR (payment received)
    * - Delta < 0: Dr AR, Cr Cash/Bank (reversal)
-   * @param {Object} params - { saleId, orderNumber, customerId, oldAmountPaid, newAmountPaid, paymentMethod, createdBy }
+   * @param {Object} params - { saleId, orderNumber, customerId, oldAmountPaid, newAmountPaid, paymentMethod, bankId, createdBy }
    */
   static async recordSalePaymentAdjustment(params, options = {}) {
     const { client = null } = options;
-    const { saleId, orderNumber, customerId, oldAmountPaid, newAmountPaid, paymentMethod = 'cash', createdBy } = params;
+    const {
+      saleId,
+      orderNumber,
+      customerId,
+      oldAmountPaid,
+      newAmountPaid,
+      paymentMethod = 'cash',
+      bankId = null,
+      createdBy
+    } = params;
     const oldAmt = parseFloat(oldAmountPaid) || 0;
     const newAmt = parseFloat(newAmountPaid) || 0;
     const delta = newAmt - oldAmt;
@@ -1786,7 +1795,15 @@ class AccountingService {
       return await this.createTransaction(
         { accountCode: debitAccount, debitAmount: delta, creditAmount: 0, description: `Sale payment (edit): ${refNum}` },
         { accountCode: creditAccount, debitAmount: 0, creditAmount: delta, description: `Payment for sale: ${refNum}` },
-        { referenceType: 'sale_payment', referenceId: saleId, referenceNumber: refNum, customerId: customerId || null, currency: 'PKR', createdBy },
+        {
+          referenceType: 'sale_payment',
+          referenceId: saleId,
+          referenceNumber: refNum,
+          customerId: customerId || null,
+          bankId: paymentMethod === 'bank' ? bankId : null,
+          currency: 'PKR',
+          createdBy
+        },
         client
       );
     } else {
@@ -1795,7 +1812,15 @@ class AccountingService {
       return await this.createTransaction(
         { accountCode: creditAccount, debitAmount: absDelta, creditAmount: 0, description: `Sale payment reversal (edit): ${refNum}` },
         { accountCode: debitAccount, debitAmount: 0, creditAmount: absDelta, description: `Reversal for sale: ${refNum}` },
-        { referenceType: 'sale_payment', referenceId: saleId, referenceNumber: refNum, customerId: customerId || null, currency: 'PKR', createdBy },
+        {
+          referenceType: 'sale_payment',
+          referenceId: saleId,
+          referenceNumber: refNum,
+          customerId: customerId || null,
+          bankId: paymentMethod === 'bank' ? bankId : null,
+          currency: 'PKR',
+          createdBy
+        },
         client
       );
     }
