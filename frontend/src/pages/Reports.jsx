@@ -626,7 +626,8 @@ export const Reports = () => {
     if (activeTab === 'bank-cash') {
       return {
         'Total Bank Balance': bankCashSummaryData?.totals?.totalBankBalance || 0,
-        'Cash Balance': bankCashSummaryData?.cash?.balance || 0
+        'Cash Balance': bankCashSummaryData?.cash?.balance || 0,
+        'Combined Balance': bankCashSummaryData?.totals?.combinedBalance || 0
       };
     }
     if (activeTab === 'top-products') {
@@ -945,6 +946,7 @@ export const Reports = () => {
             if (title === 'Above minimum') return <CheckCircle className="h-6 w-6 text-green-600" />;
             if (title === 'Low Stock') return <AlertTriangle className="h-6 w-6 text-amber-600" />;
             if (title === 'Out of Stock') return <XCircle className="h-6 w-6 text-red-600" />;
+            if (title === 'Combined Balance') return <DollarSign className="h-6 w-6 text-indigo-600" />;
             return idx === 0 ? <Users className="h-6 w-6 text-blue-600" /> :
               idx === 1 ? <TrendingUp className="h-6 w-6 text-purple-600" /> :
                 <Package className="h-6 w-6 text-gray-600" />;
@@ -955,6 +957,7 @@ export const Reports = () => {
             if (title === 'Above minimum') return "bg-green-50";
             if (title === 'Low Stock') return "bg-amber-50";
             if (title === 'Out of Stock') return "bg-red-50";
+            if (title === 'Combined Balance') return "bg-indigo-50";
             return idx === 0 ? "bg-blue-50" :
               idx === 1 ? "bg-purple-50" :
                 "bg-gray-50";
@@ -1773,7 +1776,7 @@ export const Reports = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
                   <div className="flex items-center gap-2 text-sm text-gray-500">
                     <Wallet className="h-4 w-4 text-green-600" />
@@ -1795,6 +1798,10 @@ export const Reports = () => {
                     <div>
                       <div className="text-gray-500">Payments</div>
                       <div className="font-semibold text-red-700">{(bankCashSummaryData?.cash?.totalPayments || 0).toLocaleString()}</div>
+                    </div>
+                    <div className="col-span-2 pt-1 border-t border-gray-200">
+                      <div className="text-gray-500">Total Sales</div>
+                      <div className="font-bold text-indigo-600">{(bankCashSummaryData?.totalSales || 0).toLocaleString()}</div>
                     </div>
                   </div>
                 </div>
@@ -1819,6 +1826,26 @@ export const Reports = () => {
                     <div>
                       <div className="text-gray-500">Payments</div>
                       <div className="font-semibold text-red-700">{(bankCashSummaryData?.totals?.totalBankPayments || 0).toLocaleString()}</div>
+                    </div>
+                    <div className="col-span-2 pt-1 border-t border-gray-200">
+                      <div className="text-gray-500">Total Sales</div>
+                      <div className="font-bold text-indigo-600">{(bankCashSummaryData?.totalSales || 0).toLocaleString()}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-4">
+                  <div className="flex items-center gap-2 text-sm text-indigo-700">
+                    <TrendingUp className="h-4 w-4" />
+                    Combined Summary
+                  </div>
+                  <div className="mt-2 space-y-3 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Total Combined Balance</span>
+                      <span className="font-bold text-lg text-indigo-700">{(bankCashSummaryData?.totals?.combinedBalance || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="pt-2 border-t border-indigo-100 flex justify-between items-center">
+                      <span className="text-gray-600">Period Total Sales</span>
+                      <span className="font-bold text-indigo-600">{(bankCashSummaryData?.totalSales || 0).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>

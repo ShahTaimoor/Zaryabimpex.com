@@ -1413,6 +1413,15 @@ class ReportsService {
         query(cashStatsSql, dateParams)
       ]);
 
+      const salesSql = `
+        SELECT COALESCE(SUM(total), 0) as total_sales
+        FROM sales
+        WHERE status != 'cancelled'
+        ${dateClause.replace('date', 'sale_date')}
+      `;
+      const salesResult = await query(salesSql, dateParams);
+      const totalSales = parseFloat(salesResult.rows[0]?.total_sales || 0);
+
       const cashOpening = parseFloat(cashOpeningRes.rows[0]?.periodOpening || 0);
       const cashStats = cashStatsRes.rows[0] || {};
 
@@ -1423,17 +1432,21 @@ class ReportsService {
       };
       cash.balance = cash.openingBalance + cash.totalReceipts - cash.totalPayments;
 
+      const totalBankBalance = banks.reduce((sum, bank) => sum + (bank.balance || 0), 0);
       const totals = {
-        totalBankBalance: banks.reduce((sum, bank) => sum + (bank.balance || 0), 0),
+        totalBankBalance,
         totalBankOpening: banks.reduce((sum, bank) => sum + (bank.openingBalance || 0), 0),
         totalBankReceipts: banks.reduce((sum, bank) => sum + (bank.totalReceipts || 0), 0),
         totalBankPayments: banks.reduce((sum, bank) => sum + (bank.totalPayments || 0), 0),
+        totalSales,
+        combinedBalance: totalBankBalance + cash.balance
       };
 
       return {
         banks,
         cash,
         totals,
+        totalSales,
         receiptSummary: {
           totalBankReceipts: totals.totalBankReceipts,
           totalCashReceipts: cash.totalReceipts,
