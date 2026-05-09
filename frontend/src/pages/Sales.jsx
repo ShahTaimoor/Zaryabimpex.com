@@ -86,8 +86,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useResponsive, ResponsiveGrid } from '../components/ResponsiveContainer';
-import RecommendationSection from '../components/RecommendationSection';
-import useBehaviorTracking from '../hooks/useBehaviorTracking';
 import { useTab } from '../contexts/TabContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
@@ -187,7 +185,6 @@ export const Sales = ({ tabId, editData }) => {
   // Calculate default date range (one month ago to today)
 
   const { isMobile, isTablet } = useResponsive();
-  const { trackAddToCart, trackProductView, trackPageView } = useBehaviorTracking();
   const { activeTabId, updateTabTitle, getActiveTab } = useTab();
   const { hasPermission, user } = useAuth();
   const { getPartyPermissions } = useSensitiveDataPermissions();
@@ -2993,29 +2990,6 @@ export const Sales = ({ tabId, editData }) => {
                 {/* Action Buttons */}
               </OrderSummaryContent>
             </OrderCheckoutCard>
-          </div>
-        )}
-
-        {/* Recommendations Section */}
-        {cart.length > 0 && (
-          <div className="mt-4 w-full min-w-0">
-            <RecommendationSection
-              title="Customers Also Bought"
-              algorithm="frequently_bought"
-              context={{
-                page: 'sales',
-                currentProduct: cart[0]?.product?._id ?? cart[0]?.product?.id,
-                currentProducts: cart.map((item) => item?.product?._id ?? item?.product?.id).filter(Boolean),
-                customerTier: selectedCustomer?.customerTier,
-                businessType: selectedCustomer?.businessType,
-                limit: 4,
-              }}
-              limit={4}
-              onAddToCart={addToCart}
-              onViewProduct={(product) => {
-                trackProductView(product);
-              }}
-            />
           </div>
         )}
 
