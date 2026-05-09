@@ -1388,7 +1388,7 @@ export const Settings2 = () => {
     setConfirmPassword('');
   };
 
-  const handleUpdateRolePermissions = (role) => {
+  const handleUpdateRolePermissions = async (role) => {
     if (!rolePermissionsChanged[role]) {
       toast.error('No permission changes detected for this role');
       return;
@@ -1398,12 +1398,19 @@ export const Settings2 = () => {
       `Are you sure you want to update permissions for ALL users with "${role}" role? This will override their current permissions.`
     );
 
-    if (confirmed) {
-      // Get the current permissions for this role
-      const currentPermissions = newUserData.permissions;
-      const permissionKeys = Object.keys(currentPermissions);
+    if (!confirmed) return;
 
-      handleUpdateRolePermissions(role, permissionKeys.filter(key => currentPermissions[key]));
+    const currentPermissions = newUserData.permissions;
+    const permissionKeys = Object.keys(currentPermissions);
+    const permissions = permissionKeys.filter(key => currentPermissions[key]);
+
+    try {
+      const result = await updateRolePermissions({ role, permissions }).unwrap();
+      toast.success(result?.message || `Permissions updated for all users with the "${role}" role.`);
+      setRolePermissionsChanged(prev => ({ ...prev, [role]: false }));
+      refetchUsers();
+    } catch (error) {
+      handleApiError(error, 'Push Role Permissions');
     }
   };
 
