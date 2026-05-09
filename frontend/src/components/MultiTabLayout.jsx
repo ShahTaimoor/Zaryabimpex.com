@@ -115,8 +115,8 @@ export const navigation = withRouteAccess([
     permission: 'view_sales',
     children: [
       { name: 'Sales Orders', href: '/sales-orders', icon: FileText, permission: 'view_sales_orders' },
-      { name: 'Sales', href: '/sales', icon: CreditCard, permission: 'manage_sales' },
-      { name: 'Sale Returns', href: '/sale-returns', icon: RotateCcw, permission: 'view_returns' },
+      { name: 'Sales', href: '/sales', icon: CreditCard, permission: 'view_sales' },
+      { name: 'Sale Returns', href: '/sale-returns', icon: RotateCcw, permission: 'view_sale_returns' },
     ]
   },
 
@@ -127,18 +127,18 @@ export const navigation = withRouteAccess([
     children: [
       { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText, permission: 'view_purchase_orders' },
       { name: 'Purchase', href: '/purchase', icon: Truck, permission: 'view_purchase_orders' },
-      { name: 'Import Purchase', href: '/import-purchase', icon: Truck, permission: 'view_purchase_orders' },
-      { name: 'Current Purchase Market Prices', href: '/market-prices', icon: Tag, permissionAny: ['view_market_prices', 'manage_market_prices', 'import_market_prices'] },
-      { name: 'Purchase Returns', href: '/purchase-returns', icon: RotateCcw, permission: 'view_returns' },
+      { name: 'Import Purchase', href: '/import-purchase', icon: Truck, permission: 'view_import_purchase' },
+      { name: 'Current Purchase Market Prices', href: '/market-prices', icon: Tag, permissionAny: ['view_market_prices', 'create_market_prices', 'edit_market_prices', 'delete_market_prices', 'manage_market_prices', 'import_market_prices'] },
+      { name: 'Purchase Returns', href: '/purchase-returns', icon: RotateCcw, permission: 'view_purchase_returns' },
     ]
   },
 
   {
     name: 'Financials',
     icon: Wallet,
-    permission: 'view_reports',
+    permissionAny: ['view_cash_receiving', 'view_cash_receipts', 'view_cash_payments', 'view_bank_receipts', 'view_bank_payments', 'view_expenses'],
     children: [
-      { name: 'Cash Receiving', href: '/cash-receiving', icon: Receipt, permission: 'view_accounting' },
+      { name: 'Cash Receiving', href: '/cash-receiving', icon: Receipt, permission: 'view_cash_receiving' },
       { name: 'Cash Receipts', href: '/cash-receipts', icon: Receipt, permission: 'view_cash_receipts' },
       { name: 'Cash Payments', href: '/cash-payments', icon: CreditCard, permission: 'view_cash_payments' },
       { name: 'Bank Receipts', href: '/bank-receipts', icon: Building, permission: 'view_bank_receipts' },
@@ -152,18 +152,18 @@ export const navigation = withRouteAccess([
     icon: DatabaseIcon,
     children: [
       { name: 'Products', href: '/products', icon: Package, permission: 'view_products' },
-      { name: 'Product Variants', href: '/product-variants', icon: Tag, permission: 'view_products' },
-      { name: 'Product Transformations', href: '/product-transformations', icon: ArrowRight, permission: 'update_inventory' },
-      { name: 'Categories', href: '/categories', icon: Tag, permission: 'view_products' },
+      { name: 'Product Variants', href: '/product-variants', icon: Tag, permission: 'view_product_variants' },
+      { name: 'Product Transformations', href: '/product-transformations', icon: ArrowRight, permission: 'view_product_transformations' },
+      { name: 'Categories', href: '/categories', icon: Tag, permission: 'view_product_categories' },
       { name: 'Customers', href: '/customers', icon: Users, permission: 'view_customers' },
       { name: 'Customer Analytics', href: '/customer-analytics', icon: BarChart3, permission: 'view_customer_analytics' },
       { name: 'Suppliers', href: '/suppliers', icon: Building, permission: 'view_suppliers' },
-      { name: 'Bank & cash opening', href: '/banks', icon: Building2, permission: 'manage_settings' },
+      { name: 'Bank & cash opening', href: '/banks', icon: Building2, permission: 'view_banks' },
       { name: 'Investors', href: '/investors', icon: TrendingUp, permission: 'view_investors' },
-      { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight, permission: 'create_drop_shipping' },
-      { name: 'Cities', href: '/cities', icon: MapPin, permission: 'manage_users' },
+      { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight, permission: 'view_drop_shipping' },
+      { name: 'Cities', href: '/cities', icon: MapPin, permission: 'view_cities' },
       { name: 'Discounts', href: '/discounts', icon: Tag, permission: 'view_discounts' },
-      { name: 'CCTV Access', href: '/cctv-access', icon: Camera, permission: 'view_sales_invoices', allowMultiple: true },
+      { name: 'CCTV Access', href: '/cctv-access', icon: Camera, permission: 'view_cctv_access', allowMultiple: true },
     ]
   },
 
@@ -174,19 +174,19 @@ export const navigation = withRouteAccess([
     children: [
       { name: 'Inventory', href: '/inventory', icon: Warehouse, permission: 'view_inventory' },
       { name: 'Inventory Alerts', href: '/inventory-alerts', icon: AlertTriangle, permission: 'view_inventory', allowMultiple: true },
-      { name: 'Warehouses', href: '/warehouses', icon: Warehouse, permission: 'view_inventory' },
+      { name: 'Warehouses', href: '/warehouses', icon: Warehouse, permission: 'view_warehouses' },
       { name: 'Stock Movements', href: '/stock-movements', icon: ArrowUpDown, permission: 'view_stock_movements' },
-      { name: 'Stock Ledger', href: '/stock-ledger', icon: FileText, permission: 'view_reports' },
+      { name: 'Stock Ledger', href: '/stock-ledger', icon: FileText, permission: 'view_inventory_levels' },
     ]
   },
 
   {
     name: 'Accounting',
     icon: ClipboardList,
-    permission: 'view_chart_of_accounts',
+    permissionAny: ['view_chart_of_accounts', 'view_journal_vouchers', 'view_accounting_summary'],
     children: [
       { name: 'Chart of Accounts', href: '/chart-of-accounts', icon: FolderTree, permission: 'view_chart_of_accounts' },
-      { name: 'Journal Vouchers', href: '/journal-vouchers', icon: FileText, permission: 'view_accounting_transactions', allowMultiple: true },
+      { name: 'Journal Vouchers', href: '/journal-vouchers', icon: FileText, permission: 'view_journal_vouchers', allowMultiple: true },
       { name: 'Account Ledger Summary', href: '/account-ledger', icon: FileText, permission: 'view_accounting_summary', allowMultiple: true },
     ]
   },
@@ -563,7 +563,15 @@ export const MultiTabLayout = ({ children }) => {
 
         if (firstVisiblePage && firstVisiblePage.href !== currentPath) {
           navigate(firstVisiblePage.href);
-          toast.error(`"${currentNavItem.name}" is hidden. Redirecting to ${firstVisiblePage.name}.`, { id: 'nav-redirect' });
+          // Only surface a toast when the redirect is caused by a permission
+          // denial. Sidebar visibility is a deliberate user preference, so we
+          // redirect silently in that case.
+          if (!isPermitted) {
+            toast.error(
+              `You don't have access to "${currentNavItem.name}". Redirecting to ${firstVisiblePage.name}.`,
+              { id: 'nav-redirect' }
+            );
+          }
         }
       }
     }

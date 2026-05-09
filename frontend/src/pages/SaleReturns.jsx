@@ -42,8 +42,12 @@ import { useGetBanksQuery } from '../store/services/banksApi';
 import { ProductSelectionCartSection } from '../components/order/ProductSelectionCartSection';
 import { CartItemsTableSection } from '../components/order/CartItemsTableSection';
 import { ProductSearch } from '../components/sales/ProductSearch';
+import { useAuth } from '../contexts/AuthContext';
 
 const SaleReturns = () => {
+  const { hasPermission } = useAuth();
+  const canViewCustomerBalance = hasPermission('view_customer_balance');
+  const canViewCustomerPhone = hasPermission('view_customer_phone');
   const today = getCurrentDatePakistan();
   const [step, setStep] = useState('customer'); // used for API skip optimization
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -786,7 +790,7 @@ const SaleReturns = () => {
                   return (
                     <div>
                       <div className="font-medium">{name}</div>
-                      {customer.phone && (
+                      {canViewCustomerPhone && customer.phone && (
                         <div className="text-xs text-gray-500">Phone: {customer.phone}</div>
                       )}
                     </div>
@@ -798,7 +802,7 @@ const SaleReturns = () => {
           </div>
 
           <div className="lg:w-auto w-full lg:max-w-md lg:self-end">
-            {selectedCustomer ? (
+            {selectedCustomer && canViewCustomerBalance ? (
               <div className="bg-gray-50 border border-gray-200 rounded-xl h-8 px-2 flex items-center">
                 {(() => {
                   const rawBalance = selectedCustomer.currentBalance !== undefined && selectedCustomer.currentBalance !== null

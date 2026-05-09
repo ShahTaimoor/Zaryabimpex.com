@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { LoadingButton } from '@/components/LoadingSpinner';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import BaseModal from '@/components/BaseModal';
+import { useAuth } from '@/contexts/AuthContext';
 import { compressImageFileToDataUrl } from '@/utils/imageCompress';
 
 /** Max rows shown in dropdown (server search caps higher; we slice in hook). */
@@ -37,6 +38,9 @@ function ProductSearchComponent({
   loadingOverride = null,
   emptyMessageOverride = null,
 }) {
+  const { hasPermission } = useAuth();
+  const canViewStock = hasPermission('view_stock_levels');
+
   const formatDisplayNumber = (value) => {
     const num = Number(value);
     if (!Number.isFinite(num)) return '0';
@@ -611,9 +615,11 @@ function ProductSearchComponent({
           </div>
         </div>
         <div className="flex items-center space-x-4">
-          <div className={`text-sm ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-orange-600' : 'text-gray-600'}`}>
-            Stock: {inventory.currentStock || 0}
-          </div>
+          {canViewStock && (
+            <div className={`text-sm ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-orange-600' : 'text-gray-600'}`}>
+              Stock: {inventory.currentStock || 0}
+            </div>
+          )}
           {showCostPrice && hasCostPricePermission && (purchasePrice !== undefined && purchasePrice !== null) && (
             <div className="text-sm text-red-600 font-medium">Cost: {Math.round(purchasePrice)}</div>
           )}
@@ -770,7 +776,7 @@ function ProductSearchComponent({
           {/* Fields Grid - 2 columns on mobile */}
           <div className="grid grid-cols-2 gap-3">
             {/* Stock */}
-            {!isManualMode && (
+            {!isManualMode && canViewStock && (
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Stock

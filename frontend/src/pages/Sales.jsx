@@ -1700,12 +1700,12 @@ export const Sales = ({ tabId, editData }) => {
                       : (Number(customer?.pendingBalance ?? 0) - Number(customer?.advanceBalance ?? 0));
                     const hasBalance = totalBalance !== 0 && !Number.isNaN(totalBalance);
                     const isPayable = totalBalance < 0;
-                    const isReceivable = totalBalance > 0;
+                    const showBalance = hasPermission(PERMISSIONS.VIEW_CUSTOMER_BALANCE);
 
                     return (
                       <div>
                         <div className="font-medium">{name}</div>
-                        {hasBalance ? (
+                        {showBalance && hasBalance ? (
                           <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
                             Total Balance: {isPayable ? '-' : '+'}{Math.abs(totalBalance).toFixed(2)}
                           </div>
@@ -1721,7 +1721,7 @@ export const Sales = ({ tabId, editData }) => {
 
             {/* Customer Information - Right Side */}
             <div className="lg:w-auto w-full lg:max-w-md lg:self-end">
-              {selectedCustomer ? (() => {
+              {selectedCustomer && hasPermission(PERMISSIONS.VIEW_CUSTOMER_BALANCE) ? (() => {
                 const balanceSource = selectedCustomer ?? customerWithBalance;
                 const creditLimitNum = Math.max(0, Number(selectedCustomer?.creditLimit ?? selectedCustomer?.credit_limit ?? balanceSource?.creditLimit ?? balanceSource?.credit_limit ?? 0) || 0);
                 const availableCreditNum = Math.max(0, creditLimitNum - currentBalanceNum);
@@ -1804,7 +1804,7 @@ export const Sales = ({ tabId, editData }) => {
                       )}
                     </Button>
                   )}
-                  {hasPermission(PERMISSIONS.VIEW_FINANCIAL_DATA) && (
+                  {hasPermission(PERMISSIONS.VIEW_BP) && (
                     <>
                       <Button
                         type="button"
@@ -1829,7 +1829,7 @@ export const Sales = ({ tabId, editData }) => {
                   )}
                 </div>
               </div>
-              {selectedCustomer && cart.length > 0 && (
+              {hasPermission(PERMISSIONS.APPLY_LAST_PRICES) && selectedCustomer && cart.length > 0 && (
                 <>
                   {!isLastPricesApplied ? (
                     <LoadingButton
@@ -3193,17 +3193,21 @@ export const Sales = ({ tabId, editData }) => {
                                 </button>
                                 <ExcelExportButton
                                   getData={async () => {
+                                    const printPerms = {
+                                      canViewBalance: hasPermission(PERMISSIONS.VIEW_CUSTOMER_BALANCE),
+                                      canViewPhone: hasPermission(PERMISSIONS.VIEW_CUSTOMER_PHONE)
+                                    };
                                     try {
                                       const result = await fetchOrderById(invoice?._id || invoice?.id).unwrap();
                                       const freshOrder = result?.order || result?.data?.order || result || invoice;
-                                      const payload = getInvoicePdfPayload(freshOrder, companySettings, 'Sales Invoice', 'Customer');
+                                      const payload = getInvoicePdfPayload(freshOrder, companySettings, 'Sales Invoice', 'Customer', null, printPerms);
                                       return {
                                         ...payload,
                                         filename: `Sales_Invoice_${invoiceNumber}.xlsx`,
                                       };
                                     } catch (err) {
                                       return {
-                                        ...getInvoicePdfPayload(invoice, companySettings, 'Sales Invoice', 'Customer'),
+                                        ...getInvoicePdfPayload(invoice, companySettings, 'Sales Invoice', 'Customer', null, printPerms),
                                         filename: `Sales_Invoice_${invoiceNumber}.xlsx`,
                                       };
                                     }
@@ -3213,12 +3217,16 @@ export const Sales = ({ tabId, editData }) => {
                                 />
                                 <PdfExportButton
                                   getData={async () => {
+                                    const printPerms = {
+                                      canViewBalance: hasPermission(PERMISSIONS.VIEW_CUSTOMER_BALANCE),
+                                      canViewPhone: hasPermission(PERMISSIONS.VIEW_CUSTOMER_PHONE)
+                                    };
                                     try {
                                       const result = await fetchOrderById(invoice?._id || invoice?.id).unwrap();
                                       const freshOrder = result?.order || result?.data?.order || result || invoice;
-                                      return getInvoicePdfPayload(freshOrder, companySettings, 'Sales Invoice', 'Customer');
+                                      return getInvoicePdfPayload(freshOrder, companySettings, 'Sales Invoice', 'Customer', null, printPerms);
                                     } catch (err) {
-                                      return getInvoicePdfPayload(invoice, companySettings, 'Sales Invoice', 'Customer');
+                                      return getInvoicePdfPayload(invoice, companySettings, 'Sales Invoice', 'Customer', null, printPerms);
                                     }
                                   }}
                                   label=""

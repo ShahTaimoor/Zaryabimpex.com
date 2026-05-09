@@ -1,6 +1,7 @@
 import React from 'react';
 import { Users, Building, User, Edit, Trash2, MessageSquare } from 'lucide-react';
 import { getContactPersonVisible } from '../utils/fieldVisibility';
+import { useAuth } from '../contexts/AuthContext';
 
 export const CustomerList = ({
   customers,
@@ -9,6 +10,9 @@ export const CustomerList = ({
   onDelete,
   onShowNotes
 }) => {
+  const { hasPermission } = useAuth();
+  const canViewCustomerBalance = hasPermission('view_customer_balance');
+  const canViewCustomerPhone = hasPermission('view_customer_phone');
   const [visibilitySettings, setVisibilitySettings] = React.useState({
     contactPerson: getContactPersonVisible(false),
     customerTier: localStorage.getItem('showCustomerSetting_customerTier') === 'true',
@@ -124,10 +128,12 @@ export const CustomerList = ({
 
                 <div className="grid grid-cols-2 gap-3 text-xs">
 
-                  <div>
-                    <p className="text-gray-500 mb-1">Phone</p>
-                    <p className="text-gray-700">{customer.phone || '-'}</p>
-                  </div>
+                  {canViewCustomerPhone && (
+                    <div>
+                      <p className="text-gray-500 mb-1">Phone</p>
+                      <p className="text-gray-700">{customer.phone || '-'}</p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-gray-500 mb-1">Status</p>
                     <span className={`badge ${customer.status === 'active' ? 'badge-success' : 'badge-gray'
@@ -156,12 +162,14 @@ export const CustomerList = ({
                     <p className="text-gray-500 mb-1">Opening</p>
                     <p className="text-gray-700">{Math.round(customer.openingBalance || customer.opening_balance || 0)}</p>
                   </div>
-                  <div>
-                    <p className="text-gray-500 mb-1">Balance</p>
-                    <p className={`font-semibold ${customer.currentBalance > 0 ? 'text-red-600' : customer.currentBalance < 0 ? 'text-green-600' : 'text-gray-700'}`}>
-                      {Math.round(customer.currentBalance || 0)}
-                    </p>
-                  </div>
+                  {canViewCustomerBalance && (
+                    <div>
+                      <p className="text-gray-500 mb-1">Balance</p>
+                      <p className={`font-semibold ${customer.currentBalance > 0 ? 'text-red-600' : customer.currentBalance < 0 ? 'text-green-600' : 'text-gray-700'}`}>
+                        {Math.round(customer.currentBalance || 0)}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -190,7 +198,7 @@ export const CustomerList = ({
                 </div>
 
                 <div className="col-span-1">
-                  <p className="text-xs lg:text-sm text-gray-600">{customer.phone || '-'}</p>
+                  <p className="text-xs lg:text-sm text-gray-600">{canViewCustomerPhone ? (customer.phone || '-') : '—'}</p>
                 </div>
 
                 <div className="col-span-1">
@@ -222,9 +230,13 @@ export const CustomerList = ({
                 </div>
 
                 <div className="col-span-1">
-                  <p className={`text-xs lg:text-sm font-semibold ${customer.currentBalance > 0 ? 'text-red-600' : customer.currentBalance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
-                    {Math.round(customer.currentBalance || 0)}
-                  </p>
+                  {canViewCustomerBalance ? (
+                    <p className={`text-xs lg:text-sm font-semibold ${customer.currentBalance > 0 ? 'text-red-600' : customer.currentBalance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                      {Math.round(customer.currentBalance || 0)}
+                    </p>
+                  ) : (
+                    <p className="text-xs lg:text-sm text-gray-300">—</p>
+                  )}
                 </div>
 
                 <div className="col-span-1 flex justify-end">

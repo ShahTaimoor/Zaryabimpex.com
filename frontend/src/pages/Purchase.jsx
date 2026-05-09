@@ -82,6 +82,7 @@ import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import AsyncErrorBoundary from '../components/AsyncErrorBoundary';
 import { useResponsive } from '../components/ResponsiveContainer';
 import { ProductSearch as SharedSalesProductSearch } from '../components/sales/ProductSearch';
+import { useAuth } from '../contexts/AuthContext';
 
 const PurchaseItem = ({
   item,
@@ -429,6 +430,10 @@ const IMPORT_ALLOCATION_METHODS = {
 };
 
 export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
+  const { hasPermission } = useAuth();
+  const canViewSupplierBalance = hasPermission('view_supplier_balance');
+  const canViewSupplierPhone = hasPermission('view_supplier_phone');
+  const canViewStock = hasPermission('view_stock_levels');
   const isImportPurchase = purchaseMode === 'import';
   const [purchaseItems, setPurchaseItems] = useState([]);
   const purchaseCartScrollRef = useRef(null);
@@ -779,9 +784,11 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
         {supplier.name && supplier.name !== (supplier.companyName || supplier.company_name || supplier.businessName || supplier.displayName) && (
           <div className="text-xs text-gray-500">{supplier.name}</div>
         )}
-        <div className="text-sm text-gray-600">
-          Outstanding Balance: {(Number(supplier.pendingBalance ?? supplier.outstandingBalance ?? 0) || 0).toFixed(2)}
-        </div>
+        {canViewSupplierBalance && (
+          <div className="text-sm text-gray-600">
+            Outstanding Balance: {(Number(supplier.pendingBalance ?? supplier.outstandingBalance ?? 0) || 0).toFixed(2)}
+          </div>
+        )}
       </div>
     );
   };
@@ -1535,12 +1542,16 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                       <span className="text-gray-600 capitalize">
                         {selectedSupplier.businessType || 'Wholesaler'}
                       </span>
-                      <span className="text-gray-400">|</span>
-                      <span className="text-gray-500 uppercase font-semibold">Outstanding</span>
-                      <span className={`font-bold ${supplierOutstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {Math.round(supplierOutstanding)}
-                      </span>
-                      {selectedSupplier.phone && (
+                      {canViewSupplierBalance && (
+                        <>
+                          <span className="text-gray-400">|</span>
+                          <span className="text-gray-500 uppercase font-semibold">Outstanding</span>
+                          <span className={`font-bold ${supplierOutstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {Math.round(supplierOutstanding)}
+                          </span>
+                        </>
+                      )}
+                      {canViewSupplierPhone && selectedSupplier.phone && (
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400">|</span>
                           <Phone className="h-3 w-3 text-gray-400 flex-shrink-0" />
@@ -2403,13 +2414,14 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                                 </button>
                                 <ExcelExportButton
                                   getData={async () => {
+                                    const printPerms = { canViewBalance: canViewSupplierBalance, canViewPhone: canViewSupplierPhone };
                                     try {
                                       const result = await getPurchaseInvoiceById(invoice?._id || invoice?.id).unwrap();
                                       const freshInvoice = result?.invoice || result?.data?.invoice || result?.data || result || invoice;
-                                      const payload = getInvoicePdfPayload(freshInvoice, companySettings, 'Purchase Invoice', 'Supplier');
+                                      const payload = getInvoicePdfPayload(freshInvoice, companySettings, 'Purchase Invoice', 'Supplier', null, printPerms);
                                       return { ...payload, filename: `Purchase_Invoice_${invoiceNumber}.xlsx` };
                                     } catch {
-                                      return { ...getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier'), filename: `Purchase_Invoice_${invoiceNumber}.xlsx` };
+                                      return { ...getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier', null, printPerms), filename: `Purchase_Invoice_${invoiceNumber}.xlsx` };
                                     }
                                   }}
                                   label=""
@@ -2417,12 +2429,13 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                                 />
                                 <PdfExportButton
                                   getData={async () => {
+                                    const printPerms = { canViewBalance: canViewSupplierBalance, canViewPhone: canViewSupplierPhone };
                                     try {
                                       const result = await getPurchaseInvoiceById(invoice?._id || invoice?.id).unwrap();
                                       const freshInvoice = result?.invoice || result?.data?.invoice || result?.data || result || invoice;
-                                      return getInvoicePdfPayload(freshInvoice, companySettings, 'Purchase Invoice', 'Supplier');
+                                      return getInvoicePdfPayload(freshInvoice, companySettings, 'Purchase Invoice', 'Supplier', null, printPerms);
                                     } catch {
-                                      return getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier');
+                                      return getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier', null, printPerms);
                                     }
                                   }}
                                   label=""

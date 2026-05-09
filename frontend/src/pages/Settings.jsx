@@ -29,7 +29,18 @@ import {
   UserPlus,
   ChevronUp,
   ChevronDown,
-  Package
+  Package,
+  ShoppingCart,
+  Truck,
+  Warehouse,
+  Wallet,
+  ClipboardList,
+  Settings as SettingsIcon,
+  Camera,
+  RotateCcw,
+  Tag,
+  Database,
+  Receipt
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -82,6 +93,9 @@ export const Settings2 = () => {
 
   // Active tab state
   const [activeTab, setActiveTab] = useState('company');
+
+  // Active permission group (sub-tab inside the User tab's permissions matrix)
+  const [activePermissionGroup, setActivePermissionGroup] = useState('dashboard');
 
   // Company Information State
   const [companyData, setCompanyData] = useState({
@@ -542,9 +556,152 @@ export const Settings2 = () => {
     }
   };
 
+  // Page-based permission groups (used to render the multi-tab Permissions Matrix below)
+  // Each group corresponds to a top-level sidebar section. Each page maps optional
+  // CRUD actions to backend permission keys. Pages with only `view` (e.g., Dashboard,
+  // analytics screens) render a single View checkbox; others render the full grid.
+  const pagePermissionGroups = {
+    dashboard: {
+      name: 'Dashboard',
+      icon: LayoutDashboard,
+      pages: [
+        { key: 'dashboard', name: 'Dashboard', view: 'view_dashboard' }
+      ]
+    },
+    sales: {
+      name: 'Sales',
+      icon: ShoppingCart,
+      pages: [
+        { key: 'sales-orders', name: 'Sales Orders', view: 'view_sales_orders', create: 'create_sales_orders', edit: 'edit_sales_orders', delete: 'delete_sales_orders' },
+        { key: 'sales', name: 'Sales', view: 'view_sales', create: 'create_sales_invoices', edit: 'edit_sales_invoices', delete: 'void_sales_invoices' },
+        { key: 'sale-returns', name: 'Sale Returns', view: 'view_sale_returns', create: 'create_sale_returns', edit: 'edit_sale_returns', delete: 'delete_sale_returns' }
+      ]
+    },
+    advanced: {
+      name: 'Advanced',
+      icon: Shield,
+      pages: [],
+      extraPermissions: [
+        { key: 'view_product_costs', name: 'Show Cost Price' },
+        { key: 'view_bp', name: 'Show BP' },
+        { key: 'apply_last_prices', name: 'Apply Last Price' },
+        { key: 'view_customer_balance', name: 'Show Customer Balance' },
+        { key: 'view_supplier_balance', name: 'Show Supplier Balance' },
+        { key: 'view_stock_levels', name: 'Show Stock' },
+        { key: 'view_customer_phone', name: 'Show Customer Phone' },
+        { key: 'view_supplier_phone', name: 'Show Supplier Phone' }
+      ]
+    },
+    purchase: {
+      name: 'Purchase',
+      icon: Truck,
+      pages: [
+        { key: 'purchase-orders', name: 'Purchase Orders', view: 'view_purchase_orders', create: 'create_purchase_orders', edit: 'edit_purchase_orders', delete: 'delete_purchase_orders' },
+        { key: 'purchase', name: 'Purchase', view: 'view_purchase_invoices', create: 'create_purchase_invoices', edit: 'edit_purchase_invoices', delete: 'delete_purchase_invoices' },
+        { key: 'import-purchase', name: 'Import Purchase', view: 'view_import_purchase', create: 'create_import_purchase', edit: 'edit_import_purchase', delete: 'delete_import_purchase' },
+        { key: 'purchase-returns', name: 'Purchase Returns', view: 'view_purchase_returns', create: 'create_purchase_returns', edit: 'edit_purchase_returns', delete: 'delete_purchase_returns' },
+        { key: 'market-prices', name: 'Market Prices', view: 'view_market_prices', create: 'create_market_prices', edit: 'edit_market_prices', delete: 'delete_market_prices' }
+      ]
+    },
+    masterData: {
+      name: 'Master Data',
+      icon: Database,
+      pages: [
+        { key: 'products', name: 'Products', view: 'view_products', create: 'create_products', edit: 'edit_products', delete: 'delete_products' },
+        { key: 'product-variants', name: 'Product Variants', view: 'view_product_variants', create: 'create_product_variants', edit: 'edit_product_variants', delete: 'delete_product_variants' },
+        { key: 'product-transformations', name: 'Product Transformations', view: 'view_product_transformations', create: 'create_product_transformations', edit: 'edit_product_transformations', delete: 'delete_product_transformations' },
+        { key: 'categories', name: 'Categories', view: 'view_product_categories', create: 'create_categories', edit: 'edit_categories', delete: 'delete_categories' },
+        { key: 'customers', name: 'Customers', view: 'view_customers', create: 'create_customers', edit: 'edit_customers', delete: 'delete_customers' },
+        { key: 'suppliers', name: 'Suppliers', view: 'view_suppliers', create: 'create_suppliers', edit: 'edit_suppliers', delete: 'delete_suppliers' },
+        { key: 'discounts', name: 'Discounts', view: 'view_discounts', create: 'create_discounts', edit: 'edit_discounts', delete: 'delete_discounts' },
+        { key: 'investors', name: 'Investors', view: 'view_investors', create: 'create_investors', edit: 'edit_investors', delete: 'delete_investors' },
+        { key: 'drop-shipping', name: 'Drop Shipping', view: 'view_drop_shipping', create: 'create_drop_shipping', edit: 'edit_drop_shipping', delete: 'delete_drop_shipping' },
+        { key: 'cities', name: 'Cities', view: 'view_cities', create: 'create_cities', edit: 'edit_cities', delete: 'delete_cities' },
+        { key: 'banks', name: 'Bank & Cash Opening', view: 'view_banks', create: 'create_banks', edit: 'edit_banks', delete: 'delete_banks' },
+        { key: 'cctv-access', name: 'CCTV Access', view: 'view_cctv_access' }
+      ]
+    },
+    inventory: {
+      name: 'Inventory',
+      icon: Warehouse,
+      pages: [
+        { key: 'inventory', name: 'Inventory', view: 'view_inventory', create: 'create_inventory', edit: 'edit_inventory', delete: 'delete_inventory' },
+        { key: 'warehouses', name: 'Warehouses', view: 'view_warehouses', create: 'create_warehouses', edit: 'edit_warehouses', delete: 'delete_warehouses' },
+        { key: 'stock-movements', name: 'Stock Movements', view: 'view_stock_movements' },
+        { key: 'stock-ledger', name: 'Stock Ledger', view: 'view_inventory_levels' },
+        { key: 'inventory-alerts', name: 'Inventory Alerts', view: 'view_low_stock_alerts' }
+      ]
+    },
+    financials: {
+      name: 'Financials',
+      icon: Wallet,
+      pages: [
+        { key: 'cash-receiving', name: 'Cash Receiving', view: 'view_cash_receiving', create: 'create_cash_receiving', edit: 'edit_cash_receiving', delete: 'delete_cash_receiving' },
+        { key: 'cash-receipts', name: 'Cash Receipts', view: 'view_cash_receipts', create: 'create_cash_receipts', edit: 'edit_cash_receipts', delete: 'delete_cash_receipts' },
+        { key: 'cash-payments', name: 'Cash Payments', view: 'view_cash_payments', create: 'create_cash_payments', edit: 'edit_cash_payments', delete: 'delete_cash_payments' },
+        { key: 'bank-receipts', name: 'Bank Receipts', view: 'view_bank_receipts', create: 'create_bank_receipts', edit: 'edit_bank_receipts', delete: 'delete_bank_receipts' },
+        { key: 'bank-payments', name: 'Bank Payments', view: 'view_bank_payments', create: 'create_bank_payments', edit: 'edit_bank_payments', delete: 'delete_bank_payments' },
+        { key: 'expenses', name: 'Expenses', view: 'view_expenses', create: 'create_expenses', edit: 'edit_expenses', delete: 'delete_expenses' }
+      ]
+    },
+    accounting: {
+      name: 'Accounting',
+      icon: ClipboardList,
+      pages: [
+        { key: 'chart-of-accounts', name: 'Chart of Accounts', view: 'view_chart_of_accounts', create: 'create_chart_of_accounts', edit: 'edit_chart_of_accounts', delete: 'delete_chart_of_accounts' },
+        { key: 'journal-vouchers', name: 'Journal Vouchers', view: 'view_journal_vouchers', create: 'create_journal_vouchers', edit: 'edit_journal_vouchers', delete: 'delete_journal_vouchers' },
+        { key: 'account-ledger', name: 'Account Ledger Summary', view: 'view_accounting_summary' }
+      ]
+    },
+    analytics: {
+      name: 'Analytics',
+      icon: BarChart3,
+      pages: [
+        { key: 'pl-statements', name: 'P&L Statements', view: 'view_pl_statements' },
+        { key: 'balance-sheet', name: 'Balance Sheet', view: 'view_balance_sheets' },
+        { key: 'sales-performance', name: 'Sales Performance', view: 'view_sales_performance' },
+        { key: 'inventory-reports', name: 'Inventory Reports', view: 'view_inventory_reports' },
+        { key: 'reports', name: 'Reports', view: 'view_general_reports' },
+        { key: 'backdate-report', name: 'Backdate Report', view: 'view_backdate_report' },
+        { key: 'customer-analytics', name: 'Customer Analytics', view: 'view_customer_analytics' },
+        { key: 'anomaly-detection', name: 'Anomaly Detection', view: 'view_anomaly_detection' }
+      ]
+    },
+    hr: {
+      name: 'HR / Admin',
+      icon: Users,
+      pages: [
+        { key: 'employees', name: 'Employees', view: 'manage_users', create: 'create_users', edit: 'edit_users', delete: 'delete_users' },
+        { key: 'attendance', name: 'Attendance', view: 'view_own_attendance', create: 'clock_in', edit: 'manage_attendance_breaks', delete: 'delete_attendance' }
+      ]
+    },
+    system: {
+      name: 'System',
+      icon: SettingsIcon,
+      pages: [
+        { key: 'settings', name: 'Settings', view: 'view_settings', edit: 'edit_settings' },
+        { key: 'migration', name: 'Migration', view: 'view_migration', create: 'run_migration' },
+        { key: 'help', name: 'Help', view: 'view_help' }
+      ]
+    }
+  };
+
+  const allPagePermissionDefaults = Object.values(pagePermissionGroups).reduce((acc, group) => {
+    group.pages.forEach((page) => {
+      ['view', 'create', 'edit', 'delete'].forEach((action) => {
+        if (page[action]) acc[page[action]] = true;
+      });
+    });
+    (group.extraPermissions || []).forEach((permission) => {
+      acc[permission.key] = true;
+    });
+    return acc;
+  }, {});
+
   // Default role permissions (using correct backend permission names)
   const defaultRolePermissions = {
     admin: {
+      ...allPagePermissionDefaults,
       // Products
       view_products: true, create_products: true, edit_products: true, delete_products: true,
       view_product_list: true, view_product_details: true, view_product_categories: true, view_product_inventory: true,
@@ -557,7 +714,10 @@ export const Settings2 = () => {
       // Orders
       view_orders: true, create_orders: true, edit_orders: true, cancel_orders: true,
       view_sales_orders: true, view_purchase_orders: true, view_sales_invoices: true, view_purchase_invoices: true,
-      view_product_costs: true, manage_sales: true,
+      view_product_costs: true, view_bp: true, apply_last_prices: true, manage_sales: true,
+      // Advanced (sensitive globals)
+      view_customer_balance: true, view_supplier_balance: true, view_stock_levels: true,
+      view_customer_phone: true, view_supplier_phone: true,
       // Inventory
       view_inventory: true, update_inventory: true, manage_inventory: true,
       view_inventory_levels: true, view_stock_movements: true, view_low_stock_alerts: true,
@@ -615,6 +775,9 @@ export const Settings2 = () => {
       // Products - Full access except delete
       view_products: true, create_products: true, edit_products: true,
       view_product_list: true, view_product_details: true, view_product_categories: true, view_product_inventory: true,
+      view_product_variants: true, create_product_variants: true, edit_product_variants: true,
+      view_product_transformations: true, create_product_transformations: true, edit_product_transformations: true,
+      create_categories: true, edit_categories: true,
       // Customers - Full access
       view_customers: true, create_customers: true, edit_customers: true, delete_customers: true,
       view_customer_list: true, view_customer_details: true, view_customer_history: true, view_customer_balance: true,
@@ -623,15 +786,21 @@ export const Settings2 = () => {
       view_supplier_list: true, view_supplier_details: true, view_supplier_orders: true, view_supplier_balance: true,
       // Orders - Full access
       view_orders: true, create_orders: true, edit_orders: true, cancel_orders: true,
-      view_sales_orders: true, view_purchase_orders: true, view_sales_invoices: true, view_purchase_invoices: true,
-      view_product_costs: true, manage_sales: true,
+      view_sales: true, view_sales_orders: true, view_purchase_orders: true, view_sales_invoices: true, view_purchase_invoices: true,
+      view_product_costs: true, view_bp: true, apply_last_prices: true, manage_sales: true,
+      // Advanced (sensitive globals)
+      view_customer_balance: true, view_supplier_balance: true, view_stock_levels: true,
+      view_customer_phone: true, view_supplier_phone: true,
       // Inventory - Full access
       view_inventory: true, update_inventory: true, manage_inventory: true,
-      view_inventory_levels: true, view_stock_movements: true, view_low_stock_alerts: true,
+      view_inventory_levels: true, view_stock_movements: true, view_low_stock_alerts: true, view_warehouses: true,
+      create_inventory: true, edit_inventory: true, create_warehouses: true, edit_warehouses: true,
       update_stock_quantities: true, create_stock_adjustments: true, process_receipts: true,
       // Returns - Full access
       view_returns: true, create_returns: true, edit_returns: true, approve_returns: true, process_returns: true,
       view_return_requests: true, view_return_history: true, view_return_reasons: true,
+      view_sale_returns: true, create_sale_returns: true, edit_sale_returns: true, delete_sale_returns: true,
+      view_purchase_returns: true, create_purchase_returns: true, edit_purchase_returns: true, delete_purchase_returns: true,
       // Discounts - Full access
       view_discounts: true, manage_discounts: true,
       view_discount_list: true, view_discount_rules: true, view_discount_history: true,
@@ -643,6 +812,7 @@ export const Settings2 = () => {
       view_customer_analytics: true, view_anomaly_detection: true, view_financial_data: true,
       share_reports: true, schedule_reports: true, view_advanced_analytics: true,
       // Financial Operations
+      view_cash_receiving: true, create_cash_receiving: true, edit_cash_receiving: true, delete_cash_receiving: true,
       view_cash_receipts: true, create_cash_receipts: true, edit_cash_receipts: true, delete_cash_receipts: true,
       view_cash_payments: true, create_cash_payments: true, edit_cash_payments: true, delete_cash_payments: true,
       view_bank_receipts: true, create_bank_receipts: true, edit_bank_receipts: true, delete_bank_receipts: true,
@@ -652,6 +822,8 @@ export const Settings2 = () => {
       create_purchase_orders: true, edit_purchase_orders: true, delete_purchase_orders: true,
       approve_purchase_orders: true, reject_purchase_orders: true, receive_purchase_orders: true,
       create_purchase_invoices: true, edit_purchase_invoices: true, delete_purchase_invoices: true,
+      view_import_purchase: true, create_import_purchase: true, edit_import_purchase: true, delete_import_purchase: true,
+      view_market_prices: true, create_market_prices: true, edit_market_prices: true,
       // Sales Operations - Granular
       create_sales_orders: true, edit_sales_orders: true, delete_sales_orders: true,
       approve_sales_orders: true, reject_sales_orders: true,
@@ -663,85 +835,141 @@ export const Settings2 = () => {
       // Accounting
       view_accounting_transactions: true, view_accounting_accounts: true, view_trial_balance: true,
       update_balance_sheet: true, view_chart_of_accounts: true, view_accounting_summary: true,
+      view_journal_vouchers: true, create_journal_vouchers: true, edit_journal_vouchers: true,
       // Attendance
       clock_attendance: true, clock_in: true, clock_out: true, manage_attendance_breaks: true,
       view_own_attendance: true, view_team_attendance: true,
       // Till Management
       open_till: true, close_till: true, view_till: true,
       // Investor Management
-      view_investors: true, manage_investors: true, create_investors: true, edit_investors: true, payout_investors: true
+      view_investors: true, manage_investors: true, create_investors: true, edit_investors: true, payout_investors: true,
+      view_drop_shipping: true, create_drop_shipping: true, edit_drop_shipping: true,
+      view_banks: true, create_banks: true, edit_banks: true,
+      view_cctv_access: true, view_cities: true, create_cities: true, edit_cities: true,
+      view_help: true
     },
     cashier: {
-      // Products - View only with basic details
+      // Dashboard
+      view_dashboard: true,
+      // Products - View only
       view_products: true,
       view_product_list: true, view_product_details: true,
-      // Customers - View and create, limited edit
+      view_product_categories: true,
+      // Customers - View, create, edit
       view_customers: true, create_customers: true, edit_customers: true,
       view_customer_list: true, view_customer_details: true,
-      // Orders - View and create sales orders only
+      // Sales pages - View + create
       view_orders: true, create_orders: true,
-      view_sales_orders: true, view_sales_invoices: true,
-      // Inventory - View levels and basic movements
+      view_sales: true, view_sales_orders: true, view_sales_invoices: true,
+      create_sales_orders: true, edit_sales_orders: true,
+      create_sales_invoices: true, edit_sales_invoices: true,
+      apply_last_prices: true,
+      manage_sales: true,
+      // Sale Returns
+      view_returns: true, process_returns: true, create_returns: true,
+      view_sale_returns: true, create_sale_returns: true, edit_sale_returns: true,
+      view_return_requests: true, view_return_history: true,
+      // Inventory - View levels & stock movements
       view_inventory: true,
       view_inventory_levels: true, view_stock_movements: true,
-      // Returns - View and process returns
-      view_returns: true, process_returns: true,
-      view_return_requests: true, view_return_history: true,
       // Discounts - View only
       view_discounts: true,
-      view_discount_list: true,
-      // Reports - Limited access
+      view_discount_list: true, apply_discounts: true,
+      // Financials - Cash receiving
+      view_cash_receiving: true, create_cash_receiving: true,
+      view_cash_receipts: true, create_cash_receipts: true,
+      // Reports - Limited
       view_reports: true,
-      view_general_reports: true
+      view_general_reports: true,
+      // System
+      view_help: true
     },
     viewer: {
-      // Products - View only, basic details
+      // Dashboard
+      view_dashboard: true,
+      // Products - View only
       view_products: true,
-      view_product_list: true, view_product_details: true,
-      // Customers - View only, basic details
+      view_product_list: true, view_product_details: true, view_product_categories: true, view_product_inventory: true,
+      // Customers - View only
       view_customers: true,
       view_customer_list: true, view_customer_details: true,
-      // Suppliers - View only, basic details
+      // Suppliers - View only
       view_suppliers: true,
       view_supplier_list: true, view_supplier_details: true,
       // Orders - View only
       view_orders: true,
-      view_sales_orders: true, view_purchase_orders: true, view_sales_invoices: true, view_purchase_invoices: true,
-      // Inventory - View only, basic levels
-      view_inventory: true,
-      view_inventory_levels: true,
+      view_sales: true, view_sales_orders: true, view_purchase_orders: true,
+      view_sales_invoices: true, view_purchase_invoices: true,
+      view_import_purchase: true,
+      // Inventory - View only
+      view_inventory: true, view_warehouses: true,
+      view_inventory_levels: true, view_low_stock_alerts: true,
       // Returns - View only
-      view_returns: true,
+      view_returns: true, view_sale_returns: true, view_purchase_returns: true,
       view_return_requests: true, view_return_history: true,
       // Discounts - View only
       view_discounts: true,
       view_discount_list: true,
-      // Reports - Limited financial reports
+      // Reports - Read-only
       view_reports: true,
-      view_pl_statements: true, view_balance_sheets: true, view_general_reports: true
+      view_pl_statements: true, view_balance_sheets: true,
+      view_sales_performance: true, view_inventory_reports: true,
+      view_general_reports: true, view_backdate_report: true,
+      view_customer_analytics: true, view_anomaly_detection: true,
+      // Accounting - View only
+      view_chart_of_accounts: true, view_journal_vouchers: true, view_accounting_summary: true,
+      // System
+      view_help: true
     },
     sales_person: {
-      // Sales Person - sales and purchase transaction workflow only
-      create_sales_orders: true,
-      edit_sales_orders: true,
-      create_orders: true,
-      edit_orders: true,
-      create_sales_invoices: true,
-      edit_sales_invoices: true,
-      create_purchase_orders: true,
-      edit_purchase_orders: true,
-      create_purchase_invoices: true,
-      edit_purchase_invoices: true,
-      // View permissions so allowed pages/modules are visible
-      view_orders: true,
-      view_sales_orders: true,
-      view_sales_invoices: true,
-      view_purchase_orders: true,
-      view_purchase_invoices: true
+      // Dashboard
+      view_dashboard: true,
+      // Master data - View
+      view_products: true, view_product_list: true, view_product_details: true, view_product_categories: true,
+      view_customers: true, create_customers: true, edit_customers: true,
+      view_customer_list: true, view_customer_details: true,
+      view_suppliers: true, view_supplier_list: true, view_supplier_details: true,
+      // Sales workflow
+      view_orders: true, create_orders: true, edit_orders: true,
+      view_sales: true, view_sales_orders: true, view_sales_invoices: true,
+      create_sales_orders: true, edit_sales_orders: true,
+      create_sales_invoices: true, edit_sales_invoices: true,
+      apply_last_prices: true,
+      manage_sales: true,
+      // Sale Returns
+      view_returns: true, view_sale_returns: true, create_sale_returns: true, edit_sale_returns: true,
+      // Purchase workflow
+      view_purchase_orders: true, view_purchase_invoices: true,
+      create_purchase_orders: true, edit_purchase_orders: true,
+      create_purchase_invoices: true, edit_purchase_invoices: true,
+      view_import_purchase: true, create_import_purchase: true, edit_import_purchase: true,
+      // Purchase Returns
+      view_purchase_returns: true, create_purchase_returns: true, edit_purchase_returns: true,
+      // Inventory - read
+      view_inventory: true, view_inventory_levels: true,
+      // Discounts
+      view_discounts: true, apply_discounts: true,
+      // Reports
+      view_reports: true, view_general_reports: true, view_sales_performance: true,
+      // System
+      view_help: true
     },
     employee: {
+      // Dashboard
+      view_dashboard: true,
+      // Sales pages only
       view_sales: true,
-      manage_sales: true
+      manage_sales: true,
+      view_sales_orders: true,
+      view_sales_invoices: true,
+      create_sales_orders: true,
+      create_sales_invoices: true,
+      // Customers
+      view_customers: true, view_customer_list: true, view_customer_details: true,
+      // Products
+      view_products: true, view_product_list: true, view_product_details: true,
+      // System
+      view_help: true
     },
     inventory: {
       view_products: true,
@@ -749,7 +977,14 @@ export const Settings2 = () => {
       view_product_details: true,
       view_product_categories: true,
       view_product_inventory: true,
+      view_product_variants: true, create_product_variants: true, edit_product_variants: true,
+      view_product_transformations: true, create_product_transformations: true, edit_product_transformations: true,
       view_inventory: true,
+      create_inventory: true,
+      edit_inventory: true,
+      view_warehouses: true,
+      create_warehouses: true,
+      edit_warehouses: true,
       update_inventory: true,
       manage_inventory: true,
       view_inventory_levels: true,
@@ -757,7 +992,11 @@ export const Settings2 = () => {
       view_low_stock_alerts: true,
       update_stock_quantities: true,
       create_stock_adjustments: true,
-      process_receipts: true
+      process_receipts: true,
+      view_suppliers: true, view_supplier_list: true, view_supplier_details: true,
+      view_market_prices: true,
+      view_dashboard: true,
+      view_help: true
     }
   };
 
@@ -1279,6 +1518,31 @@ export const Settings2 = () => {
         [newUserData.role]: {
           ...prev[newUserData.role],
           ...permissionUpdates
+        }
+      }));
+    }
+  };
+
+  // Toggle every CRUD permission key declared on a page in a single update
+  const togglePageAllPermissions = (page, isChecked) => {
+    const updates = {};
+    ['view', 'create', 'edit', 'delete'].forEach((action) => {
+      const permissionKey = page[action];
+      if (permissionKey) updates[permissionKey] = isChecked;
+    });
+    if (Object.keys(updates).length === 0) return;
+
+    setNewUserData(prev => ({
+      ...prev,
+      permissions: { ...prev.permissions, ...updates }
+    }));
+
+    if (newUserData.role) {
+      setRolePermissionsChanged(prev => ({
+        ...prev,
+        [newUserData.role]: {
+          ...prev[newUserData.role],
+          ...updates
         }
       }));
     }
@@ -1989,13 +2253,13 @@ export const Settings2 = () => {
                             paddingRight: '2.5rem'
                           }}
                         >
-                          <option value="cashier">Cashier — Daily point of sale ops</option>
-                          <option value="employee">Employee — Restricted access to Sales only</option>
-                          <option value="manager">Manager — Full back-office operations</option>
-                          <option value="inventory">Inventory — Manage stock & ledgers</option>
-                          <option value="sales_person">Sales Person — Sales & purchase transaction workflow</option>
                           <option value="admin">Administrator — Full uninhibited access</option>
-                          <option value="viewer">Viewer — Readonly reporting access</option>
+                          <option value="manager">Manager — Full back-office operations</option>
+                          <option value="sales_person">Sales Person — Sales &amp; purchase transaction workflow</option>
+                          <option value="cashier">Cashier — Daily point of sale ops</option>
+                          <option value="inventory">Inventory — Manage stock &amp; ledgers</option>
+                          <option value="employee">Employee — Restricted access to Sales only</option>
+                          <option value="viewer">Viewer — Read-only reporting access</option>
                         </select>
                         <span className="text-xs font-semibold text-gray-500 mt-1 pl-1">
                           {editingUser && editingUser._id === user?._id
@@ -2092,7 +2356,23 @@ export const Settings2 = () => {
                         </p>
                       </div>
                       <div className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 shadow-sm whitespace-nowrap">
-                        {Object.keys(newUserData.permissions || {}).filter(k => newUserData.permissions[k]).length} Allowed Rules
+                        {(() => {
+                          const matrixKeys = new Set();
+                          Object.values(pagePermissionGroups).forEach((group) => {
+                            group.pages.forEach((page) => {
+                              ['view', 'create', 'edit', 'delete'].forEach((action) => {
+                                if (page[action]) matrixKeys.add(page[action]);
+                              });
+                            });
+                            (group.extraPermissions || []).forEach((permission) => {
+                              matrixKeys.add(permission.key);
+                            });
+                          });
+                          const allowedCount = Array.from(matrixKeys).filter(
+                            (key) => !!newUserData.permissions?.[key]
+                          ).length;
+                          return `${allowedCount} Allowed`;
+                        })()}
                       </div>
                     </div>
 
@@ -2107,69 +2387,169 @@ export const Settings2 = () => {
                         </p>
                       </div>
                     ) : (
-                      <div className="p-6 md:p-8 bg-gray-50/50">
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                          {Object.entries(permissionCategories).map(([categoryKey, category]) => {
-                            // Check if all permissions in category are active to show a nice global indicator
-                            const totalPerms = category.permissions.length + category.permissions.reduce((acc, p) => acc + (p.subcategories?.length || 0), 0);
-                            const activePermsCount = category.permissions.filter(p => newUserData.permissions[p.key]).length +
-                              category.permissions.reduce((acc, p) => acc + (p.subcategories?.filter(s => newUserData.permissions[s.key]).length || 0), 0);
-                            const percentActive = totalPerms > 0 ? (activePermsCount / totalPerms) : 0;
+                      <div className="bg-gray-50/50">
+                        {/* Multi-tab top bar for permission groups */}
+                        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+                          <div className="flex items-center gap-1 overflow-x-auto px-3 py-2 scrollbar-thin scrollbar-thumb-gray-200">
+                            {Object.entries(pagePermissionGroups).map(([groupKey, group]) => {
+                              const Icon = group.icon;
+                              const allKeys = group.pages.flatMap((page) =>
+                                ['view', 'create', 'edit', 'delete']
+                                  .map((action) => page[action])
+                                  .filter(Boolean)
+                              ).concat((group.extraPermissions || []).map((permission) => permission.key));
+                              const activeCount = allKeys.filter((k) => newUserData.permissions[k]).length;
+                              const isActive = activePermissionGroup === groupKey;
+                              return (
+                                <button
+                                  type="button"
+                                  key={groupKey}
+                                  onClick={() => setActivePermissionGroup(groupKey)}
+                                  className={`flex items-center gap-2 whitespace-nowrap px-3 py-2 rounded-lg text-sm font-semibold transition-all ${isActive
+                                    ? 'bg-gray-900 text-white shadow-sm'
+                                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                                    }`}
+                                >
+                                  {Icon && <Icon className="h-4 w-4" />}
+                                  <span>{group.name}</span>
+                                  {activeCount > 0 && (
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white text-gray-900' : 'bg-blue-100 text-blue-700'
+                                      }`}>
+                                      {activeCount}
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
 
+                        {/* Active group's pages with CRUD checkboxes */}
+                        <div className="p-4 md:p-6">
+                          {(() => {
+                            const group = pagePermissionGroups[activePermissionGroup];
+                            if (!group) return null;
+                            const ACTIONS = [
+                              { key: 'view', label: 'View', color: 'text-blue-600 focus:ring-blue-500' },
+                              { key: 'create', label: 'Create', color: 'text-green-600 focus:ring-green-500' },
+                              { key: 'edit', label: 'Edit', color: 'text-amber-600 focus:ring-amber-500' },
+                              { key: 'delete', label: 'Delete', color: 'text-red-600 focus:ring-red-500' }
+                            ];
                             return (
-                              <div key={categoryKey} className="bg-white border border-gray-200 hover:border-blue-300 rounded-xl overflow-hidden shadow-sm hover:shadow transition-all duration-300 pb-2">
-                                <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/80 flex items-center justify-between">
-                                  <h4 className="font-bold text-gray-900 text-sm tracking-tight">{category.name}</h4>
-                                  <div className="flex bg-gray-200 rounded-full h-1.5 w-12 overflow-hidden shadow-inner">
-                                    <div className={`h-full ${percentActive > 0.8 ? 'bg-green-500' : percentActive > 0 ? 'bg-blue-500' : 'bg-transparent'}`} style={{ width: `${percentActive * 100}%` }}></div>
+                              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                                {/* Group header */}
+                                <div className="flex items-center justify-between px-4 py-3 bg-gray-900 text-white">
+                                  <div className="flex items-center gap-2">
+                                    {group.icon && <group.icon className="h-5 w-5" />}
+                                    <h4 className="font-bold tracking-tight text-sm md:text-base">{group.name}</h4>
                                   </div>
+                                  <span className="text-[11px] font-semibold uppercase tracking-wider opacity-80">
+                                    {group.pages.length > 0
+                                      ? `${group.pages.length} ${group.pages.length === 1 ? 'page' : 'pages'}`
+                                      : `${group.extraPermissions?.length || 0} options`}
+                                  </span>
                                 </div>
-                                <div className="p-3 space-y-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                  {category.permissions.map((permission) => (
-                                    <div key={permission.key} className="relative">
-                                      <label className="flex items-start space-x-3 py-2 px-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group">
-                                        <div className="flex items-center h-5 mt-0.5">
+
+                                {/* Column headers */}
+                                {group.pages.length > 0 && (
+                                  <div className="hidden md:grid grid-cols-[1fr_repeat(4,90px)_110px] items-center px-4 py-2 bg-gray-50 border-b border-gray-200 text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                                    <div>Page</div>
+                                    {ACTIONS.map((a) => (
+                                      <div key={a.key} className="text-center">{a.label}</div>
+                                    ))}
+                                    <div className="text-center">All</div>
+                                  </div>
+                                )}
+
+                                {/* Page rows */}
+                                <div className="divide-y divide-gray-100">
+                                  {group.pages.map((page) => {
+                                    const definedActions = ACTIONS.filter((a) => page[a.key]);
+                                    const allChecked = definedActions.length > 0 && definedActions.every((a) => newUserData.permissions[page[a.key]]);
+                                    const someChecked = definedActions.some((a) => newUserData.permissions[page[a.key]]);
+
+                                    return (
+                                      <div
+                                        key={page.key}
+                                        className="grid grid-cols-1 md:grid-cols-[1fr_repeat(4,90px)_110px] gap-3 md:gap-0 items-center px-4 py-3 hover:bg-gray-50/80 transition-colors"
+                                      >
+                                        {/* Page name */}
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${allChecked ? 'bg-green-500' : someChecked ? 'bg-blue-500' : 'bg-gray-300'}`}></span>
+                                          <span className="text-sm font-semibold text-gray-900 truncate">{page.name}</span>
+                                        </div>
+
+                                        {/* CRUD checkboxes */}
+                                        {ACTIONS.map((action) => {
+                                          const permKey = page[action.key];
+                                          if (!permKey) {
+                                            return (
+                                              <div key={action.key} className="md:flex md:items-center md:justify-center">
+                                                <span className="text-gray-300 text-xs md:text-base">—</span>
+                                              </div>
+                                            );
+                                          }
+                                          const checked = !!newUserData.permissions[permKey];
+                                          return (
+                                            <label
+                                              key={action.key}
+                                              className="flex items-center justify-start md:justify-center gap-2 cursor-pointer select-none"
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={(e) => handlePermissionChange(permKey, e.target.checked)}
+                                                className={`w-4 h-4 rounded border-2 border-gray-300 ${action.color} focus:ring-offset-0 transition-all cursor-pointer`}
+                                              />
+                                              <span className="md:hidden text-xs font-semibold text-gray-700">{action.label}</span>
+                                            </label>
+                                          );
+                                        })}
+
+                                        {/* "All" toggle */}
+                                        <div className="flex items-center justify-start md:justify-center">
+                                          <button
+                                            type="button"
+                                            onClick={() => togglePageAllPermissions(page, !allChecked)}
+                                            className={`text-[11px] font-bold px-3 py-1.5 rounded-md border transition-all ${allChecked
+                                              ? 'bg-gray-900 text-white border-gray-900 hover:bg-gray-800'
+                                              : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900 hover:text-gray-900'
+                                              }`}
+                                          >
+                                            {allChecked ? 'Revoke' : 'Grant All'}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+
+                                {group.extraPermissions?.length > 0 && (
+                                  <div className="border-t border-gray-200 bg-blue-50/40 px-4 py-4">
+                                    <h5 className="text-xs font-black uppercase tracking-wider text-blue-900 mb-3">
+                                      Additional Permissions
+                                    </h5>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                      {group.extraPermissions.map((permission) => (
+                                        <label
+                                          key={permission.key}
+                                          className="flex items-center gap-3 rounded-lg border border-blue-100 bg-white px-3 py-2.5 shadow-sm cursor-pointer hover:border-blue-300 transition-colors"
+                                        >
                                           <input
                                             type="checkbox"
-                                            checked={newUserData.permissions[permission.key] || false}
-                                            onChange={(e) => handlePermissionChange(
-                                              permission.key,
-                                              e.target.checked,
-                                              permission.subcategories?.map((subcategory) => subcategory.key) || []
-                                            )}
-                                            className="w-4 h-4 rounded border-2 border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 transition-all checked:border-blue-600 cursor-pointer"
+                                            checked={!!newUserData.permissions[permission.key]}
+                                            onChange={(e) => handlePermissionChange(permission.key, e.target.checked)}
+                                            className="w-4 h-4 rounded border-2 border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 transition-all cursor-pointer"
                                           />
-                                        </div>
-                                        <span className={`text-sm font-bold truncate transition-colors ${newUserData.permissions[permission.key] ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-900'}`}>
-                                          {permission.name}
-                                        </span>
-                                      </label>
-
-                                      {permission.subcategories && permission.subcategories.length > 0 && (
-                                        <div className="ml-7 mt-0.5 space-y-0.5 border-l-2 border-gray-100 pl-3 pt-1 pb-2">
-                                          {permission.subcategories.map((subcategory, index) => (
-                                            <label key={subcategory.key || index} className="flex items-start space-x-2 py-1.5 px-2 hover:bg-blue-50 rounded-md cursor-pointer transition-colors group">
-                                              <div className="flex items-center h-4 mt-0.5">
-                                                <input
-                                                  type="checkbox"
-                                                  checked={newUserData.permissions[subcategory.key] || false}
-                                                  onChange={(e) => handlePermissionChange(subcategory.key, e.target.checked)}
-                                                  className="w-3.5 h-3.5 rounded border border-gray-300 text-blue-500 focus:ring-blue-500 opacity-80 checked:opacity-100 transition-all cursor-pointer"
-                                                />
-                                              </div>
-                                              <span className={`text-xs font-semibold truncate transition-colors ${newUserData.permissions[subcategory.key] ? 'text-gray-800' : 'text-gray-500 group-hover:text-gray-700'}`}>
-                                                {subcategory.name}
-                                              </span>
-                                            </label>
-                                          ))}
-                                        </div>
-                                      )}
+                                          <span className="text-sm font-bold text-gray-900">{permission.name}</span>
+                                        </label>
+                                      ))}
                                     </div>
-                                  ))}
-                                </div>
+                                  </div>
+                                )}
                               </div>
                             );
-                          })}
+                          })()}
                         </div>
                       </div>
                     )}

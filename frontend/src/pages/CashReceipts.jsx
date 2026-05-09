@@ -38,9 +38,15 @@ import { useGetBalanceSummaryQuery as useGetSupplierBalanceSummaryQuery } from '
 import DateFilter from '../components/DateFilter';
 import PaginationControls from '../components/PaginationControls';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 
 const CashReceipts = () => {
+  const { hasPermission } = useAuth();
+  const canViewCustomerBalance = hasPermission('view_customer_balance');
+  const canViewSupplierBalance = hasPermission('view_supplier_balance');
+  const canViewCustomerPhone = hasPermission('view_customer_phone');
+  const canViewSupplierPhone = hasPermission('view_supplier_phone');
   const today = getCurrentDatePakistan();
   // State for filters and pagination
   const [filters, setFilters] = useState({
@@ -742,7 +748,7 @@ const CashReceipts = () => {
                             {(customer.businessName || customer.business_name) && customer.name && (
                               <div className="text-xs text-gray-500">Contact: {customer.name}</div>
                             )}
-                            {hasBalance && (
+                            {canViewCustomerBalance && hasBalance && (
                               <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
                                 {isPayable ? 'Payables:' : 'Receivables:'} {Math.abs(currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </div>
@@ -756,7 +762,7 @@ const CashReceipts = () => {
               )}
 
               {/* Balance Display */}
-              {selectedCustomer && (
+              {selectedCustomer && canViewCustomerBalance && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Balance
@@ -836,7 +842,7 @@ const CashReceipts = () => {
                               }`}
                           >
                             <div className="font-medium text-gray-900">{supplier.companyName || supplier.name || 'Unknown'}</div>
-                            {supplier.phone && (
+                            {canViewSupplierPhone && supplier.phone && (
                               <div className="text-sm text-gray-500">Phone: {supplier.phone}</div>
                             )}
                           </div>
@@ -848,7 +854,7 @@ const CashReceipts = () => {
               )}
 
               {/* Supplier Balance Display */}
-              {paymentType === 'supplier' && selectedSupplier && (
+              {paymentType === 'supplier' && selectedSupplier && canViewSupplierBalance && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Balance

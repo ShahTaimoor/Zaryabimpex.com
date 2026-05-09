@@ -43,12 +43,14 @@ const CashReceipts = lazy(() => import('./pages/CashReceipts'));
 const CashReceiving = lazy(() => import('./pages/CashReceiving'));
 const CashPayments = lazy(() => import('./pages/CashPayments'));
 const Cities = lazy(() => import('./pages/Cities'));
+const Banks = lazy(() => import('./pages/Banks'));
 const Expenses = lazy(() => import('./pages/Expenses'));
 const BankReceipts = lazy(() => import('./pages/BankReceipts'));
 const BankPayments = lazy(() => import('./pages/BankPayments'));
 const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
 const Settings2 = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings2 })));
 const StockMovements = lazy(() => import('./pages/StockMovements').then(m => ({ default: m.StockMovements })));
+const StockLedger = lazy(() => import('./pages/StockLedger'));
 const ChartOfAccounts = lazy(() => import('./pages/ChartOfAccounts'));
 const AccountLedgerSummary = lazy(() => import('./pages/AccountLedgerSummary'));
 const Migration = lazy(() => import('./pages/Migration'));
@@ -119,6 +121,7 @@ function App() {
                       <Route path="/anomaly-detection" element={withRouteGuard('/anomaly-detection', <Suspense fallback={<LoadingPage />}><AnomalyDetection /></Suspense>)} />
                       <Route path="/warehouses" element={withRouteGuard('/warehouses', <Suspense fallback={<LoadingPage />}><Warehouses /></Suspense>)} />
                       <Route path="/stock-movements" element={withRouteGuard('/stock-movements', <Suspense fallback={<LoadingPage />}><StockMovements /></Suspense>)} />
+                      <Route path="/stock-ledger" element={withRouteGuard('/stock-ledger', <Suspense fallback={<LoadingPage />}><StockLedger /></Suspense>)} />
 
                       <Route path="/pl-statements" element={withRouteGuard('/pl-statements', <Suspense fallback={<LoadingPage />}><PLStatements /></Suspense>)} />
                       <Route path="/balance-sheet-statement" element={withRouteGuard('/balance-sheet-statement', <Suspense fallback={<LoadingPage />}><BalanceSheetStatement /></Suspense>)} />
@@ -132,6 +135,7 @@ function App() {
                       <Route path="/cash-receiving" element={withRouteGuard('/cash-receiving', <Suspense fallback={<LoadingPage />}><CashReceiving /></Suspense>)} />
                       <Route path="/cash-payments" element={withRouteGuard('/cash-payments', <Suspense fallback={<LoadingPage />}><CashPayments /></Suspense>)} />
                       <Route path="/cities" element={withRouteGuard('/cities', <Suspense fallback={<LoadingPage />}><Cities /></Suspense>)} />
+                      <Route path="/banks" element={withRouteGuard('/banks', <Suspense fallback={<LoadingPage />}><Banks /></Suspense>)} />
                       <Route path="/expenses" element={withRouteGuard('/expenses', <Suspense fallback={<LoadingPage />}><Expenses /></Suspense>)} />
                       <Route path="/bank-receipts" element={withRouteGuard('/bank-receipts', <Suspense fallback={<LoadingPage />}><BankReceipts /></Suspense>)} />
                       <Route path="/bank-payments" element={withRouteGuard('/bank-payments', <Suspense fallback={<LoadingPage />}><BankPayments /></Suspense>)} />

@@ -8,8 +8,9 @@ import { formatQuantityDisplay } from './dualUnitUtils';
  * @param {string} partyLabel - 'Customer' or 'Supplier'
  * @returns {Object} Payload for PdfExportButton
  */
-export const getInvoicePdfPayload = (orderData, companySettings, documentTitle = 'Invoice', partyLabel = 'Customer', ledgerBalanceProp = null) => {
+export const getInvoicePdfPayload = (orderData, companySettings, documentTitle = 'Invoice', partyLabel = 'Customer', ledgerBalanceProp = null, permissions = {}) => {
   if (!orderData) return null;
+  const { canViewBalance = true, canViewPhone = true } = permissions || {};
 
   const isSale = partyLabel.toLowerCase().includes('customer');
   // Thoroughly resolve the customer/supplier name
@@ -103,9 +104,9 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
   }
   summaryRows.push({ name: 'Total', total: Math.round(total).toLocaleString('en-US') });
 
-  // Add Ledger Balance if available
+  // Add Ledger Balance if available and the user has permission to view it
   const ledgerBalance = ledgerBalanceProp ?? orderData.ledgerBalance ?? orderData.customer?.balance ?? null;
-  if (ledgerBalance !== null) {
+  if (canViewBalance && ledgerBalance !== null) {
     summaryRows.push({ name: 'Ledger Balance', total: Math.round(ledgerBalance).toLocaleString('en-US') });
   }
 
@@ -121,7 +122,7 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
   if (typeof partyAddress === 'object') {
     partyAddress = Object.values(partyAddress).filter(v => typeof v === 'string').join(', ');
   }
-  const partyPhone = partyInfo.phone || partyInfo.contactNumber || '';
+  const partyPhone = canViewPhone ? (partyInfo.phone || partyInfo.contactNumber || '') : '';
 
   return {
     title: `${documentTitle}: #${orderId}`,

@@ -35,9 +35,15 @@ import { Textarea } from '@/components/ui/textarea';
 import BaseModal from '../components/BaseModal';
 import FormField from '../components/FormField';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 
 const BankReceipts = () => {
+  const { hasPermission } = useAuth();
+  const canViewCustomerBalance = hasPermission('view_customer_balance');
+  const canViewSupplierBalance = hasPermission('view_supplier_balance');
+  const canViewCustomerPhone = hasPermission('view_customer_phone');
+  const canViewSupplierPhone = hasPermission('view_supplier_phone');
   const today = getCurrentDatePakistan();
   // State for filters and pagination
   const [filters, setFilters] = useState({
@@ -454,7 +460,7 @@ const BankReceipts = () => {
                             {(customer.businessName || customer.business_name) && customer.name && (
                               <div className="text-xs text-gray-500">Contact: {customer.name}</div>
                             )}
-                            {hasBalance && (
+                            {canViewCustomerBalance && hasBalance && (
                               <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
                                 {isPayable ? 'Payables:' : 'Receivables:'} {Math.abs(netBalance).toFixed(2)}
                               </div>
@@ -468,7 +474,7 @@ const BankReceipts = () => {
               )}
 
               {/* Balance Display */}
-              {selectedCustomer && (
+              {selectedCustomer && canViewCustomerBalance && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Balance
@@ -529,7 +535,7 @@ const BankReceipts = () => {
                           className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
                         >
                           <div className="font-medium text-gray-900">{supplier.companyName || supplier.name || 'Unknown'}</div>
-                          {supplier.phone && (
+                          {canViewSupplierPhone && supplier.phone && (
                             <div className="text-sm text-gray-500">Phone: {supplier.phone}</div>
                           )}
                         </div>
@@ -540,7 +546,7 @@ const BankReceipts = () => {
               )}
 
               {/* Supplier Balance Display */}
-              {paymentType === 'supplier' && selectedSupplier && (
+              {paymentType === 'supplier' && selectedSupplier && canViewSupplierBalance && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Balance

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 
 /**
  * ReturnPrintContent - Printable return document.
@@ -9,7 +10,10 @@ const ReturnPrintContent = ({
   companyInfo = {},
   partyLabel = 'Customer'
 }) => {
+  const { hasPermission } = useAuth();
   if (!returnData) return null;
+  const isPurchaseReturn = returnData.origin === 'purchase';
+  const canViewPartyPhone = hasPermission(isPurchaseReturn ? 'view_supplier_phone' : 'view_customer_phone');
 
   const companyName = companyInfo?.companyName || companyInfo?.data?.companyName || 'Your Company Name';
   const address = companyInfo?.address || companyInfo?.data?.address || '';
@@ -67,7 +71,9 @@ const ReturnPrintContent = ({
           <div className="space-y-1">
             <p><span className="font-medium">Name:</span> {partyName}</p>
             <p><span className="font-medium">Email:</span> {partyEmail}</p>
-            <p><span className="font-medium">Phone:</span> {partyPhone}</p>
+            {canViewPartyPhone && (
+              <p><span className="font-medium">Phone:</span> {partyPhone}</p>
+            )}
           </div>
         </div>
         <div>

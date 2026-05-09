@@ -28,6 +28,11 @@ const PERMISSIONS = {
   EDIT_PRODUCTS: 'edit_products',
   DELETE_PRODUCTS: 'delete_products',
   VIEW_PRODUCT_COSTS: 'view_product_costs', // Sensitive
+  VIEW_CUSTOMER_BALANCE: 'view_customer_balance', // Sensitive
+  VIEW_SUPPLIER_BALANCE: 'view_supplier_balance', // Sensitive
+  VIEW_STOCK_LEVELS: 'view_stock_levels',
+  VIEW_CUSTOMER_PHONE: 'view_customer_phone', // Sensitive
+  VIEW_SUPPLIER_PHONE: 'view_supplier_phone', // Sensitive
   VIEW_MARKET_PRICES: 'view_market_prices',
   MANAGE_MARKET_PRICES: 'manage_market_prices',
   IMPORT_MARKET_PRICES: 'import_market_prices',
@@ -57,29 +62,77 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.VIEW_SALES,
     PERMISSIONS.MANAGE_SALES,
     PERMISSIONS.VIEW_SALES_ORDERS,
+    'view_sales_invoices',
+    'create_sales_orders',
+    'edit_sales_orders',
+    'create_sales_invoices',
+    'edit_sales_invoices',
+    'view_sale_returns',
+    'create_sale_returns',
+    'edit_sale_returns',
     PERMISSIONS.VIEW_PRODUCTS,
     PERMISSIONS.CREATE_PRODUCTS,
     PERMISSIONS.EDIT_PRODUCTS,
     PERMISSIONS.VIEW_PRODUCT_COSTS,
+    'view_bp',
+    'apply_last_prices',
+    PERMISSIONS.VIEW_CUSTOMER_BALANCE,
+    PERMISSIONS.VIEW_SUPPLIER_BALANCE,
+    PERMISSIONS.VIEW_STOCK_LEVELS,
+    PERMISSIONS.VIEW_CUSTOMER_PHONE,
+    PERMISSIONS.VIEW_SUPPLIER_PHONE,
+    'view_product_categories',
+    'view_customers',
+    'view_suppliers',
+    'view_banks',
+    'view_cctv_access',
     PERMISSIONS.VIEW_MARKET_PRICES,
     PERMISSIONS.MANAGE_MARKET_PRICES,
     PERMISSIONS.IMPORT_MARKET_PRICES,
+    'view_purchase_orders',
+    'view_purchase_invoices',
+    'create_purchase_orders',
+    'edit_purchase_orders',
+    'create_purchase_invoices',
+    'edit_purchase_invoices',
+    'view_import_purchase',
+    'create_import_purchase',
+    'edit_import_purchase',
+    'view_purchase_returns',
+    'create_purchase_returns',
+    'edit_purchase_returns',
     PERMISSIONS.VIEW_INVENTORY,
     PERMISSIONS.MANAGE_INVENTORY,
-    PERMISSIONS.VIEW_REPORTS
+    'view_warehouses',
+    'view_stock_movements',
+    'view_inventory_levels',
+    PERMISSIONS.VIEW_REPORTS,
+    'view_help'
   ],
   
   [ROLES.CASHIER]: [
     PERMISSIONS.VIEW_DASHBOARD,
     PERMISSIONS.VIEW_SALES,
     PERMISSIONS.MANAGE_SALES,
+    'view_sales_orders',
+    'view_sales_invoices',
+    'create_sales_orders',
+    'edit_sales_orders',
+    'create_sales_invoices',
+    'edit_sales_invoices',
+    'apply_last_prices',
     PERMISSIONS.VIEW_PRODUCTS,
-    PERMISSIONS.VIEW_INVENTORY
+    PERMISSIONS.VIEW_INVENTORY,
+    'view_inventory_levels',
+    'view_help'
   ],
   
   [ROLES.EMPLOYEE]: [
     PERMISSIONS.VIEW_SALES,
-    PERMISSIONS.MANAGE_SALES
+    PERMISSIONS.MANAGE_SALES,
+    'view_sales_orders',
+    'view_sales_invoices',
+    'view_help'
     // Restricted: No dashboard, no reports, no product management, no cost prices
   ],
   
@@ -88,19 +141,46 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.VIEW_PRODUCTS,
     PERMISSIONS.VIEW_MARKET_PRICES,
     PERMISSIONS.VIEW_INVENTORY,
-    PERMISSIONS.MANAGE_INVENTORY
+    PERMISSIONS.MANAGE_INVENTORY,
+    'view_warehouses',
+    'view_stock_movements',
+    'view_inventory_levels',
+    'view_low_stock_alerts',
+    'view_help'
   ],
   
   [ROLES.VIEWER]: [
     PERMISSIONS.VIEW_DASHBOARD,
     PERMISSIONS.VIEW_PRODUCTS,
+    'view_product_categories',
+    'view_customers',
+    'view_suppliers',
     PERMISSIONS.VIEW_INVENTORY,
-    PERMISSIONS.VIEW_SALES
+    'view_inventory_levels',
+    PERMISSIONS.VIEW_SALES,
+    'view_sales_orders',
+    'view_sales_invoices',
+    'view_help'
   ],
 
   [ROLES.SALES_PERSON]: [
     PERMISSIONS.VIEW_DASHBOARD,
-    PERMISSIONS.VIEW_SALES_ORDERS
+    PERMISSIONS.VIEW_SALES,
+    PERMISSIONS.VIEW_SALES_ORDERS,
+    'view_sales_invoices',
+    'create_sales_orders',
+    'edit_sales_orders',
+    'create_sales_invoices',
+    'edit_sales_invoices',
+    'apply_last_prices',
+    'view_purchase_orders',
+    'view_purchase_invoices',
+    'create_purchase_orders',
+    'edit_purchase_orders',
+    'create_purchase_invoices',
+    'edit_purchase_invoices',
+    'view_import_purchase',
+    'view_help'
   ]
 };
 

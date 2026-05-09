@@ -285,8 +285,13 @@ const SalesOrders = ({ tabId }) => {
 
 
   // Auth context for permissions
-  const { hasPermission, user } = useAuth();
-  const canViewCostPrice = hasPermission('view_cost_prices');
+  const { hasPermission } = useAuth();
+  const canViewCostPrice = hasPermission('view_product_costs');
+  const canViewBP = hasPermission('view_bp');
+  const canApplyLastPrices = hasPermission('apply_last_prices');
+  const canViewCustomerBalance = hasPermission('view_customer_balance');
+  const canViewCustomerPhone = hasPermission('view_customer_phone');
+  const canViewStock = hasPermission('view_stock_levels');
   const [showProfit, setShowProfit] = useState(false);
 
   const [autoPrint, setAutoPrint] = useState(false);
@@ -520,7 +525,6 @@ const SalesOrders = ({ tabId }) => {
       : ((customer.pendingBalance || 0) - (customer.advanceBalance || 0));
     const hasBalance = totalBalance !== 0;
     const isPayable = totalBalance < 0;
-    const isReceivable = totalBalance > 0;
 
     return (
       <div>
@@ -528,14 +532,14 @@ const SalesOrders = ({ tabId }) => {
         {customer.name && customer.name !== (customer.businessName || customer.business_name || customer.displayName) && (
           <div className="text-xs text-gray-500">{customer.name}</div>
         )}
-        {hasBalance ? (
+        {canViewCustomerBalance && hasBalance ? (
           <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
             Total Balance: {isPayable ? '-' : '+'}{Math.abs(totalBalance).toFixed(2)}
           </div>
         ) : null}
       </div>
     );
-  }, []);
+  }, [canViewCustomerBalance]);
 
   const handleCustomerSelect = (customer) => {
     // SearchableDropdown passes the full customer object, not just the ID
@@ -742,14 +746,16 @@ const SalesOrders = ({ tabId }) => {
           {variantInfo && <div className="text-xs text-gray-500">{variantInfo}</div>}
         </div>
         <div className="flex items-center space-x-4">
-          <div className={`text-sm ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-orange-600' : 'text-gray-600'}`}>
-            Stock: {inventory.currentStock || 0}
-          </div>
+          {canViewStock && (
+            <div className={`text-sm ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-orange-600' : 'text-gray-600'}`}>
+              Stock: {inventory.currentStock || 0}
+            </div>
+          )}
           <div className="text-sm text-gray-600">Price: {Math.round(unitPrice)}</div>
         </div>
       </div>
     );
-  }, [priceType]);
+  }, [priceType, canViewStock]);
 
   const handleAddItem = async () => {
     if (!selectedProduct) return;
@@ -2083,7 +2089,7 @@ const SalesOrders = ({ tabId }) => {
 
           {/* Customer Information - Right Side */}
           <div className="lg:w-auto w-full lg:max-w-md lg:self-end">
-            {selectedCustomer ? (() => {
+            {selectedCustomer && canViewCustomerBalance ? (() => {
               const balanceNum = Number(displayBalance);
               const totalBalance = (isNaN(balanceNum) || balanceNum === null || balanceNum === undefined) ? 0 : balanceNum;
               const creditLimitNum = Math.max(0, Number(displayCreditLimit) || 0);
@@ -2147,26 +2153,28 @@ const SalesOrders = ({ tabId }) => {
               )}
               {/* Show/Hide Cost Price Toggle Button */}
               <div className="flex items-center space-x-2">
-                <Button
-                  onClick={() => setShowCostPrice(!showCostPrice)}
-                  variant="secondary"
-                  size="sm"
-                  className="flex items-center space-x-2"
-                  title={showCostPrice ? "Hide purchase cost prices" : "Show purchase cost prices"}
-                >
-                  {showCostPrice ? (
-                    <>
-                      <EyeOff className="h-4 w-4" />
-                      <span>Hide Cost</span>
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="h-4 w-4" />
-                      <span>Show Cost</span>
-                    </>
-                  )}
-                </Button>
-                {user?.role === 'admin' && formData.items.length > 0 && (
+                {canViewCostPrice && (
+                  <Button
+                    onClick={() => setShowCostPrice(!showCostPrice)}
+                    variant="secondary"
+                    size="sm"
+                    className="flex items-center space-x-2"
+                    title={showCostPrice ? "Hide purchase cost prices" : "Show purchase cost prices"}
+                  >
+                    {showCostPrice ? (
+                      <>
+                        <EyeOff className="h-4 w-4" />
+                        <span>Hide Cost</span>
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="h-4 w-4" />
+                        <span>Show Cost</span>
+                      </>
+                    )}
+                  </Button>
+                )}
+                {canViewBP && formData.items.length > 0 && (
                   <>
                     <Button
                       onClick={() => setShowProfit(prev => !prev)}
@@ -2189,7 +2197,7 @@ const SalesOrders = ({ tabId }) => {
                   </>
                 )}
               </div>
-              {selectedCustomer && formData.items.length > 0 && (
+              {canApplyLastPrices && selectedCustomer && formData.items.length > 0 && (
                 <>
                   {!isLastPricesApplied ? (
                     <LoadingButton
@@ -2442,9 +2450,13 @@ const SalesOrders = ({ tabId }) => {
 
                         {/* Stock - 1 column */}
                         <div className="min-w-0">
-                          <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
-                            {product?.inventory?.currentStock || 0}
-                          </span>
+                          {canViewStock ? (
+                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
+                              {product?.inventory?.currentStock || 0}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-300 block text-center h-8 flex items-center justify-center">—</span>
+                          )}
                         </div>
 
                         {/* Quantity */}
@@ -2623,12 +2635,14 @@ const SalesOrders = ({ tabId }) => {
 
                         {/* Details Grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Stock</p>
-                            <p className="text-sm font-medium text-gray-900">
-                              {product?.inventory?.currentStock || 0}
-                            </p>
-                          </div>
+                          {canViewStock && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Stock</p>
+                              <p className="text-sm font-medium text-gray-900">
+                                {product?.inventory?.currentStock || 0}
+                              </p>
+                            </div>
+                          )}
                           <div>
                             <p className="text-xs text-gray-500 mb-1">Quantity</p>
                             <DualUnitQuantityInput
@@ -3188,17 +3202,18 @@ const SalesOrders = ({ tabId }) => {
                             </button>
                             <ExcelExportButton
                               getData={async () => {
+                                const printPerms = { canViewBalance: canViewCustomerBalance, canViewPhone: canViewCustomerPhone };
                                 try {
                                   const result = await fetchSalesOrderById(order.id || order._id).unwrap();
                                   const freshOrder = result?.order || result?.data?.salesOrder || result?.data || result || order;
-                                  const payload = getInvoicePdfPayload(freshOrder, companySettings, 'Sales Order', 'Customer');
+                                  const payload = getInvoicePdfPayload(freshOrder, companySettings, 'Sales Order', 'Customer', null, printPerms);
                                   return {
                                     ...payload,
                                     filename: `Sales_Order_${order.soNumber || order.orderNumber || order._id}.xlsx`
                                   };
                                 } catch (err) {
                                   return {
-                                    ...getInvoicePdfPayload(order, companySettings, 'Sales Order', 'Customer'),
+                                    ...getInvoicePdfPayload(order, companySettings, 'Sales Order', 'Customer', null, printPerms),
                                     filename: `Sales_Order_${order.soNumber || order.orderNumber || order._id}.xlsx`
                                   };
                                 }
@@ -3208,12 +3223,13 @@ const SalesOrders = ({ tabId }) => {
                             />
                             <PdfExportButton
                               getData={async () => {
+                                const printPerms = { canViewBalance: canViewCustomerBalance, canViewPhone: canViewCustomerPhone };
                                 try {
                                   const result = await fetchSalesOrderById(order.id || order._id).unwrap();
                                   const freshOrder = result?.order || result?.data?.salesOrder || result?.data || result || order;
-                                  return getInvoicePdfPayload(freshOrder, companySettings, 'Sales Order', 'Customer');
+                                  return getInvoicePdfPayload(freshOrder, companySettings, 'Sales Order', 'Customer', null, printPerms);
                                 } catch (err) {
-                                  return getInvoicePdfPayload(order, companySettings, 'Sales Order', 'Customer');
+                                  return getInvoicePdfPayload(order, companySettings, 'Sales Order', 'Customer', null, printPerms);
                                 }
                               }}
                               label=""

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { formatQuantityDisplay } from '../utils/dualUnitUtils';
 import ThermalReceipt from './print/ThermalReceipt';
+import { useAuth } from '../contexts/AuthContext';
 
 const PrintDocument = ({
     companySettings,
@@ -11,6 +12,10 @@ const PrintDocument = ({
     ledgerBalance: ledgerBalanceProp,
     children
 }) => {
+    const { hasPermission } = useAuth();
+    const isCustomerParty = (partyLabel?.toLowerCase() || '').includes('customer');
+    const canViewPartyBalance = hasPermission(isCustomerParty ? 'view_customer_balance' : 'view_supplier_balance');
+    const canViewPartyPhone = hasPermission(isCustomerParty ? 'view_customer_phone' : 'view_supplier_phone');
     const {
         showLogo = true,
         showCompanyDetails = true,
@@ -356,7 +361,7 @@ const PrintDocument = ({
         showPrintContactName ? { label: 'Name:', value: partyInfo.name } : null,
         showPrintBusinessName && partyInfo.extra ? { label: 'Business:', value: partyInfo.extra } : null,
         showEmail && partyInfo.email !== 'N/A' ? { label: 'Email:', value: partyInfo.email } : null,
-        partyInfo.phone !== 'N/A' ? { label: 'Phone:', value: partyInfo.phone } : null,
+        canViewPartyPhone && partyInfo.phone !== 'N/A' ? { label: 'Phone:', value: partyInfo.phone } : null,
         showPrintAddress && (partyInfo.street || partyInfo.address) ? { label: 'Address:', value: (partyInfo.street || partyInfo.address) } : null,
         showPrintCity && partyInfo.city ? { label: 'City:', value: partyInfo.city } : null,
         showPrintState && partyInfo.state ? { label: 'State:', value: partyInfo.state } : null,
@@ -452,7 +457,7 @@ const PrintDocument = ({
                             <div className="receipt-voucher__label w-1/3 font-semibold p-2">Amount</div>
                             <div className="receipt-voucher__value flex-1 p-2 border-l border-black font-bold text-lg">{formatCurrency(amount)}</div>
                         </div>
-                        {showPrintLedgerBalance && ledgerBalanceProp != null && (
+                        {canViewPartyBalance && showPrintLedgerBalance && ledgerBalanceProp != null && (
                             <div className="receipt-voucher__row flex border-b border-black">
                                 <div className="receipt-voucher__label w-1/3 font-semibold p-2">Ledger Balance</div>
                                 <div className="receipt-voucher__value flex-1 p-2 border-l border-black">{formatCurrency(Number(ledgerBalanceProp))}</div>
@@ -520,7 +525,7 @@ const PrintDocument = ({
                 {/* Info Boxes */}
                 <div className="grid grid-cols-12 gap-0 mb-6 border-t border-l border-black">
                     <div className="col-span-8 p-2 border-r border-b border-black font-medium">
-                        Customer: <span className="uppercase">{partyInfo.name}</span> {partyInfo.phone !== 'N/A' && partyInfo.phone}
+                        Customer: <span className="uppercase">{partyInfo.name}</span> {canViewPartyPhone && partyInfo.phone !== 'N/A' && partyInfo.phone}
                     </div>
                     <div className="col-span-4 p-2 border-r border-b border-black font-medium text-right">
                         Invoice Date: {formatDate(invoiceDate)}
@@ -621,7 +626,7 @@ const PrintDocument = ({
                                     <td className="border-b border-r border-black p-1 text-right font-bold">Received Amount</td>
                                     <td className="border-b border-r border-black p-1 text-right">{formatCurrency(receivedAmount)}</td>
                                 </tr>
-                                {showPrintLedgerBalance && (
+                                {canViewPartyBalance && showPrintLedgerBalance && (
                                   <>
                                 <tr>
                                     <td className="border-b border-r border-black p-1 text-right font-bold">Previous Balance</td>
@@ -864,7 +869,7 @@ const PrintDocument = ({
                         <span>Total</span>
                         <span>{formatCurrency(totalValue)}</span>
                     </div>
-                    {showPrintLedgerBalance && (
+                    {canViewPartyBalance && showPrintLedgerBalance && (
                     <div className="print-document__summary-row">
                         <span>Ledger Balance</span>
                         <span>{formatCurrency(ledgerBalance)}</span>

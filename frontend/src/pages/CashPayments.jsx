@@ -41,9 +41,15 @@ import DateFilter from '../components/DateFilter';
 import BaseModal from '../components/BaseModal';
 import FormField from '../components/FormField';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 
 const CashPayments = () => {
+  const { hasPermission } = useAuth();
+  const canViewCustomerBalance = hasPermission('view_customer_balance');
+  const canViewSupplierBalance = hasPermission('view_supplier_balance');
+  const canViewCustomerPhone = hasPermission('view_customer_phone');
+  const canViewSupplierPhone = hasPermission('view_supplier_phone');
   const today = getCurrentDatePakistan();
   // State for filters and pagination
   const [filters, setFilters] = useState({
@@ -639,13 +645,15 @@ const CashPayments = () => {
                               }
                             </div>
                             <div className="flex items-center space-x-3 mt-1">
-                              <div className="text-sm text-gray-600">
-                                <span className="text-gray-500">Outstanding Balance:</span>{' '}
-                                <span className={`font-medium ${(supplier.pendingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                  {Math.round(supplier.pendingBalance || 0)}
-                                </span>
-                              </div>
-                              {supplier.phone && (
+                              {canViewSupplierBalance && (
+                                <div className="text-sm text-gray-600">
+                                  <span className="text-gray-500">Outstanding Balance:</span>{' '}
+                                  <span className={`font-medium ${(supplier.pendingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    {Math.round(supplier.pendingBalance || 0)}
+                                  </span>
+                                </div>
+                              )}
+                              {canViewSupplierPhone && supplier.phone && (
                                 <div className="flex items-center space-x-1 text-sm text-gray-500">
                                   <Phone className="h-3 w-3" />
                                   <span>{supplier.phone}</span>
@@ -680,13 +688,15 @@ const CashPayments = () => {
                             }
                           </p>
                           <div className="flex items-center space-x-4 mt-2">
-                            <div className="flex items-center space-x-1">
-                              <span className="text-xs text-gray-500">Outstanding Balance:</span>
-                              <span className={`text-sm font-medium ${(selectedSupplier.pendingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                {Math.round(selectedSupplier.pendingBalance || 0)}
-                              </span>
-                            </div>
-                            {selectedSupplier.phone && (
+                            {canViewSupplierBalance && (
+                              <div className="flex items-center space-x-1">
+                                <span className="text-xs text-gray-500">Outstanding Balance:</span>
+                                <span className={`text-sm font-medium ${(selectedSupplier.pendingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                  {Math.round(selectedSupplier.pendingBalance || 0)}
+                                </span>
+                              </div>
+                            )}
+                            {canViewSupplierPhone && selectedSupplier.phone && (
                               <div className="flex items-center space-x-1">
                                 <Phone className="h-3 w-3 text-gray-400" />
                                 <span className="text-xs text-gray-500">{selectedSupplier.phone}</span>
@@ -753,7 +763,7 @@ const CashPayments = () => {
                               {customer.businessType || ''}
                             </div>
                             <div className="flex items-center space-x-3 mt-1">
-                              {hasBalance && (
+                              {canViewCustomerBalance && hasBalance && (
                                 <div className="text-sm text-gray-600">
                                   <span className="text-gray-500">{isPayable ? 'Payables:' : 'Receivables:'}</span>{' '}
                                   <span className={`font-medium ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'}`}>
@@ -761,7 +771,7 @@ const CashPayments = () => {
                                   </span>
                                 </div>
                               )}
-                              {customer.phone && (
+                              {canViewCustomerPhone && customer.phone && (
                                 <div className="flex items-center space-x-1 text-sm text-gray-500">
                                   <Phone className="h-3 w-3" />
                                   <span>{customer.phone}</span>
@@ -792,10 +802,10 @@ const CashPayments = () => {
                           )}
                           <p className="text-sm text-gray-600 capitalize">
                             {selectedCustomer.businessType ? `${selectedCustomer.businessType} • ` : ''}
-                            {selectedCustomer.phone || 'No phone'}
+                            {canViewCustomerPhone ? (selectedCustomer.phone || 'No phone') : ''}
                           </p>
                           <div className="flex items-center space-x-4 mt-2">
-                            {(() => {
+                            {canViewCustomerBalance && (() => {
                               const currentBalance = selectedCustomer.currentBalance !== undefined
                                 ? selectedCustomer.currentBalance
                                 : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
@@ -871,13 +881,13 @@ const CashPayments = () => {
               )}
 
               {/* Balance Display */}
-              {(selectedSupplier || selectedCustomer) && (
+              {((selectedSupplier && canViewSupplierBalance) || (selectedCustomer && canViewCustomerBalance)) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Balance
                   </label>
                   <div className="space-y-1">
-                    {paymentType === 'supplier' && selectedSupplier && (
+                    {paymentType === 'supplier' && selectedSupplier && canViewSupplierBalance && (
                       <>
                         {(() => {
                           const currentBalance = selectedSupplier.currentBalance !== undefined
@@ -904,7 +914,7 @@ const CashPayments = () => {
                         })()}
                       </>
                     )}
-                    {paymentType === 'customer' && selectedCustomer && (
+                    {paymentType === 'customer' && selectedCustomer && canViewCustomerBalance && (
                       <>
                         {(() => {
                           const currentBalance = selectedCustomer.currentBalance !== undefined

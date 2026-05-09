@@ -34,6 +34,7 @@ import PdfExportButton from '../components/PdfExportButton';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import PaginationControls from '../components/PaginationControls';
 import { useCursorPagination } from '../hooks/useCursorPagination';
+import { useAuth } from '../contexts/AuthContext';
 
 const INVOICE_PAGE_SIZE = 50;
 
@@ -190,6 +191,9 @@ const OrderCard = ({ order, onView, onEdit, onPrint }) => {
 };
 
 export const Orders = () => {
+  const { hasPermission } = useAuth();
+  const canViewCustomerBalance = hasPermission('view_customer_balance');
+  const canViewCustomerPhone = hasPermission('view_customer_phone');
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebouncedValue(searchTerm, 350);
   const [statusFilter, setStatusFilter] = useState('');
@@ -733,17 +737,18 @@ export const Orders = () => {
                       <button onClick={() => handlePrint(order)} className="p-1 text-green-600 hover:text-green-800" title="Print"><Printer className="h-4 w-4" /></button>
                       <ExcelExportButton
                         getData={async () => {
+                          const printPerms = { canViewBalance: canViewCustomerBalance, canViewPhone: canViewCustomerPhone };
                           try {
                             const result = await fetchOrderById(order._id || order.id).unwrap();
                             const freshOrder = result?.order || result?.data?.order || result || order;
-                            const payload = getInvoicePdfPayload(freshOrder, companySettings, 'Sales Invoice', 'Customer');
+                            const payload = getInvoicePdfPayload(freshOrder, companySettings, 'Sales Invoice', 'Customer', null, printPerms);
                             return {
                               ...payload,
                               filename: `Invoice_${order.order_number ?? order.orderNumber}.xlsx`
                             };
                           } catch (err) {
                             return {
-                              ...getInvoicePdfPayload(order, companySettings, 'Sales Invoice', 'Customer'),
+                              ...getInvoicePdfPayload(order, companySettings, 'Sales Invoice', 'Customer', null, printPerms),
                               filename: `Invoice_${order.order_number ?? order.orderNumber}.xlsx`
                             };
                           }
@@ -753,12 +758,13 @@ export const Orders = () => {
                       />
                       <PdfExportButton
                         getData={async () => {
+                          const printPerms = { canViewBalance: canViewCustomerBalance, canViewPhone: canViewCustomerPhone };
                           try {
                             const result = await fetchOrderById(order._id || order.id).unwrap();
                             const freshOrder = result?.order || result?.data?.order || result || order;
-                            return getInvoicePdfPayload(freshOrder, companySettings, 'Sales Invoice', 'Customer');
+                            return getInvoicePdfPayload(freshOrder, companySettings, 'Sales Invoice', 'Customer', null, printPerms);
                           } catch (err) {
-                            return getInvoicePdfPayload(order, companySettings, 'Sales Invoice', 'Customer');
+                            return getInvoicePdfPayload(order, companySettings, 'Sales Invoice', 'Customer', null, printPerms);
                           }
                         }}
                         label=""

@@ -72,6 +72,7 @@ import {
 } from '../components/order/OrderCheckoutLayout';
 import { ShowDetailsSectionHeader } from '../components/ShowDetailsSectionHeader';
 import { useTab } from '../contexts/TabContext';
+import { useAuth } from '../contexts/AuthContext';
 import { getComponentInfo } from '../utils/componentUtils';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
@@ -317,6 +318,10 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
 };
 
 export const PurchaseOrders = ({ tabId }) => {
+  const { hasPermission } = useAuth();
+  const canViewSupplierBalance = hasPermission('view_supplier_balance');
+  const canViewSupplierPhone = hasPermission('view_supplier_phone');
+  const canViewStock = hasPermission('view_stock_levels');
   const { updateTabTitle, getActiveTab, openTab } = useTab();
   const { companyInfo: companySettings } = useCompanyInfo();
   const resolvedCompanyName = companySettings.companyName || 'Company Name';
@@ -627,9 +632,11 @@ export const PurchaseOrders = ({ tabId }) => {
         {supplier.name && supplier.name !== (supplier.companyName || supplier.company_name || supplier.businessName || supplier.displayName) && (
           <div className="text-xs text-gray-500">{supplier.name}</div>
         )}
-        <div className="text-sm text-gray-600">
-          Outstanding Balance: {(Number(supplier.pendingBalance ?? supplier.outstandingBalance ?? 0) || 0).toFixed(2)}
-        </div>
+        {canViewSupplierBalance && (
+          <div className="text-sm text-gray-600">
+            Outstanding Balance: {(Number(supplier.pendingBalance ?? supplier.outstandingBalance ?? 0) || 0).toFixed(2)}
+          </div>
+        )}
       </div>
     );
   };
@@ -2920,18 +2927,20 @@ export const PurchaseOrders = ({ tabId }) => {
                     {viewOrder.supplier?.email && (
                       <p><span className="font-medium">Email:</span> {safeRender(viewOrder.supplier.email)}</p>
                     )}
-                    {viewOrder.supplier?.phone && (
+                    {canViewSupplierPhone && viewOrder.supplier?.phone && (
                       <p><span className="font-medium">Phone:</span> {safeRender(viewOrder.supplier.phone)}</p>
                     )}
                     <p><span className="font-medium">Address:</span> {formatAddressForDisplay(viewOrder.supplier) || '—'}</p>
                     {(viewOrder.supplier?.contact_person || viewOrder.supplier?.contactPerson) && (
                       <p><span className="font-medium">Contact:</span> {safeRender(viewOrder.supplier.contact_person || viewOrder.supplier.contactPerson)}</p>
                     )}
+                    {canViewSupplierBalance && (
                     <div className="mt-3 pt-2 border-t border-gray-200">
                       <p className="font-semibold text-red-600">
                         <span className="font-medium">Outstanding Balance:</span> {Math.round((viewOrder.supplier?.pendingBalance ?? viewOrder.supplier?.currentBalance) || 0)}
                       </p>
                     </div>
+                    )}
                   </div>
                 </div>
               </div>

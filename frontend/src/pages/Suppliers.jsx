@@ -44,6 +44,7 @@ import {
 import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useGetCitiesQuery, useGetActiveCitiesQuery } from '../store/services/citiesApi';
 import { getContactPersonVisible } from '../utils/fieldVisibility';
+import { useAuth } from '../contexts/AuthContext';
 
 
 const supplierDefaultValues = {
@@ -788,6 +789,9 @@ const LIMIT_OPTIONS = [50, 500, 1000, 5000];
 const DEFAULT_LIMIT = 50;
 
 export const Suppliers = () => {
+  const { hasPermission } = useAuth();
+  const canViewSupplierBalance = hasPermission('view_supplier_balance');
+  const canViewSupplierPhone = hasPermission('view_supplier_phone');
   const [visibilitySettings, setVisibilitySettings] = useState({
     contactPerson: getContactPersonVisible(true),
     email: localStorage.getItem('showSupplierSetting_email') === 'true',
@@ -1225,10 +1229,12 @@ export const Suppliers = () => {
                           <p className="text-gray-700 truncate">{supplier.email || '-'}</p>
                         </div>
                       )}
-                      <div>
-                        <p className="text-gray-500 mb-1">Phone</p>
-                        <p className="text-gray-700">{supplier.phone || '-'}</p>
-                      </div>
+                      {canViewSupplierPhone && (
+                        <div>
+                          <p className="text-gray-500 mb-1">Phone</p>
+                          <p className="text-gray-700">{supplier.phone || '-'}</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-gray-500 mb-1">Status</p>
                         <span className={`badge ${supplier.status === 'active' ? 'badge-success' :
@@ -1295,7 +1301,7 @@ export const Suppliers = () => {
 
                     {/* Phone */}
                     <div className="col-span-1">
-                      <p className="text-xs lg:text-sm text-gray-600">{supplier.phone || '-'}</p>
+                      <p className="text-xs lg:text-sm text-gray-600">{canViewSupplierPhone ? (supplier.phone || '-') : '—'}</p>
                     </div>
 
                     {/* Status */}

@@ -38,8 +38,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { ProductSearch } from '../components/sales/ProductSearch';
+import { useAuth } from '../contexts/AuthContext';
 
 const PurchaseReturns = () => {
+  const { hasPermission } = useAuth();
+  const canViewSupplierBalance = hasPermission('view_supplier_balance');
+  const canViewSupplierPhone = hasPermission('view_supplier_phone');
   const today = getCurrentDatePakistan();
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [supplierSearchTerm, setSupplierSearchTerm] = useState('');
@@ -589,7 +593,7 @@ const PurchaseReturns = () => {
                   return (
                     <div>
                       <div className="font-medium">{name}</div>
-                      {supplier.phone && (
+                      {canViewSupplierPhone && supplier.phone && (
                         <div className="text-xs text-gray-500">Phone: {supplier.phone}</div>
                       )}
                     </div>

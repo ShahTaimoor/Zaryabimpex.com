@@ -7,6 +7,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { PrintModal, ReturnPrintContent } from './print';
 import { showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '../contexts/AuthContext';
 
 const ReturnDetailModal = ({
   return: returnData,
@@ -20,6 +21,7 @@ const ReturnDetailModal = ({
   isLoading
 }) => {
   const actualReturnData = returnDataProp || returnData;
+  const { hasPermission } = useAuth();
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showIssueRefundModal, setShowIssueRefundModal] = useState(false);
   const [issueRefundMethod, setIssueRefundMethod] = useState('cash');
@@ -117,6 +119,8 @@ const ReturnDetailModal = ({
   const partyEmail = party?.email || '';
   const partyPhone = party?.phone || '';
   const partyAddress = formatAddress(party?.address || party?.businessAddress);
+  const isPurchaseReturnView = returnInfo.origin === 'purchase';
+  const canViewPartyPhone = hasPermission(isPurchaseReturnView ? 'view_supplier_phone' : 'view_customer_phone');
 
   const origRef = returnInfo.origin === 'purchase'
     ? (returnInfo.originalOrder?.invoiceNumber || returnInfo.originalOrder?.poNumber || 'N/A')
@@ -180,7 +184,7 @@ const ReturnDetailModal = ({
                 <div className="space-y-1">
                   <p className="font-medium">{partyName}</p>
                   {partyEmail && <p className="text-gray-600">{partyEmail}</p>}
-                  {partyPhone && <p className="text-gray-600">{partyPhone}</p>}
+                  {canViewPartyPhone && partyPhone && <p className="text-gray-600">{partyPhone}</p>}
                   {partyAddress && <p className="text-gray-600">{partyAddress}</p>}
                 </div>
               </div>

@@ -37,6 +37,7 @@ import PdfExportButton from '../components/PdfExportButton';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import PaginationControls from '../components/PaginationControls';
 import { useCursorPagination } from '../hooks/useCursorPagination';
+import { useAuth } from '../contexts/AuthContext';
 
 const PI_PAGE_SIZE = 50;
 
@@ -160,6 +161,9 @@ const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onP
 
 export const PurchaseInvoices = () => {
   const { companyInfo: companySettings } = useCompanyInfo();
+  const { hasPermission } = useAuth();
+  const canViewSupplierBalance = hasPermission('view_supplier_balance');
+  const canViewSupplierPhone = hasPermission('view_supplier_phone');
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebouncedValue(searchTerm, 350);
   const [statusFilter, setStatusFilter] = useState('');
@@ -810,17 +814,18 @@ export const PurchaseInvoices = () => {
                       </button>
                       <ExcelExportButton
                         getData={async () => {
+                          const printPerms = { canViewBalance: canViewSupplierBalance, canViewPhone: canViewSupplierPhone };
                           try {
                             const result = await getPurchaseInvoiceById(invoice.id || invoice._id).unwrap();
                             const fullInvoice = result?.invoice || result?.data?.invoice || result?.data || result || invoice;
-                            const payload = getInvoicePdfPayload(fullInvoice, companySettings, 'Purchase Invoice', 'Supplier');
+                            const payload = getInvoicePdfPayload(fullInvoice, companySettings, 'Purchase Invoice', 'Supplier', null, printPerms);
                             return {
                               ...payload,
                               filename: `Purchase_Invoice_${invoice.invoiceNumber}.xlsx`
                             };
                           } catch (err) {
                             return {
-                              ...getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier'),
+                              ...getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier', null, printPerms),
                               filename: `Purchase_Invoice_${invoice.invoiceNumber}.xlsx`
                             };
                           }
@@ -830,12 +835,13 @@ export const PurchaseInvoices = () => {
                       />
                       <PdfExportButton
                         getData={async () => {
+                          const printPerms = { canViewBalance: canViewSupplierBalance, canViewPhone: canViewSupplierPhone };
                           try {
                             const result = await getPurchaseInvoiceById(invoice.id || invoice._id).unwrap();
                             const fullInvoice = result?.invoice || result?.data?.invoice || result?.data || result || invoice;
-                            return getInvoicePdfPayload(fullInvoice, companySettings, 'Purchase Invoice', 'Supplier');
+                            return getInvoicePdfPayload(fullInvoice, companySettings, 'Purchase Invoice', 'Supplier', null, printPerms);
                           } catch (err) {
-                            return getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier');
+                            return getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier', null, printPerms);
                           }
                         }}
                         label=""

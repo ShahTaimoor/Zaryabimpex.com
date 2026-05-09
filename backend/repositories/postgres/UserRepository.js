@@ -32,22 +32,30 @@ function rowToUser(row) {
     updated_at: row.updated_at
   };
 
-  // Merge default permissions for the role into the user object
-  if (user.role && rbacConfig.ROLE_PERMISSIONS[user.role.toLowerCase()]) {
-    const roleDefaults = rbacConfig.ROLE_PERMISSIONS[user.role.toLowerCase()];
-    user.permissions = Array.from(new Set([...user.permissions, ...roleDefaults]));
+  // Only seed role defaults when the user has no explicit permissions stored
+  // (legacy fallback). Otherwise the user's saved permissions are authoritative,
+  // so unchecking a role-default permission actually takes effect.
+  if (
+    user.role &&
+    Array.isArray(user.permissions) &&
+    user.permissions.length === 0 &&
+    rbacConfig.ROLE_PERMISSIONS[user.role.toLowerCase()]
+  ) {
+    user.permissions = [...rbacConfig.ROLE_PERMISSIONS[user.role.toLowerCase()]];
   }
   user.isLocked = !!(user.lockUntil && new Date(user.lockUntil) > new Date());
   user.hasPermission = function (permission) {
     // 1. Admin always has all permissions
     if (this.role === 'admin') return true;
 
-    // 2. Check if user has explicit permission assigned in DB
-    if (Array.isArray(this.permissions) && this.permissions.includes(permission)) {
-      return true;
+    // 2. If the user has any explicit permissions stored, they are authoritative.
+    //    This ensures that when an admin unchecks a role-default permission and saves,
+    //    the user is actually denied that permission going forward.
+    if (Array.isArray(this.permissions) && this.permissions.length > 0) {
+      return this.permissions.includes(permission);
     }
 
-    // 3. Fallback to role-based default permissions
+    // 3. Legacy fallback: user has no stored permissions, defer to role defaults.
     return rbacConfig.hasPermission(this.role, permission);
   };
   user.toSafeObject = function () {

@@ -53,6 +53,7 @@ export const navigation = [
     name: 'Sales',
     icon: ShoppingCart,
     permissionAny: [
+      PERMISSIONS.VIEW_SALES,
       PERMISSIONS.VIEW_SALES_ORDERS,
       PERMISSIONS.VIEW_SALES_INVOICES,
       PERMISSIONS.CREATE_SALES_ORDERS,
@@ -64,8 +65,8 @@ export const navigation = [
     ],
     children: [
       { name: 'Sales Orders', href: '/sales-orders', icon: FileText, permission: PERMISSIONS.VIEW_SALES_ORDERS },
-      { name: 'Sales', href: '/sales', icon: CreditCard, permissionAny: [PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS, PERMISSIONS.MANAGE_SALES] },
-      { name: 'Sale Returns', href: '/sale-returns', icon: RotateCcw, permission: PERMISSIONS.MANAGE_SALES },
+      { name: 'Sales', href: '/sales', icon: CreditCard, permissionAny: [PERMISSIONS.VIEW_SALES, PERMISSIONS.CREATE_SALES_INVOICES, PERMISSIONS.EDIT_SALES_INVOICES] },
+      { name: 'Sale Returns', href: '/sale-returns', icon: RotateCcw, permission: PERMISSIONS.VIEW_SALE_RETURNS },
     ]
   },
 
@@ -79,27 +80,27 @@ export const navigation = [
       PERMISSIONS.EDIT_PURCHASE_ORDERS,
       PERMISSIONS.CREATE_PURCHASE_INVOICES,
       PERMISSIONS.EDIT_PURCHASE_INVOICES,
-      PERMISSIONS.CREATE_ORDERS,
-      PERMISSIONS.EDIT_ORDERS,
+      PERMISSIONS.VIEW_IMPORT_PURCHASE,
+      PERMISSIONS.VIEW_PURCHASE_RETURNS,
     ],
     children: [
       { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText, permissionAny: [PERMISSIONS.VIEW_PURCHASE_ORDERS, PERMISSIONS.CREATE_PURCHASE_ORDERS, PERMISSIONS.EDIT_PURCHASE_ORDERS] },
-      { name: 'Purchase', href: '/purchase', icon: Truck, permissionAny: [PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS] },
-      { name: 'Import Purchase', href: '/import-purchase', icon: Truck, permissionAny: [PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS] },
-      { name: 'Purchase Returns', href: '/purchase-returns', icon: RotateCcw, permission: PERMISSIONS.MANAGE_INVENTORY },
+      { name: 'Purchase', href: '/purchase', icon: Truck, permissionAny: [PERMISSIONS.VIEW_PURCHASE_INVOICES, PERMISSIONS.CREATE_PURCHASE_INVOICES, PERMISSIONS.EDIT_PURCHASE_INVOICES] },
+      { name: 'Import Purchase', href: '/import-purchase', icon: Truck, permissionAny: [PERMISSIONS.VIEW_IMPORT_PURCHASE, PERMISSIONS.CREATE_IMPORT_PURCHASE, PERMISSIONS.EDIT_IMPORT_PURCHASE] },
+      { name: 'Purchase Returns', href: '/purchase-returns', icon: RotateCcw, permission: PERMISSIONS.VIEW_PURCHASE_RETURNS },
     ]
   },
 
   {
     name: 'Financials',
     icon: Wallet,
-    permission: PERMISSIONS.VIEW_ACCOUNTING,
+    permissionAny: ['view_cash_receiving', PERMISSIONS.VIEW_CASH_RECEIPTS, PERMISSIONS.VIEW_CASH_PAYMENTS, PERMISSIONS.VIEW_BANK_RECEIPTS, PERMISSIONS.VIEW_BANK_PAYMENTS, PERMISSIONS.VIEW_EXPENSES],
     children: [
-      { name: 'Cash Receipts', href: '/cash-receipts', icon: Receipt, permission: PERMISSIONS.VIEW_ACCOUNTING },
-      { name: 'Cash Payments', href: '/cash-payments', icon: CreditCard, permission: PERMISSIONS.VIEW_ACCOUNTING },
-      { name: 'Bank Receipts', href: '/bank-receipts', icon: Building, permission: PERMISSIONS.VIEW_ACCOUNTING },
-      { name: 'Bank Payments', href: '/bank-payments', icon: ArrowUpDown, permission: PERMISSIONS.VIEW_ACCOUNTING },
-      { name: 'Record Expense', href: '/expenses', icon: Wallet, permission: PERMISSIONS.VIEW_ACCOUNTING },
+      { name: 'Cash Receipts', href: '/cash-receipts', icon: Receipt, permission: PERMISSIONS.VIEW_CASH_RECEIPTS },
+      { name: 'Cash Payments', href: '/cash-payments', icon: CreditCard, permission: PERMISSIONS.VIEW_CASH_PAYMENTS },
+      { name: 'Bank Receipts', href: '/bank-receipts', icon: Building, permission: PERMISSIONS.VIEW_BANK_RECEIPTS },
+      { name: 'Bank Payments', href: '/bank-payments', icon: ArrowUpDown, permission: PERMISSIONS.VIEW_BANK_PAYMENTS },
+      { name: 'Record Expense', href: '/expenses', icon: Wallet, permission: PERMISSIONS.VIEW_EXPENSES },
     ]
   },
 
@@ -108,14 +109,14 @@ export const navigation = [
     icon: DatabaseIcon,
     children: [
       { name: 'Products', href: '/products', icon: Package, permission: PERMISSIONS.VIEW_PRODUCTS },
-      { name: 'Categories', href: '/categories', icon: Tag, permission: PERMISSIONS.VIEW_PRODUCTS },
-      { name: 'Customers', href: '/customers', icon: PERMISSIONS.VIEW_PRODUCTS }, // Employees might need to view customers
-      { name: 'Suppliers', href: '/suppliers', icon: Building, permission: PERMISSIONS.MANAGE_INVENTORY },
-      { name: 'Bank & cash opening', href: '/banks', icon: Building2, permission: PERMISSIONS.MANAGE_SETTINGS },
-      { name: 'Investors', href: '/investors', icon: TrendingUp, permission: PERMISSIONS.VIEW_REPORTS },
-      { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight, permission: PERMISSIONS.VIEW_SALES },
-      { name: 'Discounts', href: '/discounts', icon: Tag, permission: PERMISSIONS.MANAGE_SETTINGS },
-      { name: 'CCTV Access', href: '/cctv-access', icon: Camera, permission: PERMISSIONS.VIEW_SALES },
+      { name: 'Categories', href: '/categories', icon: Tag, permission: 'view_product_categories' },
+      { name: 'Customers', href: '/customers', icon: Users, permission: 'view_customers' },
+      { name: 'Suppliers', href: '/suppliers', icon: Building, permission: 'view_suppliers' },
+      { name: 'Bank & cash opening', href: '/banks', icon: Building2, permission: PERMISSIONS.VIEW_BANKS },
+      { name: 'Investors', href: '/investors', icon: TrendingUp, permission: 'view_investors' },
+      { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight, permission: 'view_drop_shipping' },
+      { name: 'Discounts', href: '/discounts', icon: Tag, permission: 'view_discounts' },
+      { name: 'CCTV Access', href: '/cctv-access', icon: Camera, permission: PERMISSIONS.VIEW_CCTV_ACCESS },
     ]
   },
 
@@ -125,34 +126,34 @@ export const navigation = [
     permission: PERMISSIONS.VIEW_INVENTORY,
     children: [
       { name: 'Inventory', href: '/inventory', icon: Warehouse, permission: PERMISSIONS.VIEW_INVENTORY },
-      { name: 'Warehouses', href: '/warehouses', icon: Warehouse, permission: PERMISSIONS.VIEW_INVENTORY },
-      { name: 'Stock Movements', href: '/stock-movements', icon: ArrowUpDown, permission: PERMISSIONS.VIEW_INVENTORY },
-      { name: 'Stock Ledger', href: '/stock-ledger', icon: FileText, permission: PERMISSIONS.VIEW_INVENTORY },
+      { name: 'Warehouses', href: '/warehouses', icon: Warehouse, permission: PERMISSIONS.VIEW_WAREHOUSES },
+      { name: 'Stock Movements', href: '/stock-movements', icon: ArrowUpDown, permission: 'view_stock_movements' },
+      { name: 'Stock Ledger', href: '/stock-ledger', icon: FileText, permission: 'view_inventory_levels' },
     ]
   },
 
   {
     name: 'Accounting',
     icon: ClipboardList,
-    permission: PERMISSIONS.VIEW_ACCOUNTING,
+    permissionAny: [PERMISSIONS.VIEW_CHART_OF_ACCOUNTS, PERMISSIONS.VIEW_JOURNAL_VOUCHERS, PERMISSIONS.VIEW_ACCOUNTING_SUMMARY],
     children: [
-      { name: 'Chart of Accounts', href: '/chart-of-accounts', icon: FolderTree, permission: PERMISSIONS.VIEW_ACCOUNTING },
-      { name: 'Journal Vouchers', href: '/journal-vouchers', icon: FileText, permission: PERMISSIONS.VIEW_ACCOUNTING },
-      { name: 'Account Ledger Summary', href: '/account-ledger', icon: FileText, permission: PERMISSIONS.VIEW_ACCOUNTING },
+      { name: 'Chart of Accounts', href: '/chart-of-accounts', icon: FolderTree, permission: PERMISSIONS.VIEW_CHART_OF_ACCOUNTS },
+      { name: 'Journal Vouchers', href: '/journal-vouchers', icon: FileText, permission: PERMISSIONS.VIEW_JOURNAL_VOUCHERS },
+      { name: 'Account Ledger Summary', href: '/account-ledger', icon: FileText, permission: PERMISSIONS.VIEW_ACCOUNTING_SUMMARY },
     ]
   },
 
   {
     name: 'Analytics',
     icon: BarChart3,
-    permission: PERMISSIONS.VIEW_REPORTS,
+    permissionAny: ['view_pl_statements', 'view_balance_sheets', 'view_sales_performance', 'view_inventory_reports', 'view_general_reports', PERMISSIONS.VIEW_BACKDATE_REPORT],
     children: [
-      { name: 'P&L Statements', href: '/pl-statements', icon: BarChart3, permission: PERMISSIONS.VIEW_FINANCIAL_DATA },
-      { name: 'Balance Sheet', href: '/balance-sheet-statement', icon: FileText, permission: PERMISSIONS.VIEW_FINANCIAL_DATA },
-      { name: 'Sales Performance', href: '/sales-performance', icon: TrendingUp, permission: PERMISSIONS.VIEW_REPORTS },
-      { name: 'Inventory Reports', href: '/inventory-reports', icon: Warehouse, permission: PERMISSIONS.VIEW_REPORTS },
-      { name: 'Reports', href: '/reports', icon: BarChart3, permission: PERMISSIONS.VIEW_REPORTS },
-      { name: 'Backdate Report', href: '/backdate-report', icon: Clock, permission: PERMISSIONS.VIEW_REPORTS },
+      { name: 'P&L Statements', href: '/pl-statements', icon: BarChart3, permission: 'view_pl_statements' },
+      { name: 'Balance Sheet', href: '/balance-sheet-statement', icon: FileText, permission: 'view_balance_sheets' },
+      { name: 'Sales Performance', href: '/sales-performance', icon: TrendingUp, permission: 'view_sales_performance' },
+      { name: 'Inventory Reports', href: '/inventory-reports', icon: Warehouse, permission: 'view_inventory_reports' },
+      { name: 'Reports', href: '/reports', icon: BarChart3, permission: 'view_general_reports' },
+      { name: 'Backdate Report', href: '/backdate-report', icon: Clock, permission: PERMISSIONS.VIEW_BACKDATE_REPORT },
     ]
   },
 
@@ -160,7 +161,7 @@ export const navigation = [
     name: 'System',
     icon: Settings,
     children: [
-      { name: 'Migration', href: '/migration', icon: RefreshCw, permission: PERMISSIONS.MANAGE_SETTINGS },
+      { name: 'Migration', href: '/migration', icon: RefreshCw, permission: PERMISSIONS.VIEW_MIGRATION },
     ]
   }
 ];
