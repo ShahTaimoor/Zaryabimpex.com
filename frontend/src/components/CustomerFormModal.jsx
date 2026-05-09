@@ -11,6 +11,7 @@ import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useGetActiveCitiesQuery, useCreateCityMutation } from '../store/services/citiesApi';
 import { LoadingInline } from './LoadingSpinner';
 import toast from 'react-hot-toast';
+import { getContactPersonVisible } from '../utils/fieldVisibility';
 
 const defaultCustomerValues = {
   name: '',
@@ -61,7 +62,7 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
 
   // Field Visibility Settings
   const [visibilitySettings, setVisibilitySettings] = useState({
-    contactPerson: localStorage.getItem('showCustomerSetting_contactPerson') === 'true',
+    contactPerson: getContactPersonVisible(false),
     email: localStorage.getItem('showCustomerSetting_email') === 'true',
     customerTier: localStorage.getItem('showCustomerSetting_customerTier') === 'true',
     state: localStorage.getItem('showCustomerSetting_state') === 'true',
@@ -72,7 +73,7 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
   useEffect(() => {
     const handleConfigChange = () => {
       setVisibilitySettings({
-        contactPerson: localStorage.getItem('showCustomerSetting_contactPerson') === 'true',
+        contactPerson: getContactPersonVisible(false),
         email: localStorage.getItem('showCustomerSetting_email') === 'true',
         customerTier: localStorage.getItem('showCustomerSetting_customerTier') === 'true',
         state: localStorage.getItem('showCustomerSetting_state') === 'true',

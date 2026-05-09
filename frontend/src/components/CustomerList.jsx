@@ -1,5 +1,6 @@
 import React from 'react';
 import { Users, Building, User, Edit, Trash2, MessageSquare } from 'lucide-react';
+import { getContactPersonVisible } from '../utils/fieldVisibility';
 
 export const CustomerList = ({
   customers,
@@ -9,14 +10,14 @@ export const CustomerList = ({
   onShowNotes
 }) => {
   const [visibilitySettings, setVisibilitySettings] = React.useState({
-    contactPerson: localStorage.getItem('showCustomerSetting_contactPerson') === 'true',
+    contactPerson: getContactPersonVisible(false),
     customerTier: localStorage.getItem('showCustomerSetting_customerTier') === 'true',
   });
 
   React.useEffect(() => {
     const handleConfigChange = () => {
       setVisibilitySettings({
-        contactPerson: localStorage.getItem('showCustomerSetting_contactPerson') === 'true',
+        contactPerson: getContactPersonVisible(false),
         customerTier: localStorage.getItem('showCustomerSetting_customerTier') === 'true',
       });
     };

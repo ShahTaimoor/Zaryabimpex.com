@@ -43,6 +43,7 @@ import {
 } from '../store/services/suppliersApi';
 import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useGetCitiesQuery, useGetActiveCitiesQuery } from '../store/services/citiesApi';
+import { getContactPersonVisible } from '../utils/fieldVisibility';
 
 
 const supplierDefaultValues = {
@@ -79,7 +80,7 @@ const supplierDefaultValues = {
 
 const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
   const [visibilitySettings, setVisibilitySettings] = useState({
-    contactPerson: localStorage.getItem('showSupplierSetting_contactPerson') === 'true',
+    contactPerson: getContactPersonVisible(true),
     email: localStorage.getItem('showSupplierSetting_email') === 'true',
     paymentTerms: localStorage.getItem('showSupplierSetting_paymentTerms') === 'true',
     website: localStorage.getItem('showSupplierSetting_website') === 'true',
@@ -95,7 +96,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
   useEffect(() => {
     const handleConfigChange = () => {
       setVisibilitySettings({
-        contactPerson: localStorage.getItem('showSupplierSetting_contactPerson') === 'true',
+        contactPerson: getContactPersonVisible(true),
         email: localStorage.getItem('showSupplierSetting_email') === 'true',
         paymentTerms: localStorage.getItem('showSupplierSetting_paymentTerms') === 'true',
         website: localStorage.getItem('showSupplierSetting_website') === 'true',
@@ -788,7 +789,7 @@ const DEFAULT_LIMIT = 50;
 
 export const Suppliers = () => {
   const [visibilitySettings, setVisibilitySettings] = useState({
-    contactPerson: localStorage.getItem('showSupplierSetting_contactPerson') === 'true',
+    contactPerson: getContactPersonVisible(true),
     email: localStorage.getItem('showSupplierSetting_email') === 'true',
     rating: localStorage.getItem('showSupplierSetting_rating') === 'true',
     notes: localStorage.getItem('showSupplierSetting_notes') === 'true',
@@ -797,7 +798,7 @@ export const Suppliers = () => {
   useEffect(() => {
     const handleConfigChange = () => {
       setVisibilitySettings({
-        contactPerson: localStorage.getItem('showSupplierSetting_contactPerson') === 'true',
+        contactPerson: getContactPersonVisible(true),
         email: localStorage.getItem('showSupplierSetting_email') === 'true',
         rating: localStorage.getItem('showSupplierSetting_rating') === 'true',
         notes: localStorage.getItem('showSupplierSetting_notes') === 'true',

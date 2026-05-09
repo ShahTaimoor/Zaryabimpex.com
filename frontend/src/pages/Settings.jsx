@@ -63,6 +63,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { LUCIDE_ICON_MAP } from '../utils/lucideIconMap';
+import { getVisibilityFlag } from '../utils/fieldVisibility';
 
 export const Settings2 = () => {
   const { user } = useAuth();
@@ -155,7 +156,9 @@ export const Settings2 = () => {
     logoSize: 100
   });
 
-  const [showSupplierSetting_contactPerson, setShowSupplierSetting_contactPerson] = useState(localStorage.getItem('showSupplierSetting_contactPerson') === 'true');
+  const [showSupplierSetting_contactPerson, setShowSupplierSetting_contactPerson] = useState(() =>
+    getVisibilityFlag('showSupplierSetting_contactPerson', true)
+  );
   const [showSupplierSetting_email, setShowSupplierSetting_email] = useState(localStorage.getItem('showSupplierSetting_email') === 'true');
   const [showSupplierSetting_paymentTerms, setShowSupplierSetting_paymentTerms] = useState(localStorage.getItem('showSupplierSetting_paymentTerms') === 'true');
   const [showSupplierSetting_website, setShowSupplierSetting_website] = useState(localStorage.getItem('showSupplierSetting_website') === 'true');
@@ -1474,7 +1477,9 @@ export const Settings2 = () => {
   const [showProductSetting_invoiceRef, setShowProductSetting_invoiceRef] = useState(() => localStorage.getItem('showProductSetting_invoiceRef') === 'true');
 
   // Customer Visibility Settings
-  const [showCustomerSetting_contactPerson, setShowCustomerSetting_contactPerson] = useState(() => localStorage.getItem('showCustomerSetting_contactPerson') === 'true');
+  const [showCustomerSetting_contactPerson, setShowCustomerSetting_contactPerson] = useState(() =>
+    getVisibilityFlag('showCustomerSetting_contactPerson', true)
+  );
   const [showCustomerSetting_email, setShowCustomerSetting_email] = useState(() => localStorage.getItem('showCustomerSetting_email') === 'true');
   const [showCustomerSetting_customerTier, setShowCustomerSetting_customerTier] = useState(() => localStorage.getItem('showCustomerSetting_customerTier') === 'true');
   const [showCustomerSetting_state, setShowCustomerSetting_state] = useState(() => localStorage.getItem('showCustomerSetting_state') === 'true');
