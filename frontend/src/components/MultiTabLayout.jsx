@@ -47,7 +47,6 @@ import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../utils/componentUtils';
 import TabBar from './TabBar';
 import TabContent from './TabContent';
-import { toast } from 'sonner';
 import ErrorBoundary from './ErrorBoundary';
 import MobileNavigation from './MobileNavigation';
 import MobileBottomNav from './MobileBottomNav';
@@ -563,15 +562,6 @@ export const MultiTabLayout = ({ children }) => {
 
         if (firstVisiblePage && firstVisiblePage.href !== currentPath) {
           navigate(firstVisiblePage.href);
-          // Only surface a toast when the redirect is caused by a permission
-          // denial. Sidebar visibility is a deliberate user preference, so we
-          // redirect silently in that case.
-          if (!isPermitted) {
-            toast.error(
-              `You don't have access to "${currentNavItem.name}". Redirecting to ${firstVisiblePage.name}.`,
-              { id: 'nav-redirect' }
-            );
-          }
         }
       }
     }

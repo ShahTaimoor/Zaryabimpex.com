@@ -94,7 +94,7 @@ import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermission
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 
 import { PERMISSIONS } from '../config/rbacConfig';
-import { getLocalDateString } from '../utils/dateUtils';
+import { getLocalDateString, getCurrentDatePakistan } from '../utils/dateUtils';
 import { formatDate } from '../utils/formatters';
 import DateFilter from '../components/DateFilter';
 import PaginationControls from '../components/PaginationControls';
@@ -162,8 +162,8 @@ export const Sales = ({ tabId, editData }) => {
   const [showProductImages, setShowProductImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
   const [savedInvoiceSearchTerm, setSavedInvoiceSearchTerm] = useState('');
   const [savedInvoiceStatus, setSavedInvoiceStatus] = useState('');
-  const [savedInvoiceFromDate, setSavedInvoiceFromDate] = useState('');
-  const [savedInvoiceToDate, setSavedInvoiceToDate] = useState('');
+  const [savedInvoiceFromDate, setSavedInvoiceFromDate] = useState(() => getCurrentDatePakistan());
+  const [savedInvoiceToDate, setSavedInvoiceToDate] = useState(() => getCurrentDatePakistan());
   const [savedInvoicePage, setSavedInvoicePage] = useState(1);
   const savedInvoiceLimit = 20;
   const [showSavedInvoicePrintModal, setShowSavedInvoicePrintModal] = useState(false);

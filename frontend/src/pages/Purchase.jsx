@@ -70,7 +70,7 @@ import {
   computeTotalPieces,
 } from '../utils/dualUnitUtils';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
-import { getLocalDateString } from '../utils/dateUtils';
+import { getLocalDateString, getCurrentDatePakistan } from '../utils/dateUtils';
 import { formatDate } from '../utils/formatters';
 import DateFilter from '../components/DateFilter';
 import PaginationControls from '../components/PaginationControls';
@@ -514,8 +514,8 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   const [purchaseDeleteTarget, setPurchaseDeleteTarget] = useState(null);
   const [savedPurchaseSearchTerm, setSavedPurchaseSearchTerm] = useState('');
   const [savedPurchaseStatus, setSavedPurchaseStatus] = useState('');
-  const [savedPurchaseFromDate, setSavedPurchaseFromDate] = useState('');
-  const [savedPurchaseToDate, setSavedPurchaseToDate] = useState('');
+  const [savedPurchaseFromDate, setSavedPurchaseFromDate] = useState(() => getCurrentDatePakistan());
+  const [savedPurchaseToDate, setSavedPurchaseToDate] = useState(() => getCurrentDatePakistan());
   const [savedPurchasePage, setSavedPurchasePage] = useState(1);
   const savedPurchaseLimit = 20;
   const debouncedSavedPurchaseSearch = useDebouncedValue(savedPurchaseSearchTerm, 350);
