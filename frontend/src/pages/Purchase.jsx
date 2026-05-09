@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Package,
+  Search,
+  Filter,
+  Edit,
+  RefreshCw,
   Trash2,
   Building,
   Truck,
@@ -22,8 +26,12 @@ import {
 import {
   useCreatePurchaseInvoiceMutation,
   useUpdatePurchaseInvoiceMutation,
-
+  useGetPurchaseInvoicesQuery,
+  useLazyGetPurchaseInvoicesQuery,
+  useLazyGetPurchaseInvoiceQuery,
+  useDeletePurchaseInvoiceMutation,
 } from '../store/services/purchaseInvoicesApi';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import { useGetUnifiedBalanceQuery } from '../store/services/accountingApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
@@ -63,6 +71,12 @@ import {
 } from '../utils/dualUnitUtils';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { getLocalDateString } from '../utils/dateUtils';
+import { formatDate } from '../utils/formatters';
+import DateFilter from '../components/DateFilter';
+import PaginationControls from '../components/PaginationControls';
+import ExcelExportButton from '../components/ExcelExportButton';
+import PdfExportButton from '../components/PdfExportButton';
+import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 
 
 import AsyncErrorBoundary from '../components/AsyncErrorBoundary';
@@ -486,6 +500,18 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [directPrintOrder, setDirectPrintOrder] = useState(null);
+  const [showSavedPurchasePrintModal, setShowSavedPurchasePrintModal] = useState(false);
+  const [savedPurchasePrintOrder, setSavedPurchasePrintOrder] = useState(null);
+  const [inlineEditData, setInlineEditData] = useState(null);
+  const activeEditData = inlineEditData?.isEditMode ? inlineEditData : editData;
+  const [purchaseDeleteTarget, setPurchaseDeleteTarget] = useState(null);
+  const [savedPurchaseSearchTerm, setSavedPurchaseSearchTerm] = useState('');
+  const [savedPurchaseStatus, setSavedPurchaseStatus] = useState('');
+  const [savedPurchaseFromDate, setSavedPurchaseFromDate] = useState('');
+  const [savedPurchaseToDate, setSavedPurchaseToDate] = useState('');
+  const [savedPurchasePage, setSavedPurchasePage] = useState(1);
+  const savedPurchaseLimit = 20;
+  const debouncedSavedPurchaseSearch = useDebouncedValue(savedPurchaseSearchTerm, 350);
 
   const PURCHASE_INVOICE_LABEL_KEY = 'purchaseInvoiceOfferBarcodeLabels';
   const [printBarcodeLabelsAfterInvoice, setPrintBarcodeLabelsAfterInvoice] = useState(() => {
@@ -524,6 +550,25 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   const [searchSuppliers, { data: suppliersSearchResult, isLoading: suppliersLoading, refetch: refetchSuppliers }] = useLazySearchSuppliersQuery();
   const [createPurchaseInvoice] = useCreatePurchaseInvoiceMutation();
   const [updatePurchaseInvoice] = useUpdatePurchaseInvoiceMutation();
+  const [deletePurchaseInvoice] = useDeletePurchaseInvoiceMutation();
+  const [getPurchaseInvoiceById] = useLazyGetPurchaseInvoiceQuery();
+  const [fetchPurchaseInvoicesForExport] = useLazyGetPurchaseInvoicesQuery();
+  const {
+    data: savedPurchaseResponse,
+    isLoading: isSavedPurchaseLoading,
+    error: savedPurchaseError,
+    refetch: refetchSavedPurchase,
+  } = useGetPurchaseInvoicesQuery(
+    {
+      search: debouncedSavedPurchaseSearch || undefined,
+      status: savedPurchaseStatus || undefined,
+      dateFrom: savedPurchaseFromDate || undefined,
+      dateTo: savedPurchaseToDate || undefined,
+      page: savedPurchasePage,
+      limit: savedPurchaseLimit,
+    },
+    { refetchOnMountOrArgChange: 120 }
+  );
 
   const { data: banksData, isLoading: banksLoading } = useGetBanksQuery(
     { isActive: true },
@@ -534,6 +579,21 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     const banks = banksData?.data?.banks || banksData?.banks || [];
     return banks.filter((bank) => bank.isActive !== false);
   }, [banksData]);
+
+  const savedPurchaseInvoices = useMemo(() => {
+    const top = savedPurchaseResponse?.data ?? savedPurchaseResponse;
+    if (Array.isArray(top?.data?.invoices)) return top.data.invoices;
+    if (Array.isArray(top?.invoices)) return top.invoices;
+    if (Array.isArray(top?.data?.purchaseInvoices)) return top.data.purchaseInvoices;
+    if (Array.isArray(top?.purchaseInvoices)) return top.purchaseInvoices;
+    if (Array.isArray(top?.data?.data?.invoices)) return top.data.data.invoices;
+    return [];
+  }, [savedPurchaseResponse]);
+
+  const savedPurchasePagination = useMemo(
+    () => savedPurchaseResponse?.data?.pagination ?? savedPurchaseResponse?.pagination ?? {},
+    [savedPurchaseResponse]
+  );
 
   useEffect(() => {
     if (paymentMethod !== 'bank' || selectedBankAccount) return;
@@ -551,45 +611,45 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
 
   // Handle edit data when component is opened for editing
   useEffect(() => {
-    if (editData && editData.isEditMode && editData.invoiceId) {
+    if (activeEditData && activeEditData.isEditMode && activeEditData.invoiceId) {
       // Set the supplier (will be updated with complete data if available)
-      if (editData.supplier) {
-        setSelectedSupplier(editData.supplier);
+      if (activeEditData.supplier) {
+        setSelectedSupplier(activeEditData.supplier);
       }
 
       // Set the invoice number
-      if (editData.invoiceNumber) {
-        setInvoiceNumber(editData.invoiceNumber);
+      if (activeEditData.invoiceNumber) {
+        setInvoiceNumber(activeEditData.invoiceNumber);
         setAutoGenerateInvoice(false); // Don't auto-generate when editing
       }
 
       // Set the notes
-      if (editData.notes) {
-        setNotes(editData.notes);
+      if (activeEditData.notes) {
+        setNotes(activeEditData.notes);
       }
 
       if (isEnhancedImportPurchase) {
-        const existingImportCharges = editData?.pricing?.importCharges;
+        const existingImportCharges = activeEditData?.pricing?.importCharges;
         if (existingImportCharges && typeof existingImportCharges === 'object') {
           setImportCharges((prev) => ({ ...prev, ...existingImportCharges }));
         }
-        const existingAllocationMethod = editData?.pricing?.importAllocationMethod;
+        const existingAllocationMethod = activeEditData?.pricing?.importAllocationMethod;
         if (existingAllocationMethod) {
           setImportAllocationMethod(existingAllocationMethod);
         }
       }
 
       // Set bill date (same as Sale page; API returns invoiceDate)
-      if (editData.invoiceDate || editData.billDate) {
-        const d = editData.invoiceDate || editData.billDate;
+      if (activeEditData.invoiceDate || activeEditData.billDate) {
+        const d = activeEditData.invoiceDate || activeEditData.billDate;
         setBillDate(!isNaN(new Date(d).getTime()) ? getLocalDateString(new Date(d)) : getLocalDateString());
-      } else if (editData.createdAt) {
-        setBillDate(!isNaN(new Date(editData.createdAt).getTime()) ? getLocalDateString(new Date(editData.createdAt)) : getLocalDateString());
+      } else if (activeEditData.createdAt) {
+        setBillDate(!isNaN(new Date(activeEditData.createdAt).getTime()) ? getLocalDateString(new Date(activeEditData.createdAt)) : getLocalDateString());
       }
 
       // Set the purchase items
-      if (editData.items && editData.items.length > 0) {
-        const formattedItems = editData.items.map(item => ({
+      if (activeEditData.items && activeEditData.items.length > 0) {
+        const formattedItems = activeEditData.items.map(item => ({
           product: item.product,
           quantity: item.quantity,
           costPerUnit: item.unitCost || item.costPerUnit,
@@ -599,14 +659,14 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
       }
 
       // Set payment amount and method for editing (same as sales invoice amount received)
-      if (editData.payment) {
-        const amt = editData.payment.amount ?? editData.payment.paidAmount ?? 0;
+      if (activeEditData.payment) {
+        const amt = activeEditData.payment.amount ?? activeEditData.payment.paidAmount ?? 0;
         setAmountPaid(typeof amt === 'number' ? amt : parseFloat(amt) || 0);
-        if (editData.payment.method) {
-          setPaymentMethod(editData.payment.method);
+        if (activeEditData.payment.method) {
+          setPaymentMethod(activeEditData.payment.method);
         }
-        if (editData.payment.method === 'bank') {
-          setSelectedBankAccount(editData.payment.bankAccount || '');
+        if (activeEditData.payment.method === 'bank') {
+          setSelectedBankAccount(activeEditData.payment.bankAccount || '');
         } else {
           setSelectedBankAccount('');
         }
@@ -614,7 +674,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
 
       // Data loaded successfully (no toast needed as PurchaseInvoices already shows opening message)
     }
-  }, [editData?.invoiceId, isEnhancedImportPurchase]); // Only depend on invoiceId to prevent multiple executions
+  }, [activeEditData?.invoiceId, isEnhancedImportPurchase]); // Only depend on invoiceId to prevent multiple executions
 
   // Fetch complete supplier data when supplier is selected (for immediate balance updates)
   const { data: completeSupplierData, refetch: refetchSupplier } = useGetSupplierQuery(
@@ -742,7 +802,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     }
 
     // Clear cart when supplier changes (only in new purchase mode, not in edit mode)
-    if (purchaseItems.length > 0 && !editData?.isEditMode) {
+    if (purchaseItems.length > 0 && !activeEditData?.isEditMode) {
       setPurchaseItems([]);
       setHighlightedPurchaseLineIndex(null);
       toast.success('Purchase items cleared due to supplier change. Please re-add products.');
@@ -882,17 +942,22 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
         }
       }
 
-      // Navigate to Purchase Invoices page after successful update
-      const componentInfo = getComponentInfo('/purchase-invoices');
-      if (componentInfo) {
-        openTab({
-          title: 'Purchase Invoices',
-          path: '/purchase-invoices',
-          component: componentInfo.component,
-          icon: componentInfo.icon,
-          allowMultiple: componentInfo.allowMultiple,
-          props: {}
-        });
+      if (inlineEditData?.isEditMode) {
+        setInlineEditData(null);
+        toast.success('Returned to new purchase mode');
+      } else {
+        // Navigate to Purchase Invoices page after successful update
+        const componentInfo = getComponentInfo('/purchase-invoices');
+        if (componentInfo) {
+          openTab({
+            title: 'Purchase Invoices',
+            path: '/purchase-invoices',
+            component: componentInfo.component,
+            icon: componentInfo.icon,
+            allowMultiple: componentInfo.allowMultiple,
+            props: {}
+          });
+        }
       }
     } catch (error) {
       toast.error(error?.data?.message || error?.message || 'Failed to update purchase');
@@ -1215,17 +1280,165 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     }
 
     pendingReceiptLabelPayloadRef.current = null;
-    if (printBarcodeLabelsAfterInvoice && !editData?.isEditMode && purchaseItems.length > 0) {
+    if (printBarcodeLabelsAfterInvoice && !activeEditData?.isEditMode && purchaseItems.length > 0) {
       pendingReceiptLabelPayloadRef.current = { items: [...purchaseItems] };
     }
 
     // Use appropriate mutation based on edit mode
-    if (editData?.isEditMode) {
-      handleUpdatePurchaseInvoice(editData.invoiceId, invoiceData);
+    if (activeEditData?.isEditMode) {
+      handleUpdatePurchaseInvoice(activeEditData.invoiceId, invoiceData);
     } else {
       handleCreatePurchaseInvoice(invoiceData);
     }
-  }, [purchaseItems, selectedSupplier, invoiceNumber, autoGenerateInvoice, expectedDelivery, billDate, notes, taxSystemEnabled, subtotal, tax, total, directDiscountAmount, paymentMethod, selectedBankAccount, amountPaid, editData, handleCreatePurchaseInvoice, handleUpdatePurchaseInvoice, printBarcodeLabelsAfterInvoice, isEnhancedImportPurchase, importCharges, importChargesTotal, importAllocationMethod, getImportAllocatedItems]);
+  }, [purchaseItems, selectedSupplier, invoiceNumber, autoGenerateInvoice, expectedDelivery, billDate, notes, taxSystemEnabled, subtotal, tax, total, directDiscountAmount, paymentMethod, selectedBankAccount, amountPaid, activeEditData, handleCreatePurchaseInvoice, handleUpdatePurchaseInvoice, printBarcodeLabelsAfterInvoice, isEnhancedImportPurchase, importCharges, importChargesTotal, importAllocationMethod, getImportAllocatedItems]);
+
+  const getDerivedPurchasePaymentStatus = useCallback((invoice) => {
+    const totalAmount = Number(invoice?.pricing?.total ?? invoice?.total ?? 0) || 0;
+    const paidAmount = Number(
+      invoice?.payment?.amountPaid ??
+      invoice?.payment?.paidAmount ??
+      invoice?.payment?.amount ??
+      invoice?.amountPaid ??
+      invoice?.amount_paid ??
+      0
+    ) || 0;
+    if (totalAmount <= 0) return 'pending';
+    if (paidAmount <= 0) return 'pending';
+    if (paidAmount + 0.01 >= totalAmount) return 'paid';
+    return 'partial';
+  }, []);
+
+  const getPurchasePaymentStatusBadgeClass = useCallback((status) => {
+    switch (String(status || '').toLowerCase()) {
+      case 'paid':
+        return 'bg-green-100 text-green-800';
+      case 'partial':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'pending':
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
+  }, []);
+
+  const getSavedPurchaseInvoicesExportData = useCallback(async () => {
+    try {
+      const res = await fetchPurchaseInvoicesForExport({
+        search: savedPurchaseSearchTerm || undefined,
+        status: savedPurchaseStatus || undefined,
+        dateFrom: savedPurchaseFromDate || undefined,
+        dateTo: savedPurchaseToDate || undefined,
+        page: 1,
+        limit: 10000,
+      }).unwrap();
+
+      const top = res?.data ?? res;
+      let allRows = [];
+      if (Array.isArray(top?.data?.invoices)) allRows = top.data.invoices;
+      else if (Array.isArray(top?.invoices)) allRows = top.invoices;
+      else if (Array.isArray(top?.data?.purchaseInvoices)) allRows = top.data.purchaseInvoices;
+      else if (Array.isArray(top?.purchaseInvoices)) allRows = top.purchaseInvoices;
+      else if (Array.isArray(top?.data?.data?.invoices)) allRows = top.data.data.invoices;
+
+      const supplierNameOf = (invoice) =>
+        invoice?.supplierInfo?.businessName ||
+        invoice?.supplierInfo?.business_name ||
+        invoice?.supplierInfo?.companyName ||
+        invoice?.supplierInfo?.name ||
+        'Unknown';
+
+      const fnFrom = savedPurchaseFromDate || 'all';
+      const fnTo = savedPurchaseToDate || 'all';
+
+      return {
+        title: 'Purchase Invoices Report',
+        filename: `Purchase_Invoices_${fnFrom}_to_${fnTo}.xlsx`,
+        company: {
+          name: companySettings?.companyName || 'ZARYAB IMPEX',
+          address: companySettings?.address || companySettings?.billingAddress || '',
+          contact: `${companySettings?.contactNumber || ''} ${companySettings?.email ? '| ' + companySettings.email : ''}`.trim(),
+        },
+        columns: [
+          { header: 'S.No', key: 'sno', width: 8, type: 'number' },
+          { header: 'Date', key: 'date', width: 15 },
+          { header: 'Invoice #', key: 'invoiceNumber', width: 22 },
+          { header: 'Supplier', key: 'supplierName', width: 35 },
+          { header: 'Status', key: 'status', width: 14 },
+          { header: 'Total Amount', key: 'totalAmount', width: 15, type: 'currency' },
+        ],
+        data: allRows.map((invoice, i) => ({
+          sno: i + 1,
+          date: formatDate(invoice?.invoiceDate || invoice?.invoice_date || invoice?.createdAt || invoice?.created_at),
+          invoiceNumber: invoice?.invoiceNumber || invoice?.invoice_number || '—',
+          supplierName: supplierNameOf(invoice),
+          status: String(getDerivedPurchasePaymentStatus(invoice)).toUpperCase(),
+          totalAmount: Number(invoice?.pricing?.total ?? invoice?.total ?? 0),
+        })),
+        summary: {
+          rows: [
+            {
+              label: 'GRAND TOTAL:',
+              invoiceNumber: `${allRows.length} Invoices`,
+              totalAmount: allRows.reduce((sum, inv) => sum + Number(inv?.pricing?.total ?? inv?.total ?? 0), 0),
+            },
+          ],
+        },
+      };
+    } catch (error) {
+      toast.error(error?.data?.message || error?.message || 'Could not load purchase invoices for export');
+      return null;
+    }
+  }, [
+    fetchPurchaseInvoicesForExport,
+    savedPurchaseSearchTerm,
+    savedPurchaseStatus,
+    savedPurchaseFromDate,
+    savedPurchaseToDate,
+    companySettings,
+    getDerivedPurchasePaymentStatus,
+  ]);
+
+  const handleEditSavedPurchase = useCallback(async (invoice) => {
+    try {
+      const result = await getPurchaseInvoiceById(invoice?._id || invoice?.id).unwrap();
+      const full = result?.invoice || result?.data?.invoice || result?.data || result || invoice;
+      setInlineEditData({
+        invoiceId: full._id || full.id,
+        isEditMode: true,
+        supplier: full.supplierInfo || full.supplier,
+        invoiceNumber: full.invoiceNumber || full.invoice_number,
+        notes: full.notes || '',
+        pricing: full.pricing || {},
+        invoiceDate: full.invoiceDate || full.invoice_date || full.createdAt,
+        items: (full.items || []).map((item) => ({
+          product: item.product && typeof item.product === 'object'
+            ? item.product
+            : { _id: item.product_id || item.product, name: item.name || item.productName || 'Product' },
+          quantity: item.quantity || 1,
+          unitCost: item.unitCost ?? item.costPerUnit ?? item.unit_price ?? 0,
+          totalCost: item.totalCost ?? item.total ?? (Number(item.quantity || 0) * Number(item.unitCost ?? item.costPerUnit ?? 0)),
+        })),
+        payment: full.payment || {},
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      toast.success('Invoice loaded for inline edit');
+    } catch (error) {
+      toast.error(error?.data?.message || error?.message || 'Failed to load purchase invoice');
+    }
+  }, [getPurchaseInvoiceById]);
+
+  const handleDeleteSavedPurchase = useCallback(async (invoice) => {
+    const target = invoice ?? purchaseDeleteTarget;
+    const id = target?._id || target?.id;
+    if (!id) return;
+    try {
+      await deletePurchaseInvoice(id).unwrap();
+      toast.success('Purchase invoice deleted successfully');
+      setPurchaseDeleteTarget(null);
+      refetchSavedPurchase();
+    } catch (error) {
+      toast.error(error?.data?.message || error?.message || 'Failed to delete purchase invoice');
+    }
+  }, [deletePurchaseInvoice, purchaseDeleteTarget, refetchSavedPurchase]);
 
 
   return (
@@ -1621,7 +1834,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                     className="bg-slate-900 hover:bg-slate-800 text-white border-none h-8 px-4 font-bold"
                   >
                     <Truck className="h-4 w-4 mr-2" />
-                    {editData?.isEditMode ? 'Update' : 'Complete'}
+                    {activeEditData?.isEditMode ? 'Update' : 'Complete'}
                   </LoadingButton>
 
                   <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
@@ -2005,7 +2218,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                 </div>
 
                 <OrderCheckoutActions className="mt-4 border-0 pt-0">
-                  {!editData?.isEditMode && purchaseItems.length > 0 && (
+                  {!activeEditData?.isEditMode && purchaseItems.length > 0 && (
                     <div className="flex items-center space-x-2 px-2 mb-2">
                       <Input
                         type="checkbox"
@@ -2024,6 +2237,232 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
             </OrderCheckoutCard>
           </div>
         )}
+
+        <div className="mt-4 card">
+          <div className="card-header">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-medium text-gray-900 leading-tight">
+                    Purchase Invoices
+                    <span className="block sm:inline sm:ml-2 text-xs sm:text-sm font-normal text-gray-500 mt-1 sm:mt-0">
+                      From: {savedPurchaseFromDate ? formatDate(savedPurchaseFromDate) : '—'} To:{' '}
+                      {savedPurchaseToDate ? formatDate(savedPurchaseToDate) : '—'}
+                    </span>
+                  </h3>
+                </div>
+                <div className="flex flex-shrink-0 flex-wrap items-center gap-2 sm:gap-3 sm:justify-end">
+                  <span className="text-xs sm:text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                    <span className="font-semibold text-gray-700">
+                      {savedPurchasePagination.total ?? savedPurchaseInvoices.length}
+                    </span>{' '}
+                    records
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <ExcelExportButton getData={getSavedPurchaseInvoicesExportData} label="Export" />
+                    <PdfExportButton getData={getSavedPurchaseInvoicesExportData} label="PDF" />
+                    <button
+                      onClick={() => refetchSavedPurchase()}
+                      className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Refresh"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 pt-1 border-t border-gray-100">
+                <div className="sm:col-span-2 lg:col-span-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Date Range</label>
+                  <DateFilter
+                    startDate={savedPurchaseFromDate}
+                    endDate={savedPurchaseToDate}
+                    onDateChange={(start, end) => {
+                      setSavedPurchaseFromDate(start || '');
+                      setSavedPurchaseToDate(end || '');
+                      setSavedPurchasePage(1);
+                    }}
+                    compact={true}
+                    showPresets={true}
+                  />
+                </div>
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Invoice / Supplier</label>
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={savedPurchaseSearchTerm}
+                    onChange={(e) => {
+                      setSavedPurchaseSearchTerm(e.target.value);
+                      setSavedPurchasePage(1);
+                    }}
+                    className="input h-[42px] w-full"
+                  />
+                </div>
+                <div className="sm:col-span-2 lg:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
+                  <select
+                    value={savedPurchaseStatus}
+                    onChange={(e) => {
+                      setSavedPurchaseStatus(e.target.value);
+                      setSavedPurchasePage(1);
+                    }}
+                    className="input h-[42px] w-full"
+                  >
+                    <option value="">All statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="partial">Partial</option>
+                    <option value="paid">Paid</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2 lg:col-span-2 flex items-end">
+                  <Button
+                    type="button"
+                    variant="default"
+                    onClick={() => refetchSavedPurchase()}
+                    className="w-full h-[42px] flex items-center justify-center space-x-2"
+                  >
+                    <Search className="h-4 w-4" />
+                    <span>Search</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="card-content p-0">
+            {isSavedPurchaseLoading ? (
+              <div className="p-8 text-center">
+                <RefreshCw className="h-8 w-8 animate-spin mx-auto text-gray-400" />
+                <p className="mt-2 text-gray-500">Loading purchase invoices...</p>
+              </div>
+            ) : savedPurchaseError ? (
+              <div className="p-8 text-center text-red-600">
+                <p>{savedPurchaseError?.data?.message || 'Error loading purchase invoices'}</p>
+              </div>
+            ) : savedPurchaseInvoices.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <p>No purchase invoices found for the selected criteria.</p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice #</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {savedPurchaseInvoices.map((invoice, index) => {
+                        const invoiceId = invoice?._id || invoice?.id || `saved-pi-${index}`;
+                        const invoiceNumber = invoice?.invoiceNumber || invoice?.invoice_number || '—';
+                        const supplierName = invoice?.supplierInfo?.businessName || invoice?.supplierInfo?.business_name || invoice?.supplierInfo?.companyName || invoice?.supplierInfo?.name || 'Unknown';
+                        const invoiceDate = invoice?.invoiceDate || invoice?.invoice_date || invoice?.createdAt || invoice?.created_at;
+                        const totalValue = Number(invoice?.pricing?.total ?? invoice?.total ?? 0) || 0;
+                        const paymentStatus = getDerivedPurchasePaymentStatus(invoice);
+                        return (
+                          <tr key={invoiceId} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {invoiceDate ? new Date(invoiceDate).toLocaleDateString() : '—'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{invoiceNumber}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{supplierName}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getPurchasePaymentStatusBadgeClass(paymentStatus)}`}>
+                                {paymentStatus}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{totalValue.toFixed(2)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => {
+                                    setSavedPurchasePrintOrder(invoice);
+                                    setShowSavedPurchasePrintModal(true);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-900"
+                                  title="View"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSavedPurchasePrintOrder(invoice);
+                                    setShowSavedPurchasePrintModal(true);
+                                  }}
+                                  className="text-green-600 hover:text-green-900"
+                                  title="Print"
+                                >
+                                  <Printer className="h-4 w-4" />
+                                </button>
+                                <ExcelExportButton
+                                  getData={async () => {
+                                    try {
+                                      const result = await getPurchaseInvoiceById(invoice?._id || invoice?.id).unwrap();
+                                      const freshInvoice = result?.invoice || result?.data?.invoice || result?.data || result || invoice;
+                                      const payload = getInvoicePdfPayload(freshInvoice, companySettings, 'Purchase Invoice', 'Supplier');
+                                      return { ...payload, filename: `Purchase_Invoice_${invoiceNumber}.xlsx` };
+                                    } catch {
+                                      return { ...getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier'), filename: `Purchase_Invoice_${invoiceNumber}.xlsx` };
+                                    }
+                                  }}
+                                  label=""
+                                  className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-emerald-600 hover:text-emerald-800 px-1 py-1"
+                                />
+                                <PdfExportButton
+                                  getData={async () => {
+                                    try {
+                                      const result = await getPurchaseInvoiceById(invoice?._id || invoice?.id).unwrap();
+                                      const freshInvoice = result?.invoice || result?.data?.invoice || result?.data || result || invoice;
+                                      return getInvoicePdfPayload(freshInvoice, companySettings, 'Purchase Invoice', 'Supplier');
+                                    } catch {
+                                      return getInvoicePdfPayload(invoice, companySettings, 'Purchase Invoice', 'Supplier');
+                                    }
+                                  }}
+                                  label=""
+                                  className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-red-600 hover:text-red-800 px-1 py-1"
+                                />
+                                <button
+                                  onClick={() => handleEditSavedPurchase(invoice)}
+                                  className="text-blue-600 hover:text-blue-800"
+                                  title="Edit"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => setPurchaseDeleteTarget(invoice)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <PaginationControls
+                  page={Number(savedPurchasePagination.current ?? savedPurchasePage) || 1}
+                  totalPages={Math.max(1, Number(savedPurchasePagination.pages) || 1)}
+                  onPageChange={(p) => setSavedPurchasePage(p)}
+                  totalItems={savedPurchasePagination.total}
+                  limit={savedPurchaseLimit}
+                />
+              </>
+            )}
+          </div>
+        </div>
 
         {directPrintOrder && (
           <DirectPrintInvoice
@@ -2045,6 +2484,42 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
           documentTitle="Purchase Invoice"
           partyLabel="Supplier"
         />
+
+        <PrintModal
+          isOpen={showSavedPurchasePrintModal}
+          onClose={() => {
+            setShowSavedPurchasePrintModal(false);
+            setSavedPurchasePrintOrder(null);
+          }}
+          orderData={savedPurchasePrintOrder}
+          documentTitle="Purchase Invoice"
+          partyLabel="Supplier"
+        />
+
+        <BaseModal
+          isOpen={!!purchaseDeleteTarget}
+          onClose={() => setPurchaseDeleteTarget(null)}
+          title="Delete Purchase Invoice"
+          maxWidth="sm"
+          footer={
+            <div className="flex justify-end gap-2 w-full">
+              <Button type="button" variant="secondary" onClick={() => setPurchaseDeleteTarget(null)}>
+                Cancel
+              </Button>
+              <Button type="button" variant="destructive" onClick={() => handleDeleteSavedPurchase()}>
+                Delete
+              </Button>
+            </div>
+          }
+        >
+          <p className="text-sm text-gray-700">
+            Are you sure you want to delete invoice{' '}
+            <span className="font-semibold">
+              {purchaseDeleteTarget?.invoiceNumber || purchaseDeleteTarget?.invoice_number || purchaseDeleteTarget?._id || purchaseDeleteTarget?.id}
+            </span>
+            ? This action cannot be undone.
+          </p>
+        </BaseModal>
 
         {showReceiptLabelPrinter && (
           <BarcodeLabelPrinter

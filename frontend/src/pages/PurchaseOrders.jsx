@@ -2603,160 +2603,147 @@ export const PurchaseOrders = ({ tabId }) => {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Results: title row, filters below, then table (same pattern as Sales Orders) */}
       <div className="card">
         <div className="card-header">
-          <div className="flex items-center space-x-2">
-            <Filter className="h-5 w-5 text-gray-400" />
-            <h3 className="text-lg font-medium text-gray-900">Filters</h3>
-          </div>
-        </div>
-        <div className="card-content">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4">
-            {/* Date Range - spans more columns to prevent overlap */}
-            <div className="sm:col-span-2 lg:col-span-5">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date Range
-              </label>
-              <DateFilter
-                startDate={filters.fromDate}
-                endDate={filters.toDate}
-                onDateChange={(start, end) => {
-                  handleFilterChange('fromDate', start || '');
-                  handleFilterChange('toDate', end || '');
-                }}
-                compact={true}
-                showPresets={true}
-              />
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-medium text-gray-900 leading-tight">
+                  Purchase Orders
+                  <span className="block sm:inline sm:ml-2 text-xs sm:text-sm font-normal text-gray-500 mt-1 sm:mt-0">
+                    From: {formatDate(filters.fromDate)} To: {formatDate(filters.toDate)}
+                  </span>
+                </h3>
+              </div>
+              <div className="flex flex-shrink-0 flex-wrap items-center gap-2 sm:gap-3 sm:justify-end">
+                <span className="text-xs sm:text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                  <span className="font-semibold text-gray-700">
+                    {paginationInfo.total ?? paginationInfo.totalItems ?? purchaseOrders.length ?? 0}
+                  </span>{' '}
+                  records
+                </span>
+                <div className="flex items-center gap-2">
+                  <ExcelExportButton getData={getExportData} label="Export" />
+                  <PdfExportButton getData={getExportData} label="PDF" />
+                  <button
+                    onClick={() => refetch()}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Refresh"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* PO Number Filter */}
-            <div className="sm:col-span-2 lg:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                PO Number
-              </label>
-              <Input
-                type="text"
-                autoComplete="off"
-                placeholder="Contains..."
-                value={filters.poNumber}
-                onChange={(e) => handleFilterChange('poNumber', e.target.value)}
-                className="h-[42px] w-full"
-              />
-            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 pt-1 border-t border-gray-100">
+              <div className="sm:col-span-2 lg:col-span-5">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Date Range
+                </label>
+                <DateFilter
+                  startDate={filters.fromDate}
+                  endDate={filters.toDate}
+                  onDateChange={(start, end) => {
+                    handleFilterChange('fromDate', start || '');
+                    handleFilterChange('toDate', end || '');
+                  }}
+                  compact={true}
+                  showPresets={true}
+                />
+              </div>
 
-            {/* Status Filter */}
-            <div className="sm:col-span-2 lg:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Status
-              </label>
-              <select
-                value={filters.status}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-                className="input h-[42px] w-full"
-              >
-                <option value="">All Statuses</option>
-                <option value="draft">Pending</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="partially_received">Partially Received</option>
-                <option value="fully_received">Fully Received</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="closed">Closed</option>
-              </select>
-            </div>
+              <div className="sm:col-span-2 lg:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  PO Number
+                </label>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  placeholder="Contains..."
+                  value={filters.poNumber}
+                  onChange={(e) => handleFilterChange('poNumber', e.target.value)}
+                  className="input h-[42px] w-full"
+                />
+              </div>
 
-            {/* Supplier Filter */}
-            <div className="sm:col-span-2 lg:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Supplier
-              </label>
-              <select
-                value={filters.supplier}
-                onChange={(e) => handleFilterChange('supplier', e.target.value)}
-                className="input h-[42px] w-full"
-              >
-                <option value="">All Suppliers</option>
-                {suppliers?.map((supplier) => (
-                  <option key={supplier._id} value={supplier._id}>
-                    {supplier.companyName || supplier.name || 'Unknown'}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="sm:col-span-2 lg:col-span-12 flex items-start gap-2 pt-2 border-t border-gray-100 mt-1">
-              <input
-                type="checkbox"
-                id="po-offer-barcode-labels"
-                checked={printBarcodeLabelsAfterPoConfirm}
-                onChange={(e) => setPrintBarcodeLabelsAfterPoConfirm(e.target.checked)}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mt-1"
-              />
-              <label htmlFor="po-offer-barcode-labels" className="text-sm text-gray-700 cursor-pointer">
-                After confirming a draft PO (receipt), open barcode label printer — copies default to line quantity (barcode or SKU per product)
-              </label>
-            </div>
-
-            {/* Payment Status Filter */}
-            <div className="sm:col-span-2 lg:col-span-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Payment
-              </label>
-              <select
-                value={filters.paymentStatus}
-                onChange={(e) => handleFilterChange('paymentStatus', e.target.value)}
-                className="input h-[42px] w-full"
-              >
-                <option value="">All</option>
-                <option value="pending">Pending</option>
-                <option value="paid">Paid</option>
-                <option value="partial">Partial</option>
-                <option value="refunded">Refunded</option>
-              </select>
-            </div>
-
-            {/* Search Button */}
-            <div className="sm:col-span-2 lg:col-span-2 flex items-end">
-              <Button
-                onClick={() => refetch()}
-                variant="default"
-                className="w-full flex items-center justify-center space-x-2 h-[42px]"
-              >
-                <Search className="h-4 w-4" />
-                <span>Search</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Results */}
-      <div className="card">
-        <div className="card-header">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 leading-tight">
-              Purchase Orders
-              <span className="block sm:inline sm:ml-2 text-xs sm:text-sm font-normal text-gray-500 mt-1 sm:mt-0">
-                From: {formatDate(filters.fromDate)} To: {formatDate(filters.toDate)}
-              </span>
-            </h3>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <span className="text-xs sm:text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                <span className="font-semibold text-gray-700">
-                  {paginationInfo.total ?? paginationInfo.totalItems ?? purchaseOrders.length ?? 0}
-                </span>{' '}
-                records
-              </span>
-              <div className="flex items-center gap-2">
-                <ExcelExportButton getData={getExportData} label="Export" />
-                <PdfExportButton getData={getExportData} label="PDF" />
-                <button
-                  onClick={() => refetch()}
-                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                  title="Refresh"
+              <div className="sm:col-span-2 lg:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Status
+                </label>
+                <select
+                  value={filters.status}
+                  onChange={(e) => handleFilterChange('status', e.target.value)}
+                  className="input h-[42px] w-full"
                 >
-                  <RefreshCw className="h-4 w-4" />
-                </button>
+                  <option value="">All Statuses</option>
+                  <option value="draft">Pending</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="partially_received">Partially Received</option>
+                  <option value="fully_received">Fully Received</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Supplier
+                </label>
+                <select
+                  value={filters.supplier}
+                  onChange={(e) => handleFilterChange('supplier', e.target.value)}
+                  className="input h-[42px] w-full"
+                >
+                  <option value="">All Suppliers</option>
+                  {suppliers?.map((supplier) => (
+                    <option key={supplier._id} value={supplier._id}>
+                      {supplier.companyName || supplier.name || 'Unknown'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-12 flex items-start gap-2 pt-2 border-t border-gray-100 mt-1">
+                <input
+                  type="checkbox"
+                  id="po-offer-barcode-labels"
+                  checked={printBarcodeLabelsAfterPoConfirm}
+                  onChange={(e) => setPrintBarcodeLabelsAfterPoConfirm(e.target.checked)}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mt-1"
+                />
+                <label htmlFor="po-offer-barcode-labels" className="text-sm text-gray-700 cursor-pointer">
+                  After confirming a draft PO (receipt), open barcode label printer — copies default to line quantity (barcode or SKU per product)
+                </label>
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Payment
+                </label>
+                <select
+                  value={filters.paymentStatus}
+                  onChange={(e) => handleFilterChange('paymentStatus', e.target.value)}
+                  className="input h-[42px] w-full"
+                >
+                  <option value="">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="paid">Paid</option>
+                  <option value="partial">Partial</option>
+                  <option value="refunded">Refunded</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-2 flex items-end">
+                <Button
+                  onClick={() => refetch()}
+                  variant="default"
+                  className="w-full flex items-center justify-center space-x-2 h-[42px]"
+                >
+                  <Search className="h-4 w-4" />
+                  <span>Search</span>
+                </Button>
               </div>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ShoppingCart,
   Search,
+  Filter,
   Plus,
   Minus,
   Trash2,
@@ -11,8 +12,10 @@ import {
   TrendingUp,
   Calculator,
   Receipt,
+  Edit,
   Printer,
   History,
+  RefreshCw,
   RotateCcw,
   CheckCircle,
   AlertCircle,
@@ -30,7 +33,11 @@ import { useGetCustomerQuery, useLazySearchCustomersQuery } from '../store/servi
 import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
 import {
   useCreateSaleMutation,
+  useGetOrdersQuery,
+  useLazyGetOrdersQuery,
+  useLazyGetOrderByIdQuery,
   useUpdateOrderMutation,
+  useDeleteOrderMutation,
   useLazyGetLastPricesQuery,
 
 } from '../store/services/salesApi';
@@ -87,6 +94,12 @@ import { useCompanyInfo } from '../hooks/useCompanyInfo';
 
 import { PERMISSIONS } from '../config/rbacConfig';
 import { getLocalDateString } from '../utils/dateUtils';
+import { formatDate } from '../utils/formatters';
+import DateFilter from '../components/DateFilter';
+import PaginationControls from '../components/PaginationControls';
+import ExcelExportButton from '../components/ExcelExportButton';
+import PdfExportButton from '../components/PdfExportButton';
+import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 
 import { ProductSearch } from '../components/sales/ProductSearch';
 
@@ -146,6 +159,17 @@ export const Sales = ({ tabId, editData }) => {
   const [previewImageProduct, setPreviewImageProduct] = useState(null);
   const [showCostPrice, setShowCostPrice] = useState(false); // Toggle to show/hide cost prices
   const [showProductImages, setShowProductImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
+  const [savedInvoiceSearchTerm, setSavedInvoiceSearchTerm] = useState('');
+  const [savedInvoiceStatus, setSavedInvoiceStatus] = useState('');
+  const [savedInvoiceFromDate, setSavedInvoiceFromDate] = useState('');
+  const [savedInvoiceToDate, setSavedInvoiceToDate] = useState('');
+  const [savedInvoicePage, setSavedInvoicePage] = useState(1);
+  const savedInvoiceLimit = 20;
+  const [showSavedInvoicePrintModal, setShowSavedInvoicePrintModal] = useState(false);
+  const [savedInvoicePrintOrder, setSavedInvoicePrintOrder] = useState(null);
+  const [inlineEditData, setInlineEditData] = useState(null);
+  const [invoiceDeleteTarget, setInvoiceDeleteTarget] = useState(null);
+  const activeEditData = inlineEditData?.isEditMode ? inlineEditData : editData;
 
   useEffect(() => {
     const handleConfigChange = () => {
@@ -247,26 +271,26 @@ export const Sales = ({ tabId, editData }) => {
 
   // Handle edit data when component is opened for editing
   useEffect(() => {
-    if (editData && editData.isEditMode && editData.orderId) {
+    if (activeEditData && activeEditData.isEditMode && activeEditData.orderId) {
       // Set the customer
-      if (editData.customer) {
-        setSelectedCustomer(editData.customer);
+      if (activeEditData.customer) {
+        setSelectedCustomer(activeEditData.customer);
       }
 
       // Set the invoice number
-      if (editData.orderNumber) {
-        setInvoiceNumber(editData.orderNumber);
+      if (activeEditData.orderNumber) {
+        setInvoiceNumber(activeEditData.orderNumber);
         setAutoGenerateInvoice(false); // Don't auto-generate when editing
       }
 
       // Set the notes
-      if (editData.notes) {
-        setNotes(editData.notes);
+      if (activeEditData.notes) {
+        setNotes(activeEditData.notes);
       }
 
       // Set the cart items
-      if (editData.items && editData.items.length > 0) {
-        const formattedItems = editData.items.map(item => ({
+      if (activeEditData.items && activeEditData.items.length > 0) {
+        const formattedItems = activeEditData.items.map(item => ({
           product: item.product,
           quantity: item.quantity,
           unitPrice: item.unitPrice || item.price || (item.product?.pricing?.retail || 0),
@@ -276,10 +300,10 @@ export const Sales = ({ tabId, editData }) => {
       }
 
       // Restore existing discounts in edit mode (code + manual)
-      const rawAppliedDiscounts = Array.isArray(editData.appliedDiscounts)
-        ? editData.appliedDiscounts
-        : Array.isArray(editData.applied_discounts)
-          ? editData.applied_discounts
+      const rawAppliedDiscounts = Array.isArray(activeEditData.appliedDiscounts)
+        ? activeEditData.appliedDiscounts
+        : Array.isArray(activeEditData.applied_discounts)
+          ? activeEditData.applied_discounts
           : [];
       const hydratedAppliedDiscounts = rawAppliedDiscounts
         .map((d) => ({
@@ -293,10 +317,10 @@ export const Sales = ({ tabId, editData }) => {
       setAppliedDiscounts(hydratedAppliedDiscounts);
 
       const invoiceDiscountRaw = Number(
-        editData.discountAmount ??
-        editData.discount ??
-        editData.pricing?.discountAmount ??
-        editData.pricing?.discount ??
+        activeEditData.discountAmount ??
+        activeEditData.discount ??
+        activeEditData.pricing?.discountAmount ??
+        activeEditData.pricing?.discount ??
         0
       ) || 0;
       const appliedDiscountTotal = hydratedAppliedDiscounts.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
@@ -304,23 +328,23 @@ export const Sales = ({ tabId, editData }) => {
       setDirectDiscount({ type: 'amount', value: manualDiscountForEdit });
 
       // Set payment method and amount paid if available
-      if (editData.payment) {
-        setPaymentMethod(editData.payment.method || 'cash');
+      if (activeEditData.payment) {
+        setPaymentMethod(activeEditData.payment.method || 'cash');
         // IMPORTANT:
         // When the invoice is pending, Amount Paid should NOT be derived from amountReceived.
         // Some backend payloads may include `amountReceived` even when payment was never made,
         // which incorrectly pre-fills the full sale amount in edit mode.
         const paymentStatusRaw =
-          editData.payment.status ??
-          editData.paymentStatus ??
-          editData.payment_status ??
+          activeEditData.payment.status ??
+          activeEditData.paymentStatus ??
+          activeEditData.payment_status ??
           'pending';
         const normalizedPaymentStatus = String(paymentStatusRaw).toLowerCase();
 
         const orderStatusRaw =
-          editData.orderStatus ??
-          editData.status ??
-          editData.order_status ??
+          activeEditData.orderStatus ??
+          activeEditData.status ??
+          activeEditData.order_status ??
           '';
         const normalizedOrderStatus = String(orderStatusRaw).toLowerCase();
 
@@ -333,29 +357,29 @@ export const Sales = ({ tabId, editData }) => {
           ? 0
           : (normalizedPaymentStatus === 'pending'
             ? 0
-            : (editData.payment.amountPaid ??
-              editData.payment.amountReceived ??
-              editData.amountPaid ??
+            : (activeEditData.payment.amountPaid ??
+              activeEditData.payment.amountReceived ??
+              activeEditData.amountPaid ??
               0));
         const normalizedPaid = Number(paidFromPayload);
         setAmountPaid(Number.isFinite(normalizedPaid) && normalizedPaid >= 0 ? normalizedPaid : 0);
-        if (editData.payment.method === 'bank') {
-          setSelectedBankAccount(editData.payment.bankAccount || editData.payment.bank_id || '');
+        if (activeEditData.payment.method === 'bank') {
+          setSelectedBankAccount(activeEditData.payment.bankAccount || activeEditData.payment.bank_id || '');
         } else {
           setSelectedBankAccount('');
         }
       }
 
       // Set price type from order type (so user can see and change it in edit mode)
-      if (editData.orderType) {
-        const ot = String(editData.orderType).toLowerCase();
+      if (activeEditData.orderType) {
+        const ot = String(activeEditData.orderType).toLowerCase();
         if (ot === 'retail' || ot === 'wholesale' || ot === 'distributor' || ot === 'custom') {
           setPriceType(ot);
         }
       }
       // Bill date: when editing, show the existing invoice date
-      if (editData.billDate) {
-        const d = editData.billDate instanceof Date ? editData.billDate : new Date(editData.billDate);
+      if (activeEditData.billDate) {
+        const d = activeEditData.billDate instanceof Date ? activeEditData.billDate : new Date(activeEditData.billDate);
         setBillDate(!isNaN(d.getTime()) ? getLocalDateString(d) : getLocalDateString());
       } else {
         setBillDate(getLocalDateString());
@@ -363,7 +387,7 @@ export const Sales = ({ tabId, editData }) => {
 
       // Data loaded successfully (no toast needed as Orders already shows opening message)
     }
-  }, [editData?.orderId]); // Only depend on orderId to prevent multiple executions
+  }, [activeEditData?.orderId]); // Only depend on orderId to prevent multiple executions
 
   // RTK Query hooks
   const { data: banksData, isLoading: banksLoading } = useGetBanksQuery(
@@ -383,10 +407,198 @@ export const Sales = ({ tabId, editData }) => {
   // Sales mutations
   const [createSale, { isLoading: isCreatingSale }] = useCreateSaleMutation();
   const [updateOrder, { isLoading: isUpdatingOrder }] = useUpdateOrderMutation();
+  const [deleteOrder] = useDeleteOrderMutation();
+  const [fetchOrderById] = useLazyGetOrderByIdQuery();
+  const [fetchOrdersForExport] = useLazyGetOrdersQuery();
   const [getLastPrices] = useLazyGetLastPricesQuery();
 
   const [checkApplicableDiscounts] = useCheckApplicableDiscountsMutation();
   const [applicableDiscountList, setApplicableDiscountList] = useState([]);
+  const {
+    data: savedInvoicesResponse,
+    isLoading: isSavedInvoicesLoading,
+    error: savedInvoicesError,
+    refetch: refetchSavedInvoices,
+  } = useGetOrdersQuery(
+    {
+      search: savedInvoiceSearchTerm || undefined,
+      status: savedInvoiceStatus || undefined,
+      dateFrom: savedInvoiceFromDate || undefined,
+      dateTo: savedInvoiceToDate || undefined,
+      page: savedInvoicePage,
+      limit: savedInvoiceLimit,
+    },
+    { refetchOnMountOrArgChange: 120 }
+  );
+
+  const savedInvoices = useMemo(() => {
+    if (!savedInvoicesResponse) return [];
+    if (Array.isArray(savedInvoicesResponse?.data?.orders)) return savedInvoicesResponse.data.orders;
+    if (Array.isArray(savedInvoicesResponse?.orders)) return savedInvoicesResponse.orders;
+    if (Array.isArray(savedInvoicesResponse?.data?.data?.orders)) return savedInvoicesResponse.data.data.orders;
+    if (Array.isArray(savedInvoicesResponse?.items)) return savedInvoicesResponse.items;
+    return [];
+  }, [savedInvoicesResponse]);
+
+  const savedInvoicesPagination = useMemo(
+    () => savedInvoicesResponse?.data?.pagination ?? savedInvoicesResponse?.pagination ?? {},
+    [savedInvoicesResponse]
+  );
+
+  const handleEditSavedInvoice = useCallback(async (invoice) => {
+    try {
+      const result = await fetchOrderById(invoice?._id || invoice?.id).unwrap();
+      const full = result?.order || result?.data?.order || result || invoice;
+      setInlineEditData({
+        orderId: full._id || full.id,
+        isEditMode: true,
+        customer: full.customer || full.customerInfo,
+        orderNumber: full.order_number ?? full.orderNumber,
+        notes: full.notes || '',
+        items: (full.items || []).map((item) => ({
+          product: item.product && typeof item.product === 'object'
+            ? item.product
+            : { _id: item.product_id || item.product, name: item.name || item.productName || 'Product' },
+          quantity: item.quantity || 1,
+          unitPrice: item.unitPrice ?? item.unit_price ?? 0,
+          totalPrice: item.total ?? (item.quantity * (item.unitPrice ?? item.unit_price ?? 0)),
+        })),
+        payment: full.payment || {},
+        orderStatus: full.status ?? full.order_status,
+        paymentStatus: full.payment?.status ?? full.payment_status,
+        amountPaid: full.payment?.amountPaid ?? full.payment?.amountReceived ?? full.amountPaid ?? full.amount_paid ?? 0,
+        orderType: full.orderType ?? full.order_type,
+        billDate: full.billDate ?? full.sale_date ?? full.createdAt ?? full.created_at,
+        discountAmount: full.discountAmount ?? full.discount ?? full.pricing?.discountAmount ?? 0,
+        appliedDiscounts: full.appliedDiscounts ?? full.applied_discounts ?? [],
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      showSuccessToast('Invoice loaded for inline edit');
+    } catch (err) {
+      handleApiError(err, 'Loading invoice for edit');
+    }
+  }, [fetchOrderById]);
+
+  const handleDeleteSavedInvoice = useCallback(async (invoice) => {
+    const target = invoice ?? invoiceDeleteTarget;
+    const id = target?._id || target?.id;
+    if (!id) return;
+    try {
+      await deleteOrder(id).unwrap();
+      showSuccessToast('Sales invoice deleted successfully');
+      refetchSavedInvoices();
+      setInvoiceDeleteTarget(null);
+    } catch (err) {
+      handleApiError(err, 'Sales Invoice Deletion');
+    }
+  }, [deleteOrder, refetchSavedInvoices, invoiceDeleteTarget]);
+
+  const getDerivedPaymentStatus = useCallback((invoice) => {
+    const total = Number(invoice?.pricing?.total ?? invoice?.total ?? 0) || 0;
+    const paid = Number(
+      invoice?.payment?.amountPaid ??
+      invoice?.payment?.amountReceived ??
+      invoice?.amount_paid ??
+      invoice?.amountPaid ??
+      invoice?.amount_received ??
+      invoice?.amountReceived ??
+      0
+    ) || 0;
+    if (total <= 0) return 'pending';
+    if (paid <= 0) return 'pending';
+    if (paid + 0.01 >= total) return 'paid';
+    return 'partial';
+  }, []);
+
+  const getPaymentStatusBadgeClass = useCallback((status) => {
+    switch (String(status || '').toLowerCase()) {
+      case 'paid':
+        return 'bg-green-100 text-green-800';
+      case 'partial':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'pending':
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
+  }, []);
+
+  const getSavedInvoicesExportData = useCallback(async () => {
+    try {
+      const res = await fetchOrdersForExport({
+        search: savedInvoiceSearchTerm || undefined,
+        status: savedInvoiceStatus || undefined,
+        dateFrom: savedInvoiceFromDate || undefined,
+        dateTo: savedInvoiceToDate || undefined,
+        page: 1,
+        limit: 10000,
+      }).unwrap();
+
+      let allRows = [];
+      if (Array.isArray(res?.data?.orders)) allRows = res.data.orders;
+      else if (Array.isArray(res?.orders)) allRows = res.orders;
+      else if (Array.isArray(res?.data?.data?.orders)) allRows = res.data.data.orders;
+      else if (Array.isArray(res?.items)) allRows = res.items;
+
+      const customerNameOf = (invoice) =>
+        invoice?.customer?.business_name ??
+        invoice?.customer?.businessName ??
+        invoice?.customer?.displayName ??
+        invoice?.customer?.name ??
+        invoice?.customerInfo?.businessName ??
+        invoice?.customerInfo?.business_name ??
+        invoice?.customerInfo?.name ??
+        'Walk-in';
+
+      const fnFrom = savedInvoiceFromDate || 'all';
+      const fnTo = savedInvoiceToDate || 'all';
+
+      return {
+        title: 'Sales Invoices Report',
+        filename: `Sales_Invoices_${fnFrom}_to_${fnTo}.xlsx`,
+        company: {
+          name: companySettings?.companyName || 'ZARYAB IMPEX',
+          address: companySettings?.address || companySettings?.billingAddress || '',
+          contact: `${companySettings?.contactNumber || ''} ${companySettings?.email ? '| ' + companySettings.email : ''}`.trim(),
+        },
+        columns: [
+          { header: 'S.No', key: 'sno', width: 8, type: 'number' },
+          { header: 'Date', key: 'date', width: 15 },
+          { header: 'Invoice #', key: 'invoiceNumber', width: 22 },
+          { header: 'Customer', key: 'customerName', width: 35 },
+          { header: 'Status', key: 'status', width: 14 },
+          { header: 'Total Amount', key: 'totalAmount', width: 15, type: 'currency' },
+        ],
+        data: allRows.map((invoice, i) => ({
+          sno: i + 1,
+          date: formatDate(invoice?.sale_date ?? invoice?.billDate ?? invoice?.order_date ?? invoice?.created_at ?? invoice?.createdAt),
+          invoiceNumber: invoice?.order_number ?? invoice?.orderNumber ?? invoice?.invoiceNumber ?? '—',
+          customerName: customerNameOf(invoice),
+          status: String(getDerivedPaymentStatus(invoice)).toUpperCase(),
+          totalAmount: Number(invoice?.pricing?.total ?? invoice?.total ?? 0),
+        })),
+        summary: {
+          rows: [
+            {
+              label: 'GRAND TOTAL:',
+              invoiceNumber: `${allRows.length} Invoices`,
+              totalAmount: allRows.reduce((sum, inv) => sum + Number(inv?.pricing?.total ?? inv?.total ?? 0), 0),
+            },
+          ],
+        },
+      };
+    } catch (err) {
+      showErrorToast(handleApiError(err).message || 'Could not load sales invoices for export');
+      return null;
+    }
+  }, [
+    fetchOrdersForExport,
+    savedInvoiceSearchTerm,
+    savedInvoiceStatus,
+    savedInvoiceFromDate,
+    savedInvoiceToDate,
+    companySettings,
+    getDerivedPaymentStatus,
+  ]);
 
   // Duplicate prevention: use BOTH ref (synchronous check) and state (button disable)
   const isSubmittingRef = useRef(false); // For immediate synchronous checks
@@ -472,12 +684,12 @@ export const Sales = ({ tabId, editData }) => {
   );
 
   useEffect(() => {
-    if (editData?.isEditMode) return;
+    if (activeEditData?.isEditMode) return;
     if (paymentMethod !== 'bank' || selectedBankAccount) return;
     const first = activeBanks[0];
     const id = first?._id || first?.id;
     if (id) setSelectedBankAccount(id);
-  }, [paymentMethod, selectedBankAccount, activeBanks, editData?.isEditMode]);
+  }, [paymentMethod, selectedBankAccount, activeBanks, activeEditData?.isEditMode]);
 
   // Update selected customer when customers data changes (e.g., after cash receipt updates balance)
   useEffect(() => {
@@ -1088,6 +1300,7 @@ export const Sales = ({ tabId, editData }) => {
     setOriginalPrices({});
     setIsLastPricesApplied(false);
     setPriceStatus({});
+    setInlineEditData(null);
   }, []);
 
 
@@ -1331,8 +1544,8 @@ export const Sales = ({ tabId, editData }) => {
     };
 
     // Use appropriate mutation based on edit mode
-    if (editData?.isEditMode) {
-      const orderId = editData.orderId;
+    if (activeEditData?.isEditMode) {
+      const orderId = activeEditData.orderId;
       // For updates, send items with all required fields according to orderItemSchema
       const updateData = {
         orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
@@ -1412,7 +1625,7 @@ export const Sales = ({ tabId, editData }) => {
     notes,
     selectedBankAccount,
     isAdvancePayment,
-    editData,
+    activeEditData,
     resetSubmittingState,
     handleCreateOrder,
     handleUpdateOrder
@@ -2184,7 +2397,7 @@ export const Sales = ({ tabId, editData }) => {
                     what was used when the invoice was created (causing the "price type" mismatch).
                   */}
                       {(() => {
-                        const editOrderType = editData?.isEditMode ? editData?.orderType : null;
+                        const editOrderType = activeEditData?.isEditMode ? activeEditData?.orderType : null;
                         const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
                         const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
                         const valueToShow =
@@ -2300,7 +2513,7 @@ export const Sales = ({ tabId, editData }) => {
                       <select
                         value={
                           (() => {
-                            const editOrderType = editData?.isEditMode ? editData?.orderType : null;
+                            const editOrderType = activeEditData?.isEditMode ? activeEditData?.orderType : null;
                             const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
                             const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
                             return (
@@ -2416,7 +2629,7 @@ export const Sales = ({ tabId, editData }) => {
                     className="bg-slate-900 hover:bg-slate-800 text-white border-none h-8 px-4 font-bold"
                   >
                     <Receipt className="h-4 w-4 mr-2" />
-                    {editData?.isEditMode
+                    {activeEditData?.isEditMode
                       ? (amountPaid === 0 ? 'Update Invoice' : 'Update Sale')
                       : (amountPaid === 0 ? 'Create Invoice' : 'Complete Sale')
                     }
@@ -2561,10 +2774,10 @@ export const Sales = ({ tabId, editData }) => {
                     const receivedAmount = amountPaid || 0;
                     const invoiceBalance = total - receivedAmount;
                     // In edit mode, ledger already includes this invoice; in new sale, it does not
-                    const previousBalance = editData?.isEditMode
+                    const previousBalance = activeEditData?.isEditMode
                       ? ledgerBalance - invoiceBalance
                       : ledgerBalance;
-                    const totalReceivables = editData?.isEditMode
+                    const totalReceivables = activeEditData?.isEditMode
                       ? ledgerBalance
                       : ledgerBalance + invoiceBalance;
 
@@ -2803,6 +3016,250 @@ export const Sales = ({ tabId, editData }) => {
             />
           </div>
         )}
+
+        {/* Sales Invoices: same header + filter layout as Sales Orders list */}
+        <div className="mt-4 card">
+          <div className="card-header">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-medium text-gray-900 leading-tight">
+                    Sales Invoices
+                    <span className="block sm:inline sm:ml-2 text-xs sm:text-sm font-normal text-gray-500 mt-1 sm:mt-0">
+                      From: {savedInvoiceFromDate ? formatDate(savedInvoiceFromDate) : '—'} To:{' '}
+                      {savedInvoiceToDate ? formatDate(savedInvoiceToDate) : '—'}
+                    </span>
+                  </h3>
+                </div>
+                <div className="flex flex-shrink-0 flex-wrap items-center gap-2 sm:gap-3 sm:justify-end">
+                  <span className="text-xs sm:text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                    <span className="font-semibold text-gray-700">
+                      {savedInvoicesPagination.total ?? savedInvoices.length}
+                    </span>{' '}
+                    records
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <ExcelExportButton getData={getSavedInvoicesExportData} label="Export" />
+                    <PdfExportButton getData={getSavedInvoicesExportData} label="PDF" />
+                    <button
+                      onClick={() => refetchSavedInvoices()}
+                      className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Refresh"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 pt-1 border-t border-gray-100">
+                <div className="sm:col-span-2 lg:col-span-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Date Range</label>
+                  <DateFilter
+                    startDate={savedInvoiceFromDate}
+                    endDate={savedInvoiceToDate}
+                    onDateChange={(start, end) => {
+                      setSavedInvoiceFromDate(start || '');
+                      setSavedInvoiceToDate(end || '');
+                      setSavedInvoicePage(1);
+                    }}
+                    compact={true}
+                    showPresets={true}
+                  />
+                </div>
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Invoice / Customer</label>
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={savedInvoiceSearchTerm}
+                    onChange={(e) => {
+                      setSavedInvoiceSearchTerm(e.target.value);
+                      setSavedInvoicePage(1);
+                    }}
+                    className="input h-[42px] w-full"
+                  />
+                </div>
+                <div className="sm:col-span-2 lg:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
+                  <select
+                    value={savedInvoiceStatus}
+                    onChange={(e) => {
+                      setSavedInvoiceStatus(e.target.value);
+                      setSavedInvoicePage(1);
+                    }}
+                    className="input h-[42px] w-full"
+                  >
+                    <option value="">All statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="partial">Partial</option>
+                    <option value="paid">Paid</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2 lg:col-span-2 flex items-end">
+                  <Button
+                    type="button"
+                    variant="default"
+                    onClick={() => refetchSavedInvoices()}
+                    className="w-full h-[42px] flex items-center justify-center space-x-2"
+                  >
+                    <Search className="h-4 w-4" />
+                    <span>Search</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="card-content p-0">
+            {isSavedInvoicesLoading ? (
+              <div className="p-8 text-center">
+                <RefreshCw className="h-8 w-8 animate-spin mx-auto text-gray-400" />
+                <p className="mt-2 text-gray-500">Loading sales invoices...</p>
+              </div>
+            ) : savedInvoicesError ? (
+              <div className="p-8 text-center text-red-600">
+                <p>{handleApiError(savedInvoicesError).message || 'Error loading sales invoices'}</p>
+              </div>
+            ) : savedInvoices.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <p>No sales invoices found for the selected criteria.</p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice #</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {savedInvoices.map((invoice, index) => {
+                        const invoiceId = invoice?._id ?? invoice?.id ?? `saved-invoice-${index}`;
+                        const invoiceNumber = invoice?.order_number ?? invoice?.orderNumber ?? invoice?.invoiceNumber ?? '—';
+                        const customerName =
+                          invoice?.customer?.business_name ??
+                          invoice?.customer?.businessName ??
+                          invoice?.customer?.displayName ??
+                          invoice?.customer?.name ??
+                          invoice?.customerInfo?.businessName ??
+                          invoice?.customerInfo?.business_name ??
+                          invoice?.customerInfo?.name ??
+                          'Walk-in';
+                        const invoiceDate = invoice?.sale_date ?? invoice?.billDate ?? invoice?.order_date ?? invoice?.created_at ?? invoice?.createdAt;
+                        const totalValue = Number(invoice?.pricing?.total ?? invoice?.total ?? 0) || 0;
+                        return (
+                          <tr key={invoiceId} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {invoiceDate ? new Date(invoiceDate).toLocaleDateString() : '—'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{invoiceNumber}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{customerName}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
+                              {(() => {
+                                const paymentStatus = getDerivedPaymentStatus(invoice);
+                                return (
+                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getPaymentStatusBadgeClass(paymentStatus)}`}>
+                                    {paymentStatus}
+                                  </span>
+                                );
+                              })()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{Math.round(totalValue)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => {
+                                    setSavedInvoicePrintOrder(invoice);
+                                    setShowSavedInvoicePrintModal(true);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-900"
+                                  title="View"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSavedInvoicePrintOrder(invoice);
+                                    setShowSavedInvoicePrintModal(true);
+                                  }}
+                                  className="text-green-600 hover:text-green-900"
+                                  title="Print"
+                                >
+                                  <Printer className="h-4 w-4" />
+                                </button>
+                                <ExcelExportButton
+                                  getData={async () => {
+                                    try {
+                                      const result = await fetchOrderById(invoice?._id || invoice?.id).unwrap();
+                                      const freshOrder = result?.order || result?.data?.order || result || invoice;
+                                      const payload = getInvoicePdfPayload(freshOrder, companySettings, 'Sales Invoice', 'Customer');
+                                      return {
+                                        ...payload,
+                                        filename: `Sales_Invoice_${invoiceNumber}.xlsx`,
+                                      };
+                                    } catch (err) {
+                                      return {
+                                        ...getInvoicePdfPayload(invoice, companySettings, 'Sales Invoice', 'Customer'),
+                                        filename: `Sales_Invoice_${invoiceNumber}.xlsx`,
+                                      };
+                                    }
+                                  }}
+                                  label=""
+                                  className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-emerald-600 hover:text-emerald-800 px-1 py-1"
+                                />
+                                <PdfExportButton
+                                  getData={async () => {
+                                    try {
+                                      const result = await fetchOrderById(invoice?._id || invoice?.id).unwrap();
+                                      const freshOrder = result?.order || result?.data?.order || result || invoice;
+                                      return getInvoicePdfPayload(freshOrder, companySettings, 'Sales Invoice', 'Customer');
+                                    } catch (err) {
+                                      return getInvoicePdfPayload(invoice, companySettings, 'Sales Invoice', 'Customer');
+                                    }
+                                  }}
+                                  label=""
+                                  className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-red-600 hover:text-red-800 px-1 py-1"
+                                />
+                                <button
+                                  onClick={() => handleEditSavedInvoice(invoice)}
+                                  className="text-blue-600 hover:text-blue-800"
+                                  title="Edit"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => setInvoiceDeleteTarget(invoice)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <PaginationControls
+                  page={Number(savedInvoicesPagination.current ?? savedInvoicePage) || 1}
+                  totalPages={Math.max(1, Number(savedInvoicesPagination.pages) || 1)}
+                  onPageChange={(p) => setSavedInvoicePage(p)}
+                  totalItems={savedInvoicesPagination.total}
+                  limit={savedInvoiceLimit}
+                />
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Clear Cart Confirmation Dialog */}
@@ -2814,6 +3271,35 @@ export const Sales = ({ tabId, editData }) => {
         itemType="items"
         isLoading={false}
       />
+
+      <BaseModal
+        isOpen={!!invoiceDeleteTarget}
+        onClose={() => setInvoiceDeleteTarget(null)}
+        title="Delete Sales Invoice"
+        maxWidth="sm"
+        footer={
+          <div className="flex justify-end gap-2 w-full">
+            <Button type="button" variant="secondary" onClick={() => setInvoiceDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => handleDeleteSavedInvoice()}
+            >
+              Delete
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-gray-700">
+          Are you sure you want to delete invoice{' '}
+          <span className="font-semibold">
+            {invoiceDeleteTarget?.order_number ?? invoiceDeleteTarget?.orderNumber ?? invoiceDeleteTarget?._id ?? invoiceDeleteTarget?.id}
+          </span>
+          ? This action cannot be undone.
+        </p>
+      </BaseModal>
 
       {/* Payment Modal */}
       <PaymentModal
@@ -2851,6 +3337,17 @@ export const Sales = ({ tabId, editData }) => {
           resetSaleDraft({ resetBillDate: true });
         }}
         orderData={currentOrder}
+        documentTitle="Sales Invoice"
+        partyLabel="Customer"
+      />
+
+      <PrintModal
+        isOpen={showSavedInvoicePrintModal}
+        onClose={() => {
+          setShowSavedInvoicePrintModal(false);
+          setSavedInvoicePrintOrder(null);
+        }}
+        orderData={savedInvoicePrintOrder}
         documentTitle="Sales Invoice"
         partyLabel="Customer"
       />

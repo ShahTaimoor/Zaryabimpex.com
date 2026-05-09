@@ -2994,115 +2994,101 @@ const SalesOrders = ({ tabId }) => {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Results: title row, then filters below title, then table */}
       <div className="card">
         <div className="card-header">
-          <div className="flex items-center space-x-2">
-            <Filter className="h-5 w-5 text-gray-400" />
-            <h3 className="text-lg font-medium text-gray-900">Filters</h3>
-          </div>
-        </div>
-        <div className="card-content">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4">
-            {/* Date Range - spans more columns to prevent overlap */}
-            <div className="sm:col-span-2 lg:col-span-5">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date Range
-              </label>
-              <DateFilter
-                startDate={filters.fromDate}
-                endDate={filters.toDate}
-                onDateChange={(start, end) => {
-                  handleFilterChange('fromDate', start);
-                  handleFilterChange('toDate', end);
-                }}
-                compact={true}
-                showPresets={true}
-              />
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-medium text-gray-900 leading-tight">
+                  Sales Orders
+                  <span className="block sm:inline sm:ml-2 text-xs sm:text-sm font-normal text-gray-500 mt-1 sm:mt-0">
+                    From: {formatDate(filters.fromDate)} To: {formatDate(filters.toDate)}
+                  </span>
+                </h3>
+              </div>
+              <div className="flex flex-shrink-0 flex-wrap items-center gap-2 sm:gap-3 sm:justify-end">
+                <span className="text-xs sm:text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                  <span className="font-semibold text-gray-700">
+                    {paginationInfo.totalItems ?? paginationInfo.total ?? salesOrders.length}
+                  </span>{' '}
+                  records
+                </span>
+                <div className="flex items-center gap-2">
+                  <ExcelExportButton
+                    getData={getExportData}
+                    label="Export"
+                  />
+                  <PdfExportButton
+                    getData={getExportData}
+                    label="PDF"
+                  />
+                  <button
+                    onClick={() => refetch()}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Refresh"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Order Number Filter */}
-            <div className="sm:col-span-2 lg:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Order Number
-              </label>
-              <input
-                type="text"
-                placeholder="Contains..."
-                value={filters.orderNumber}
-                onChange={(e) => handleFilterChange('orderNumber', e.target.value)}
-                className="input h-[42px] w-full"
-              />
-            </div>
-
-            {/* Status Filter */}
-            <div className="sm:col-span-2 lg:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Status
-              </label>
-              <select
-                value={filters.status}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-                className="input h-[42px] w-full"
-              >
-                <option value="">All Statuses</option>
-                <option value="draft">Pending</option>
-                <option value="confirmed">Order confirmed</option>
-                <option value="partially_invoiced">Partially Invoiced</option>
-                <option value="fully_invoiced">Fully Invoiced</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="closed">Closed</option>
-              </select>
-            </div>
-
-            {/* Search Button */}
-            <div className="sm:col-span-2 lg:col-span-2 flex items-end">
-              <Button
-                onClick={() => refetch()}
-                variant="default"
-                className="w-full flex items-center justify-center space-x-2 h-[42px]"
-              >
-                <Search className="h-4 w-4" />
-                <span>Search</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Results */}
-      <div className="card">
-        <div className="card-header">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 leading-tight">
-              Sales Orders
-              <span className="block sm:inline sm:ml-2 text-xs sm:text-sm font-normal text-gray-500 mt-1 sm:mt-0">
-                From: {formatDate(filters.fromDate)} To: {formatDate(filters.toDate)}
-              </span>
-            </h3>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <span className="text-xs sm:text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                <span className="font-semibold text-gray-700">
-                  {paginationInfo.totalItems ?? paginationInfo.total ?? salesOrders.length}
-                </span>{' '}
-                records
-              </span>
-              <div className="flex items-center gap-2">
-                <ExcelExportButton
-                  getData={getExportData}
-                  label="Export"
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 pt-1 border-t border-gray-100">
+              <div className="sm:col-span-2 lg:col-span-5">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Date Range
+                </label>
+                <DateFilter
+                  startDate={filters.fromDate}
+                  endDate={filters.toDate}
+                  onDateChange={(start, end) => {
+                    handleFilterChange('fromDate', start);
+                    handleFilterChange('toDate', end);
+                  }}
+                  compact={true}
+                  showPresets={true}
                 />
-                <PdfExportButton
-                  getData={getExportData}
-                  label="PDF"
+              </div>
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Order Number
+                </label>
+                <input
+                  type="text"
+                  placeholder="Contains..."
+                  value={filters.orderNumber}
+                  onChange={(e) => handleFilterChange('orderNumber', e.target.value)}
+                  className="input h-[42px] w-full"
                 />
-                <button
-                  onClick={() => refetch()}
-                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                  title="Refresh"
+              </div>
+              <div className="sm:col-span-2 lg:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Status
+                </label>
+                <select
+                  value={filters.status}
+                  onChange={(e) => handleFilterChange('status', e.target.value)}
+                  className="input h-[42px] w-full"
                 >
-                  <RefreshCw className="h-4 w-4" />
-                </button>
+                  <option value="">All Statuses</option>
+                  <option value="draft">Pending</option>
+                  <option value="confirmed">Order confirmed</option>
+                  <option value="partially_invoiced">Partially Invoiced</option>
+                  <option value="fully_invoiced">Fully Invoiced</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-2 flex items-end">
+                <Button
+                  onClick={() => refetch()}
+                  variant="default"
+                  className="w-full flex items-center justify-center space-x-2 h-[42px]"
+                >
+                  <Search className="h-4 w-4" />
+                  <span>Search</span>
+                </Button>
               </div>
             </div>
           </div>

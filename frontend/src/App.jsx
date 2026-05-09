@@ -21,13 +21,11 @@ const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m
 const SalesOrders = lazy(() => import('./pages/SalesOrders'));
 const Sales = lazy(() => import('./pages/Sales').then(m => ({ default: m.Sales })));
 const PurchaseOrders = lazy(() => import('./pages/PurchaseOrders').then(m => ({ default: m.PurchaseOrders })));
-const PurchaseInvoices = lazy(() => import('./pages/PurchaseInvoices').then(m => ({ default: m.PurchaseInvoices })));
 const Purchase = lazy(() => import('./pages/Purchase').then(m => ({ default: m.Purchase })));
 const ImportPurchase = lazy(() => import('./pages/ImportPurchase').then(m => ({ default: m.ImportPurchase })));
 const Products = lazy(() => import('./pages/Products'));
 const Customers = lazy(() => import('./pages/Customers').then(m => ({ default: m.Customers })));
 const Suppliers = lazy(() => import('./pages/Suppliers').then(m => ({ default: m.Suppliers })));
-const SalesInvoices = lazy(() => import('./pages/Orders').then(m => ({ default: m.Orders })));
 const Inventory = lazy(() => import('./pages/Inventory').then(m => ({ default: m.Inventory })));
 const InventoryAlerts = lazy(() => import('./pages/InventoryAlerts'));
 const CustomerAnalytics = lazy(() => import('./pages/CustomerAnalytics'));
@@ -103,7 +101,7 @@ function App() {
                       <Route path="/sales-orders" element={withRouteGuard('/sales-orders', <Suspense fallback={<LoadingPage />}><SalesOrders /></Suspense>)} />
                       <Route path="/sales" element={withRouteGuard('/sales', <Suspense fallback={<LoadingPage />}><Sales /></Suspense>)} />
                       <Route path="/purchase-orders" element={withRouteGuard('/purchase-orders', <Suspense fallback={<LoadingPage />}><PurchaseOrders /></Suspense>)} />
-                      <Route path="/purchase-invoices" element={withRouteGuard('/purchase-invoices', <Suspense fallback={<LoadingPage />}><PurchaseInvoices /></Suspense>)} />
+                      <Route path="/purchase-invoices" element={<Navigate to="/purchase" replace />} />
                       <Route path="/market-prices" element={withRouteGuard('/market-prices', <Suspense fallback={<LoadingPage />}><MarketPrices /></Suspense>)} />
                       <Route path="/purchase" element={withRouteGuard('/purchase', <Suspense fallback={<LoadingPage />}><Purchase /></Suspense>)} />
                       <Route path="/import-purchase" element={withRouteGuard('/import-purchase', <Suspense fallback={<LoadingPage />}><ImportPurchase /></Suspense>)} />
@@ -115,7 +113,7 @@ function App() {
                       <Route path="/suppliers" element={withRouteGuard('/suppliers', <Suspense fallback={<LoadingPage />}><Suppliers /></Suspense>)} />
                       <Route path="/investors" element={withRouteGuard('/investors', <Suspense fallback={<LoadingPage />}><Investors /></Suspense>)} />
                       <Route path="/drop-shipping" element={withRouteGuard('/drop-shipping', <Suspense fallback={<LoadingPage />}><DropShipping /></Suspense>)} />
-                      <Route path="/sales-invoices" element={withRouteGuard('/sales-invoices', <Suspense fallback={<LoadingPage />}><SalesInvoices /></Suspense>)} />
+                      <Route path="/sales-invoices" element={<Navigate to="/sales" replace />} />
                       <Route path="/inventory" element={withRouteGuard('/inventory', <Suspense fallback={<LoadingPage />}><Inventory /></Suspense>)} />
                       <Route path="/inventory-alerts" element={withRouteGuard('/inventory-alerts', <Suspense fallback={<LoadingPage />}><InventoryAlerts /></Suspense>)} />
                       <Route path="/customer-analytics" element={withRouteGuard('/customer-analytics', <Suspense fallback={<LoadingPage />}><CustomerAnalytics /></Suspense>)} />
