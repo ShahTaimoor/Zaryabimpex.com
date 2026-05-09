@@ -716,7 +716,7 @@ export const Settings2 = () => {
       view_sales_orders: true, view_purchase_orders: true, view_sales_invoices: true, view_purchase_invoices: true,
       view_product_costs: true, view_bp: true, apply_last_prices: true, manage_sales: true,
       // Advanced (sensitive globals)
-      view_customer_balance: true, view_supplier_balance: true, view_stock_levels: true,
+      view_stock_levels: true,
       view_customer_phone: true, view_supplier_phone: true,
       // Inventory
       view_inventory: true, update_inventory: true, manage_inventory: true,
@@ -789,7 +789,7 @@ export const Settings2 = () => {
       view_sales: true, view_sales_orders: true, view_purchase_orders: true, view_sales_invoices: true, view_purchase_invoices: true,
       view_product_costs: true, view_bp: true, apply_last_prices: true, manage_sales: true,
       // Advanced (sensitive globals)
-      view_customer_balance: true, view_supplier_balance: true, view_stock_levels: true,
+      view_stock_levels: true,
       view_customer_phone: true, view_supplier_phone: true,
       // Inventory - Full access
       view_inventory: true, update_inventory: true, manage_inventory: true,
