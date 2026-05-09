@@ -74,23 +74,24 @@ const MobileNavigation = ({ user, onLogout, isLoggingOut = false }) => {
 
   const navigationItems = [
     { path: '/', icon: Home, label: 'Dashboard', badge: null },
-    { path: '/sales', icon: ShoppingCart, label: 'Sales', badge: null },
     { path: '/sales-orders', icon: FileText, label: 'Sales Orders', badge: null },
+    { path: '/sales', icon: ShoppingCart, label: 'Sales', badge: null },
+    { path: '/sale-returns', icon: RotateCcw, label: 'Sale Returns', badge: null },
+    { path: '/purchase-orders', icon: FileText, label: 'Purchase Orders', badge: null },
     { path: '/purchase', icon: Truck, label: 'Purchase', badge: null },
     { path: '/import-purchase', icon: Truck, label: 'Import Purchase', badge: null },
-    { path: '/purchase-orders', icon: FileText, label: 'Purchase Orders', badge: null },
+    { path: '/purchase-returns', icon: RotateCcw, label: 'Purchase Returns', badge: null },
     { path: '/products', icon: Package, label: 'Products', badge: null },
     { path: '/customers', icon: Users, label: 'Customers', badge: null },
     { path: '/suppliers', icon: Truck, label: 'Suppliers', badge: null },
     { path: '/banks', icon: Building2, label: 'Bank & cash opening', badge: null },
     { path: '/investors', icon: TrendingUp, label: 'Investors', badge: null },
     { path: '/drop-shipping', icon: ArrowRight, label: 'Drop Shipping', badge: null },
+    { path: '/discounts', icon: Tag, label: 'Discounts', badge: null },
+    { path: '/cctv-access', icon: Camera, label: 'CCTV Access', badge: null },
     { path: '/inventory', icon: Package, label: 'Inventory', badge: null },
     { path: '/stock-movements', icon: ArrowUpDown, label: 'Stock Movements', badge: null },
     { path: '/stock-ledger', icon: FileText, label: 'Stock Ledger', badge: null },
-    { path: '/sale-returns', icon: RotateCcw, label: 'Sale Returns', badge: null },
-    { path: '/purchase-returns', icon: RotateCcw, label: 'Purchase Returns', badge: null },
-    { path: '/discounts', icon: Tag, label: 'Discounts', badge: null },
     { path: '/pl-statements', icon: BarChart3, label: 'P&L Statements', badge: null },
     { path: '/balance-sheet-statement', icon: FileText, label: 'Balance Sheet', badge: null },
     { path: '/sales-performance', icon: TrendingUp, label: 'Sales Performance', badge: null },
@@ -105,8 +106,7 @@ const MobileNavigation = ({ user, onLogout, isLoggingOut = false }) => {
     { path: '/settings2', icon: Settings, label: 'Settings', badge: null },
     { path: '/expenses', icon: Wallet, label: 'Record Expense', badge: null },
     { path: '/cash-receipts', icon: Receipt, label: 'Cash Receipts', badge: null },
-    { path: '/cash-payments', icon: CreditCard, label: 'Cash Payments', badge: null },
-    { path: '/cctv-access', icon: Camera, label: 'CCTV Access', badge: null }
+    { path: '/cash-payments', icon: CreditCard, label: 'Cash Payments', badge: null }
   ];
 
   // Sidebar visibility state

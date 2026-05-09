@@ -33,7 +33,6 @@ import {
   Wallet,
   FolderTree,
   Camera,
-  Layers,
   PieChart,
   ClipboardList
 } from 'lucide-react';
@@ -67,6 +66,7 @@ export const navigation = [
     children: [
       { name: 'Sales Orders', href: '/sales-orders', icon: FileText, permission: PERMISSIONS.VIEW_SALES_ORDERS },
       { name: 'Sales', href: '/sales', icon: CreditCard, permissionAny: [PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS, PERMISSIONS.MANAGE_SALES] },
+      { name: 'Sale Returns', href: '/sale-returns', icon: RotateCcw, permission: PERMISSIONS.MANAGE_SALES },
     ]
   },
 
@@ -87,17 +87,7 @@ export const navigation = [
       { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText, permissionAny: [PERMISSIONS.VIEW_PURCHASE_ORDERS, PERMISSIONS.CREATE_PURCHASE_ORDERS, PERMISSIONS.EDIT_PURCHASE_ORDERS] },
       { name: 'Purchase', href: '/purchase', icon: Truck, permissionAny: [PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS] },
       { name: 'Import Purchase', href: '/import-purchase', icon: Truck, permissionAny: [PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS] },
-    ]
-  },
-
-  {
-    name: 'Operations',
-    icon: Layers,
-    children: [
-      { name: 'Sale Returns', href: '/sale-returns', icon: RotateCcw, permission: PERMISSIONS.MANAGE_SALES },
       { name: 'Purchase Returns', href: '/purchase-returns', icon: RotateCcw, permission: PERMISSIONS.MANAGE_INVENTORY },
-      { name: 'Discounts', href: '/discounts', icon: Tag, permission: PERMISSIONS.MANAGE_SETTINGS },
-      { name: 'CCTV Access', href: '/cctv-access', icon: Camera, permission: PERMISSIONS.VIEW_SALES },
     ]
   },
 
@@ -125,6 +115,8 @@ export const navigation = [
       { name: 'Bank & cash opening', href: '/banks', icon: Building2, permission: PERMISSIONS.MANAGE_SETTINGS },
       { name: 'Investors', href: '/investors', icon: TrendingUp, permission: PERMISSIONS.VIEW_REPORTS },
       { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight, permission: PERMISSIONS.VIEW_SALES },
+      { name: 'Discounts', href: '/discounts', icon: Tag, permission: PERMISSIONS.MANAGE_SETTINGS },
+      { name: 'CCTV Access', href: '/cctv-access', icon: Camera, permission: PERMISSIONS.VIEW_SALES },
     ]
   },
 
@@ -203,7 +195,6 @@ const sidebarHeaderColors = {
   Dashboard: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
   Sales: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
   Purchase: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
-  Operations: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
   Financials: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
   'Master Data': { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
   Inventory: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
@@ -212,7 +203,7 @@ const sidebarHeaderColors = {
   System: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
 };
 const getHeaderColors = (name) => sidebarHeaderColors[name] || { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' };
-const defaultOpenSections = ['Sales', 'Purchase', 'Operations'];
+const defaultOpenSections = ['Sales', 'Purchase'];
 const SidebarItem = ({ item, isActivePath, sidebarConfig, level = 0, categoryTree, categoriesLoading, refetchCategories, user }) => {
   const hasChildren = item.children && item.children.length > 0;
   const [isOpen, setIsOpen] = useState(hasChildren && defaultOpenSections.includes(item.name));

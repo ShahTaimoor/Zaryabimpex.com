@@ -36,7 +36,6 @@ import {
   Camera,
   Eye,
   EyeOff,
-  Layers,
   PieChart,
   ClipboardList,
   HelpCircle,
@@ -117,6 +116,7 @@ export const navigation = withRouteAccess([
     children: [
       { name: 'Sales Orders', href: '/sales-orders', icon: FileText, permission: 'view_sales_orders' },
       { name: 'Sales', href: '/sales', icon: CreditCard, permission: 'manage_sales' },
+      { name: 'Sale Returns', href: '/sale-returns', icon: RotateCcw, permission: 'view_returns' },
     ]
   },
 
@@ -129,17 +129,7 @@ export const navigation = withRouteAccess([
       { name: 'Purchase', href: '/purchase', icon: Truck, permission: 'view_purchase_orders' },
       { name: 'Import Purchase', href: '/import-purchase', icon: Truck, permission: 'view_purchase_orders' },
       { name: 'Current Purchase Market Prices', href: '/market-prices', icon: Tag, permissionAny: ['view_market_prices', 'manage_market_prices', 'import_market_prices'] },
-    ]
-  },
-
-  {
-    name: 'Operations',
-    icon: Layers,
-    children: [
-      { name: 'Sale Returns', href: '/sale-returns', icon: RotateCcw, permission: 'view_returns' },
       { name: 'Purchase Returns', href: '/purchase-returns', icon: RotateCcw, permission: 'view_returns' },
-      { name: 'Discounts', href: '/discounts', icon: Tag, permission: 'view_discounts' },
-      { name: 'CCTV Access', href: '/cctv-access', icon: Camera, permission: 'view_sales_invoices', allowMultiple: true },
     ]
   },
 
@@ -172,6 +162,8 @@ export const navigation = withRouteAccess([
       { name: 'Investors', href: '/investors', icon: TrendingUp, permission: 'view_investors' },
       { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight, permission: 'create_drop_shipping' },
       { name: 'Cities', href: '/cities', icon: MapPin, permission: 'manage_users' },
+      { name: 'Discounts', href: '/discounts', icon: Tag, permission: 'view_discounts' },
+      { name: 'CCTV Access', href: '/cctv-access', icon: Camera, permission: 'view_sales_invoices', allowMultiple: true },
     ]
   },
 
@@ -330,7 +322,6 @@ const sidebarHeaderColors = {
   Dashboard: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
   Sales: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
   Purchase: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
-  Operations: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
   Financials: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
   'Master Data': { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
   Inventory: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
@@ -340,7 +331,7 @@ const sidebarHeaderColors = {
   System: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
 };
 const getHeaderColors = (name) => sidebarHeaderColors[name] || { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' };
-const defaultOpenSections = ['Sales', 'Purchase', 'Operations'];
+const defaultOpenSections = ['Sales', 'Purchase'];
 const isItemPermitted = (item, user, hasPermission) => {
   if (!item) return false;
   if (item.href) {
