@@ -103,7 +103,6 @@ const MobileNavigation = ({ user, onLogout, isLoggingOut = false }) => {
     { path: '/account-ledger', icon: FileText, label: 'Account Ledger Summary', badge: null },
     { path: '/employees', icon: Users, label: 'Employees', badge: null },
     { path: '/attendance', icon: Clock, label: 'Attendance', badge: null },
-    { path: '/settings2', icon: Settings, label: 'Settings', badge: null },
     { path: '/expenses', icon: Wallet, label: 'Record Expense', badge: null },
     { path: '/cash-receipts', icon: Receipt, label: 'Cash Receipts', badge: null },
     { path: '/cash-payments', icon: CreditCard, label: 'Cash Payments', badge: null }

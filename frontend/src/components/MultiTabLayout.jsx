@@ -215,14 +215,6 @@ export const navigation = withRouteAccess([
     ]
   },
 
-  {
-    name: 'System',
-    icon: Settings,
-    children: [
-      { name: 'Settings', href: '/settings2', icon: Settings, permission: 'manage_users' },
-      { name: 'Help', href: '/help', icon: HelpCircle, permission: null },
-    ]
-  }
 ]);
 
 /** Migrate legacy parent-only sidebar keys to per-child keys (see Settings → Sidebar). */
@@ -328,7 +320,6 @@ const sidebarHeaderColors = {
   Accounting: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
   Analytics: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
   'HR/Admin': { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
-  System: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
 };
 const getHeaderColors = (name) => sidebarHeaderColors[name] || { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' };
 const defaultOpenSections = ['Sales', 'Purchase'];
@@ -893,6 +884,17 @@ export const MultiTabLayout = ({ children }) => {
                         <span>Settings</span>
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleNavigationClick({ href: '/help', name: 'Help' });
+                        setUserMenuOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors"
+                    >
+                      <HelpCircle className="h-4 w-4 flex-shrink-0" />
+                      <span>Help</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => {

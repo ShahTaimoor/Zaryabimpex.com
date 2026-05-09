@@ -29,7 +29,6 @@ import {
   Plus,
   ChevronRight,
   ChevronDown,
-  HelpCircle,
   Wallet,
   FolderTree,
   Camera,
@@ -161,9 +160,7 @@ export const navigation = [
     name: 'System',
     icon: Settings,
     children: [
-      { name: 'Settings', href: '/settings', icon: Settings, permission: PERMISSIONS.MANAGE_SETTINGS },
       { name: 'Migration', href: '/migration', icon: RefreshCw, permission: PERMISSIONS.MANAGE_SETTINGS },
-      { name: 'Help & Support', href: '/help', icon: HelpCircle },
     ]
   }
 ];
