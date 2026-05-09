@@ -87,7 +87,6 @@ export const navigation = [
       { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText, permissionAny: [PERMISSIONS.VIEW_PURCHASE_ORDERS, PERMISSIONS.CREATE_PURCHASE_ORDERS, PERMISSIONS.EDIT_PURCHASE_ORDERS] },
       { name: 'Purchase', href: '/purchase', icon: Truck, permissionAny: [PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS] },
       { name: 'Import Purchase', href: '/import-purchase', icon: Truck, permissionAny: [PERMISSIONS.CREATE_ORDERS, PERMISSIONS.EDIT_ORDERS] },
-      { name: 'Products by Supplier', href: '/purchase-by-supplier', icon: BarChart3, permission: PERMISSIONS.VIEW_REPORTS },
     ]
   },
 

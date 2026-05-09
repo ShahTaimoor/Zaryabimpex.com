@@ -299,14 +299,57 @@ class ReportsService {
         });
       });
 
-      // Calculate averages and sort
-      const productReport = Object.values(productSales)
-        .map(item => ({
-          ...item,
-          averagePrice: item.totalQuantity > 0 ? item.totalRevenue / item.totalQuantity : 0
-        }))
-        .sort((a, b) => b.totalRevenue - a.totalRevenue)
-        .slice(0, limit);
+      // Calculate averages
+      let rows = Object.values(productSales).map(item => ({
+        ...item,
+        averagePrice: item.totalQuantity > 0 ? item.totalRevenue / item.totalQuantity : 0
+      }));
+
+      const supplierFilter =
+        queryParams.supplierId && String(queryParams.supplierId).trim()
+          ? String(queryParams.supplierId).trim()
+          : null;
+      const sortBy = queryParams.sortBy === 'supplier' ? 'supplier' : 'revenue';
+
+      const productIds = rows
+        .map((r) => {
+          const p = r.product;
+          return p && (p.id || p._id) ? String(p.id || p._id) : null;
+        })
+        .filter(Boolean);
+
+      const supplierByProduct = await this._getLastPurchaseSuppliersForProductIds(productIds);
+
+      rows = rows.map((row) => {
+        const pid = row.product && (row.product.id || row.product._id)
+          ? String(row.product.id || row.product._id)
+          : null;
+        const sup = pid ? supplierByProduct.get(pid) : null;
+        return {
+          ...row,
+          supplierId: sup?.supplierId ?? null,
+          supplierName: sup?.supplierName ?? null
+        };
+      });
+
+      if (supplierFilter) {
+        rows = rows.filter((r) => r.supplierId === supplierFilter);
+      }
+
+      const totalMatching = rows.length;
+
+      if (sortBy === 'supplier') {
+        rows.sort((a, b) => {
+          const an = (a.supplierName || '\uffff').toLowerCase();
+          const bn = (b.supplierName || '\uffff').toLowerCase();
+          if (an !== bn) return an.localeCompare(bn);
+          return (b.totalRevenue || 0) - (a.totalRevenue || 0);
+        });
+      } else {
+        rows.sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0));
+      }
+
+      const productReport = rows.slice(0, limit);
 
       return {
         products: productReport,
@@ -314,9 +357,51 @@ class ReportsService {
           from: dateFrom,
           to: dateTo
         },
-        total: Object.keys(productSales).length
+        total: totalMatching,
+        totalAllSkusInPeriod: Object.keys(productSales).length,
+        filters: {
+          supplierId: supplierFilter || undefined,
+          sortBy
+        }
       };
     });
+  }
+
+  /**
+   * Last purchase supplier per product (PostgreSQL stock_movements).
+   * @param {string[]} productIds
+   * @returns {Promise<Map<string, { supplierId: string, supplierName: string }>>}
+   */
+  async _getLastPurchaseSuppliersForProductIds(productIds) {
+    const map = new Map();
+    const { query } = require('../config/postgres');
+    const valid = [...new Set(productIds)].filter(
+      (id) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+    );
+    if (valid.length === 0) return map;
+
+    const result = await query(
+      `
+      WITH last_supplier AS (
+        SELECT DISTINCT ON (product_id) product_id, supplier_id
+        FROM stock_movements
+        WHERE movement_type = 'purchase' AND status = 'completed' AND supplier_id IS NOT NULL
+        ORDER BY product_id, created_at DESC
+      )
+      SELECT ls.product_id::text AS pid,
+             ls.supplier_id::text AS sid,
+             COALESCE(s.company_name, s.name) AS supplier_name
+      FROM last_supplier ls
+      LEFT JOIN suppliers s ON s.id = ls.supplier_id AND (s.is_deleted = FALSE OR s.is_deleted IS NULL)
+      WHERE ls.product_id = ANY($1::uuid[])
+    `,
+      [valid]
+    );
+
+    (result.rows || []).forEach((r) => {
+      map.set(r.pid, { supplierId: r.sid, supplierName: r.supplier_name });
+    });
+    return map;
   }
 
   /**
@@ -459,6 +544,9 @@ class ReportsService {
 
       const categoryId = filters.category && filters.category !== 'all' ? filters.category : null;
       const searchTerm = filters.search && String(filters.search).trim() ? String(filters.search).trim() : null;
+      const supplierId =
+        filters.supplierId && String(filters.supplierId).trim() ? String(filters.supplierId).trim() : null;
+      const sortBy = filters.sortBy === 'supplier' ? 'supplier' : 'name';
       const dateFrom = filters.dateFrom ? getStartOfDayPakistan(filters.dateFrom) : getStartOfDayPakistan(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
       const dateTo = filters.dateTo ? getEndOfDayPakistan(filters.dateTo) : getEndOfDayPakistan(new Date().toISOString().split('T')[0]);
 
@@ -474,9 +562,21 @@ class ReportsService {
         params.push(`%${searchTerm}%`);
         paramIdx += 1;
       }
+      if (supplierId) {
+        prodFilter += ` AND EXISTS (
+          SELECT 1 FROM stock_movements smf
+          WHERE smf.product_id = p.id AND smf.supplier_id = $${paramIdx}::uuid
+            AND smf.movement_type = 'purchase' AND smf.status = 'completed'
+        )`;
+        params.push(supplierId);
+        paramIdx += 1;
+      }
 
       const stockInTypes = "'purchase','return_in','adjustment_in','transfer_in','production','initial_stock'";
       const stockOutTypes = "'sale','return_out','adjustment_out','transfer_out','damage','expiry','theft','consumption'";
+      const orderClause = sortBy === 'supplier'
+        ? 'pb.supplier_name ASC NULLS LAST, pb.name ASC'
+        : 'pb.name ASC';
 
       const sql = `
       WITH ib_agg AS (
@@ -490,6 +590,12 @@ class ReportsService {
         WHERE deleted_at IS NULL
         GROUP BY product_id
       ),
+      last_supplier AS (
+        SELECT DISTINCT ON (product_id) product_id, supplier_id
+        FROM stock_movements
+        WHERE movement_type = 'purchase' AND status = 'completed' AND supplier_id IS NOT NULL
+        ORDER BY product_id, created_at DESC
+      ),
       products_base AS (
         SELECT p.id, p.name, p.sku, p.unit, cat.name as "categoryName",
                COALESCE(p.cost_price, 0) as cost_price,
@@ -497,11 +603,15 @@ class ReportsService {
                COALESCE(p.wholesale_price, p.selling_price, 0) as wholesale_price,
                COALESCE(p.min_stock_level, 0) as min_stock_level,
                p.image_url,
-               COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0)::decimal as "currentStock"
+               COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0)::decimal as "currentStock",
+               ls.supplier_id,
+               COALESCE(sup.company_name, sup.name) as supplier_name
         FROM products p
         LEFT JOIN categories cat ON p.category_id = cat.id
         LEFT JOIN ib_agg ib ON ib.product_id = p.id
         LEFT JOIN inv_agg i ON i.product_id = p.id
+        LEFT JOIN last_supplier ls ON ls.product_id = p.id
+        LEFT JOIN suppliers sup ON sup.id = ls.supplier_id AND (sup.is_deleted = FALSE OR sup.is_deleted IS NULL)
         WHERE p.is_deleted = FALSE AND p.is_active = TRUE ${prodFilter}
       ),
       period_act AS (
@@ -539,6 +649,8 @@ class ReportsService {
         pb."currentStock",
         pb.min_stock_level,
         pb.image_url as "imageUrl",
+        pb.supplier_id as "supplierId",
+        pb.supplier_name as "supplierName",
         (pb."currentStock" - COALESCE(pa.net_qty, 0))::decimal as "openingQty",
         COALESCE(pa.net_qty, 0)::decimal as "netQty",
         COALESCE(pa.purchase_qty, 0)::decimal as "purchaseQty",
@@ -557,7 +669,7 @@ class ReportsService {
       LEFT JOIN period_act pa ON pa.product_id = pb.id
       LEFT JOIN last_pur lp ON lp.product_id = pb.id
       LEFT JOIN avg_cost ac ON ac.product_id = pb.id
-      ORDER BY pb.name ASC
+      ORDER BY ${orderClause}
     `;
 
       const result = await query(sql, params);
@@ -596,6 +708,8 @@ class ReportsService {
           unit: r.unit,
           categoryName: r.categoryName,
           imageUrl: r.imageUrl,
+          supplierId: r.supplierId || null,
+          supplierName: r.supplierName || null,
           minStockLevel,
           lastPurchasePrice,
           currentStock,
@@ -674,7 +788,14 @@ class ReportsService {
           inStockCount
         },
         reportType: 'stock-summary',
-        filters: { categoryId, search: searchTerm || undefined, dateFrom: filters.dateFrom, dateTo: filters.dateTo }
+        filters: {
+          categoryId,
+          search: searchTerm || undefined,
+          dateFrom: filters.dateFrom,
+          dateTo: filters.dateTo,
+          supplierId: supplierId || undefined,
+          sortBy
+        }
       };
     });
   }
@@ -871,6 +992,9 @@ class ReportsService {
       const { query } = require('../config/postgres');
       const categoryId = filters.category && filters.category !== 'all' ? filters.category : null;
       const searchTerm = filters.search && String(filters.search).trim() ? String(filters.search).trim() : null;
+      const supplierId =
+        filters.supplierId && String(filters.supplierId).trim() ? String(filters.supplierId).trim() : null;
+      const sortBy = filters.sortBy === 'supplier' ? 'supplier' : 'name';
 
       let sql = '';
       let params = [];
@@ -886,6 +1010,15 @@ class ReportsService {
         params.push(`%${searchTerm}%`);
         paramIdx += 1;
       }
+      if (supplierId) {
+        whereClause += ` AND EXISTS (
+          SELECT 1 FROM stock_movements smf
+          WHERE smf.product_id = p.id AND smf.supplier_id = $${paramIdx}::uuid
+            AND smf.movement_type = 'purchase' AND smf.status = 'completed'
+        )`;
+        params.push(supplierId);
+        paramIdx += 1;
+      }
 
       if (reportType === 'low-stock') {
         whereClause += " AND p.stock_quantity <= p.min_stock_level";
@@ -894,6 +1027,11 @@ class ReportsService {
       if (reportType === 'summary') {
         whereClause += " AND (COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) > 0)";
       }
+
+      const orderClause =
+        sortBy === 'supplier'
+          ? 'COALESCE(sup.company_name, sup.name) ASC NULLS LAST, p.name ASC'
+          : 'p.name ASC';
 
       sql = `
       WITH ib_agg AS (
@@ -906,6 +1044,12 @@ class ReportsService {
         FROM inventory
         WHERE deleted_at IS NULL
         GROUP BY product_id
+      ),
+      last_supplier AS (
+        SELECT DISTINCT ON (product_id) product_id, supplier_id
+        FROM stock_movements
+        WHERE movement_type = 'purchase' AND status = 'completed' AND supplier_id IS NOT NULL
+        ORDER BY product_id, created_at DESC
       )
       SELECT 
         p.id,
@@ -914,6 +1058,8 @@ class ReportsService {
         p.barcode,
         p.image_url as "imageUrl",
         cat.name as "categoryName",
+        ls.supplier_id as "supplierId",
+        COALESCE(sup.company_name, sup.name) as "supplierName",
         COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) as "stockQuantity",
         p.min_stock_level as "minStockLevel",
         p.cost_price as "costPrice",
@@ -925,13 +1071,44 @@ class ReportsService {
       LEFT JOIN categories cat ON p.category_id = cat.id
       LEFT JOIN ib_agg ib ON ib.product_id = p.id
       LEFT JOIN inv_agg i ON i.product_id = p.id
+      LEFT JOIN last_supplier ls ON ls.product_id = p.id
+      LEFT JOIN suppliers sup ON sup.id = ls.supplier_id AND (sup.is_deleted = FALSE OR sup.is_deleted IS NULL)
       ${whereClause}
-      ORDER BY p.name ASC
+      ORDER BY ${orderClause}
     `;
 
       const result = await query(sql, params);
 
       // Calculate summary using correct stock source (inventory_balance > inventory > products.stock_quantity)
+      let sumParamIdx = 1;
+      let summaryWhere = 'WHERE p.is_deleted = FALSE AND p.is_active = TRUE';
+      const summaryParams = [];
+      if (categoryId) {
+        summaryWhere += ` AND p.category_id = $${sumParamIdx++}`;
+        summaryParams.push(categoryId);
+      }
+      if (searchTerm) {
+        summaryWhere += ` AND (p.name ILIKE $${sumParamIdx} OR p.sku ILIKE $${sumParamIdx} OR p.barcode ILIKE $${sumParamIdx})`;
+        summaryParams.push(`%${searchTerm}%`);
+        sumParamIdx += 1;
+      }
+      if (supplierId) {
+        summaryWhere += ` AND EXISTS (
+          SELECT 1 FROM stock_movements smf
+          WHERE smf.product_id = p.id AND smf.supplier_id = $${sumParamIdx}::uuid
+            AND smf.movement_type = 'purchase' AND smf.status = 'completed'
+        )`;
+        summaryParams.push(supplierId);
+        sumParamIdx += 1;
+      }
+      if (reportType === 'low-stock') {
+        summaryWhere += " AND p.stock_quantity <= p.min_stock_level";
+      }
+      if (reportType === 'summary') {
+        summaryWhere +=
+          ' AND (COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) > 0)';
+      }
+
       const summarySql = `
       WITH ib_agg AS (
         SELECT product_id, SUM(COALESCE(quantity, 0))::decimal AS quantity
@@ -956,20 +1133,16 @@ class ReportsService {
       FROM products p
       LEFT JOIN ib_agg ib ON ib.product_id = p.id
       LEFT JOIN inv_agg i ON i.product_id = p.id
-      WHERE p.is_deleted = FALSE AND p.is_active = TRUE
-      ${categoryId ? ` AND p.category_id = $1` : ''}
-      ${searchTerm ? ` AND (p.name ILIKE $${categoryId ? 2 : 1} OR p.sku ILIKE $${categoryId ? 2 : 1} OR p.barcode ILIKE $${categoryId ? 2 : 1})` : ''}
-      ${reportType === 'summary' ? ` AND (COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) > 0)` : ''}
+      ${summaryWhere}
     `;
-      const summaryParams = [];
-      if (categoryId) summaryParams.push(categoryId);
-      if (searchTerm) summaryParams.push(`%${searchTerm}%`);
       const summaryResult = await query(summarySql, summaryParams.length ? summaryParams : []);
       const summary = summaryResult.rows[0];
 
       return {
         data: result.rows.map(row => ({
           ...row,
+          supplierId: row.supplierId || null,
+          supplierName: row.supplierName || null,
           stockQuantity: parseFloat(row.stockQuantity || 0),
           minStockLevel: parseFloat(row.minStockLevel || 0),
           costPrice: parseFloat(row.costPrice || 0),
@@ -986,7 +1159,7 @@ class ReportsService {
           inStockCount: parseInt(summary.inStockCount || 0)
         },
         reportType,
-        filters: { categoryId }
+        filters: { categoryId, supplierId: supplierId || undefined, sortBy }
       };
     });
   }
@@ -1554,172 +1727,6 @@ class ReportsService {
     });
   }
 
-  /**
-   * Get products purchased by supplier - quantity and amount per product per supplier.
-   * Same product from different suppliers shown as separate rows.
-   * @param {object} filters - supplier (optional), dateFrom, dateTo
-   * @returns {Promise<{ data: Array, summary }>}
-   */
-  async getPurchaseBySupplierReport(filters) {
-    return reportsCache('getPurchaseBySupplierReport', filters, async () => {
-      const { query } = require('../config/postgres');
-      const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
-
-      const dateFrom = filters.dateFrom ? getStartOfDayPakistan(filters.dateFrom) : null;
-      const dateTo = filters.dateTo ? getEndOfDayPakistan(filters.dateTo) : null;
-      const supplierId = filters.supplier || filters.supplierId || null;
-      const includeCustomersSold = [true, 'true', '1', 1].includes(filters.includeCustomersSold);
-
-      let sql = `
-      WITH item_rows AS (
-        SELECT
-          pi.supplier_id,
-          pi.invoice_date,
-          pi.created_at,
-          COALESCE(
-            elem->'product'->>'id',
-            elem->'product'->>'_id',
-            elem->>'product',
-            elem->>'product_id'
-          ) AS product_id,
-          (COALESCE((elem->>'quantity')::numeric, (elem->>'qty')::numeric, 0)) AS qty,
-          (COALESCE((elem->>'unitCost')::numeric, (elem->>'unit_cost')::numeric, (elem->>'price')::numeric, 0)) AS unit_cost
-        FROM purchase_invoices pi
-        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(pi.items, '[]'::jsonb)) AS elem
-        WHERE pi.deleted_at IS NULL
-          AND pi.status NOT IN ('cancelled')
-          AND pi.invoice_type = 'purchase'
-          AND (
-            (elem->'product'->>'id') IS NOT NULL OR
-            (elem->'product'->>'_id') IS NOT NULL OR
-            elem->>'product' IS NOT NULL OR
-            elem->>'product_id' IS NOT NULL
-          )
-    )
-    SELECT
-      ir.product_id AS "productId",
-      COALESCE(p.name, pv.display_name, pv.variant_name, 'Unknown Product') AS "productName",
-      ir.supplier_id AS "supplierId",
-      COALESCE(s.company_name, s.name, 'Unknown Supplier') AS "supplierName",
-      SUM(ir.qty) AS "totalQuantity",
-      SUM(ir.qty * ir.unit_cost) AS "totalAmount"
-    FROM item_rows ir
-    LEFT JOIN products p ON p.id::text = ir.product_id AND (p.is_deleted = FALSE OR p.is_deleted IS NULL)
-    LEFT JOIN product_variants pv ON pv.id::text = ir.product_id AND pv.deleted_at IS NULL
-    LEFT JOIN suppliers s ON s.id = ir.supplier_id AND (s.is_deleted = FALSE OR s.is_deleted IS NULL)
-    WHERE ir.product_id IS NOT NULL AND ir.supplier_id IS NOT NULL
-  `;
-      const params = [];
-      let pn = 1;
-      if (dateFrom) {
-        sql += ` AND (ir.invoice_date >= $${pn} OR ir.created_at >= $${pn})`;
-        params.push(dateFrom);
-        pn++;
-      }
-      if (dateTo) {
-        sql += ` AND (ir.invoice_date <= $${pn} OR ir.created_at <= $${pn})`;
-        params.push(dateTo);
-        pn++;
-      }
-      if (supplierId) {
-        sql += ` AND ir.supplier_id = $${pn}`;
-        params.push(supplierId);
-        pn++;
-      }
-      sql += `
-    GROUP BY ir.product_id, p.name, pv.display_name, pv.variant_name, ir.supplier_id, s.company_name, s.name
-    ORDER BY "productName", "supplierName"
-    `;
-
-      const result = await query(sql, params);
-      const rows = result.rows || [];
-      const summary = {
-        totalProducts: new Set(rows.map(r => r.productId)).size,
-        totalSuppliers: new Set(rows.map(r => r.supplierId)).size,
-        totalQuantity: rows.reduce((sum, r) => sum + parseFloat(r.totalQuantity || 0), 0),
-        totalAmount: rows.reduce((sum, r) => sum + parseFloat(r.totalAmount || 0), 0)
-      };
-
-      let customersSoldByProduct = {};
-      if (includeCustomersSold && rows.length > 0) {
-        const productIds = [...new Set(rows.map(r => r.productId).filter(Boolean))];
-        const placeholders = productIds.map((_, i) => `$${i + 1}`).join(', ');
-        const salesSql = `
-        SELECT
-          COALESCE(
-            elem->>'product',
-            elem->>'product_id',
-            elem->'product'->>'id',
-            elem->'product'->>'_id'
-          ) AS product_id,
-          s.customer_id,
-          TRIM(COALESCE(c.name, c.business_name, 'Unknown')) AS customer_name,
-          SUM(COALESCE((elem->>'quantity')::numeric, (elem->>'qty')::numeric, 0)) AS qty_sold
-        FROM sales s
-        CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(COALESCE(s.items, '[]')::jsonb) = 'array' THEN COALESCE(s.items, '[]')::jsonb ELSE '[]'::jsonb END) AS elem
-        LEFT JOIN customers c ON c.id = s.customer_id AND (c.is_deleted = FALSE OR c.is_deleted IS NULL)
-        WHERE s.deleted_at IS NULL AND s.status != 'cancelled'
-          AND COALESCE(elem->>'product', elem->>'product_id', elem->'product'->>'id', elem->'product'->>'_id') IN (${placeholders})
-        GROUP BY 1, 2, 3
-      `;
-        const soSql = `
-        SELECT
-          COALESCE(
-            elem->>'product',
-            elem->>'product_id',
-            elem->'product'->>'id',
-            elem->'product'->>'_id'
-          ) AS product_id,
-          so.customer_id,
-          TRIM(COALESCE(c.name, c.business_name, 'Unknown')) AS customer_name,
-          SUM(COALESCE((elem->>'quantity')::numeric, (elem->>'qty')::numeric, 0)) AS qty_sold
-        FROM sales_orders so
-        CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(COALESCE(so.items, '[]'::jsonb)) = 'array' THEN COALESCE(so.items, '[]'::jsonb) ELSE '[]'::jsonb END) AS elem
-        LEFT JOIN customers c ON c.id = so.customer_id AND (c.is_deleted = FALSE OR c.is_deleted IS NULL)
-        WHERE so.deleted_at IS NULL AND so.status NOT IN ('cancelled', 'draft')
-          AND COALESCE(elem->>'product', elem->>'product_id', elem->'product'->>'id', elem->'product'->>'_id') IN (${placeholders})
-        GROUP BY 1, 2, 3
-      `;
-        try {
-          const [salesRes, soRes] = await Promise.all([
-            query(salesSql, productIds),
-            query(soSql, productIds)
-          ]);
-          const combined = [...(salesRes.rows || []), ...(soRes.rows || [])];
-          combined.forEach((row) => {
-            const pid = row.product_id;
-            if (!pid) return;
-            if (!customersSoldByProduct[pid]) customersSoldByProduct[pid] = [];
-            const name = (row.customer_name || '').trim() || 'Unknown';
-            const qty = parseFloat(row.qty_sold || 0);
-            const existing = customersSoldByProduct[pid].find((x) => x.customerName === name);
-            if (existing) existing.quantity += qty;
-            else customersSoldByProduct[pid].push({ customerName: name, quantity: qty });
-          });
-        } catch (err) {
-          console.warn('getPurchaseBySupplierReport: could not load customers sold', err.message);
-        }
-      }
-
-      return {
-        data: rows.map(r => {
-          const out = {
-            productId: r.productId,
-            productName: r.productName,
-            supplierId: r.supplierId,
-            supplierName: r.supplierName,
-            totalQuantity: parseFloat(r.totalQuantity || 0),
-            totalAmount: parseFloat(r.totalAmount || 0)
-          };
-          if (includeCustomersSold && r.productId && customersSoldByProduct[r.productId]) {
-            out.customersSold = customersSoldByProduct[r.productId];
-          }
-          return out;
-        }),
-        summary
-      };
-    });
-  }
 }
 
 module.exports = new ReportsService();

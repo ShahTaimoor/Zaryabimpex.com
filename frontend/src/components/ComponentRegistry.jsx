@@ -20,7 +20,6 @@ const componentLoader = {
   '/purchase-orders': () => import('../pages/PurchaseOrders').then(module => module.PurchaseOrders),
   '/purchase-invoices': () => import('../pages/PurchaseInvoices').then(module => module.default || module.PurchaseInvoices),
   '/market-prices': () => import('../pages/MarketPrices').then(module => module.default || module.MarketPrices),
-  '/purchase-by-supplier': () => import('../pages/PurchaseBySupplierReport').then(module => module.default),
   '/reports': () => import('../pages/Reports').then(module => module.Reports),
   '/pl-statements': () => import('../pages/PLStatements').then(module => module.PLStatements),
   '/balance-sheet-statement': () => import('../pages/BalanceSheetStatement').then(module => module.BalanceSheetStatement),
@@ -128,10 +127,6 @@ export const componentRegistry = {
     title: 'Current Purchase Market Prices',
     icon: 'Tag',
     allowMultiple: true
-  },
-  '/purchase-by-supplier': {
-    title: 'Products by Supplier',
-    icon: 'BarChart3'
   },
   '/reports': {
     title: 'Reports',

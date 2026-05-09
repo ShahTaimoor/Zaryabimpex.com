@@ -28,7 +28,6 @@ export const ROUTE_ACCESS = {
   '/balance-sheet-statement': { permission: PERMISSIONS.VIEW_FINANCIAL_DATA },
   '/sale-returns': { permission: PERMISSIONS.MANAGE_SALES },
   '/purchase-returns': { permission: PERMISSIONS.MANAGE_INVENTORY },
-  '/purchase-by-supplier': { permission: PERMISSIONS.VIEW_REPORTS },
   '/discounts': { permission: PERMISSIONS.MANAGE_SETTINGS },
   '/sales-performance': { permission: PERMISSIONS.VIEW_REPORTS },
   '/inventory-reports': { permission: PERMISSIONS.VIEW_REPORTS },

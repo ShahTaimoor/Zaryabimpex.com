@@ -36,7 +36,6 @@ const PLStatements = lazy(() => import('./pages/PLStatements').then(m => ({ defa
 const BalanceSheetStatement = lazy(() => import('./pages/BalanceSheetStatement').then(m => ({ default: m.BalanceSheetStatement })));
 const SaleReturns = lazy(() => import('./pages/SaleReturns'));
 const PurchaseReturns = lazy(() => import('./pages/PurchaseReturns'));
-const PurchaseBySupplierReport = lazy(() => import('./pages/PurchaseBySupplierReport'));
 const Discounts = lazy(() => import('./pages/Discounts'));
 const SalesPerformanceReports = lazy(() => import('./pages/SalesPerformanceReports'));
 const InventoryReports = lazy(() => import('./pages/InventoryReports'));
@@ -125,7 +124,7 @@ function App() {
                       <Route path="/balance-sheet-statement" element={withRouteGuard('/balance-sheet-statement', <Suspense fallback={<LoadingPage />}><BalanceSheetStatement /></Suspense>)} />
                       <Route path="/sale-returns" element={withRouteGuard('/sale-returns', <Suspense fallback={<LoadingPage />}><SaleReturns /></Suspense>)} />
                       <Route path="/purchase-returns" element={withRouteGuard('/purchase-returns', <Suspense fallback={<LoadingPage />}><PurchaseReturns /></Suspense>)} />
-                      <Route path="/purchase-by-supplier" element={withRouteGuard('/purchase-by-supplier', <Suspense fallback={<LoadingPage />}><PurchaseBySupplierReport /></Suspense>)} />
+                      <Route path="/purchase-by-supplier" element={<Navigate to="/reports" replace />} />
                       <Route path="/discounts" element={withRouteGuard('/discounts', <Suspense fallback={<LoadingPage />}><Discounts /></Suspense>)} />
                       <Route path="/sales-performance" element={withRouteGuard('/sales-performance', <Suspense fallback={<LoadingPage />}><SalesPerformanceReports /></Suspense>)} />
                       <Route path="/inventory-reports" element={withRouteGuard('/inventory-reports', <Suspense fallback={<LoadingPage />}><InventoryReports /></Suspense>)} />

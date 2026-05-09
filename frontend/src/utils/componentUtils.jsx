@@ -126,11 +126,6 @@ export const componentRegistry = {
     allowMultiple: true,
     component: () => import('../pages/MarketPrices').then(m => m.default || m.MarketPrices)
   },
-  '/purchase-by-supplier': {
-    title: 'Products by Supplier',
-    icon: 'BarChart3',
-    component: () => import('../pages/PurchaseBySupplierReport').then(m => m.default)
-  },
   '/help': {
     title: 'Help & Support',
     icon: 'HelpCircle',

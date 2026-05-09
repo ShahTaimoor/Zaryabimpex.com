@@ -44,7 +44,6 @@ export const suppliersApi = api.injectEndpoints({
         { type: 'Suppliers', id: 'CHECK' },
         { type: 'Accounting' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
-        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
@@ -65,7 +64,6 @@ export const suppliersApi = api.injectEndpoints({
         { type: 'Orders', id: 'PO_LIST' },
         { type: 'Orders', id: 'PI_LIST' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
-        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
       ],
@@ -85,7 +83,6 @@ export const suppliersApi = api.injectEndpoints({
         { type: 'Orders', id: 'PO_LIST' },
         { type: 'Orders', id: 'PI_LIST' },
         { type: 'Reports', id: 'PARTY_BALANCE' },
-        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
       ],
     }),
     checkEmail: builder.query({

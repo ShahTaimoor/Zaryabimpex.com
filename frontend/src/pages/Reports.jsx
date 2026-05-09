@@ -33,6 +33,7 @@ import {
   useGetBankCashSummaryQuery,
 } from '../store/services/reportsApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
+import { useGetSuppliersQuery } from '../store/services/suppliersApi';
 import DateFilter from '../components/DateFilter';
 import PrintReportModal from '../components/PrintReportModal';
 import PageShell from '../components/PageShell';
@@ -50,6 +51,10 @@ export const Reports = () => {
   const [financialType, setFinancialType] = useState('trial-balance');
   const [inventoryProductSearch, setInventoryProductSearch] = useState('');
   const debouncedInventoryProductSearch = useDebouncedValue(inventoryProductSearch, 400);
+  const [inventorySupplierId, setInventorySupplierId] = useState('');
+  const [inventorySortBy, setInventorySortBy] = useState('name');
+  const [topProductsSupplierId, setTopProductsSupplierId] = useState('');
+  const [topProductsSortBy, setTopProductsSortBy] = useState('revenue');
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   /** Party Balances table: client-side paging */
   const [partyBalancePage, setPartyBalancePage] = useState(1);
@@ -151,7 +156,9 @@ export const Reports = () => {
   } = useGetProductReportQuery({
     dateFrom: dateRange.from,
     dateTo: dateRange.to,
-    limit: 100
+    limit: 100,
+    ...(topProductsSupplierId.trim() ? { supplierId: topProductsSupplierId.trim() } : {}),
+    ...(topProductsSortBy === 'supplier' ? { sortBy: 'supplier' } : {})
   }, {
     skip: activeTab !== 'top-products'
   });
@@ -176,10 +183,18 @@ export const Reports = () => {
   } = useGetInventoryReportQuery({
     type: inventoryType,
     ...(debouncedInventoryProductSearch.trim() ? { search: debouncedInventoryProductSearch.trim() } : {}),
-    ...(inventoryType === 'stock-summary' && { dateFrom: dateRange.from, dateTo: dateRange.to })
+    ...(inventoryType === 'stock-summary' && { dateFrom: dateRange.from, dateTo: dateRange.to }),
+    ...(inventorySupplierId.trim() ? { supplierId: inventorySupplierId.trim() } : {}),
+    ...(inventorySortBy === 'supplier' ? { sortBy: 'supplier' } : {})
   }, {
     skip: activeTab !== 'inventory'
   });
+
+  const { data: inventorySuppliersData } = useGetSuppliersQuery(
+    { limit: 500 },
+    { skip: activeTab !== 'inventory' && activeTab !== 'top-products' }
+  );
+  const inventorySupplierOptions = inventorySuppliersData?.data?.suppliers || inventorySuppliersData?.suppliers || [];
 
   // Fetch Financial Report
   const {
@@ -231,7 +246,7 @@ export const Reports = () => {
 
   useEffect(() => {
     setStockSummaryPage(1);
-  }, [inventoryType, dateRange.from, dateRange.to, debouncedInventoryProductSearch]);
+  }, [inventoryType, dateRange.from, dateRange.to, debouncedInventoryProductSearch, inventorySupplierId, inventorySortBy]);
 
   useEffect(() => {
     setStockSummaryPage(1);
@@ -367,6 +382,11 @@ export const Reports = () => {
         if (inventoryType === 'stock-summary') {
           return [
             { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
+            {
+              header: 'Supplier',
+              render: (row) => row.supplierName || '—',
+              key: 'supplierName'
+            },
             { header: 'Product Name', key: 'name' },
             ...(showCostPrice ? [
               { header: 'Last Purchase Price', render: (row) => (row.lastPurchasePrice || 0).toLocaleString(), align: 'right' },
@@ -402,6 +422,11 @@ export const Reports = () => {
         }
         const baseCols = [
           { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
+          {
+            header: 'Supplier',
+            render: (row) => row.supplierName || '—',
+            key: 'supplierName'
+          },
           { header: 'Product Name', key: 'name' },
           { header: 'SKU', key: 'sku' },
           { header: 'Category', key: 'categoryName' },
@@ -472,6 +497,11 @@ export const Reports = () => {
       case 'top-products':
         return [
           { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
+          {
+            header: 'Supplier',
+            render: (row) => row.supplierName || '—',
+            key: 'supplierName'
+          },
           { header: 'Product', render: (row) => row.product?.name || '—' },
           { header: 'SKU', render: (row) => row.product?.sku || '—' },
           { header: 'Qty sold', render: (row) => (row.totalQuantity || 0).toLocaleString(), align: 'right' },
@@ -667,7 +697,9 @@ export const Reports = () => {
     }
     if (activeTab === 'bank-cash') return 'Current Total';
     if (activeTab === 'top-products') {
-      if (title === 'Products with sales') return 'Distinct SKUs in period';
+      if (title === 'Products with sales') {
+        return topProductsSupplierId ? 'SKUs matching supplier filter' : 'Distinct SKUs matching filters';
+      }
       return 'In Selected Period';
     }
     if (activeTab === 'top-customers') {
@@ -728,6 +760,7 @@ export const Reports = () => {
           columns = [
             { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
             { header: 'Image', key: 'imageUrl', width: 12, type: 'image' },
+            { header: 'Supplier', key: 'supplierName', width: 28 },
             { header: 'Product Name', key: 'name', width: 40 },
             { header: 'SKU', key: 'sku', width: 15 },
             { header: 'Category', key: 'categoryName', width: 20 },
@@ -747,6 +780,7 @@ export const Reports = () => {
           columns = [
             { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
             { header: 'Image', key: 'imageUrl', width: 12, type: 'image' },
+            { header: 'Supplier', key: 'supplierName', width: 28 },
             { header: 'Product Name', key: 'name', width: 40 },
             { header: 'SKU', key: 'sku', width: 15 },
             { header: 'Category', key: 'categoryName', width: 20 },
@@ -791,6 +825,7 @@ export const Reports = () => {
       case 'top-products':
         columns = [
           { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
+          { header: 'Supplier', key: 'supplierName', width: 28 },
           { header: 'Product', key: 'productName', width: 40 },
           { header: 'SKU', key: 'sku', width: 18 },
           { header: 'Qty sold', key: 'totalQuantity', width: 12, type: 'number' },
@@ -981,10 +1016,14 @@ export const Reports = () => {
           {partyType === 'customer' ? 'customers' : 'suppliers'}, not only transactions in the date range above. Use the detailed party table for movement in context.
         </p>
       )}
-      {(activeTab === 'top-products' || activeTab === 'top-customers') && (
+      {activeTab === 'top-products' && (
         <p className="text-sm text-gray-600 bg-slate-50 border border-slate-100 rounded-lg px-4 py-2.5">
-          Table lists up to <strong>100</strong> rows ranked by revenue for the selected dates. Card totals labeled “top 100 rows” sum only those visible rows; “distinct” counts include all qualifying{' '}
-          {activeTab === 'top-products' ? 'products' : 'customers'} in the period.
+          Up to <strong>100</strong> rows per request. Sort by revenue or by supplier (then revenue). Supplier reflects the latest purchase. Summary cards total only visible rows; product count follows your supplier filter when set.
+        </p>
+      )}
+      {activeTab === 'top-customers' && (
+        <p className="text-sm text-gray-600 bg-slate-50 border border-slate-100 rounded-lg px-4 py-2.5">
+          Table lists up to <strong>100</strong> rows ranked by revenue for the selected dates. Card totals labeled “top 100 rows” sum only those visible rows; “distinct” counts include all qualifying customers in the period.
         </p>
       )}
 
@@ -1260,12 +1299,50 @@ export const Reports = () => {
 
           {activeTab === 'top-products' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-wrap">
                 <p className="text-sm text-gray-600">
-                  Products ranked by revenue from invoice lines in the selected period (cancelled sales excluded).
+                  Products ranked from invoice lines in the selected period (cancelled sales excluded). Supplier is from the latest purchase record.
                 </p>
-                <div className="text-sm text-gray-500">
-                  {(productReportData?.products?.length ?? 0)} rows · {(productReportData?.total ?? 0)} products with sales
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-gray-400 shrink-0" aria-hidden />
+                    <select
+                      value={topProductsSupplierId}
+                      onChange={(e) => setTopProductsSupplierId(e.target.value)}
+                      className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 min-w-[180px] max-w-[240px]"
+                    >
+                      <option value="">All suppliers</option>
+                      {inventorySupplierOptions.map((s) => {
+                        const id = s.id || s._id;
+                        const label = s.companyName || s.businessName || s.name || id;
+                        return (
+                          <option key={id} value={id}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="top-products-sort" className="text-xs font-medium text-gray-600 whitespace-nowrap">
+                      Sort
+                    </label>
+                    <select
+                      id="top-products-sort"
+                      value={topProductsSortBy}
+                      onChange={(e) => setTopProductsSortBy(e.target.value)}
+                      className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      <option value="revenue">By revenue</option>
+                      <option value="supplier">By supplier, then revenue</option>
+                    </select>
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {(productReportData?.products?.length ?? 0)} rows · {(productReportData?.total ?? 0)} products match
+                    {productReportData?.totalAllSkusInPeriod != null && topProductsSupplierId ? (
+                      <span className="text-gray-400"> ({productReportData.totalAllSkusInPeriod} SKUs sold in period)</span>
+                    ) : null}
+                  </div>
                 </div>
               </div>
               <div className="overflow-x-auto border border-gray-100 rounded-lg">
@@ -1396,6 +1473,43 @@ export const Reports = () => {
                       className="input w-full text-sm h-9"
                     />
                   </div>
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="inventory-supplier" className="sr-only">
+                      Filter by supplier
+                    </label>
+                    <Building2 className="h-4 w-4 text-gray-400 shrink-0" aria-hidden />
+                    <select
+                      id="inventory-supplier"
+                      value={inventorySupplierId}
+                      onChange={(e) => setInventorySupplierId(e.target.value)}
+                      className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 min-w-[180px] max-w-[240px]"
+                    >
+                      <option value="">All suppliers</option>
+                      {inventorySupplierOptions.map((s) => {
+                        const id = s.id || s._id;
+                        const label = s.companyName || s.businessName || s.name || id;
+                        return (
+                          <option key={id} value={id}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="inventory-sort" className="text-xs font-medium text-gray-600 whitespace-nowrap">
+                      Sort
+                    </label>
+                    <select
+                      id="inventory-sort"
+                      value={inventorySortBy}
+                      onChange={(e) => setInventorySortBy(e.target.value)}
+                      className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      <option value="name">Product name</option>
+                      <option value="supplier">Supplier, then product</option>
+                    </select>
+                  </div>
                   <div className="text-sm text-gray-500">
                     {isInventoryPaginated ? (
                       <span>
@@ -1410,6 +1524,10 @@ export const Reports = () => {
                   </div>
                 </div>
               </div>
+
+              <p className="text-xs text-gray-500">
+                Supplier shows the vendor from the latest purchase. Choosing a supplier narrows the list to products with at least one purchase from that supplier.
+              </p>
 
               <div
                 ref={stockSummaryTableScrollRef}

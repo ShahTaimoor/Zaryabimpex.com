@@ -135,7 +135,6 @@ export const inventoryApi = api.injectEndpoints({
         { type: 'StockLedger', id: 'LIST' },
         { type: 'Reports', id: 'INVENTORY_REPORT' },
         { type: 'Reports', id: 'PRODUCT_REPORT' },
-        { type: 'Reports', id: 'PURCHASE_BY_SUPPLIER' },
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'STOCK_MOVEMENTS_STATS' },
       ],

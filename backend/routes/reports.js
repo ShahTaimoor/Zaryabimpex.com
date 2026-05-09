@@ -34,6 +34,8 @@ router.get('/products', [
   requirePermission('view_reports'),
   ...validateDateParams,
   query('limit').optional().isInt({ min: 1, max: 100 }),
+  query('supplierId').optional().isUUID(),
+  query('sortBy').optional().isIn(['revenue', 'supplier']),
   handleValidationErrors,
   processDateFilter('createdAt'),
 ], async (req, res) => {
@@ -126,6 +128,8 @@ router.get('/inventory', [
   query('type').optional().isIn(['summary', 'low-stock', 'valuation', 'stock-summary']),
   query('dateFrom').optional().isDate(),
   query('dateTo').optional().isDate(),
+  query('supplierId').optional().isUUID(),
+  query('sortBy').optional().isIn(['name', 'supplier']),
   handleValidationErrors,
 ], async (req, res) => {
   try {
@@ -194,27 +198,6 @@ router.get('/financial', [
     res.json(report);
   } catch (error) {
     console.error('Financial report error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   GET /api/reports/purchase-by-supplier
-// @desc    Products purchased by supplier - quantity per product per supplier
-// @access  Private
-router.get('/purchase-by-supplier', [
-  auth,
-  requirePermission('view_reports'),
-  query('supplier').optional().isUUID(),
-  query('supplierId').optional().isUUID(),
-  query('dateFrom').optional().isISO8601(),
-  query('dateTo').optional().isISO8601(),
-  handleValidationErrors,
-], async (req, res) => {
-  try {
-    const report = await reportsService.getPurchaseBySupplierReport(req.query);
-    res.json(report);
-  } catch (error) {
-    console.error('Purchase by supplier report error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
