@@ -39,15 +39,16 @@ import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
 
 const BankPayments = () => {
-  const { hasPermission } = useAuth();
-  const canViewCustomerBalance = hasPermission('view_customer_balance');
-  const canViewSupplierBalance = hasPermission('view_supplier_balance');
-  const canViewCustomerPhone = hasPermission('view_customer_phone');
-  const canViewSupplierPhone = hasPermission('view_supplier_phone');
+  const {
+    canViewCustomerBalance,
+    canViewSupplierBalance,
+    canViewCustomerPhone,
+    canViewSupplierPhone
+  } = useSensitiveDataPermissions();
   const today = getCurrentDatePakistan();
   // State for filters and pagination
   const [filters, setFilters] = useState({

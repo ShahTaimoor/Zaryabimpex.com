@@ -42,12 +42,10 @@ import { useGetBanksQuery } from '../store/services/banksApi';
 import { ProductSelectionCartSection } from '../components/order/ProductSelectionCartSection';
 import { CartItemsTableSection } from '../components/order/CartItemsTableSection';
 import { ProductSearch } from '../components/sales/ProductSearch';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
 const SaleReturns = () => {
-  const { hasPermission } = useAuth();
-  const canViewCustomerBalance = hasPermission('view_customer_balance');
-  const canViewCustomerPhone = hasPermission('view_customer_phone');
+  const { canViewCustomerBalance, canViewCustomerPhone } = useSensitiveDataPermissions();
   const today = getCurrentDatePakistan();
   const [step, setStep] = useState('customer'); // used for API skip optimization
   const [selectedCustomer, setSelectedCustomer] = useState(null);

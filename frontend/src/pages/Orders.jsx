@@ -34,7 +34,7 @@ import PdfExportButton from '../components/PdfExportButton';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import PaginationControls from '../components/PaginationControls';
 import { useCursorPagination } from '../hooks/useCursorPagination';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
 const INVOICE_PAGE_SIZE = 50;
 
@@ -191,9 +191,7 @@ const OrderCard = ({ order, onView, onEdit, onPrint }) => {
 };
 
 export const Orders = () => {
-  const { hasPermission } = useAuth();
-  const canViewCustomerBalance = hasPermission('view_customer_balance');
-  const canViewCustomerPhone = hasPermission('view_customer_phone');
+  const { getPartyPermissions } = useSensitiveDataPermissions();
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebouncedValue(searchTerm, 350);
   const [statusFilter, setStatusFilter] = useState('');
@@ -737,7 +735,7 @@ export const Orders = () => {
                       <button onClick={() => handlePrint(order)} className="p-1 text-green-600 hover:text-green-800" title="Print"><Printer className="h-4 w-4" /></button>
                       <ExcelExportButton
                         getData={async () => {
-                          const printPerms = { canViewBalance: canViewCustomerBalance, canViewPhone: canViewCustomerPhone };
+                          const printPerms = getPartyPermissions('customer');
                           try {
                             const result = await fetchOrderById(order._id || order.id).unwrap();
                             const freshOrder = result?.order || result?.data?.order || result || order;
@@ -758,7 +756,7 @@ export const Orders = () => {
                       />
                       <PdfExportButton
                         getData={async () => {
-                          const printPerms = { canViewBalance: canViewCustomerBalance, canViewPhone: canViewCustomerPhone };
+                          const printPerms = getPartyPermissions('customer');
                           try {
                             const result = await fetchOrderById(order._id || order.id).unwrap();
                             const freshOrder = result?.order || result?.data?.order || result || order;

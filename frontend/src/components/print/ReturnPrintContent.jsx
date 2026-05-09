@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../../hooks/useSensitiveDataPermissions';
 
 /**
  * ReturnPrintContent - Printable return document.
@@ -10,10 +10,11 @@ const ReturnPrintContent = ({
   companyInfo = {},
   partyLabel = 'Customer'
 }) => {
-  const { hasPermission } = useAuth();
+  const { getPartyPermissions } = useSensitiveDataPermissions();
   if (!returnData) return null;
-  const isPurchaseReturn = returnData.origin === 'purchase';
-  const canViewPartyPhone = hasPermission(isPurchaseReturn ? 'view_supplier_phone' : 'view_customer_phone');
+  const { canViewPhone: canViewPartyPhone } = getPartyPermissions(
+    returnData.origin === 'purchase' ? 'supplier' : 'customer'
+  );
 
   const companyName = companyInfo?.companyName || companyInfo?.data?.companyName || 'Your Company Name';
   const address = companyInfo?.address || companyInfo?.data?.address || '';

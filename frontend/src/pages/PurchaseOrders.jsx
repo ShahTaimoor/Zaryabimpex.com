@@ -72,7 +72,7 @@ import {
 } from '../components/order/OrderCheckoutLayout';
 import { ShowDetailsSectionHeader } from '../components/ShowDetailsSectionHeader';
 import { useTab } from '../contexts/TabContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 import { getComponentInfo } from '../utils/componentUtils';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
@@ -318,10 +318,11 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
 };
 
 export const PurchaseOrders = ({ tabId }) => {
-  const { hasPermission } = useAuth();
-  const canViewSupplierBalance = hasPermission('view_supplier_balance');
-  const canViewSupplierPhone = hasPermission('view_supplier_phone');
-  const canViewStock = hasPermission('view_stock_levels');
+  const {
+    canViewSupplierBalance,
+    canViewSupplierPhone,
+    canViewStock
+  } = useSensitiveDataPermissions();
   const { updateTabTitle, getActiveTab, openTab } = useTab();
   const { companyInfo: companySettings } = useCompanyInfo();
   const resolvedCompanyName = companySettings.companyName || 'Company Name';

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { formatQuantityDisplay } from '../utils/dualUnitUtils';
 import ThermalReceipt from './print/ThermalReceipt';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
 const PrintDocument = ({
     companySettings,
@@ -12,10 +12,9 @@ const PrintDocument = ({
     ledgerBalance: ledgerBalanceProp,
     children
 }) => {
-    const { hasPermission } = useAuth();
-    const isCustomerParty = (partyLabel?.toLowerCase() || '').includes('customer');
-    const canViewPartyBalance = hasPermission(isCustomerParty ? 'view_customer_balance' : 'view_supplier_balance');
-    const canViewPartyPhone = hasPermission(isCustomerParty ? 'view_customer_phone' : 'view_supplier_phone');
+    const { getPartyPermissions } = useSensitiveDataPermissions();
+    const { canViewBalance: canViewPartyBalance, canViewPhone: canViewPartyPhone } =
+        getPartyPermissions(partyLabel);
     const {
         showLogo = true,
         showCompanyDetails = true,

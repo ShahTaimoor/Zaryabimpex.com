@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { LoadingButton } from '@/components/LoadingSpinner';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import BaseModal from '@/components/BaseModal';
-import { useAuth } from '@/contexts/AuthContext';
+import { useSensitiveDataPermissions } from '@/hooks/useSensitiveDataPermissions';
 import { compressImageFileToDataUrl } from '@/utils/imageCompress';
 
 /** Max rows shown in dropdown (server search caps higher; we slice in hook). */
@@ -38,8 +38,7 @@ function ProductSearchComponent({
   loadingOverride = null,
   emptyMessageOverride = null,
 }) {
-  const { hasPermission } = useAuth();
-  const canViewStock = hasPermission('view_stock_levels');
+  const { canViewStock } = useSensitiveDataPermissions();
 
   const formatDisplayNumber = (value) => {
     const num = Number(value);

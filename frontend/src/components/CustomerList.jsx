@@ -1,7 +1,7 @@
 import React from 'react';
 import { Users, Building, User, Edit, Trash2, MessageSquare } from 'lucide-react';
 import { getContactPersonVisible } from '../utils/fieldVisibility';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
 export const CustomerList = ({
   customers,
@@ -10,9 +10,7 @@ export const CustomerList = ({
   onDelete,
   onShowNotes
 }) => {
-  const { hasPermission } = useAuth();
-  const canViewCustomerBalance = hasPermission('view_customer_balance');
-  const canViewCustomerPhone = hasPermission('view_customer_phone');
+  const { canViewCustomerBalance, canViewCustomerPhone } = useSensitiveDataPermissions();
   const [visibilitySettings, setVisibilitySettings] = React.useState({
     contactPerson: getContactPersonVisible(false),
     customerTier: localStorage.getItem('showCustomerSetting_customerTier') === 'true',

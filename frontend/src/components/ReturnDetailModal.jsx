@@ -7,7 +7,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { PrintModal, ReturnPrintContent } from './print';
 import { showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
 const ReturnDetailModal = ({
   return: returnData,
@@ -21,7 +21,7 @@ const ReturnDetailModal = ({
   isLoading
 }) => {
   const actualReturnData = returnDataProp || returnData;
-  const { hasPermission } = useAuth();
+  const { getPartyPermissions } = useSensitiveDataPermissions();
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showIssueRefundModal, setShowIssueRefundModal] = useState(false);
   const [issueRefundMethod, setIssueRefundMethod] = useState('cash');
@@ -119,8 +119,9 @@ const ReturnDetailModal = ({
   const partyEmail = party?.email || '';
   const partyPhone = party?.phone || '';
   const partyAddress = formatAddress(party?.address || party?.businessAddress);
-  const isPurchaseReturnView = returnInfo.origin === 'purchase';
-  const canViewPartyPhone = hasPermission(isPurchaseReturnView ? 'view_supplier_phone' : 'view_customer_phone');
+  const { canViewPhone: canViewPartyPhone } = getPartyPermissions(
+    returnInfo.origin === 'purchase' ? 'supplier' : 'customer'
+  );
 
   const origRef = returnInfo.origin === 'purchase'
     ? (returnInfo.originalOrder?.invoiceNumber || returnInfo.originalOrder?.poNumber || 'N/A')

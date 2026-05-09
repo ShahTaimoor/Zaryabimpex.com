@@ -90,6 +90,7 @@ import RecommendationSection from '../components/RecommendationSection';
 import useBehaviorTracking from '../hooks/useBehaviorTracking';
 import { useTab } from '../contexts/TabContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 
 import { PERMISSIONS } from '../config/rbacConfig';
@@ -189,6 +190,7 @@ export const Sales = ({ tabId, editData }) => {
   const { trackAddToCart, trackProductView, trackPageView } = useBehaviorTracking();
   const { activeTabId, updateTabTitle, getActiveTab } = useTab();
   const { hasPermission, user } = useAuth();
+  const { getPartyPermissions } = useSensitiveDataPermissions();
   const { companyInfo: companySettings } = useCompanyInfo();
 
   const allowSaleWithoutProductEnabled = companySettings.orderSettings?.allowSaleWithoutProduct === true;
@@ -3193,10 +3195,7 @@ export const Sales = ({ tabId, editData }) => {
                                 </button>
                                 <ExcelExportButton
                                   getData={async () => {
-                                    const printPerms = {
-                                      canViewBalance: hasPermission(PERMISSIONS.VIEW_CUSTOMER_BALANCE),
-                                      canViewPhone: hasPermission(PERMISSIONS.VIEW_CUSTOMER_PHONE)
-                                    };
+                                    const printPerms = getPartyPermissions('customer');
                                     try {
                                       const result = await fetchOrderById(invoice?._id || invoice?.id).unwrap();
                                       const freshOrder = result?.order || result?.data?.order || result || invoice;
@@ -3217,10 +3216,7 @@ export const Sales = ({ tabId, editData }) => {
                                 />
                                 <PdfExportButton
                                   getData={async () => {
-                                    const printPerms = {
-                                      canViewBalance: hasPermission(PERMISSIONS.VIEW_CUSTOMER_BALANCE),
-                                      canViewPhone: hasPermission(PERMISSIONS.VIEW_CUSTOMER_PHONE)
-                                    };
+                                    const printPerms = getPartyPermissions('customer');
                                     try {
                                       const result = await fetchOrderById(invoice?._id || invoice?.id).unwrap();
                                       const freshOrder = result?.order || result?.data?.order || result || invoice;

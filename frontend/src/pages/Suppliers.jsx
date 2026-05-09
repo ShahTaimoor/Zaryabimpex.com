@@ -44,7 +44,7 @@ import {
 import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
 import { useGetCitiesQuery, useGetActiveCitiesQuery } from '../store/services/citiesApi';
 import { getContactPersonVisible } from '../utils/fieldVisibility';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
 
 const supplierDefaultValues = {
@@ -789,9 +789,7 @@ const LIMIT_OPTIONS = [50, 500, 1000, 5000];
 const DEFAULT_LIMIT = 50;
 
 export const Suppliers = () => {
-  const { hasPermission } = useAuth();
-  const canViewSupplierBalance = hasPermission('view_supplier_balance');
-  const canViewSupplierPhone = hasPermission('view_supplier_phone');
+  const { canViewSupplierPhone } = useSensitiveDataPermissions();
   const [visibilitySettings, setVisibilitySettings] = useState({
     contactPerson: getContactPersonVisible(true),
     email: localStorage.getItem('showSupplierSetting_email') === 'true',

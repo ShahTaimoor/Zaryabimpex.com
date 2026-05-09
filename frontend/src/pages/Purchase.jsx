@@ -82,7 +82,7 @@ import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import AsyncErrorBoundary from '../components/AsyncErrorBoundary';
 import { useResponsive } from '../components/ResponsiveContainer';
 import { ProductSearch as SharedSalesProductSearch } from '../components/sales/ProductSearch';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
 const PurchaseItem = ({
   item,
@@ -430,10 +430,12 @@ const IMPORT_ALLOCATION_METHODS = {
 };
 
 export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
-  const { hasPermission } = useAuth();
-  const canViewSupplierBalance = hasPermission('view_supplier_balance');
-  const canViewSupplierPhone = hasPermission('view_supplier_phone');
-  const canViewStock = hasPermission('view_stock_levels');
+  const {
+    canViewSupplierBalance,
+    canViewSupplierPhone,
+    canViewStock,
+    getPartyPermissions
+  } = useSensitiveDataPermissions();
   const isImportPurchase = purchaseMode === 'import';
   const [purchaseItems, setPurchaseItems] = useState([]);
   const purchaseCartScrollRef = useRef(null);
@@ -2414,7 +2416,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                                 </button>
                                 <ExcelExportButton
                                   getData={async () => {
-                                    const printPerms = { canViewBalance: canViewSupplierBalance, canViewPhone: canViewSupplierPhone };
+                                    const printPerms = getPartyPermissions('supplier');
                                     try {
                                       const result = await getPurchaseInvoiceById(invoice?._id || invoice?.id).unwrap();
                                       const freshInvoice = result?.invoice || result?.data?.invoice || result?.data || result || invoice;
@@ -2429,7 +2431,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                                 />
                                 <PdfExportButton
                                   getData={async () => {
-                                    const printPerms = { canViewBalance: canViewSupplierBalance, canViewPhone: canViewSupplierPhone };
+                                    const printPerms = getPartyPermissions('supplier');
                                     try {
                                       const result = await getPurchaseInvoiceById(invoice?._id || invoice?.id).unwrap();
                                       const freshInvoice = result?.invoice || result?.data?.invoice || result?.data || result || invoice;

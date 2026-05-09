@@ -35,15 +35,15 @@ import { Textarea } from '@/components/ui/textarea';
 import BaseModal from '../components/BaseModal';
 import FormField from '../components/FormField';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
 
 const BankReceipts = () => {
-  const { hasPermission } = useAuth();
-  const canViewCustomerBalance = hasPermission('view_customer_balance');
-  const canViewSupplierBalance = hasPermission('view_supplier_balance');
-  const canViewCustomerPhone = hasPermission('view_customer_phone');
-  const canViewSupplierPhone = hasPermission('view_supplier_phone');
+  const {
+    canViewCustomerBalance,
+    canViewSupplierBalance,
+    canViewSupplierPhone
+  } = useSensitiveDataPermissions();
   const today = getCurrentDatePakistan();
   // State for filters and pagination
   const [filters, setFilters] = useState({

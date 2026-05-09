@@ -37,7 +37,7 @@ import PdfExportButton from '../components/PdfExportButton';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import PaginationControls from '../components/PaginationControls';
 import { useCursorPagination } from '../hooks/useCursorPagination';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
 const PI_PAGE_SIZE = 50;
 
@@ -161,9 +161,7 @@ const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onP
 
 export const PurchaseInvoices = () => {
   const { companyInfo: companySettings } = useCompanyInfo();
-  const { hasPermission } = useAuth();
-  const canViewSupplierBalance = hasPermission('view_supplier_balance');
-  const canViewSupplierPhone = hasPermission('view_supplier_phone');
+  const { getPartyPermissions } = useSensitiveDataPermissions();
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebouncedValue(searchTerm, 350);
   const [statusFilter, setStatusFilter] = useState('');
@@ -814,7 +812,7 @@ export const PurchaseInvoices = () => {
                       </button>
                       <ExcelExportButton
                         getData={async () => {
-                          const printPerms = { canViewBalance: canViewSupplierBalance, canViewPhone: canViewSupplierPhone };
+                          const printPerms = getPartyPermissions('supplier');
                           try {
                             const result = await getPurchaseInvoiceById(invoice.id || invoice._id).unwrap();
                             const fullInvoice = result?.invoice || result?.data?.invoice || result?.data || result || invoice;
@@ -835,7 +833,7 @@ export const PurchaseInvoices = () => {
                       />
                       <PdfExportButton
                         getData={async () => {
-                          const printPerms = { canViewBalance: canViewSupplierBalance, canViewPhone: canViewSupplierPhone };
+                          const printPerms = getPartyPermissions('supplier');
                           try {
                             const result = await getPurchaseInvoiceById(invoice.id || invoice._id).unwrap();
                             const fullInvoice = result?.invoice || result?.data?.invoice || result?.data || result || invoice;

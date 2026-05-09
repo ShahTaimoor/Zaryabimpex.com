@@ -38,12 +38,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { ProductSearch } from '../components/sales/ProductSearch';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
 const PurchaseReturns = () => {
-  const { hasPermission } = useAuth();
-  const canViewSupplierBalance = hasPermission('view_supplier_balance');
-  const canViewSupplierPhone = hasPermission('view_supplier_phone');
+  const { canViewSupplierPhone } = useSensitiveDataPermissions();
   const today = getCurrentDatePakistan();
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [supplierSearchTerm, setSupplierSearchTerm] = useState('');

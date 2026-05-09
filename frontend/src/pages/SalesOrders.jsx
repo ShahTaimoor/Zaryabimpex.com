@@ -83,7 +83,7 @@ import { ProductSearch } from '../components/sales/ProductSearch';
 import { CartTableHeader } from '../components/order/CartTableHeader';
 import { hasDualUnit, piecesToBoxesAndPieces, getPiecesPerBox, formatStockDualLabel } from '../utils/dualUnitUtils';
 import { useTab } from '../contexts/TabContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 import PrintModal, { DirectPrintInvoice } from '../components/PrintModal';
 import BaseModal from '../components/BaseModal';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
@@ -284,14 +284,16 @@ const SalesOrders = ({ tabId }) => {
 
 
 
-  // Auth context for permissions
-  const { hasPermission } = useAuth();
-  const canViewCostPrice = hasPermission('view_product_costs');
-  const canViewBP = hasPermission('view_bp');
-  const canApplyLastPrices = hasPermission('apply_last_prices');
-  const canViewCustomerBalance = hasPermission('view_customer_balance');
-  const canViewCustomerPhone = hasPermission('view_customer_phone');
-  const canViewStock = hasPermission('view_stock_levels');
+  // Sensitive permission flags (Advanced tab) - centralized hook
+  const {
+    canViewProductCosts: canViewCostPrice,
+    canViewBP,
+    canApplyLastPrices,
+    canViewCustomerBalance,
+    canViewCustomerPhone,
+    canViewStock,
+    getPartyPermissions
+  } = useSensitiveDataPermissions();
   const [showProfit, setShowProfit] = useState(false);
 
   const [autoPrint, setAutoPrint] = useState(false);
@@ -3202,7 +3204,7 @@ const SalesOrders = ({ tabId }) => {
                             </button>
                             <ExcelExportButton
                               getData={async () => {
-                                const printPerms = { canViewBalance: canViewCustomerBalance, canViewPhone: canViewCustomerPhone };
+                                const printPerms = getPartyPermissions('customer');
                                 try {
                                   const result = await fetchSalesOrderById(order.id || order._id).unwrap();
                                   const freshOrder = result?.order || result?.data?.salesOrder || result?.data || result || order;
@@ -3223,7 +3225,7 @@ const SalesOrders = ({ tabId }) => {
                             />
                             <PdfExportButton
                               getData={async () => {
-                                const printPerms = { canViewBalance: canViewCustomerBalance, canViewPhone: canViewCustomerPhone };
+                                const printPerms = getPartyPermissions('customer');
                                 try {
                                   const result = await fetchSalesOrderById(order.id || order._id).unwrap();
                                   const freshOrder = result?.order || result?.data?.salesOrder || result?.data || result || order;
