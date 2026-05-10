@@ -3,6 +3,31 @@ import { formatQuantityDisplay } from '../utils/dualUnitUtils';
 import ThermalReceipt from './print/ThermalReceipt';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
+/** Line items for print when payloads use alternate keys or list APIs omit items (minimal listMode). */
+function resolvePrintOrderLineItems(orderData) {
+    if (!orderData || typeof orderData !== 'object') return [];
+    const raw =
+        orderData.data && typeof orderData.data === 'object' && !Array.isArray(orderData.data)
+            ? orderData.data
+            : orderData;
+    let candidate =
+        raw.items ??
+        raw.orderItems ??
+        raw.products ??
+        raw.invoiceItems ??
+        raw.line_items ??
+        raw.lineItems;
+    if (candidate == null) return [];
+    if (typeof candidate === 'string') {
+        try {
+            candidate = JSON.parse(candidate);
+        } catch {
+            return [];
+        }
+    }
+    return Array.isArray(candidate) ? candidate : [];
+}
+
 const PrintDocument = ({
     companySettings,
     orderData,
@@ -273,7 +298,7 @@ const PrintDocument = ({
         };
     }, [orderData, partyLabel]);
 
-    const items = Array.isArray(orderData?.items) ? orderData.items : [];
+    const items = useMemo(() => resolvePrintOrderLineItems(orderData), [orderData]);
 
     const computedSubtotalFromItems = items.reduce((sum, item) => {
         const qty = toNumber(item.quantity ?? item.qty, 0);

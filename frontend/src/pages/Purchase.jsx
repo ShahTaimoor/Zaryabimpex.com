@@ -1393,6 +1393,29 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     }
   }, [getPurchaseInvoiceById]);
 
+  /** Saved-invoice list uses minimal rows (no line items); load full PI before print preview. */
+  const openSavedPurchasePrintPreview = useCallback(
+    async (invoice) => {
+      const id = invoice?._id || invoice?.id;
+      if (!id) {
+        setSavedPurchasePrintOrder(invoice);
+        setShowSavedPurchasePrintModal(true);
+        return;
+      }
+      try {
+        const result = await getPurchaseInvoiceById(id).unwrap();
+        const full = result?.invoice || result?.data?.invoice || result?.data || result || invoice;
+        setSavedPurchasePrintOrder(full);
+        setShowSavedPurchasePrintModal(true);
+      } catch (error) {
+        toast.error(error?.data?.message || error?.message || 'Failed to load invoice for print');
+        setSavedPurchasePrintOrder(invoice);
+        setShowSavedPurchasePrintModal(true);
+      }
+    },
+    [getPurchaseInvoiceById]
+  );
+
   const handleDeleteSavedPurchase = useCallback(async (invoice) => {
     const target = invoice ?? purchaseDeleteTarget;
     const id = target?._id || target?.id;
@@ -2288,20 +2311,14 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <div className="flex items-center gap-1">
                                 <button
-                                  onClick={() => {
-                                    setSavedPurchasePrintOrder(invoice);
-                                    setShowSavedPurchasePrintModal(true);
-                                  }}
+                                  onClick={() => openSavedPurchasePrintPreview(invoice)}
                                   className="text-blue-600 hover:text-blue-900"
                                   title="View"
                                 >
                                   <Eye className="h-4 w-4" />
                                 </button>
                                 <button
-                                  onClick={() => {
-                                    setSavedPurchasePrintOrder(invoice);
-                                    setShowSavedPurchasePrintModal(true);
-                                  }}
+                                  onClick={() => openSavedPurchasePrintPreview(invoice)}
                                   className="text-green-600 hover:text-green-900"
                                   title="Print"
                                 >

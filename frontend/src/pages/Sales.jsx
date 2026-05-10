@@ -584,6 +584,29 @@ export const Sales = ({ tabId, editData }) => {
     }
   }, [fetchOrderById]);
 
+  /** Saved-invoice list uses minimal rows (no line items); load full sale before print preview. */
+  const openSavedInvoicePrintPreview = useCallback(
+    async (invoice) => {
+      const id = invoice?._id || invoice?.id;
+      if (!id) {
+        setSavedInvoicePrintOrder(invoice);
+        setShowSavedInvoicePrintModal(true);
+        return;
+      }
+      try {
+        const result = await fetchOrderById(id).unwrap();
+        const full = result?.order || result?.data?.order || result || invoice;
+        setSavedInvoicePrintOrder(full);
+        setShowSavedInvoicePrintModal(true);
+      } catch (err) {
+        handleApiError(err, 'Loading invoice for print');
+        setSavedInvoicePrintOrder(invoice);
+        setShowSavedInvoicePrintModal(true);
+      }
+    },
+    [fetchOrderById]
+  );
+
   const handleDeleteSavedInvoice = useCallback(async (invoice) => {
     const target = invoice ?? invoiceDeleteTarget;
     const id = target?._id || target?.id;
@@ -2794,20 +2817,14 @@ export const Sales = ({ tabId, editData }) => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <div className="flex items-center gap-1">
                                 <button
-                                  onClick={() => {
-                                    setSavedInvoicePrintOrder(invoice);
-                                    setShowSavedInvoicePrintModal(true);
-                                  }}
+                                  onClick={() => openSavedInvoicePrintPreview(invoice)}
                                   className="text-blue-600 hover:text-blue-900"
                                   title="View"
                                 >
                                   <Eye className="h-4 w-4" />
                                 </button>
                                 <button
-                                  onClick={() => {
-                                    setSavedInvoicePrintOrder(invoice);
-                                    setShowSavedInvoicePrintModal(true);
-                                  }}
+                                  onClick={() => openSavedInvoicePrintPreview(invoice)}
                                   className="text-green-600 hover:text-green-900"
                                   title="Print"
                                 >

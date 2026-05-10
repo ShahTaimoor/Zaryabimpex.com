@@ -468,9 +468,9 @@ export const PurchaseInvoices = () => {
     showSuccessToast(`Opening ${row.invoiceNumber} for editing...`);
   };
 
+  // List rows are minimal (no items); reuse print helper so view shows full lines like PDF export.
   const handleView = (invoice) => {
-    setSelectedInvoice(invoice);
-    setShowViewModal(true);
+    handlePrint(invoice);
   };
 
 
