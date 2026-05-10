@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import {
   FileText,
@@ -12,7 +12,8 @@ import {
   TrendingUp,
   Printer,
   Calendar,
-
+  MoreHorizontal,
+  FileSpreadsheet
 } from 'lucide-react';
 import {
   useGetPurchaseInvoicesQuery,
@@ -30,6 +31,12 @@ import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
 import PrintModal from '../components/PrintModal';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
 import ExcelExportButton from '../components/ExcelExportButton';
@@ -162,6 +169,11 @@ const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onP
 export const PurchaseInvoices = () => {
   const { companyInfo: companySettings } = useCompanyInfo();
   const { getPartyPermissions } = useSensitiveDataPermissions();
+  
+  // Refs for responsive actions
+  const excelExportRef = useRef(null);
+  const pdfExportRef = useRef(null);
+
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebouncedValue(searchTerm, 350);
   const [statusFilter, setStatusFilter] = useState('');
@@ -558,26 +570,55 @@ export const PurchaseInvoices = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto items-stretch sm:items-center">
-          <ExcelExportButton
-            getData={getExportData}
-            label="Export"
-          />
-          <PdfExportButton
-            getData={getExportData}
-            label="PDF"
-          />
-          <div className="w-full sm:w-auto">
-            <DateFilter
-              startDate={dateFrom}
-              endDate={dateTo}
-              onDateChange={(start, end) => {
-                setDateFrom(start || '');
-                setDateTo(end || '');
-              }}
-              compact={true}
-              showPresets={true}
-              className="w-full"
+          {/* Desktop Actions */}
+          <div className="hidden sm:flex items-center gap-2">
+            <ExcelExportButton
+              ref={excelExportRef}
+              getData={getExportData}
+              label="Export"
             />
+            <PdfExportButton
+              ref={pdfExportRef}
+              getData={getExportData}
+              label="PDF"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex-1 sm:flex-none">
+              <DateFilter
+                startDate={dateFrom}
+                endDate={dateTo}
+                onDateChange={(start, end) => {
+                  setDateFrom(start || '');
+                  setDateTo(end || '');
+                }}
+                compact={true}
+                showPresets={true}
+                className="w-full"
+              />
+            </div>
+
+            {/* Mobile Actions Dropdown */}
+            <div className="sm:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-10 w-10 border-gray-200 bg-white">
+                    <MoreHorizontal className="h-5 w-5 text-gray-600" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => excelExportRef.current?.handleExport()}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
+                    Excel Export
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => pdfExportRef.current?.handleExport()}>
+                    <FileText className="h-4 w-4 mr-2 text-red-600" />
+                    PDF Export
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
       </div>

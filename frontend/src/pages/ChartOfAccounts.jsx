@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Plus, 
   Edit, 
@@ -13,8 +13,17 @@ import {
   X,
   Eye,
   EyeOff,
-  RefreshCw
+  RefreshCw,
+  MoreHorizontal,
+  FileSpreadsheet,
+  FileText
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from 'sonner';
 import {
   useGetAccountsQuery,
@@ -766,6 +775,10 @@ const CategoryManagement = ({ categories, onCategoryCreated, onCategoryUpdated, 
 };
 
 export const ChartOfAccounts = () => {
+  // Refs for responsive actions
+  const excelExportRef = useRef(null);
+  const pdfExportRef = useRef(null);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -1051,34 +1064,64 @@ export const ChartOfAccounts = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Chart of Accounts</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your accounting structure and account heads</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto items-stretch sm:items-center">
           <Button
             onClick={() => setShowCategoryManagement(!showCategoryManagement)}
             variant="secondary"
             size="default"
-            className="flex items-center justify-center gap-2"
+            className="flex items-center justify-center gap-2 h-10"
           >
             <FolderTree className="h-4 w-4" />
             <span className="hidden sm:inline">{showCategoryManagement ? 'Hide Categories' : 'Manage Categories'}</span>
             <span className="sm:hidden">Categories</span>
           </Button>
-          <ExcelExportButton 
-            getData={getExportData}
-            label="Export"
-          />
-          <PdfExportButton 
-            getData={getExportData}
-            label="PDF"
-          />
-          <Button
-            onClick={handleAddNew}
-            variant="default"
-            size="default"
-            className="flex items-center justify-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Create Account
-          </Button>
+
+          {/* Desktop Export Buttons */}
+          <div className="hidden sm:flex items-center gap-2">
+            <ExcelExportButton 
+              ref={excelExportRef}
+              getData={getExportData}
+              label="Export"
+            />
+            <PdfExportButton 
+              ref={pdfExportRef}
+              getData={getExportData}
+              label="PDF"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Button
+              onClick={handleAddNew}
+              variant="default"
+              size="default"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 h-10"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Create Account</span>
+            </Button>
+
+            {/* Mobile Actions Dropdown */}
+            <div className="sm:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-10 w-10 border-gray-200 bg-white">
+                    <MoreHorizontal className="h-5 w-5 text-gray-600" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => excelExportRef.current?.handleExport()}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
+                    Excel Export
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => pdfExportRef.current?.handleExport()}>
+                    <FileText className="h-4 w-4 mr-2 text-red-600" />
+                    PDF Export
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
         </div>
       </div>
 

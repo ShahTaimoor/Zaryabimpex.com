@@ -6,7 +6,7 @@ import { toast } from 'sonner';
  * A professional Export PDF button component
  * Supports professional invoice layouts with company/party headers.
  */
-const PdfExportButton = ({ getData, label = "PDF", className = "" }) => {
+const PdfExportButton = React.forwardRef(({ getData, label = "PDF", className = "" }, ref) => {
     const [isExporting, setIsExporting] = useState(false);
 
     const loadImage = (url) => {
@@ -255,6 +255,10 @@ const PdfExportButton = ({ getData, label = "PDF", className = "" }) => {
         }
     };
 
+    React.useImperativeHandle(ref, () => ({
+        handleExport
+    }));
+
     return (
         <button
             onClick={handleExport}
@@ -271,6 +275,6 @@ const PdfExportButton = ({ getData, label = "PDF", className = "" }) => {
             {label && !isExporting && <Download className="h-3.5 w-3.5 ml-1 opacity-0 group-hover:opacity-100 -translate-y-1 group-hover:translate-y-0 transition-all text-red-600" />}
         </button>
     );
-};
+});
 
 export default PdfExportButton;

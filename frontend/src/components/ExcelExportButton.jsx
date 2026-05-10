@@ -9,7 +9,7 @@ import { exportToExcel } from '../utils/excelExport';
  * @param {string} props.label - Button label
  * @param {string} props.className - Custom CSS classes
  */
-const ExcelExportButton = ({ getData, label = "Export to Excel", className = "" }) => {
+const ExcelExportButton = React.forwardRef(({ getData, label = "Export to Excel", className = "" }, ref) => {
     const [isExporting, setIsExporting] = useState(false);
 
     const handleExport = async () => {
@@ -25,6 +25,10 @@ const ExcelExportButton = ({ getData, label = "Export to Excel", className = "" 
             setIsExporting(false);
         }
     };
+
+    React.useImperativeHandle(ref, () => ({
+        handleExport
+    }));
 
     return (
         <button
@@ -42,6 +46,6 @@ const ExcelExportButton = ({ getData, label = "Export to Excel", className = "" 
             {label && !isExporting && <Download className="h-3.5 w-3.5 ml-1 opacity-0 group-hover:opacity-100 -translate-y-1 group-hover:translate-y-0 transition-all text-green-600" />}
         </button>
     );
-};
+});
 
 export default ExcelExportButton;

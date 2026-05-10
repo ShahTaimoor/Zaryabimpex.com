@@ -32,7 +32,9 @@ import {
   Calculator,
   MessageSquare,
   ChevronDown,
-  Camera
+  Camera,
+  MoreHorizontal,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatDate, formatCurrency } from '../utils/formatters';
@@ -186,6 +188,8 @@ const SalesOrders = ({ tabId }) => {
   const [currentOrder, setCurrentOrder] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  const excelExportRef = useRef(null);
+  const pdfExportRef = useRef(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -3068,15 +3072,38 @@ const SalesOrders = ({ tabId }) => {
                     </Button>
 
                     <ExcelExportButton 
+                      ref={excelExportRef}
                       getData={getExportData} 
                       label="" 
-                      className="h-10 w-10 p-0"
+                      className="h-10 w-10 p-0 hidden sm:flex"
                     />
                     <PdfExportButton 
+                      ref={pdfExportRef}
                       getData={getExportData} 
                       label="" 
-                      className="h-10 w-10 p-0"
+                      className="h-10 w-10 p-0 hidden sm:flex"
                     />
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="h-10 w-10 p-0 sm:hidden border-gray-200"
+                        >
+                          <MoreHorizontal className="h-4 w-4 text-gray-500" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); excelExportRef.current?.handleExport(); }}>
+                          <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
+                          Export to Excel
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); pdfExportRef.current?.handleExport(); }}>
+                          <FileText className="h-4 w-4 mr-2 text-red-600" />
+                          Export to PDF
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
 
                     <Button
                       type="button"

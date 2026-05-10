@@ -16,7 +16,10 @@ import {
   MapPin,
   ArrowUpDown,
   Download,
-  Camera
+  Camera,
+  MoreHorizontal,
+  FileSpreadsheet,
+  FileText,
 } from 'lucide-react';
 import BaseModal from '../components/BaseModal';
 import {
@@ -515,6 +518,8 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   const [purchaseDeleteTarget, setPurchaseDeleteTarget] = useState(null);
   const [savedPurchaseSearchTerm, setSavedPurchaseSearchTerm] = useState('');
   const [savedPurchaseStatus, setSavedPurchaseStatus] = useState('');
+  const excelExportRef = useRef(null);
+  const pdfExportRef = useRef(null);
   const [savedPurchaseFromDate, setSavedPurchaseFromDate] = useState(() => getCurrentDatePakistan());
   const [savedPurchaseToDate, setSavedPurchaseToDate] = useState(() => getCurrentDatePakistan());
   const [savedPurchasePage, setSavedPurchasePage] = useState(1);
@@ -2307,15 +2312,38 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                       </Button>
 
                       <ExcelExportButton 
+                        ref={excelExportRef}
                         getData={getSavedPurchaseInvoicesExportData} 
                         label="" 
-                        className="h-10 w-10 p-0"
+                        className="h-10 w-10 p-0 hidden sm:flex"
                       />
                       <PdfExportButton 
+                        ref={pdfExportRef}
                         getData={getSavedPurchaseInvoicesExportData} 
                         label="" 
-                        className="h-10 w-10 p-0"
+                        className="h-10 w-10 p-0 hidden sm:flex"
                       />
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="h-10 w-10 p-0 sm:hidden border-gray-200"
+                          >
+                            <MoreHorizontal className="h-4 w-4 text-gray-500" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); excelExportRef.current?.handleExport(); }}>
+                            <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
+                            Export to Excel
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); pdfExportRef.current?.handleExport(); }}>
+                            <FileText className="h-4 w-4 mr-2 text-red-600" />
+                            Export to PDF
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
 
                       <Button
                         type="button"

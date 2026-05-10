@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useTableRowVirtualizer, getVirtualTablePadding } from '../hooks/useTableRowVirtualizer';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { toast } from 'sonner';
@@ -18,8 +18,17 @@ import {
   FileSpreadsheet,
   Printer,
   Wallet,
-  Building2
+  Building2,
+  MoreHorizontal,
+  FileText
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from '@/components/ui/button';
 import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import {
@@ -43,6 +52,11 @@ import { useCompanyInfo } from '../hooks/useCompanyInfo';
 
 export const Reports = () => {
   const { companyInfo: companySettings } = useCompanyInfo();
+  
+  // Refs for responsive actions
+  const excelExportRef = useRef(null);
+  const pdfExportRef = useRef(null);
+
   const showCostPrice = companySettings.orderSettings?.showCostPrice !== false;
   const [activeTab, setActiveTab] = useState('party-balance');
   const [partyType, setPartyType] = useState('customer');
@@ -919,13 +933,13 @@ export const Reports = () => {
   return (
     <PageShell className="bg-gray-50" contentClassName="space-y-6 p-4 md:p-6">
       {/* Header & Global Filters */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Reporting Dashboard</h1>
           <p className="text-gray-500 text-sm">Real-time business analytics & financial reports</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap md:flex-nowrap items-center gap-3">
           {(activeTab !== 'bank-cash') && (activeTab !== 'inventory' || inventoryType === 'stock-summary') && (
             <DateFilter
               startDate={dateRange.from}
@@ -940,29 +954,59 @@ export const Reports = () => {
 
           <button
             onClick={handleRefresh}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors h-10 w-10 flex items-center justify-center border border-gray-200 bg-white"
             title="Refresh Data"
           >
             <RefreshCcw className={`h-5 w-5 ${(summaryLoading || partyLoading || salesLoading || productReportLoading || customerReportLoading || inventoryLoading || financialLoading || bankCashLoading) ? 'animate-spin' : ''}`} />
           </button>
 
-          <ExcelExportButton
-            getData={getExportData}
-            label="Export Report"
-            className="border-indigo-200 bg-white text-indigo-700 hover:border-indigo-500 hover:bg-indigo-50 transition-all font-semibold"
-          />
-          <PdfExportButton
-            getData={getExportData}
-            label="PDF Report"
-            className="border-indigo-200 bg-white text-indigo-700 hover:border-indigo-500 hover:bg-indigo-50 transition-all font-semibold"
-          />
-          <button
-            onClick={() => setIsPrintModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-blue-200 bg-white text-blue-700 hover:border-blue-500 hover:bg-blue-50 transition-all font-semibold rounded-lg text-sm h-9"
-          >
-            <Printer className="h-4 w-4" />
-            Print Report
-          </button>
+          {/* Desktop Actions */}
+          <div className="hidden sm:flex items-center gap-2">
+            <ExcelExportButton
+              ref={excelExportRef}
+              getData={getExportData}
+              label="Excel"
+              className="h-10 border-indigo-200 bg-white text-indigo-700 hover:border-indigo-500 hover:bg-indigo-50 transition-all font-semibold"
+            />
+            <PdfExportButton
+              ref={pdfExportRef}
+              getData={getExportData}
+              label="PDF"
+              className="h-10 border-indigo-200 bg-white text-indigo-700 hover:border-indigo-500 hover:bg-indigo-50 transition-all font-semibold"
+            />
+            <button
+              onClick={() => setIsPrintModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-blue-200 bg-white text-blue-700 hover:border-blue-500 hover:bg-blue-50 transition-all font-semibold rounded-lg text-sm h-10"
+            >
+              <Printer className="h-4 w-4" />
+              Print
+            </button>
+          </div>
+
+          {/* Mobile Actions Dropdown */}
+          <div className="sm:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="h-10 w-10 border-gray-200 bg-white">
+                  <MoreHorizontal className="h-5 w-5 text-gray-600" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => excelExportRef.current?.handleExport()}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
+                  Excel Export
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => pdfExportRef.current?.handleExport()}>
+                  <FileText className="h-4 w-4 mr-2 text-red-600" />
+                  PDF Export
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsPrintModalOpen(true)}>
+                  <Printer className="h-4 w-4 mr-2 text-blue-600" />
+                  Print Report
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
@@ -1010,22 +1054,8 @@ export const Reports = () => {
         })}
       </div>
 
-      {activeTab === 'party-balance' && (
-        <p className="text-sm text-gray-600 bg-amber-50/80 border border-amber-100 rounded-lg px-4 py-2.5">
-          The summary balance reflects <strong>current</strong> ledger positions for all{' '}
-          {partyType === 'customer' ? 'customers' : 'suppliers'}, not only transactions in the date range above. Use the detailed party table for movement in context.
-        </p>
-      )}
-      {activeTab === 'top-products' && (
-        <p className="text-sm text-gray-600 bg-slate-50 border border-slate-100 rounded-lg px-4 py-2.5">
-          Up to <strong>100</strong> rows per request. Sort by revenue or by supplier (then revenue). Supplier reflects the latest purchase. Summary cards total only visible rows; product count follows your supplier filter when set.
-        </p>
-      )}
-      {activeTab === 'top-customers' && (
-        <p className="text-sm text-gray-600 bg-slate-50 border border-slate-100 rounded-lg px-4 py-2.5">
-          Table lists up to <strong>100</strong> rows ranked by revenue for the selected dates. Card totals labeled “top 100 rows” sum only those visible rows; “distinct” counts include all qualifying customers in the period.
-        </p>
-      )}
+
+
 
       {/* Main Report Section */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -1090,20 +1120,9 @@ export const Reports = () => {
                     Suppliers
                   </button>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                  <span>
-                    {partyBalanceTotal} {partyType === 'customer' ? 'customers' : 'suppliers'} total
-                  </span>
-                  <span className="text-gray-400">·</span>
-                  <span>
-                    Rows {partyRangeStart}–{partyRangeEnd} of {partyBalanceTotal}
-                  </span>
-                </div>
+
               </div>
-              <p className="text-xs text-gray-500">
-                Net balance = opening balance + ledger activity on AR (1100) or AP (2000). Ledger Dr/Cr exclude
-                opening-balance postings so they match the general ledger.
-              </p>
+
 
               <div
                 ref={partyTableScrollRef}
@@ -1300,9 +1319,7 @@ export const Reports = () => {
           {activeTab === 'top-products' && (
             <div className="space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-wrap">
-                <p className="text-sm text-gray-600">
-                  Products ranked from invoice lines in the selected period (cancelled sales excluded). Supplier is from the latest purchase record.
-                </p>
+
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-gray-400 shrink-0" aria-hidden />
@@ -1337,12 +1354,7 @@ export const Reports = () => {
                       <option value="supplier">By supplier, then revenue</option>
                     </select>
                   </div>
-                  <div className="text-sm text-gray-500">
-                    {(productReportData?.products?.length ?? 0)} rows · {(productReportData?.total ?? 0)} products match
-                    {productReportData?.totalAllSkusInPeriod != null && topProductsSupplierId ? (
-                      <span className="text-gray-400"> ({productReportData.totalAllSkusInPeriod} SKUs sold in period)</span>
-                    ) : null}
-                  </div>
+
                 </div>
               </div>
               <div className="overflow-x-auto border border-gray-100 rounded-lg">
@@ -1387,12 +1399,8 @@ export const Reports = () => {
           {activeTab === 'top-customers' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-4">
-                <p className="text-sm text-gray-600">
-                  Customers ranked by total invoice value in the selected period.
-                </p>
-                <div className="text-sm text-gray-500">
-                  {(customerReportData?.customers?.length ?? 0)} rows · {(customerReportData?.total ?? 0)} customers with orders
-                </div>
+
+
               </div>
               <div className="overflow-x-auto border border-gray-100 rounded-lg">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -1510,24 +1518,11 @@ export const Reports = () => {
                       <option value="supplier">Supplier, then product</option>
                     </select>
                   </div>
-                  <div className="text-sm text-gray-500">
-                    {isInventoryPaginated ? (
-                      <span>
-                        {stockSummaryTotal} items
-                        {stockSummaryTotal > 0 ? (
-                          <span className="text-gray-400"> · Rows {stockRangeStart}–{stockRangeEnd} of {stockSummaryTotal}</span>
-                        ) : null}
-                      </span>
-                    ) : (
-                      <span>{inventoryReportData?.data?.length || 0} Items Found</span>
-                    )}
-                  </div>
+
                 </div>
               </div>
 
-              <p className="text-xs text-gray-500">
-                Supplier shows the vendor from the latest purchase. Choosing a supplier narrows the list to products with at least one purchase from that supplier.
-              </p>
+
 
               <div
                 ref={stockSummaryTableScrollRef}

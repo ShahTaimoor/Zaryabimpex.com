@@ -9,13 +9,17 @@ import { toast } from 'sonner';
  * @param {Function} props.onDataImported - Callback function when data is successfully parsed
  * @param {string} props.label - Button label
  */
-const ExcelImportButton = ({ onDataImported, label = "Import Excel" }) => {
+const ExcelImportButton = React.forwardRef(({ onDataImported, label = "Import Excel", className = "" }, ref) => {
     const fileInputRef = useRef(null);
     const [isImporting, setIsImporting] = useState(false);
 
     const handleButtonClick = () => {
         fileInputRef.current?.click();
     };
+
+    React.useImperativeHandle(ref, () => ({
+        handleButtonClick
+    }));
 
     const handleFileChange = async (event) => {
         const file = event.target.files?.[0];
@@ -71,7 +75,7 @@ const ExcelImportButton = ({ onDataImported, label = "Import Excel" }) => {
             <button
                 onClick={handleButtonClick}
                 disabled={isImporting}
-                className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 hover:border-blue-500 hover:bg-blue-50 text-gray-700 hover:text-blue-700 rounded-lg transition-all duration-200 shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed group"
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 hover:border-blue-500 hover:bg-blue-50 text-gray-700 hover:text-blue-700 rounded-lg transition-all duration-200 shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed group ${className}`}
             >
                 {isImporting ? (
                     <div className="h-4 w-4 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
@@ -83,6 +87,6 @@ const ExcelImportButton = ({ onDataImported, label = "Import Excel" }) => {
             </button>
         </div>
     );
-};
+});
 
 export default ExcelImportButton;

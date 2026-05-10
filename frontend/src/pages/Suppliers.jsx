@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import BaseModal from '../components/BaseModal';
 import {
   Building,
@@ -16,10 +16,19 @@ import {
   MessageSquare,
   FileSpreadsheet,
   Download,
+  MoreHorizontal,
+  FileText,
+  Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import ExcelImportButton from '../components/ExcelImportButton';
@@ -790,6 +799,11 @@ const DEFAULT_LIMIT = 50;
 
 export const Suppliers = () => {
   const { canViewSupplierPhone } = useSensitiveDataPermissions();
+  
+  // Refs for responsive actions
+  const excelExportRef = useRef(null);
+  const pdfExportRef = useRef(null);
+  const excelImportRef = useRef(null);
   const [visibilitySettings, setVisibilitySettings] = useState({
     contactPerson: getContactPersonVisible(true),
     email: localStorage.getItem('showSupplierSetting_email') === 'true',
@@ -1053,7 +1067,7 @@ export const Suppliers = () => {
           <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Suppliers</h1>
           <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">Manage your supplier relationships and information</p>
         </div>
-        <div className="flex-shrink-0 flex items-center gap-2 overflow-x-auto">
+        <div className="flex-shrink-0 flex items-center gap-2">
           <Button
             onClick={() => handleAddNew()}
             variant="default"
@@ -1063,27 +1077,71 @@ export const Suppliers = () => {
             <Plus className="h-4 w-4" />
             <span className="uppercase">ADD SUPPLIER</span>
           </Button>
-          <ExcelExportButton getData={getExportData} label="Export" />
-          <PdfExportButton getData={getExportData} label="PDF" />
-          <ExcelImportButton onDataImported={handleImportData} label="Import" />
-          <label className="inline-flex items-center gap-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
-            <input
-              type="checkbox"
-              checked={autoCreateImportCities}
-              onChange={(e) => setAutoCreateImportCities(e.target.checked)}
-              className="h-4 w-4"
-            />
-            Auto-create city
-          </label>
-          <Button
-            onClick={handleDownloadTemplate}
-            variant="outline"
-            size="sm"
-            className="group flex items-center justify-center gap-2 border-orange-200 bg-white text-orange-600 hover:bg-orange-50 hover:border-orange-500 h-9 px-3 rounded-lg shadow-sm transition-all duration-200"
-          >
-            <Download className="h-3.5 w-3.5 group-hover:-translate-y-0.5 transition-transform" />
-            <span className="text-xs font-semibold tracking-tight uppercase">Template</span>
-          </Button>
+
+          {/* Desktop Actions */}
+          <div className="hidden sm:flex items-center gap-2">
+            <ExcelExportButton ref={excelExportRef} getData={getExportData} label="Export" />
+            <PdfExportButton ref={pdfExportRef} getData={getExportData} label="PDF" />
+            <ExcelImportButton ref={excelImportRef} onDataImported={handleImportData} label="Import" />
+            <label className="inline-flex items-center gap-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
+              <input
+                type="checkbox"
+                checked={autoCreateImportCities}
+                onChange={(e) => setAutoCreateImportCities(e.target.checked)}
+                className="h-4 w-4"
+              />
+              Auto-create city
+            </label>
+            <Button
+              onClick={handleDownloadTemplate}
+              variant="outline"
+              size="sm"
+              className="group flex items-center justify-center gap-2 border-orange-200 bg-white text-orange-600 hover:bg-orange-50 hover:border-orange-500 h-9 px-3 rounded-lg shadow-sm transition-all duration-200"
+            >
+              <Download className="h-3.5 w-3.5 group-hover:-translate-y-0.5 transition-transform" />
+              <span className="text-xs font-semibold tracking-tight uppercase">Template</span>
+            </Button>
+          </div>
+
+          {/* Mobile Actions Dropdown */}
+          <div className="sm:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="h-10 w-10 border-gray-200">
+                  <MoreHorizontal className="h-5 w-5 text-gray-600" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => excelExportRef.current?.handleExport()}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2 text-green-600" />
+                  Excel Export
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => pdfExportRef.current?.handleExport()}>
+                  <FileText className="h-4 w-4 mr-2 text-red-600" />
+                  PDF Export
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => excelImportRef.current?.handleButtonClick()}>
+                  <Upload className="h-4 w-4 mr-2 text-blue-600" />
+                  Import Excel
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadTemplate}>
+                  <Download className="h-4 w-4 mr-2 text-orange-600" />
+                  Template
+                </DropdownMenuItem>
+                <div className="px-2 py-1.5 border-t mt-1">
+                  <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoCreateImportCities}
+                      onChange={(e) => setAutoCreateImportCities(e.target.checked)}
+                      className="h-3.5 w-3.5"
+                    />
+                    Auto-create city
+                  </label>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
