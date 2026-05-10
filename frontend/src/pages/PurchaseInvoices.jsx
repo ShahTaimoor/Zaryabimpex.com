@@ -30,6 +30,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
 import PrintModal from '../components/PrintModal';
+import { EntityStatusBadge } from '../components/order/EntityStatusBadge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -45,6 +46,8 @@ import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import PaginationControls from '../components/PaginationControls';
 import { useCursorPagination } from '../hooks/useCursorPagination';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
+import ConfirmationDialog from '../components/ConfirmationDialog';
+import { useConfirmation } from '../hooks/useConfirmation';
 
 const PI_PAGE_SIZE = 50;
 
@@ -73,26 +76,9 @@ const canEditByDate = (invoice) => {
   return d >= cutoff;
 };
 
-const StatusBadge = ({ status }) => {
-  const statusConfig = {
-    draft: { color: 'bg-gray-100 text-gray-800', icon: Clock, label: 'Draft' },
-    confirmed: { color: 'bg-blue-100 text-blue-800', icon: CheckCircle, label: 'Confirmed' },
-    received: { color: 'bg-green-100 text-green-800', icon: CheckCircle, label: 'Received' },
-    paid: { color: 'bg-green-100 text-green-800', icon: CheckCircle, label: 'Paid' },
-    cancelled: { color: 'bg-red-100 text-red-800', icon: XCircle, label: 'Cancelled' },
-    closed: { color: 'bg-gray-100 text-gray-800', icon: XCircle, label: 'Closed' }
-  };
-
-  const config = statusConfig[status] || statusConfig.draft;
-  const Icon = config.icon;
-
-  return (
-    <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
-      <Icon className="h-3 w-3 mr-0.5 sm:mr-1" />
-      {config.label}
-    </span>
-  );
-};
+const StatusBadge = ({ status }) => (
+  <EntityStatusBadge type="purchase_invoice" status={status} />
+);
 
 const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onPrint }) => (
   <div className="card hover:shadow-lg transition-shadow">
@@ -169,7 +155,13 @@ const PurchaseInvoiceCard = ({ invoice, onEdit, onDelete, onConfirm, onView, onP
 export const PurchaseInvoices = () => {
   const { companyInfo: companySettings } = useCompanyInfo();
   const { getPartyPermissions } = useSensitiveDataPermissions();
-  
+  const {
+    confirmation,
+    showConfirmation,
+    handleConfirm: handleConfirmationConfirm,
+    handleCancel: handleConfirmationCancel,
+  } = useConfirmation();
+
   // Refs for responsive actions
   const excelExportRef = useRef(null);
   const pdfExportRef = useRef(null);
@@ -386,37 +378,49 @@ export const PurchaseInvoices = () => {
 
   // Event handlers
   const handleConfirm = (invoice) => {
-    if (window.confirm(`Are you sure you want to confirm invoice ${invoice.invoiceNumber}?`)) {
-      confirmPurchaseInvoiceMutation(invoice._id || invoice.id)
-        .unwrap()
-        .then(() => {
+    showConfirmation({
+      title: 'Confirm Purchase Invoice',
+      message: `Are you sure you want to confirm invoice ${invoice.invoiceNumber}?`,
+      confirmText: 'Confirm Invoice',
+      type: 'info',
+      onConfirm: async () => {
+        try {
+          await confirmPurchaseInvoiceMutation(invoice._id || invoice.id).unwrap();
           showSuccessToast('Purchase invoice confirmed successfully');
           refetch();
-        })
-        .catch((error) => {
+        } catch (error) {
           handleApiError(error, 'Purchase Invoice Confirmation');
-        });
-    }
+          throw error;
+        }
+      },
+    });
   };
 
   const handleDelete = (invoice) => {
-    const message = invoice.status === 'confirmed'
-      ? `Are you sure you want to delete invoice ${invoice.invoiceNumber}?\n\nThis will:\n• Remove ${invoice.lineItemCount ?? invoice.items?.length ?? 0} products from inventory\n• Reduce supplier balance by ${Math.round((invoice.pricing?.total || 0) - (invoice.payment?.amount || 0))}`
+    const isConfirmed = invoice.status === 'confirmed';
+    const itemCount = invoice.lineItemCount ?? invoice.items?.length ?? 0;
+    const supplierImpact = Math.round((invoice.pricing?.total || 0) - (invoice.payment?.amount || 0));
+    const message = isConfirmed
+      ? `Are you sure you want to delete invoice ${invoice.invoiceNumber}? This will remove ${itemCount} product(s) from inventory and reduce supplier balance by ${supplierImpact}.`
       : `Are you sure you want to delete invoice ${invoice.invoiceNumber}?`;
 
-    if (window.confirm(message)) {
-      deletePurchaseInvoiceMutation(invoice._id || invoice.id)
-        .unwrap()
-        .then(() => {
+    showConfirmation({
+      title: 'Delete Purchase Invoice',
+      message,
+      confirmText: 'Delete',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deletePurchaseInvoiceMutation(invoice._id || invoice.id).unwrap();
           showSuccessToast('Purchase invoice deleted successfully');
           refetch();
-        })
-        .catch((error) => {
+        } catch (error) {
           handleApiError(error, 'Purchase Invoice Deletion');
-        });
-    }
+          throw error;
+        }
+      },
+    });
   };
-
   const handleEdit = async (invoice) => {
     const componentInfo = getComponentInfo('/purchase');
     if (!componentInfo) {
@@ -937,6 +941,18 @@ export const PurchaseInvoices = () => {
         } : null}
         documentTitle="Purchase Invoice"
         partyLabel="Supplier"
+      />
+
+      <ConfirmationDialog
+        isOpen={confirmation.isOpen}
+        onClose={handleConfirmationCancel}
+        onConfirm={handleConfirmationConfirm}
+        title={confirmation.title}
+        message={confirmation.message}
+        confirmText={confirmation.confirmText}
+        cancelText={confirmation.cancelText}
+        type={confirmation.type}
+        isLoading={confirmation.isLoading}
       />
 
       {/* Edit modal removed: editing handled via opening /purchase tab */}

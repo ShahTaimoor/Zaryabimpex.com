@@ -12,17 +12,21 @@ import {
   Printer,
   Eye,
   ChevronDown,
-  Phone,
   MapPin,
   ArrowUpDown,
   Download,
-  Camera,
   MoreHorizontal,
   FileSpreadsheet,
   FileText,
 } from 'lucide-react';
 import BaseModal from '../components/BaseModal';
 import { DuplicateLineItemMergeModal } from '../components/order/DuplicateLineItemMergeModal';
+import { ProductImagePreviewModal } from '../components/order/ProductImagePreviewModal';
+import { DocumentNumberField } from '../components/order/DocumentNumberField';
+import { SupplierPartySelect, SupplierSummaryStrip } from '../components/order/SupplierPartySelect';
+import { OrderNotesField } from '../components/order/OrderNotesField';
+import { PaymentMethodSelect } from '../components/order/PaymentMethodSelect';
+import { computePurchaseCheckoutPricing } from '../utils/orderPricing';
 import {
   useGetSupplierQuery,
   useLazySearchSuppliersQuery,
@@ -36,7 +40,6 @@ import {
   useDeletePurchaseInvoiceMutation,
 } from '../store/services/purchaseInvoicesApi';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { SearchableDropdown } from '../components/SearchableDropdown';
 import { useGetUnifiedBalanceQuery } from '../store/services/accountingApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { toast } from 'sonner';
@@ -65,6 +68,14 @@ import {
 import { ProductSelectionCartSection } from '../components/order/ProductSelectionCartSection';
 import { CartItemsTableSection } from '../components/order/CartItemsTableSection';
 import { CartTableHeader } from '../components/order/CartTableHeader';
+import {
+  LineItemSerial,
+  LineItemThumbnail,
+  LineItemStockCell,
+  LineItemTotalCell,
+  LineItemRemoveButton,
+  LineItemBoxInputCell,
+} from '../components/order/CartLineItemAtoms';
 import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
 import {
   hasDualUnit,
@@ -120,21 +131,16 @@ const PurchaseItem = ({
       <div className="md:hidden space-y-3 p-3 border border-gray-200 rounded-lg">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0 flex items-center gap-2">
-            {product?.imageUrl && showProductImages && (
-              <div
-                className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+            {showProductImages && (
+              <LineItemThumbnail
+                src={product?.imageUrl}
+                size="md"
                 onClick={() => setPreviewImageProduct(product)}
-                title="Click to view full size"
-              >
-                <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
-                  <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </div>
+              />
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
+                <LineItemSerial index={index} variant="mobile" />
                 {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low Stock</span>}
               </div>
               <p className="font-medium text-sm truncate">{displayName}</p>
@@ -152,14 +158,10 @@ const PurchaseItem = ({
               })()}
             </div>
           </div>
-          <Button
+          <LineItemRemoveButton
             onClick={() => onRemove(item.product?._id)}
-            variant="destructive"
-            size="sm"
             className="p-1 flex-shrink-0"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -172,9 +174,7 @@ const PurchaseItem = ({
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Total</label>
-            <span className="text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center">
-              {totalPrice.toFixed(2)}
-            </span>
+            <LineItemTotalCell value={totalPrice.toFixed(2)} textSize="text-xs" />
           </div>
           <div className={hasDualUnit(product) ? 'col-span-2' : ''}>
             <label className="block text-xs text-gray-500 mb-1">Quantity</label>
@@ -234,28 +234,15 @@ const PurchaseItem = ({
             }`}
         >
           <div className="min-w-0 flex justify-start">
-            <span
-              className={`text-sm font-medium px-0.5 py-1 rounded border block w-8 text-center h-8 flex items-center justify-center transition-colors duration-300 ${highlightSerial
-                ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
-                : 'text-gray-700 bg-gray-50 border-gray-200'
-                }`}
-            >
-              {index + 1}
-            </span>
+            <LineItemSerial index={index} highlight={highlightSerial} />
           </div>
 
           <div className="min-w-0 flex items-center h-8 gap-2">
-            {product?.imageUrl && showProductImages && (
-              <div
-                className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+            {showProductImages && (
+              <LineItemThumbnail
+                src={product?.imageUrl}
                 onClick={() => setPreviewImageProduct(product)}
-                title="Click to view full size"
-              >
-                <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
-                  <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </div>
+              />
             )}
             <div className="flex flex-col min-w-0 w-full">
               <div className="flex items-center gap-2 min-w-0">
@@ -279,54 +266,20 @@ const PurchaseItem = ({
 
           {dualUnitShowBoxInputEnabled && (
             <div className="min-w-0">
-              {hasDualUnit(product) ? (
-                (() => {
-                  const ppb = getPiecesPerBox(product);
-                  const boxVal =
-                    item.boxes != null
-                      ? item.boxes
-                      : ppb
-                        ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
-                        : 0;
-                  return (
-                    <input
-                      type="number"
-                      min={0}
-                      value={item.quantity === 0 ? '' : boxVal}
-                      onChange={(e) => onUpdateCartBoxCount(item.product?._id, e.target.value)}
-                      onFocus={(e) => e.target.select()}
-                      className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(product.inventory?.currentStock || 0) === 0
-                        ? 'text-red-700 bg-red-50 border-red-200'
-                        : (product.inventory?.currentStock || 0) <= (product.inventory?.reorderPoint || 0)
-                          ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                          : 'text-gray-700 bg-gray-100 border-gray-200'
-                        }`}
-                      title="Full boxes"
-                    />
-                  );
-                })()
-              ) : (
-                <span
-                  className="text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200"
-                  title="Not applicable"
-                >
-                  —
-                </span>
-              )}
+              <LineItemBoxInputCell
+                product={product}
+                item={item}
+                onChange={(value) => onUpdateCartBoxCount(item.product?._id, value)}
+              />
             </div>
           )}
 
           <div className="min-w-0">
-            <span
-              className={`text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center ${(product.inventory?.currentStock || 0) === 0
-                ? 'text-red-700 bg-red-50 border-red-200'
-                : (product.inventory?.currentStock || 0) <= (product.inventory?.reorderPoint || 0)
-                  ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
-                  : 'text-gray-700 bg-gray-100 border-gray-200'
-                }`}
-            >
-              {hasDualUnit(product) ? formatStockDualLabel(currentStock, product) : currentStock}
-            </span>
+            <LineItemStockCell
+              currentStock={currentStock}
+              reorderPoint={reorderPoint}
+              formatValue={() => (hasDualUnit(product) ? formatStockDualLabel(currentStock, product) : currentStock)}
+            />
           </div>
 
           <div className="min-w-0">
@@ -366,21 +319,13 @@ const PurchaseItem = ({
           </div>
 
           <div className="min-w-0">
-            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block w-full min-w-0 text-center h-8 flex items-center justify-center">
-              {Number.isFinite(totalPrice) ? totalPrice.toFixed(2) : '0.00'}
-            </span>
+            <LineItemTotalCell
+              value={Number.isFinite(totalPrice) ? totalPrice.toFixed(2) : '0.00'}
+            />
           </div>
 
           <div className="min-w-0 flex justify-end">
-            <Button
-              onClick={() => onRemove(item.product?._id)}
-              variant="destructive"
-              size="sm"
-              className="h-8 w-8 p-0"
-              title="Delete"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <LineItemRemoveButton onClick={() => onRemove(item.product?._id)} />
           </div>
         </div>
       </div>
@@ -796,22 +741,6 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     return invoiceNum;
   };
 
-  const supplierDisplayKey = (supplier) => {
-    return (
-      <div>
-        <div className="font-medium">{supplier.companyName || supplier.company_name || supplier.businessName || supplier.business_name || supplier.displayName || supplier.name || 'Unknown'}</div>
-        {supplier.name && supplier.name !== (supplier.companyName || supplier.company_name || supplier.businessName || supplier.displayName) && (
-          <div className="text-xs text-gray-500">{supplier.name}</div>
-        )}
-        {canViewSupplierBalance && (
-          <div className="text-sm text-gray-600">
-            Outstanding Balance: {(Number(supplier.pendingBalance ?? supplier.outstandingBalance ?? 0) || 0).toFixed(2)}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const handleSupplierSelect = (supplier) => {
     // SearchableDropdown passes the full supplier object
     setSelectedSupplier(supplier);
@@ -990,25 +919,19 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     }
   };
 
-  const calculateTax = () => {
-    if (!taxSystemEnabled) return 0;
-    if (!selectedSupplier) return 0;
-    const sub = purchaseItems.reduce((sum, item) => sum + (item.costPerUnit * item.quantity), 0);
-    return sub * (globalTaxPct / 100);
-  };
-
-  const subtotal = purchaseItems.reduce((sum, item) => sum + (item.costPerUnit * item.quantity), 0);
-  const tax = calculateTax();
   const importChargesTotal = isEnhancedImportPurchase
     ? Object.values(importCharges).reduce((sum, value) => sum + (Number(value) || 0), 0)
     : 0;
 
-  // Calculate discount amount
-  const directDiscountAmount = directDiscount.type === 'percentage'
-    ? (subtotal * directDiscount.value / 100)
-    : directDiscount.value;
-
-  const total = subtotal + tax - directDiscountAmount + importChargesTotal;
+  const { subtotal, tax, directDiscountAmount, total } = computePurchaseCheckoutPricing({
+    items: purchaseItems,
+    directDiscount,
+    taxRate: globalTaxPct,
+    // Preserve existing behaviour: tax only applies when a supplier has been
+    // selected (the original calculateTax() short-circuited otherwise).
+    taxSystemEnabled: taxSystemEnabled && !!selectedSupplier,
+    importChargesTotal,
+  });
   // Use centralized ledger balance if available, fallback to entity balance
   const supplierOutstanding = unifiedBalanceData?.balance ?? (
     Number(selectedSupplier?.pendingBalance ?? selectedSupplier?.outstandingBalance ?? 0) || 0
@@ -1553,56 +1476,28 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                     Refresh
                   </button>
                 </div>
-                <SearchableDropdown
-                  className="[&_input]:h-8"
-                  ref={supplierSearchRef}
-                  placeholder="Search suppliers by name, email, or business..."
+                <SupplierPartySelect
+                  innerRef={supplierSearchRef}
                   items={suppliers?.data?.suppliers || suppliers?.suppliers || []}
+                  selectedItem={selectedSupplier}
                   onSelect={handleSupplierSelect}
                   onSearch={setSupplierSearchTerm}
-                  displayKey={supplierDisplayKey}
-                  selectedItem={selectedSupplier}
                   loading={suppliersLoading}
+                  searchValue={supplierSearchTerm}
                   emptyMessage={supplierSearchTerm.length > 0 ? "No suppliers found" : "Start typing to search suppliers..."}
+                  canViewBalance={canViewSupplierBalance}
+                  showSecondaryName
                 />
               </div>
             </div>
 
-            <div className="lg:w-auto w-full lg:min-w-[360px] lg:max-w-xl lg:self-end">
-              {selectedSupplier ? (
-                <div className="bg-gray-50 border border-gray-200 rounded-xl h-8 px-2 flex items-center">
-                  <div className="flex items-center gap-2 text-xs whitespace-nowrap overflow-hidden">
-                    <span className="font-bold text-gray-900 truncate">
-                      {selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name || 'Unknown Supplier'}
-                    </span>
-                    <span className="text-gray-400">|</span>
-                      <span className="text-gray-600 capitalize">
-                        {selectedSupplier.businessType || 'Wholesaler'}
-                      </span>
-                      {canViewSupplierBalance && (
-                        <>
-                          <span className="text-gray-400">|</span>
-                          <span className="text-gray-500 uppercase font-semibold">Outstanding</span>
-                          <span className={`font-bold ${supplierOutstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {Math.round(supplierOutstanding)}
-                          </span>
-                        </>
-                      )}
-                      {canViewSupplierPhone && selectedSupplier.phone && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400">|</span>
-                          <Phone className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                          <span className="text-xs text-gray-500">{selectedSupplier.phone}</span>
-                        </div>
-                      )}
-                  </div>
-                </div>
-              ) : (
-                <div className="hidden lg:flex items-center justify-center h-full px-8 border-2 border-dashed border-gray-100 rounded-xl">
-                  <span className="text-gray-400 text-sm font-medium italic">No supplier selected</span>
-                </div>
-              )}
-            </div>
+            <SupplierSummaryStrip
+              supplier={selectedSupplier}
+              canViewBalance={canViewSupplierBalance}
+              canViewPhone={canViewSupplierPhone}
+              outstandingOverride={supplierOutstanding}
+              roundOutstanding
+            />
           </div>
         </div>
 
@@ -1699,53 +1594,27 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                 {showPurchaseDetailsFields && (
                   <>
                     <div className="md:hidden space-y-3">
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="block text-xs font-medium text-gray-700">Invoice Number</label>
-                          <label
-                            htmlFor="autoGenerateInvoicePurchaseMobile"
-                            className="flex items-center space-x-1 text-xs text-gray-600 cursor-pointer select-none"
-                          >
-                            <Input
-                              type="checkbox"
-                              id="autoGenerateInvoicePurchaseMobile"
-                              checked={autoGenerateInvoice}
-                              onChange={(e) => {
-                                setAutoGenerateInvoice(e.target.checked);
-                                if (e.target.checked && selectedSupplier) {
-                                  setInvoiceNumber(generateInvoiceNumber(selectedSupplier));
-                                }
-                              }}
-                              className="h-3.5 w-3.5 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                            />
-                            <span>Auto-generate</span>
-                          </label>
-                        </div>
-                        <div className="relative">
-                          <Input
-                            type="text"
-                            autoComplete="off"
-                            value={invoiceNumber}
-                            onChange={(e) => setInvoiceNumber(e.target.value)}
-                            className="w-full pr-20 h-10 text-sm"
-                            placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
-                            disabled={autoGenerateInvoice}
-                          />
-                          {autoGenerateInvoice && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (selectedSupplier) {
-                                  setInvoiceNumber(generateInvoiceNumber(selectedSupplier));
-                                }
-                              }}
-                              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-primary-600 hover:text-primary-800 font-medium"
-                            >
-                              Regenerate
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                      <DocumentNumberField
+                        id="autoGenerateInvoicePurchaseMobile"
+                        label="Invoice Number"
+                        manualPlaceholder="Enter invoice number"
+                        autoGenerate={autoGenerateInvoice}
+                        onAutoGenerateChange={(checked) => {
+                          setAutoGenerateInvoice(checked);
+                          if (checked && selectedSupplier) {
+                            setInvoiceNumber(generateInvoiceNumber(selectedSupplier));
+                          }
+                        }}
+                        value={invoiceNumber}
+                        onChange={setInvoiceNumber}
+                        onRegenerate={() => {
+                          if (selectedSupplier) {
+                            setInvoiceNumber(generateInvoiceNumber(selectedSupplier));
+                          }
+                        }}
+                        containerClassName=""
+                        inputClassName="w-full pr-20 h-10 text-sm"
+                      />
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Expected Delivery</label>
                         <Input
@@ -1769,67 +1638,33 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                           max={getLocalDateString()}
                         />
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
-                        <Input
-                          type="text"
-                          autoComplete="off"
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                          className="h-10 text-sm w-full"
-                          placeholder="Additional notes..."
-                        />
-                      </div>
+                      <OrderNotesField
+                        value={notes}
+                        onChange={setNotes}
+                        density="comfortable"
+                      />
                     </div>
 
                     <div className="hidden md:flex flex-wrap gap-3 items-end justify-start">
-                      <div className="flex flex-col w-72">
-                        <div className="flex items-center gap-3 mb-1">
-                          <label className="block text-xs font-medium text-gray-700 m-0">Invoice Number</label>
-                          <label
-                            htmlFor="autoGenerateInvoicePurchase"
-                            className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
-                          >
-                            <Input
-                              type="checkbox"
-                              id="autoGenerateInvoicePurchase"
-                              checked={autoGenerateInvoice}
-                              onChange={(e) => {
-                                setAutoGenerateInvoice(e.target.checked);
-                                if (e.target.checked && selectedSupplier) {
-                                  setInvoiceNumber(generateInvoiceNumber(selectedSupplier));
-                                }
-                              }}
-                              className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                            />
-                            <span>Auto-generate</span>
-                          </label>
-                        </div>
-                        <div className="relative">
-                          <Input
-                            type="text"
-                            autoComplete="off"
-                            value={invoiceNumber}
-                            onChange={(e) => setInvoiceNumber(e.target.value)}
-                            className="w-full pr-16 h-8 text-sm"
-                            placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
-                            disabled={autoGenerateInvoice}
-                          />
-                          {autoGenerateInvoice && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (selectedSupplier) {
-                                  setInvoiceNumber(generateInvoiceNumber(selectedSupplier));
-                                }
-                              }}
-                              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[11px] text-primary-600 hover:text-primary-800 font-medium"
-                            >
-                              Regenerate
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                      <DocumentNumberField
+                        id="autoGenerateInvoicePurchase"
+                        label="Invoice Number"
+                        manualPlaceholder="Enter invoice number"
+                        autoGenerate={autoGenerateInvoice}
+                        onAutoGenerateChange={(checked) => {
+                          setAutoGenerateInvoice(checked);
+                          if (checked && selectedSupplier) {
+                            setInvoiceNumber(generateInvoiceNumber(selectedSupplier));
+                          }
+                        }}
+                        value={invoiceNumber}
+                        onChange={setInvoiceNumber}
+                        onRegenerate={() => {
+                          if (selectedSupplier) {
+                            setInvoiceNumber(generateInvoiceNumber(selectedSupplier));
+                          }
+                        }}
+                      />
                       <div className="flex flex-col w-44">
                         <label className="block text-xs font-medium text-gray-700 mb-1">Expected Delivery</label>
                         <Input
@@ -1853,17 +1688,10 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                           max={getLocalDateString()}
                         />
                       </div>
-                      <div className="flex min-w-0 flex-1 flex-col basis-[min(100%,20rem)]">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
-                        <Input
-                          type="text"
-                          autoComplete="off"
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                          className="h-8 w-full min-w-0 text-sm"
-                          placeholder="Additional notes..."
-                        />
-                      </div>
+                      <OrderNotesField
+                        value={notes}
+                        onChange={setNotes}
+                      />
                     </div>
                   </>
                 )}
@@ -2207,35 +2035,15 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                           <div className="flex flex-col">
                             <div className="flex items-center justify-between mb-1">
                               <label className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Payment</label>
-                              <select
-                                value={paymentMethod === 'bank' && selectedBankAccount ? `bank:${selectedBankAccount}` : paymentMethod}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  if (v.startsWith('bank:')) {
-                                    setPaymentMethod('bank');
-                                    setSelectedBankAccount(v.slice(5));
-                                  } else {
-                                    setPaymentMethod(v);
-                                    setSelectedBankAccount('');
-                                  }
+                              <PaymentMethodSelect
+                                value={paymentMethod}
+                                bankAccountId={selectedBankAccount}
+                                banks={activeBanks}
+                                onChange={(method, bankId) => {
+                                  setPaymentMethod(method);
+                                  setSelectedBankAccount(bankId);
                                 }}
-                                className="border-none bg-transparent p-0 text-[10px] font-bold text-primary-600 focus:ring-0 cursor-pointer max-w-[60px] overflow-hidden text-ellipsis"
-                              >
-                                <option value="cash">Cash</option>
-                                <optgroup label="Banks">
-                                  {activeBanks.map((bank) => {
-                                    const bid = bank._id || bank.id;
-                                    if (!bid) return null;
-                                    const label = [bank.bankName, bank.accountNumber].filter(Boolean).join(' - ');
-                                    return <option key={bid} value={`bank:${bid}`}>{label}</option>;
-                                  })}
-                                </optgroup>
-                                <option value="credit_card">Card</option>
-                                <option value="debit_card">Debit</option>
-                                <option value="check">Check</option>
-                                <option value="account">Acc</option>
-                                <option value="split">Split</option>
-                              </select>
+                              />
                             </div>
                             <Input
                               type="number"
@@ -2648,24 +2456,10 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
           confirmText="Update quantity"
         />
 
-        {/* Product Image Preview Modal */}
-        <BaseModal
-          isOpen={!!previewImageProduct}
+        <ProductImagePreviewModal
+          product={previewImageProduct}
           onClose={() => setPreviewImageProduct(null)}
-          title={previewImageProduct?.displayName || previewImageProduct?.variantName || previewImageProduct?.name || 'Product Image'}
-        >
-          <div className="flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden min-h-[300px] p-4">
-            {previewImageProduct?.imageUrl ? (
-              <img
-                src={previewImageProduct.imageUrl}
-                alt="Product Preview"
-                className="max-w-full max-h-[70vh] object-contain"
-              />
-            ) : (
-              <div className="text-gray-400">No image available</div>
-            )}
-          </div>
-        </BaseModal>
+        />
 
       </div>
     </AsyncErrorBoundary>

@@ -30,6 +30,8 @@ import { getComponentInfo } from '../components/ComponentRegistry';
 import DateFilter from '../components/DateFilter';
 import PrintModal from '../components/PrintModal';
 import BaseModal from '../components/BaseModal';
+import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
+import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -201,7 +203,13 @@ const OrderCard = ({ order, onView, onEdit, onPrint }) => {
 
 export const Orders = () => {
   const { getPartyPermissions } = useSensitiveDataPermissions();
-  
+  const {
+    confirmation: deleteConfirmation,
+    confirmDelete,
+    handleConfirm: handleDeleteConfirm,
+    handleCancel: handleDeleteCancel,
+  } = useDeleteConfirmation();
+
   // Refs for responsive actions
   const excelExportRef = useRef(null);
   const pdfExportRef = useRef(null);
@@ -474,9 +482,8 @@ export const Orders = () => {
   };
 
   const handleDelete = (order) => {
-    if (window.confirm(`Are you sure you want to delete invoice ${order.order_number ?? order.orderNumber ?? order.id ?? 'this'}?`)) {
-      handleDeleteOrder(order._id);
-    }
+    const label = order.order_number ?? order.orderNumber ?? order.id ?? 'this invoice';
+    confirmDelete(label, 'Sales Invoice', () => handleDeleteOrder(order._id));
   };
 
   const handleView = (order) => {
@@ -889,14 +896,11 @@ export const Orders = () => {
                   size="sm"
                   variant="destructive"
                   onClick={() => {
-                    if (
-                      window.confirm(
-                        `Are you sure you want to delete invoice ${selectedOrder.order_number ?? selectedOrder.orderNumber ?? 'this'}?`
-                      )
-                    ) {
-                      handleDeleteOrder(selectedOrder._id);
+                    const label = selectedOrder.order_number ?? selectedOrder.orderNumber ?? 'this invoice';
+                    confirmDelete(label, 'Sales Invoice', async () => {
+                      await handleDeleteOrder(selectedOrder._id);
                       setShowViewModal(false);
-                    }
+                    });
                   }}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -1115,6 +1119,15 @@ export const Orders = () => {
         orderData={printOrderData}
         documentTitle="Sales Invoice"
         partyLabel="Customer"
+      />
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmation.isOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        itemName={deleteConfirmation.message?.match(/"([^"]*)"/)?.[1] || ''}
+        itemType="Sales Invoice"
+        isLoading={deleteConfirmation.isLoading}
       />
     </div>
   );

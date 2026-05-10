@@ -11,7 +11,6 @@ import {
 
   RefreshCw,
   ArrowUpDown,
-  RotateCcw,
   Printer,
   ShoppingCart,
   Package,
@@ -25,14 +24,10 @@ import {
   Receipt,
   Phone,
   X,
-  History,
   Info,
   AlertCircle,
-  EyeOff,
-  Calculator,
   MessageSquare,
   ChevronDown,
-  Camera,
   MoreHorizontal,
   FileSpreadsheet,
 } from 'lucide-react';
@@ -79,10 +74,28 @@ import {
   OrderConfirmSelectedActions,
   getItemConfirmationStatus,
 } from '../components/OrderItemConfirmationCell';
-import { SearchableDropdown } from '../components/SearchableDropdown';
 import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
 import { ProductSearch } from '../components/sales/ProductSearch';
 import { DuplicateLineItemMergeModal } from '../components/order/DuplicateLineItemMergeModal';
+import { ProductImagePreviewModal } from '../components/order/ProductImagePreviewModal';
+import { DocumentNumberField } from '../components/order/DocumentNumberField';
+import { CustomerPartySelect, CustomerBalanceStrip } from '../components/order/CustomerPartySelect';
+import { OrderNotesField } from '../components/order/OrderNotesField';
+import { ApplyLastPricesButton } from '../components/order/ApplyLastPricesButton';
+import { useApplyLastPrices } from '../hooks/useApplyLastPrices';
+import { useListControls } from '../hooks/useListControls';
+import {
+  LineItemSerial,
+  LineItemThumbnail,
+  LineItemStockCell,
+  LineItemTotalCell,
+  LineItemRemoveButton,
+  LineItemBoxInputCell,
+  LineItemPriceStatusBadge,
+} from '../components/order/CartLineItemAtoms';
+import { CostPriceToggleButton, ProfitToggleButton } from '../components/order/CostPriceToggleButton';
+import { formatPartyAddress as formatAddressForDisplay } from '../utils/partyDisplay';
+import { computeSalesCheckoutPricing } from '../utils/orderPricing';
 import { PriceTypeSelector } from '../components/order/PriceTypeSelector';
 import {
   deriveInitialPriceType,
@@ -106,6 +119,8 @@ import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import { useResponsive } from '../components/ResponsiveContainer';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
+import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
+import { useDeleteConfirmation } from '../hooks/useConfirmation';
 
 
 // Helper function to safely render values
@@ -118,28 +133,17 @@ const safeRender = (value) => {
   return String(value);
 };
 
-// Format customer address for display (avoids showing raw JSON)
-const formatAddressForDisplay = (customer) => {
-  if (!customer) return '';
-  if (typeof customer.address === 'string' && customer.address.trim()) return customer.address.trim();
-  const addrRaw = customer.address ?? customer.addresses;
-  if (Array.isArray(addrRaw) && addrRaw.length > 0) {
-    const a = addrRaw.find(x => x.isDefault) || addrRaw.find(x => x.type === 'billing' || x.type === 'both') || addrRaw[0];
-    const parts = [a.street || a.address_line1 || a.addressLine1 || a.line1 || a.address, a.city, a.state || a.province, a.country, a.zipCode || a.zip || a.postalCode || a.postal_code].filter(Boolean);
-    return parts.join(', ') || '—';
-  }
-  if (addrRaw && typeof addrRaw === 'object' && !Array.isArray(addrRaw)) {
-    const parts = [addrRaw.street || addrRaw.address_line1 || addrRaw.addressLine1 || addrRaw.line1 || addrRaw.address, addrRaw.city, addrRaw.state || addrRaw.province, addrRaw.country, addrRaw.zipCode || addrRaw.zip || addrRaw.postalCode || addrRaw.postal_code].filter(Boolean);
-    return parts.join(', ') || '—';
-  }
-  if (typeof customer.location === 'string' && customer.location.trim()) return customer.location.trim();
-  if (typeof customer.companyAddress === 'string' && customer.companyAddress.trim()) return customer.companyAddress.trim();
-  return '';
-};
+// Address formatting moved to utils/partyDisplay.js (imported at top)
 
 const SalesOrders = ({ tabId }) => {
   const { updateTabTitle, tabs, activeTabId } = useTab();
   const { isMobile } = useResponsive();
+  const {
+    confirmation: deleteConfirmation,
+    confirmDelete,
+    handleConfirm: handleDeleteConfirm,
+    handleCancel: handleDeleteCancel,
+  } = useDeleteConfirmation();
   const { companyInfo: companySettings } = useCompanyInfo();
   const resolvedCompanyName = companySettings.companyName || 'Company Name';
   const itemWiseConfirmationEnabled = companySettings.orderSettings?.salesOrderItemWiseConfirmation !== false;
@@ -160,23 +164,25 @@ const SalesOrders = ({ tabId }) => {
   const fromDateDefault = getDateDaysAgo(14);
 
   // State for filters and pagination
-  const [filters, setFilters] = useState({
-    fromDate: fromDateDefault, // 14 days ago
-    toDate: today, // Today
-    orderNumber: '',
-    customer: '',
-    status: '',
-    orderType: ''
-  });
-
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 50
-  });
-
-  const [sortConfig, setSortConfig] = useState({
-    key: 'createdAt',
-    direction: 'desc'
+  // State for filters / pagination / sort lives in `useListControls`.
+  const {
+    filters,
+    setFilters,
+    pagination,
+    setPagination,
+    sortConfig,
+    setFilter: handleFilterChange,
+    toggleSort: handleSort,
+  } = useListControls({
+    initialFilters: {
+      fromDate: fromDateDefault, // 14 days ago
+      toDate: today, // Today
+      orderNumber: '',
+      customer: '',
+      status: '',
+      orderType: '',
+    },
+    initialSort: { key: 'createdAt', direction: 'desc' },
   });
 
   const [showNotes, setShowNotes] = useState(false);
@@ -263,14 +269,10 @@ const SalesOrders = ({ tabId }) => {
   const [searchKey, setSearchKey] = useState(0); // Key to force re-render
 
   // Last prices state
-  const [isLoadingLastPrices, setIsLoadingLastPrices] = useState(false);
-  const [originalPrices, setOriginalPrices] = useState({}); // Store original prices before applying last prices
-  const [isLastPricesApplied, setIsLastPricesApplied] = useState(false);
-  const [priceStatus, setPriceStatus] = useState({}); // Track price change status: 'updated', 'not-found', 'unchanged'
+  // Apply / Restore "last prices" state lives in the shared hook below.
 
   // Loading states for buttons
   const [isAddingToCart, setIsAddingToCart] = useState(false);
-  const [isRestoringPrices, setIsRestoringPrices] = useState(false);
   const [isRemovingFromCart, setIsRemovingFromCart] = useState({});
   const [isSortingItems, setIsSortingItems] = useState(false);
 
@@ -466,6 +468,71 @@ const SalesOrders = ({ tabId }) => {
   const [getLastPurchasePrice] = useLazyGetLastPurchasePriceQuery();
   const [getLastPrices] = useLazyGetLastPricesQuery();
 
+  // ----- Apply / Restore "last prices" --------------------------------
+  // Centralized in `useApplyLastPrices`; SalesOrders recomputes per-line
+  // subtotal / tax / total inside `applyPriceToItem` so order rows stay
+  // in sync.
+  const fetchLastPricesForCustomer = useCallback(
+    async (customerId) => {
+      const { data: response } = await getLastPrices(customerId);
+      const prices = response?.data?.prices ?? response?.prices ?? null;
+      const orderNumber =
+        response?.data?.orderNumber ?? response?.orderNumber ?? null;
+      const orderDate =
+        response?.data?.orderDate ?? response?.orderDate ?? null;
+      if (!prices) return null;
+      return { prices, orderNumber, orderDate };
+    },
+    [getLastPrices]
+  );
+
+  const recalcSalesOrderItem = useCallback(
+    (item, lastPrice) => {
+      const newSubtotal = lastPrice * item.quantity;
+      const newTaxAmount = !taxSystemEnabled
+        ? 0
+        : (newSubtotal * effectiveGlobalTaxPct) / 100;
+      const newTotal = newSubtotal - (item.discountAmount || 0) + newTaxAmount;
+      return {
+        ...item,
+        unitPrice: lastPrice,
+        subtotal: newSubtotal,
+        taxAmount: newTaxAmount,
+        total: newTotal,
+      };
+    },
+    [taxSystemEnabled, effectiveGlobalTaxPct]
+  );
+
+  const setSalesOrderItems = useCallback(
+    (next) =>
+      setFormData((prev) => ({
+        ...prev,
+        items: typeof next === 'function' ? next(prev.items) : next,
+      })),
+    []
+  );
+
+  const {
+    apply: handleApplyLastPrices,
+    restore: handleRestoreCurrentPrices,
+    isApplying: isLoadingLastPrices,
+    isRestoring: isRestoringPrices,
+    isApplied: isLastPricesApplied,
+    setIsApplied: setIsLastPricesApplied,
+    originalPrices,
+    setOriginalPrices,
+    priceStatus,
+    setPriceStatus,
+  } = useApplyLastPrices({
+    items: formData.items,
+    setItems: setSalesOrderItems,
+    selectedCustomer,
+    fetchLastPrices: fetchLastPricesForCustomer,
+    getProductId: (item) => item.product?.toString(),
+    applyPriceToItem: recalcSalesOrderItem,
+  });
+
   const {
     customers,
     isLoading: customersLoading,
@@ -577,29 +644,6 @@ const SalesOrders = ({ tabId }) => {
 
     // Tab title will be updated by useEffect when selectedCustomer changes
   };
-
-  const customerDisplayKey = useCallback((customer) => {
-    // Calculate total balance: currentBalance (which is net balance)
-    const totalBalance = customer.currentBalance !== undefined
-      ? customer.currentBalance
-      : ((customer.pendingBalance || 0) - (customer.advanceBalance || 0));
-    const hasBalance = totalBalance !== 0;
-    const isPayable = totalBalance < 0;
-
-    return (
-      <div>
-        <div className="font-medium">{customer.businessName || customer.business_name || customer.displayName || customer.name || 'Unknown'}</div>
-        {customer.name && customer.name !== (customer.businessName || customer.business_name || customer.displayName) && (
-          <div className="text-xs text-gray-500">{customer.name}</div>
-        )}
-        {canViewCustomerBalance && hasBalance ? (
-          <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
-            Total Balance: {isPayable ? '-' : '+'}{Math.abs(totalBalance).toFixed(2)}
-          </div>
-        ) : null}
-      </div>
-    );
-  }, [canViewCustomerBalance]);
 
   const handleCustomerSelect = (customer) => {
     // SearchableDropdown passes the full customer object, not just the ID
@@ -1231,180 +1275,26 @@ const SalesOrders = ({ tabId }) => {
     }
   };
 
-  const handleApplyLastPrices = async () => {
-    if (!selectedCustomer) {
-      showErrorToast('Please select a customer first');
-      return;
-    }
-
-    if (formData.items.length === 0) {
-      showErrorToast('Please add products to cart first');
-      return;
-    }
-
-    setIsLoadingLastPrices(true);
-    try {
-      const { data: response } = await getLastPrices(selectedCustomer._id);
-      const { prices, orderNumber, orderDate } = response.data;
-
-      if (!prices || Object.keys(prices).length === 0) {
-        showErrorToast('No previous order found for this customer');
-        setIsLoadingLastPrices(false);
-        return;
-      }
-
-      // Store original prices before applying last prices
-      const originalPricesMap = {};
-      const priceStatusMap = {};
-      formData.items.forEach(item => {
-        const productId = item.product.toString();
-        originalPricesMap[productId] = item.unitPrice;
-      });
-      setOriginalPrices(originalPricesMap);
-
-      // Apply last prices to matching products in cart
-      let updatedCount = 0;
-      let unchangedCount = 0;
-      let notFoundCount = 0;
-      const updatedItems = formData.items.map(item => {
-        const productId = item.product.toString();
-        if (prices[productId]) {
-          const lastPrice = prices[productId].unitPrice;
-          const currentPrice = item.unitPrice;
-
-          if (lastPrice !== currentPrice) {
-            // Price changed
-            updatedCount++;
-            priceStatusMap[productId] = 'updated';
-            const newSubtotal = lastPrice * item.quantity;
-            const newTaxAmount = !taxSystemEnabled ? 0 : (newSubtotal * effectiveGlobalTaxPct) / 100;
-            const newTotal = newSubtotal - (item.discountAmount || 0) + newTaxAmount;
-
-            return {
-              ...item,
-              unitPrice: lastPrice,
-              subtotal: newSubtotal,
-              taxAmount: newTaxAmount,
-              total: newTotal
-            };
-          } else {
-            // Price is the same
-            unchangedCount++;
-            priceStatusMap[productId] = 'unchanged';
-            return item;
-          }
-        } else {
-          // Product not found in last order
-          notFoundCount++;
-          priceStatusMap[productId] = 'not-found';
-          return item;
-        }
-      });
-
-      setFormData(prev => ({
-        ...prev,
-        items: updatedItems
-      }));
-      setPriceStatus(priceStatusMap);
-      setIsLastPricesApplied(true);
-
-      const orderDateStr = orderDate ? new Date(orderDate).toLocaleDateString() : 'previous order';
-      if (updatedCount > 0) {
-        let message = `Applied prices from ${orderNumber || 'previous order'} (${orderDateStr}). Updated ${updatedCount} product(s).`;
-        if (unchangedCount > 0) {
-          message += ` ${unchangedCount} product(s) had same price.`;
-        }
-        if (notFoundCount > 0) {
-          message += ` ${notFoundCount} product(s) not found in previous order.`;
-        }
-        showSuccessToast(message);
-      } else if (unchangedCount > 0) {
-        showSuccessToast(`All products already have the same prices as in ${orderNumber || 'previous order'} (${orderDateStr}).`);
-      } else {
-        showErrorToast('No matching products found in previous order');
-      }
-    } catch (error) {
-      handleApiError(error, 'Apply Last Prices');
-    } finally {
-      setIsLoadingLastPrices(false);
-    }
-  };
-
-  const handleRestoreCurrentPrices = () => {
-    if (Object.keys(originalPrices).length === 0) {
-      showErrorToast('No original prices to restore');
-      return;
-    }
-
-    setIsRestoringPrices(true);
-    try {
-      // Restore original prices
-      let restoredCount = 0;
-      const restoredItems = formData.items.map(item => {
-        const productId = item.product.toString();
-        if (originalPrices[productId] !== undefined) {
-          restoredCount++;
-          const restoredPrice = originalPrices[productId];
-          const newSubtotal = restoredPrice * item.quantity;
-          const newTaxAmount = !taxSystemEnabled ? 0 : (newSubtotal * effectiveGlobalTaxPct) / 100;
-          const newTotal = newSubtotal - (item.discountAmount || 0) + newTaxAmount;
-
-          return {
-            ...item,
-            unitPrice: restoredPrice,
-            subtotal: newSubtotal,
-            taxAmount: newTaxAmount,
-            total: newTotal
-          };
-        }
-        return item;
-      });
-
-      setFormData(prev => ({
-        ...prev,
-        items: restoredItems
-      }));
-      setIsLastPricesApplied(false);
-      setOriginalPrices({});
-      setPriceStatus({});
-
-      if (restoredCount > 0) {
-        showSuccessToast(`Restored original prices for ${restoredCount} product(s).`);
-      }
-    } finally {
-      setIsRestoringPrices(false);
-    }
-  };
-
   const calculateTotals = () => {
-    const subtotal = formData.items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-    const lineDiscountTotal = formData.items.reduce((sum, item) => sum + (item.discountAmount || 0), 0);
-    const totalDiscount = Math.min(lineDiscountTotal, subtotal);
-    const subtotalAfterDiscount = subtotal - totalDiscount;
-    const totalTax =
-      !taxSystemEnabled ? 0 : subtotalAfterDiscount * (globalTaxPct / 100);
-    const total = subtotalAfterDiscount + totalTax;
-
+    const lineDiscountTotal = formData.items.reduce(
+      (sum, item) => sum + (item.discountAmount || 0),
+      0
+    );
+    const { subtotal, totalDiscount, tax, total } = computeSalesCheckoutPricing({
+      items: formData.items,
+      lineDiscountTotal,
+      taxRate: globalTaxPct,
+      taxSystemEnabled,
+    });
     return {
       subtotal,
       lineDiscountTotal,
       totalDiscount,
-      totalTax,
+      totalTax: tax,
       total,
     };
   };
 
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-    setPagination(prev => ({ ...prev, page: 1 }));
-  };
-
-  const handleSort = (key) => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  };
 
   const handleCreate = () => {
     if (formData.items.length === 0) {
@@ -1570,18 +1460,19 @@ const SalesOrders = ({ tabId }) => {
       });
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this sales order?')) {
-      deleteSalesOrderMutation(id)
-        .unwrap()
-        .then(() => {
-          showSuccessToast('Sales order deleted successfully');
-          refetch();
-        })
-        .catch((error) => {
-          showErrorToast(handleApiError(error));
-        });
-    }
+  const handleDelete = (idOrOrder) => {
+    const id = typeof idOrOrder === 'object' ? (idOrOrder?.id ?? idOrOrder?._id) : idOrOrder;
+    const label = (typeof idOrOrder === 'object' && (idOrOrder?.salesOrderNumber || idOrOrder?.orderNumber)) || `${id}`;
+    confirmDelete(label, 'Sales Order', async () => {
+      try {
+        await deleteSalesOrderMutation(id).unwrap();
+        showSuccessToast('Sales order deleted successfully');
+        refetch();
+      } catch (error) {
+        showErrorToast(handleApiError(error));
+        throw error;
+      }
+    });
   };
 
   const CREDIT_LIMIT_TOAST = 'Credit limit exceeded. Invoice cannot be created';
@@ -2180,64 +2071,27 @@ const SalesOrders = ({ tabId }) => {
                   onChange={setPriceType}
                 />
               </div>
-              <SearchableDropdown
-                className="[&_input]:h-8"
-                ref={customerSearchRef}
-                placeholder="Search customers by name, email, or business..."
+              <CustomerPartySelect
+                innerRef={customerSearchRef}
                 items={customers}
+                selectedItem={selectedCustomer}
                 onSelect={handleCustomerSelect}
                 onSearch={handleCustomerSearch}
-                displayKey={customerDisplayKey}
-                selectedItem={selectedCustomer}
+                searchValue={customerSearchTerm}
                 loading={customersLoading || customersFetching}
                 emptyMessage={customerSearchTerm.length > 0 ? "No customers found" : "Start typing to search customers..."}
-                value={customerSearchTerm}
-                rightContentKey="city"
+                canViewBalance={canViewCustomerBalance}
+                showSecondaryName
               />
             </div>
           </div>
 
-          {/* Customer Information - Right Side */}
-          <div className="lg:w-auto w-full lg:max-w-md lg:self-end">
-            {selectedCustomer && canViewCustomerBalance ? (() => {
-              const balanceNum = Number(displayBalance);
-              const totalBalance = (isNaN(balanceNum) || balanceNum === null || balanceNum === undefined) ? 0 : balanceNum;
-              const creditLimitNum = Math.max(0, Number(displayCreditLimit) || 0);
-              const availableCreditNum = Math.max(0, creditLimitNum - totalBalance);
-              const isPayable = totalBalance < 0;
-              const isReceivable = totalBalance > 0;
-
-              return (
-                <div className="bg-gray-50 border border-gray-200 rounded-xl h-8 px-2 flex items-center">
-                  <div className="flex items-center gap-2 text-xs whitespace-nowrap overflow-hidden">
-                    <span className="text-gray-500 uppercase font-semibold">Balance</span>
-                    <span className={`font-bold ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'}`}>
-                      {isPayable ? '-' : ''}{Math.abs(totalBalance).toFixed(2)}
-                    </span>
-                    <span className="text-gray-400">|</span>
-                    <span className="text-gray-500 uppercase font-semibold">Credit</span>
-                    <span className={`font-bold ${creditLimitNum > 0 ? (
-                      totalBalance >= creditLimitNum * 0.9 ? 'text-red-600' : totalBalance >= creditLimitNum * 0.7 ? 'text-yellow-600' : 'text-blue-600'
-                    ) : 'text-gray-600'}`}>
-                      {creditLimitNum.toFixed(2)}
-                      {creditLimitNum > 0 && totalBalance >= creditLimitNum * 0.9 && <span className="ml-1">⚠️</span>}
-                    </span>
-                    <span className="text-gray-400">|</span>
-                    <span className="text-gray-500 uppercase font-semibold">Available</span>
-                    <span className={`font-bold ${creditLimitNum > 0 ? (
-                      availableCreditNum <= creditLimitNum * 0.1 ? 'text-red-600' : availableCreditNum <= creditLimitNum * 0.3 ? 'text-yellow-600' : 'text-green-600'
-                    ) : 'text-gray-600'}`}>
-                      {availableCreditNum.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              );
-            })() : (
-              <div className="hidden lg:flex items-center justify-center h-full px-8 border-2 border-dashed border-gray-100 rounded-xl">
-                <span className="text-gray-400 text-sm font-medium italic">No customer selected</span>
-              </div>
-            )}
-          </div>
+          <CustomerBalanceStrip
+            customer={selectedCustomer}
+            canViewBalance={canViewCustomerBalance}
+            balanceOverride={displayBalance}
+            creditLimitOverride={displayCreditLimit}
+          />
         </div>
       </div>
 
@@ -2261,81 +2115,35 @@ const SalesOrders = ({ tabId }) => {
                   <span>Sort A-Z</span>
                 </LoadingButton>
               )}
-              {/* Show/Hide Cost Price Toggle Button */}
               <div className="flex items-center space-x-2">
-                {canViewCostPrice && (
-                  <Button
-                    onClick={() => setShowCostPrice(!showCostPrice)}
-                    variant="secondary"
-                    size="sm"
-                    className="flex items-center space-x-2"
-                    title={showCostPrice ? "Hide purchase cost prices" : "Show purchase cost prices"}
-                  >
-                    {showCostPrice ? (
-                      <>
-                        <EyeOff className="h-4 w-4" />
-                        <span>Hide Cost</span>
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="h-4 w-4" />
-                        <span>Show Cost</span>
-                      </>
-                    )}
-                  </Button>
-                )}
-                {canViewBP && formData.items.length > 0 && (
-                  <>
-                    <Button
-                      onClick={() => setShowProfit(prev => !prev)}
-                      variant="secondary"
-                      size="sm"
-                      className="flex items-center space-x-2"
-                      title="Toggle estimated profit (BP)"
-                    >
-                      <Calculator className="h-4 w-4" />
-                      <span>{showProfit ? 'Hide BP' : 'Show BP'}</span>
-                    </Button>
-                    {showProfit && (
-                      <span
-                        className={`text-sm font-semibold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'
-                          }`}
-                      >
-                        {formatCurrency(totalProfit || 0)}
-                      </span>
-                    )}
-                  </>
+                <CostPriceToggleButton
+                  canView={canViewCostPrice}
+                  enabled={showCostPrice}
+                  onToggle={setShowCostPrice}
+                  title={showCostPrice ? "Hide purchase cost prices" : "Show purchase cost prices"}
+                />
+                {formData.items.length > 0 && (
+                  <ProfitToggleButton
+                    canView={canViewBP}
+                    enabled={showProfit}
+                    onToggle={setShowProfit}
+                    totalProfit={totalProfit}
+                    showProfitValue
+                    title="Toggle estimated profit (BP)"
+                    formatProfit={formatCurrency}
+                  />
                 )}
               </div>
-              {canApplyLastPrices && selectedCustomer && formData.items.length > 0 && (
-                <>
-                  {!isLastPricesApplied ? (
-                    <LoadingButton
-                      onClick={handleApplyLastPrices}
-                      isLoading={isLoadingLastPrices}
-                      variant="secondary"
-                      size="sm"
-                      className="flex items-center space-x-2"
-                      title="Apply prices from last order for this customer"
-                    >
-                      <History className="h-4 w-4 mr-2" />
-                      Apply Last Prices
-                    </LoadingButton>
-                  ) : (
-                    <LoadingButton
-                      onClick={handleRestoreCurrentPrices}
-                      isLoading={isRestoringPrices}
-                      variant="secondary"
-                      size="sm"
-                      className="flex items-center space-x-2"
-                      title="Restore original/current prices"
-                    >
-                      <RotateCcw className="h-4 w-4 mr-2" />
-                      Restore Current Prices
-                    </LoadingButton>
-                  )}
-                </>
-              )}
+              <ApplyLastPricesButton
+                canApply={canApplyLastPrices}
+                hasCustomer={!!selectedCustomer}
+                hasItems={formData.items.length > 0}
+                isApplied={isLastPricesApplied}
+                isApplying={isLoadingLastPrices}
+                isRestoring={isRestoringPrices}
+                onApply={handleApplyLastPrices}
+                onRestore={handleRestoreCurrentPrices}
+              />
             </div>
           </div>
         </div>
@@ -2444,29 +2252,16 @@ const SalesOrders = ({ tabId }) => {
                       >
                         {/* Serial Number - 1 column */}
                         <div className="min-w-0 flex justify-start">
-                          <span
-                            className={`text-sm font-medium px-0.5 py-1 rounded border block text-center h-8 flex items-center justify-center transition-colors duration-300 ${serialHighlight
-                              ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
-                              : 'text-gray-700 bg-gray-50 border-gray-200'
-                              }`}
-                          >
-                            {index + 1}
-                          </span>
+                          <LineItemSerial index={index} highlight={serialHighlight} />
                         </div>
 
                         {/* Product Name - reduced width to keep row alignment */}
                         <div className="min-w-0 flex items-center h-8 gap-2">
-                          {product?.imageUrl && showProductImages && (
-                            <div
-                              className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                          {showProductImages && (
+                            <LineItemThumbnail
+                              src={product?.imageUrl}
                               onClick={() => setPreviewImageProduct(product)}
-                              title="Click to view full size"
-                            >
-                              <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
-                                <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </div>
-                            </div>
+                            />
                           )}
                           <div className="flex flex-col min-w-0 w-full">
                             <span className="font-medium text-sm truncate min-w-0">
@@ -2480,19 +2275,11 @@ const SalesOrders = ({ tabId }) => {
                                     ⚠️ Below Cost
                                   </span>
                                 )}
-                              {isLastPricesApplied && priceStatus[item.product?.toString()] && (
-                                <span className={`text-xs ml-2 px-1.5 py-0.5 rounded ${priceStatus[item.product?.toString()] === 'updated'
-                                  ? 'bg-green-100 text-green-700'
-                                  : priceStatus[item.product?.toString()] === 'unchanged'
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'bg-yellow-100 text-yellow-700'
-                                  }`}>
-                                  {priceStatus[item.product?.toString()] === 'updated'
-                                    ? 'Updated'
-                                    : priceStatus[item.product?.toString()] === 'unchanged'
-                                      ? 'Same Price'
-                                      : 'Not in Last Order'}
-                                </span>
+                              {isLastPricesApplied && (
+                                <LineItemPriceStatusBadge
+                                  status={priceStatus[item.product?.toString()]}
+                                  className="ml-2"
+                                />
                               )}
                             </span>
                             {product?.isVariant && (
@@ -2506,57 +2293,31 @@ const SalesOrders = ({ tabId }) => {
                         {/* Box column */}
                         {dualUnitShowBoxInputEnabled && (
                           <div className="min-w-0">
-                            {hasDualUnit(product) ? (
-                              (() => {
-                                const ppb = getPiecesPerBox(product);
-                                const boxVal =
-                                  item.boxes != null
-                                    ? item.boxes
-                                    : ppb
-                                      ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
-                                      : 0;
-                                return (
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={item.quantity === 0 ? '' : boxVal}
-                                    onChange={(e) => {
-                                      const nextBoxes = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                      const piecesPerBox = getPiecesPerBox(product) || 1;
-                                      const currentPieces = item.pieces != null
-                                        ? Math.max(0, Number(item.pieces) || 0)
-                                        : piecesToBoxesAndPieces(item.quantity, piecesPerBox).pieces;
-                                      const rawQty = nextBoxes * piecesPerBox + currentPieces;
-                                      const stockCap = Number(product?.inventory?.currentStock ?? 0);
-                                      if (rawQty > stockCap && stockCap >= 0) {
-                                        toast.warning(`Warning: Quantity ${rawQty} exceeds available stock ${stockCap}`, { duration: 3000, icon: '⚠️' });
-                                      }
-                                      const nextQty = rawQty;
-                                      setFormData(prev => ({
-                                        ...prev,
-                                        items: prev.items.map((itm, i) => (
-                                          i === index
-                                            ? { ...itm, boxes: nextBoxes, quantity: nextQty, total: nextQty * itm.unitPrice }
-                                            : itm
-                                        ))
-                                      }));
-                                    }}
-                                    onFocus={(e) => e.target.select()}
-                                    className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(product?.inventory?.currentStock || 0) === 0
-                                      ? 'text-red-700 bg-red-50 border-red-200'
-                                      : (product?.inventory?.currentStock || 0) <= (product?.inventory?.reorderPoint || 0)
-                                        ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                                        : 'text-gray-700 bg-gray-100 border-gray-200'
-                                      }`}
-                                    title="Full boxes"
-                                  />
-                                );
-                              })()
-                            ) : (
-                              <span className="text-sm font-semibold text-gray-400 bg-gray-50 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
-                                —
-                              </span>
-                            )}
+                            <LineItemBoxInputCell
+                              product={product}
+                              item={item}
+                              onChange={(rawValue) => {
+                                const nextBoxes = Math.max(0, parseInt(rawValue, 10) || 0);
+                                const piecesPerBox = getPiecesPerBox(product) || 1;
+                                const currentPieces = item.pieces != null
+                                  ? Math.max(0, Number(item.pieces) || 0)
+                                  : piecesToBoxesAndPieces(item.quantity, piecesPerBox).pieces;
+                                const rawQty = nextBoxes * piecesPerBox + currentPieces;
+                                const stockCap = Number(product?.inventory?.currentStock ?? 0);
+                                if (rawQty > stockCap && stockCap >= 0) {
+                                  toast.warning(`Warning: Quantity ${rawQty} exceeds available stock ${stockCap}`, { duration: 3000, icon: '⚠️' });
+                                }
+                                const nextQty = rawQty;
+                                setFormData(prev => ({
+                                  ...prev,
+                                  items: prev.items.map((itm, i) => (
+                                    i === index
+                                      ? { ...itm, boxes: nextBoxes, quantity: nextQty, total: nextQty * itm.unitPrice }
+                                      : itm
+                                  ))
+                                }));
+                              }}
+                            />
                           </div>
                         )}
 
@@ -2674,22 +2435,16 @@ const SalesOrders = ({ tabId }) => {
 
                         {/* Total - 1 column */}
                         <div className="min-w-0">
-                          <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center h-8 flex items-center justify-center">
-                            {Math.round(totalPrice)}
-                          </span>
+                          <LineItemTotalCell value={Math.round(totalPrice)} />
                         </div>
 
                         {/* Delete Button - 1 column */}
                         <div className="min-w-0 flex justify-end">
-                          <LoadingButton
+                          <LineItemRemoveButton
                             onClick={() => handleRemoveItem(index)}
-                            isLoading={isRemovingFromCart[formData.items[index]?.product?.toString() || index]}
-                            variant="destructive"
-                            size="sm"
+                            loading={isRemovingFromCart[formData.items[index]?.product?.toString() || index]}
                             className="h-8 w-8 p-0 flex-shrink-0"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </LoadingButton>
+                          />
                         </div>
                       </div>
 
@@ -2698,28 +2453,20 @@ const SalesOrders = ({ tabId }) => {
                         {/* Product Name and Delete Button Row */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0 flex items-center gap-2">
-                            {product?.imageUrl && showProductImages && (
-                              <div
-                                className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                            {showProductImages && (
+                              <LineItemThumbnail
+                                src={product?.imageUrl}
+                                size="md"
                                 onClick={() => setPreviewImageProduct(product)}
-                                title="Click to view full size"
-                              >
-                                <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
-                                  <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                              </div>
+                              />
                             )}
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <span
-                                  className={`text-xs font-semibold px-2 py-0.5 rounded transition-colors duration-300 ${serialHighlight
-                                    ? 'bg-green-100 text-green-800 border border-green-400 ring-2 ring-green-300/80'
-                                    : 'text-gray-500 bg-gray-100'
-                                    }`}
-                                >
-                                  #{index + 1}
-                                </span>
+                                <LineItemSerial
+                                  index={index}
+                                  highlight={serialHighlight}
+                                  variant="mobile"
+                                />
                               </div>
                               <h5 className="font-medium text-sm text-gray-900 truncate">
                                 {safeRender(product?.name) || 'Unknown Product'}
@@ -2733,16 +2480,12 @@ const SalesOrders = ({ tabId }) => {
                                 </span>
                               )}
                           </div>
-                          <LoadingButton
+                          <LineItemRemoveButton
                             onClick={() => handleRemoveItem(index)}
-                            isLoading={isRemovingFromCart[formData.items[index]?.product?.toString() || index]}
-                            variant="destructive"
-                            size="sm"
+                            loading={isRemovingFromCart[formData.items[index]?.product?.toString() || index]}
                             className="flex-shrink-0"
                             title="Remove Item"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </LoadingButton>
+                          />
                         </div>
 
                         {/* Details Grid */}
@@ -2895,72 +2638,37 @@ const SalesOrders = ({ tabId }) => {
                     </select>
                   </div>
 
-                  {/* Invoice Number */}
-                  <div className="flex flex-col w-full sm:w-72">
-                    <div className="flex items-center gap-3 mb-1 flex-wrap">
-                      <label className="block text-xs font-medium text-gray-700 m-0">
-                        Invoice Number
-                      </label>
-                      <label
-                        htmlFor="soAutoGenerateInvoice"
-                        className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
-                      >
-                        <input
-                          type="checkbox"
-                          id="soAutoGenerateInvoice"
-                          checked={autoGenerateOrderNumber}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setAutoGenerateOrderNumber(checked);
-                            if (checked) {
-                              const newNumber = generateOrderNumber(selectedCustomer);
-                              setFormData((prev) => ({ ...prev, orderNumber: newNumber }));
-                            }
-                          }}
-                          className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                        />
-                        <span>Auto-generate</span>
-                      </label>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        autoComplete="off"
-                        value={formData.orderNumber}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, orderNumber: e.target.value }))}
-                        className="w-full input pr-16 h-8 text-sm"
-                        placeholder={autoGenerateOrderNumber ? 'Auto-generated' : 'Enter invoice number'}
-                        disabled={autoGenerateOrderNumber}
-                      />
-                      {autoGenerateOrderNumber && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newNumber = generateOrderNumber(selectedCustomer);
-                            setFormData((prev) => ({ ...prev, orderNumber: newNumber }));
-                          }}
-                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[11px] text-primary-600 hover:text-primary-800 font-medium"
-                        >
-                          Regenerate
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  {/* Order Number */}
+                  <DocumentNumberField
+                    id="soAutoGenerateInvoice"
+                    label="Order Number"
+                    manualPlaceholder="Enter order number"
+                    autoGenerate={autoGenerateOrderNumber}
+                    onAutoGenerateChange={(checked) => {
+                      setAutoGenerateOrderNumber(checked);
+                      if (checked) {
+                        const newNumber = generateOrderNumber(selectedCustomer);
+                        setFormData((prev) => ({ ...prev, orderNumber: newNumber }));
+                      }
+                    }}
+                    value={formData.orderNumber}
+                    onChange={(value) =>
+                      setFormData((prev) => ({ ...prev, orderNumber: value }))
+                    }
+                    onRegenerate={() => {
+                      const newNumber = generateOrderNumber(selectedCustomer);
+                      setFormData((prev) => ({ ...prev, orderNumber: newNumber }));
+                    }}
+                    containerClassName="flex flex-col w-full sm:w-72"
+                  />
 
-                  {/* Notes */}
-                  <div className="flex flex-col w-full sm:w-[28rem]">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Notes
-                    </label>
-                    <input
-                      type="text"
-                      autoComplete="off"
-                      value={formData.notes}
-                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                      className="input h-8 text-sm"
-                      placeholder="Additional notes..."
-                    />
-                  </div>
+                  <OrderNotesField
+                    value={formData.notes}
+                    onChange={(value) =>
+                      setFormData((prev) => ({ ...prev, notes: value }))
+                    }
+                    containerClassName="flex flex-col w-full sm:w-[28rem]"
+                  />
                 </div>
               )}
             </OrderDetailsSection>
@@ -3452,7 +3160,7 @@ const SalesOrders = ({ tabId }) => {
                             )}
                             {order.status === 'draft' && (
                               <LoadingButton
-                                onClick={() => handleDelete(order?.id ?? order?._id)}
+                                onClick={() => handleDelete(order)}
                                 isLoading={deleting}
                                 size="icon-sm"
                                 iconOnly
@@ -3934,24 +3642,19 @@ const SalesOrders = ({ tabId }) => {
         confirmText="Update quantity"
       />
 
-      {/* Product Image Preview Modal */}
-      <BaseModal
-        isOpen={!!previewImageProduct}
+      <ProductImagePreviewModal
+        product={previewImageProduct}
         onClose={() => setPreviewImageProduct(null)}
-        title={previewImageProduct?.displayName || previewImageProduct?.variantName || previewImageProduct?.name || 'Product Image'}
-      >
-        <div className="flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden min-h-[300px] p-4">
-          {previewImageProduct?.imageUrl ? (
-            <img
-              src={previewImageProduct.imageUrl}
-              alt="Product Preview"
-              className="max-w-full max-h-[70vh] object-contain"
-            />
-          ) : (
-            <div className="text-gray-400">No image available</div>
-          )}
-        </div>
-      </BaseModal>
+      />
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmation.isOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        itemName={deleteConfirmation.message?.match(/"([^"]*)"/)?.[1] || ''}
+        itemType="Sales Order"
+        isLoading={deleteConfirmation.isLoading}
+      />
 
     </div>
   );

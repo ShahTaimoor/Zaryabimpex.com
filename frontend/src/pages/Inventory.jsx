@@ -33,6 +33,7 @@ import StockAdjustmentModal from '../components/StockAdjustmentModal';
 import StockUpdateModal from '../components/StockUpdateModal';
 import { useNavigate } from 'react-router-dom';
 import { useTab } from '../contexts/TabContext';
+import { PageHeader } from '../components/layout/PageHeader';
 import { getComponentInfo } from '../utils/componentUtils';
 
 const LIMIT_OPTIONS = [50, 500, 1000, 5000];
@@ -352,44 +353,43 @@ export const Inventory = () => {
   return (
     <ResponsiveContainer className="space-y-4 xl:space-y-6 min-w-0">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Inventory Management</h1>
-          <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">Track and manage product stock levels</p>
-        </div>
-
-        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 overflow-x-auto">
-          {!lowStockFilter && (
+      <PageHeader
+        title="Inventory Management"
+        subtitle="Track and manage product stock levels"
+        actions={
+          <>
+            {!lowStockFilter && (
+              <Button
+                onClick={() => setShowAdjustmentModal(true)}
+                variant="default"
+                size="default"
+                className="flex items-center justify-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Stock Adjustment
+              </Button>
+            )}
             <Button
-              onClick={() => setShowAdjustmentModal(true)}
-              variant="default"
+              onClick={() => refetch()}
+              variant="secondary"
               size="default"
               className="flex items-center justify-center gap-2"
             >
-              <Plus className="h-4 w-4" />
-              Stock Adjustment
+              <RefreshCw className="h-4 w-4" />
+              Refresh
             </Button>
-          )}
-          <Button
-            onClick={() => refetch()}
-            variant="secondary"
-            size="default"
-            className="flex items-center justify-center gap-2"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
-          <Button
-            onClick={handleOpenWarehousesTab}
-            variant="ghost"
-            size="default"
-            className="flex items-center justify-center gap-2"
-          >
-            <Warehouse className="h-4 w-4" />
-            Add Warehouse
-          </Button>
-        </div>
-      </div>
+            <Button
+              onClick={handleOpenWarehousesTab}
+              variant="ghost"
+              size="default"
+              className="flex items-center justify-center gap-2"
+            >
+              <Warehouse className="h-4 w-4" />
+              Add Warehouse
+            </Button>
+          </>
+        }
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

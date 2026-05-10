@@ -27,10 +27,19 @@ import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch'
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { LoadingSpinner, LoadingCard, LoadingTable, LoadingButton } from '../components/LoadingSpinner';
 import { useResponsive } from '../components/ResponsiveContainer';
-import { SearchableDropdown } from '../components/SearchableDropdown';
+import { SupplierPartySelect } from '../components/order/SupplierPartySelect';
 import CreatePurchaseReturnModal from '../components/CreatePurchaseReturnModal';
 import ReturnDetailModal from '../components/ReturnDetailModal';
 import DateFilter from '../components/DateFilter';
+import { EntityStatusBadge } from '../components/order/EntityStatusBadge';
+import {
+  LineItemSerialStatic,
+  LineItemThumbnail,
+  LineItemStockCell,
+  LineItemTotalCell,
+  LineItemRemoveButton,
+  LineItemPlaceholderCell,
+} from '../components/order/CartLineItemAtoms';
 import { ClearConfirmationDialog } from '../components/ConfirmationDialog';
 import { useClearConfirmation } from '../hooks/useConfirmation';
 import { getCurrentDatePakistan } from '../utils/dateUtils';
@@ -481,28 +490,9 @@ const PurchaseReturns = () => {
   };
 
   // Get status badge
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: Clock },
-      approved: { bg: 'bg-blue-100', text: 'text-blue-800', icon: CheckCircle },
-      rejected: { bg: 'bg-red-100', text: 'text-red-800', icon: XCircle },
-      processing: { bg: 'bg-purple-100', text: 'text-purple-800', icon: Package },
-      received: { bg: 'bg-indigo-100', text: 'text-indigo-800', icon: Package },
-      completed: { bg: 'bg-green-100', text: 'text-green-800', icon: CheckCircle },
-      processed: { bg: 'bg-green-100', text: 'text-green-800', icon: CheckCircle },
-      cancelled: { bg: 'bg-gray-100', text: 'text-gray-800', icon: XCircle },
-    };
-
-    const config = statusConfig[status] || statusConfig.pending;
-    const Icon = config.icon;
-
-    return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
-        <Icon className="h-3 w-3" />
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    );
-  };
+  const getStatusBadge = (status) => (
+    <EntityStatusBadge type="return" status={status} />
+  );
 
   return (
     <div className="space-y-4 lg:space-y-6 w-full max-w-full overflow-x-hidden px-2 sm:px-0">
@@ -577,27 +567,15 @@ const PurchaseReturns = () => {
             {suppliersLoading ? (
               <LoadingSpinner />
             ) : (
-              <SearchableDropdown
-                className="[&_input]:h-8"
+              <SupplierPartySelect
                 placeholder="Search supplier by name, phone, or email..."
                 items={suppliers}
+                selectedItem={selectedSupplier}
                 onSelect={handleSupplierSelect}
                 onSearch={setSupplierSearchTerm}
-                value={supplierSearchTerm}
+                searchValue={supplierSearchTerm}
                 loading={suppliersLoading || suppliersFetching}
-                emptyMessage="No suppliers found"
-                displayKey={(supplier) => {
-                  const name = supplier.companyName || supplier.businessName || supplier.name || 'Unknown';
-                  return (
-                    <div>
-                      <div className="font-medium">{name}</div>
-                      {canViewSupplierPhone && supplier.phone && (
-                        <div className="text-xs text-gray-500">Phone: {supplier.phone}</div>
-                      )}
-                    </div>
-                  );
-                }}
-                selectedItem={selectedSupplier}
+                canViewPhone={canViewSupplierPhone}
               />
             )}
           </div>
@@ -674,35 +652,23 @@ const PurchaseReturns = () => {
                           className="grid grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5.35rem_5.35rem_2.25rem] gap-x-1 items-center py-1"
                         >
                           <div className="min-w-0 flex justify-start">
-                            <span className="text-sm font-medium px-0.5 py-1 rounded border block w-8 text-center h-8 flex items-center justify-center text-green-800 bg-green-100 border-green-300">
-                              {index + 1}
-                            </span>
+                            <LineItemSerialStatic index={index} />
                           </div>
 
                           <div className="min-w-0 flex items-center h-8 gap-2">
-                            {item.productImage ? (
-                              <div className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200">
-                                <img src={item.productImage} alt="" className="h-full w-full object-cover shadow-sm" />
-                              </div>
-                            ) : null}
+                            <LineItemThumbnail src={item.productImage} variant="static" />
                             <span className="font-medium text-sm text-gray-900 truncate">{item.productName || 'Unknown'}</span>
                           </div>
 
                           <div className="min-w-0">
-                            <span className="text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200">
-                              -
-                            </span>
+                            <LineItemPlaceholderCell symbol="-" />
                           </div>
 
                           <div className="min-w-0">
-                            <span className={`text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center ${(item.currentStock || 0) === 0
-                              ? 'text-red-700 bg-red-50 border-red-200'
-                              : (item.currentStock || 0) <= 5
-                                ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
-                                : 'text-gray-700 bg-gray-100 border-gray-200'
-                              }`}>
-                              {item.currentStock ?? item.maxQuantity ?? 0}
-                            </span>
+                            <LineItemStockCell
+                              currentStock={item.currentStock ?? item.maxQuantity ?? 0}
+                              reorderPoint={5}
+                            />
                           </div>
 
                           <div className="min-w-0">
@@ -717,27 +683,18 @@ const PurchaseReturns = () => {
                           </div>
 
                           <div className="min-w-0">
-                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block w-full text-center h-8 flex items-center justify-center">
-                              {(item.originalPrice || 0).toFixed(2)}
-                            </span>
+                            <LineItemTotalCell value={(item.originalPrice || 0).toFixed(2)} />
                           </div>
 
                           <div className="min-w-0">
-                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block w-full text-center h-8 flex items-center justify-center">
-                              {total.toFixed(2)}
-                            </span>
+                            <LineItemTotalCell value={total.toFixed(2)} />
                           </div>
 
                           <div className="min-w-0 flex justify-end">
-                            <Button
+                            <LineItemRemoveButton
                               onClick={() => handleRemoveFromReturnCart(index)}
-                              variant="destructive"
-                              size="sm"
-                              className="h-8 w-8 p-0"
                               title="Remove"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            />
                           </div>
                         </div>
                       );
@@ -755,14 +712,7 @@ const PurchaseReturns = () => {
                             <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">#{index + 1}</span>
                             <span className="ml-2 font-medium text-sm">{item.productName || 'Unknown'}</span>
                           </div>
-                          <Button
-                            onClick={() => handleRemoveFromReturnCart(index)}
-                            variant="destructive"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <LineItemRemoveButton onClick={() => handleRemoveFromReturnCart(index)} />
                         </div>
                         <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
                           <div>

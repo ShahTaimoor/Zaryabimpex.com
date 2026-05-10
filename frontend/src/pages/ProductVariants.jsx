@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import ValidatedInput, { ValidatedSelect } from '../components/ValidatedInput';
+import { PageHeader } from '../components/layout/PageHeader';
 import { useFormValidation } from '../hooks/useFormValidation';
 
 const ProductVariants = () => {
@@ -111,12 +112,11 @@ const ProductVariants = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
-      <div className="mb-6">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Product Variants</h1>
-            <p className="hidden sm:block mt-1 text-sm sm:text-base text-gray-600">Manage product variants and transformations</p>
-          </div>
+      <PageHeader
+        className="mb-6"
+        title="Product Variants"
+        subtitle="Manage product variants and transformations"
+        actions={
           <Button
             onClick={() => setIsModalOpen(true)}
             variant="default"
@@ -126,8 +126,8 @@ const ProductVariants = () => {
             <Plus className="h-4 w-4" />
             Add Variant
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">

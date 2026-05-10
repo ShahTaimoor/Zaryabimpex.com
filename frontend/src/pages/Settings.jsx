@@ -75,9 +75,17 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { LUCIDE_ICON_MAP } from '../utils/lucideIconMap';
 import { getVisibilityFlag } from '../utils/fieldVisibility';
+import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
+import { useDeleteConfirmation } from '../hooks/useConfirmation';
 
 export const Settings2 = () => {
   const { user } = useAuth();
+  const {
+    confirmation: deleteUserConfirmation,
+    confirmDelete: confirmDeleteUser,
+    handleConfirm: handleDeleteUserConfirm,
+    handleCancel: handleDeleteUserCancel,
+  } = useDeleteConfirmation();
   const sidebarDefaultHiddenItems = useMemo(() => new Set([
     'Import Purchase',
     'Current Purchase Market Prices',
@@ -1486,10 +1494,8 @@ export const Settings2 = () => {
     }
   };
 
-  const handleDeleteUserClick = (userId) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      handleDeleteUser(userId);
-    }
+  const handleDeleteUserClick = (userId, userName = 'this user') => {
+    confirmDeleteUser(userName, 'User', () => handleDeleteUser(userId));
   };
 
   const handlePermissionChange = (permissionKey, isChecked, subcategoryKeys = []) => {
@@ -2037,7 +2043,7 @@ export const Settings2 = () => {
                           <Button variant="outline" size="sm" onClick={() => handleEditUser(systemUser)} title="Edit Configuration" className="h-10 w-10 p-0 rounded-xl hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 shadow-sm border-gray-200">
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleDeleteUserClick(systemUser._id)} disabled={systemUser._id === user?._id} title="Delete User" className="h-10 w-10 p-0 rounded-xl hover:bg-red-50 hover:text-red-700 hover:border-red-200 disabled:opacity-40 shadow-sm border-gray-200">
+                          <Button variant="outline" size="sm" onClick={() => handleDeleteUserClick(systemUser._id, `${systemUser.firstName || ''} ${systemUser.lastName || ''}`.trim() || systemUser.email || 'this user')} disabled={systemUser._id === user?._id} title="Delete User" className="h-10 w-10 p-0 rounded-xl hover:bg-red-50 hover:text-red-700 hover:border-red-200 disabled:opacity-40 shadow-sm border-gray-200">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -4159,6 +4165,15 @@ export const Settings2 = () => {
           </div>
         )}
       </div>
+
+      <DeleteConfirmationDialog
+        isOpen={deleteUserConfirmation.isOpen}
+        onClose={handleDeleteUserCancel}
+        onConfirm={handleDeleteUserConfirm}
+        itemName={deleteUserConfirmation.message?.match(/"([^"]*)"/)?.[1] || ''}
+        itemType="User"
+        isLoading={deleteUserConfirmation.isLoading}
+      />
     </div>
   );
 };

@@ -38,6 +38,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import { useTab } from '../contexts/TabContext';
+import { PageHeader } from '../components/layout/PageHeader';
 
 /** Amount display without a currency prefix (e.g. no leading $). */
 function formatAmount(value) {
@@ -502,37 +503,38 @@ export const Investors = ({ tabId }) => {
 
   return (
     <div className="p-4 sm:p-6">
-      <div className="flex items-center justify-between gap-2 mb-6">
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Investors</h1>
-          <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">Manage investors and track profit distributions</p>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0 overflow-x-auto">
-          <Button
-            type="button"
-            onClick={handlePrintInvestorsList}
-            variant="outline"
-            size="default"
-            className="flex items-center justify-center gap-2"
-            disabled={investors.length === 0}
-          >
-            <Printer className="h-4 w-4" />
-            <span>Print</span>
-          </Button>
-          <Button
-            onClick={() => {
-              setSelectedInvestor(null);
-              setIsModalOpen(true);
-            }}
-            variant="default"
-            size="default"
-            className="flex items-center justify-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add Investor</span>
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        className="mb-6"
+        title="Investors"
+        subtitle="Manage investors and track profit distributions"
+        actions={
+          <>
+            <Button
+              type="button"
+              onClick={handlePrintInvestorsList}
+              variant="outline"
+              size="default"
+              className="flex items-center justify-center gap-2"
+              disabled={investors.length === 0}
+            >
+              <Printer className="h-4 w-4" />
+              <span>Print</span>
+            </Button>
+            <Button
+              onClick={() => {
+                setSelectedInvestor(null);
+                setIsModalOpen(true);
+              }}
+              variant="default"
+              size="default"
+              className="flex items-center justify-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add Investor</span>
+            </Button>
+          </>
+        }
+      />
 
       {/* Search and Filters */}
       <div className="mb-6 flex flex-col sm:flex-row gap-4">

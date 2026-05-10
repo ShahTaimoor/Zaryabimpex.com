@@ -32,6 +32,7 @@ import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 
 import ProductFilters from '../components/ProductFilters';
+import { PageHeader } from '../components/layout/PageHeader';
 import { useTab } from '../contexts/TabContext';
 import { useBulkOperations } from '../hooks/useBulkOperations';
 import BulkOperationsBar from '../components/BulkOperationsBar';
@@ -307,13 +308,10 @@ export const Products = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0">
-      <div className="flex items-center justify-between gap-2 min-w-0">
-        <div className="min-w-0 pr-2">
-          <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Products</h1>
-          <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">Manage your product catalog</p>
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-end gap-2 sm:gap-3 overflow-x-auto">
+      <PageHeader
+        title="Products"
+        subtitle="Manage your product catalog"
+        actions={<>
           <Button
             onClick={() => productOps.handleAdd()}
             variant="default"
@@ -426,9 +424,8 @@ export const Products = () => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          </div>
-        </div>
-      </div>
+        </>}
+      />
 
       <div className="w-full">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">

@@ -39,6 +39,9 @@ import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, L
 
 import SupplierFilters from '../components/SupplierFilters';
 import NotesPanel from '../components/NotesPanel';
+import { PageHeader } from '../components/layout/PageHeader';
+import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
+import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import {
   useGetSuppliersQuery,
   useCreateSupplierMutation,
@@ -799,7 +802,13 @@ const DEFAULT_LIMIT = 50;
 
 export const Suppliers = () => {
   const { canViewSupplierPhone } = useSensitiveDataPermissions();
-  
+  const {
+    confirmation: deleteConfirmation,
+    confirmDelete,
+    handleConfirm: handleDeleteConfirm,
+    handleCancel: handleDeleteCancel,
+  } = useDeleteConfirmation();
+
   // Refs for responsive actions
   const excelExportRef = useRef(null);
   const pdfExportRef = useRef(null);
@@ -956,17 +965,16 @@ export const Suppliers = () => {
   };
 
   const handleDelete = (supplier) => {
-    if (window.confirm(`Are you sure you want to delete ${supplier.companyName}?`)) {
-      deleteSupplier(supplier.id || supplier._id)
-        .unwrap()
-        .then(() => {
-          toast.success('Supplier deleted successfully!');
-          refetch();
-        })
-        .catch((error) => {
-          toast.error(error?.data?.message || 'Failed to delete supplier');
-        });
-    }
+    confirmDelete(supplier.companyName || supplier.businessName || 'this supplier', 'Supplier', async () => {
+      try {
+        await deleteSupplier(supplier.id || supplier._id).unwrap();
+        toast.success('Supplier deleted successfully!');
+        refetch();
+      } catch (error) {
+        toast.error(error?.data?.message || 'Failed to delete supplier');
+        throw error;
+      }
+    });
   };
   const handleAddNew = () => {
     setSelectedSupplier(null);
@@ -1062,12 +1070,10 @@ export const Suppliers = () => {
 
   return (
     <div className="space-y-4 xl:space-y-6 min-w-0">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Suppliers</h1>
-          <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">Manage your supplier relationships and information</p>
-        </div>
-        <div className="flex-shrink-0 flex items-center gap-2">
+      <PageHeader
+        title="Suppliers"
+        subtitle="Manage your supplier relationships and information"
+        actions={<>
           <Button
             onClick={() => handleAddNew()}
             variant="default"
@@ -1142,8 +1148,8 @@ export const Suppliers = () => {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Search */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -1524,6 +1530,15 @@ export const Suppliers = () => {
           }}
         />
       )}
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmation.isOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        itemName={deleteConfirmation.message?.match(/"([^"]*)"/)?.[1] || ''}
+        itemType="Supplier"
+        isLoading={deleteConfirmation.isLoading}
+      />
     </div>
   );
 };

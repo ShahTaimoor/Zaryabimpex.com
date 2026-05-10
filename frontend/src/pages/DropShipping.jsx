@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { LoadingButton } from '../components/LoadingSpinner';
 import { toast } from 'sonner';
+import { PageHeader } from '../components/layout/PageHeader';
 
 const DropShipping = () => {
   // Supplier Section
@@ -327,12 +328,11 @@ const DropShipping = () => {
 
   return (
     <div className="container mx-auto p-4 sm:p-6">
-      <div className="flex items-center justify-between gap-2 mb-6">
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Drop Shipping</h1>
-          <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">Manage drop shipping transactions</p>
-        </div>
-      </div>
+      <PageHeader
+        className="mb-6"
+        title="Drop Shipping"
+        subtitle="Manage drop shipping transactions"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Supplier Detail */}

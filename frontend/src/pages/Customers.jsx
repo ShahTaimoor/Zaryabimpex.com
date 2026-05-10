@@ -33,6 +33,7 @@ import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 
 import CustomerFilters from '../components/CustomerFilters';
+import { PageHeader } from '../components/layout/PageHeader';
 import NotesPanel from '../components/NotesPanel';
 import { CustomerFormModal } from '../components/CustomerFormModal';
 import { CustomerList } from '../components/CustomerList';
@@ -189,12 +190,10 @@ export const Customers = () => {
 
   return (
     <div className="space-y-6 w-full ">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0 flex items-center gap-2">
-          <BarChart3 className="h-7 w-7 text-primary-600 shrink-0 hidden sm:block" aria-hidden />
-          <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Customers</h1>
-        </div>
-        <div className="flex-shrink-0 flex items-center gap-2">
+      <PageHeader
+        title="Customers"
+        icon={BarChart3}
+        actions={<>
           <Button
             onClick={() => customerOps.handleAdd()}
             variant="default"
@@ -273,8 +272,8 @@ export const Customers = () => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-      </div>
+          </>}
+      />
 
       {/* Search */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">

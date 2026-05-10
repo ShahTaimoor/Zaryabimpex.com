@@ -41,6 +41,8 @@ import { Textarea } from '@/components/ui/textarea';
 import PaginationControls from '../components/PaginationControls';
 import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
+import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
+import { useDeleteConfirmation } from '../hooks/useConfirmation';
 
 const AccountTypeBadge = ({ type }) => {
   const config = {
@@ -455,6 +457,12 @@ const AccountForm = ({ account, onSave, onCancel, isOpen, existingAccounts, pres
 
 // Category Management Component
 const CategoryManagement = ({ categories, onCategoryCreated, onCategoryUpdated, onCategoryDeleted }) => {
+  const {
+    confirmation: deleteConfirmation,
+    confirmDelete,
+    handleConfirm: handleDeleteConfirm,
+    handleCancel: handleDeleteCancel,
+  } = useDeleteConfirmation();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [autoGenerateCode, setAutoGenerateCode] = useState(true); // Auto-generate for new categories
@@ -529,16 +537,17 @@ const CategoryManagement = ({ categories, onCategoryCreated, onCategoryUpdated, 
     setIsFormOpen(true);
   };
 
-  const handleDelete = async (category) => {
-    if (window.confirm(`Are you sure you want to delete category "${category.name}"?`)) {
+  const handleDelete = (category) => {
+    confirmDelete(category.name, 'Category', async () => {
       try {
         await accountCategoriesAPI.deleteCategory(category._id);
         onCategoryDeleted();
         toast.success('Category deleted successfully!');
       } catch (error) {
         handleApiError(error, 'Category Deletion');
+        throw error;
       }
-    }
+    });
   };
 
   return (
@@ -770,11 +779,26 @@ const CategoryManagement = ({ categories, onCategoryCreated, onCategoryUpdated, 
           </div>
         </div>
       )}
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmation.isOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        itemName={deleteConfirmation.message?.match(/"([^"]*)"/)?.[1] || ''}
+        itemType="Category"
+        isLoading={deleteConfirmation.isLoading}
+      />
     </div>
   );
 };
 
 export const ChartOfAccounts = () => {
+  const {
+    confirmation: deleteConfirmation,
+    confirmDelete,
+    handleConfirm: handleDeleteConfirm,
+    handleCancel: handleDeleteCancel,
+  } = useDeleteConfirmation();
   // Refs for responsive actions
   const excelExportRef = useRef(null);
   const pdfExportRef = useRef(null);
@@ -998,16 +1022,17 @@ export const ChartOfAccounts = () => {
     setIsFormOpen(true);
   };
 
-  const handleDelete = async (account) => {
-    if (window.confirm(`Are you sure you want to delete account "${account.accountName}"?`)) {
+  const handleDelete = (account) => {
+    confirmDelete(account.accountName, 'Account', async () => {
       try {
         await deleteAccount(account._id).unwrap();
         toast.success('Account deleted successfully!');
         refetchAccounts();
       } catch (error) {
         handleApiError(error, 'Account Deletion');
+        throw error;
       }
-    }
+    });
   };
 
   const handleAddNew = () => {
@@ -1443,6 +1468,15 @@ export const ChartOfAccounts = () => {
         presetCategory={presetCategory}
         categories={categories}
         categoryOptions={categoryOptions}
+      />
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmation.isOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        itemName={deleteConfirmation.message?.match(/"([^"]*)"/)?.[1] || ''}
+        itemType="Account"
+        isLoading={deleteConfirmation.isLoading}
       />
     </div>
   );

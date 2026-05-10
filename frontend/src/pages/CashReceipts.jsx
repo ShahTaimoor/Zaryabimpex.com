@@ -1,16 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Calendar,
-  Search,
-  Filter,
-  Edit,
-  Trash2,
-  Eye,
-  RefreshCw,
-  ArrowUpDown,
-  RotateCcw,
-  Printer,
-  Save
+  Search
 } from 'lucide-react';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
@@ -37,8 +28,20 @@ import { useGetBalanceSummaryQuery } from '../store/services/customerBalancesApi
 import { useGetBalanceSummaryQuery as useGetSupplierBalanceSummaryQuery } from '../store/services/supplierBalancesApi';
 import DateFilter from '../components/DateFilter';
 import PaginationControls from '../components/PaginationControls';
+import { InputWithIcon } from '@/components/ui/input-with-icon';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
+import { useListControls } from '../hooks/useListControls';
+import { getPaginationInfo } from '../utils/paginationInfo';
+import { FiltersCard } from '../components/list/FiltersCard';
+import { ListResultsHeader } from '../components/list/ListResultsHeader';
+import { SortableTableHeader } from '../components/list/SortableTableHeader';
+import { DataStateMessage } from '../components/list/DataStateMessage';
+import { RowActionButtons } from '../components/list/RowActionButtons';
+import { PageHeader } from '../components/layout/PageHeader';
+import { FormActionsFooter } from '../components/layout/FormActionsFooter';
+import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
+import { useDeleteConfirmation } from '../hooks/useConfirmation';
 
 
 const CashReceipts = () => {
@@ -48,23 +51,30 @@ const CashReceipts = () => {
     canViewSupplierPhone
   } = useSensitiveDataPermissions();
   const today = getCurrentDatePakistan();
+  const {
+    confirmation: deleteConfirmation,
+    confirmDelete,
+    handleConfirm: handleDeleteConfirm,
+    handleCancel: handleDeleteCancel,
+  } = useDeleteConfirmation();
   // State for filters and pagination
-  const [filters, setFilters] = useState({
-    fromDate: today,
-    toDate: today,
-    voucherCode: '',
-    amount: '',
-    particular: ''
-  });
-
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 50
-  });
-
-  const [sortConfig, setSortConfig] = useState({
-    key: 'date',
-    direction: 'desc'
+  // State for filters / pagination / sort lives in `useListControls`.
+  const {
+    filters,
+    setFilters,
+    pagination,
+    setPagination,
+    sortConfig,
+    setFilter: handleFilterChange,
+    toggleSort: handleSort,
+  } = useListControls({
+    initialFilters: {
+      fromDate: today,
+      toDate: today,
+      voucherCode: '',
+      amount: '',
+      particular: '',
+    },
   });
 
   // State for modals
@@ -356,18 +366,6 @@ const CashReceipts = () => {
     }
   };
 
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-    setPagination(prev => ({ ...prev, page: 1 }));
-  };
-
-  const handleSort = (key) => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  };
-
   const handleCreate = () => {
     // Clean up form data - remove empty strings and only send fields with values
     const cleanedData = {
@@ -529,8 +527,9 @@ const CashReceipts = () => {
     const receiptCustomer = receipt?.customer?.id || receipt?.customer?._id || receipt?.customer || null;
     const receiptSupplier = receipt?.supplier?.id || receipt?.supplier?._id || receipt?.supplier || null;
 
-    if (window.confirm('Are you sure you want to delete this cash receipt?')) {
-      deleteCashReceipt(receiptId)
+    const label = receipt?.receiptNumber || receipt?.transactionReference || `${receiptId || 'this receipt'}`;
+    confirmDelete(label, 'Cash Receipt', () => {
+      return deleteCashReceipt(receiptId)
         .unwrap()
         .then(() => {
           showSuccessToast('Cash receipt deleted successfully');
@@ -588,8 +587,9 @@ const CashReceipts = () => {
         })
         .catch((error) => {
           showErrorToast(handleApiError(error));
+          throw error;
         });
-    }
+    });
   };
 
   const handleEdit = (receipt) => {
@@ -641,17 +641,12 @@ const CashReceipts = () => {
     cashReceiptsData?.data?.receipts ||
     cashReceiptsData?.receipts ||
     [];
-  const paginationInfo =
-    cashReceiptsData?.data?.pagination ||
-    cashReceiptsData?.pagination ||
-    {};
+  const paginationInfo = getPaginationInfo(cashReceiptsData);
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="min-w-0">
-        <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">Cash Receipts</h1>
-      </div>
+      <PageHeader title="Cash Receipts" />
 
       {/* Cash Receipt Form */}
       <div className="card">
@@ -915,16 +910,13 @@ const CashReceipts = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Receipt Date
                 </label>
-                <div className="relative">
-                  <Input
-                    type="date"
-                    autoComplete="off"
-                    value={formData.date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                    className="w-full pr-10"
-                  />
-                  <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                </div>
+                <InputWithIcon
+                  icon={Calendar}
+                  type="date"
+                  autoComplete="off"
+                  value={formData.date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                />
               </div>
 
               {/* Description */}
@@ -958,40 +950,19 @@ const CashReceipts = () => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
-            <Button
-              onClick={resetForm}
-              variant="outline"
-              size="default"
-              className="flex items-center justify-center gap-2 w-full sm:w-auto"
-            >
-              <RotateCcw className="h-4 w-4" />
-              <span>Reset</span>
-            </Button>
-            <Button
-              onClick={handleCreate}
-              disabled={creating}
-              variant="default"
-              size="default"
-              className="flex items-center justify-center gap-2 w-full sm:w-auto"
-            >
-              <Save className="h-4 w-4" />
-              <span>{creating ? 'Saving...' : 'Save Receipt'}</span>
-            </Button>
-          </div>
+          <FormActionsFooter
+            onReset={resetForm}
+            onSubmit={handleCreate}
+            isSubmitting={creating}
+            submitLabel="Save Receipt"
+            submittingLabel="Saving..."
+          />
         </div>
       </div>
 
       {/* Filters */}
-      <div className="card">
-        <div className="card-header">
-          <div className="flex items-center space-x-2">
-            <Filter className="h-5 w-5 text-gray-400" />
-            <h3 className="text-lg font-medium text-gray-900">Filters</h3>
-          </div>
-        </div>
-        <div className="card-content">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <FiltersCard>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Date Range
@@ -1063,84 +1034,52 @@ const CashReceipts = () => {
               </Button>
             </div>
           </div>
-        </div>
-      </div>
+      </FiltersCard>
 
       {/* Results */}
       <div className="card">
-        <div className="card-header">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 leading-tight">
-              Cash Receipts
-              <span className="block sm:inline sm:ml-2 text-xs sm:text-sm font-normal text-gray-500 mt-1 sm:mt-0">
-                From: {formatDate(filters.fromDate)} To: {formatDate(filters.toDate)}
-              </span>
-            </h3>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <span className="text-xs sm:text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                <span className="font-semibold text-gray-700">
-                  {paginationInfo.totalItems || 0}
-                </span>{' '}
-                records
-              </span>
-              <button
-                onClick={() => refetch()}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                title="Refresh"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </div>
+        <ListResultsHeader
+          title="Cash Receipts"
+          fromDate={filters.fromDate}
+          toDate={filters.toDate}
+          formatDate={formatDate}
+          recordCount={paginationInfo.totalItems || 0}
+          onRefresh={() => refetch()}
+          refreshing={isLoading}
+        />
         <div className="card-content p-0">
-          {isLoading ? (
-            <div className="p-8 text-center">
-              <RefreshCw className="h-8 w-8 animate-spin mx-auto text-gray-400" />
-              <p className="mt-2 text-gray-500">Loading cash receipts...</p>
-            </div>
-          ) : error ? (
-            <div className="p-8 text-center text-red-600">
-              <p>Error loading cash receipts: {handleApiError(error).message}</p>
-            </div>
-          ) : cashReceipts.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <p>No cash receipts found for the selected criteria.</p>
-            </div>
-          ) : (
+          <DataStateMessage
+            isLoading={isLoading}
+            error={error}
+            isEmpty={cashReceipts.length === 0}
+            loadingLabel="Loading cash receipts..."
+            errorPrefix="Error loading cash receipts"
+            emptyLabel="No cash receipts found for the selected criteria."
+          >
             <>
               {/* Table */}
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                        onClick={() => handleSort('date')}
-                      >
-                        <div className="flex items-center space-x-1">
-                          <span>Date</span>
-                          <ArrowUpDown className="h-3 w-3" />
-                        </div>
-                      </th>
-                      <th
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                        onClick={() => handleSort('voucherCode')}
-                      >
-                        <div className="flex items-center space-x-1">
-                          <span>Voucher Code</span>
-                          <ArrowUpDown className="h-3 w-3" />
-                        </div>
-                      </th>
-                      <th
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                        onClick={() => handleSort('amount')}
-                      >
-                        <div className="flex items-center space-x-1">
-                          <span>Amount</span>
-                          <ArrowUpDown className="h-3 w-3" />
-                        </div>
-                      </th>
+                      <SortableTableHeader
+                        label="Date"
+                        sortKey="date"
+                        sortConfig={sortConfig}
+                        onSort={handleSort}
+                      />
+                      <SortableTableHeader
+                        label="Voucher Code"
+                        sortKey="voucherCode"
+                        sortConfig={sortConfig}
+                        onSort={handleSort}
+                      />
+                      <SortableTableHeader
+                        label="Amount"
+                        sortKey="amount"
+                        sortConfig={sortConfig}
+                        onSort={handleSort}
+                      />
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Customer/Supplier
                       </th>
@@ -1180,40 +1119,12 @@ const CashReceipts = () => {
                             {receipt.particular}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => handlePrint(receipt)}
-                                className="text-green-600 hover:text-green-900"
-                                title="Print"
-                              >
-                                <Printer className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleView(receipt)}
-                                className="text-blue-600 hover:text-blue-900"
-                                title="View"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </button>
-                              {(
-                                <>
-                                  <button
-                                    onClick={() => handleEdit(receipt)}
-                                    className="text-indigo-600 hover:text-indigo-900"
-                                    title="Edit"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(receipt)}
-                                    className="text-red-600 hover:text-red-900"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
+                            <RowActionButtons
+                              onPrint={() => handlePrint(receipt)}
+                              onView={() => handleView(receipt)}
+                              onEdit={() => handleEdit(receipt)}
+                              onDelete={() => handleDelete(receipt)}
+                            />
                           </td>
                         </tr>
                       );
@@ -1231,7 +1142,7 @@ const CashReceipts = () => {
                 onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
               />
             </>
-          )}
+          </DataStateMessage>
         </div>
       </div>
 
@@ -1408,6 +1319,15 @@ const CashReceipts = () => {
         }}
         documentTitle="Cash Receipt"
         receiptData={printData}
+      />
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmation.isOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        itemName={deleteConfirmation.message?.match(/"([^"]*)"/)?.[1] || ''}
+        itemType="Cash Receipt"
+        isLoading={deleteConfirmation.isLoading}
       />
     </div>
   );

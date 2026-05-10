@@ -10,22 +10,14 @@ import {
   User,
   CreditCard,
   TrendingUp,
-  Calculator,
   Receipt,
   Edit,
   Printer,
-  History,
   RefreshCw,
-  RotateCcw,
-  CheckCircle,
-  AlertCircle,
-  Info,
   Eye,
-  EyeOff,
   XCircle,
   ArrowUpDown,
   ChevronDown,
-  Camera,
   MoreHorizontal,
   FileSpreadsheet,
   FileText,
@@ -47,7 +39,6 @@ import {
 import { useCheckApplicableDiscountsMutation } from '../store/services/discountsApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
-import { SearchableDropdown } from '../components/SearchableDropdown';
 import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
 import {
   usePostJournalMutation,
@@ -105,6 +96,26 @@ import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 
 import { ProductSearch } from '../components/sales/ProductSearch';
 import { DuplicateLineItemMergeModal } from '../components/order/DuplicateLineItemMergeModal';
+import { ProductImagePreviewModal } from '../components/order/ProductImagePreviewModal';
+import { DocumentNumberField } from '../components/order/DocumentNumberField';
+import { CustomerPartySelect, CustomerBalanceStrip } from '../components/order/CustomerPartySelect';
+import { OrderNotesField } from '../components/order/OrderNotesField';
+import { ApplyLastPricesButton, LastPricesStatusLegend } from '../components/order/ApplyLastPricesButton';
+import { PaymentMethodSelect } from '../components/order/PaymentMethodSelect';
+import { CostPriceToggleButton, ProfitToggleButton } from '../components/order/CostPriceToggleButton';
+import {
+  LineItemSerial,
+  LineItemThumbnail,
+  LineItemStockCell,
+  LineItemTotalCell,
+  LineItemRemoveButton,
+  LineItemBoxInputCell,
+  LineItemPriceStatusBadge,
+  LineItemPriceStatusIcon,
+  priceStatusInputClasses,
+} from '../components/order/CartLineItemAtoms';
+import { useApplyLastPrices } from '../hooks/useApplyLastPrices';
+import { computeSalesCheckoutPricing } from '../utils/orderPricing';
 import { PriceTypeSelector } from '../components/order/PriceTypeSelector';
 import {
   deriveInitialPriceType,
@@ -181,14 +192,9 @@ export const Sales = ({ tabId, editData }) => {
   const [showSalesDetailsFields, setShowSalesDetailsFields] = useState(false);
   const [billDate, setBillDate] = useState(getLocalDateString()); // Default to current date for backdating invoices
   const [notes, setNotes] = useState('');
-  const [isLoadingLastPrices, setIsLoadingLastPrices] = useState(false);
-  const [isRestoringPrices, setIsRestoringPrices] = useState(false);
+  // Apply / Restore "last prices" state lives in `useApplyLastPrices` below.
   const [isClearingCart, setIsClearingCart] = useState(false);
   const [isRemovingFromCart, setIsRemovingFromCart] = useState({});
-  const [originalPrices, setOriginalPrices] = useState({}); // Store original prices before applying last prices
-  const [isApplyingLastPrices, setIsApplyingLastPrices] = useState(false);
-  const [isLastPricesApplied, setIsLastPricesApplied] = useState(false);
-  const [priceStatus, setPriceStatus] = useState({}); // Track price change status: 'updated', 'not-found', 'unchanged'
   const [previewImageProduct, setPreviewImageProduct] = useState(null);
   const [showCostPrice, setShowCostPrice] = useState(false); // Toggle to show/hide cost prices
   const [showProductImages, setShowProductImages] = useState(localStorage.getItem('showProductImagesUI') !== 'false');
@@ -449,6 +455,52 @@ export const Sales = ({ tabId, editData }) => {
   const [fetchOrderById] = useLazyGetOrderByIdQuery();
   const [fetchOrdersForExport] = useLazyGetOrdersQuery();
   const [getLastPrices] = useLazyGetLastPricesQuery();
+
+  // ----- Apply / Restore "last prices" --------------------------------
+  // Centralized in `useApplyLastPrices`. Sales' lazy query response can
+  // be wrapped in either `result.data.prices` or `result.data.data.prices`,
+  // so the wrapper normalises both shapes (and surfaces explicit errors).
+  const fetchLastPricesForCustomer = useCallback(
+    async (customerId) => {
+      const result = await getLastPrices(customerId);
+      if (result?.error) {
+        const err = new Error(
+          result.error?.data?.message || 'Failed to retrieve last prices'
+        );
+        err.cause = result.error;
+        throw err;
+      }
+      const response = result?.data;
+      if (!response) return null;
+      const prices = response?.prices ?? response?.data?.prices ?? null;
+      const orderNumber =
+        response?.orderNumber ?? response?.data?.orderNumber ?? null;
+      const orderDate =
+        response?.orderDate ?? response?.data?.orderDate ?? null;
+      if (!prices) return null;
+      return { prices, orderNumber, orderDate };
+    },
+    [getLastPrices]
+  );
+
+  const {
+    apply: handleApplyLastPrices,
+    restore: handleRestoreCurrentPrices,
+    isApplying: isLoadingLastPrices,
+    isRestoring: isRestoringPrices,
+    isApplied: isLastPricesApplied,
+    setIsApplied: setIsLastPricesApplied,
+    originalPrices,
+    setOriginalPrices,
+    priceStatus,
+    setPriceStatus,
+  } = useApplyLastPrices({
+    items: cart,
+    setItems: setCart,
+    selectedCustomer,
+    fetchLastPrices: fetchLastPricesForCustomer,
+    getProductId: (item) => item.product._id.toString(),
+  });
 
   const [checkApplicableDiscounts] = useCheckApplicableDiscountsMutation();
   const [applicableDiscountList, setApplicableDiscountList] = useState([]);
@@ -774,19 +826,19 @@ export const Sales = ({ tabId, editData }) => {
     return () => { cancelled = true; };
   }, [subtotal, selectedCustomer?._id, selectedCustomer?.id]);
 
-  let directDiscountAmount = 0;
-  if (directDiscount.value > 0) {
-    if (directDiscount.type === 'percentage') {
-      directDiscountAmount = (subtotal * directDiscount.value) / 100;
-    } else {
-      directDiscountAmount = Math.min(directDiscount.value, subtotal);
-    }
-  }
-
-  const totalDiscountAmount = codeDiscountAmount + directDiscountAmount;
-  const subtotalAfterDiscount = subtotal - totalDiscountAmount;
-  const tax = taxSystemEnabled ? subtotalAfterDiscount * (globalTaxPercent / 100) : 0;
-  const total = subtotalAfterDiscount + tax;
+  const {
+    directDiscountAmount,
+    totalDiscount: totalDiscountAmount,
+    subtotalAfterDiscount,
+    tax,
+    total,
+  } = computeSalesCheckoutPricing({
+    items: cart,
+    directDiscount,
+    codeDiscountAmount,
+    taxRate: globalTaxPercent,
+    taxSystemEnabled,
+  });
   const change = amountPaid - total;
   const manualDiscountDisplay = Math.max(0, Math.round(directDiscountAmount || 0));
 
@@ -1121,153 +1173,6 @@ export const Sales = ({ tabId, editData }) => {
 
       return sortedCart;
     });
-  };
-
-  const handleApplyLastPrices = async () => {
-    if (!selectedCustomer) {
-      showErrorToast('Please select a customer first');
-      return;
-    }
-
-    if (cart.length === 0) {
-      showErrorToast('Please add products to cart first');
-      return;
-    }
-
-    setIsLoadingLastPrices(true);
-    try {
-      const result = await getLastPrices(selectedCustomer._id);
-
-      // Check if there was an error in the request
-      if (result.error) {
-        showErrorToast(result.error?.data?.message || 'Failed to retrieve last prices');
-        setIsLoadingLastPrices(false);
-        return;
-      }
-
-      // Check if the request was successful and has data
-      if (!result || !result.data) {
-        showErrorToast('No previous order found for this customer');
-        setIsLoadingLastPrices(false);
-        return;
-      }
-
-      // The API returns data directly: { success, prices, orderNumber, orderDate }
-      const response = result.data;
-
-      // Handle both possible response structures
-      const prices = response?.prices || (response?.data && response.data.prices);
-      const orderNumber = response?.orderNumber || (response?.data && response.data.orderNumber);
-      const orderDate = response?.orderDate || (response?.data && response.data.orderDate);
-
-      if (!prices || (typeof prices === 'object' && Object.keys(prices).length === 0)) {
-        showErrorToast('No previous order found for this customer');
-        setIsLoadingLastPrices(false);
-        return;
-      }
-
-      // Store original prices before applying last prices
-      const originalPricesMap = {};
-      const priceStatusMap = {};
-      cart.forEach(cartItem => {
-        const productId = cartItem.product._id.toString();
-        originalPricesMap[productId] = cartItem.unitPrice;
-      });
-      setOriginalPrices(originalPricesMap);
-
-      // Apply last prices to matching products in cart
-      let updatedCount = 0;
-      let unchangedCount = 0;
-      let notFoundCount = 0;
-      const updatedCart = cart.map(cartItem => {
-        const productId = cartItem.product._id.toString();
-        if (prices[productId]) {
-          const lastPrice = prices[productId].unitPrice;
-          const currentPrice = cartItem.unitPrice;
-
-          if (lastPrice !== currentPrice) {
-            // Price changed
-            updatedCount++;
-            priceStatusMap[productId] = 'updated';
-            return {
-              ...cartItem,
-              unitPrice: lastPrice
-            };
-          } else {
-            // Price is the same
-            unchangedCount++;
-            priceStatusMap[productId] = 'unchanged';
-            return cartItem;
-          }
-        } else {
-          // Product not found in last order
-          notFoundCount++;
-          priceStatusMap[productId] = 'not-found';
-          return cartItem;
-        }
-      });
-
-      setCart(updatedCart);
-      setPriceStatus(priceStatusMap);
-      setIsLastPricesApplied(true);
-
-      const orderDateStr = orderDate ? new Date(orderDate).toLocaleDateString() : 'previous order';
-      if (updatedCount > 0) {
-        let message = `Applied prices from ${orderNumber || 'previous order'} (${orderDateStr}). Updated ${updatedCount} product(s).`;
-        if (unchangedCount > 0) {
-          message += ` ${unchangedCount} product(s) had same price.`;
-        }
-        if (notFoundCount > 0) {
-          message += ` ${notFoundCount} product(s) not found in previous order.`;
-        }
-        showSuccessToast(message);
-      } else if (unchangedCount > 0) {
-        showSuccessToast(`All products already have the same prices as in ${orderNumber || 'previous order'} (${orderDateStr}).`);
-      } else {
-        showErrorToast('No matching products found in previous order');
-      }
-    } catch (error) {
-      handleApiError(error, 'Apply Last Prices');
-    } finally {
-      setIsLoadingLastPrices(false);
-    }
-  };
-
-  const handleRestoreCurrentPrices = () => {
-    if (Object.keys(originalPrices).length === 0) {
-      showErrorToast('No original prices to restore');
-      return;
-    }
-
-    setIsRestoringPrices(true);
-    try {
-      // Restore original prices
-      let restoredCount = 0;
-      const restoredCart = cart.map(cartItem => {
-        const productId = cartItem.product._id.toString();
-        if (originalPrices[productId] !== undefined) {
-          restoredCount++;
-          return {
-            ...cartItem,
-            unitPrice: originalPrices[productId]
-          };
-        }
-        return cartItem;
-      });
-
-      setCart(restoredCart);
-      setIsLastPricesApplied(false);
-      setOriginalPrices({});
-      setPriceStatus({});
-
-      if (restoredCount > 0) {
-        showSuccessToast(`Restored original prices for ${restoredCount} product(s).`);
-      } else {
-        showErrorToast('No matching products found to restore');
-      }
-    } finally {
-      setIsRestoringPrices(false);
-    }
   };
 
   const { confirmation: clearConfirmation, confirmClear, handleConfirm: handleClearConfirm, handleCancel: handleClearCancel } = useClearConfirmation();
@@ -1735,80 +1640,28 @@ export const Sales = ({ tabId, editData }) => {
                     onChange={setPriceType}
                   />
                 </div>
-                <SearchableDropdown
-                  className="[&_input]:h-8"
-                  placeholder="Search customers by name, email, or business..."
-                  items={customers || []}
+                <CustomerPartySelect
+                  items={customers}
+                  selectedItem={selectedCustomer}
                   onSelect={handleCustomerSelect}
                   onSearch={setCustomerSearchTerm}
-                  selectedItem={selectedCustomer}
-                  rightContentKey="city"
-                  displayKey={(customer) => {
-                    const name = customer?.displayName ?? customer?.display_name ?? customer?.businessName ?? customer?.business_name ?? customer?.name ?? 'Customer';
-                    const totalBalance = customer?.currentBalance !== undefined && customer?.currentBalance !== null
-                      ? Number(customer.currentBalance)
-                      : (Number(customer?.pendingBalance ?? 0) - Number(customer?.advanceBalance ?? 0));
-                    const hasBalance = totalBalance !== 0 && !Number.isNaN(totalBalance);
-                    const isPayable = totalBalance < 0;
-                    const showBalance = hasPermission(PERMISSIONS.VIEW_CUSTOMER_BALANCE);
-
-                    return (
-                      <div>
-                        <div className="font-medium">{name}</div>
-                        {showBalance && hasBalance ? (
-                          <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
-                            Total Balance: {isPayable ? '-' : '+'}{Math.abs(totalBalance).toFixed(2)}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  }}
                   loading={customersLoading || customersFetching}
-                  emptyMessage="No customers found"
+                  canViewBalance={hasPermission(PERMISSIONS.VIEW_CUSTOMER_BALANCE)}
                 />
               </div>
             </div>
 
-            {/* Customer Information - Right Side */}
-            <div className="lg:w-auto w-full lg:max-w-md lg:self-end">
-              {selectedCustomer && hasPermission(PERMISSIONS.VIEW_CUSTOMER_BALANCE) ? (() => {
-                const balanceSource = selectedCustomer ?? customerWithBalance;
-                const creditLimitNum = Math.max(0, Number(selectedCustomer?.creditLimit ?? selectedCustomer?.credit_limit ?? balanceSource?.creditLimit ?? balanceSource?.credit_limit ?? 0) || 0);
-                const availableCreditNum = Math.max(0, creditLimitNum - currentBalanceNum);
-                const isPayable = currentBalanceNum < 0;
-                const isReceivable = currentBalanceNum > 0;
-
-                return (
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl h-8 px-2 flex items-center">
-                    <div className="flex items-center gap-2 text-xs whitespace-nowrap overflow-hidden">
-                      <span className="text-gray-500 uppercase font-semibold">Balance</span>
-                      <span className={`font-bold ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'}`}>
-                        {isPayable ? '-' : ''}{Math.abs(currentBalanceNum).toFixed(2)}
-                      </span>
-                      <span className="text-gray-400">|</span>
-                      <span className="text-gray-500 uppercase font-semibold">Credit</span>
-                      <span className={`font-bold ${(creditLimitNum > 0) ? (
-                        currentBalanceNum >= creditLimitNum * 0.9 ? 'text-red-600' : currentBalanceNum >= creditLimitNum * 0.7 ? 'text-yellow-600' : 'text-blue-600'
-                      ) : 'text-gray-600'}`}>
-                        {creditLimitNum.toFixed(2)}
-                        {creditLimitNum > 0 && currentBalanceNum >= creditLimitNum * 0.9 && <span className="ml-1">⚠️</span>}
-                      </span>
-                      <span className="text-gray-400">|</span>
-                      <span className="text-gray-500 uppercase font-semibold">Available</span>
-                      <span className={`font-bold ${creditLimitNum > 0 ? (
-                        availableCreditNum <= creditLimitNum * 0.1 ? 'text-red-600' : availableCreditNum <= creditLimitNum * 0.3 ? 'text-yellow-600' : 'text-green-600'
-                      ) : 'text-gray-600'}`}>
-                        {availableCreditNum.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })() : (
-                <div className="hidden lg:flex items-center justify-center h-full px-8 border-2 border-dashed border-gray-100 rounded-xl">
-                  <span className="text-gray-400 text-sm font-medium italic">No customer selected</span>
-                </div>
-              )}
-            </div>
+            <CustomerBalanceStrip
+              customer={selectedCustomer}
+              canViewBalance={hasPermission(PERMISSIONS.VIEW_CUSTOMER_BALANCE)}
+              balanceOverride={currentBalanceNum}
+              creditLimitOverride={
+                selectedCustomer?.creditLimit ??
+                selectedCustomer?.credit_limit ??
+                customerWithBalance?.creditLimit ??
+                customerWithBalance?.credit_limit
+              }
+            />
           </div>
         </div>
 
@@ -1832,81 +1685,31 @@ export const Sales = ({ tabId, editData }) => {
                   </Button>
                 )}
                 <div className="flex items-center space-x-2">
-                  {hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) && (
-                    <Button
-                      type="button"
-                      onClick={() => setShowCostPrice((prev) => !prev)}
-                      variant="secondary"
-                      size="sm"
-                      className="flex items-center space-x-2"
-                      title={showCostPrice ? "Hide buying price (cost)" : "Show buying price (cost)"}
-                    >
-                      {showCostPrice ? (
-                        <>
-                          <EyeOff className="h-4 w-4" />
-                          <span>Hide Cost</span>
-                        </>
-                      ) : (
-                        <>
-                          <Eye className="h-4 w-4" />
-                          <span>Show Cost</span>
-                        </>
-                      )}
-                    </Button>
-                  )}
-                  {hasPermission(PERMISSIONS.VIEW_BP) && (
-                    <>
-                      <Button
-                        type="button"
-                        onClick={() => setShowProfit((prev) => !prev)}
-                        variant="secondary"
-                        size="sm"
-                        className="flex items-center space-x-2"
-                        title="Show estimated profit (BP)"
-                      >
-                        <Calculator className="h-4 w-4" />
-                        <span>{showProfit ? 'Hide BP' : 'Show BP'}</span>
-                      </Button>
-                      {showProfit && (
-                        <span className={`text-sm font-semibold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {new Intl.NumberFormat('en-US', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          }).format(totalProfit || 0)}
-                        </span>
-                      )}
-                    </>
-                  )}
+                  <CostPriceToggleButton
+                    canView={hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS)}
+                    enabled={showCostPrice}
+                    onToggle={setShowCostPrice}
+                    title={showCostPrice ? "Hide buying price (cost)" : "Show buying price (cost)"}
+                  />
+                  <ProfitToggleButton
+                    canView={hasPermission(PERMISSIONS.VIEW_BP)}
+                    enabled={showProfit}
+                    onToggle={setShowProfit}
+                    totalProfit={totalProfit}
+                    showProfitValue
+                  />
                 </div>
               </div>
-              {hasPermission(PERMISSIONS.APPLY_LAST_PRICES) && selectedCustomer && cart.length > 0 && (
-                <>
-                  {!isLastPricesApplied ? (
-                    <LoadingButton
-                      onClick={handleApplyLastPrices}
-                      isLoading={isLoadingLastPrices}
-                      variant="secondary"
-                      size="sm"
-                      title="Apply prices from last order for this customer"
-                    >
-                      <History className="h-4 w-4 mr-2" />
-                      Apply Last Prices
-                    </LoadingButton>
-                  ) : (
-                    <LoadingButton
-                      onClick={handleRestoreCurrentPrices}
-                      isLoading={isRestoringPrices}
-                      variant="secondary"
-                      size="sm"
-                      className="flex items-center space-x-2"
-                      title="Restore original/current prices"
-                    >
-                      <RotateCcw className="h-4 w-4" />
-                      <span>Restore Current Prices</span>
-                    </LoadingButton>
-                  )}
-                </>
-              )}
+              <ApplyLastPricesButton
+                canApply={hasPermission(PERMISSIONS.APPLY_LAST_PRICES)}
+                hasCustomer={!!selectedCustomer}
+                hasItems={cart.length > 0}
+                isApplied={isLastPricesApplied}
+                isApplying={isLoadingLastPrices}
+                isRestoring={isRestoringPrices}
+                onApply={handleApplyLastPrices}
+                onRestore={handleRestoreCurrentPrices}
+              />
             </>
           }
           searchSection={
@@ -1938,21 +1741,7 @@ export const Sales = ({ tabId, editData }) => {
           <CartItemsTableSection
             className="pt-2"
             topContent={isLastPricesApplied && Object.keys(priceStatus).length > 0 ? (
-              <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 mb-3 text-xs">
-                <span className="text-gray-600 font-medium">Price Status:</span>
-                <div className="flex items-center space-x-1">
-                  <CheckCircle className="h-3 w-3 text-green-600" />
-                  <span className="text-gray-600">Updated</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <Info className="h-3 w-3 text-blue-600" />
-                  <span className="text-gray-600">Same Price</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <AlertCircle className="h-3 w-3 text-yellow-600" />
-                  <span className="text-gray-600">Not in Last Order</span>
-                </div>
-              </div>
+              <LastPricesStatusLegend className="mb-3" />
             ) : null}
             desktopHeader={null}
           >
@@ -1992,28 +1781,21 @@ export const Sales = ({ tabId, editData }) => {
                       <div className="md:hidden mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1 min-w-0 flex items-center gap-3">
-                            {item.product?.imageUrl && showProductImages && (
-                              <div
-                                className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                            {showProductImages && (
+                              <LineItemThumbnail
+                                src={item.product?.imageUrl}
+                                size="md"
                                 onClick={() => setPreviewImageProduct(item.product)}
-                                title="Click to view full size"
-                              >
-                                <img src={item.product.imageUrl} alt="" crossOrigin="anonymous" className="h-full w-full object-cover" />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
-                                  <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                              </div>
+                                crossOrigin="anonymous"
+                              />
                             )}
                             <div className="flex flex-col min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <span
-                                  className={`text-xs font-semibold px-2 py-0.5 rounded transition-colors duration-300 ${serialHighlight
-                                    ? 'bg-green-100 text-green-800 border border-green-400 ring-2 ring-green-300/80'
-                                    : 'text-gray-500 bg-gray-100'
-                                    }`}
-                                >
-                                  #{index + 1}
-                                </span>
+                                <LineItemSerial
+                                  index={index}
+                                  highlight={serialHighlight}
+                                  variant="mobile"
+                                />
                                 <span className="font-medium text-sm truncate">
                                   {item.product.isVariant
                                     ? (item.product.displayName || item.product.variantName || item.product.name)
@@ -2034,84 +1816,39 @@ export const Sales = ({ tabId, editData }) => {
                                       ⚠️ Loss
                                     </span>
                                   )}
-                                {isLastPricesApplied && priceStatus[item.product._id] && (
-                                  <span className={`text-xs px-1.5 py-0.5 rounded ${priceStatus[item.product._id] === 'updated'
-                                    ? 'bg-green-100 text-green-700'
-                                    : priceStatus[item.product._id] === 'unchanged'
-                                      ? 'bg-blue-100 text-blue-700'
-                                      : 'bg-yellow-100 text-yellow-700'
-                                    }`}>
-                                    {priceStatus[item.product._id] === 'updated'
-                                      ? 'Updated'
-                                      : priceStatus[item.product._id] === 'unchanged'
-                                        ? 'Same Price'
-                                        : 'Not in Last Order'}
-                                  </span>
+                                {isLastPricesApplied && (
+                                  <LineItemPriceStatusBadge status={priceStatus[item.product._id]} />
                                 )}
                               </div>
                             </div>
                           </div>
-                          <LoadingButton
+                          <LineItemRemoveButton
                             onClick={() => removeFromCart(item.product._id)}
-                            isLoading={isRemovingFromCart[item.product._id]}
-                            variant="destructive"
-                            size="sm"
+                            loading={isRemovingFromCart[item.product._id]}
                             className="h-8 w-8 p-0 flex-shrink-0 ml-2"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </LoadingButton>
+                          />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           {hasDualUnit(item.product) && dualUnitShowBoxInputEnabled && (
                             <div>
                               <label className="block text-xs font-medium text-gray-500 mb-1">Box</label>
-                              {(() => {
-                                const ppb = getPiecesPerBox(item.product);
-                                const boxVal =
-                                  item.boxes != null
-                                    ? item.boxes
-                                    : ppb
-                                      ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
-                                      : 0;
-                                return (
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={item.quantity === 0 ? '' : boxVal}
-                                    onChange={(e) =>
-                                      updateCartBoxCount(item.product._id, e.target.value)
-                                    }
-                                    onFocus={(e) => e.target.select()}
-                                    className={`text-sm font-semibold w-full rounded border px-2 py-1 text-center focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(item.product.inventory?.currentStock || 0) === 0
-                                      ? 'text-red-700 bg-red-50 border-red-200'
-                                      : (item.product.inventory?.currentStock || 0) <=
-                                        (item.product.inventory?.reorderPoint || 0)
-                                        ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                                        : 'text-gray-700 bg-gray-100 border-gray-200'
-                                      }`}
-                                    title="Full boxes"
-                                  />
-                                );
-                              })()}
+                              <LineItemBoxInputCell
+                                product={item.product}
+                                item={item}
+                                onChange={(value) => updateCartBoxCount(item.product._id, value)}
+                              />
                             </div>
                           )}
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">Stock</label>
-                            <span className={`text-sm font-semibold px-2 py-1 rounded border block text-center ${(item.product.inventory?.currentStock || 0) === 0
-                              ? 'text-red-700 bg-red-50 border-red-200'
-                              : (item.product.inventory?.currentStock || 0) <= (item.product.inventory?.reorderPoint || 0)
-                                ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
-                                : 'text-gray-700 bg-gray-100 border-gray-200'
-                              }`}>
-                              {item.product.inventory?.currentStock || 0}
-                            </span>
+                            <LineItemStockCell
+                              currentStock={item.product.inventory?.currentStock}
+                              reorderPoint={item.product.inventory?.reorderPoint}
+                            />
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">Total</label>
-                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center">
-                              {Math.round(totalPrice)}
-                            </span>
+                            <LineItemTotalCell value={Math.round(totalPrice)} />
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
@@ -2178,29 +1915,17 @@ export const Sales = ({ tabId, editData }) => {
                         >
                           {/* Serial Number - 1 column */}
                           <div className="min-w-0 flex justify-start">
-                            <span
-                              className={`text-sm font-medium px-0.5 py-1 rounded border block w-8 text-center h-8 flex items-center justify-center transition-colors duration-300 ${serialHighlight
-                                ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
-                                : 'text-gray-700 bg-gray-50 border-gray-200'
-                                }`}
-                            >
-                              {index + 1}
-                            </span>
+                            <LineItemSerial index={index} highlight={serialHighlight} />
                           </div>
 
                           {/* Product Name - mirror Sales Order layout (6 columns normally, 5 when cost column shown) */}
                           <div className="min-w-0 flex items-center h-8 gap-2">
-                            {item.product?.imageUrl && showProductImages && (
-                              <div
-                                className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                            {showProductImages && (
+                              <LineItemThumbnail
+                                src={item.product?.imageUrl}
                                 onClick={() => setPreviewImageProduct(item.product)}
-                                title="Click to view full size"
-                              >
-                                <img src={item.product.imageUrl} alt="" crossOrigin="anonymous" className="h-full w-full object-cover shadow-sm" />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
-                                  <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                              </div>
+                                crossOrigin="anonymous"
+                              />
                             )}
                             <div className="flex flex-col min-w-0 w-full">
                               <div className="flex items-center gap-2 min-w-0">
@@ -2223,19 +1948,11 @@ export const Sales = ({ tabId, editData }) => {
                                       ⚠️ Loss
                                     </span>
                                   )}
-                                {isLastPricesApplied && priceStatus[item.product._id] && (
-                                  <span className={`text-xs px-1.5 py-0.5 rounded whitespace-nowrap ${priceStatus[item.product._id] === 'updated'
-                                    ? 'bg-green-100 text-green-700'
-                                    : priceStatus[item.product._id] === 'unchanged'
-                                      ? 'bg-blue-100 text-blue-700'
-                                      : 'bg-yellow-100 text-yellow-700'
-                                    }`}>
-                                    {priceStatus[item.product._id] === 'updated'
-                                      ? 'Updated'
-                                      : priceStatus[item.product._id] === 'unchanged'
-                                        ? 'Same Price'
-                                        : 'Not in Last Order'}
-                                  </span>
+                                {isLastPricesApplied && (
+                                  <LineItemPriceStatusBadge
+                                    status={priceStatus[item.product._id]}
+                                    className="whitespace-nowrap"
+                                  />
                                 )}
                               </div>
                               {item.product.isVariant && (
@@ -2249,56 +1966,20 @@ export const Sales = ({ tabId, editData }) => {
                           {/* Box — dual-unit boxes only; hidden fully when box input setting is off */}
                           {dualUnitShowBoxInputEnabled && (
                             <div className="min-w-0">
-                              {hasDualUnit(item.product) ? (
-                                (() => {
-                                  const ppb = getPiecesPerBox(item.product);
-                                  const boxVal =
-                                    item.boxes != null
-                                      ? item.boxes
-                                      : ppb
-                                        ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
-                                        : 0;
-                                  return (
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      value={item.quantity === 0 ? '' : boxVal}
-                                      onChange={(e) =>
-                                        updateCartBoxCount(item.product._id, e.target.value)
-                                      }
-                                      onFocus={(e) => e.target.select()}
-                                      className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(item.product.inventory?.currentStock || 0) === 0
-                                        ? 'text-red-700 bg-red-50 border-red-200'
-                                        : (item.product.inventory?.currentStock || 0) <=
-                                          (item.product.inventory?.reorderPoint || 0)
-                                          ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                                          : 'text-gray-700 bg-gray-100 border-gray-200'
-                                        }`}
-                                      title="Full boxes"
-                                    />
-                                  );
-                                })()
-                              ) : (
-                                <span
-                                  className="text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200"
-                                  title="Not applicable"
-                                >
-                                  —
-                                </span>
-                              )}
+                              <LineItemBoxInputCell
+                                product={item.product}
+                                item={item}
+                                onChange={(value) => updateCartBoxCount(item.product._id, value)}
+                              />
                             </div>
                           )}
 
                           {/* Stock - 1 column */}
                           <div className="min-w-0">
-                            <span className={`text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center ${(item.product.inventory?.currentStock || 0) === 0
-                              ? 'text-red-700 bg-red-50 border-red-200'
-                              : (item.product.inventory?.currentStock || 0) <= (item.product.inventory?.reorderPoint || 0)
-                                ? 'text-yellow-700 bg-yellow-50 border-yellow-200'
-                                : 'text-gray-700 bg-gray-100 border-gray-200'
-                              }`}>
-                              {item.product.inventory?.currentStock || 0}
-                            </span>
+                            <LineItemStockCell
+                              currentStock={item.product.inventory?.currentStock}
+                              reorderPoint={item.product.inventory?.reorderPoint}
+                            />
                           </div>
 
                           {/* Quantity */}
@@ -2349,16 +2030,9 @@ export const Sales = ({ tabId, editData }) => {
                                   onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
                                   onFocus={(e) => e.target.select()}
                                   className={`text-center h-8 ${
-                                    // Check if sale price is less than cost price - highest priority styling (always check)
                                     isBelowCost
                                       ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
-                                      : priceStatus[item.product._id] === 'updated'
-                                        ? 'bg-green-50 border-green-300 ring-1 ring-green-200'
-                                        : priceStatus[item.product._id] === 'not-found'
-                                          ? 'bg-yellow-50 border-yellow-300 ring-1 ring-yellow-200'
-                                          : priceStatus[item.product._id] === 'unchanged'
-                                            ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200'
-                                            : ''
+                                      : priceStatusInputClasses(priceStatus[item.product._id])
                                     }`}
                                   min="0"
                                   title={
@@ -2369,48 +2043,22 @@ export const Sales = ({ tabId, editData }) => {
                                 />
                               );
                             })()}
-                            {isLastPricesApplied && priceStatus[item.product._id] && (
-                              <div
-                                className="absolute -right-7 top-1/2 transform -translate-y-1/2 flex items-center z-10"
-                                title={
-                                  priceStatus[item.product._id] === 'updated'
-                                    ? 'Price updated from last order'
-                                    : priceStatus[item.product._id] === 'unchanged'
-                                      ? 'Price same as last order'
-                                      : 'Product not found in previous order'
-                                }
-                              >
-                                {priceStatus[item.product._id] === 'updated' && (
-                                  <CheckCircle className="h-4 w-4 text-green-600 bg-white rounded-full" />
-                                )}
-                                {priceStatus[item.product._id] === 'unchanged' && (
-                                  <Info className="h-4 w-4 text-blue-600 bg-white rounded-full" />
-                                )}
-                                {priceStatus[item.product._id] === 'not-found' && (
-                                  <AlertCircle className="h-4 w-4 text-yellow-600 bg-white rounded-full" />
-                                )}
-                              </div>
+                            {isLastPricesApplied && (
+                              <LineItemPriceStatusIcon status={priceStatus[item.product._id]} />
                             )}
                           </div>
 
                           {/* Total - 1 column */}
                           <div className="min-w-0">
-                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block w-full min-w-0 text-center h-8 flex items-center justify-center">
-                              {Math.round(totalPrice)}
-                            </span>
+                            <LineItemTotalCell value={Math.round(totalPrice)} />
                           </div>
 
                           {/* Delete Button - 1 column */}
                           <div className="min-w-0 flex justify-end">
-                            <LoadingButton
+                            <LineItemRemoveButton
                               onClick={() => removeFromCart(item.product._id)}
-                              isLoading={isRemovingFromCart[item.product._id]}
-                              variant="destructive"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </LoadingButton>
+                              loading={isRemovingFromCart[item.product._id]}
+                            />
                           </div>
                         </div>
                       </div>
@@ -2461,55 +2109,27 @@ export const Sales = ({ tabId, editData }) => {
                     </div>
 
                     {/* Invoice Number */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-xs font-medium text-gray-700">
-                          Invoice Number
-                        </label>
-                        <label
-                          htmlFor="autoGenerateInvoiceMobile"
-                          className="flex items-center space-x-1 text-xs text-gray-600 cursor-pointer select-none"
-                        >
-                          <Input
-                            type="checkbox"
-                            id="autoGenerateInvoiceMobile"
-                            checked={autoGenerateInvoice}
-                            onChange={(e) => {
-                              setAutoGenerateInvoice(e.target.checked);
-                              if (e.target.checked && selectedCustomer) {
-                                setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
-                              }
-                            }}
-                            className="h-3.5 w-3.5 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                          />
-                          <span>Auto-generate</span>
-                        </label>
-                      </div>
-                      <div className="relative">
-                        <Input
-                          type="text"
-                          autoComplete="off"
-                          value={invoiceNumber}
-                          onChange={(e) => setInvoiceNumber(e.target.value)}
-                          className="w-full pr-20 h-10 text-sm"
-                          placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
-                          disabled={autoGenerateInvoice}
-                        />
-                        {autoGenerateInvoice && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (selectedCustomer) {
-                                setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
-                              }
-                            }}
-                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-primary-600 hover:text-primary-800 font-medium"
-                          >
-                            Regenerate
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                    <DocumentNumberField
+                      id="autoGenerateInvoiceMobile"
+                      label="Invoice Number"
+                      manualPlaceholder="Enter invoice number"
+                      autoGenerate={autoGenerateInvoice}
+                      onAutoGenerateChange={(checked) => {
+                        setAutoGenerateInvoice(checked);
+                        if (checked && selectedCustomer) {
+                          setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
+                        }
+                      }}
+                      value={invoiceNumber}
+                      onChange={setInvoiceNumber}
+                      onRegenerate={() => {
+                        if (selectedCustomer) {
+                          setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
+                        }
+                      }}
+                      containerClassName=""
+                      inputClassName="w-full pr-20 h-10 text-sm"
+                    />
 
                     {/* Bill Date (for backdating) */}
                     <div>
@@ -2526,20 +2146,11 @@ export const Sales = ({ tabId, editData }) => {
                       />
                     </div>
 
-                    {/* Notes */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Notes
-                      </label>
-                      <Input
-                        type="text"
-                        autoComplete="off"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        className="h-10 text-sm w-full"
-                        placeholder="Additional notes..."
-                      />
-                    </div>
+                    <OrderNotesField
+                      value={notes}
+                      onChange={setNotes}
+                      density="comfortable"
+                    />
                   </div>
                 )}
 
@@ -2564,55 +2175,25 @@ export const Sales = ({ tabId, editData }) => {
                     </div>
 
                     {/* Invoice Number */}
-                    <div className="flex flex-col w-72">
-                      <div className="flex items-center gap-3 mb-1">
-                        <label className="block text-xs font-medium text-gray-700 m-0">
-                          Invoice Number
-                        </label>
-                        <label
-                          htmlFor="autoGenerateInvoice"
-                          className="flex items-center space-x-1 text-[11px] text-gray-600 cursor-pointer select-none"
-                        >
-                          <Input
-                            type="checkbox"
-                            id="autoGenerateInvoice"
-                            checked={autoGenerateInvoice}
-                            onChange={(e) => {
-                              setAutoGenerateInvoice(e.target.checked);
-                              if (e.target.checked && selectedCustomer) {
-                                setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
-                              }
-                            }}
-                            className="h-3 w-3 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                          />
-                          <span>Auto-generate</span>
-                        </label>
-                      </div>
-                      <div className="relative">
-                        <Input
-                          type="text"
-                          autoComplete="off"
-                          value={invoiceNumber}
-                          onChange={(e) => setInvoiceNumber(e.target.value)}
-                          className="w-full pr-16 h-8 text-sm"
-                          placeholder={autoGenerateInvoice ? 'Auto-generated' : 'Enter invoice number'}
-                          disabled={autoGenerateInvoice}
-                        />
-                        {autoGenerateInvoice && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (selectedCustomer) {
-                                setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
-                              }
-                            }}
-                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[11px] text-primary-600 hover:text-primary-800 font-medium"
-                          >
-                            Regenerate
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                    <DocumentNumberField
+                      id="autoGenerateInvoice"
+                      label="Invoice Number"
+                      manualPlaceholder="Enter invoice number"
+                      autoGenerate={autoGenerateInvoice}
+                      onAutoGenerateChange={(checked) => {
+                        setAutoGenerateInvoice(checked);
+                        if (checked && selectedCustomer) {
+                          setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
+                        }
+                      }}
+                      value={invoiceNumber}
+                      onChange={setInvoiceNumber}
+                      onRegenerate={() => {
+                        if (selectedCustomer) {
+                          setInvoiceNumber(generateInvoiceNumber(selectedCustomer));
+                        }
+                      }}
+                    />
 
                     {/* Bill Date (for backdating) - Desktop */}
                     <div className="flex flex-col w-44">
@@ -2629,19 +2210,10 @@ export const Sales = ({ tabId, editData }) => {
                       />
                     </div>
 
-                    {/* Notes */}
-                    <div className="flex min-w-0 flex-1 flex-col basis-[min(100%,20rem)]">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Notes
-                      </label>
-                      <Input
-                        type="text"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        className="h-8 w-full min-w-0 text-sm"
-                        placeholder="Additional notes..."
-                      />
-                    </div>
+                    <OrderNotesField
+                      value={notes}
+                      onChange={setNotes}
+                    />
                   </div>
                 )}
               </OrderDetailsSection>
@@ -2880,38 +2452,16 @@ export const Sales = ({ tabId, editData }) => {
                           <div className="flex flex-col">
                             <div className="flex items-center justify-between mb-1">
                               <label className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Payment</label>
-                              <select
-                                value={paymentMethod === 'bank' && selectedBankAccount ? `bank:${selectedBankAccount}` : paymentMethod}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  if (v.startsWith('bank:')) {
-                                    setPaymentMethod('bank');
-                                    setSelectedBankAccount(v.slice(5));
-                                  } else {
-                                    setPaymentMethod(v);
-                                    setSelectedBankAccount('');
-                                  }
+                              <PaymentMethodSelect
+                                value={paymentMethod}
+                                bankAccountId={selectedBankAccount}
+                                banks={activeBanks}
+                                showSelectBankPlaceholder
+                                onChange={(method, bankId) => {
+                                  setPaymentMethod(method);
+                                  setSelectedBankAccount(bankId);
                                 }}
-                                className="border-none bg-transparent p-0 text-[10px] font-bold text-primary-600 focus:ring-0 cursor-pointer max-w-[60px] overflow-hidden text-ellipsis"
-                              >
-                                <option value="cash">Cash</option>
-                                <option value="bank" disabled>
-                                  Select Bank
-                                </option>
-                                <optgroup label="Banks">
-                                  {activeBanks.map((bank) => {
-                                    const bid = bank._id || bank.id;
-                                    if (!bid) return null;
-                                    const label = [bank.bankName, bank.accountNumber].filter(Boolean).join(' - ');
-                                    return <option key={bid} value={`bank:${bid}`}>{label}</option>;
-                                  })}
-                                </optgroup>
-                                <option value="credit_card">Card</option>
-                                <option value="debit_card">Debit</option>
-                                <option value="check">Check</option>
-                                <option value="account">Acc</option>
-                                <option value="split">Split</option>
-                              </select>
+                              />
                             </div>
                             <Input
                               type="number"
@@ -3433,24 +2983,10 @@ export const Sales = ({ tabId, editData }) => {
         partyLabel="Customer"
       />
 
-      {/* Product Image Preview Modal */}
-      <BaseModal
-        isOpen={!!previewImageProduct}
+      <ProductImagePreviewModal
+        product={previewImageProduct}
         onClose={() => setPreviewImageProduct(null)}
-        title={previewImageProduct?.displayName || previewImageProduct?.variantName || previewImageProduct?.name || 'Product Image'}
-      >
-        <div className="flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden min-h-[300px] p-4">
-          {previewImageProduct?.imageUrl ? (
-            <img
-              src={previewImageProduct.imageUrl}
-              alt="Product Preview"
-              className="max-w-full max-h-[70vh] object-contain"
-            />
-          ) : (
-            <div className="text-gray-400">No image available</div>
-          )}
-        </div>
-      </BaseModal>
+      />
 
     </AsyncErrorBoundary>
   );

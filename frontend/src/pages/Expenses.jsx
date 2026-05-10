@@ -40,6 +40,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import RecurringExpensesPanel from '../components/RecurringExpensesPanel';
 import { getLocalDateString } from '../utils/dateUtils';
+import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
+import { useDeleteConfirmation } from '../hooks/useConfirmation';
 
 const today = getLocalDateString();
 
@@ -55,6 +57,12 @@ const defaultFormState = {
 };
 
 const Expenses = () => {
+  const {
+    confirmation: deleteConfirmation,
+    confirmDelete,
+    handleConfirm: handleDeleteConfirm,
+    handleCancel: handleDeleteCancel,
+  } = useDeleteConfirmation();
   const [formData, setFormData] = useState(defaultFormState);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [recentExpenses, setRecentExpenses] = useState([]);
@@ -413,24 +421,25 @@ const Expenses = () => {
     }
   };
 
-  const handleDeleteExpense = async (expense) => {
-    const confirmed = window.confirm('Are you sure you want to delete this expense entry?');
-    if (!confirmed) return;
-
-    try {
-      if (expense.source === 'bank') {
-        await deleteBankPayment(expense._id).unwrap();
-      } else {
-        await deleteCashPayment(expense._id).unwrap();
+  const handleDeleteExpense = (expense) => {
+    const label = expense?.voucherCode || expense?.payment_number || expense?.particular || `${expense?._id || 'this expense'}`;
+    confirmDelete(label, 'Expense', async () => {
+      try {
+        if (expense.source === 'bank') {
+          await deleteBankPayment(expense._id).unwrap();
+        } else {
+          await deleteCashPayment(expense._id).unwrap();
+        }
+        setRecentExpenses((prev) => prev.filter((item) => item._id !== expense._id));
+        showSuccessToast('Expense deleted successfully');
+        if (editingExpense?._id === expense._id) {
+          resetForm();
+        }
+      } catch (error) {
+        showErrorToast(handleApiError(error));
+        throw error;
       }
-      setRecentExpenses((prev) => prev.filter((item) => item._id !== expense._id));
-      showSuccessToast('Expense deleted successfully');
-      if (editingExpense?._id === expense._id) {
-        resetForm();
-      }
-    } catch (error) {
-      showErrorToast(handleApiError(error));
-    }
+    });
   };
 
   const openExpenseDocument = (expense, { print = false } = {}) => {
@@ -965,6 +974,15 @@ const Expenses = () => {
           }}
         />
       </div>
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmation.isOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        itemName={deleteConfirmation.message?.match(/"([^"]*)"/)?.[1] || ''}
+        itemType="Expense"
+        isLoading={deleteConfirmation.isLoading}
+      />
     </div>
   );
 };

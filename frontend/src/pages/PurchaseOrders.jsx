@@ -21,16 +21,25 @@ import {
   Save,
   RotateCcw,
   RefreshCw,
-  Phone,
   Receipt,
   Printer,
   ArrowUpDown,
-  Camera,
   MoreHorizontal,
   FileSpreadsheet,
 } from 'lucide-react';
-import BaseModal from '../components/BaseModal';
 import { DuplicateLineItemMergeModal } from '../components/order/DuplicateLineItemMergeModal';
+import { ProductImagePreviewModal } from '../components/order/ProductImagePreviewModal';
+import { EntityStatusBadge } from '../components/order/EntityStatusBadge';
+import { SupplierPartySelect, SupplierSummaryStrip } from '../components/order/SupplierPartySelect';
+import {
+  LineItemSerial,
+  LineItemThumbnail,
+  LineItemTotalCell,
+  LineItemRemoveButton,
+  LineItemBoxInputCell,
+} from '../components/order/CartLineItemAtoms';
+import { useListControls } from '../hooks/useListControls';
+import { formatPartyAddress as formatAddressForDisplay } from '../utils/partyDisplay';
 import PaginationControls from '../components/PaginationControls';
 import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
@@ -57,7 +66,6 @@ import {
   getItemConfirmationStatus,
 } from '../components/OrderItemConfirmationCell';
 import { useDebouncedPosProductSearch } from '../hooks/useDebouncedPosProductSearch';
-import { SearchableDropdown } from '../components/SearchableDropdown';
 import { ProductSearch as SharedSalesProductSearch } from '../components/sales/ProductSearch';
 import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
 import { hasDualUnit, getPiecesPerBox, piecesToBoxesAndPieces, formatStockDualLabel } from '../utils/dualUnitUtils';
@@ -91,6 +99,8 @@ import PrintModal from '../components/PrintModal';
 import BarcodeLabelPrinter from '../components/BarcodeLabelPrinter';
 import { buildReceiptLabelProductsFromLineItems } from '../utils/receiptLabelUtils';
 import { useResponsive } from '../components/ResponsiveContainer';
+import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
+import { useDeleteConfirmation } from '../hooks/useConfirmation';
 
 // Helper to get product display name (handles object with name/displayName or UUID string)
 const getProductDisplayName = (product) => {
@@ -126,24 +136,7 @@ function mergePurchaseOrderLine(existing, addQty, latestProductData) {
   };
 }
 
-// Format supplier/customer address for display (avoids showing raw JSON)
-const formatAddressForDisplay = (party) => {
-  if (!party) return '';
-  if (typeof party.address === 'string' && party.address.trim()) return party.address.trim();
-  const addrRaw = party.address ?? party.addresses;
-  if (Array.isArray(addrRaw) && addrRaw.length > 0) {
-    const a = addrRaw.find(x => x.isDefault) || addrRaw.find(x => x.type === 'billing' || x.type === 'both') || addrRaw[0];
-    const parts = [a.street || a.address_line1 || a.addressLine1 || a.line1 || a.address, a.city, a.state || a.province, a.country, a.zipCode || a.zip || a.postalCode || a.postal_code].filter(Boolean);
-    return parts.join(', ') || '—';
-  }
-  if (addrRaw && typeof addrRaw === 'object' && !Array.isArray(addrRaw)) {
-    const parts = [addrRaw.street || addrRaw.address_line1 || addrRaw.addressLine1 || addrRaw.line1 || addrRaw.address, addrRaw.city, addrRaw.state || addrRaw.province, addrRaw.country, addrRaw.zipCode || addrRaw.zip || addrRaw.postalCode || addrRaw.postal_code].filter(Boolean);
-    return parts.join(', ') || '—';
-  }
-  if (typeof party.location === 'string' && party.location.trim()) return party.location.trim();
-  if (typeof party.companyAddress === 'string' && party.companyAddress.trim()) return party.companyAddress.trim();
-  return '';
-};
+// Address formatting moved to utils/partyDisplay.js (imported at top)
 
 // Helper function to safely render values (supports both camelCase and snake_case)
 const safeRender = (value) => {
@@ -169,26 +162,9 @@ const safeRender = (value) => {
   return String(value);
 };
 
-const StatusBadge = ({ status }) => {
-  const statusConfig = {
-    draft: { color: 'bg-gray-100 text-gray-800', icon: FileText, label: 'Pending' },
-    confirmed: { color: 'bg-blue-100 text-blue-800', icon: CheckCircle, label: 'Confirmed' },
-    partially_received: { color: 'bg-yellow-100 text-yellow-800', icon: Clock, label: 'Partially Received' },
-    fully_received: { color: 'bg-green-100 text-green-800', icon: CheckCircle, label: 'Fully Received' },
-    cancelled: { color: 'bg-red-100 text-red-800', icon: XCircle, label: 'Cancelled' },
-    closed: { color: 'bg-gray-100 text-gray-800', icon: XCircle, label: 'Closed' }
-  };
-
-  const config = statusConfig[status] || statusConfig.draft;
-  const Icon = config.icon;
-
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
-      <Icon className="h-3 w-3 mr-1" />
-      {config.label}
-    </span>
-  );
-};
+const StatusBadge = ({ status }) => (
+  <EntityStatusBadge type="purchase_order" status={status} />
+);
 
 const PurchaseOrderCard = ({ po, onEdit, onDelete, onConfirm, onCancel, onClose, onView, onConvert }) => (
   <div className="card hover:shadow-lg transition-shadow">
@@ -356,6 +332,12 @@ export const PurchaseOrders = ({ tabId }) => {
   } = useSensitiveDataPermissions();
   const { updateTabTitle, getActiveTab, openTab } = useTab();
   const { isMobile } = useResponsive();
+  const {
+    confirmation: deleteConfirmation,
+    confirmDelete,
+    handleConfirm: handleDeleteConfirm,
+    handleCancel: handleDeleteCancel,
+  } = useDeleteConfirmation();
   const { companyInfo: companySettings } = useCompanyInfo();
   const resolvedCompanyName = companySettings.companyName || 'Company Name';
   const itemWiseConfirmationEnabled = companySettings.orderSettings?.purchaseOrderItemWiseConfirmation !== false;
@@ -371,21 +353,23 @@ export const PurchaseOrders = ({ tabId }) => {
   const fromDateDefault = getDateDaysAgo(14);
 
   // State for filters and pagination
-  const [filters, setFilters] = useState({
-    fromDate: fromDateDefault, // 14 days ago
-    toDate: today, // Today
-    poNumber: '',
-    status: ''
-  });
-
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 50
-  });
-
-  const [sortConfig, setSortConfig] = useState({
-    key: 'createdAt',
-    direction: 'desc'
+  // State for filters / pagination / sort lives in `useListControls`.
+  const {
+    filters,
+    setFilters,
+    pagination,
+    setPagination,
+    sortConfig,
+    setFilter: handleFilterChange,
+    toggleSort: handleSort,
+  } = useListControls({
+    initialFilters: {
+      fromDate: fromDateDefault, // 14 days ago
+      toDate: today, // Today
+      poNumber: '',
+      status: '',
+    },
+    initialSort: { key: 'createdAt', direction: 'desc' },
   });
 
   // State for modals
@@ -680,22 +664,6 @@ export const PurchaseOrders = ({ tabId }) => {
         updateTabTitle(activeTab.id, 'PO');
       }
     }
-  };
-
-  const supplierDisplayKey = (supplier) => {
-    return (
-      <div>
-        <div className="font-medium">{supplier.companyName || supplier.company_name || supplier.businessName || supplier.displayName || supplier.name || 'Unknown'}</div>
-        {supplier.name && supplier.name !== (supplier.companyName || supplier.company_name || supplier.businessName || supplier.displayName) && (
-          <div className="text-xs text-gray-500">{supplier.name}</div>
-        )}
-        {canViewSupplierBalance && (
-          <div className="text-sm text-gray-600">
-            Outstanding Balance: {(Number(supplier.pendingBalance ?? supplier.outstandingBalance ?? 0) || 0).toFixed(2)}
-          </div>
-        )}
-      </div>
-    );
   };
 
   const handleSupplierSelect = (supplier) => {
@@ -1047,17 +1015,6 @@ export const PurchaseOrders = ({ tabId }) => {
     return { subtotal, tax, total, supplierOutstanding, totalPayables };
   };
 
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-    setPagination(prev => ({ ...prev, page: 1 }));
-  };
-
-  const handleSort = (key) => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  };
 
   const handleCreate = () => {
     if (formData.items.length === 0) {
@@ -1184,18 +1141,19 @@ export const PurchaseOrders = ({ tabId }) => {
       });
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this purchase order?')) {
-      deletePurchaseOrderMutation(id)
-        .unwrap()
-        .then(() => {
-          toast.success('Purchase order deleted successfully');
-          refetch();
-        })
-        .catch((error) => {
-          toast.error(error?.data?.message || 'Failed to delete purchase order');
-        });
-    }
+  const handleDelete = (idOrOrder) => {
+    const id = typeof idOrOrder === 'object' ? (idOrOrder?.id ?? idOrOrder?._id) : idOrOrder;
+    const label = (typeof idOrOrder === 'object' && (idOrOrder?.purchaseOrderNumber || idOrOrder?.orderNumber)) || `${id}`;
+    confirmDelete(label, 'Purchase Order', async () => {
+      try {
+        await deletePurchaseOrderMutation(id).unwrap();
+        toast.success('Purchase order deleted successfully');
+        refetch();
+      } catch (error) {
+        toast.error(error?.data?.message || 'Failed to delete purchase order');
+        throw error;
+      }
+    });
   };
 
   const handleConfirm = async (order) => {
@@ -1511,53 +1469,26 @@ export const PurchaseOrders = ({ tabId }) => {
                   </button>
                 )}
               </div>
-              <SearchableDropdown
-                className="[&_input]:h-8"
-                ref={supplierSearchRef}
-                placeholder="Search suppliers by name, email, or business..."
-                items={suppliers || []}
+              <SupplierPartySelect
+                innerRef={supplierSearchRef}
+                items={suppliers}
+                selectedItem={selectedSupplier}
                 onSelect={handleSupplierSelect}
                 onSearch={handleSupplierSearch}
-                displayKey={supplierDisplayKey}
-                selectedItem={selectedSupplier}
+                searchValue={supplierSearchTerm}
                 loading={suppliersLoading || suppliersFetching}
                 emptyMessage={supplierSearchTerm.length > 0 ? "No suppliers found" : "Start typing to search suppliers..."}
-                value={supplierSearchTerm}
+                canViewBalance={canViewSupplierBalance}
+                showSecondaryName
               />
             </div>
           </div>
 
-          <div className="lg:w-auto w-full lg:min-w-[360px] lg:max-w-xl lg:self-end">
-            {selectedSupplier ? (
-              <div className="bg-gray-50 border border-gray-200 rounded-xl h-8 px-2 flex items-center">
-                <div className="flex items-center gap-2 text-xs whitespace-nowrap overflow-hidden">
-                  <span className="font-bold text-gray-900 truncate">
-                    {selectedSupplier.companyName || selectedSupplier.company_name || selectedSupplier.businessName || selectedSupplier.business_name || selectedSupplier.displayName || selectedSupplier.name || 'Unknown'}
-                  </span>
-                  <span className="text-gray-400">|</span>
-                    <span className="text-gray-600 capitalize">
-                      {selectedSupplier.businessType || 'Wholesaler'}
-                    </span>
-                    <span className="text-gray-400">|</span>
-                    <span className="text-gray-500 uppercase font-semibold">Outstanding</span>
-                    <span className={`font-bold ${(Number(selectedSupplier.pendingBalance ?? selectedSupplier.outstandingBalance ?? 0) || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {(Number(selectedSupplier.pendingBalance ?? selectedSupplier.outstandingBalance ?? 0) || 0).toFixed(2)}
-                    </span>
-                    {selectedSupplier.phone && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-gray-400">|</span>
-                        <Phone className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                        <span className="text-xs text-gray-500">{selectedSupplier.phone}</span>
-                      </div>
-                    )}
-                </div>
-              </div>
-            ) : (
-              <div className="hidden lg:flex items-center justify-center h-full px-8 border-2 border-dashed border-gray-100 rounded-xl">
-                <span className="text-gray-400 text-sm font-medium italic">No supplier selected</span>
-              </div>
-            )}
-          </div>
+          <SupplierSummaryStrip
+            supplier={selectedSupplier}
+            canViewBalance
+            canViewPhone
+          />
         </div>
       </div>
 
@@ -1629,28 +1560,20 @@ export const PurchaseOrders = ({ tabId }) => {
                       <div className="md:hidden mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1 min-w-0 flex items-center gap-2">
-                            {product?.imageUrl && showProductImages && (
-                              <div
-                                className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                            {showProductImages && (
+                              <LineItemThumbnail
+                                src={product?.imageUrl}
+                                size="md"
                                 onClick={() => setPreviewImageProduct(product)}
-                                title="Click to view full size"
-                              >
-                                <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
-                                  <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                              </div>
+                              />
                             )}
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <span
-                                  className={`text-xs font-semibold px-2 py-0.5 rounded transition-colors duration-300 ${serialHighlight
-                                      ? 'bg-green-100 text-green-800 border border-green-400 ring-2 ring-green-300/80'
-                                      : 'text-gray-500 bg-gray-100'
-                                    }`}
-                                >
-                                  #{index + 1}
-                                </span>
+                                <LineItemSerial
+                                  index={index}
+                                  highlight={serialHighlight}
+                                  variant="mobile"
+                                />
                                 <span className="font-medium text-sm truncate">
                                   {product?.isVariant
                                     ? safeRender(product?.displayName || product?.variantName || product?.name || 'Unknown Variant')
@@ -1674,15 +1597,10 @@ export const PurchaseOrders = ({ tabId }) => {
                               </div>
                             </div>
                           </div>
-                          <Button
+                          <LineItemRemoveButton
                             onClick={() => handleRemoveItem(index)}
-                            variant="destructive"
-                            size="sm"
                             className="h-8 w-8 p-0 flex-shrink-0 ml-2"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
@@ -1695,9 +1613,7 @@ export const PurchaseOrders = ({ tabId }) => {
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">Total</label>
-                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center">
-                              {Math.round(totalPrice)}
-                            </span>
+                            <LineItemTotalCell value={Math.round(totalPrice)} />
                           </div>
                           <div className={hasDualUnit(product) ? 'col-span-2' : ''}>
                             <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
@@ -1786,29 +1702,16 @@ export const PurchaseOrders = ({ tabId }) => {
                         >
                           {/* Serial Number - 1 column (new field) */}
                           <div className="min-w-0 flex justify-start">
-                            <span
-                              className={`text-sm font-medium px-0.5 py-1 rounded border block w-8 text-center h-8 flex items-center justify-center transition-colors duration-300 ${serialHighlight
-                                  ? 'bg-green-100 text-green-800 border-green-400 ring-2 ring-green-300/80'
-                                  : 'text-gray-700 bg-gray-50 border-gray-200'
-                                }`}
-                            >
-                              {index + 1}
-                            </span>
+                            <LineItemSerial index={index} highlight={serialHighlight} />
                           </div>
 
                           {/* Product Name — col-span-4 so Qty can use 3 cols for dual units */}
                           <div className="min-w-0 flex items-center h-8 gap-2 pl-1">
-                            {product?.imageUrl && showProductImages && (
-                              <div
-                                className="h-8 w-8 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 cursor-pointer hover:border-primary-500 transition-colors group relative"
+                            {showProductImages && (
+                              <LineItemThumbnail
+                                src={product?.imageUrl}
                                 onClick={() => setPreviewImageProduct(product)}
-                                title="Click to view full size"
-                              >
-                                <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-colors">
-                                  <Camera className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                              </div>
+                              />
                             )}
                             <div className="flex flex-col min-w-0">
                               <span className="font-medium text-sm truncate">
@@ -1827,53 +1730,30 @@ export const PurchaseOrders = ({ tabId }) => {
 
                           {dualUnitShowBoxInputEnabled && (
                             <div className="min-w-0">
-                              {hasDualUnit(product) ? (
-                                (() => {
+                              <LineItemBoxInputCell
+                                product={product}
+                                item={item}
+                                inputComponent={Input}
+                                onChange={(rawValue) => {
                                   const ppb = getPiecesPerBox(product);
-                                  const boxVal =
-                                    item.boxes != null
-                                      ? item.boxes
-                                      : ppb
-                                        ? piecesToBoxesAndPieces(item.quantity, ppb).boxes
-                                        : 0;
-                                  return (
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      value={item.quantity === 0 ? '' : boxVal}
-                                      onChange={(e) => {
-                                        const newBoxes = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                        const currentPieces = piecesToBoxesAndPieces(item.quantity, ppb || 1).pieces;
-                                        const nextQty = (newBoxes * (ppb || 1)) + currentPieces;
-                                        setFormData(prev => ({
-                                          ...prev,
-                                          items: prev.items.map((itm, i) =>
-                                            i === index
-                                              ? {
-                                                ...itm,
-                                                boxes: newBoxes,
-                                                quantity: nextQty,
-                                                totalCost: nextQty * itm.costPerUnit
-                                              }
-                                              : itm
-                                          )
-                                        }));
-                                      }}
-                                      onFocus={(e) => e.target.select()}
-                                      className={`text-sm font-semibold w-full min-w-0 rounded border px-2 py-1 text-center h-8 focus:outline-none focus:ring-2 focus:ring-primary-500/35 ${(product.inventory?.currentStock || 0) === 0
-                                        ? 'text-red-700 bg-red-50 border-red-200'
-                                        : (product.inventory?.currentStock || 0) <= (product.inventory?.reorderPoint || 0)
-                                          ? 'text-yellow-800 bg-yellow-50 border-yellow-200'
-                                          : 'text-gray-700 bg-gray-100 border-gray-200'
-                                        }`}
-                                    />
-                                  );
-                                })()
-                              ) : (
-                                <span className="text-sm font-semibold px-2 py-1 rounded border block text-center h-8 flex items-center justify-center text-gray-400 bg-gray-50 border-gray-200">
-                                  —
-                                </span>
-                              )}
+                                  const newBoxes = Math.max(0, parseInt(rawValue, 10) || 0);
+                                  const currentPieces = piecesToBoxesAndPieces(item.quantity, ppb || 1).pieces;
+                                  const nextQty = (newBoxes * (ppb || 1)) + currentPieces;
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    items: prev.items.map((itm, i) =>
+                                      i === index
+                                        ? {
+                                          ...itm,
+                                          boxes: newBoxes,
+                                          quantity: nextQty,
+                                          totalCost: nextQty * itm.costPerUnit
+                                        }
+                                        : itm
+                                    )
+                                  }));
+                                }}
+                              />
                             </div>
                           )}
 
@@ -1943,22 +1823,14 @@ export const PurchaseOrders = ({ tabId }) => {
 
                           {/* Total - 1 column (matches Product Selection Amount) */}
                           <div className="min-w-0">
-                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block w-full min-w-0 text-center h-8 flex items-center justify-center">
-                              {Number.isFinite(totalPrice) ? totalPrice.toFixed(2) : '0.00'}
-                            </span>
+                            <LineItemTotalCell
+                              value={Number.isFinite(totalPrice) ? totalPrice.toFixed(2) : '0.00'}
+                            />
                           </div>
 
                           {/* Delete Button - 1 column (matches Product Selection Add Button) */}
                           <div className="min-w-0 flex justify-end">
-                            <Button
-                              onClick={() => handleRemoveItem(index)}
-                              variant="destructive"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <LineItemRemoveButton onClick={() => handleRemoveItem(index)} />
                           </div>
                         </div>
                       </div>
@@ -3046,7 +2918,7 @@ export const PurchaseOrders = ({ tabId }) => {
                                     )}
                                     {(order.status === 'draft' || order.status === 'cancelled' || order.status === 'confirmed' || order.status === 'partially_received' || !order.supplier) && (
                                       <button
-                                        onClick={() => handleDelete(order.id || order._id)}
+                                        onClick={() => handleDelete(order)}
                                         className="text-red-600 hover:text-red-900"
                                         title="Delete"
                                       >
@@ -3402,24 +3274,19 @@ export const PurchaseOrders = ({ tabId }) => {
         confirmText="Update quantity"
       />
 
-      {/* Product Image Preview Modal */}
-      <BaseModal
-        isOpen={!!previewImageProduct}
+      <ProductImagePreviewModal
+        product={previewImageProduct}
         onClose={() => setPreviewImageProduct(null)}
-        title={previewImageProduct?.displayName || previewImageProduct?.variantName || previewImageProduct?.name || 'Product Image'}
-      >
-        <div className="flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden min-h-[300px] p-4">
-          {previewImageProduct?.imageUrl ? (
-            <img
-              src={previewImageProduct.imageUrl}
-              alt="Product Preview"
-              className="max-w-full max-h-[70vh] object-contain"
-            />
-          ) : (
-            <div className="text-gray-400">No image available</div>
-          )}
-        </div>
-      </BaseModal>
+      />
+
+      <DeleteConfirmationDialog
+        isOpen={deleteConfirmation.isOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        itemName={deleteConfirmation.message?.match(/"([^"]*)"/)?.[1] || ''}
+        itemType="Purchase Order"
+        isLoading={deleteConfirmation.isLoading}
+      />
 
     </div>
   );
