@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { useTableRowVirtualizer, getVirtualTablePadding } from '../hooks/useTableRowVirtualizer';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { toast } from 'sonner';
@@ -91,16 +92,28 @@ export const Reports = () => {
     to: getCurrentDatePakistan()
   });
   const [selectedBankIds, setSelectedBankIds] = useState([]);
+  /** When true, report API calls append `nocache=1` so the backend skips the reports TTL cache (see reportsService.reportsCache). */
+  const [reportNoCache, setReportNoCache] = useState(false);
+
+  const reportNoCacheParams = reportNoCache ? { nocache: '1' } : {};
 
   const handleRefresh = () => {
-    refetchSummary();
-    if (activeTab === 'party-balance') refetchParty();
-    if (activeTab === 'sales') refetchSales();
-    if (activeTab === 'top-products') refetchProductReport();
-    if (activeTab === 'top-customers') refetchCustomerReport();
-    if (activeTab === 'inventory') refetchInventory();
-    if (activeTab === 'financial') refetchFinancial();
-    if (activeTab === 'bank-cash') refetchBankCash();
+    flushSync(() => {
+      setReportNoCache(true);
+    });
+
+    const promises = [refetchSummary()];
+    if (activeTab === 'party-balance') promises.push(refetchParty());
+    if (activeTab === 'sales') promises.push(refetchSales());
+    if (activeTab === 'top-products') promises.push(refetchProductReport());
+    if (activeTab === 'top-customers') promises.push(refetchCustomerReport());
+    if (activeTab === 'inventory') promises.push(refetchInventory());
+    if (activeTab === 'financial') promises.push(refetchFinancial());
+    if (activeTab === 'bank-cash') promises.push(refetchBankCash());
+
+    Promise.all(promises).finally(() => {
+      setReportNoCache(false);
+    });
   };
 
 
@@ -111,7 +124,8 @@ export const Reports = () => {
     refetch: refetchSummary
   } = useGetSummaryCardsQuery({
     dateFrom: dateRange.from,
-    dateTo: dateRange.to
+    dateTo: dateRange.to,
+    ...reportNoCacheParams
   });
 
   // Fetch Party Balance Report
@@ -120,7 +134,8 @@ export const Reports = () => {
     isLoading: partyLoading,
     refetch: refetchParty
   } = useGetPartyBalanceReportQuery({
-    partyType
+    partyType,
+    ...reportNoCacheParams
   }, {
     skip: activeTab !== 'party-balance'
   });
@@ -158,7 +173,8 @@ export const Reports = () => {
   } = useGetSalesReportQuery({
     dateFrom: dateRange.from,
     dateTo: dateRange.to,
-    groupBy: salesGroupBy
+    groupBy: salesGroupBy,
+    ...reportNoCacheParams
   }, {
     skip: activeTab !== 'sales'
   });
@@ -172,7 +188,8 @@ export const Reports = () => {
     dateTo: dateRange.to,
     limit: 100,
     ...(topProductsSupplierId.trim() ? { supplierId: topProductsSupplierId.trim() } : {}),
-    ...(topProductsSortBy === 'supplier' ? { sortBy: 'supplier' } : {})
+    ...(topProductsSortBy === 'supplier' ? { sortBy: 'supplier' } : {}),
+    ...reportNoCacheParams
   }, {
     skip: activeTab !== 'top-products'
   });
@@ -184,7 +201,8 @@ export const Reports = () => {
   } = useGetCustomerReportQuery({
     dateFrom: dateRange.from,
     dateTo: dateRange.to,
-    limit: 100
+    limit: 100,
+    ...reportNoCacheParams
   }, {
     skip: activeTab !== 'top-customers'
   });
@@ -199,7 +217,8 @@ export const Reports = () => {
     ...(debouncedInventoryProductSearch.trim() ? { search: debouncedInventoryProductSearch.trim() } : {}),
     ...(inventoryType === 'stock-summary' && { dateFrom: dateRange.from, dateTo: dateRange.to }),
     ...(inventorySupplierId.trim() ? { supplierId: inventorySupplierId.trim() } : {}),
-    ...(inventorySortBy === 'supplier' ? { sortBy: 'supplier' } : {})
+    ...(inventorySortBy === 'supplier' ? { sortBy: 'supplier' } : {}),
+    ...reportNoCacheParams
   }, {
     skip: activeTab !== 'inventory'
   });
@@ -218,7 +237,8 @@ export const Reports = () => {
   } = useGetFinancialReportQuery({
     dateFrom: dateRange.from,
     dateTo: dateRange.to,
-    type: financialType
+    type: financialType,
+    ...reportNoCacheParams
   }, {
     skip: activeTab !== 'financial'
   });
@@ -240,7 +260,8 @@ export const Reports = () => {
     refetch: refetchBankCash
   } = useGetBankCashSummaryQuery({
     ...bankCashDateParams,
-    ...(selectedBankIds.length ? { bankIds: selectedBankIds.join(',') } : {})
+    ...(selectedBankIds.length ? { bankIds: selectedBankIds.join(',') } : {}),
+    ...reportNoCacheParams
   }, {
     skip: activeTab !== 'bank-cash'
   });
@@ -530,6 +551,8 @@ export const Reports = () => {
             header: 'Customer',
             render: (row) =>
               row.customer?.businessName ||
+              row.customer?.business_name ||
+              row.customer?.name ||
               [row.customer?.firstName, row.customer?.lastName].filter(Boolean).join(' ') ||
               '—'
           },
@@ -955,7 +978,7 @@ export const Reports = () => {
           <button
             onClick={handleRefresh}
             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors h-10 w-10 flex items-center justify-center border border-gray-200 bg-white"
-            title="Refresh Data"
+            title="Refresh data (bypasses server report cache for ~90s TTL)"
           >
             <RefreshCcw className={`h-5 w-5 ${(summaryLoading || partyLoading || salesLoading || productReportLoading || customerReportLoading || inventoryLoading || financialLoading || bankCashLoading) ? 'animate-spin' : ''}`} />
           </button>

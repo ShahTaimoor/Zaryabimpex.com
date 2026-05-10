@@ -896,7 +896,8 @@ router.put('/:id', [
       const oldAmountPaid = parseFloat(order.amount_paid) || 0;
       const newAmountPaid = parseFloat(req.body.amountReceived) || 0;
       const paymentMethodForAdjustment = req.body.paymentMethod || order.payment_method || order.payment?.method || 'cash';
-      const bankIdForAdjustment = paymentMethodForAdjustment === 'bank'
+      const pmAdj = String(paymentMethodForAdjustment || 'cash').toLowerCase();
+      const bankIdForAdjustment = pmAdj === 'bank' || pmAdj === 'bank_transfer'
         ? (req.body.bankAccount || req.body.payment?.bankAccount || null)
         : null;
       if (Math.abs(newAmountPaid - oldAmountPaid) >= 0.01) {
@@ -909,6 +910,7 @@ router.put('/:id', [
             newAmountPaid,
             paymentMethod: paymentMethodForAdjustment,
             bankId: bankIdForAdjustment,
+            transactionDate: newSaleDate || new Date(),
             createdBy: req.user?.id || req.user?._id
           });
         } catch (ledgerErr) {
@@ -920,7 +922,8 @@ router.put('/:id', [
     // Keep sale-payment ledger bank mapping in sync even when amount does not change.
     if (req.body.paymentMethod !== undefined) {
       const paymentMethodForBankSync = req.body.paymentMethod || order.payment_method || order.payment?.method || 'cash';
-      const bankIdForBankSync = paymentMethodForBankSync === 'bank'
+      const pmSync = String(paymentMethodForBankSync || 'cash').toLowerCase();
+      const bankIdForBankSync = pmSync === 'bank' || pmSync === 'bank_transfer'
         ? (req.body.bankAccount || req.body.payment?.bankAccount || null)
         : null;
       try {

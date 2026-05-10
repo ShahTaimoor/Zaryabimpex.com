@@ -314,17 +314,23 @@ function ProductSearchComponent({
     let lastKeyTime = Date.now();
 
     const handleGlobalKeyDown = (e) => {
+      const key = e.key;
+      // Some synthetic events / browsers may omit `key`
+      if (key == null) return;
+
       // Ignore modifier keys
-      if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(key)) return;
 
       const currentTime = Date.now();
       const timeDiff = currentTime - lastKeyTime;
       lastKeyTime = currentTime;
 
+      const isPrintableChar = typeof key === 'string' && key.length === 1;
+
       // Scanners usually send keys very fast (<30ms between keys)
       // If time between keys is short, it's likely a scanner
       if (timeDiff < 50) {
-        if (e.key === 'Enter') {
+        if (key === 'Enter') {
           if (buffer.length >= 4) {
             e.preventDefault();
             e.stopPropagation();
@@ -334,14 +340,14 @@ function ProductSearchComponent({
           } else {
             buffer = '';
           }
-        } else if (e.key.length === 1) {
-          buffer += e.key;
+        } else if (isPrintableChar) {
+          buffer += key;
         }
       } else {
         // Too slow, probably manual typing. Clear buffer.
         // But if it was a single character after a long pause, it might be the START of a scan
-        if (e.key.length === 1) {
-          buffer = e.key;
+        if (isPrintableChar) {
+          buffer = key;
         } else {
           buffer = '';
         }

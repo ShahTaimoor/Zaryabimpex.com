@@ -455,9 +455,9 @@ class SalesService {
         amountPaid = parseFloat(ledgerResult.rows[0]?.total || 0);
       } catch (_) { /* ignore */ }
     }
-    if (amountPaid === 0 && normalizedPaymentStatus === 'paid') {
-      amountPaid = parseFloat(order.total) || 0;
-    }
+    // Do NOT infer "amount received" from invoice total when payment_status is `paid`.
+    // POS marks many cash invoices as `paid` while amount_paid is still 0 (collected later).
+    // Substituting the full total here made Edit Sale show the entire invoice as paid incorrectly.
     let bankAccount = null;
     try {
       const bankResult = await query(
@@ -778,6 +778,13 @@ class SalesService {
       await AccountingService.recordSale(createdOrder, { client });
 
       if (amountPaidAtCreate > 0 && customer) {
+        const pm = String(payment?.method || 'cash').toLowerCase();
+        const ledgerUsesBank = pm === 'bank' || pm === 'bank_transfer';
+        const paymentTxnDate =
+          createdOrder.sale_date ||
+          createdOrder.saleDate ||
+          saleData.saleDate ||
+          new Date();
         await AccountingService.recordSalePaymentAdjustment({
           saleId: createdOrder.id || createdOrder._id,
           orderNumber: createdOrder.order_number || createdOrder.orderNumber,
@@ -785,7 +792,8 @@ class SalesService {
           oldAmountPaid: 0,
           newAmountPaid: amountPaidAtCreate,
           paymentMethod: payment?.method || 'cash',
-          bankId: payment?.method === 'bank' ? (payment?.bankAccount || null) : null,
+          bankId: ledgerUsesBank ? (payment?.bankAccount || null) : null,
+          transactionDate: paymentTxnDate,
           createdBy: user?.id || user?._id
         }, { client });
       }

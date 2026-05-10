@@ -369,42 +369,55 @@ export const Sales = ({ tabId, editData }) => {
       const manualDiscountForEdit = Math.max(0, invoiceDiscountRaw - appliedDiscountTotal);
       setDirectDiscount({ type: 'amount', value: manualDiscountForEdit });
 
-      // Set payment method and amount paid if available
+      // Amount received: prefer persisted sale.amount_paid (authoritative) over enriched payment.*,
+      // because workflow payment_status can be `paid` for cash while nothing was collected yet.
+      const rootPaidRaw = activeEditData.amount_paid ?? activeEditData.amountPaid;
+      const hasRootPaid =
+        rootPaidRaw !== undefined && rootPaidRaw !== null && rootPaidRaw !== '';
+
+      if (hasRootPaid) {
+        const rp = Number(rootPaidRaw);
+        setAmountPaid(Number.isFinite(rp) && rp >= 0 ? rp : 0);
+      }
+
+      // Set payment method and bank (amount paid handled above when DB column is present)
       if (activeEditData.payment) {
         setPaymentMethod(activeEditData.payment.method || 'cash');
-        // IMPORTANT:
-        // When the invoice is pending, Amount Paid should NOT be derived from amountReceived.
-        // Some backend payloads may include `amountReceived` even when payment was never made,
-        // which incorrectly pre-fills the full sale amount in edit mode.
-        const paymentStatusRaw =
-          activeEditData.payment.status ??
-          activeEditData.paymentStatus ??
-          activeEditData.payment_status ??
-          'pending';
-        const normalizedPaymentStatus = String(paymentStatusRaw).toLowerCase();
+        if (!hasRootPaid) {
+          // IMPORTANT:
+          // When the invoice is pending, Amount Paid should NOT be derived from amountReceived.
+          // Some backend payloads may include `amountReceived` even when payment was never made,
+          // which incorrectly pre-fills the full sale amount in edit mode.
+          const paymentStatusRaw =
+            activeEditData.payment.status ??
+            activeEditData.paymentStatus ??
+            activeEditData.payment_status ??
+            'pending';
+          const normalizedPaymentStatus = String(paymentStatusRaw).toLowerCase();
 
-        const orderStatusRaw =
-          activeEditData.orderStatus ??
-          activeEditData.status ??
-          activeEditData.order_status ??
-          '';
-        const normalizedOrderStatus = String(orderStatusRaw).toLowerCase();
+          const orderStatusRaw =
+            activeEditData.orderStatus ??
+            activeEditData.status ??
+            activeEditData.order_status ??
+            '';
+          const normalizedOrderStatus = String(orderStatusRaw).toLowerCase();
 
-        // Important: the UI "Pending" label comes from the invoice/order status, not payment.status.
-        // If the invoice is pending (e.g. "confirmed_pending"), Amount Paid must be 0 in edit mode.
-        const isInvoicePending =
-          normalizedOrderStatus.includes('pending') || normalizedOrderStatus.includes('draft');
+          // Important: the UI "Pending" label comes from the invoice/order status, not payment.status.
+          // If the invoice is pending (e.g. "confirmed_pending"), Amount Paid must be 0 in edit mode.
+          const isInvoicePending =
+            normalizedOrderStatus.includes('pending') || normalizedOrderStatus.includes('draft');
 
-        const paidFromPayload = isInvoicePending
-          ? 0
-          : (normalizedPaymentStatus === 'pending'
+          const paidFromPayload = isInvoicePending
             ? 0
-            : (activeEditData.payment.amountPaid ??
-              activeEditData.payment.amountReceived ??
-              activeEditData.amountPaid ??
-              0));
-        const normalizedPaid = Number(paidFromPayload);
-        setAmountPaid(Number.isFinite(normalizedPaid) && normalizedPaid >= 0 ? normalizedPaid : 0);
+            : (normalizedPaymentStatus === 'pending'
+              ? 0
+              : (activeEditData.payment.amountPaid ??
+                activeEditData.payment.amountReceived ??
+                activeEditData.amountPaid ??
+                0));
+          const normalizedPaid = Number(paidFromPayload);
+          setAmountPaid(Number.isFinite(normalizedPaid) && normalizedPaid >= 0 ? normalizedPaid : 0);
+        }
         if (activeEditData.payment.method === 'bank') {
           setSelectedBankAccount(activeEditData.payment.bankAccount || activeEditData.payment.bank_id || '');
         } else {
@@ -556,7 +569,9 @@ export const Sales = ({ tabId, editData }) => {
         payment: full.payment || {},
         orderStatus: full.status ?? full.order_status,
         paymentStatus: full.payment?.status ?? full.payment_status,
-        amountPaid: full.payment?.amountPaid ?? full.payment?.amountReceived ?? full.amountPaid ?? full.amount_paid ?? 0,
+        // Persisted column — preferred when hydrating Amount Paid (see edit-mode effect).
+        amount_paid: full.amount_paid ?? full.amountPaid,
+        amountPaid: full.amount_paid ?? full.amountPaid ?? full.payment?.amountPaid ?? full.payment?.amountReceived ?? 0,
         orderType: full.orderType ?? full.order_type,
         billDate: full.billDate ?? full.sale_date ?? full.createdAt ?? full.created_at,
         discountAmount: full.discountAmount ?? full.discount ?? full.pricing?.discountAmount ?? 0,

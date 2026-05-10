@@ -6,6 +6,20 @@ const SalesRepository = require('../repositories/SalesRepository');
  * Provides RFM analysis, segmentation, CLV prediction, and churn risk detection
  */
 class CustomerAnalyticsService {
+  /** PostgreSQL customers use `id`; legacy payloads may use `_id`. */
+  static getCustomerRecordId(customer) {
+    if (customer == null) return null;
+    if (typeof customer !== 'object') return String(customer);
+    const id = customer.id || customer._id;
+    return id != null ? String(id) : null;
+  }
+
+  static saleTimestamp(sale) {
+    if (!sale) return null;
+    const raw = sale.sale_date || sale.created_at || sale.createdAt;
+    return raw ? new Date(raw) : null;
+  }
+
   /**
    * Calculate RFM scores for a customer
    * @param {Object} customer - Customer object
@@ -14,21 +28,30 @@ class CustomerAnalyticsService {
    */
   static async calculateRFM(customer, analysisDate = new Date()) {
     try {
-      const customerId = customer && customer._id ? customer._id : customer;
-      
-      // Get sales data for this customer
-      // Include orders that are not cancelled/returned and have been paid (or are confirmed/delivered)
-      const sales = await SalesRepository.findAll({
-        customer: customerId,
-        status: { $nin: ['cancelled', 'returned'] }, // Exclude cancelled and returned orders
-        $or: [
-          { 'payment.status': { $in: ['paid', 'partial'] } }, // Include paid orders
-          { status: { $in: ['confirmed', 'delivered'] } } // Include confirmed/delivered orders even if payment status is pending
-        ]
-      }, {
-        sort: { createdAt: -1 },
-        lean: true
-      });
+      const customerId = this.getCustomerRecordId(customer);
+      if (!customerId) {
+        return {
+          recency: 0,
+          frequency: 0,
+          monetary: 0,
+          recencyScore: 1,
+          frequencyScore: 1,
+          monetaryScore: 1,
+          rfmScore: 111,
+          lastPurchaseDate: null,
+          totalOrders: 0,
+          totalRevenue: 0,
+          averageOrderValue: 0
+        };
+      }
+
+      const sales = await SalesRepository.findAll(
+        {
+          customerId,
+          excludeStatuses: ['cancelled', 'returned']
+        },
+        { sort: { sale_date: -1 } }
+      );
 
       if (!sales || sales.length === 0) {
         return {
@@ -47,7 +70,22 @@ class CustomerAnalyticsService {
       }
 
       // Calculate Recency (days since last purchase)
-      const lastPurchaseDate = new Date(sales[0].createdAt);
+      const lastPurchaseDate = this.saleTimestamp(sales[0]);
+      if (!lastPurchaseDate || Number.isNaN(lastPurchaseDate.getTime())) {
+        return {
+          recency: 0,
+          frequency: 0,
+          monetary: 0,
+          recencyScore: 1,
+          frequencyScore: 1,
+          monetaryScore: 1,
+          rfmScore: 111,
+          lastPurchaseDate: null,
+          totalOrders: 0,
+          totalRevenue: 0,
+          averageOrderValue: 0
+        };
+      }
       const daysSinceLastPurchase = Math.floor(
         (analysisDate - lastPurchaseDate) / (1000 * 60 * 60 * 24)
       );
@@ -56,7 +94,10 @@ class CustomerAnalyticsService {
       const oneYearAgo = new Date(analysisDate);
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
       
-      const recentSales = sales.filter(s => new Date(s.createdAt) >= oneYearAgo);
+      const recentSales = sales.filter((s) => {
+        const d = this.saleTimestamp(s);
+        return d && !Number.isNaN(d.getTime()) && d >= oneYearAgo;
+      });
       const frequency = recentSales.length;
 
       // Calculate Monetary (total revenue in last 12 months)
@@ -267,12 +308,23 @@ class CustomerAnalyticsService {
       const { averageOrderValue, frequency, recency, monetary } = rfmData;
       
       // Get customer age (days since first purchase)
-      const customerId = customer && customer._id ? customer._id : customer;
-      const sales = await SalesRepository.findAll({ customer: customerId }, {
-        sort: { createdAt: 1 },
-        limit: 1,
-        lean: true
-      });
+      const customerId = this.getCustomerRecordId(customer);
+      if (!customerId) {
+        return {
+          predictedCLV: 0,
+          confidence: 'low',
+          method: 'no_history',
+          factors: {}
+        };
+      }
+
+      const sales = await SalesRepository.findAll(
+        {
+          customerId,
+          excludeStatuses: ['cancelled', 'returned']
+        },
+        { sort: { sale_date: 1 }, limit: 1 }
+      );
       const firstSale = sales.length > 0 ? sales[0] : null;
       
       if (!firstSale) {
@@ -284,8 +336,18 @@ class CustomerAnalyticsService {
         };
       }
 
+      const firstTs = this.saleTimestamp(firstSale);
+      if (!firstTs || Number.isNaN(firstTs.getTime())) {
+        return {
+          predictedCLV: 0,
+          confidence: 'low',
+          method: 'no_history',
+          factors: {}
+        };
+      }
+
       const customerAge = Math.floor(
-        (new Date() - new Date(firstSale.createdAt)) / (1000 * 60 * 60 * 24)
+        (new Date() - firstTs) / (1000 * 60 * 60 * 24)
       );
 
       // Calculate average purchase frequency (purchases per month)
@@ -527,11 +589,13 @@ class CustomerAnalyticsService {
             continue;
           }
 
+          const cid = customer.id || customer._id;
           const customerAnalytics = {
             customer: {
-              _id: customer._id,
+              _id: cid,
+              id: cid,
               name: customer.name,
-              businessName: customer.businessName,
+              businessName: customer.businessName || customer.business_name,
               email: customer.email,
               phone: customer.phone,
               status: customer.status
@@ -554,7 +618,7 @@ class CustomerAnalyticsService {
             analytics.summary.churnedCount++;
           }
         } catch (error) {
-          console.error(`Error analyzing customer ${customer._id}:`, error);
+          console.error(`Error analyzing customer ${customer.id || customer._id}:`, error);
           // Continue with next customer
         }
       }
@@ -593,11 +657,13 @@ class CustomerAnalyticsService {
       const clv = await this.predictCLV(customer, rfmData);
       const churnRisk = this.calculateChurnRisk(rfmData, segment);
 
+      const cid = customer.id || customer._id;
       return {
         customer: {
-          _id: customer._id,
+          _id: cid,
+          id: cid,
           name: customer.name,
-          businessName: customer.businessName,
+          businessName: customer.businessName || customer.business_name,
           email: customer.email,
           phone: customer.phone,
           status: customer.status

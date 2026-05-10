@@ -1767,7 +1767,7 @@ class AccountingService {
    * Posts the delta to account_ledger so balance reflects the change.
    * - Delta > 0: Dr Cash/Bank, Cr AR (payment received)
    * - Delta < 0: Dr AR, Cr Cash/Bank (reversal)
-   * @param {Object} params - { saleId, orderNumber, customerId, oldAmountPaid, newAmountPaid, paymentMethod, bankId, createdBy }
+   * @param {Object} params - { saleId, orderNumber, customerId, oldAmountPaid, newAmountPaid, paymentMethod, bankId, transactionDate, createdBy }
    */
   static async recordSalePaymentAdjustment(params, options = {}) {
     const { client = null } = options;
@@ -1779,6 +1779,7 @@ class AccountingService {
       newAmountPaid,
       paymentMethod = 'cash',
       bankId = null,
+      transactionDate,
       createdBy
     } = params;
     const oldAmt = parseFloat(oldAmountPaid) || 0;
@@ -1787,8 +1788,18 @@ class AccountingService {
     if (Math.abs(delta) < 0.01) return { ok: true };
 
     const refNum = orderNumber || saleId;
-    const debitAccount = (paymentMethod === 'bank' || paymentMethod === 'bank_transfer') ? '1001' : '1000';
+    const pm = String(paymentMethod || '').toLowerCase();
+    const ledgerUsesBank = pm === 'bank' || pm === 'bank_transfer';
+    const debitAccount = ledgerUsesBank ? '1001' : '1000';
     const creditAccount = '1100'; // AR
+
+    let txnDate = new Date();
+    if (transactionDate != null && transactionDate !== '') {
+      const d = new Date(transactionDate);
+      if (!Number.isNaN(d.getTime())) txnDate = d;
+    }
+
+    const bankIdForLedger = ledgerUsesBank ? bankId : null;
 
     if (delta > 0) {
       // Payment received: Dr Cash/Bank, Cr AR
@@ -1800,7 +1811,8 @@ class AccountingService {
           referenceId: saleId,
           referenceNumber: refNum,
           customerId: customerId || null,
-          bankId: paymentMethod === 'bank' ? bankId : null,
+          bankId: bankIdForLedger,
+          transactionDate: txnDate,
           currency: 'PKR',
           createdBy
         },
@@ -1817,7 +1829,8 @@ class AccountingService {
           referenceId: saleId,
           referenceNumber: refNum,
           customerId: customerId || null,
-          bankId: paymentMethod === 'bank' ? bankId : null,
+          bankId: bankIdForLedger,
+          transactionDate: txnDate,
           currency: 'PKR',
           createdBy
         },

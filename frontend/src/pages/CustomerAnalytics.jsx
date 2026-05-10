@@ -247,14 +247,20 @@ const CustomerAnalytics = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {(summary.topCustomers || []).map((customer) => (
-                <tr key={customer.customer._id} className="hover:bg-gray-50">
+              {(summary.topCustomers || []).map((customer, idx) => (
+                <tr
+                  key={String(customer.customer?.id ?? customer.customer?._id ?? `top-${idx}`)}
+                  className="hover:bg-gray-50"
+                >
                   <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                     <div>
                       <div className="text-sm font-medium text-gray-900">
-                        {customer.customer.businessName || customer.customer.name}
+                        {customer.customer?.businessName ||
+                          customer.customer?.business_name ||
+                          customer.customer?.name ||
+                          '—'}
                       </div>
-                      <div className="text-xs sm:text-sm text-gray-500 truncate">{customer.customer.email}</div>
+                      <div className="text-xs sm:text-sm text-gray-500 truncate">{customer.customer?.email || '—'}</div>
                     </div>
                   </td>
                   <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
@@ -273,7 +279,7 @@ const CustomerAnalytics = () => {
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       riskColors[customer.churnRisk] || riskColors.medium
                     }`}>
-                      {customer.churnRisk.replace('_', ' ')}
+                      {String(customer.churnRisk || '').replace('_', ' ') || '—'}
                     </span>
                   </td>
                   <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
@@ -324,53 +330,61 @@ const CustomerAnalytics = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {analytics.customers.slice(0, 50).map((item) => (
-                  <tr key={item.customer._id} className="hover:bg-gray-50">
+                {analytics.customers.slice(0, 50).map((item, idx) => (
+                  <tr
+                    key={String(item.customer?.id ?? item.customer?._id ?? `detail-${idx}`)}
+                    className="hover:bg-gray-50"
+                  >
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
-                          {item.customer.businessName || item.customer.name}
+                          {item.customer?.businessName ||
+                            item.customer?.business_name ||
+                            item.customer?.name ||
+                            '—'}
                         </div>
-                        <div className="text-xs sm:text-sm text-gray-500 truncate">{item.customer.email}</div>
+                        <div className="text-xs sm:text-sm text-gray-500 truncate">{item.customer?.email || '—'}</div>
                       </div>
                     </td>
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                       <div>
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          segmentColors[item.segment.segment] || segmentColors.regular
+                          segmentColors[item.segment?.segment] || segmentColors.regular
                         }`}>
-                          {item.segment.segmentName}
+                          {item.segment?.segmentName ?? '—'}
                         </span>
-                        <p className="text-xs text-gray-500 mt-1 truncate">{item.segment.description}</p>
+                        <p className="text-xs text-gray-500 mt-1 truncate">{item.segment?.description ?? ''}</p>
                       </div>
                     </td>
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                       <div className="text-xs sm:text-sm">
-                        <div className="font-medium">R{item.rfm.recencyScore} F{item.rfm.frequencyScore} M{item.rfm.monetaryScore}</div>
+                        <div className="font-medium">
+                          R{item.rfm?.recencyScore ?? '—'} F{item.rfm?.frequencyScore ?? '—'} M{item.rfm?.monetaryScore ?? '—'}
+                        </div>
                         <div className="text-xs text-gray-500">
-                          {item.rfm.recency} days ago
+                          {item.rfm?.recency ?? '—'} days ago
                         </div>
                       </div>
                     </td>
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                       <div>
                         <div className="text-xs sm:text-sm font-semibold text-gray-900">
-                          {formatCurrency(item.clv.predictedCLV)}
+                          {formatCurrency(item.clv?.predictedCLV ?? 0)}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {item.clv.confidence} confidence
+                          {item.clv?.confidence ?? '—'} confidence
                         </div>
                       </div>
                     </td>
                     <td className="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                       <div>
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          riskColors[item.churnRisk.riskLevel] || riskColors.medium
+                          riskColors[item.churnRisk?.riskLevel] || riskColors.medium
                         }`}>
-                          {item.churnRisk.riskLevel.replace('_', ' ')}
+                          {String(item.churnRisk?.riskLevel ?? '').replace('_', ' ') || '—'}
                         </span>
                         <div className="text-xs text-gray-500 mt-1">
-                          Score: {item.churnRisk.riskScore}%
+                          Score: {item.churnRisk?.riskScore ?? '—'}%
                         </div>
                       </div>
                     </td>

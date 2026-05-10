@@ -77,7 +77,7 @@ class ReportsService {
             SUM(s.tax) as tax
           FROM sales s
           LEFT JOIN customers c ON s.customer_id = c.id
-          WHERE s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
+          WHERE s.deleted_at IS NULL AND s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
           ${cityFilter}
           GROUP BY DATE(s.sale_date)
           ORDER BY date DESC
@@ -94,7 +94,7 @@ class ReportsService {
             SUM(s.total) as total
           FROM sales s
           LEFT JOIN customers c ON s.customer_id = c.id
-          WHERE s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
+          WHERE s.deleted_at IS NULL AND s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
           ${cityFilter}
           GROUP BY TO_CHAR(s.sale_date, 'YYYY-MM')
           ORDER BY month DESC
@@ -112,7 +112,7 @@ class ReportsService {
               s.status
             FROM sales s,
             jsonb_array_elements(CASE WHEN jsonb_typeof(COALESCE(s.items, '[]')::jsonb) = 'array' THEN s.items::jsonb ELSE '[]'::jsonb END) AS elem
-            WHERE s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
+            WHERE s.deleted_at IS NULL AND s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
           )
           SELECT 
             p.name as "productName",
@@ -138,7 +138,7 @@ class ReportsService {
               s.customer_id
             FROM sales s,
             jsonb_array_elements(CASE WHEN jsonb_typeof(COALESCE(s.items, '[]')::jsonb) = 'array' THEN s.items::jsonb ELSE '[]'::jsonb END) AS elem
-            WHERE s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
+            WHERE s.deleted_at IS NULL AND s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
           )
           SELECT 
             cat.name as "categoryName",
@@ -168,7 +168,7 @@ class ReportsService {
             COALESCE(SUM(s.total), 0) as "totalRevenue"
           FROM sales s
           JOIN customers c ON s.customer_id = c.id
-          WHERE s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
+          WHERE s.deleted_at IS NULL AND s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
           GROUP BY city
           ORDER BY "totalRevenue" DESC
         `;
@@ -185,7 +185,7 @@ class ReportsService {
             s.payment_method as method
           FROM sales s
           LEFT JOIN customers c ON s.customer_id = c.id
-          WHERE s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
+          WHERE s.deleted_at IS NULL AND s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
           ${cityFilter}
           ORDER BY s.sale_date DESC
         `;
@@ -202,7 +202,7 @@ class ReportsService {
         AVG(s.total) as "averageOrderValue"
       FROM sales s
       LEFT JOIN customers c ON s.customer_id = c.id
-      WHERE s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
+      WHERE s.deleted_at IS NULL AND s.sale_date BETWEEN $1 AND $2 AND s.status != 'cancelled'
       ${cityFilter}
     `;
       const summaryResult = await query(summarySql, params);
@@ -1589,7 +1589,7 @@ class ReportsService {
       const salesSql = `
         SELECT COALESCE(SUM(total), 0) as total_sales
         FROM sales
-        WHERE status != 'cancelled'
+        WHERE deleted_at IS NULL AND status != 'cancelled'
         ${dateClause.replace('date', 'sale_date')}
       `;
       const salesResult = await query(salesSql, dateParams);
