@@ -105,6 +105,14 @@ import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 
 import { ProductSearch } from '../components/sales/ProductSearch';
 import { DuplicateLineItemMergeModal } from '../components/order/DuplicateLineItemMergeModal';
+import { PriceTypeSelector } from '../components/order/PriceTypeSelector';
+import {
+  deriveInitialPriceType,
+  mapPriceTypeToOrderType,
+  normalizePriceType,
+  priceTypeFromBusinessType,
+  resolveOrderTypeForSave,
+} from '../utils/priceTypeUtils';
 
 function normalizeCartProductId(product) {
   if (!product) return '';
@@ -398,13 +406,15 @@ export const Sales = ({ tabId, editData }) => {
         }
       }
 
-      // Set price type from order type (so user can see and change it in edit mode)
-      if (activeEditData.orderType) {
-        const ot = String(activeEditData.orderType).toLowerCase();
-        if (ot === 'retail' || ot === 'wholesale' || ot === 'distributor' || ot === 'custom') {
-          setPriceType(ot);
-        }
-      }
+      // Restore the Price Type so it always matches what was saved on the
+      // existing order. Combine the saved orderType with the customer's
+      // businessType to recover collapsed values like distributor.
+      setPriceType(
+        deriveInitialPriceType(
+          activeEditData.orderType,
+          activeEditData.customer ?? activeEditData.customerInfo
+        )
+      );
       // Bill date: when editing, show the existing invoice date
       if (activeEditData.billDate) {
         const d = activeEditData.billDate instanceof Date ? activeEditData.billDate : new Date(activeEditData.billDate);
@@ -780,20 +790,12 @@ export const Sales = ({ tabId, editData }) => {
   const change = amountPaid - total;
   const manualDiscountDisplay = Math.max(0, Math.round(directDiscountAmount || 0));
 
-  // Map businessType to orderType
-  // businessType: ['retail', 'wholesale', 'distributor', 'individual']
-  // orderType: ['retail', 'wholesale', 'return', 'exchange']
-  const mapBusinessTypeToOrderType = (bt) => {
-    // If bt is not provided, use selectedCustomer's type as fallback
-    const businessType = bt || selectedCustomer?.business_type || selectedCustomer?.businessType;
-    if (!businessType) return 'retail';
-
-    const type = String(businessType).toLowerCase();
-    if (type === 'retail' || type === 'wholesale') return type;
-    if (type === 'distributor') return 'wholesale'; // Distributors are wholesale customers
-    if (type === 'individual') return 'retail'; // Individuals are retail customers
-    return 'retail'; // Default fallback
-  };
+  // The orderType sent to the backend always reflects the user-selected
+  // Price Type so the value round-trips correctly between create and edit.
+  // We also preserve return/exchange overrides if the order was loaded as
+  // such in edit mode.
+  const resolvedOrderTypeForSave = () =>
+    resolveOrderTypeForSave(priceType, activeEditData?.orderType);
 
   const handleCustomerSelect = async (customer) => {
     setSelectedCustomer(customer);
@@ -803,15 +805,12 @@ export const Sales = ({ tabId, editData }) => {
     setIsLastPricesApplied(false);
     setPriceStatus({});
 
-    // Auto-set price type based on customer business type
-    if (customer?.businessType) {
-      if (customer.businessType === 'retail' || customer.businessType === 'individual') {
-        setPriceType('retail');
-      } else if (customer.businessType === 'wholesale') {
-        setPriceType('wholesale');
-      } else if (customer.businessType === 'distributor') {
-        setPriceType('distributor');
-      }
+    // Auto-set price type based on customer business type. Skip in edit
+    // mode so the freshly-selected customer doesn't overwrite the price
+    // type already restored from the saved order.
+    if (!activeEditData?.isEditMode) {
+      const suggested = priceTypeFromBusinessType(customer?.businessType);
+      if (suggested) setPriceType(suggested);
     }
 
     // Auto-generate invoice number if enabled
@@ -1328,7 +1327,7 @@ export const Sales = ({ tabId, editData }) => {
           setOriginalPrices({});
           setIsLastPricesApplied(false);
           setPriceStatus({});
-          setPriceType('wholesale');
+          setPriceType(normalizePriceType('wholesale'));
 
           // Reset tab title to default
           const activeTab = getActiveTab();
@@ -1544,7 +1543,7 @@ export const Sales = ({ tabId, editData }) => {
     const effectivePaid = Number(amountPaid) || 0;
 
     const orderData = {
-      orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
+      orderType: resolvedOrderTypeForSave(),
       customer: selectedCustomer?.id || selectedCustomer?._id,
       items: cart.map(item => {
         const productId = item.product?._id ?? item.product?.id;
@@ -1607,7 +1606,7 @@ export const Sales = ({ tabId, editData }) => {
       const orderId = activeEditData.orderId;
       // For updates, send items with all required fields according to orderItemSchema
       const updateData = {
-        orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
+        orderType: resolvedOrderTypeForSave(),
         customer: selectedCustomer?.id || selectedCustomer?._id,
         items: cart.map(item => {
           const productId = item.product?._id ?? item.product?.id;
@@ -1730,19 +1729,11 @@ export const Sales = ({ tabId, editData }) => {
                       </button>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price Type:</label>
-                    <select
-                      value={priceType}
-                      onChange={(e) => setPriceType(e.target.value)}
-                      className="bg-gray-50 border-none text-[11px] font-bold text-gray-700 rounded-md py-0 px-2 h-5 focus:ring-0 cursor-pointer"
-                    >
-                      <option value="wholesale">Wholesale</option>
-                      <option value="retail">Retail</option>
-                      <option value="distributor">Distributor</option>
-                      <option value="custom">Custom</option>
-                    </select>
-                  </div>
+                  <PriceTypeSelector
+                    id="salesPriceType"
+                    value={priceType}
+                    onChange={setPriceType}
+                  />
                 </div>
                 <SearchableDropdown
                   className="[&_input]:h-8"
@@ -2457,27 +2448,16 @@ export const Sales = ({ tabId, editData }) => {
                     Previously this UI was tied to `selectedCustomer.businessType`, which could differ from
                     what was used when the invoice was created (causing the "price type" mismatch).
                   */}
-                      {(() => {
-                        const editOrderType = activeEditData?.isEditMode ? activeEditData?.orderType : null;
-                        const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
-                        const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
-                        const valueToShow =
-                          normalizedEditOrderType && allowed.has(normalizedEditOrderType)
-                            ? normalizedEditOrderType
-                            : mapBusinessTypeToOrderType(selectedCustomer?.businessType);
-                        return (
-                          <select
-                            value={valueToShow}
-                            className="h-10 text-sm w-full"
-                            disabled
-                          >
-                            <option value="retail">Retail</option>
-                            <option value="wholesale">Wholesale</option>
-                            <option value="return">Return</option>
-                            <option value="exchange">Exchange</option>
-                          </select>
-                        );
-                      })()}
+                      <select
+                        value={resolveOrderTypeForSave(priceType, activeEditData?.orderType)}
+                        className="h-10 text-sm w-full"
+                        disabled
+                      >
+                        <option value="retail">Retail</option>
+                        <option value="wholesale">Wholesale</option>
+                        <option value="return">Return</option>
+                        <option value="exchange">Exchange</option>
+                      </select>
                     </div>
 
                     {/* Invoice Number */}
@@ -2572,18 +2552,7 @@ export const Sales = ({ tabId, editData }) => {
                         Order Type
                       </label>
                       <select
-                        value={
-                          (() => {
-                            const editOrderType = activeEditData?.isEditMode ? activeEditData?.orderType : null;
-                            const normalizedEditOrderType = editOrderType ? String(editOrderType).toLowerCase() : null;
-                            const allowed = new Set(['retail', 'wholesale', 'return', 'exchange']);
-                            return (
-                              normalizedEditOrderType && allowed.has(normalizedEditOrderType)
-                                ? normalizedEditOrderType
-                                : mapBusinessTypeToOrderType(selectedCustomer?.businessType)
-                            );
-                          })()
-                        }
+                        value={resolveOrderTypeForSave(priceType, activeEditData?.orderType)}
                         className="h-8 text-sm"
                         disabled
                       >
@@ -2731,7 +2700,7 @@ export const Sales = ({ tabId, editData }) => {
                               } else if (selectedCustomer?.address) customerAddress = selectedCustomer.address;
                               const tempOrder = {
                                 orderNumber: `TEMP-${Date.now()}`,
-                                orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
+                                orderType: resolvedOrderTypeForSave(),
                                 customer: selectedCustomer ?? undefined,
                                 customerInfo: selectedCustomer ? {
                                   name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,
@@ -2773,7 +2742,7 @@ export const Sales = ({ tabId, editData }) => {
                               } else if (selectedCustomer?.address) customerAddress = selectedCustomer.address;
                               const tempOrder = {
                                 orderNumber: `TEMP-${Date.now()}`,
-                                orderType: mapBusinessTypeToOrderType(selectedCustomer?.businessType),
+                                orderType: resolvedOrderTypeForSave(),
                                 customer: selectedCustomer ?? undefined,
                                 customerInfo: selectedCustomer ? {
                                   name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,
