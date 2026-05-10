@@ -93,6 +93,7 @@ import PaginationControls from '../components/PaginationControls';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
+import { useResponsive } from '../components/ResponsiveContainer';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 
 
@@ -127,6 +128,7 @@ const formatAddressForDisplay = (customer) => {
 
 const SalesOrders = ({ tabId }) => {
   const { updateTabTitle, tabs, activeTabId } = useTab();
+  const { isMobile } = useResponsive();
   const { companyInfo: companySettings } = useCompanyInfo();
   const resolvedCompanyName = companySettings.companyName || 'Company Name';
   const itemWiseConfirmationEnabled = companySettings.orderSettings?.salesOrderItemWiseConfirmation !== false;
@@ -167,6 +169,7 @@ const SalesOrders = ({ tabId }) => {
   });
 
   const [showNotes, setShowNotes] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [notesEntity, setNotesEntity] = useState(null);
 
   // Out-of-stock warning modal (shown before confirm when items lack stock)
@@ -3013,84 +3016,110 @@ const SalesOrders = ({ tabId }) => {
       {/* Results: single header row — title, filters, actions */}
       <div className="card">
         <div className="card-header py-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between xl:gap-4">
-            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-2">
-              <h3 className="shrink-0 text-base font-medium text-gray-900 sm:text-lg">Sales Orders</h3>
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3">
-                <span className="sr-only">Date range</span>
-                <div className="min-w-[11rem] flex-1 sm:max-w-[min(100%,20rem)]">
-                  <DateFilter
-                    startDate={filters.fromDate}
-                    endDate={filters.toDate}
-                    onDateChange={(start, end) => {
-                      handleFilterChange('fromDate', start);
-                      handleFilterChange('toDate', end);
-                    }}
-                    compact={true}
-                    showPresets={true}
-                    showLabel={false}
-                  />
-                </div>
-                <div className="min-w-[10rem] flex-1 sm:max-w-[14rem]">
-                  <label htmlFor="so-list-order-number" className="sr-only">
-                    Order number
-                  </label>
-                  <input
-                    id="so-list-order-number"
-                    type="text"
-                    placeholder="Order #…"
-                    value={filters.orderNumber}
-                    onChange={(e) => handleFilterChange('orderNumber', e.target.value)}
-                    className="input h-10 w-full"
-                  />
-                </div>
-                <div className="w-full min-w-[8rem] sm:w-40">
-                  <label htmlFor="so-list-status" className="sr-only">
-                    Status
-                  </label>
-                  <select
-                    id="so-list-status"
-                    value={filters.status}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                    className="input h-10 w-full"
-                  >
-                    <option value="">All Statuses</option>
-                    <option value="draft">Pending</option>
-                    <option value="confirmed">Order confirmed</option>
-                    <option value="partially_invoiced">Partially Invoiced</option>
-                    <option value="fully_invoiced">Fully Invoiced</option>
-                    <option value="cancelled">Cancelled</option>
-                    <option value="closed">Closed</option>
-                  </select>
-                </div>
-                <Button
-                  onClick={() => refetch()}
-                  variant="default"
-                  className="h-10 shrink-0 px-4 sm:px-5"
-                >
-                  <Search className="mr-2 h-4 w-4" />
-                  Search
-                </Button>
+          <div className="flex flex-col gap-3">
+            {/* Row 1: Title, Records (desktop), and Refresh */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h3 className="text-base font-semibold text-gray-900 sm:text-lg">Sales Orders</h3>
+                <span className="hidden sm:inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+                  {paginationInfo.totalItems ?? paginationInfo.total ?? salesOrders.length} records
+                </span>
               </div>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
-              <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-500 sm:text-sm">
-                <span className="font-semibold text-gray-700">
-                  {paginationInfo.totalItems ?? paginationInfo.total ?? salesOrders.length}
-                </span>{' '}
-                records
-              </span>
               <div className="flex items-center gap-2">
-                <ExcelExportButton getData={getExportData} label="Export" />
-                <PdfExportButton getData={getExportData} label="PDF" />
                 <button
                   type="button"
                   onClick={() => refetch()}
-                  className="p-2 text-gray-400 transition-colors hover:text-gray-600"
+                  className="p-2 text-gray-400 transition-colors hover:text-gray-600 hover:bg-gray-100 rounded-full"
                   title="Refresh"
                 >
-                  <RefreshCw className="h-4 w-4" />
+                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                 </button>
+              </div>
+            </div>
+
+            {/* Content Row: Date, Toggle, Actions (One row on mobile/desktop) */}
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+                {/* Primary Row: Date and All Action Buttons */}
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <div className="flex-1 min-w-0">
+                    <DateFilter
+                      startDate={filters.fromDate}
+                      endDate={filters.toDate}
+                      onDateChange={(start, end) => {
+                        handleFilterChange('fromDate', start);
+                        handleFilterChange('toDate', end);
+                      }}
+                      compact={true}
+                      showPresets={true}
+                      showLabel={false}
+                    />
+                  </div>
+                  
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowMobileFilters(!showMobileFilters)}
+                      className={`h-10 w-10 p-0 lg:hidden border-gray-200 ${showMobileFilters ? 'bg-gray-100' : ''}`}
+                      title="More Filters"
+                    >
+                      <Filter className={`h-4 w-4 ${showMobileFilters ? 'text-primary-600' : 'text-gray-500'}`} />
+                    </Button>
+
+                    <ExcelExportButton 
+                      getData={getExportData} 
+                      label="" 
+                      className="h-10 w-10 p-0"
+                    />
+                    <PdfExportButton 
+                      getData={getExportData} 
+                      label="" 
+                      className="h-10 w-10 p-0"
+                    />
+
+                    <Button
+                      type="button"
+                      variant="default"
+                      onClick={() => refetch()}
+                      className="h-10 px-3 sm:px-5 bg-slate-900 hover:bg-slate-800"
+                    >
+                      <span className="hidden sm:inline">Search</span>
+                      <Search className="h-4 w-4 sm:hidden" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Collapsible Filters: Search and Status Select */}
+                <div className={`${showMobileFilters ? 'flex' : 'hidden'} lg:flex flex-col sm:flex-row items-center gap-2 flex-1`}>
+                  <div className="relative flex-1 w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      id="so-list-order-number"
+                      type="text"
+                      placeholder="Order # / customer…"
+                      value={filters.orderNumber}
+                      onChange={(e) => handleFilterChange('orderNumber', e.target.value)}
+                      className="input h-10 w-full pl-9 bg-gray-50 border-gray-200 focus:bg-white text-sm"
+                    />
+                  </div>
+                  <div className="w-full sm:w-48">
+                    <select
+                      id="so-list-status"
+                      value={filters.status}
+                      onChange={(e) => handleFilterChange('status', e.target.value)}
+                      className="input h-10 w-full bg-gray-50 border-gray-200 text-sm"
+                    >
+                      <option value="">All Statuses</option>
+                      <option value="draft">Pending</option>
+                      <option value="confirmed">Order confirmed</option>
+                      <option value="partially_invoiced">Partially Invoiced</option>
+                      <option value="fully_invoiced">Fully Invoiced</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

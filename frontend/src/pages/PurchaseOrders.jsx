@@ -81,6 +81,7 @@ import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 import PrintModal from '../components/PrintModal';
 import BarcodeLabelPrinter from '../components/BarcodeLabelPrinter';
 import { buildReceiptLabelProductsFromLineItems } from '../utils/receiptLabelUtils';
+import { useResponsive } from '../components/ResponsiveContainer';
 
 // Helper to get product display name (handles object with name/displayName or UUID string)
 const getProductDisplayName = (product) => {
@@ -324,6 +325,7 @@ export const PurchaseOrders = ({ tabId }) => {
     canViewStock
   } = useSensitiveDataPermissions();
   const { updateTabTitle, getActiveTab, openTab } = useTab();
+  const { isMobile } = useResponsive();
   const { companyInfo: companySettings } = useCompanyInfo();
   const resolvedCompanyName = companySettings.companyName || 'Company Name';
   const itemWiseConfirmationEnabled = companySettings.orderSettings?.purchaseOrderItemWiseConfirmation !== false;
@@ -357,6 +359,7 @@ export const PurchaseOrders = ({ tabId }) => {
   });
 
   // State for modals
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -1436,7 +1439,7 @@ export const PurchaseOrders = ({ tabId }) => {
 
           {/* Cart Items */}
           {formData.items.length === 0 ? (
-            <div className="p-8 text-center text-gray-500 border-t border-gray-200">
+            <div className="p-8 text-center text-gray-500">
               <Package className="mx-auto h-12 w-12 text-gray-400" />
               <p className="mt-2">No items in cart</p>
             </div>
@@ -2599,17 +2602,36 @@ export const PurchaseOrders = ({ tabId }) => {
           </div>
         </div>
       )}
-
-      {/* Results: compact header row + optional barcode option */}
+     {/* Results: compact header row + optional barcode option */}
       <div className="card">
         <div className="card-header py-3">
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between xl:gap-4">
-              <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-3 lg:gap-y-2">
-                <h3 className="shrink-0 text-base font-medium text-gray-900 sm:text-lg">Purchase Orders</h3>
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3">
-                  <span className="sr-only">Date range</span>
-                  <div className="min-w-[11rem] flex-1 sm:max-w-[min(100%,18rem)]">
+          <div className="flex flex-col gap-3">
+            {/* Row 1: Title, Records (desktop), and Refresh */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h3 className="text-base font-semibold text-gray-900 sm:text-lg">Purchase Orders</h3>
+                <span className="hidden sm:inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+                  {paginationInfo.total ?? paginationInfo.totalItems ?? purchaseOrders.length ?? 0} records
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => refetch()}
+                  className="p-2 text-gray-400 transition-colors hover:text-gray-600 hover:bg-gray-100 rounded-full"
+                  title="Refresh"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Content Row: Date, Toggle, Actions (One row on mobile/desktop) */}
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+                {/* Primary Row: Date and All Action Buttons */}
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <div className="flex-1 min-w-0">
                     <DateFilter
                       startDate={filters.fromDate}
                       endDate={filters.toDate}
@@ -2622,29 +2644,61 @@ export const PurchaseOrders = ({ tabId }) => {
                       showLabel={false}
                     />
                   </div>
-                  <div className="min-w-[8rem] flex-1 sm:max-w-[10rem]">
-                    <label htmlFor="po-list-number" className="sr-only">
-                      PO number
-                    </label>
+                  
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowMobileFilters(!showMobileFilters)}
+                      className={`h-10 w-10 p-0 lg:hidden border-gray-200 ${showMobileFilters ? 'bg-gray-100' : ''}`}
+                      title="More Filters"
+                    >
+                      <Filter className={`h-4 w-4 ${showMobileFilters ? 'text-primary-600' : 'text-gray-500'}`} />
+                    </Button>
+
+                    <ExcelExportButton 
+                      getData={getExportData} 
+                      label="" 
+                      className="h-10 w-10 p-0"
+                    />
+                    <PdfExportButton 
+                      getData={getExportData} 
+                      label="" 
+                      className="h-10 w-10 p-0"
+                    />
+
+                    <Button
+                      type="button"
+                      variant="default"
+                      onClick={() => refetch()}
+                      className="h-10 px-3 sm:px-5 bg-slate-900 hover:bg-slate-800"
+                    >
+                      <span className="hidden sm:inline">Search</span>
+                      <Search className="h-4 w-4 sm:hidden" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Collapsible Filters: Search and Status Select */}
+                <div className={`${showMobileFilters ? 'flex' : 'hidden'} lg:flex flex-col sm:flex-row items-center gap-2 flex-1`}>
+                  <div className="relative flex-1 w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input
                       id="po-list-number"
                       type="text"
                       autoComplete="off"
-                      placeholder="PO #…"
+                      placeholder="PO # / supplier…"
                       value={filters.poNumber}
                       onChange={(e) => handleFilterChange('poNumber', e.target.value)}
-                      className="input h-10 w-full"
+                      className="input h-10 w-full pl-9 bg-gray-50 border-gray-200 focus:bg-white text-sm"
                     />
                   </div>
-                  <div className="min-w-[8rem] w-full sm:w-36">
-                    <label htmlFor="po-list-status" className="sr-only">
-                      Status
-                    </label>
+                  <div className="w-full sm:w-48">
                     <select
                       id="po-list-status"
                       value={filters.status}
                       onChange={(e) => handleFilterChange('status', e.target.value)}
-                      className="input h-10 w-full"
+                      className="input h-10 w-full bg-gray-50 border-gray-200 text-sm"
                     >
                       <option value="">All Statuses</option>
                       <option value="draft">Pending</option>
@@ -2655,34 +2709,6 @@ export const PurchaseOrders = ({ tabId }) => {
                       <option value="closed">Closed</option>
                     </select>
                   </div>
-                  <Button
-                    onClick={() => refetch()}
-                    variant="default"
-                    className="h-10 shrink-0 px-4 sm:px-5"
-                  >
-                    <Search className="mr-2 h-4 w-4" />
-                    Search
-                  </Button>
-                </div>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
-                <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-500 sm:text-sm">
-                  <span className="font-semibold text-gray-700">
-                    {paginationInfo.total ?? paginationInfo.totalItems ?? purchaseOrders.length ?? 0}
-                  </span>{' '}
-                  records
-                </span>
-                <div className="flex items-center gap-2">
-                  <ExcelExportButton getData={getExportData} label="Export" />
-                  <PdfExportButton getData={getExportData} label="PDF" />
-                  <button
-                    type="button"
-                    onClick={() => refetch()}
-                    className="p-2 text-gray-400 transition-colors hover:text-gray-600"
-                    title="Refresh"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </button>
                 </div>
               </div>
             </div>

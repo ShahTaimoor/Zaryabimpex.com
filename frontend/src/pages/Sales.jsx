@@ -168,6 +168,7 @@ export const Sales = ({ tabId, editData }) => {
   const [savedInvoicePrintOrder, setSavedInvoicePrintOrder] = useState(null);
   const [inlineEditData, setInlineEditData] = useState(null);
   const [invoiceDeleteTarget, setInvoiceDeleteTarget] = useState(null);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const activeEditData = inlineEditData?.isEditMode ? inlineEditData : editData;
 
   useEffect(() => {
@@ -2996,90 +2997,117 @@ export const Sales = ({ tabId, editData }) => {
         {/* Sales Invoices: single header row — title, filters, and actions */}
         <div className="mt-4 card">
           <div className="card-header py-3">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between xl:gap-4">
-              <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-2">
-                <h3 className="shrink-0 text-base font-medium text-gray-900 sm:text-lg">Sales Invoices</h3>
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3">
-                  <div className="min-w-[11rem] flex-1 sm:max-w-[min(100%,20rem)]">
-                    <span className="sr-only">Date range</span>
-                    <DateFilter
-                      startDate={savedInvoiceFromDate}
-                      endDate={savedInvoiceToDate}
-                      onDateChange={(start, end) => {
-                        setSavedInvoiceFromDate(start || '');
-                        setSavedInvoiceToDate(end || '');
-                        setSavedInvoicePage(1);
-                      }}
-                      compact={true}
-                      showPresets={true}
-                      showLabel={false}
-                    />
-                  </div>
-                  <div className="min-w-[10rem] flex-1 sm:max-w-[14rem]">
-                    <label htmlFor="saved-invoice-search" className="sr-only">
-                      Invoice or customer search
-                    </label>
-                    <input
-                      id="saved-invoice-search"
-                      type="text"
-                      placeholder="Invoice / customer…"
-                      value={savedInvoiceSearchTerm}
-                      onChange={(e) => {
-                        setSavedInvoiceSearchTerm(e.target.value);
-                        setSavedInvoicePage(1);
-                      }}
-                      className="input h-10 w-full"
-                    />
-                  </div>
-                  <div className="w-full min-w-[8rem] sm:w-36">
-                    <label htmlFor="saved-invoice-status" className="sr-only">
-                      Payment status
-                    </label>
-                    <select
-                      id="saved-invoice-status"
-                      value={savedInvoiceStatus}
-                      onChange={(e) => {
-                        setSavedInvoiceStatus(e.target.value);
-                        setSavedInvoicePage(1);
-                      }}
-                      className="input h-10 w-full"
-                    >
-                      <option value="">All statuses</option>
-                      <option value="pending">Pending</option>
-                      <option value="partial">Partial</option>
-                      <option value="paid">Paid</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="default"
-                    onClick={() => refetchSavedInvoices()}
-                    className="h-10 shrink-0 px-4 sm:px-5"
-                  >
-                    <Search className="mr-2 h-4 w-4" />
-                    Search
-                  </Button>
+            <div className="flex flex-col gap-3">
+              {/* Row 1: Title, Records (desktop), and Refresh */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-base font-semibold text-gray-900 sm:text-lg">Sales Invoices</h3>
+                  <span className="hidden sm:inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+                    {savedInvoicesPagination.total ?? savedInvoices.length} records
+                  </span>
                 </div>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
-                <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-500 sm:text-sm">
-                  <span className="font-semibold text-gray-700">
-                    {savedInvoicesPagination.total ?? savedInvoices.length}
-                  </span>{' '}
-                  records
-                </span>
                 <div className="flex items-center gap-2">
-                  <ExcelExportButton getData={getSavedInvoicesExportData} label="Export" />
-                  <PdfExportButton getData={getSavedInvoicesExportData} label="PDF" />
                   <button
                     type="button"
                     onClick={() => refetchSavedInvoices()}
-                    className="p-2 text-gray-400 transition-colors hover:text-gray-600"
+                    className="p-2 text-gray-400 transition-colors hover:text-gray-600 hover:bg-gray-100 rounded-full"
                     title="Refresh"
                   >
-                    <RefreshCw className="h-4 w-4" />
+                    <RefreshCw className={`h-4 w-4 ${isSavedInvoicesLoading ? 'animate-spin' : ''}`} />
                   </button>
+                </div>
+              </div>
+
+              {/* Content Row: Date, Toggle, Actions (One row on mobile/desktop) */}
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+                  {/* Primary Row: Date and All Action Buttons */}
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <div className="flex-1 min-w-0">
+                      <DateFilter
+                        startDate={savedInvoiceFromDate}
+                        endDate={savedInvoiceToDate}
+                        onDateChange={(start, end) => {
+                          setSavedInvoiceFromDate(start || '');
+                          setSavedInvoiceToDate(end || '');
+                          setSavedInvoicePage(1);
+                        }}
+                        compact={true}
+                        showPresets={true}
+                        showLabel={false}
+                      />
+                    </div>
+                    
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowMobileFilters(!showMobileFilters)}
+                        className={`h-10 w-10 p-0 lg:hidden border-gray-200 ${showMobileFilters ? 'bg-gray-100' : ''}`}
+                        title="More Filters"
+                      >
+                        <Filter className={`h-4 w-4 ${showMobileFilters ? 'text-primary-600' : 'text-gray-500'}`} />
+                      </Button>
+
+                      <ExcelExportButton 
+                        getData={getSavedInvoicesExportData} 
+                        label="" 
+                        className="h-10 w-10 p-0"
+                      />
+                      <PdfExportButton 
+                        getData={getSavedInvoicesExportData} 
+                        label="" 
+                        className="h-10 w-10 p-0"
+                      />
+
+                      <Button
+                        type="button"
+                        variant="default"
+                        onClick={() => refetchSavedInvoices()}
+                        className="h-10 px-3 sm:px-5 bg-slate-900 hover:bg-slate-800"
+                      >
+                        <span className="hidden sm:inline">Search</span>
+                        <Search className="h-4 w-4 sm:hidden" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Collapsible Filters: Search and Status Select */}
+                  <div className={`${showMobileFilters ? 'flex' : 'hidden'} lg:flex flex-col sm:flex-row items-center gap-2 flex-1`}>
+                    <div className="relative flex-1 w-full">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        id="saved-invoice-search"
+                        type="text"
+                        placeholder="Invoice / customer…"
+                        value={savedInvoiceSearchTerm}
+                        onChange={(e) => {
+                          setSavedInvoiceSearchTerm(e.target.value);
+                          setSavedInvoicePage(1);
+                        }}
+                        className="input h-10 w-full pl-9 bg-gray-50 border-gray-200 focus:bg-white text-sm"
+                      />
+                    </div>
+                    <div className="w-full sm:w-48">
+                      <select
+                        id="saved-invoice-status"
+                        value={savedInvoiceStatus}
+                        onChange={(e) => {
+                          setSavedInvoiceStatus(e.target.value);
+                          setSavedInvoicePage(1);
+                        }}
+                        className="input h-10 w-full bg-gray-50 border-gray-200 text-sm"
+                      >
+                        <option value="">All Statuses</option>
+                        <option value="draft">Draft</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="received">Received</option>
+                        <option value="paid">Paid</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="closed">Closed</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
