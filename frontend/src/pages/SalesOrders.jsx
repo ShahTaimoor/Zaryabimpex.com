@@ -82,6 +82,7 @@ import {
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
 import { ProductSearch } from '../components/sales/ProductSearch';
+import { DuplicateLineItemMergeModal } from '../components/order/DuplicateLineItemMergeModal';
 import { CartTableHeader } from '../components/order/CartTableHeader';
 import { hasDualUnit, piecesToBoxesAndPieces, getPiecesPerBox, formatStockDualLabel } from '../utils/dualUnitUtils';
 import { useTab } from '../contexts/TabContext';
@@ -271,6 +272,33 @@ const SalesOrders = ({ tabId }) => {
   const soCartLineElRefs = useRef(new Map());
   const [highlightedSoLineIndex, setHighlightedSoLineIndex] = useState(null);
   const soCartNeedsInnerScroll = formData.items.length > 10;
+
+  const [soDuplicateMerge, setSoDuplicateMerge] = useState(null);
+  const [soSearchResetKey, setSoSearchResetKey] = useState(0);
+  const soProductSearchFocusFnRef = useRef(null);
+  const handleSoProductSearchFocusReady = useCallback((fn) => {
+    soProductSearchFocusFnRef.current = fn;
+  }, []);
+  const refocusSoProductSearch = useCallback((source) => {
+    setTimeout(() => {
+      if (source === 'inline') {
+        productSearchRef.current?.focus({ preventScroll: true });
+      } else {
+        soProductSearchFocusFnRef.current?.();
+      }
+    }, 60);
+  }, []);
+  const soItemsRef = useRef(formData.items);
+  useEffect(() => {
+    soItemsRef.current = formData.items;
+  }, [formData.items]);
+
+  const getSoItemProductId = (item) => {
+    const raw = typeof item?.product === 'string'
+      ? item.product
+      : (item?.product?._id ?? item?.product?.id);
+    return raw != null ? String(raw) : '';
+  };
 
   useLayoutEffect(() => {
     if (highlightedSoLineIndex === null) return;
@@ -815,59 +843,47 @@ const SalesOrders = ({ tabId }) => {
         }));
       }
 
-      const productId = selectedProduct._id;
-      const getItemProductId = (item) => (typeof item.product === 'string' ? item.product : item.product?._id)?.toString?.() || item.product;
-      const existingIndex = formData.items.findIndex(item => getItemProductId(item) === productId);
+      const productId = String(selectedProduct._id);
+      const existingIndex = soItemsRef.current.findIndex(item => getSoItemProductId(item) === productId);
 
       if (existingIndex >= 0) {
-        // Product already in cart - increase quantity instead of adding a new row
-        const existingItem = formData.items[existingIndex];
-        const newQuantity = (existingItem.quantity || 0) + quantity;
-        const ppb = getPiecesPerBox(selectedProduct);
-        const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {};
-        const newSubtotal = newQuantity * unitPrice;
-        const newTaxAmount = !taxSystemEnabled ? 0 : (newSubtotal * effectiveGlobalTaxPct) / 100;
-        const newTotal = newSubtotal - (existingItem.discountAmount || 0) + newTaxAmount;
-
-        setFormData(prev => ({
-          ...prev,
-          items: prev.items.map((item, i) =>
-            i === existingIndex
-              ? {
-                ...item,
-                quantity: newQuantity,
-                ...(ppb && { boxes, pieces }),
-                unitPrice: unitPrice,
-                subtotal: newSubtotal,
-                taxAmount: newTaxAmount,
-                total: newTotal
-              }
-              : item
-          )
-        }));
-      } else {
-        // New product - add as new row (store boxes/pieces for dual-unit display)
-        const ppb = getPiecesPerBox(selectedProduct);
-        const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(quantity, ppb) : {};
-        const newItem = {
-          product: selectedProduct._id,
-          productData: selectedProduct,
-          quantity,
-          ...(ppb && { boxes, pieces }),
-          unitPrice: unitPrice,
-          discountPercent: 0,
-          taxRate: taxRate,
-          subtotal,
-          discountAmount,
-          taxAmount,
-          total
-        };
-
-        setFormData(prev => ({
-          ...prev,
-          items: [...prev.items, newItem]
-        }));
+        const existingItem = soItemsRef.current[existingIndex];
+        setSoDuplicateMerge({
+          productId,
+          displayName: displayName || 'Product',
+          currentQuantity: Number(existingItem.quantity) || 0,
+          addQuantity: quantity,
+          source: 'inline',
+          incomingSnapshot: {
+            quantity,
+            unitPrice,
+            taxRate,
+            productData: selectedProduct,
+          },
+        });
+        return;
       }
+
+      const ppb = getPiecesPerBox(selectedProduct);
+      const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(quantity, ppb) : {};
+      const newItem = {
+        product: selectedProduct._id,
+        productData: selectedProduct,
+        quantity,
+        ...(ppb && { boxes, pieces }),
+        unitPrice: unitPrice,
+        discountPercent: 0,
+        taxRate: taxRate,
+        subtotal,
+        discountAmount,
+        taxAmount,
+        total
+      };
+
+      setFormData(prev => ({
+        ...prev,
+        items: [...prev.items, newItem]
+      }));
 
       // Reset form
       setSelectedProduct(null);
@@ -913,46 +929,35 @@ const SalesOrders = ({ tabId }) => {
     const ppb = getPiecesPerBox(product);
     const derivedDual = ppb ? piecesToBoxesAndPieces(qty, ppb) : {};
 
+    const productId = product._id.toString();
+    const existingIndex = soItemsRef.current.findIndex((item) => getSoItemProductId(item) === productId);
+
+    if (existingIndex >= 0) {
+      const existingItem = soItemsRef.current[existingIndex];
+      const displayName = product.isVariant
+        ? (product.displayName || product.variantName || product.name)
+        : product.name;
+      setSoDuplicateMerge({
+        productId,
+        displayName: displayName || 'Product',
+        currentQuantity: Number(existingItem.quantity) || 0,
+        addQuantity: qty,
+        source: 'sharedSearch',
+        incomingSnapshot: {
+          quantity: qty,
+          unitPrice,
+          taxRate,
+          productData: product,
+          ...(payload.boxes !== undefined ? { boxes: payload.boxes } : {}),
+          ...(payload.pieces !== undefined ? { pieces: payload.pieces } : {}),
+        },
+      });
+      return;
+    }
+
     let highlightLineIndex = null;
 
     setFormData((prev) => {
-      const productId = product._id.toString();
-      const getItemProductId = (item) => (
-        typeof item.product === 'string' ? item.product : item.product?._id
-      )?.toString?.() || item.product;
-      const existingIndex = prev.items.findIndex((item) => getItemProductId(item) === productId);
-
-      if (existingIndex >= 0) {
-        highlightLineIndex = existingIndex;
-        const existingItem = prev.items[existingIndex];
-        const newQuantity = (Number(existingItem.quantity) || 0) + qty;
-        const newSubtotal = newQuantity * unitPrice;
-        const newTaxAmount = !taxSystemEnabled ? 0 : (newSubtotal * effectiveGlobalTaxPct) / 100;
-        const newTotal = newSubtotal - (existingItem.discountAmount || 0) + newTaxAmount;
-        const mergedDual = ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {};
-
-        return {
-          ...prev,
-          items: prev.items.map((item, i) => (
-            i === existingIndex
-              ? {
-                ...item,
-                quantity: newQuantity,
-                ...(ppb && {
-                  boxes: payload.boxes ?? mergedDual.boxes,
-                  pieces: payload.pieces ?? mergedDual.pieces
-                }),
-                unitPrice,
-                taxRate: item.taxRate || taxRate,
-                subtotal: newSubtotal,
-                taxAmount: newTaxAmount,
-                total: newTotal
-              }
-              : item
-          ))
-        };
-      }
-
       highlightLineIndex = prev.items.length;
 
       const newItem = {
@@ -982,6 +987,86 @@ const SalesOrders = ({ tabId }) => {
       setHighlightedSoLineIndex(highlightLineIndex);
     }
   }, [taxSystemEnabled, effectiveGlobalTaxPct]);
+
+  const handleSoDuplicateMergeConfirm = () => {
+    if (!soDuplicateMerge) return;
+    const { productId, incomingSnapshot, source } = soDuplicateMerge;
+    const { quantity: addQty, unitPrice, taxRate, productData, boxes: incBoxes, pieces: incPieces } = incomingSnapshot;
+    const ppb = getPiecesPerBox(productData);
+
+    let mergedIdx = null;
+    setFormData((prev) => {
+      const idx = prev.items.findIndex((row) => getSoItemProductId(row) === productId);
+      if (idx < 0) {
+        mergedIdx = prev.items.length;
+        const subtotal = unitPrice * addQty;
+        const taxAmount = !taxSystemEnabled ? 0 : (subtotal * (taxRate ?? 0)) / 100;
+        const dual = ppb ? piecesToBoxesAndPieces(addQty, ppb) : {};
+        const newItem = {
+          product: productData._id,
+          productData,
+          quantity: addQty,
+          ...(ppb && {
+            boxes: incBoxes ?? dual.boxes,
+            pieces: incPieces ?? dual.pieces,
+          }),
+          unitPrice,
+          discountPercent: 0,
+          taxRate: taxRate ?? effectiveGlobalTaxPct,
+          subtotal,
+          discountAmount: 0,
+          taxAmount,
+          total: subtotal + taxAmount,
+        };
+        return { ...prev, items: [...prev.items, newItem] };
+      }
+
+      mergedIdx = idx;
+      const existingItem = prev.items[idx];
+      const newQuantity = (Number(existingItem.quantity) || 0) + addQty;
+      const newSubtotal = newQuantity * unitPrice;
+      const newTaxAmount = !taxSystemEnabled ? 0 : (newSubtotal * effectiveGlobalTaxPct) / 100;
+      const newTotal = newSubtotal - (existingItem.discountAmount || 0) + newTaxAmount;
+      const dual = ppb ? piecesToBoxesAndPieces(newQuantity, ppb) : {};
+      return {
+        ...prev,
+        items: prev.items.map((item, i) =>
+          i === idx
+            ? {
+              ...item,
+              quantity: newQuantity,
+              ...(ppb && { boxes: dual.boxes, pieces: dual.pieces }),
+              unitPrice,
+              taxRate: item.taxRate || taxRate || effectiveGlobalTaxPct,
+              subtotal: newSubtotal,
+              taxAmount: newTaxAmount,
+              total: newTotal,
+            }
+            : item
+        ),
+      };
+    });
+
+    setSoDuplicateMerge(null);
+
+    if (source === 'inline') {
+      setSelectedProduct(null);
+      setQuantity(1);
+      setCustomRate('');
+      setCalculatedRate(0);
+      setIsAddingProduct(false);
+      setProductSearchTerm('');
+      setSelectedProductIndex(-1);
+      setSearchKey((prev) => prev + 1);
+    } else if (source === 'sharedSearch') {
+      setSoSearchResetKey((k) => k + 1);
+    }
+    refocusSoProductSearch(source);
+
+    if (mergedIdx !== null && mergedIdx >= 0) {
+      setHighlightedSoLineIndex(mergedIdx);
+    }
+  };
 
   const handleAddModalItem = async () => {
     if (!modalSelectedProduct) return;
@@ -2242,6 +2327,8 @@ const SalesOrders = ({ tabId }) => {
           {/* Product Search */}
           <div className="mb-2">
             <ProductSearch
+              key={soSearchResetKey}
+              onFocusReady={handleSoProductSearchFocusReady}
               onAddProduct={addToCartFromProductSearch}
               selectedCustomer={selectedCustomer}
               showCostPrice={showCostPrice}
@@ -3811,6 +3898,25 @@ const SalesOrders = ({ tabId }) => {
           }}
         />
       )}
+
+      <DuplicateLineItemMergeModal
+        isOpen={!!soDuplicateMerge}
+        onClose={() => {
+          const src = soDuplicateMerge?.source;
+          setSoDuplicateMerge(null);
+          refocusSoProductSearch(src);
+        }}
+        onConfirm={handleSoDuplicateMergeConfirm}
+        productName={soDuplicateMerge?.displayName ?? ''}
+        currentQuantity={soDuplicateMerge?.currentQuantity ?? 0}
+        quantityToAdd={soDuplicateMerge?.addQuantity ?? 0}
+        newTotalQuantity={
+          (soDuplicateMerge?.currentQuantity ?? 0) + (soDuplicateMerge?.addQuantity ?? 0)
+        }
+        title="Duplicate product"
+        scopeLabel="sales order"
+        confirmText="Update quantity"
+      />
 
       {/* Product Image Preview Modal */}
       <BaseModal

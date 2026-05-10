@@ -104,6 +104,13 @@ import PdfExportButton from '../components/PdfExportButton';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 
 import { ProductSearch } from '../components/sales/ProductSearch';
+import { DuplicateLineItemMergeModal } from '../components/order/DuplicateLineItemMergeModal';
+
+function normalizeCartProductId(product) {
+  if (!product) return '';
+  const id = product._id ?? product.id;
+  return id != null ? String(id) : '';
+}
 
 /** Cart → print payload: names, optional manual photo, dual-unit qty for invoice/PDF. */
 function mapCartItemsForInvoicePrint(cart) {
@@ -133,6 +140,22 @@ export const Sales = ({ tabId, editData }) => {
   const [refetchProducts, setRefetchProducts] = useState(null);
 
   const [cart, setCart] = useState([]);
+  const cartRef = useRef(cart);
+  useEffect(() => {
+    cartRef.current = cart;
+  }, [cart]);
+
+  const [duplicateCartMerge, setDuplicateCartMerge] = useState(null);
+  /** Remount ProductSearch after merging duplicate lines so its internal form resets. */
+  const [productSearchResetKey, setProductSearchResetKey] = useState(0);
+  const productSearchFocusFnRef = useRef(null);
+  const handleProductSearchFocusReady = useCallback((fn) => {
+    productSearchFocusFnRef.current = fn;
+  }, []);
+  const refocusProductSearch = useCallback(() => {
+    setTimeout(() => productSearchFocusFnRef.current?.(), 60);
+  }, []);
+
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -843,38 +866,26 @@ export const Sales = ({ tabId, editData }) => {
     const product = item?.product;
     if (!product) return;
 
+    const productId = normalizeCartProductId(product);
+    const existingIndex = cartRef.current.findIndex(
+      (c) => normalizeCartProductId(c.product) === productId
+    );
+
+    if (existingIndex >= 0) {
+      const displayName = product.isVariant
+        ? (product.displayName || product.variantName || product.name)
+        : product.name;
+      setDuplicateCartMerge({
+        productId,
+        pendingItem: item,
+        displayName: displayName || 'Product',
+      });
+      return;
+    }
+
     let highlightLineIndex = null;
 
     setCart(prevCart => {
-      // For variants, use variant _id; for products, use product _id
-      const itemId = product._id ?? product.id;
-      const existingItem = prevCart.find(c => (c.product?._id ?? c.product?.id) === itemId);
-
-      if (existingItem) {
-        highlightLineIndex = prevCart.findIndex(c => (c.product?._id ?? c.product?.id) === itemId);
-        // Check if combined quantity exceeds available stock
-        const combinedQuantity = existingItem.quantity + item.quantity;
-        const availableStock = product.inventory?.currentStock || 0;
-
-        if (combinedQuantity > availableStock) {
-          const displayName = product.isVariant
-            ? (product.displayName || product.variantName || product.name)
-            : product.name;
-          toast.warning(`Stock for ${displayName} is insufficient. Adding ${item.quantity} units anyway.`);
-        }
-
-        const newQty = existingItem.quantity + item.quantity;
-        const ppb = getPiecesPerBox(product);
-        const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(newQty, ppb) : {};
-        const updatedCart = prevCart.map(c =>
-          (c.product?._id ?? c.product?.id) === itemId
-            ? { ...c, quantity: newQty, ...(ppb && { boxes, pieces }), unitPrice: item.unitPrice }
-            : c
-        );
-
-        return updatedCart;
-      }
-
       highlightLineIndex = prevCart.length;
 
       // New item added - fetch its last purchase price (always, for loss alerts)
@@ -890,7 +901,7 @@ export const Sales = ({ tabId, editData }) => {
             if (response && response.lastPurchasePrice !== null) {
               setLastPurchasePrices(prev => ({
                 ...prev,
-                [itemId]: response.lastPurchasePrice
+                [productId]: response.lastPurchasePrice
               }));
             }
           })
@@ -899,13 +910,56 @@ export const Sales = ({ tabId, editData }) => {
           });
       }
 
-      // New item added - don't store in originalPrices since it wasn't there before
-      // applying last prices, so there's nothing to restore
       return [...prevCart, item];
     });
 
     if (highlightLineIndex !== null && highlightLineIndex >= 0) {
       setHighlightedCartLineIndex(highlightLineIndex);
+    }
+  };
+
+  const handleDuplicateCartMergeConfirm = () => {
+    if (!duplicateCartMerge) return;
+    const { productId, pendingItem } = duplicateCartMerge;
+    const item = pendingItem;
+    const product = item.product;
+
+    let mergedLineIndex = null;
+    setCart(prevCart => {
+      const idx = prevCart.findIndex((c) => normalizeCartProductId(c.product) === productId);
+      if (idx < 0) {
+        mergedLineIndex = prevCart.length;
+        return [...prevCart, item];
+      }
+
+      mergedLineIndex = idx;
+      const existingItem = prevCart[idx];
+      const combinedQuantity = existingItem.quantity + item.quantity;
+      const availableStock = product.inventory?.currentStock || 0;
+
+      if (combinedQuantity > availableStock) {
+        const displayName = product.isVariant
+          ? (product.displayName || product.variantName || product.name)
+          : product.name;
+        toast.warning(`Stock for ${displayName} is insufficient. Adding ${item.quantity} units anyway.`);
+      }
+
+      const newQty = existingItem.quantity + item.quantity;
+      const ppb = getPiecesPerBox(product);
+      const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(newQty, ppb) : {};
+      return prevCart.map((c) =>
+        normalizeCartProductId(c.product) === productId
+          ? { ...c, quantity: newQty, ...(ppb && { boxes, pieces }), unitPrice: item.unitPrice }
+          : c
+      );
+    });
+
+    setDuplicateCartMerge(null);
+    setProductSearchResetKey((k) => k + 1);
+    refocusProductSearch();
+
+    if (mergedLineIndex !== null && mergedLineIndex >= 0) {
+      setHighlightedCartLineIndex(mergedLineIndex);
     }
   };
 
@@ -1866,6 +1920,8 @@ export const Sales = ({ tabId, editData }) => {
           }
           searchSection={
             <ProductSearch
+              key={productSearchResetKey}
+              onFocusReady={handleProductSearchFocusReady}
               onAddProduct={addToCart}
               selectedCustomer={selectedCustomer}
               showCostPrice={showCostPrice && globalShowCostPriceAllowed}
@@ -3301,6 +3357,31 @@ export const Sales = ({ tabId, editData }) => {
         itemCount={cart.length}
         itemType="items"
         isLoading={false}
+      />
+
+      <DuplicateLineItemMergeModal
+        isOpen={!!duplicateCartMerge}
+        onClose={() => {
+          setDuplicateCartMerge(null);
+          refocusProductSearch();
+        }}
+        onConfirm={handleDuplicateCartMergeConfirm}
+        productName={duplicateCartMerge?.displayName ?? ''}
+        currentQuantity={
+          duplicateCartMerge
+            ? cart.find((c) => normalizeCartProductId(c.product) === duplicateCartMerge.productId)?.quantity ?? 0
+            : 0
+        }
+        quantityToAdd={duplicateCartMerge?.pendingItem?.quantity ?? 0}
+        newTotalQuantity={
+          duplicateCartMerge
+            ? (cart.find((c) => normalizeCartProductId(c.product) === duplicateCartMerge.productId)?.quantity ?? 0) +
+              (duplicateCartMerge?.pendingItem?.quantity ?? 0)
+            : 0
+        }
+        scopeLabel="invoice"
+        title="Duplicate product"
+        confirmText="Update quantity"
       />
 
       <BaseModal

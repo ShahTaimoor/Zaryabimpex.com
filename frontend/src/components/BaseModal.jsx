@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button';
  *   - className: string - Additional classes for the content container
  *   - contentClassName: string - Additional classes for scrollable content area
  *   - headerClassName: string - Additional classes for header
- *   - zIndex: number - z-index for overlay (default: 50)
+ *   - footerClassName: string - Extra classes on footer wrapper (optional)
  */
 const BaseModal = ({
   isOpen,
@@ -42,7 +42,8 @@ const BaseModal = ({
   contentClassName = '',
   headerClassName = '',
   zIndex = 50,
-  footer
+  footer,
+  footerClassName = '',
 }) => {
   useEffect(() => {
     if (!isOpen) return;
@@ -136,13 +137,15 @@ const BaseModal = ({
           )}
 
           <div
-            className={`flex-1 ${variant === 'scrollable' ? 'overflow-y-auto' : ''} ${contentClassName}`}
+            className={`${
+              variant === 'scrollable' ? 'min-h-0 flex-1 overflow-y-auto' : 'flex-none overflow-visible'
+            } ${contentClassName}`}
           >
             {children}
           </div>
 
           {footer && (
-            <div className="flex-shrink-0 p-5 border-t border-gray-200 bg-gray-50 rounded-b-md">
+            <div className={`flex-shrink-0 p-5 border-t border-gray-200 bg-gray-50 rounded-b-md ${footerClassName}`}>
               {footer}
             </div>
           )}

@@ -22,6 +22,7 @@ import {
   FileText,
 } from 'lucide-react';
 import BaseModal from '../components/BaseModal';
+import { DuplicateLineItemMergeModal } from '../components/order/DuplicateLineItemMergeModal';
 import {
   useGetSupplierQuery,
   useLazySearchSuppliersQuery,
@@ -390,7 +391,7 @@ const PurchaseItem = ({
 // NOTE: SupplierSearch component removed - functionality moved to main Purchase component
 // This was using react-query instead of RTK Query, causing conflicts
 
-const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
+const ProductSearch = ({ onAddProduct, onRefetchReady, onFocusReady }) => {
   const { companyInfo: companySettings } = useCompanyInfo();
   const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
@@ -411,6 +412,7 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
       dualUnitShowPiecesInput={dualUnitShowPiecesInputEnabled}
       allowOutOfStock
       onRefetchReady={onRefetchReady}
+      onFocusReady={onFocusReady}
     />
   );
 };
@@ -445,6 +447,15 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   const purchaseCartLineElRefs = useRef(new Map());
   const [highlightedPurchaseLineIndex, setHighlightedPurchaseLineIndex] = useState(null);
   const purchaseCartNeedsInnerScroll = purchaseItems.length > 10;
+  const [purchaseDuplicateMerge, setPurchaseDuplicateMerge] = useState(null);
+  const [purchaseSearchResetKey, setPurchaseSearchResetKey] = useState(0);
+  const purchaseProductSearchFocusFnRef = useRef(null);
+  const handlePurchaseProductSearchFocusReady = useCallback((fn) => {
+    purchaseProductSearchFocusFnRef.current = fn;
+  }, []);
+  const refocusPurchaseProductSearch = useCallback(() => {
+    setTimeout(() => purchaseProductSearchFocusFnRef.current?.(), 60);
+  }, []);
 
   useLayoutEffect(() => {
     if (highlightedPurchaseLineIndex === null) return;
@@ -1049,50 +1060,68 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   }, [isEnhancedImportPurchase, importChargesTotal, purchaseItems, importAllocationMethod]);
 
   const addToPurchase = (newItem) => {
+    const existingIndex = purchaseItems.findIndex(
+      (item) => item.product?._id === newItem.product?._id
+    );
+
+    if (existingIndex >= 0) {
+      const existingItem = purchaseItems[existingIndex];
+      const product = newItem.product || {};
+      const displayName = product.isVariant
+        ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
+        : (product.name || 'Unknown Product');
+      setPurchaseDuplicateMerge({
+        productId: String(product._id),
+        displayName,
+        currentQuantity: Number(existingItem.quantity) || 0,
+        addQuantity: Number(newItem.quantity) || 0,
+        incomingItem: newItem,
+      });
+      return;
+    }
+
     let highlightLineIndex = null;
-    setPurchaseItems(prevItems => {
-      const existingItem = prevItems.find(item => item.product?._id === newItem.product?._id);
-      if (existingItem) {
-        // Get display name for confirmation message
-        const product = newItem.product || {};
-        const displayName = product.isVariant
-          ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
-          : (product.name || 'Unknown Product');
-
-        // Show confirmation dialog for existing product
-        const confirmAdd = window.confirm(
-          `"${displayName}" is already in the cart (Qty: ${existingItem.quantity}).\n\nDo you want to add ${newItem.quantity} more units?`
-        );
-
-        if (!confirmAdd) {
-          // User chose not to add, return current cart unchanged
-          return prevItems;
-        }
-
-        highlightLineIndex = prevItems.findIndex((item) => item.product?._id === newItem.product?._id);
-
-        // User confirmed, update existing item quantity and cost (re-split boxes/pieces when dual)
-        return prevItems.map(item =>
-          item.product?._id === newItem.product?._id
-            ? (() => {
-              const mergedQty = item.quantity + newItem.quantity;
-              const ppb = getPiecesPerBox(item.product);
-              const split = ppb ? piecesToBoxesAndPieces(mergedQty, ppb) : {};
-              return {
-                ...item,
-                quantity: mergedQty,
-                costPerUnit: newItem.costPerUnit,
-                ...(ppb ? { boxes: split.boxes, pieces: split.pieces } : {}),
-              };
-            })()
-            : item
-        );
-      }
+    setPurchaseItems((prevItems) => {
       highlightLineIndex = prevItems.length;
       return [...prevItems, newItem];
     });
     if (highlightLineIndex !== null && highlightLineIndex >= 0) {
       setHighlightedPurchaseLineIndex(highlightLineIndex);
+    }
+  };
+
+  const handlePurchaseDuplicateMergeConfirm = () => {
+    if (!purchaseDuplicateMerge) return;
+    const { productId, incomingItem } = purchaseDuplicateMerge;
+
+    let mergedIdx = null;
+    setPurchaseItems((prevItems) => {
+      const idx = prevItems.findIndex((item) => String(item.product?._id) === productId);
+      if (idx < 0) {
+        mergedIdx = prevItems.length;
+        return [...prevItems, incomingItem];
+      }
+      mergedIdx = idx;
+      return prevItems.map((item, i) => {
+        if (i !== idx) return item;
+        const mergedQty = (Number(item.quantity) || 0) + (Number(incomingItem.quantity) || 0);
+        const ppb = getPiecesPerBox(item.product);
+        const split = ppb ? piecesToBoxesAndPieces(mergedQty, ppb) : {};
+        return {
+          ...item,
+          quantity: mergedQty,
+          costPerUnit: incomingItem.costPerUnit,
+          ...(ppb ? { boxes: split.boxes, pieces: split.pieces } : {}),
+        };
+      });
+    });
+
+    setPurchaseDuplicateMerge(null);
+    setPurchaseSearchResetKey((k) => k + 1);
+    refocusPurchaseProductSearch();
+
+    if (mergedIdx !== null && mergedIdx >= 0) {
+      setHighlightedPurchaseLineIndex(mergedIdx);
     }
   };
 
@@ -1603,8 +1632,10 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
           }
           searchSection={
             <ProductSearch
+              key={purchaseSearchResetKey}
               onAddProduct={addToPurchase}
               onRefetchReady={setRefetchProducts}
+              onFocusReady={handlePurchaseProductSearchFocusReady}
               allowOutOfStock
             />
           }
@@ -2598,6 +2629,24 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
             }}
           />
         )}
+
+        <DuplicateLineItemMergeModal
+          isOpen={!!purchaseDuplicateMerge}
+          onClose={() => {
+            setPurchaseDuplicateMerge(null);
+            refocusPurchaseProductSearch();
+          }}
+          onConfirm={handlePurchaseDuplicateMergeConfirm}
+          productName={purchaseDuplicateMerge?.displayName ?? ''}
+          currentQuantity={purchaseDuplicateMerge?.currentQuantity ?? 0}
+          quantityToAdd={purchaseDuplicateMerge?.addQuantity ?? 0}
+          newTotalQuantity={
+            (purchaseDuplicateMerge?.currentQuantity ?? 0) + (purchaseDuplicateMerge?.addQuantity ?? 0)
+          }
+          title="Duplicate product"
+          scopeLabel="purchase"
+          confirmText="Update quantity"
+        />
 
         {/* Product Image Preview Modal */}
         <BaseModal

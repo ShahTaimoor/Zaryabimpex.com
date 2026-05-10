@@ -37,6 +37,7 @@ function ProductSearchComponent({
   itemsOverride = null,
   loadingOverride = null,
   emptyMessageOverride = null,
+  onFocusReady,
 }) {
   const { canViewStock } = useSensitiveDataPermissions();
 
@@ -105,6 +106,16 @@ function ProductSearchComponent({
       onRefetchReady(refreshProductSearchCache);
     }
   }, [onRefetchReady, refreshProductSearchCache]);
+
+  const focusSearchInput = useCallback(() => {
+    productSearchRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  useEffect(() => {
+    if (typeof onFocusReady === 'function') {
+      onFocusReady(focusSearchInput);
+    }
+  }, [onFocusReady, focusSearchInput]);
 
   const getCostPrice = (product) => {
     if (!product) return 0;

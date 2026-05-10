@@ -30,6 +30,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import BaseModal from '../components/BaseModal';
+import { DuplicateLineItemMergeModal } from '../components/order/DuplicateLineItemMergeModal';
 import PaginationControls from '../components/PaginationControls';
 import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
@@ -104,6 +105,26 @@ const getProductDisplayName = (product) => {
   }
   return product;
 };
+
+function normalizePoLineProductId(item) {
+  const raw = item?.productData?._id ?? item?.productData?.id ?? item?.product;
+  return raw != null ? String(raw) : '';
+}
+
+function mergePurchaseOrderLine(existing, addQty, latestProductData) {
+  const product = existing.productData || latestProductData;
+  const newQty = (existing.quantity || 0) + addQty;
+  const costPerUnit = existing.costPerUnit;
+  const totalCost = newQty * costPerUnit;
+  const ppb = getPiecesPerBox(product);
+  const dual = ppb ? piecesToBoxesAndPieces(newQty, ppb) : {};
+  return {
+    ...existing,
+    quantity: newQty,
+    totalCost,
+    ...(ppb ? { boxes: dual.boxes, pieces: dual.pieces } : {}),
+  };
+}
 
 // Format supplier/customer address for display (avoids showing raw JSON)
 const formatAddressForDisplay = (party) => {
@@ -299,7 +320,7 @@ const PurchaseOrderCard = ({ po, onEdit, onDelete, onConfirm, onCancel, onClose,
   </div>
 );
 
-const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
+const ProductSearch = ({ onAddProduct, onRefetchReady, onFocusReady }) => {
   const { companyInfo: companySettings } = useCompanyInfo();
   const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
@@ -322,6 +343,7 @@ const ProductSearch = ({ onAddProduct, onRefetchReady }) => {
       allowOutOfStock
       allowManualCostPrice={allowManualCostPriceEnabled}
       onRefetchReady={onRefetchReady}
+      onFocusReady={onFocusReady}
     />
   );
 };
@@ -411,6 +433,11 @@ export const PurchaseOrders = ({ tabId }) => {
     terms: ''
   });
 
+  const itemsRef = useRef(formData.items);
+  useEffect(() => {
+    itemsRef.current = formData.items;
+  }, [formData.items]);
+
   // Product selection state
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productSearchTerm, setProductSearchTerm] = useState('');
@@ -419,6 +446,24 @@ export const PurchaseOrders = ({ tabId }) => {
   const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
   const [searchKey, setSearchKey] = useState(0); // Key to force re-render
   const [, setRefetchProducts] = useState(null);
+  const [poDuplicateMerge, setPoDuplicateMerge] = useState(null);
+  const [productSearchResetKey, setProductSearchResetKey] = useState(0);
+  const poProductSearchFocusFnRef = useRef(null);
+  const handlePoProductSearchFocusReady = useCallback((fn) => {
+    poProductSearchFocusFnRef.current = fn;
+  }, []);
+  const refocusPoProductSearch = useCallback((source) => {
+    setTimeout(() => {
+      if (source === 'inline') {
+        productSearchRef.current?.focus({ preventScroll: true });
+      } else if (source === 'editModal') {
+        const modalInput = document.querySelector('.modal-product-search input');
+        modalInput?.focus({ preventScroll: true });
+      } else {
+        poProductSearchFocusFnRef.current?.();
+      }
+    }, 60);
+  }, []);
 
   // Modal-specific product selection state
   const [modalProductSearchTerm, setModalProductSearchTerm] = useState('');
@@ -762,46 +807,12 @@ export const PurchaseOrders = ({ tabId }) => {
     }
   };
 
-  const handleAddItem = () => {
-    if (!selectedProduct || quantity <= 0) {
-      toast.error('Please select a product and enter quantity');
-      return;
-    }
-
-    const costPerUnit = parseFloat(customCost) || selectedProduct.pricing?.cost || 0;
-    const totalCost = costPerUnit * quantity;
-    const ppb = getPiecesPerBox(selectedProduct);
-    const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(quantity, ppb) : {};
-
-    const newItem = {
-      product: selectedProduct._id,
-      productData: selectedProduct,
-      quantity,
-      ...(ppb && { boxes, pieces }),
-      costPerUnit,
-      totalCost
-    };
-
-    let addedLineIndex = null;
-    setFormData(prev => {
-      addedLineIndex = prev.items.length;
-      return {
-        ...prev,
-        items: [...prev.items, newItem]
-      };
-    });
-    if (addedLineIndex !== null && addedLineIndex >= 0) {
-      setHighlightedPoLineIndex(addedLineIndex);
-    }
-
-    // Reset product selection
+  const resetPoProductPickerFields = () => {
     setSelectedProduct(null);
     setProductSearchTerm('');
     setQuantity(1);
     setCustomCost('');
-    setSearchKey(prev => prev + 1); // Force re-render of search components
-
-    // Focus back to product search input
+    setSearchKey((prev) => prev + 1);
     setTimeout(() => {
       if (productSearchRef.current) {
         productSearchRef.current.focus({ preventScroll: true });
@@ -809,14 +820,146 @@ export const PurchaseOrders = ({ tabId }) => {
     }, 100);
   };
 
+  const handlePoDuplicateMergeConfirm = () => {
+    if (!poDuplicateMerge) return;
+    const { productId, incomingSnapshot, source } = poDuplicateMerge;
+
+    let mergedIdx = null;
+    setFormData((prev) => {
+      const idx = prev.items.findIndex((row) => normalizePoLineProductId(row) === productId);
+      if (idx < 0) {
+        const snap = incomingSnapshot;
+        const pid = snap.productData._id ?? snap.productData.id;
+        const newItem = {
+          product: pid,
+          productData: snap.productData,
+          quantity: snap.quantity,
+          costPerUnit: snap.costPerUnit,
+          totalCost: snap.quantity * snap.costPerUnit,
+          ...(snap.boxes !== undefined && snap.pieces !== undefined ? { boxes: snap.boxes, pieces: snap.pieces } : {}),
+        };
+        mergedIdx = prev.items.length;
+        return { ...prev, items: [...prev.items, newItem] };
+      }
+      mergedIdx = idx;
+      const merged = mergePurchaseOrderLine(prev.items[idx], incomingSnapshot.quantity, incomingSnapshot.productData);
+      return {
+        ...prev,
+        items: prev.items.map((it, i) => (i === idx ? merged : it)),
+      };
+    });
+
+    setPoDuplicateMerge(null);
+
+    if (source === 'sharedSearch') {
+      setProductSearchResetKey((k) => k + 1);
+      refocusPoProductSearch('sharedSearch');
+    } else if (source === 'inline') {
+      resetPoProductPickerFields();
+    } else if (source === 'editModal') {
+      setModalSelectedProduct(null);
+      setModalProductSearchTerm('');
+      setEditProductQuantity(1);
+      setEditProductCost(0);
+      setModalSelectedSuggestionIndex(-1);
+      refocusPoProductSearch('editModal');
+    }
+
+    if (mergedIdx !== null && mergedIdx >= 0) {
+      setHighlightedPoLineIndex(mergedIdx);
+    }
+  };
+
+  const handleAddItem = () => {
+    if (!selectedProduct || quantity <= 0) {
+      toast.error('Please select a product and enter quantity');
+      return;
+    }
+
+    const costPerUnit = parseFloat(customCost) || selectedProduct.pricing?.cost || 0;
+    const ppb = getPiecesPerBox(selectedProduct);
+    const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(quantity, ppb) : {};
+
+    const productId = String(selectedProduct._id ?? selectedProduct.id);
+    const existingIndex = itemsRef.current.findIndex((row) => normalizePoLineProductId(row) === productId);
+
+    if (existingIndex >= 0) {
+      const existing = itemsRef.current[existingIndex];
+      const displayName = selectedProduct.isVariant
+        ? (selectedProduct.displayName || selectedProduct.variantName || selectedProduct.name)
+        : selectedProduct.name;
+      setPoDuplicateMerge({
+        productId,
+        displayName: displayName || 'Product',
+        currentQuantity: existing.quantity,
+        addQuantity: quantity,
+        source: 'inline',
+        incomingSnapshot: {
+          quantity,
+          costPerUnit,
+          productData: selectedProduct,
+          ...(ppb && { boxes, pieces }),
+        },
+      });
+      return;
+    }
+
+    const totalCost = costPerUnit * quantity;
+    const newItem = {
+      product: selectedProduct._id,
+      productData: selectedProduct,
+      quantity,
+      ...(ppb && { boxes, pieces }),
+      costPerUnit,
+      totalCost,
+    };
+
+    let addedLineIndex = null;
+    setFormData((prev) => {
+      addedLineIndex = prev.items.length;
+      return {
+        ...prev,
+        items: [...prev.items, newItem],
+      };
+    });
+    if (addedLineIndex !== null && addedLineIndex >= 0) {
+      setHighlightedPoLineIndex(addedLineIndex);
+    }
+
+    resetPoProductPickerFields();
+  };
+
   const handleAddItemFromProductSearch = useCallback((item) => {
     const productObj = item?.product;
-    const productId = productObj?._id || productObj?.id || item?.product;
+    const productId = String(productObj?._id || productObj?.id || item?.product || '');
     const qty = Number(item?.quantity) || 1;
     const costPerUnit = Number(item?.costPerUnit ?? item?.unitPrice ?? 0);
     const totalCost = costPerUnit * qty;
 
     if (!productId || !productObj || qty <= 0) {
+      return;
+    }
+
+    const existingIndex = itemsRef.current.findIndex((row) => normalizePoLineProductId(row) === productId);
+
+    if (existingIndex >= 0) {
+      const existing = itemsRef.current[existingIndex];
+      const displayName = productObj.isVariant
+        ? (productObj.displayName || productObj.variantName || productObj.name)
+        : productObj.name;
+      setPoDuplicateMerge({
+        productId,
+        displayName: displayName || 'Product',
+        currentQuantity: existing.quantity,
+        addQuantity: qty,
+        source: 'sharedSearch',
+        incomingSnapshot: {
+          quantity: qty,
+          costPerUnit,
+          productData: productObj,
+          ...(item?.boxes !== undefined && item?.pieces !== undefined ? { boxes: item.boxes, pieces: item.pieces } : {}),
+        },
+      });
       return;
     }
 
@@ -830,7 +973,7 @@ export const PurchaseOrders = ({ tabId }) => {
     };
 
     let addedLineIndex = null;
-    setFormData(prev => {
+    setFormData((prev) => {
       addedLineIndex = prev.items.length;
       return {
         ...prev,
@@ -1442,8 +1585,10 @@ export const PurchaseOrders = ({ tabId }) => {
           {/* Product Search */}
           <div className="mb-2">
             <ProductSearch
+              key={productSearchResetKey}
               onAddProduct={handleAddItemFromProductSearch}
               onRefetchReady={setRefetchProducts}
+              onFocusReady={handlePoProductSearchFocusReady}
             />
           </div>
 
@@ -2429,6 +2574,27 @@ export const PurchaseOrders = ({ tabId }) => {
                           type="button"
                           onClick={() => {
                             if (modalSelectedProduct && editProductQuantity > 0 && editProductCost >= 0) {
+                              const pid = String(modalSelectedProduct._id ?? modalSelectedProduct.id);
+                              const existingIndex = itemsRef.current.findIndex((row) => normalizePoLineProductId(row) === pid);
+                              if (existingIndex >= 0) {
+                                const existing = itemsRef.current[existingIndex];
+                                const displayName = modalSelectedProduct.isVariant
+                                  ? (modalSelectedProduct.displayName || modalSelectedProduct.variantName || modalSelectedProduct.name)
+                                  : modalSelectedProduct.name;
+                                setPoDuplicateMerge({
+                                  productId: pid,
+                                  displayName: displayName || 'Product',
+                                  currentQuantity: existing.quantity,
+                                  addQuantity: editProductQuantity,
+                                  source: 'editModal',
+                                  incomingSnapshot: {
+                                    quantity: editProductQuantity,
+                                    costPerUnit: editProductCost,
+                                    productData: modalSelectedProduct,
+                                  },
+                                });
+                                return;
+                              }
                               const newItem = {
                                 product: modalSelectedProduct._id,
                                 quantity: editProductQuantity,
@@ -3216,6 +3382,25 @@ export const PurchaseOrders = ({ tabId }) => {
           }}
         />
       )}
+
+      <DuplicateLineItemMergeModal
+        isOpen={!!poDuplicateMerge}
+        onClose={() => {
+          const src = poDuplicateMerge?.source;
+          setPoDuplicateMerge(null);
+          refocusPoProductSearch(src);
+        }}
+        onConfirm={handlePoDuplicateMergeConfirm}
+        productName={poDuplicateMerge?.displayName ?? ''}
+        currentQuantity={poDuplicateMerge?.currentQuantity ?? 0}
+        quantityToAdd={poDuplicateMerge?.addQuantity ?? 0}
+        newTotalQuantity={
+          (poDuplicateMerge?.currentQuantity ?? 0) + (poDuplicateMerge?.addQuantity ?? 0)
+        }
+        title="Duplicate product"
+        scopeLabel="purchase order"
+        confirmText="Update quantity"
+      />
 
       {/* Product Image Preview Modal */}
       <BaseModal
