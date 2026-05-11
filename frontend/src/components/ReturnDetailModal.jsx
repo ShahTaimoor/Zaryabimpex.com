@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Printer } from 'lucide-react';
 import { useGetReturnQuery } from '../store/services/returnsApi';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
@@ -18,7 +18,8 @@ const ReturnDetailModal = ({
   onAddNote,
   onAddCommunication,
   onUpdate,
-  isLoading
+  isLoading,
+  autoOpenPrint = false
 }) => {
   const actualReturnData = returnDataProp || returnData;
   const { getPartyPermissions } = useSensitiveDataPermissions();
@@ -35,6 +36,12 @@ const ReturnDetailModal = ({
 
   const { companyInfo } = useCompanyInfo();
   const returnInfo = detailedReturn?.data || detailedReturn || actualReturnData;
+
+  useEffect(() => {
+    if (autoOpenPrint && isOpen && returnInfo && !detailLoading) {
+      setShowPrintModal(true);
+    }
+  }, [autoOpenPrint, isOpen, returnInfo, detailLoading]);
 
   const getStatusColor = (status) => {
     const map = {

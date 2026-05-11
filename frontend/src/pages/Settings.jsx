@@ -220,8 +220,8 @@ export const Settings2 = () => {
       address: '123 Main Street, New York, NY, US, 10001'
     },
     items: [
-      { name: 'Sample Item 1', quantity: 2, unitPrice: 50.00, total: 100.00 },
-      { name: 'Sample Item 2', quantity: 1, unitPrice: 25.00, total: 25.00 }
+      { name: 'Sample Item 1', quantity: 2, unitPrice: 50.00, total: 100.00, discount: 5.00, description: 'Premium quality item' },
+      { name: 'Sample Item 2', quantity: 1, unitPrice: 25.00, total: 25.00, discount: 0, description: 'Standard item' }
     ],
     subtotal: 125.00,
     tax: 12.50,
@@ -2823,15 +2823,15 @@ export const Settings2 = () => {
                           </div>
                         </div>
 
-                        {/* Standard Toggle Boxes */}
+                        {/* Standard Toggle Boxes — filtered per layout */}
                         {[
-                          { id: 'showLogo', label: 'Display Logo', icon: <Printer className="h-3.5 w-3.5" /> },
-                          { id: 'showCompanyDetails', label: 'Company Header', icon: <Building className="h-3.5 w-3.5" />, hidden: printSettings.invoiceLayout === 'layout2' },
-                          { id: 'showEmail', label: 'Show Email', icon: <Mail className="h-3.5 w-3.5" /> },
-                          { id: 'showFooter', label: 'Show Footer', icon: <FileText className="h-3.5 w-3.5" /> },
-                          { id: 'mobilePrintPreview', label: 'Mobile View', icon: <Eye className="h-3.5 w-3.5" /> },
-                          { id: 'showDate', label: 'Doc Date', icon: <Clock className="h-3.5 w-3.5" /> },
-                        ].map(item => !item.hidden && (
+                          { id: 'showLogo', label: 'Display Logo', icon: <Printer className="h-3.5 w-3.5" />, layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'showCompanyDetails', label: 'Company Header', icon: <Building className="h-3.5 w-3.5" />, layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'showEmail', label: 'Show Email', icon: <Mail className="h-3.5 w-3.5" />, layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'showFooter', label: 'Show Footer', icon: <FileText className="h-3.5 w-3.5" />, layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'mobilePrintPreview', label: 'Mobile View', icon: <Eye className="h-3.5 w-3.5" />, layouts: ['standard', 'detailed'] },
+                          { id: 'showDate', label: 'Doc Date', icon: <Clock className="h-3.5 w-3.5" />, layouts: ['standard', 'detailed', 'layout2'] },
+                        ].filter(item => !item.layouts || item.layouts.includes(printSettings.invoiceLayout)).map(item => (
                           <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
                             <Checkbox
                               id={item.id}
@@ -2856,11 +2856,11 @@ export const Settings2 = () => {
                       </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         {[
-                          { id: 'showTax', label: 'Tax Breakdown' },
-                          { id: 'showDiscount', label: 'Discounts' },
-                          { id: 'showDescription', label: 'Item Desc' },
-                          { id: 'showCameraTime', label: 'Cam Timestamp' },
-                        ].map(item => (
+                          { id: 'showTax', label: 'Tax Breakdown', layouts: ['standard', 'detailed'] },
+                          { id: 'showDiscount', label: 'Discounts', layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'showDescription', label: 'Item Desc', layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'showCameraTime', label: 'Cam Timestamp', layouts: ['standard', 'detailed'] },
+                        ].filter(item => !item.layouts || item.layouts.includes(printSettings.invoiceLayout)).map(item => (
                           <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-emerald-300 hover:shadow-md transition-all duration-200 group">
                             <Checkbox
                               id={item.id}
@@ -2884,13 +2884,13 @@ export const Settings2 = () => {
                       </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         {[
-                          { id: 'showPrintBusinessName', label: 'Business Name' },
-                          { id: 'showPrintContactName', label: 'Contact Name' },
-                          { id: 'showPrintAddress', label: 'Full Address' },
-                          { id: 'showPrintCity', label: 'City' },
-                          { id: 'showPrintState', label: 'State / Prov' },
-                          { id: 'showPrintPostalCode', label: 'Postal Code' },
-                        ].map(item => (
+                          { id: 'showPrintBusinessName', label: 'Business Name', layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'showPrintContactName', label: 'Contact Name', layouts: ['standard', 'detailed'] },
+                          { id: 'showPrintAddress', label: 'Full Address', layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'showPrintCity', label: 'City', layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'showPrintState', label: 'State / Prov', layouts: ['standard', 'detailed'] },
+                          { id: 'showPrintPostalCode', label: 'Postal Code', layouts: ['standard', 'detailed'] },
+                        ].filter(item => !item.layouts || item.layouts.includes(printSettings.invoiceLayout)).map(item => (
                           <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-amber-300 hover:shadow-md transition-all duration-200 group">
                             <Checkbox
                               id={item.id}
@@ -2914,15 +2914,15 @@ export const Settings2 = () => {
                       </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         {[
-                          { id: 'showPrintInvoiceNumber', label: 'Invoice #' },
-                          { id: 'showPrintInvoiceDate', label: 'Inv Date' },
-                          { id: 'showPrintInvoiceStatus', label: 'Doc Status' },
-                          { id: 'showPrintInvoiceType', label: 'Doc Type' },
-                          { id: 'showPrintPaymentStatus', label: 'Pay Status' },
-                          { id: 'showPrintPaymentMethod', label: 'Pay Method' },
-                          { id: 'showPrintPaymentAmount', label: 'Pay Amount' },
-                          { id: 'showPrintLedgerBalance', label: 'Ledger balance on invoice' },
-                        ].map(item => (
+                          { id: 'showPrintInvoiceNumber', label: 'Invoice #', layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'showPrintInvoiceDate', label: 'Inv Date', layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'showPrintInvoiceStatus', label: 'Doc Status', layouts: ['standard', 'detailed'] },
+                          { id: 'showPrintInvoiceType', label: 'Doc Type', layouts: ['standard', 'detailed'] },
+                          { id: 'showPrintPaymentStatus', label: 'Pay Status', layouts: ['standard', 'detailed'] },
+                          { id: 'showPrintPaymentMethod', label: 'Pay Method', layouts: ['standard', 'detailed'] },
+                          { id: 'showPrintPaymentAmount', label: 'Pay Amount', layouts: ['standard', 'detailed'] },
+                          { id: 'showPrintLedgerBalance', label: 'Ledger balance on invoice', layouts: ['standard', 'detailed', 'layout2'] },
+                        ].filter(item => !item.layouts || item.layouts.includes(printSettings.invoiceLayout)).map(item => (
                           <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-md transition-all duration-200 group">
                             <Checkbox
                               id={item.id}

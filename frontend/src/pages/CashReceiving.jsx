@@ -18,6 +18,7 @@ import { useCreateBatchCashReceiptsMutation } from '../store/services/cashReceip
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import PrintModal from '../components/PrintModal';
+import PrintReportModal from '../components/PrintReportModal';
 import PageShell from '../components/PageShell';
 import { Button } from '@/components/ui/button';
 import { getLocalDateString } from '../utils/dateUtils';
@@ -54,6 +55,8 @@ const CashReceiving = () => {
   // Print modal state
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printData, setPrintData] = useState(null);
+  const [showCustomerListPrint, setShowCustomerListPrint] = useState(false);
+  const [customerListPrintData, setCustomerListPrintData] = useState(null);
 
   // Fetch cities
   const { data: citiesData, isLoading: citiesLoading, error: citiesError } = useCitiesQuery(undefined, {
@@ -378,54 +381,37 @@ const CashReceiving = () => {
       return;
     }
 
-    // Check if at least one balance filter is selected
     if (!balanceFilters.positive && !balanceFilters.negative && !balanceFilters.zero) {
       showErrorToast('Please select at least one balance filter to print.');
       return;
     }
 
-    // Get company info from settings or use defaults
-    const companyName = companyInfo?.companyName || 'Your Company Name';
-    const companyAddress = companyInfo?.address || '';
-    const companyPhone = companyInfo?.contactNumber || '';
-
-    // Apply the same balance filtering logic as the display
     const threshold = 0.01;
     let filteredEntries = customerEntries.filter(entry => {
       const balance = entry.balance || 0;
       const isZero = Math.abs(balance) <= threshold;
       const isPositive = balance > threshold;
       const isNegative = balance < -threshold;
-      
-      // Show customer if their balance type is selected
       if (isZero && balanceFilters.zero) return true;
       if (isPositive && balanceFilters.positive) return true;
       if (isNegative && balanceFilters.negative) return true;
       return false;
     });
     
-    // Sort filtered entries: positive first, then negative, then zero
     filteredEntries = [...filteredEntries].sort((a, b) => {
       const balanceA = a.balance || 0;
       const balanceB = b.balance || 0;
-      
       const getCategory = (balance) => {
-        if (Math.abs(balance) <= threshold) return 2; // Zero balance
-        if (balance > 0) return 0; // Positive balance
-        return 1; // Negative balance
+        if (Math.abs(balance) <= threshold) return 2;
+        if (balance > 0) return 0;
+        return 1;
       };
-      
       const categoryA = getCategory(balanceA);
       const categoryB = getCategory(balanceB);
-      
-      if (categoryA !== categoryB) {
-        return categoryA - categoryB;
-      }
-      
+      if (categoryA !== categoryB) return categoryA - categoryB;
       return Math.abs(balanceB) - Math.abs(balanceA);
     });
 
-    // Build filter description for print
     const activeFilters = [];
     if (balanceFilters.positive) activeFilters.push('Positive');
     if (balanceFilters.negative) activeFilters.push('Negative');
@@ -434,12 +420,8 @@ const CashReceiving = () => {
       ? activeFilters.join(', ') 
       : 'None selected';
 
-    // Prepare customer data for printing - use filtered entries
     const customerListData = filteredEntries.map((entry) => {
-      // Get the full customer object to access phone if not in entry
       const customer = customers.find(c => c._id === entry.customerId);
-      
-      // Extract city - prefer entry.city, then check customer data
       let customerCity = entry.city || '';
       if (!customerCity && customer) {
         customerCity = customer.city || '';
@@ -448,7 +430,6 @@ const CashReceiving = () => {
           customerCity = defaultAddress?.city || '';
         }
       }
-      // If still no city, try to find from selected cities
       if (!customerCity && selectedCities.length > 0 && customer) {
         if (customer.addresses && customer.addresses.length > 0) {
           const matchingAddress = customer.addresses.find(addr => 
@@ -457,7 +438,6 @@ const CashReceiving = () => {
           customerCity = matchingAddress?.city || '';
         }
       }
-
       return {
         name: entry.name || entry.accountName || 'N/A',
         phone: entry.phone || customer?.phone || 'N/A',
@@ -466,185 +446,31 @@ const CashReceiving = () => {
       };
     });
 
-    // Create print window
-    const printWindow = window.open('', '_blank');
-    const printDate = new Date().toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
+    const totalBalance = customerListData.reduce((sum, c) => sum + (c.balance || 0), 0);
     const selectedCitiesText = selectedCities.length > 0 ? selectedCities.join(', ') : 'All Cities';
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Customer Balance List - ${selectedCitiesText}</title>
-          <style>
-            @media print {
-              @page {
-                size: A4;
-                margin: 0.5in;
-              }
-              body {
-                margin: 0;
-                padding: 0;
-              }
-            }
-            body {
-              font-family: 'Arial', sans-serif;
-              font-size: 12px;
-              color: #000;
-              margin: 0;
-              padding: 20px;
-            }
-            .header {
-              text-align: center;
-              margin-bottom: 30px;
-              border-bottom: 2px solid #000;
-              padding-bottom: 15px;
-            }
-            .company-name {
-              font-size: 24px;
-              font-weight: bold;
-              margin-bottom: 5px;
-            }
-            .document-title {
-              font-size: 18px;
-              font-weight: bold;
-              margin-top: 10px;
-            }
-            .info-section {
-              margin-bottom: 20px;
-              font-size: 11px;
-            }
-            .info-row {
-              margin-bottom: 5px;
-            }
-            .info-label {
-              font-weight: bold;
-              display: inline-block;
-              width: 120px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 20px;
-            }
-            th {
-              background-color: #f0f0f0;
-              border: 1px solid #000;
-              padding: 10px;
-              text-align: left;
-              font-weight: bold;
-            }
-            td {
-              border: 1px solid #000;
-              padding: 8px;
-            }
-            .text-right {
-              text-align: right;
-            }
-            .text-center {
-              text-align: center;
-            }
-            .footer {
-              margin-top: 30px;
-              text-align: center;
-              font-size: 10px;
-              border-top: 1px solid #000;
-              padding-top: 10px;
-            }
-            .total-row {
-              font-weight: bold;
-              background-color: #f9f9f9;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="company-name">${companyName}</div>
-            ${companyAddress ? `<div style="font-size: 11px; margin-top: 5px;">${companyAddress}</div>` : ''}
-            ${companyPhone ? `<div style="font-size: 11px;">${companyPhone}</div>` : ''}
-            <div class="document-title">Customer Balance List</div>
-          </div>
-
-          <div class="info-section">
-            <div class="info-row">
-              <span class="info-label">Date:</span>
-              <span>${printDate}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Cities:</span>
-              <span>${selectedCitiesText}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Balance Filters:</span>
-              <span>${filterDescription}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Total Customers:</span>
-              <span>${customerListData.length}</span>
-            </div>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 5%;">#</th>
-                <th style="width: 30%;">Customer Name</th>
-                <th style="width: 20%;">Contact Number</th>
-                <th style="width: 20%;">City</th>
-                <th style="width: 25%;" class="text-right">Current Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${customerListData.map((customer, index) => {
-                const balance = customer.balance || 0;
-                const balanceText = balance >= 0 
-                  ? `Rs. ${Math.abs(balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                  : `(Rs. ${Math.abs(balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
-                const balanceClass = balance < 0 ? 'style="color: red;"' : '';
-                
-                return `
-                  <tr>
-                    <td class="text-center">${index + 1}</td>
-                    <td>${customer.name}</td>
-                    <td>${customer.phone}</td>
-                    <td>${customer.city}</td>
-                    <td class="text-right" ${balanceClass}>${balanceText}</td>
-                  </tr>
-                `;
-              }).join('')}
-              <tr class="total-row">
-                <td colspan="4" class="text-right"><strong>Total Balance:</strong></td>
-                <td class="text-right">
-                  <strong>
-                    ${(() => {
-                      const total = customerListData.reduce((sum, c) => sum + (c.balance || 0), 0);
-                      return total >= 0 
-                        ? `Rs. ${Math.abs(total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        : `(Rs. ${Math.abs(total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
-                    })()}
-                  </strong>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="footer">
-            <div>Generated on ${printDate}</div>
-            <div>This document is for payment collection purposes</div>
-          </div>
-        </body>
-      </html>
-    `);
-
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => {
-      printWindow.print();
-    }, 250);
+    setCustomerListPrintData({
+      data: customerListData,
+      columns: [
+        { header: '#', key: '_index', render: (row, idx) => idx + 1 },
+        { header: 'Customer Name', key: 'name' },
+        { header: 'Contact', key: 'phone' },
+        { header: 'City', key: 'city' },
+        { header: 'Balance', key: 'balance', align: 'right', bold: true, render: (row) => {
+          const b = row.balance || 0;
+          return b >= 0
+            ? `Rs. ${Math.abs(b).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : `(Rs. ${Math.abs(b).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+        }}
+      ],
+      filters: { dateFrom: selectedCitiesText, dateTo: filterDescription, city: '' },
+      summaryData: {
+        'Total Customers': customerListData.length,
+        'Total Balance': totalBalance
+      },
+      title: `Customer Balance List - ${selectedCitiesText}`
+    });
+    setShowCustomerListPrint(true);
   };
 
   return (
@@ -1077,6 +903,22 @@ const CashReceiving = () => {
         documentTitle="Cash Receipt Voucher"
         partyLabel="Customer"
       />
+
+      {/* Customer Balance List Print Modal */}
+      {showCustomerListPrint && customerListPrintData && (
+        <PrintReportModal
+          isOpen={showCustomerListPrint}
+          onClose={() => {
+            setShowCustomerListPrint(false);
+            setCustomerListPrintData(null);
+          }}
+          reportTitle={customerListPrintData.title}
+          data={customerListPrintData.data}
+          columns={customerListPrintData.columns}
+          filters={customerListPrintData.filters}
+          summaryData={customerListPrintData.summaryData}
+        />
+      )}
     </PageShell>
   );
 };

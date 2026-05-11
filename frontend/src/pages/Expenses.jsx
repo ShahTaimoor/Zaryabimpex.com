@@ -42,6 +42,8 @@ import RecurringExpensesPanel from '../components/RecurringExpensesPanel';
 import { getLocalDateString } from '../utils/dateUtils';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
+import { PrintModal } from '../components/print';
+import { useCompanyInfo } from '../hooks/useCompanyInfo';
 
 const today = getLocalDateString();
 
@@ -74,6 +76,8 @@ const Expenses = () => {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [supplierDropdownIndex, setSupplierDropdownIndex] = useState(-1);
   const [customerDropdownIndex, setCustomerDropdownIndex] = useState(-1);
+  const [printExpense, setPrintExpense] = useState(null);
+  const { companyInfo } = useCompanyInfo();
 
   const { data: expenseAccountsResponse, isLoading: expenseAccountsLoading } = useGetAccountsQuery({
     accountType: 'expense',
@@ -442,86 +446,12 @@ const Expenses = () => {
     });
   };
 
-  const openExpenseDocument = (expense, { print = false } = {}) => {
-    const accountLabel = expense.expenseAccount?.accountName
-      ? `${expense.expenseAccount.accountName} (${expense.expenseAccount.accountCode || ''})`
-      : 'Expense Account';
-    const methodLabel = expense.source === 'bank' ? 'Bank' : 'Cash';
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) return;
-
-    const htmlContent = `
-      <html>
-        <head>
-          <title>Expense Voucher</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #1f2937; }
-            h1 { font-size: 20px; margin-bottom: 16px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-            td { padding: 8px 12px; border: 1px solid #e5e7eb; vertical-align: top; font-size: 14px; }
-            .label { font-weight: 600; background: #f3f4f6; width: 35%; }
-            .footer { text-align: center; font-size: 12px; color: #6b7280; }
-          </style>
-        </head>
-        <body>
-          <h1>Expense Voucher</h1>
-          <table>
-            <tr>
-              <td class="label">Voucher ID</td>
-              <td>${expense.voucherCode || expense._id}</td>
-            </tr>
-            <tr>
-              <td class="label">Date</td>
-              <td>${formatDate(expense.date || expense.createdAt)}</td>
-            </tr>
-            <tr>
-              <td class="label">Payment Method</td>
-              <td>${methodLabel}</td>
-            </tr>
-            <tr>
-              <td class="label">Expense Account</td>
-              <td>${accountLabel}</td>
-            </tr>
-            <tr>
-              <td class="label">Amount</td>
-              <td>${formatCurrency(expense.amount || 0)}</td>
-            </tr>
-            ${expense.supplier || expense.customer ? `
-            <tr>
-              <td class="label">Party</td>
-              <td>${expense.supplier?.displayName || expense.customer?.displayName || '-'}</td>
-            </tr>
-            ` : ''}
-            <tr>
-              <td class="label">Description</td>
-              <td>${expense.particular || '-'}</td>
-            </tr>
-            <tr>
-              <td class="label">Notes</td>
-              <td>${expense.notes || '-'}</td>
-            </tr>
-          </table>
-          <div class="footer">Generated on ${formatDate(new Date().toISOString())}</div>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    printWindow.focus();
-    if (print) {
-      printWindow.print();
-      printWindow.close();
-    }
-  };
-
   const handleViewExpense = (expense) => {
-    openExpenseDocument(expense, { print: false });
+    setPrintExpense(expense);
   };
 
   const handlePrintExpense = (expense) => {
-    openExpenseDocument(expense, { print: true });
+    setPrintExpense(expense);
   };
 
   return (
@@ -983,6 +913,78 @@ const Expenses = () => {
         itemType="Expense"
         isLoading={deleteConfirmation.isLoading}
       />
+
+      {/* Expense Voucher Print Modal */}
+      {printExpense && (
+        <PrintModal
+          isOpen={!!printExpense}
+          onClose={() => setPrintExpense(null)}
+          documentTitle="Expense Voucher"
+          hasData={!!printExpense}
+          emptyMessage="No expense data."
+        >
+          <div className="print-document bg-white p-8 max-w-[500px] mx-auto">
+            <div className="text-center mb-5 border-b-2 border-black pb-3">
+              <div className="text-xl font-black uppercase">
+                {companyInfo?.companyName || 'POS SYSTEM'}
+              </div>
+              {companyInfo?.address && (
+                <div className="text-xs text-gray-600 mt-1">{companyInfo.address}</div>
+              )}
+              <div className="text-base font-bold mt-2">Expense Voucher</div>
+            </div>
+            <table className="w-full border-collapse text-sm">
+              <tbody>
+                <tr>
+                  <td className="border border-gray-300 p-2 font-semibold bg-gray-50 w-[35%]">Voucher ID</td>
+                  <td className="border border-gray-300 p-2">{printExpense.voucherCode || printExpense._id}</td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-300 p-2 font-semibold bg-gray-50">Date</td>
+                  <td className="border border-gray-300 p-2">{formatDate(printExpense.date || printExpense.createdAt)}</td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-300 p-2 font-semibold bg-gray-50">Payment Method</td>
+                  <td className="border border-gray-300 p-2">{printExpense.source === 'bank' ? 'Bank' : 'Cash'}</td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-300 p-2 font-semibold bg-gray-50">Expense Account</td>
+                  <td className="border border-gray-300 p-2">
+                    {printExpense.expenseAccount?.accountName
+                      ? `${printExpense.expenseAccount.accountName} (${printExpense.expenseAccount.accountCode || ''})`
+                      : 'Expense Account'}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-300 p-2 font-semibold bg-gray-50">Amount</td>
+                  <td className="border border-gray-300 p-2 font-bold">{formatCurrency(printExpense.amount || 0)}</td>
+                </tr>
+                {(printExpense.supplier || printExpense.customer) && (
+                  <tr>
+                    <td className="border border-gray-300 p-2 font-semibold bg-gray-50">Party</td>
+                    <td className="border border-gray-300 p-2">
+                      {printExpense.supplier?.displayName || printExpense.customer?.displayName || '-'}
+                    </td>
+                  </tr>
+                )}
+                <tr>
+                  <td className="border border-gray-300 p-2 font-semibold bg-gray-50">Description</td>
+                  <td className="border border-gray-300 p-2">{printExpense.particular || '-'}</td>
+                </tr>
+                {printExpense.notes && (
+                  <tr>
+                    <td className="border border-gray-300 p-2 font-semibold bg-gray-50">Notes</td>
+                    <td className="border border-gray-300 p-2">{printExpense.notes}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            <div className="mt-6 pt-3 border-t text-center text-[10px] text-gray-400">
+              Generated on {formatDate(new Date().toISOString())}
+            </div>
+          </div>
+        </PrintModal>
+      )}
     </div>
   );
 };

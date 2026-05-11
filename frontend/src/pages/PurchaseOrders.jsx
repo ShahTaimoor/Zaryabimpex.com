@@ -1346,8 +1346,18 @@ export const PurchaseOrders = ({ tabId }) => {
     };
   };
 
-  const handlePrint = (order) => {
-    const formatted = formatPurchaseOrderForPrint(order);
+  const handlePrint = async (order) => {
+    const orderId = order?._id || order?.id;
+    let source = order;
+    if (orderId) {
+      try {
+        const result = await triggerGetPurchaseOrder(orderId).unwrap();
+        source = result?.purchaseOrder || result?.data?.purchaseOrder || result || order;
+      } catch {
+        toast.error('Could not load full order — printing with available data');
+      }
+    }
+    const formatted = formatPurchaseOrderForPrint(source);
     if (formatted) {
       setPrintOrderData(formatted);
       setShowPrintModal(true);

@@ -1,7 +1,17 @@
 /**
- * Print page style string for react-to-print.
- * Injected into the print iframe so styles apply when printing.
+ * Print page style strings for react-to-print.
+ * Injected into the print iframe via the `pageStyle` prop.
+ *
+ * IMPORTANT: Keep these values aligned with printStyles.css (the single
+ * source of truth for native / Ctrl+P print). When you change a value
+ * here, update printStyles.css too — and vice-versa.
+ *
+ * Canonical values:
+ *   body font-size: 11px      |  th/td border: 1px solid #000
+ *   th/td padding:  4px 6px   |  th/td font-size: 11px
+ *   th background:  #f3f4f6   |  @page A4: margin 10mm
  */
+
 export const PRINT_PAGE_STYLE = `
   @page { size: A4 portrait; margin: 10mm; }
   * { box-sizing: border-box; }
@@ -17,9 +27,16 @@ export const PRINT_PAGE_STYLE = `
   }
   .no-print, .btn, button, .print-toolbar { display: none !important; }
   .print-wrapper, .print-preview-scale { box-shadow: none !important; border: none !important; }
+
   table { width: 100% !important; border-collapse: collapse !important; }
-  th, td { border: 1px solid #333 !important; padding: 4px 6px !important; font-size: 10px !important; }
-  th { background-color: #f3f4f6 !important; font-weight: 700 !important; }
+  th, td { border: 1px solid #000 !important; padding: 4px 6px !important; font-size: 11px !important; line-height: 1.2 !important; }
+  th { background-color: #f3f4f6 !important; font-weight: 700 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  .print-document {
+    width: 100% !important; max-width: 100% !important;
+    box-shadow: none !important; border: none !important;
+    padding: 0 !important; margin: 0 !important; border-radius: 0 !important;
+  }
   .print-document__company-name { font-size: 20px !important; font-weight: 700 !important; }
   .print-document__table th, .print-document__table td { padding: 4px 6px !important; }
   .print-document__summary-table { font-size: 11px !important; }
@@ -28,7 +45,8 @@ export const PRINT_PAGE_STYLE = `
   .layout2-table th, .layout2-table td { border: 1px solid #000 !important; }
   .print-document, .receipt-voucher { page-break-inside: avoid; }
   .print-document--compact { width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
-  /* Sale invoice - emerald */
+
+  /* Sale invoice — emerald */
   .print-document.print-document--sale .print-document__table th,
   .print-document.print-document--sale .layout2-table th {
     background-color: #059669 !important; color: #fff !important;
@@ -39,7 +57,7 @@ export const PRINT_PAGE_STYLE = `
     background-color: #d1fae5 !important;
     -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
   }
-  /* Purchase invoice - blue */
+  /* Purchase invoice — blue */
   .print-document.print-document--purchase .print-document__table th,
   .print-document.print-document--purchase .layout2-table th {
     background-color: #2563eb !important; color: #fff !important;
@@ -50,12 +68,19 @@ export const PRINT_PAGE_STYLE = `
     background-color: #dbeafe !important;
     -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
   }
+
+  tr { page-break-inside: avoid !important; }
+  thead { display: table-header-group !important; }
+  .text-right { text-align: right !important; }
+  .text-left { text-align: left !important; }
+  .text-center { text-align: center !important; }
+  .font-bold { font-weight: 700 !important; }
 `;
 
 export const THERMAL_PRINT_PAGE_STYLE = `
-  @page { 
-    size: 80mm auto !important; 
-    margin: 0 !important; 
+  @page {
+    size: 80mm auto !important;
+    margin: 0 !important;
   }
   html, body {
     width: 80mm !important;
@@ -68,15 +93,15 @@ export const THERMAL_PRINT_PAGE_STYLE = `
     -webkit-text-size-adjust: 100% !important;
     zoom: 1 !important;
   }
-  * { 
-    box-sizing: border-box !important; 
+  * {
+    box-sizing: border-box !important;
   }
   .no-print, .btn, button, .print-toolbar { display: none !important; }
-  
-  .thermal-receipt { 
-    width: 72mm !important; 
+
+  .thermal-receipt {
+    width: 72mm !important;
     max-width: 72mm !important;
-    margin: 0 auto !important; 
+    margin: 0 auto !important;
     padding: 2mm 1mm !important;
     font-family: Arial, Helvetica, sans-serif !important;
     font-size: 13px !important;
@@ -86,16 +111,16 @@ export const THERMAL_PRINT_PAGE_STYLE = `
     color: #000 !important;
     transform: none !important;
   }
-  .thermal-receipt table { 
-    border-collapse: collapse !important; 
-    width: 100% !important; 
+  .thermal-receipt table {
+    border-collapse: collapse !important;
+    width: 100% !important;
     margin: 0 !important;
     table-layout: fixed !important;
   }
-  .thermal-receipt th, .thermal-receipt td { 
-    border: none !important; 
-    border-bottom: 1px solid #000 !important; 
-    padding: 1mm 0 !important; 
+  .thermal-receipt th, .thermal-receipt td {
+    border: none !important;
+    border-bottom: 1px solid #000 !important;
+    padding: 1mm 0 !important;
     font-size: 12px !important;
     font-weight: 600 !important;
     word-wrap: break-word !important;
@@ -107,15 +132,15 @@ export const THERMAL_PRINT_PAGE_STYLE = `
   .thermal-receipt th:nth-child(3), .thermal-receipt td:nth-child(3) { width: 20% !important; text-align: right !important; }
   .thermal-receipt th:nth-child(4), .thermal-receipt td:nth-child(4) { width: 25% !important; text-align: right !important; }
 
-  .thermal-receipt__divider { 
-    border-top: 1px dashed #000 !important; 
-    margin: 2mm 0 !important; 
+  .thermal-receipt__divider {
+    border-top: 1px dashed #000 !important;
+    margin: 2mm 0 !important;
     width: 100% !important;
   }
-  .thermal-receipt__summary-row--total { 
-    font-size: 16px !important; 
-    font-weight: bold !important; 
-    border-top: 1px solid #000 !important; 
+  .thermal-receipt__summary-row--total {
+    font-size: 16px !important;
+    font-weight: bold !important;
+    border-top: 1px solid #000 !important;
     margin-top: 1mm !important;
     padding-top: 1mm !important;
   }

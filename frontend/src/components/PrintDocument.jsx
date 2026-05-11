@@ -517,7 +517,8 @@ const PrintDocument = ({
             <div className={printClassName}>
                 {children}
 
-                {/* Header Section */}
+                {/* Header Section — respects showCompanyDetails & showLogo */}
+                {showCompanyDetails && (
                 <div className="layout2-header">
                     <div className="grid grid-cols-12 gap-4 items-center mb-2">
                         <div className="col-span-3">
@@ -540,26 +541,44 @@ const PrintDocument = ({
                             <div className="layout2-company-phone italic text-sm">
                                 Phone # {resolvedCompanyPhone}
                             </div>
+                            {showEmail && safeCompanySettings.email && (
+                                <div className="layout2-company-email italic text-sm">
+                                    {safeCompanySettings.email}
+                                </div>
+                            )}
                         </div>
                         <div className="col-span-2"></div>
                     </div>
                     <div className="border-b-2 border-black w-full mb-6"></div>
                 </div>
+                )}
 
-                {/* Info Boxes */}
+                {/* Info Boxes — respects party detail toggles */}
                 <div className="grid grid-cols-12 gap-0 mb-6 border-t border-l border-black">
                     <div className="col-span-8 p-2 border-r border-b border-black font-medium">
-                        Customer: <span className="uppercase">{partyInfo.name}</span> {canViewPartyPhone && partyInfo.phone !== 'N/A' && partyInfo.phone}
+                        {showPrintBusinessName && (<>{partyLabel}: <span className="uppercase">{partyInfo.name}</span>{' '}</>)}
+                        {canViewPartyPhone && partyInfo.phone !== 'N/A' && partyInfo.phone}
                     </div>
+                    {showPrintInvoiceDate && (
                     <div className="col-span-4 p-2 border-r border-b border-black font-medium text-right">
                         Invoice Date: {formatDate(invoiceDate)}
                     </div>
+                    )}
+                    {!showPrintInvoiceDate && (
+                    <div className="col-span-4 p-2 border-r border-b border-black"></div>
+                    )}
                     <div className="col-span-8 p-2 border-r border-b border-black font-medium min-h-[40px]">
-                        Address: {partyInfo.address}
+                        {showPrintAddress && partyInfo.address && (<>Address: {partyInfo.address}</>)}
+                        {showPrintCity && partyInfo.city && partyInfo.city !== 'N/A' && (<>{showPrintAddress && partyInfo.address ? ', ' : ''}{partyInfo.city}</>)}
                     </div>
+                    {showPrintInvoiceNumber && (
                     <div className="col-span-4 p-2 border-r border-b border-black font-medium text-right italic">
                         Invoice No: {documentNumber}
                     </div>
+                    )}
+                    {!showPrintInvoiceNumber && (
+                    <div className="col-span-4 p-2 border-r border-b border-black"></div>
+                    )}
                 </div>
 
                 {/* Items Table */}
@@ -570,6 +589,7 @@ const PrintDocument = ({
                             <th className="border border-black p-1 text-center">Product Name</th>
                             <th className="border border-black p-1 text-center w-[100px]">Quantity</th>
                             <th className="border border-black p-1 text-center w-[120px]">Price</th>
+                            {showDiscount && <th className="border border-black p-1 text-center w-[100px]">Disc</th>}
                             <th className="border border-black p-1 text-center w-[150px]">Total</th>
                         </tr>
                     </thead>
@@ -581,6 +601,7 @@ const PrintDocument = ({
                                 0
                             );
                             const lineTotal = toNumber(item.total ?? item.lineTotal ?? item.totalPrice ?? item.totalCost, qty * price);
+                            const lineDiscount = toNumber(item.discount ?? item.discountAmount ?? 0, 0);
                             const qtyDisplay = formatQuantityDisplay(qty, item.product ?? item.productData, null, { boxes: item.boxes, pieces: item.pieces });
                             const barcodeLine = getLineBarcodeDisplay(item);
                             return (
@@ -598,6 +619,9 @@ const PrintDocument = ({
                                                 )}
                                                 <span>{item.product?.name || item.name || `Item ${index + 1}`}</span>
                                             </div>
+                                            {showDescription && item.description && (
+                                                <div className="text-[10px] text-gray-600 normal-case">{item.description}</div>
+                                            )}
                                             {barcodeLine && (
                                                 <div className="text-[10px] text-gray-700 normal-case font-mono pl-0">
                                                     {barcodeLine.label}: {barcodeLine.value}
@@ -607,13 +631,13 @@ const PrintDocument = ({
                                     </td>
                                     <td className="border border-black p-1 text-center">{qtyDisplay}</td>
                                     <td className="border border-black p-1 text-right">{formatCurrency(price)}</td>
+                                    {showDiscount && <td className="border border-black p-1 text-right">{lineDiscount > 0 ? formatCurrency(lineDiscount) : '-'}</td>}
                                     <td className="border border-black p-1 text-right">{formatCurrency(lineTotal)}</td>
                                 </tr>
                             );
                         })}
-                        {/* Summary Footer of Table - Subtotal (sum of line items); Net Amount is in right panel */}
                         <tr className="font-bold">
-                            <td colSpan="4" className="border border-black p-1 text-right">Subtotal</td>
+                            <td colSpan={showDiscount ? 5 : 4} className="border border-black p-1 text-right">Subtotal</td>
                             <td className="border border-black p-1 text-right">{formatCurrency(computedSubtotal)}</td>
                         </tr>
                     </tbody>
@@ -622,6 +646,8 @@ const PrintDocument = ({
                 {/* Bottom Section */}
                 <div className="grid grid-cols-12 gap-0 mt-0">
                     <div className="col-span-8 p-4 italic">
+                        {showDate && (
+                        <>
                         <div className="mb-2">
                             Printed By: <span className="underline font-bold uppercase">{orderData?.createdBy?.firstName || (orderData?.createdBy?.name ? orderData.createdBy.name.split(' ')[0] : 'ADMIN')}</span>
                         </div>
@@ -631,17 +657,23 @@ const PrintDocument = ({
                         <div className="mb-6">
                             Print Date Time: {formatDateTime(generatedAt)}
                         </div>
+                        </>
+                        )}
+                        {showFooter && (
                         <div className="urdu-note text-right font-bold text-lg mt-8" dir="rtl">
                             نوٹ: پلٹی شدہ مال کی ٹوٹ پھوٹ کی ذمہ داری نہیں ہو گی۔ مال دوکان میں چیک
                         </div>
+                        )}
                     </div>
                     <div className="col-span-4">
                         <table className="w-full border-collapse border-l border-black">
                             <tbody>
+                                {showDiscount && (
                                 <tr>
                                     <td className="border-b border-r border-black p-1 text-right font-bold">Invoice Discount</td>
                                     <td className="border-b border-r border-black p-1 text-right">{formatCurrency(discountValue)}</td>
                                 </tr>
+                                )}
                                 <tr>
                                     <td className="border-b border-r border-black p-1 text-right font-bold">Net Amount</td>
                                     <td className="border-b border-r border-black p-1 text-right font-bold">{formatCurrency(totalValue)}</td>

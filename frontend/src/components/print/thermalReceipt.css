@@ -3,24 +3,11 @@
  * Specifically optimized for 80mm (72mm printable) printers.
  */
 
-@media print {
-  @page {
-    size: 80mm auto;
-    margin: 0;
-  }
-
-  body {
-    margin: 0;
-    padding: 0;
-    background: #fff;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .no-print {
-    display: none !important;
-  }
-}
+/**
+ * Thermal Receipt — SCREEN-only styles.
+ * All @media print rules live in printStyles.css (global)
+ * and THERMAL_PRINT_PAGE_STYLE (react-to-print iframe).
+ */
 
 .thermal-receipt {
   width: 72mm;

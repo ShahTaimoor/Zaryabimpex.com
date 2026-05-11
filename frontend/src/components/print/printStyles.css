@@ -1,77 +1,154 @@
 /**
- * Centralized Print Styles
- * Used by PrintWrapper and all print layouts.
- * Import once in App or main entry.
+ * =========================================================================
+ * SINGLE SOURCE OF TRUTH — All @media print rules for the entire app.
+ * Imported once in index.jsx. Do NOT add @media print blocks elsewhere.
+ *
+ * Canonical values (keep printPageStyle.js in sync):
+ *   body font-size: 11px
+ *   th/td border:   1px solid #000
+ *   th/td padding:  4px 6px
+ *   th/td font-size: 11px
+ *   th background:  #f3f4f6
+ *   @page:          size auto, margin 10mm
+ * =========================================================================
  */
 
 @media print {
-  /* Hide UI elements during printing */
+
+  /* ── Page ────────────────────────────────────────────────────────────── */
+  @page {
+    size: auto;
+    margin: 10mm;
+  }
+
+  /* ── Hide UI elements ───────────────────────────────────────────────── */
   .no-print,
-  .print\\:hidden,
+  .print\:hidden,
   nav,
   header:not(.print-header),
+  aside,
   .sidebar,
   .navbar,
-  button:not(.print\\:block),
+  button:not(.print\:block),
   .btn,
+  .filters,
+  .search,
   [role="banner"],
+  [role="button"],
+  [type="button"],
+  [type="submit"],
   .print-toolbar,
   .print-preview-wrapper .no-print,
   [data-print-hide="true"] {
     display: none !important;
   }
 
-  /* Reset page to auto to allow component-specific overrides */
-  @page {
-    size: auto;
-    margin: 10mm;
+  .print-only {
+    display: block !important;
   }
 
-  /* Base body reset */
+  /* ── Base body reset ────────────────────────────────────────────────── */
   body {
     margin: 0 !important;
     padding: 0 !important;
     font-family: 'Inter', Arial, Helvetica, sans-serif !important;
-    font-size: 10px !important;
+    font-size: 11px !important;
     color: #000 !important;
     background: #fff !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Prevent page breaks inside critical elements */
+  /* ── Print preview transforms ───────────────────────────────────────── */
+  .print-preview-scale {
+    transform: none !important;
+  }
+
+  .print-wrapper,
+  .print-preview-scale,
+  .print-modal-preview {
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* ── .print-document reset (A4 / standard / layout2) ────────────────── */
+  .print-document {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .print-document--compact {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* ── Logo ────────────────────────────────────────────────────────────── */
+  .print-document__logo-placeholder {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── Tables (universal) ─────────────────────────────────────────────── */
+  table,
+  .print-document__table,
+  .account-ledger-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 11px !important;
+    table-layout: auto !important;
+  }
+
+  th, td,
+  .print-document__table th,
+  .print-document__table td,
+  .account-ledger-table th,
+  .account-ledger-table td {
+    border: 1px solid #000 !important;
+    padding: 4px 6px !important;
+    font-size: 11px !important;
+    height: auto !important;
+    line-height: 1.2 !important;
+  }
+
+  th,
+  .print-document__table th,
+  .account-ledger-table th {
+    background-color: #f3f4f6 !important;
+    font-weight: 700 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* ── Page breaks ────────────────────────────────────────────────────── */
   .print-document,
   .print-layout-a4 .print-document,
   .receipt-voucher {
     page-break-inside: avoid;
   }
 
-  /* Allow page breaks between rows for long tables */
   .print-break-inside-auto tr,
   .print-break-inside-auto .print-row {
     page-break-inside: auto;
   }
 
-  /* Tables */
-  table {
-    width: 100% !important;
-    border-collapse: collapse !important;
+  tr {
+    page-break-inside: avoid !important;
   }
 
-  th, td {
-    border: 1px solid #000 !important;
-    padding: 4px 6px !important;
-    font-size: 9px !important;
+  thead {
+    display: table-header-group !important;
   }
 
-  th {
-    background-color: #eee !important;
-    font-weight: 700 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* A4 Invoice layout */
+  /* ── A4 Invoice layout helpers ──────────────────────────────────────── */
   .print-layout-a4 {
     font-size: 11px;
     max-width: 100%;
@@ -93,7 +170,7 @@
     padding: 4px;
   }
 
-  /* 80mm Thermal receipt layout */
+  /* ── 80mm Thermal layout helpers ────────────────────────────────────── */
   .print-layout-thermal {
     width: 80mm !important;
     max-width: 80mm !important;
@@ -119,7 +196,7 @@
     padding: 2px 3px;
   }
 
-  /* Ledger / Summary layouts */
+  /* ── Ledger / Summary print header & footer ─────────────────────────── */
   .print-header {
     text-align: center;
     margin-bottom: 10px;
@@ -141,7 +218,85 @@
     padding-top: 4px;
   }
 
-  /* Sale invoice print - emerald (match desktop/customer colors) */
+  /* ── Account Ledger Summary colors ──────────────────────────────────── */
+  .account-ledger-print {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Customer = emerald */
+  .account-ledger-print--customer .account-ledger-print-thead th {
+    background-color: #059669 !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .account-ledger-print--customer .account-ledger-print-opening td {
+    background-color: #ecfdf5 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .account-ledger-print--customer .account-ledger-print-subtotal td {
+    background-color: #d1fae5 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .account-ledger-print--customer .account-ledger-print-total td {
+    background-color: #a7f3d0 !important;
+    font-weight: bold;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Supplier = blue */
+  .account-ledger-print--supplier .account-ledger-print-thead th {
+    background-color: #2563eb !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .account-ledger-print--supplier .account-ledger-print-opening td {
+    background-color: #eff6ff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .account-ledger-print--supplier .account-ledger-print-subtotal td {
+    background-color: #dbeafe !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .account-ledger-print--supplier .account-ledger-print-total td {
+    background-color: #bfdbfe !important;
+    font-weight: bold;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Expense = amber */
+  .account-ledger-print--expense .account-ledger-print-thead th {
+    background-color: #d97706 !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .account-ledger-print--expense .account-ledger-print-opening td {
+    background-color: #fffbeb !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .account-ledger-print--expense .account-ledger-print-subtotal td {
+    background-color: #fef3c7 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .account-ledger-print--expense .account-ledger-print-total td {
+    background-color: #fde68a !important;
+    font-weight: bold;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── Sale invoice = emerald ─────────────────────────────────────────── */
   .print-document--sale .print-document__table th,
   .print-document--sale .layout2-table th {
     background-color: #059669 !important;
@@ -162,11 +317,9 @@
   }
   .print-document--sale .print-document__summary-table {
     border-color: #10b981 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
   }
 
-  /* Purchase invoice print - blue (match desktop/supplier colors) */
+  /* ── Purchase invoice = blue ────────────────────────────────────────── */
   .print-document--purchase .print-document__table th,
   .print-document--purchase .layout2-table th {
     background-color: #2563eb !important;
@@ -187,12 +340,11 @@
   }
   .print-document--purchase .print-document__summary-table {
     border-color: #3b82f6 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
   }
 
-  /* Utility classes */
+  /* ── Utility classes ────────────────────────────────────────────────── */
   .text-right { text-align: right !important; }
+  .text-left { text-align: left !important; }
   .text-center { text-align: center !important; }
   .font-bold { font-weight: 700 !important; }
   .print-amount { font-size: 9px !important; }

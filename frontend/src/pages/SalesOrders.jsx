@@ -1856,8 +1856,18 @@ const SalesOrders = ({ tabId }) => {
     ]
   );
 
-  const handlePrint = (order) => {
-    const formatted = formatOrderForPrint(order);
+  const handlePrint = async (order) => {
+    const orderId = order?._id || order?.id;
+    let source = order;
+    if (orderId) {
+      try {
+        const result = await fetchSalesOrderById(orderId).unwrap();
+        source = result?.salesOrder || result?.data?.salesOrder || result || order;
+      } catch {
+        showErrorToast('Could not load full order — printing with available data');
+      }
+    }
+    const formatted = formatOrderForPrint(source);
     if (!formatted) return;
     setPrintOrderData(formatted);
     setShowPrintModal(true);

@@ -272,11 +272,7 @@
   }
 }
 
-@media print {
-  .print-preview-scale {
-    transform: none !important;
-  }
-}
+/* Print transform reset moved to printStyles.css */
 
 .print-document {
   width: 900px;
@@ -383,11 +379,7 @@
   display: inline-block;
 }
 
-@media print {
-  .print-document__logo-img {
-    /* Logo size controlled by JS inline styles */
-  }
-}
+/* Print logo rules moved to printStyles.css */
 
 .print-document__logo-placeholder {
   display: inline-flex;
@@ -404,12 +396,7 @@
   border-radius: 8px;
 }
 
-@media print {
-  .print-document__logo-placeholder {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-}
+/* Print logo placeholder rules moved to printStyles.css */
 
 .print-document__toolbar {
   display: flex;
@@ -646,222 +633,7 @@
   margin-top: 40px;
 }
 
-@media print {
-  /* Reset for print */
-  body {
-    background: white !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    font-size: 11px !important;
-    color: #000 !important;
-  }
-
-  .print-document {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-shadow: none !important;
-    border: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-  }
-
-  /* Compact Table Layout */
-  .print-document__table,
-  .account-ledger-table,
-  table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-    font-size: 11px !important;
-    table-layout: auto !important;
-  }
-
-  .print-document__table th,
-  .print-document__table td,
-  .account-ledger-table th,
-  .account-ledger-table td,
-  table th,
-  table td {
-    padding: 3px 4px !important;
-    border: 1px solid #000 !important;
-    height: auto !important;
-    line-height: 1.2 !important;
-  }
-
-  .print-document__table th,
-  .account-ledger-table th,
-  table th {
-    background-color: #f3f4f6 !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-    font-weight: 700 !important;
-  }
-
-  /* Account Ledger Summary print colors - match desktop emerald/blue */
-  .account-ledger-print {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .account-ledger-print--customer .account-ledger-print-thead th {
-    background-color: #059669 !important;
-    color: #fff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .account-ledger-print--customer .account-ledger-print-opening td {
-    background-color: #ecfdf5 !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .account-ledger-print--customer .account-ledger-print-subtotal td {
-    background-color: #d1fae5 !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .account-ledger-print--customer .account-ledger-print-total td {
-    background-color: #a7f3d0 !important;
-    font-weight: bold;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .account-ledger-print--supplier .account-ledger-print-thead th {
-    background-color: #2563eb !important;
-    color: #fff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .account-ledger-print--supplier .account-ledger-print-opening td {
-    background-color: #eff6ff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .account-ledger-print--supplier .account-ledger-print-subtotal td {
-    background-color: #dbeafe !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .account-ledger-print--supplier .account-ledger-print-total td {
-    background-color: #bfdbfe !important;
-    font-weight: bold;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .account-ledger-print--expense .account-ledger-print-thead th {
-    background-color: #d97706 !important;
-    color: #fff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .account-ledger-print--expense .account-ledger-print-opening td {
-    background-color: #fffbeb !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .account-ledger-print--expense .account-ledger-print-subtotal td {
-    background-color: #fef3c7 !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .account-ledger-print--expense .account-ledger-print-total td {
-    background-color: #fde68a !important;
-    font-weight: bold;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  /* Sale invoice print - emerald (override default gray, must come after table th rules) */
-  .print-document.print-document--sale .print-document__table th,
-  .print-document.print-document--sale .layout2-table th {
-    background-color: #059669 !important;
-    color: #fff !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .print-document.print-document--sale .print-document__section-label {
-    color: #047857 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .print-document.print-document--sale .print-document__summary-row--total {
-    background-color: #d1fae5 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Purchase invoice print - blue */
-  .print-document.print-document--purchase .print-document__table th,
-  .print-document.print-document--purchase .layout2-table th {
-    background-color: #2563eb !important;
-    color: #fff !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .print-document.print-document--purchase .print-document__section-label {
-    color: #1d4ed8 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .print-document.print-document--purchase .print-document__summary-row--total {
-    background-color: #dbeafe !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Alignment */
-  .text-right {
-    text-align: right !important;
-  }
-
-  .text-left {
-    text-align: left !important;
-  }
-
-  .text-center {
-    text-align: center !important;
-  }
-
-  /* Hiding UI elements */
-  .no-print,
-  button,
-  .btn,
-  .filters,
-  .search,
-  nav,
-  aside,
-  .sidebar,
-  [role="button"],
-  [type="button"],
-  [type="submit"] {
-    display: none !important;
-  }
-
-  /* Show print-only elements */
-  .print-only {
-    display: block !important;
-  }
-
-  /* Ensure proper page breaks */
-  tr {
-    page-break-inside: avoid !important;
-  }
-
-  thead {
-    display: table-header-group !important;
-  }
-}
+/* ==========================================================================
+   ALL @media print rules consolidated into components/print/printStyles.css
+   Do NOT add @media print blocks here — edit printStyles.css instead.
+   ========================================================================== */
