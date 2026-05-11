@@ -658,10 +658,6 @@ const SaleReturns = () => {
     setReturnAmount(0);
   };
 
-  useEffect(() => {
-    const subtotal = returnCart.reduce((sum, item) => sum + (item.quantity || 1) * (item.originalPrice || 0), 0);
-    setReturnAmount(subtotal);
-  }, [returnCart]);
 
   // Format currency
   const formatCurrency = (amount) => {

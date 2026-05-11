@@ -2983,7 +2983,10 @@ export const Sales = ({ tabId, editData }) => {
           documentTitle="Sales Invoice"
           partyLabel="Customer"
           onComplete={() => {
-            resetSaleDraft({ resetBillDate: true });
+            const isTemp = directPrintOrder?.orderNumber?.startsWith('TEMP-');
+            if (!isTemp) {
+              resetSaleDraft({ resetBillDate: true });
+            }
             setDirectPrintOrder(null);
           }}
         />
@@ -2995,9 +2998,6 @@ export const Sales = ({ tabId, editData }) => {
         onClose={() => {
           setShowPrintModal(false);
           setCurrentOrder(null);
-        }}
-        onAfterPrint={() => {
-          resetSaleDraft({ resetBillDate: true });
         }}
         orderData={currentOrder}
         documentTitle="Sales Invoice"
