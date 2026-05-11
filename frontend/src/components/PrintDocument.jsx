@@ -955,10 +955,16 @@ const PrintDocument = ({
                             <span>{formatCurrency(totalValue)}</span>
                         </div>
                         {canViewPartyBalance && showPrintLedgerBalance && (
+                            <>
+                            <div className="print-document__summary-row">
+                                <span>Previous Balance</span>
+                                <span>{formatCurrency(previousBalance)}</span>
+                            </div>
                             <div className="print-document__summary-row">
                                 <span>Ledger Balance</span>
                                 <span>{formatCurrency(ledgerBalance)}</span>
                             </div>
+                            </>
                         )}
                     </div>
                 </div>
