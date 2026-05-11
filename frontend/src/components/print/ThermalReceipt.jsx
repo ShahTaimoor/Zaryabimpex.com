@@ -119,6 +119,7 @@ const ThermalReceipt = ({
       <table className="thermal-receipt__table">
         <thead>
           <tr>
+            <th style={{ width: '25px', textAlign: 'center' }}>#</th>
             <th>Item</th>
             <th>Qty</th>
             <th>Price</th>
@@ -132,6 +133,7 @@ const ThermalReceipt = ({
             const lineTotal = item.total || (qty * price);
             return (
               <tr key={index}>
+                <td style={{ textAlign: 'center' }}>{index + 1}</td>
                 <td className="thermal-receipt__item-name">
                   {item.product?.name || item.name || `Item ${index + 1}`}
                 </td>
