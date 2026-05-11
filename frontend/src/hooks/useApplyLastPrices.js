@@ -173,6 +173,8 @@ export function useApplyLastPrices({
     reset,
     isApplying,
     isRestoring,
+    setIsApplying,
+    setIsRestoring,
     isApplied,
     setIsApplied,
     originalPrices,

@@ -517,7 +517,9 @@ const SalesOrders = ({ tabId }) => {
     apply: handleApplyLastPrices,
     restore: handleRestoreCurrentPrices,
     isApplying: isLoadingLastPrices,
+    setIsApplying: setIsLoadingLastPricesBusy,
     isRestoring: isRestoringPrices,
+    setIsRestoring: setIsRestoringPrices,
     isApplied: isLastPricesApplied,
     setIsApplied: setIsLastPricesApplied,
     originalPrices,
@@ -635,6 +637,7 @@ const SalesOrders = ({ tabId }) => {
 
     // Reset loading states
     setIsAddingToCart(false);
+    setIsLoadingLastPricesBusy(false);
     setIsRestoringPrices(false);
     setIsRemovingFromCart({});
     setIsSortingItems(false);
