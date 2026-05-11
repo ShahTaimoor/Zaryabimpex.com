@@ -451,9 +451,9 @@
 .print-document__info-line {
   font-size: 13px;
   color: #111827;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   display: flex;
-  justify-content: space-between;
+  gap: 8px;
 }
 
 .print-document__info-row {
@@ -469,14 +469,13 @@
 }
 
 .print-document__info-label {
-  font-weight: 500;
+  font-weight: 700;
   color: #374151;
-  margin-right: 12px;
+  min-width: 70px;
 }
 
 .print-document__info-value {
-  text-align: right;
-  max-width: 65%;
+  text-align: left;
 }
 
 .print-document__table {
