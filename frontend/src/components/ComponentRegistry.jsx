@@ -172,7 +172,7 @@ export const componentRegistry = {
     allowMultiple: true
   },
   '/cash-receiving': {
-    title: 'Cash Receiving',
+    title: 'Multi Cash Receipt',
     icon: 'Receipt',
     allowMultiple: true
   },

@@ -644,7 +644,7 @@ export const Settings2 = () => {
       name: 'Financials',
       icon: Wallet,
       pages: [
-        { key: 'cash-receiving', name: 'Cash Receiving', view: 'view_cash_receiving', create: 'create_cash_receiving', edit: 'edit_cash_receiving', delete: 'delete_cash_receiving' },
+        { key: 'cash-receiving', name: 'Multi Cash Receipt', view: 'view_cash_receiving', create: 'create_cash_receiving', edit: 'edit_cash_receiving', delete: 'delete_cash_receiving' },
         { key: 'cash-receipts', name: 'Cash Receipts', view: 'view_cash_receipts', create: 'create_cash_receipts', edit: 'edit_cash_receipts', delete: 'delete_cash_receipts' },
         { key: 'cash-payments', name: 'Cash Payments', view: 'view_cash_payments', create: 'create_cash_payments', edit: 'edit_cash_payments', delete: 'delete_cash_payments' },
         { key: 'bank-receipts', name: 'Bank Receipts', view: 'view_bank_receipts', create: 'create_bank_receipts', edit: 'edit_bank_receipts', delete: 'delete_bank_receipts' },
@@ -924,7 +924,7 @@ export const Settings2 = () => {
       // Discounts - View only
       view_discounts: true,
       view_discount_list: true, apply_discounts: true,
-      // Financials - Cash receiving
+      // Financials - Multi Cash Receipt
       view_cash_receiving: true, create_cash_receiving: true,
       view_cash_receipts: true, create_cash_receipts: true,
       // Reports - Limited

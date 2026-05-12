@@ -190,7 +190,7 @@ export const componentRegistry = {
     component: () => import('../pages/CashReceipts').then(m => m.default || m.CashReceipts)
   },
   '/cash-receiving': {
-    title: 'Cash Receiving',
+    title: 'Multi Cash Receipt',
     icon: 'Receipt',
     allowMultiple: true,
     component: () => import('../pages/CashReceiving').then(m => m.default || m.CashReceiving)

@@ -458,7 +458,7 @@ router.get('/summary/date-range', [
 });
 
 // @route   POST /api/cash-receipts/batch
-// @desc    Create multiple cash receipts in a batch (for voucher-based cash receiving)
+// @desc    Create multiple cash receipts in a batch (for multi cash receipt voucher)
 // @access  Private
 router.post('/batch', [
   auth,

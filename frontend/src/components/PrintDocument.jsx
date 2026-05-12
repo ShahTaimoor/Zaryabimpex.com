@@ -554,48 +554,43 @@ const PrintDocument = ({
                         </div>
                         <div className="col-span-2"></div>
                     </div>
-                    <div className="border-b-2 border-black w-full mb-6"></div>
                 </div>
                 )}
 
                 {/* Info Boxes — respects party detail toggles */}
-                <div className="grid grid-cols-12 gap-0 mb-6 border-t border-l border-black">
-                    <div className="col-span-8 p-2 border-r border-b border-black font-medium">
-                        {showPrintBusinessName && (<>{partyLabel}: <span className="uppercase">{partyInfo.name}</span>{' '}</>)}
-                        {canViewPartyPhone && partyInfo.phone !== 'N/A' && partyInfo.phone}
-                    </div>
-                    {showPrintInvoiceDate && (
-                    <div className="col-span-4 p-2 border-r border-b border-black font-medium text-right">
-                        Invoice Date: {formatDate(invoiceDate)}
-                    </div>
-                    )}
-                    {!showPrintInvoiceDate && (
-                    <div className="col-span-4 p-2 border-r border-b border-black"></div>
-                    )}
-                    <div className="col-span-8 p-2 border-r border-b border-black font-medium min-h-[40px]">
-                        {showPrintAddress && partyInfo.address && (<>Address: {partyInfo.address}</>)}
-                        {showPrintCity && partyInfo.city && partyInfo.city !== 'N/A' && (<>{showPrintAddress && partyInfo.address ? ', ' : ''}{partyInfo.city}</>)}
-                    </div>
-                    {showPrintInvoiceNumber && (
-                    <div className="col-span-4 p-2 border-r border-b border-black font-medium text-right italic">
-                        Invoice No: {documentNumber}
-                    </div>
-                    )}
-                    {!showPrintInvoiceNumber && (
-                    <div className="col-span-4 p-2 border-r border-b border-black"></div>
-                    )}
-                </div>
+                <table className="w-full border-collapse mb-6" style={{ border: '1px solid black' }}>
+                    <tbody>
+                        <tr>
+                            <td className="border border-black p-2 font-medium" style={{ width: '65%' }}>
+                                {showPrintBusinessName && (<>{partyLabel}: <span className="uppercase">{partyInfo.name}</span>{' '}</>)}
+                                {canViewPartyPhone && partyInfo.phone !== 'N/A' && partyInfo.phone}
+                            </td>
+                            <td className="border border-black p-2 font-medium text-right">
+                                {showPrintInvoiceDate && <>Invoice Date: {formatDate(invoiceDate)}</>}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td className="border border-black p-2 font-medium min-h-[40px]">
+                                {showPrintAddress && partyInfo.address && (<>Address: {partyInfo.address}</>)}
+                                {showPrintCity && partyInfo.city && partyInfo.city !== 'N/A' && (<>{showPrintAddress && partyInfo.address ? ', ' : ''}{partyInfo.city}</>)}
+                            </td>
+                            <td className="border border-black p-2 font-medium text-right italic">
+                                {showPrintInvoiceNumber && <>Invoice No: {documentNumber}</>}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
 
                 {/* Items Table */}
                 <table className="layout2-table w-full border-collapse mb-0">
                     <thead>
                         <tr>
-                            <th className="border border-black p-1 text-center w-[60px]">S.No</th>
+                            <th className="border border-black p-1 text-center w-[50px]">S.No</th>
                             <th className="border border-black p-1 text-center">Product Name</th>
-                            <th className="border border-black p-1 text-center w-[100px]">Quantity</th>
-                            <th className="border border-black p-1 text-center w-[120px]">Price</th>
-                            {showDiscount && <th className="border border-black p-1 text-center w-[100px]">Disc</th>}
-                            <th className="border border-black p-1 text-center w-[150px]">Total</th>
+                            <th className="border border-black p-1 text-center w-[80px]">Quantity</th>
+                            <th className="border border-black p-1 text-center w-[80px]">Price</th>
+                            {showDiscount && <th className="border border-black p-1 text-center w-[80px]">Disc</th>}
+                            <th className="border border-black p-1 text-center w-[100px]">Total</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -671,31 +666,31 @@ const PrintDocument = ({
                         )}
                     </div>
                     <div className="col-span-4">
-                        <table className="w-full border-collapse border-l border-black">
+                        <table className="w-full border-collapse" style={{ border: '1px solid black' }}>
                             <tbody>
                                 {showDiscount && (
                                 <tr>
-                                    <td className="border-b border-r border-black p-1 text-right font-bold">Invoice Discount</td>
-                                    <td className="border-b border-r border-black p-1 text-right">{formatCurrency(discountValue)}</td>
+                                    <td className="border border-black p-1 text-right font-bold">Invoice Discount</td>
+                                    <td className="border border-black p-1 text-right">{formatCurrency(discountValue)}</td>
                                 </tr>
                                 )}
                                 <tr>
-                                    <td className="border-b border-r border-black p-1 text-right font-bold">Net Amount</td>
-                                    <td className="border-b border-r border-black p-1 text-right font-bold">{formatCurrency(totalValue)}</td>
+                                    <td className="border border-black p-1 text-right font-bold">Net Amount</td>
+                                    <td className="border border-black p-1 text-right font-bold">{formatCurrency(totalValue)}</td>
                                 </tr>
                                 <tr>
-                                    <td className="border-b border-r border-black p-1 text-right font-bold">Received Amount</td>
-                                    <td className="border-b border-r border-black p-1 text-right">{formatCurrency(receivedAmount)}</td>
+                                    <td className="border border-black p-1 text-right font-bold">Received Amount</td>
+                                    <td className="border border-black p-1 text-right">{formatCurrency(receivedAmount)}</td>
                                 </tr>
                                 {canViewPartyBalance && showPrintLedgerBalance && (
                                   <>
                                 <tr>
-                                    <td className="border-b border-r border-black p-1 text-right font-bold">Previous Balance</td>
-                                    <td className="border-b border-r border-black p-1 text-right">{formatCurrency(previousBalance)}</td>
+                                    <td className="border border-black p-1 text-right font-bold">Previous Balance</td>
+                                    <td className="border border-black p-1 text-right">{formatCurrency(previousBalance)}</td>
                                 </tr>
                                 <tr>
-                                    <td className="border-b border-r border-black p-1 text-right font-bold">Total Receivables</td>
-                                    <td className="border-b border-r border-black p-1 text-right font-bold">{formatCurrency(totalReceivables)}</td>
+                                    <td className="border border-black p-1 text-right font-bold">Total Receivables</td>
+                                    <td className="border border-black p-1 text-right font-bold">{formatCurrency(totalReceivables)}</td>
                                 </tr>
                                   </>
                                 )}

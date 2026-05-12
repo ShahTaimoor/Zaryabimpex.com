@@ -137,7 +137,7 @@ export const navigation = withRouteAccess([
     icon: Wallet,
     permissionAny: ['view_cash_receiving', 'view_cash_receipts', 'view_cash_payments', 'view_bank_receipts', 'view_bank_payments', 'view_expenses'],
     children: [
-      { name: 'Cash Receiving', href: '/cash-receiving', icon: Receipt, permission: 'view_cash_receiving' },
+      { name: 'Multi Cash Receipt', href: '/cash-receiving', icon: Receipt, permission: 'view_cash_receiving' },
       { name: 'Cash Receipts', href: '/cash-receipts', icon: Receipt, permission: 'view_cash_receipts' },
       { name: 'Cash Payments', href: '/cash-payments', icon: CreditCard, permission: 'view_cash_payments' },
       { name: 'Bank Receipts', href: '/bank-receipts', icon: Building, permission: 'view_bank_receipts' },
@@ -729,7 +729,7 @@ export const MultiTabLayout = ({ children }) => {
 
           {/* Main Navigation Container */}
           <div className="flex flex-1 items-center gap-2 sm:gap-3 lg:gap-4 min-w-0">
-            {/* Mobile Top Bar Buttons - Cash Receiving and Record Expense */}
+            {/* Mobile Top Bar Buttons - Multi Cash Receipt and Record Expense */}
             <div className="flex-shrink-0 lg:hidden flex items-center gap-2">
               {sidebarConfig['Cash Receipts'] !== false && isItemPermitted({ permission: 'view_cash_receipts' }, user, hasPermission) && (
                 <button
@@ -753,15 +753,15 @@ export const MultiTabLayout = ({ children }) => {
 
             {/* Action Buttons - Shrink when zoom/screen percentage increases (responsive) */}
             <div className="hidden lg:flex items-center gap-1 xl:gap-1.5 2xl:gap-2 overflow-x-auto flex-1 min-w-0 scrollbar-hide overflow-y-visible">
-              {sidebarConfig['Cash Receiving'] !== false && isItemPermitted({ permission: 'view_accounting' }, user, hasPermission) && (
+              {sidebarConfig['Multi Cash Receipt'] !== false && isItemPermitted({ permission: 'view_accounting' }, user, hasPermission) && (
                 <button
-                  onClick={() => handleNavigationClick({ href: '/cash-receiving', name: 'Cash Receiving' })}
+                  onClick={() => handleNavigationClick({ href: '/cash-receiving', name: 'Multi Cash Receipt' })}
                   className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
                 >
                   <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
                     <Receipt className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
                   </span>
-                  <span>Multiple Cash Receipt</span>
+                  <span>Multi Cash Receipt</span>
                 </button>
               )}
               {sidebarConfig['Cash Receipts'] !== false && isItemPermitted({ permission: 'view_cash_receipts' }, user, hasPermission) && (
