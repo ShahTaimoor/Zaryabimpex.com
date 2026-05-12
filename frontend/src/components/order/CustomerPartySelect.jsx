@@ -48,15 +48,17 @@ export function CustomerPartySelect({
 
       return (
         <div>
-          <div className="font-medium">{primaryName}</div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{primaryName}</span>
+            {canViewBalance && hasBalance ? (
+              <span className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
+                {isPayable ? '-' : '+'}{Math.abs(totalBalance)}
+              </span>
+            ) : null}
+          </div>
           {showSecondary && (
             <div className="text-xs text-gray-500">{customer.name}</div>
           )}
-          {canViewBalance && hasBalance ? (
-            <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
-              Total Balance: {isPayable ? '-' : '+'}{Math.abs(totalBalance).toFixed(2)}
-            </div>
-          ) : null}
           {typeof renderExtra === 'function' ? renderExtra(customer) : null}
         </div>
       );

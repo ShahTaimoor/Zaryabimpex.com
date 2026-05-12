@@ -37,14 +37,16 @@ export function SupplierPartySelect({
 
       return (
         <div>
-          <div className="font-medium">{primaryName}</div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{primaryName}</span>
+            {canViewBalance && (
+              <span className="text-sm text-gray-600">
+                {outstanding}
+              </span>
+            )}
+          </div>
           {showSecondary && (
             <div className="text-xs text-gray-500">{supplier.name}</div>
-          )}
-          {canViewBalance && (
-            <div className="text-sm text-gray-600">
-              Outstanding Balance: {outstanding.toFixed(2)}
-            </div>
           )}
           {canViewPhone && supplier.phone && (
             <div className="text-xs text-gray-500">Phone: {supplier.phone}</div>
