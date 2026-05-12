@@ -3057,7 +3057,7 @@ const SalesOrders = ({ tabId }) => {
                           })()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-3">
                             <button
                               onClick={() => {
                                 setNotesEntity({ type: 'SalesOrder', id: order?.id ?? order?._id, name: order?.so_number ?? order?.soNumber });
@@ -3067,13 +3067,6 @@ const SalesOrders = ({ tabId }) => {
                               title="Notes"
                             >
                               <MessageSquare className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleView(order)}
-                              className="text-blue-600 hover:text-blue-900"
-                              title="View"
-                            >
-                              <Eye className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handlePrint(order)}

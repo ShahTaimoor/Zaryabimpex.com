@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { auth, requireRole } = require('../middleware/auth');
+const { auth, requireRole, requireAnyPermission } = require('../middleware/auth');
 const settingsService = require('../services/settingsService');
 
 // @route   GET /api/settings/company
@@ -26,7 +26,14 @@ router.get('/company', auth, async (req, res) => {
 // @route   PUT /api/settings/company
 // @desc    Update company settings
 // @access  Private (Admin only)
-router.put('/company', auth, requireRole(['admin']), async (req, res) => {
+router.put('/company', auth, requireAnyPermission([
+  'manage_settings',
+  'manage_print_settings',
+  'manage_product_settings',
+  'manage_customer_settings',
+  'manage_supplier_settings',
+  'manage_advanced_settings'
+]), async (req, res) => {
   try {
     
     const {

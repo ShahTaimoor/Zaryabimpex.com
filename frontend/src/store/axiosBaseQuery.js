@@ -93,7 +93,7 @@ const axiosBaseQuery = ({ baseUrl = '' } = {}) => {
       if (!error.response) {
         return Promise.reject({
           ...error,
-          message: `Unable to connect to server at ${error.config?.baseURL || baseUrl}. Please ensure the backend server is running.`,
+          message: 'Server is currently under maintenance. Please try again shortly.',
           type: 'network',
         });
       }

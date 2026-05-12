@@ -23,7 +23,7 @@ const upload = multer({
       'image/gif',
       'image/webp'
     ];
-    
+
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -41,15 +41,15 @@ const upload = multer({
 router.post('/upload', auth, upload.single('image'), async (req, res) => {
   try {
     if (!req.file || !req.file.buffer) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'No image file uploaded' 
+        message: 'No image file uploaded'
       });
     }
 
     // Upload directly from buffer to Cloudinary
     const { secure_url, public_id } = await uploadImageOnCloudinary(
-      req.file.buffer, 
+      req.file.buffer,
       'product_images'
     );
 
@@ -64,16 +64,16 @@ router.post('/upload', auth, upload.single('image'), async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error('Image upload error:', { 
-      error: error.message, 
+    logger.error('Image upload error:', {
+      error: error.message,
       stack: error.stack,
       requestId: req.id
     });
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       success: false,
       message: 'Image upload failed',
-      error: error.message 
+      error: error.message
     });
   }
 });

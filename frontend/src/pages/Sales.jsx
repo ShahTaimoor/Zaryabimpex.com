@@ -2815,14 +2815,7 @@ export const Sales = ({ tabId, editData }) => {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{Math.round(totalValue)}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={() => openSavedInvoicePrintPreview(invoice)}
-                                  className="text-blue-600 hover:text-blue-900"
-                                  title="View"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </button>
+                              <div className="flex items-center gap-3">
                                 <button
                                   onClick={() => openSavedInvoicePrintPreview(invoice)}
                                   className="text-green-600 hover:text-green-900"

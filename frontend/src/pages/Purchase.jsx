@@ -2309,14 +2309,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{totalValue.toFixed(2)}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={() => openSavedPurchasePrintPreview(invoice)}
-                                  className="text-blue-600 hover:text-blue-900"
-                                  title="View"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </button>
+                              <div className="flex items-center gap-3">
                                 <button
                                   onClick={() => openSavedPurchasePrintPreview(invoice)}
                                   className="text-green-600 hover:text-green-900"

@@ -79,7 +79,7 @@ import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 
 export const Settings2 = () => {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const {
     confirmation: deleteUserConfirmation,
     confirmDelete: confirmDeleteUser,
@@ -683,6 +683,17 @@ export const Settings2 = () => {
         { key: 'attendance', name: 'Attendance', view: 'view_own_attendance', create: 'clock_in', edit: 'manage_attendance_breaks', delete: 'delete_attendance' }
       ]
     },
+    settingsConfig: {
+      name: 'Settings Config',
+      icon: SettingsIcon,
+      pages: [
+        { key: 'print-settings', name: 'Print Preview', view: 'manage_print_settings', edit: 'manage_print_settings' },
+        { key: 'product-settings', name: 'Product Settings', view: 'manage_product_settings', edit: 'manage_product_settings' },
+        { key: 'customer-settings', name: 'Customer Settings', view: 'manage_customer_settings', edit: 'manage_customer_settings' },
+        { key: 'supplier-settings', name: 'Supplier Settings', view: 'manage_supplier_settings', edit: 'manage_supplier_settings' },
+        { key: 'advanced-settings', name: 'Advanced Features', view: 'manage_advanced_settings', edit: 'manage_advanced_settings' }
+      ]
+    },
     system: {
       name: 'System',
       icon: SettingsIcon,
@@ -774,6 +785,8 @@ export const Settings2 = () => {
       view_investors: true, manage_investors: true, create_investors: true, edit_investors: true, payout_investors: true,
       // Administration
       manage_users: true, manage_settings: true,
+      manage_print_settings: true, manage_product_settings: true, manage_customer_settings: true,
+      manage_supplier_settings: true, manage_advanced_settings: true,
       create_users: true, edit_users: true, delete_users: true, assign_roles: true,
       company_settings: true, system_settings: true, print_settings: true, security_settings: true,
       view_audit_logs: true, import_data: true,
@@ -854,6 +867,8 @@ export const Settings2 = () => {
       view_drop_shipping: true, create_drop_shipping: true, edit_drop_shipping: true,
       view_banks: true, create_banks: true, edit_banks: true,
       view_cctv_access: true, view_cities: true, create_cities: true, edit_cities: true,
+      manage_print_settings: true, manage_product_settings: true, manage_customer_settings: true,
+      manage_supplier_settings: true, manage_advanced_settings: true,
       view_help: true
     },
     cashier: {
@@ -1756,17 +1771,18 @@ export const Settings2 = () => {
   const [showCustomerSetting_zipCode, setShowCustomerSetting_zipCode] = useState(() => localStorage.getItem('showCustomerSetting_zipCode') === 'true');
   const [showCustomerSetting_notes, setShowCustomerSetting_notes] = useState(() => localStorage.getItem('showCustomerSetting_notes') === 'true');
 
-  const tabs = [
+  const allTabs = [
     { id: 'company', name: 'Company Information', shortName: 'Company', icon: Building },
-    { id: 'users', name: 'Users', shortName: 'Users', icon: Users },
-    { id: 'print', name: 'Print Preview Settings', shortName: 'Print', icon: Printer },
+    { id: 'users', name: 'Users', shortName: 'Users', icon: Users, permission: 'manage_users' },
+    { id: 'print', name: 'Print Preview Settings', shortName: 'Print', icon: Printer, permission: 'manage_print_settings' },
     { id: 'sidebar', name: 'Sidebar Configuration', shortName: 'Sidebar', icon: LayoutDashboard },
     { id: 'mobile-nav', name: 'Mobile Nav', shortName: 'Mobile Nav', icon: Smartphone },
-    { id: 'products', name: 'Product Settings', shortName: 'Products', icon: Package },
-    { id: 'customers', name: 'Customer Settings', shortName: 'Customers', icon: UserPlus },
-    { id: 'suppliers', name: 'Supplier Settings', shortName: 'Suppliers', icon: Building },
-    { id: 'other', name: 'Advanced', shortName: 'Advanced', icon: BarChart3 },
+    { id: 'products', name: 'Product Settings', shortName: 'Products', icon: Package, permission: 'manage_product_settings' },
+    { id: 'customers', name: 'Customer Settings', shortName: 'Customers', icon: UserPlus, permission: 'manage_customer_settings' },
+    { id: 'suppliers', name: 'Supplier Settings', shortName: 'Suppliers', icon: Building, permission: 'manage_supplier_settings' },
+    { id: 'other', name: 'Advanced', shortName: 'Advanced', icon: BarChart3, permission: 'manage_advanced_settings' },
   ];
+  const tabs = allTabs.filter(tab => !tab.permission || hasPermission(tab.permission));
 
   useEffect(() => {
     const enabled = settings?.orderSettings?.useMarketPurchasePrices === true;
@@ -1908,7 +1924,7 @@ export const Settings2 = () => {
 
 
         {/* Users Control Tab */}
-        {activeTab === 'users' && (
+        {activeTab === 'users' && hasPermission('manage_users') && (
           <div className="space-y-8 max-w-full mx-auto">
             {/* Users List Card */}
             <div className="bg-white border text-gray-900 shadow-sm border-gray-200 rounded-2xl overflow-hidden relative">
@@ -2594,7 +2610,7 @@ export const Settings2 = () => {
         )}
 
         {/* Print Preview Settings Tab */}
-        {activeTab === 'print' && (
+        {activeTab === 'print' && hasPermission('manage_print_settings') && (
           <div className="card">
             <div className="card-header">
               <div className="flex items-center space-x-2">
@@ -3027,7 +3043,7 @@ export const Settings2 = () => {
         )}
 
         {/* Other Tab */}
-        {activeTab === 'other' && (
+        {activeTab === 'other' && hasPermission('manage_advanced_settings') && (
           <div className="card">
             <div className="card-header">
               <div className="flex items-center space-x-2">
@@ -3168,7 +3184,7 @@ export const Settings2 = () => {
           </div>
         )}
 
-        {activeTab === 'products' && (
+        {activeTab === 'products' && hasPermission('manage_product_settings') && (
           <div className="card">
             <div className="card-header">
               <div className="flex items-center space-x-2">
@@ -3286,7 +3302,7 @@ export const Settings2 = () => {
           </div>
         )}
 
-        {activeTab === 'customers' && (
+        {activeTab === 'customers' && hasPermission('manage_customer_settings') && (
           <div className="card">
             <div className="card-header">
               <div className="flex items-center space-x-2">
@@ -3353,7 +3369,7 @@ export const Settings2 = () => {
           </div>
         )}
 
-        {activeTab === 'suppliers' && (
+        {activeTab === 'suppliers' && hasPermission('manage_supplier_settings') && (
           <div className="card">
             <div className="card-header">
               <div className="flex items-center space-x-2">

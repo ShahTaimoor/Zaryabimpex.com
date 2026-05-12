@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 
 // Error types and their corresponding user messages
 const ERROR_MESSAGES = {
-  network: 'Unable to connect to server. Please check your internet connection.',
+  network: 'Server is currently under maintenance. Please try again shortly.',
   server: 'Server error. Please try again later.',
   validation: 'Please check your input and try again.',
   not_found: 'The requested resource was not found.',
@@ -41,6 +41,11 @@ export const getErrorMessage = (error) => {
     return ERROR_MESSAGES.unknown;
   }
   
+  // RTK Query error format: error.data is a plain string (e.g. network errors)
+  if (typeof error?.data === 'string') {
+    return error.data;
+  }
+
   // RTK Query error format: error.data.message (from axiosBaseQuery)
   if (error?.data?.message) {
     const message = error.data.message;

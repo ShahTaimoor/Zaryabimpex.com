@@ -2884,14 +2884,7 @@ export const PurchaseOrders = ({ tabId }) => {
                                   {Math.round(order.total || 0)}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                  <div className="flex space-x-2">
-                                    <button
-                                      onClick={() => handleView(order)}
-                                      className="text-blue-600 hover:text-blue-900"
-                                      title="View"
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </button>
+                                  <div className="flex items-center gap-3">
                                     <button
                                       onClick={() => handlePrint(order)}
                                       className="text-gray-600 hover:text-gray-900"

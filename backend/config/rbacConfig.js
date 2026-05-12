@@ -44,6 +44,11 @@ const PERMISSIONS = {
   // Settings & Admin
   MANAGE_USERS: 'manage_users',
   MANAGE_SETTINGS: 'manage_settings',
+  MANAGE_PRINT_SETTINGS: 'manage_print_settings',
+  MANAGE_PRODUCT_SETTINGS: 'manage_product_settings',
+  MANAGE_CUSTOMER_SETTINGS: 'manage_customer_settings',
+  MANAGE_SUPPLIER_SETTINGS: 'manage_supplier_settings',
+  MANAGE_ADVANCED_SETTINGS: 'manage_advanced_settings',
   
   // Inventory
   VIEW_INVENTORY: 'view_inventory',
@@ -107,6 +112,11 @@ const ROLE_PERMISSIONS = {
     'view_stock_movements',
     'view_inventory_levels',
     PERMISSIONS.VIEW_REPORTS,
+    PERMISSIONS.MANAGE_PRINT_SETTINGS,
+    PERMISSIONS.MANAGE_PRODUCT_SETTINGS,
+    PERMISSIONS.MANAGE_CUSTOMER_SETTINGS,
+    PERMISSIONS.MANAGE_SUPPLIER_SETTINGS,
+    PERMISSIONS.MANAGE_ADVANCED_SETTINGS,
     'view_help'
   ],
   

@@ -64,6 +64,11 @@ export const PERMISSIONS = {
   // Settings & Admin
   MANAGE_USERS: 'manage_users',
   MANAGE_SETTINGS: 'manage_settings',
+  MANAGE_PRINT_SETTINGS: 'manage_print_settings',
+  MANAGE_PRODUCT_SETTINGS: 'manage_product_settings',
+  MANAGE_CUSTOMER_SETTINGS: 'manage_customer_settings',
+  MANAGE_SUPPLIER_SETTINGS: 'manage_supplier_settings',
+  MANAGE_ADVANCED_SETTINGS: 'manage_advanced_settings',
   VIEW_SETTINGS: 'view_settings',
   EDIT_SETTINGS: 'edit_settings',
   VIEW_MIGRATION: 'view_migration',
