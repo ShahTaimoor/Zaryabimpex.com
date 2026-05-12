@@ -2650,77 +2650,10 @@ export const Settings2 = () => {
 
             <div className="card-content">
               <div className="space-y-6">
-                {/* Print Size Design */}
-                <div className="space-y-4">
-                  <label className="block text-sm font-semibold text-gray-800">
-                    Print Size
-                  </label>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="border border-gray-200 rounded-2xl bg-white p-4 sm:p-5 shadow-sm space-y-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <h3 className="text-sm font-semibold text-gray-900">Thermal Receipt Style</h3>
-                          <p className="text-xs text-gray-500 mt-1">Optimized for restaurant and retail POS printing.</p>
-                        </div>
-                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-700">
-                          Monochrome
-                        </span>
-                      </div>
-
-                      <div className="flex items-start space-x-3 p-3.5 border border-gray-200 rounded-xl bg-gray-50/50">
-                        <Checkbox
-                          id="compactMode"
-                          className="mt-0.5 w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-gray-900 data-[state=checked]:border-gray-900"
-                          checked={printSettings.invoiceLayout === 'compact'}
-                          onCheckedChange={(checked) => handlePrintSettingsChange({
-                            target: {
-                              name: 'invoiceLayout',
-                              value: checked ? 'compact' : 'standard',
-                              type: 'text'
-                            }
-                          })}
-                        />
-                        <Label htmlFor="compactMode" className="flex flex-col cursor-pointer">
-                          <span className="text-sm font-semibold text-gray-800">Compact Thermal Print Preview</span>
-                          <span className="text-xs text-gray-500 mt-1">
-                            Optimized for 80mm printers. Minimal, fast, and scanner-friendly.
-                          </span>
-                        </Label>
-                      </div>
-
-                      <div className={`flex items-start space-x-3 p-3.5 rounded-xl transition-colors ${printSettings.invoiceLayout === 'compact' ? 'border border-gray-900 bg-gray-900/5' : 'border border-gray-200 bg-white'}`}>
-                        <input
-                          type="radio"
-                          name="printSize"
-                          value="80mm"
-                          id="receipt80mm"
-                          checked={printSettings.invoiceLayout === 'compact'}
-                          onChange={handlePrintSettingsChange}
-                          className="mt-0.5 h-4 w-4 accent-gray-900"
-                        />
-                        <label htmlFor="receipt80mm" className="flex flex-col cursor-pointer">
-                          <span className="text-sm font-semibold text-gray-900">80mm Thermal Receipt</span>
-                          <span className="text-xs text-gray-600 mt-1">Professional POS paper width (only supported size).</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="border border-dashed border-gray-300 rounded-2xl p-4 sm:p-5 bg-gradient-to-br from-gray-50 to-white">
-                      <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-700">Receipt Layout Notes</h4>
-                      <ul className="mt-3 space-y-2 text-xs text-gray-600">
-                        <li>- Shop heading and identity at top</li>
-                        <li>- Item lines with qty and price alignment</li>
-                        <li>- Total block with strong visual hierarchy</li>
-                        <li>- Thank-you footer and invoice/barcode strip</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Layout Options */}
+                {/* Print Layout Selection */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-800 mb-3">
-                    Invoice/Sale Receipt Layout
+                    Print Layout
                   </label>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <label className={`flex items-center p-3.5 border rounded-xl cursor-pointer transition-all ${printSettings.invoiceLayout === 'standard' ? 'border-gray-900 bg-gray-900/5' : 'border-gray-200 hover:bg-gray-50'}`}>
@@ -2733,23 +2666,8 @@ export const Settings2 = () => {
                         className="mr-3 h-4 w-4 accent-gray-900"
                       />
                       <div>
-                        <div className="text-sm font-semibold text-gray-900">Standard</div>
-                        <div className="text-xs text-gray-500">Balanced layout for regular invoices</div>
-                      </div>
-                    </label>
-
-                    <label className={`flex items-center p-3.5 border rounded-xl cursor-pointer transition-all ${printSettings.invoiceLayout === 'detailed' ? 'border-gray-900 bg-gray-900/5' : 'border-gray-200 hover:bg-gray-50'}`}>
-                      <input
-                        type="radio"
-                        name="invoiceLayout"
-                        value="detailed"
-                        checked={printSettings.invoiceLayout === 'detailed'}
-                        onChange={handlePrintSettingsChange}
-                        className="mr-3 h-4 w-4 accent-gray-900"
-                      />
-                      <div>
-                        <div className="text-sm font-semibold text-gray-900">Detailed</div>
-                        <div className="text-xs text-gray-500">Extended receipt with additional information</div>
+                        <div className="text-sm font-semibold text-gray-900">Print 1 (Professional)</div>
+                        
                       </div>
                     </label>
 
@@ -2763,8 +2681,21 @@ export const Settings2 = () => {
                         className="mr-3 h-4 w-4 accent-gray-900"
                       />
                       <div>
-                        <div className="text-sm font-semibold text-gray-900">Layout 2 (Professional)</div>
-                        <div className="text-xs text-gray-500">Professional boxed layout</div>
+                        <div className="text-sm font-semibold text-gray-900">Print 2 (Standard)</div>
+                      </div>
+                    </label>
+
+                    <label className={`flex items-center p-3.5 border rounded-xl cursor-pointer transition-all ${printSettings.invoiceLayout === 'compact' ? 'border-gray-900 bg-gray-900/5' : 'border-gray-200 hover:bg-gray-50'}`}>
+                      <input
+                        type="radio"
+                        name="invoiceLayout"
+                        value="compact"
+                        checked={printSettings.invoiceLayout === 'compact'}
+                        onChange={handlePrintSettingsChange}
+                        className="mr-3 h-4 w-4 accent-gray-900"
+                      />
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900">Print 3 (80mm Thermal)</div>
                       </div>
                     </label>
                   </div>
@@ -2867,12 +2798,12 @@ export const Settings2 = () => {
 
                         {/* Standard Toggle Boxes — filtered per layout */}
                         {[
-                          { id: 'showLogo', label: 'Display Logo', icon: <Printer className="h-3.5 w-3.5" />, layouts: ['standard', 'detailed', 'layout2'] },
-                          { id: 'showCompanyDetails', label: 'Company Header', icon: <Building className="h-3.5 w-3.5" />, layouts: ['standard', 'detailed', 'layout2'] },
-                          { id: 'showEmail', label: 'Show Email', icon: <Mail className="h-3.5 w-3.5" />, layouts: ['standard', 'detailed', 'layout2'] },
-                          { id: 'showFooter', label: 'Show Footer', icon: <FileText className="h-3.5 w-3.5" />, layouts: ['standard', 'detailed', 'layout2'] },
-                          { id: 'mobilePrintPreview', label: 'Mobile View', icon: <Eye className="h-3.5 w-3.5" />, layouts: ['standard', 'detailed'] },
-                          { id: 'showDate', label: 'Doc Date', icon: <Clock className="h-3.5 w-3.5" />, layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'showLogo', label: 'Display Logo', icon: <Printer className="h-3.5 w-3.5" />, layouts: ['standard', 'layout2'] },
+                          { id: 'showCompanyDetails', label: 'Company Header', icon: <Building className="h-3.5 w-3.5" />, layouts: ['standard', 'layout2'] },
+                          { id: 'showEmail', label: 'Show Email', icon: <Mail className="h-3.5 w-3.5" />, layouts: ['standard', 'layout2'] },
+                          { id: 'showFooter', label: 'Show Footer', icon: <FileText className="h-3.5 w-3.5" />, layouts: ['standard', 'layout2'] },
+                          { id: 'mobilePrintPreview', label: 'Mobile View', icon: <Eye className="h-3.5 w-3.5" />, layouts: ['standard'] },
+                          { id: 'showDate', label: 'Doc Date', icon: <Clock className="h-3.5 w-3.5" />, layouts: ['standard', 'layout2'] },
                         ].filter(item => !item.layouts || item.layouts.includes(printSettings.invoiceLayout)).map(item => (
                           <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
                             <Checkbox
@@ -2898,10 +2829,10 @@ export const Settings2 = () => {
                       </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         {[
-                          { id: 'showTax', label: 'Tax Breakdown', layouts: ['standard', 'detailed'] },
-                          { id: 'showDiscount', label: 'Discounts', layouts: ['standard', 'detailed', 'layout2'] },
-                          { id: 'showDescription', label: 'Item Desc', layouts: ['standard', 'detailed', 'layout2'] },
-                          { id: 'showCameraTime', label: 'Cam Timestamp', layouts: ['standard', 'detailed'] },
+                          { id: 'showTax', label: 'Tax Breakdown', layouts: ['standard'] },
+                          { id: 'showDiscount', label: 'Discounts', layouts: ['standard', 'layout2'] },
+                          { id: 'showDescription', label: 'Item Desc', layouts: ['standard', 'layout2'] },
+                          { id: 'showCameraTime', label: 'Cam Timestamp', layouts: ['standard'] },
                         ].filter(item => !item.layouts || item.layouts.includes(printSettings.invoiceLayout)).map(item => (
                           <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-emerald-300 hover:shadow-md transition-all duration-200 group">
                             <Checkbox
@@ -2926,12 +2857,12 @@ export const Settings2 = () => {
                       </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         {[
-                          { id: 'showPrintBusinessName', label: 'Business Name', layouts: ['standard', 'detailed', 'layout2'] },
-                          { id: 'showPrintContactName', label: 'Contact Name', layouts: ['standard', 'detailed'] },
-                          { id: 'showPrintAddress', label: 'Full Address', layouts: ['standard', 'detailed', 'layout2'] },
-                          { id: 'showPrintCity', label: 'City', layouts: ['standard', 'detailed', 'layout2'] },
-                          { id: 'showPrintState', label: 'State / Prov', layouts: ['standard', 'detailed'] },
-                          { id: 'showPrintPostalCode', label: 'Postal Code', layouts: ['standard', 'detailed'] },
+                          { id: 'showPrintBusinessName', label: 'Business Name', layouts: ['standard', 'layout2'] },
+                          { id: 'showPrintContactName', label: 'Contact Name', layouts: ['standard'] },
+                          { id: 'showPrintAddress', label: 'Full Address', layouts: ['standard', 'layout2'] },
+                          { id: 'showPrintCity', label: 'City', layouts: ['standard', 'layout2'] },
+                          { id: 'showPrintState', label: 'State / Prov', layouts: ['standard'] },
+                          { id: 'showPrintPostalCode', label: 'Postal Code', layouts: ['standard'] },
                         ].filter(item => !item.layouts || item.layouts.includes(printSettings.invoiceLayout)).map(item => (
                           <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-amber-300 hover:shadow-md transition-all duration-200 group">
                             <Checkbox
@@ -2956,14 +2887,14 @@ export const Settings2 = () => {
                       </div>
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         {[
-                          { id: 'showPrintInvoiceNumber', label: 'Invoice #', layouts: ['standard', 'detailed', 'layout2'] },
-                          { id: 'showPrintInvoiceDate', label: 'Inv Date', layouts: ['standard', 'detailed', 'layout2'] },
-                          { id: 'showPrintInvoiceStatus', label: 'Doc Status', layouts: ['standard', 'detailed'] },
-                          { id: 'showPrintInvoiceType', label: 'Doc Type', layouts: ['standard', 'detailed'] },
-                          { id: 'showPrintPaymentStatus', label: 'Pay Status', layouts: ['standard', 'detailed'] },
-                          { id: 'showPrintPaymentMethod', label: 'Pay Method', layouts: ['standard', 'detailed'] },
-                          { id: 'showPrintPaymentAmount', label: 'Pay Amount', layouts: ['standard', 'detailed'] },
-                          { id: 'showPrintLedgerBalance', label: 'Ledger balance on invoice', layouts: ['standard', 'detailed', 'layout2'] },
+                          { id: 'showPrintInvoiceNumber', label: 'Invoice #', layouts: ['standard', 'layout2'] },
+                          { id: 'showPrintInvoiceDate', label: 'Inv Date', layouts: ['standard', 'layout2'] },
+                          { id: 'showPrintInvoiceStatus', label: 'Doc Status', layouts: ['standard'] },
+                          { id: 'showPrintInvoiceType', label: 'Doc Type', layouts: ['standard'] },
+                          { id: 'showPrintPaymentStatus', label: 'Pay Status', layouts: ['standard'] },
+                          { id: 'showPrintPaymentMethod', label: 'Pay Method', layouts: ['standard'] },
+                          { id: 'showPrintPaymentAmount', label: 'Pay Amount', layouts: ['standard'] },
+                          { id: 'showPrintLedgerBalance', label: 'Ledger balance on invoice', layouts: ['standard', 'layout2'] },
                         ].filter(item => !item.layouts || item.layouts.includes(printSettings.invoiceLayout)).map(item => (
                           <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-md transition-all duration-200 group">
                             <Checkbox
