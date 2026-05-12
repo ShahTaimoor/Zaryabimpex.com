@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Smartphone,
   Building,
@@ -1813,6 +1813,20 @@ export const Settings2 = () => {
     { id: 'other', name: 'Advanced', shortName: 'Advanced', icon: BarChart3, permission: 'manage_advanced_settings' },
   ];
   const tabs = allTabs.filter(tab => !tab.permission || hasPermission(tab.permission));
+  const VISIBLE_TAB_COUNT = 5;
+  const visibleTabs = tabs.slice(0, VISIBLE_TAB_COUNT);
+  const overflowTabs = tabs.slice(VISIBLE_TAB_COUNT);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const handleClickOutside = (e) => {
+      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [moreOpen]);
 
   useEffect(() => {
     const enabled = settings?.orderSettings?.useMarketPurchasePrices === true;
@@ -1910,8 +1924,8 @@ export const Settings2 = () => {
             ))}
           </select>
         </div>
-        <nav className="-mb-px hidden md:flex space-x-4 md:space-x-8 w-full overflow-x-auto scrollbar-hide">
-          {tabs.map((tab) => {
+        <nav className="-mb-px hidden md:flex space-x-4 md:space-x-8 w-full items-center">
+          {visibleTabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
@@ -1928,6 +1942,42 @@ export const Settings2 = () => {
               </button>
             );
           })}
+          {overflowTabs.length > 0 && (
+            <div className="relative flex-shrink-0" ref={moreRef}>
+              <button
+                onClick={() => setMoreOpen((v) => !v)}
+                className={`py-2 px-2 md:px-1 border-b-2 font-medium text-sm flex items-center space-x-1 whitespace-nowrap ${
+                  overflowTabs.some((t) => t.id === activeTab)
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <span>More</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {moreOpen && (
+                <div className="absolute left-0 top-full mt-1 z-50 min-w-[200px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                  {overflowTabs.map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => { setActiveTab(tab.id); setMoreOpen(false); }}
+                        className={`w-full flex items-center space-x-2 px-4 py-2 text-sm ${
+                          activeTab === tab.id
+                            ? 'bg-blue-50 text-blue-600 font-medium'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4 flex-shrink-0" />
+                        <span>{tab.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </nav>
       </div>
 

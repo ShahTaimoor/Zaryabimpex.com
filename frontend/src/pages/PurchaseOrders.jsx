@@ -298,7 +298,7 @@ const PurchaseOrderCard = ({ po, onEdit, onDelete, onConfirm, onCancel, onClose,
 
 const ProductSearch = ({ onAddProduct, onRefetchReady, onFocusReady }) => {
   const { companyInfo: companySettings } = useCompanyInfo();
-  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput === true;
+  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const allowManualCostPriceEnabled = companySettings.orderSettings?.allowManualCostPrice === true;
 
@@ -341,7 +341,7 @@ export const PurchaseOrders = ({ tabId }) => {
   const { companyInfo: companySettings } = useCompanyInfo();
   const resolvedCompanyName = companySettings.companyName || 'Company Name';
   const itemWiseConfirmationEnabled = companySettings.orderSettings?.purchaseOrderItemWiseConfirmation !== false;
-  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput === true;
+  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const resolvedCompanyAddress = companySettings.address || companySettings.billingAddress || '';
   const resolvedCompanyPhone = companySettings.contactNumber || '';

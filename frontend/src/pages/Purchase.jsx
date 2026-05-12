@@ -111,7 +111,7 @@ const PurchaseItem = ({
   highlightSerial = false,
 }) => {
   const { companyInfo: companySettings } = useCompanyInfo();
-  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput === true;
+  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const totalPrice = item.costPerUnit * item.quantity;
   const product = item.product || {};
@@ -338,7 +338,7 @@ const PurchaseItem = ({
 
 const ProductSearch = ({ onAddProduct, onRefetchReady, onFocusReady }) => {
   const { companyInfo: companySettings } = useCompanyInfo();
-  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput === true;
+  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
 
   return (
@@ -448,7 +448,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   const { companyInfo: companySettings } = useCompanyInfo();
   const importPurchaseFeatureEnabled = companySettings.orderSettings?.enableImportPurchaseLandedCost === true;
   const isEnhancedImportPurchase = isImportPurchase && importPurchaseFeatureEnabled;
-  const dualUnitShowBoxInputEnabledPage = companySettings.orderSettings?.dualUnitShowBoxInput === true;
+  const dualUnitShowBoxInputEnabledPage = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const taxSystemEnabled = companySettings.taxEnabled === true;
   const globalTaxPct = Math.min(100, Math.max(0, Number(companySettings.defaultTaxRate ?? 0)));
 
