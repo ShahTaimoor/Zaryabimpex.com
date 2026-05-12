@@ -148,7 +148,7 @@ const SalesOrders = ({ tabId }) => {
   const resolvedCompanyName = companySettings.companyName || 'Company Name';
   const itemWiseConfirmationEnabled = companySettings.orderSettings?.salesOrderItemWiseConfirmation !== false;
   const showRemainingStockAfterSaleEnabled = companySettings.orderSettings?.showRemainingStockAfterSale !== false;
-  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
+  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput === true;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const allowSaleWithoutProductEnabled = companySettings.orderSettings?.allowSaleWithoutProduct === true;
   const allowManualCostPriceEnabled = companySettings.orderSettings?.allowManualCostPrice === true;
@@ -2377,7 +2377,7 @@ const SalesOrders = ({ tabId }) => {
                             max={undefined}
                             stockPiecesForRemaining={product?.inventory?.currentStock ?? 0}
 
-                            showBoxInput={!dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
+                            showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
                             showPiecesInput={dualUnitShowPiecesInputEnabled}
                             showPiecesUnitLabel={false}
                             inputClassName="input text-center h-8"

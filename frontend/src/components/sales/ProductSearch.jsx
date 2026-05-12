@@ -29,7 +29,7 @@ function ProductSearchComponent({
   hasCostPricePermission,
   priceType,
   onRefetchReady,
-  dualUnitShowBoxInput = true,
+  dualUnitShowBoxInput = false,
   dualUnitShowPiecesInput = true,
   allowOutOfStock = false,
   allowSaleWithoutProduct = false,

@@ -22,82 +22,86 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 
-export function OrderItemWiseConfirmationSettings() {
-  const { data: settingsResponse } = useGetCompanySettingsQuery();
-  const [updateCompanySettings, { isLoading: updating }] = useUpdateCompanySettingsMutation();
-
-  const settings = settingsResponse?.data || settingsResponse;
-  const orderSettings = settings?.orderSettings || {};
-  
-  const [localSettings, setLocalSettings] = React.useState({});
-
-  // Sync local state when settings change
-  React.useEffect(() => {
-    if (orderSettings) {
-      setLocalSettings(orderSettings);
-    }
-  }, [orderSettings]);
-
-  // Use local state for immediate feedback
-  const salesEnabled = localSettings.salesOrderItemWiseConfirmation !== false;
-  const purchaseEnabled = localSettings.purchaseOrderItemWiseConfirmation !== false;
-  const showRemainingStockAfterSale = localSettings.showRemainingStockAfterSale !== false;
-  const dualUnitShowBoxInput = localSettings.dualUnitShowBoxInput !== false;
-  const dualUnitShowPiecesInput = localSettings.dualUnitShowPiecesInput !== false;
-  const showSalesDiscountCode = localSettings.showSalesDiscountCode === true;
-  const allowSaleWithoutProduct = localSettings.allowSaleWithoutProduct === true;
-  const showCostPrice = localSettings.showCostPrice === true;
-  const allowManualCostPrice = localSettings.allowManualCostPrice === true;
-
-  // Invoice Numbering Settings
-  const invoiceSequenceEnabled = localSettings.invoiceSequenceEnabled === true;
-  const invoiceSequencePrefix = localSettings.invoiceSequencePrefix || 'INV-';
-  const invoiceSequenceNext = localSettings.invoiceSequenceNext || 1;
-  const invoiceSequencePadding = localSettings.invoiceSequencePadding || 3;
-
-  // Purchase Numbering Settings
-  const purchaseSequenceEnabled = localSettings.purchaseSequenceEnabled === true;
-  const purchaseSequencePrefix = localSettings.purchaseSequencePrefix || 'PUR-';
-  const purchaseSequenceNext = localSettings.purchaseSequenceNext || 1;
-  const purchaseSequencePadding = localSettings.purchaseSequencePadding || 3;
-
-  const updateSetting = async (key, value, toastMsg) => {
-    // Optimistically update local state
-    setLocalSettings(prev => ({ ...prev, [key]: value }));
-    
-    try {
-      const currentOrderSettings = (settingsResponse?.data?.orderSettings || settingsResponse?.orderSettings || {});
-      await updateCompanySettings({
-        orderSettings: { ...currentOrderSettings, [key]: value },
-      }).unwrap();
-      if (toastMsg) toast.success(toastMsg);
-    } catch (err) {
-      // Revert local state on error
-      setLocalSettings(orderSettings);
-      handleApiError(err, 'Failed to update setting');
-    }
-  };
-
-  const SettingCard = ({ icon: Icon, title, description, checked, onChange, id, color="blue", disabled=false }) => (
-    <div className={`flex items-start space-x-3 p-4 border rounded-xl bg-white shadow-sm hover:border-${color}-300 hover:shadow-md transition-all duration-300 group ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+function SettingCard({ icon: Icon, title, description, checked, onChange, id, disabled = false }) {
+  return (
+    <div className={`flex items-start space-x-3 p-4 border rounded-xl bg-white shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-300 group ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <div className="pt-1">
-        <Checkbox 
-          id={id} 
-          checked={checked} 
+        <Checkbox
+          id={id}
+          checked={!!checked}
           onCheckedChange={onChange}
-          disabled={updating || disabled}
-          className={`w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-${color}-600 data-[state=checked]:border-${color}-600`}
+          disabled={disabled}
+          className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
         />
       </div>
       <Label htmlFor={id} className="flex flex-col cursor-pointer flex-1 space-y-1">
         <div className="flex items-center space-x-2">
-          {Icon && <Icon className={`h-4 w-4 text-${color}-500`} />}
+          {Icon && <Icon className="h-4 w-4 text-blue-500" />}
           <span className="text-sm font-bold text-gray-900 group-hover:text-blue-700">{title}</span>
         </div>
         <span className="text-[11px] text-gray-500 leading-relaxed font-medium">{description}</span>
       </Label>
     </div>
   );
+}
+
+export function OrderItemWiseConfirmationSettings() {
+  const { data: settingsResponse } = useGetCompanySettingsQuery();
+  const [updateCompanySettings] = useUpdateCompanySettingsMutation();
+
+  const settings = settingsResponse?.data || settingsResponse;
+  const serverOrderSettings = settings?.orderSettings || {};
+
+  const [localSettings, setLocalSettings] = React.useState(null);
+  const prevJsonRef = React.useRef('');
+
+  // Sync local state only when server data actually changes
+  React.useEffect(() => {
+    const json = JSON.stringify(serverOrderSettings);
+    if (json !== prevJsonRef.current) {
+      prevJsonRef.current = json;
+      setLocalSettings(serverOrderSettings);
+    }
+  }, [serverOrderSettings]);
+
+  const effective = localSettings || serverOrderSettings;
+
+  const updateSetting = React.useCallback(async (key, value, toastMsg) => {
+    setLocalSettings(prev => ({ ...(prev || serverOrderSettings), [key]: value }));
+
+    try {
+      const base = settingsResponse?.data?.orderSettings || settingsResponse?.orderSettings || {};
+      await updateCompanySettings({
+        orderSettings: { ...base, [key]: value },
+      }).unwrap();
+      if (toastMsg) toast.success(toastMsg);
+    } catch (err) {
+      setLocalSettings(serverOrderSettings);
+      handleApiError(err, 'Failed to update setting');
+    }
+  }, [serverOrderSettings, settingsResponse, updateCompanySettings]);
+
+  const salesEnabled = effective.salesOrderItemWiseConfirmation !== false;
+  const purchaseEnabled = effective.purchaseOrderItemWiseConfirmation !== false;
+  const showRemainingStockAfterSale = effective.showRemainingStockAfterSale !== false;
+  const dualUnitShowBoxInput = effective.dualUnitShowBoxInput === true;
+  const dualUnitShowPiecesInput = effective.dualUnitShowPiecesInput !== false;
+  const showSalesDiscountCode = effective.showSalesDiscountCode === true;
+  const allowSaleWithoutProduct = effective.allowSaleWithoutProduct === true;
+  const showCostPrice = effective.showCostPrice === true;
+  const allowManualCostPrice = effective.allowManualCostPrice === true;
+
+  // Invoice Numbering Settings
+  const invoiceSequenceEnabled = effective.invoiceSequenceEnabled === true;
+  const invoiceSequencePrefix = effective.invoiceSequencePrefix || 'INV-';
+  const invoiceSequenceNext = effective.invoiceSequenceNext || 1;
+  const invoiceSequencePadding = effective.invoiceSequencePadding || 3;
+
+  // Purchase Numbering Settings
+  const purchaseSequenceEnabled = effective.purchaseSequenceEnabled === true;
+  const purchaseSequencePrefix = effective.purchaseSequencePrefix || 'PUR-';
+  const purchaseSequenceNext = effective.purchaseSequenceNext || 1;
+  const purchaseSequencePadding = effective.purchaseSequencePadding || 3;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -117,7 +121,6 @@ export function OrderItemWiseConfirmationSettings() {
             description="Allow selling items not in catalog (Manual entry)"
             checked={allowSaleWithoutProduct}
             onChange={(val) => updateSetting('allowSaleWithoutProduct', val, val ? 'Manual item entry enabled' : 'Manual item entry disabled')}
-            color="emerald"
           />
 
           <SettingCard 
@@ -127,7 +130,6 @@ export function OrderItemWiseConfirmationSettings() {
             description="Enable cost price input for manual sale items"
             checked={allowManualCostPrice}
             onChange={(val) => updateSetting('allowManualCostPrice', val, val ? 'Manual cost price enabled' : 'Manual cost price disabled')}
-            color="indigo"
             disabled={!allowSaleWithoutProduct}
           />
 
@@ -138,7 +140,6 @@ export function OrderItemWiseConfirmationSettings() {
             description="Show cost prices in lists, POS, and reports"
             checked={showCostPrice}
             onChange={(val) => updateSetting('showCostPrice', val, val ? 'Cost price visibility enabled' : 'Cost price visibility disabled')}
-            color="amber"
           />
 
           <SettingCard 
@@ -148,7 +149,6 @@ export function OrderItemWiseConfirmationSettings() {
             description="Item-wise checklist before converting to Invoice"
             checked={salesEnabled}
             onChange={(val) => updateSetting('salesOrderItemWiseConfirmation', val, val ? 'Sales item-wise confirmation enabled' : 'Sales item-wise confirmation disabled')}
-            color="blue"
           />
 
           <SettingCard 
@@ -158,7 +158,6 @@ export function OrderItemWiseConfirmationSettings() {
             description="Per-item check in Purchase Orders workflow"
             checked={purchaseEnabled}
             onChange={(val) => updateSetting('purchaseOrderItemWiseConfirmation', val, val ? 'Purchase item-wise confirmation enabled' : 'Purchase item-wise confirmation disabled')}
-            color="violet"
           />
 
           <SettingCard 
@@ -168,7 +167,6 @@ export function OrderItemWiseConfirmationSettings() {
             description="Show remaining stock hint during sale entry"
             checked={showRemainingStockAfterSale}
             onChange={(val) => updateSetting('showRemainingStockAfterSale', val, val ? 'Stock hint enabled' : 'Stock hint disabled')}
-            color="rose"
           />
         </div>
       </div>
@@ -189,7 +187,6 @@ export function OrderItemWiseConfirmationSettings() {
             description="Display 'Boxes' column for dual-unit products"
             checked={dualUnitShowBoxInput}
             onChange={(val) => updateSetting('dualUnitShowBoxInput', val, val ? 'Box column enabled' : 'Box column disabled')}
-            color="sky"
           />
 
           <SettingCard 
@@ -199,7 +196,6 @@ export function OrderItemWiseConfirmationSettings() {
             description="Display 'Pieces' column for dual-unit items"
             checked={dualUnitShowPiecesInput}
             onChange={(val) => updateSetting('dualUnitShowPiecesInput', val, val ? 'Pieces column enabled' : 'Pieces column disabled')}
-            color="cyan"
           />
 
           <SettingCard 
@@ -209,7 +205,6 @@ export function OrderItemWiseConfirmationSettings() {
             description="Show discount code selector in POS panel"
             checked={showSalesDiscountCode}
             onChange={(val) => updateSetting('showSalesDiscountCode', val, val ? 'Discount selector enabled' : 'Discount selector disabled')}
-            color="teal"
           />
         </div>
       </div>

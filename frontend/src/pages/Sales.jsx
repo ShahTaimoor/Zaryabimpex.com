@@ -237,7 +237,7 @@ export const Sales = ({ tabId, editData }) => {
   const allowManualCostPriceEnabled = companySettings.orderSettings?.allowManualCostPrice === true;
   const globalShowCostPriceAllowed = companySettings.orderSettings?.showCostPrice !== false && hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS);
 
-  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
+  const dualUnitShowBoxInputEnabled = companySettings.orderSettings?.dualUnitShowBoxInput === true;
   const dualUnitShowPiecesInputEnabled = companySettings.orderSettings?.dualUnitShowPiecesInput !== false;
   const showSalesDiscountCodeEnabled = companySettings.orderSettings?.showSalesDiscountCode === true;
   const autoPrintEnabled = companySettings.printSettings?.autoPrintAfterSale !== false;
