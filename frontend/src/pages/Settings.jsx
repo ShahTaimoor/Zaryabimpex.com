@@ -580,7 +580,7 @@ export const Settings2 = () => {
       name: 'Sales',
       icon: ShoppingCart,
       pages: [
-        { key: 'sales-orders', name: 'Sales Orders', view: 'view_sales_orders', create: 'create_sales_orders', edit: 'edit_sales_orders', delete: 'delete_sales_orders' },
+        { key: 'sales-orders', name: 'Sales Orders', view: 'view_sales_orders', create: 'create_sales_orders', edit: 'edit_sales_orders', delete: 'delete_sales_orders', confirm: 'confirm_sales_orders', cancel: 'cancel_sales_orders' },
         { key: 'sales', name: 'Sales', view: 'view_sales', create: 'create_sales_invoices', edit: 'edit_sales_invoices', delete: 'void_sales_invoices' },
         { key: 'sale-returns', name: 'Sale Returns', view: 'view_sale_returns', create: 'create_sale_returns', edit: 'edit_sale_returns', delete: 'delete_sale_returns' }
       ]
@@ -723,7 +723,7 @@ export const Settings2 = () => {
 
   const allPagePermissionDefaults = Object.values(pagePermissionGroups).reduce((acc, group) => {
     group.pages.forEach((page) => {
-      ['view', 'create', 'edit', 'delete'].forEach((action) => {
+      ['view', 'create', 'edit', 'delete', 'confirm', 'cancel'].forEach((action) => {
         if (page[action]) acc[page[action]] = true;
       });
     });
@@ -783,6 +783,7 @@ export const Settings2 = () => {
       // Sales Operations - Granular
       create_sales_orders: true, edit_sales_orders: true, delete_sales_orders: true,
       approve_sales_orders: true, reject_sales_orders: true,
+      confirm_sales_orders: true, cancel_sales_orders: true,
       create_sales_invoices: true, edit_sales_invoices: true, void_sales_invoices: true,
       apply_discounts: true, override_prices: true,
       // Inventory Operations - Granular
@@ -869,6 +870,7 @@ export const Settings2 = () => {
       // Sales Operations - Granular
       create_sales_orders: true, edit_sales_orders: true, delete_sales_orders: true,
       approve_sales_orders: true, reject_sales_orders: true,
+      confirm_sales_orders: true, cancel_sales_orders: true,
       create_sales_invoices: true, edit_sales_invoices: true, void_sales_invoices: true,
       apply_discounts: true, override_prices: true,
       // Inventory Operations - Granular
@@ -911,6 +913,7 @@ export const Settings2 = () => {
       view_orders: true, create_orders: true,
       view_sales: true, view_sales_orders: true, view_sales_invoices: true,
       create_sales_orders: true, edit_sales_orders: true,
+      confirm_sales_orders: true,
       create_sales_invoices: true, edit_sales_invoices: true,
       apply_last_prices: true,
       manage_sales: true,
@@ -982,6 +985,7 @@ export const Settings2 = () => {
       view_orders: true, create_orders: true, edit_orders: true,
       view_sales: true, view_sales_orders: true, view_sales_invoices: true,
       create_sales_orders: true, edit_sales_orders: true,
+      confirm_sales_orders: true,
       create_sales_invoices: true, edit_sales_invoices: true,
       apply_last_prices: true,
       manage_sales: true,
@@ -1570,10 +1574,10 @@ export const Settings2 = () => {
     }
   };
 
-  // Toggle every CRUD permission key declared on a page in a single update
+  // Toggle every permission key declared on a page in a single update
   const togglePageAllPermissions = (page, isChecked) => {
     const updates = {};
-    ['view', 'create', 'edit', 'delete'].forEach((action) => {
+    ['view', 'create', 'edit', 'delete', 'confirm', 'cancel'].forEach((action) => {
       const permissionKey = page[action];
       if (permissionKey) updates[permissionKey] = isChecked;
     });
@@ -2408,7 +2412,7 @@ export const Settings2 = () => {
                           const matrixKeys = new Set();
                           Object.values(pagePermissionGroups).forEach((group) => {
                             group.pages.forEach((page) => {
-                              ['view', 'create', 'edit', 'delete'].forEach((action) => {
+                              ['view', 'create', 'edit', 'delete', 'confirm', 'cancel'].forEach((action) => {
                                 if (page[action]) matrixKeys.add(page[action]);
                               });
                             });
@@ -2442,7 +2446,7 @@ export const Settings2 = () => {
                             {Object.entries(pagePermissionGroups).map(([groupKey, group]) => {
                               const Icon = group.icon;
                               const allKeys = group.pages.flatMap((page) =>
-                                ['view', 'create', 'edit', 'delete']
+                                ['view', 'create', 'edit', 'delete', 'confirm', 'cancel']
                                   .map((action) => page[action])
                                   .filter(Boolean)
                               ).concat((group.extraPermissions || []).map((permission) => permission.key));
@@ -2481,7 +2485,9 @@ export const Settings2 = () => {
                               { key: 'view', label: 'View', color: 'text-blue-600 focus:ring-blue-500' },
                               { key: 'create', label: 'Create', color: 'text-green-600 focus:ring-green-500' },
                               { key: 'edit', label: 'Edit', color: 'text-amber-600 focus:ring-amber-500' },
-                              { key: 'delete', label: 'Delete', color: 'text-red-600 focus:ring-red-500' }
+                              { key: 'delete', label: 'Delete', color: 'text-red-600 focus:ring-red-500' },
+                              { key: 'confirm', label: 'Confirm', color: 'text-emerald-600 focus:ring-emerald-500' },
+                              { key: 'cancel', label: 'Cancel', color: 'text-rose-600 focus:ring-rose-500' }
                             ];
                             return (
                               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -2500,7 +2506,7 @@ export const Settings2 = () => {
 
                                 {/* Column headers */}
                                 {group.pages.length > 0 && (
-                                  <div className="hidden md:grid grid-cols-[1fr_repeat(4,90px)_110px] items-center px-4 py-2 bg-gray-50 border-b border-gray-200 text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                                  <div className="hidden md:grid grid-cols-[1fr_repeat(6,80px)_100px] items-center px-4 py-2 bg-gray-50 border-b border-gray-200 text-[11px] font-bold uppercase tracking-wider text-gray-500">
                                     <div>Page</div>
                                     {ACTIONS.map((a) => (
                                       <div key={a.key} className="text-center">{a.label}</div>
@@ -2519,7 +2525,7 @@ export const Settings2 = () => {
                                     return (
                                       <div
                                         key={page.key}
-                                        className="grid grid-cols-1 md:grid-cols-[1fr_repeat(4,90px)_110px] gap-3 md:gap-0 items-center px-4 py-3 hover:bg-gray-50/80 transition-colors"
+                                        className="grid grid-cols-1 md:grid-cols-[1fr_repeat(6,80px)_100px] gap-3 md:gap-0 items-center px-4 py-3 hover:bg-gray-50/80 transition-colors"
                                       >
                                         {/* Page name */}
                                         <div className="flex items-center gap-2 min-w-0">

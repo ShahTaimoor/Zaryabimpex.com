@@ -40,7 +40,7 @@ const AnomalyDetection = () => {
 
   React.useEffect(() => {
     if (error) {
-      showErrorToast(handleApiError(error));
+      showErrorToast(error);
     }
   }, [error]);
 

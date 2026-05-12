@@ -12,6 +12,9 @@ const getRequestIdFromResponse = (response) => {
   );
 };
 
+// Shared refresh state to prevent concurrent refresh calls
+let refreshPromise = null;
+
 /**
  * Creates an axios-based base query for RTK Query
  * @param {Object} options - Configuration options
@@ -19,20 +22,17 @@ const getRequestIdFromResponse = (response) => {
  * @returns {Function} RTK Query base query function
  */
 const axiosBaseQuery = ({ baseUrl = '' } = {}) => {
-  // Create axios instance
   const axiosInstance = axios.create({
     baseURL: baseUrl,
     headers: {
       'Content-Type': 'application/json',
     },
-    withCredentials: true, // Enable sending cookies (HTTP-only cookies for auth)
+    withCredentials: true,
   });
 
-  // Request interceptor to add idempotency key and sanitize data
-  // Note: Auth token is handled via HTTP-only cookies (sent automatically with withCredentials: true)
+  // Request interceptor
   axiosInstance.interceptors.request.use(
     (config) => {
-      // Token in cookie is preferred, but add Authorization fallback for Safari/iPad cookie restrictions
       if (typeof window !== 'undefined') {
         try {
           const storedToken = localStorage.getItem('authToken');
@@ -45,16 +45,10 @@ const axiosBaseQuery = ({ baseUrl = '' } = {}) => {
         }
       }
 
-      // Don't generate idempotency keys automatically - let the backend handle duplicate detection
-      // The frontend guard (isSubmittingRef/isSubmitting) prevents duplicate clicks
-      // Backend duplicate prevention middleware can be disabled or kept as a safety net
-
-      // Ensure relative URLs combine with baseURL
       if (config.url && config.url.startsWith('/')) {
         config.url = config.url.substring(1);
       }
 
-      // FormData: do not sanitize and let axios set Content-Type (multipart/form-data)
       if (config.data instanceof FormData) {
         config.headers = config.headers ? { ...config.headers } : {};
         delete config.headers['Content-Type'];
@@ -73,23 +67,61 @@ const axiosBaseQuery = ({ baseUrl = '' } = {}) => {
     }
   );
 
-  // Response interceptor to handle errors and sanitize responses
+  // Response interceptor
   axiosInstance.interceptors.response.use(
     (response) => {
-      // Skip sanitization for blob responses (files, PDFs, images, etc.)
       if (response.data && !(response.data instanceof Blob) && !(response.data instanceof ArrayBuffer)) {
         response.data = sanitizeResponseData(response.data);
       }
       return response;
     },
-    (error) => {
-      // Do not force a hard redirect on every 401 here.
-      // Let auth state handling decide when a session is truly invalid.
-      if (error.response?.status === 401) {
-        return Promise.reject(error);
+    async (error) => {
+      const originalRequest = error.config;
+
+      // On 401, try a silent token refresh (skip for auth endpoints to avoid loops)
+      if (
+        error.response?.status === 401 &&
+        !originalRequest._retry &&
+        !originalRequest.url?.includes('auth/refresh') &&
+        !originalRequest.url?.includes('auth/login')
+      ) {
+        originalRequest._retry = true;
+
+        try {
+          // Coalesce concurrent refresh attempts into a single request
+          if (!refreshPromise) {
+            refreshPromise = axiosInstance.post('auth/refresh').finally(() => {
+              refreshPromise = null;
+            });
+          }
+          const refreshResponse = await refreshPromise;
+
+          // Store new token for Safari/iPad fallback
+          const newToken = refreshResponse?.data?.token;
+          if (newToken && typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('authToken', newToken);
+              const userData = refreshResponse?.data?.user;
+              if (userData) {
+                localStorage.setItem('authUser', JSON.stringify(userData));
+              }
+            } catch {
+              // ignore storage errors
+            }
+          }
+
+          // Update the Authorization header and retry the original request
+          if (newToken) {
+            originalRequest.headers = originalRequest.headers || {};
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          }
+          return axiosInstance(originalRequest);
+        } catch {
+          // Refresh failed — token is truly invalid, let 401 propagate
+          return Promise.reject(error);
+        }
       }
 
-      // Handle network errors
       if (!error.response) {
         return Promise.reject({
           ...error,
@@ -114,14 +146,12 @@ const axiosBaseQuery = ({ baseUrl = '' } = {}) => {
         ...rest,
       };
 
-      // Handle blob response type
       if (responseType === 'blob' || responseHandler) {
         config.responseType = 'blob';
       }
 
       const result = await axiosInstance(config);
 
-      // If responseHandler is provided, use it to process the response
       if (responseHandler && typeof responseHandler === 'function') {
         const processedData = await responseHandler(result);
         return {
@@ -135,7 +165,6 @@ const axiosBaseQuery = ({ baseUrl = '' } = {}) => {
         };
       }
 
-      // For blob responses, include headers in meta for filename extraction
       if (config.responseType === 'blob') {
         return {
           data: result.data,

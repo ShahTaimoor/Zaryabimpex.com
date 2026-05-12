@@ -21,6 +21,8 @@ const PERMISSIONS = {
   VIEW_SALES: 'view_sales',
   MANAGE_SALES: 'manage_sales',
   VIEW_SALES_ORDERS: 'view_sales_orders',
+  CONFIRM_SALES_ORDERS: 'confirm_sales_orders',
+  CANCEL_SALES_ORDERS: 'cancel_sales_orders',
   
   // Products
   VIEW_PRODUCTS: 'view_products',

@@ -46,6 +46,12 @@ export const authApi = api.injectEndpoints({
       }),
       invalidatesTags: [{ type: 'Auth', id: 'CURRENT_USER' }],
     }),
+    refreshToken: builder.mutation({
+      query: () => ({
+        url: 'auth/refresh',
+        method: 'post',
+      }),
+    }),
     logout: builder.mutation({
       query: () => ({
         url: 'auth/logout',
@@ -64,6 +70,7 @@ export const {
   useCurrentUserQuery,
   useUpdateProfileMutation,
   useChangePasswordMutation,
+  useRefreshTokenMutation,
   useLogoutMutation,
 } = authApi;
 

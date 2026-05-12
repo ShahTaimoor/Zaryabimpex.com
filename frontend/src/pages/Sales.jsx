@@ -52,7 +52,7 @@ import {
   computeTotalPieces,
   formatStockDualLabel,
 } from '../utils/dualUnitUtils';
-import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
+import { handleApiError, showSuccessToast, showErrorToast, getErrorMessage } from '../utils/errorHandler';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -2761,7 +2761,7 @@ export const Sales = ({ tabId, editData }) => {
               </div>
             ) : savedInvoicesError ? (
               <div className="p-8 text-center text-red-600">
-                <p>{handleApiError(savedInvoicesError).message || 'Error loading sales invoices'}</p>
+                <p>{getErrorMessage(savedInvoicesError) || 'Error loading sales invoices'}</p>
               </div>
             ) : savedInvoices.length === 0 ? (
               <div className="p-8 text-center text-gray-500">

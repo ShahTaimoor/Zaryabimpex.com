@@ -144,6 +144,10 @@ export const getErrorSeverity = (error) => {
 export const showErrorToast = (error, options = {}) => {
   try {
     const message = getErrorMessage(error);
+
+    // Skip if this is a network maintenance error — handled by global middleware
+    if (typeof message === 'string' && message.includes('maintenance')) return;
+
     const severity = getErrorSeverity(error);
     const requestId = getErrorRequestId(error);
     
@@ -237,7 +241,7 @@ export const handleApiError = (error, context = '') => {
     // Ensure message is a string
     const safeMessage = typeof message === 'string' ? message : String(message);
     
-    // Show appropriate toast
+    // Show toast (skipped for maintenance errors — handled by global middleware)
     showErrorToast(error);
     
     // Return error info for further handling

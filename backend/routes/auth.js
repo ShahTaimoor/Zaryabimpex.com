@@ -292,6 +292,47 @@ router.post('/change-password', [
   }
 });
 
+// @route   POST /api/auth/refresh
+// @desc    Refresh an expired access token (issues new JWT + cookie)
+// @access  Public (uses the old token to identify the user)
+router.post('/refresh', async (req, res, next) => {
+  try {
+    let token = req.cookies?.token;
+    if (!token) {
+      token = req.header('Authorization')?.replace('Bearer ', '');
+    }
+    if (!token) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+
+    const result = await authService.refreshToken(token);
+    if (!result) {
+      return res.status(401).json({ message: 'Unable to refresh session' });
+    }
+
+    res.cookie('token', result.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 8 * 60 * 60 * 1000,
+      path: '/'
+    });
+
+    const safeUser = {
+      id: result.user.id || result.user._id,
+      firstName: result.user.firstName,
+      lastName: result.user.lastName,
+      email: result.user.email,
+      role: result.user.role,
+      permissions: result.user.permissions,
+    };
+
+    res.json({ token: result.token, user: safeUser });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 // @route   POST /api/auth/logout
 // @desc    Logout user (clear HTTP-only cookie)
 // @access  Private

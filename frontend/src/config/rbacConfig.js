@@ -18,6 +18,8 @@ export const PERMISSIONS = {
   VIEW_SALES_INVOICES: 'view_sales_invoices',
   CREATE_SALES_ORDERS: 'create_sales_orders',
   EDIT_SALES_ORDERS: 'edit_sales_orders',
+  CONFIRM_SALES_ORDERS: 'confirm_sales_orders',
+  CANCEL_SALES_ORDERS: 'cancel_sales_orders',
   CREATE_SALES_INVOICES: 'create_sales_invoices',
   EDIT_SALES_INVOICES: 'edit_sales_invoices',
   CREATE_ORDERS: 'create_orders',

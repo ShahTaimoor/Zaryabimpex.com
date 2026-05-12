@@ -126,10 +126,10 @@ const authSlice = createSlice({
         state.error = null;
       })
       .addMatcher(authApi.endpoints.currentUser.matchRejected, (state, action) => {
+        // 401 here means the interceptor already tried refresh and it failed.
         // Only clear auth when backend explicitly says the session is invalid.
-        // Keep users logged in during transient API/server failures.
         const status = action?.payload?.status;
-        const isSessionInvalid = status === 401 || status === 403;
+        const isSessionInvalid = status === 401;
 
         if (navigator.onLine && isSessionInvalid) {
           state.user = null;
@@ -142,6 +142,24 @@ const authSlice = createSlice({
             } catch {
               // ignore storage errors
             }
+          }
+        }
+      })
+      .addMatcher(authApi.endpoints.refreshToken.matchFulfilled, (state, { payload }) => {
+        state.user = payload.user || state.user;
+        state.token = payload.token || state.token;
+        state.isAuthenticated = true;
+        state.status = 'succeeded';
+        if (typeof window !== 'undefined') {
+          try {
+            if (payload?.token) {
+              localStorage.setItem('authToken', payload.token);
+            }
+            if (payload?.user) {
+              localStorage.setItem('authUser', JSON.stringify(payload.user));
+            }
+          } catch {
+            // ignore storage errors
           }
         }
       });

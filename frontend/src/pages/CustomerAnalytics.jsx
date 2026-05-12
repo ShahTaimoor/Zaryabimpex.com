@@ -41,16 +41,15 @@ const CustomerAnalytics = () => {
     skip: false,
   });
 
-  // Handle errors
   React.useEffect(() => {
     if (summaryError) {
-      showErrorToast(handleApiError(summaryError));
+      showErrorToast(summaryError);
     }
   }, [summaryError]);
 
   React.useEffect(() => {
     if (analyticsError) {
-      showErrorToast(handleApiError(analyticsError));
+      showErrorToast(analyticsError);
     }
   }, [analyticsError]);
 
