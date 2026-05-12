@@ -69,6 +69,25 @@ export const PERMISSIONS = {
   MANAGE_CUSTOMER_SETTINGS: 'manage_customer_settings',
   MANAGE_SUPPLIER_SETTINGS: 'manage_supplier_settings',
   MANAGE_ADVANCED_SETTINGS: 'manage_advanced_settings',
+
+  // Settings sub-features (Print)
+  SETTINGS_PRINT_LAYOUT: 'settings_print_layout',
+  SETTINGS_PRINT_LOGO_HEADER: 'settings_print_logo_header',
+  SETTINGS_PRINT_PARTY_DETAILS: 'settings_print_party_details',
+  SETTINGS_PRINT_INVOICE_META: 'settings_print_invoice_meta',
+  SETTINGS_PRINT_FINANCIALS: 'settings_print_financials',
+  SETTINGS_PRINT_BEHAVIOR: 'settings_print_behavior',
+  // Settings sub-features (Products)
+  SETTINGS_PRODUCT_IMAGES: 'settings_product_images',
+  SETTINGS_PRODUCT_FIELDS: 'settings_product_fields',
+  // Settings sub-features (Customers)
+  SETTINGS_CUSTOMER_FIELDS: 'settings_customer_fields',
+  // Settings sub-features (Suppliers)
+  SETTINGS_SUPPLIER_FIELDS: 'settings_supplier_fields',
+  // Settings sub-features (Advanced)
+  SETTINGS_ADVANCED_DISPLAY: 'settings_advanced_display',
+  SETTINGS_ADVANCED_FEATURES: 'settings_advanced_features',
+  SETTINGS_ADVANCED_SECURITY: 'settings_advanced_security',
   VIEW_SETTINGS: 'view_settings',
   EDIT_SETTINGS: 'edit_settings',
   VIEW_MIGRATION: 'view_migration',

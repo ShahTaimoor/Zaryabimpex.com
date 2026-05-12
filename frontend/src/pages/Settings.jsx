@@ -692,6 +692,21 @@ export const Settings2 = () => {
         { key: 'customer-settings', name: 'Customer Settings', view: 'manage_customer_settings', edit: 'manage_customer_settings' },
         { key: 'supplier-settings', name: 'Supplier Settings', view: 'manage_supplier_settings', edit: 'manage_supplier_settings' },
         { key: 'advanced-settings', name: 'Advanced Features', view: 'manage_advanced_settings', edit: 'manage_advanced_settings' }
+      ],
+      extraPermissions: [
+        { key: 'settings_print_layout', name: 'Print — Layout & Size' },
+        { key: 'settings_print_logo_header', name: 'Print — Logo & Header' },
+        { key: 'settings_print_party_details', name: 'Print — Party / Billing Details' },
+        { key: 'settings_print_invoice_meta', name: 'Print — Invoice Meta & Payment' },
+        { key: 'settings_print_financials', name: 'Print — Financials & Table' },
+        { key: 'settings_print_behavior', name: 'Print — Post-Print Behavior' },
+        { key: 'settings_product_images', name: 'Products — Image Visibility' },
+        { key: 'settings_product_fields', name: 'Products — Field Visibility' },
+        { key: 'settings_customer_fields', name: 'Customers — Field Visibility' },
+        { key: 'settings_supplier_fields', name: 'Suppliers — Field Visibility' },
+        { key: 'settings_advanced_display', name: 'Advanced — Display Options' },
+        { key: 'settings_advanced_features', name: 'Advanced — Feature Toggles' },
+        { key: 'settings_advanced_security', name: 'Advanced — Security (2FA)' }
       ]
     },
     system: {
@@ -699,6 +714,7 @@ export const Settings2 = () => {
       icon: SettingsIcon,
       pages: [
         { key: 'settings', name: 'Settings', view: 'view_settings', edit: 'edit_settings' },
+        { key: 'print-preview', name: 'Print Preview', view: 'manage_print_settings' },
         { key: 'migration', name: 'Migration', view: 'view_migration', create: 'run_migration' },
         { key: 'help', name: 'Help', view: 'view_help' }
       ]
@@ -787,6 +803,11 @@ export const Settings2 = () => {
       manage_users: true, manage_settings: true,
       manage_print_settings: true, manage_product_settings: true, manage_customer_settings: true,
       manage_supplier_settings: true, manage_advanced_settings: true,
+      settings_print_layout: true, settings_print_logo_header: true, settings_print_party_details: true,
+      settings_print_invoice_meta: true, settings_print_financials: true, settings_print_behavior: true,
+      settings_product_images: true, settings_product_fields: true,
+      settings_customer_fields: true, settings_supplier_fields: true,
+      settings_advanced_display: true, settings_advanced_features: true, settings_advanced_security: true,
       create_users: true, edit_users: true, delete_users: true, assign_roles: true,
       company_settings: true, system_settings: true, print_settings: true, security_settings: true,
       view_audit_logs: true, import_data: true,
@@ -869,6 +890,11 @@ export const Settings2 = () => {
       view_cctv_access: true, view_cities: true, create_cities: true, edit_cities: true,
       manage_print_settings: true, manage_product_settings: true, manage_customer_settings: true,
       manage_supplier_settings: true, manage_advanced_settings: true,
+      settings_print_layout: true, settings_print_logo_header: true, settings_print_party_details: true,
+      settings_print_invoice_meta: true, settings_print_financials: true, settings_print_behavior: true,
+      settings_product_images: true, settings_product_fields: true,
+      settings_customer_fields: true, settings_supplier_fields: true,
+      settings_advanced_display: true, settings_advanced_features: true, settings_advanced_security: true,
       view_help: true
     },
     cashier: {
