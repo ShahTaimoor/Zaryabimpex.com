@@ -56,7 +56,7 @@ class ProductRepository {
 
     const selectList =
       listMode === 'minimal'
-        ? `id, name, sku, barcode, hs_code, category_id, cost_price, selling_price, wholesale_price,
+        ? `id, name, description, sku, barcode, hs_code, category_id, cost_price, selling_price, wholesale_price,
            stock_quantity, min_stock_level, unit, pieces_per_box, is_active, image_url,
            country_of_origin, net_weight_kg, gross_weight_kg, import_ref_no, gd_number, invoice_ref,
            created_at, updated_at, is_deleted`
