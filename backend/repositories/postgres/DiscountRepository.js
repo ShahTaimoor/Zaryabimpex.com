@@ -12,6 +12,25 @@ function toNumericDefault(v, def = 0) {
   return Number.isNaN(n) ? def : n;
 }
 
+/** @param {unknown} arr @returns {string[]|null} */
+function toUuidArray(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  const out = arr.map((x) => String(x).trim()).filter(Boolean);
+  return out.length ? out : null;
+}
+
+function toProductDiscountRulesJson(data) {
+  const raw = data.productDiscountRules ?? data.product_discount_rules;
+  if (!Array.isArray(raw)) return '[]';
+  return JSON.stringify(raw);
+}
+
+function toIntOptional(v) {
+  if (v === '' || v === undefined || v === null) return null;
+  const n = parseInt(String(v), 10);
+  return Number.isNaN(n) ? null : n;
+}
+
 class DiscountRepository {
   async findById(id) {
     const result = await query('SELECT * FROM discounts WHERE id = $1', [id]);
@@ -106,15 +125,45 @@ class DiscountRepository {
   }
 
   async create(data) {
+    const applicableProducts = toUuidArray(data.applicableProducts ?? data.applicable_products);
+    const applicableCategories = toUuidArray(data.applicableCategories ?? data.applicable_categories);
+    const applicableCustomers = toUuidArray(data.applicableCustomers ?? data.applicable_customers);
+    const productRulesJson = toProductDiscountRulesJson(data);
+    const usageLimit = toIntOptional(data.usageLimit ?? data.usage_limit);
+    const usageLimitPerCustomer = toIntOptional(data.usageLimitPerCustomer ?? data.usage_limit_per_customer);
+    const priority = toIntOptional(data.priority);
+    const combinable = !!(data.combinableWithOtherDiscounts ?? data.combinable_with_other_discounts);
+
     const result = await query(
-      `INSERT INTO discounts (name, description, code, type, value, maximum_discount, minimum_order_amount, applicable_to, valid_from, valid_until, is_active, created_by, conditions, analytics, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, '{}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING *`,
+      `INSERT INTO discounts (
+        name, description, code, type, value, maximum_discount, minimum_order_amount,
+        applicable_to, applicable_products, applicable_categories, applicable_customers, product_discount_rules,
+        valid_from, valid_until, is_active, usage_limit, usage_limit_per_customer, priority,
+        combinable_with_other_discounts, created_by, conditions, analytics, created_at, updated_at
+      )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, $20, $21::jsonb, '{}'::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING *`,
       [
-        data.name, data.description || null, (data.code || '').toUpperCase(), data.type, toNumericDefault(data.value),
+        data.name,
+        data.description || null,
+        (data.code || '').toUpperCase(),
+        data.type,
+        toNumericDefault(data.value),
         toNumericOptional(data.maximumDiscount ?? data.maximum_discount),
         toNumericDefault(data.minimumOrderAmount ?? data.minimum_order_amount, 0),
-        data.applicableTo || data.applicable_to || 'all', data.validFrom || data.valid_from, data.validUntil || data.valid_until,
-        data.isActive !== false, data.createdBy || data.created_by, data.conditions ? JSON.stringify(data.conditions) : '{}'
+        data.applicableTo || data.applicable_to || 'all',
+        applicableProducts,
+        applicableCategories,
+        applicableCustomers,
+        productRulesJson,
+        data.validFrom || data.valid_from,
+        data.validUntil || data.valid_until,
+        data.isActive !== false,
+        usageLimit,
+        usageLimitPerCustomer,
+        priority != null ? priority : 0,
+        combinable,
+        data.createdBy || data.created_by,
+        data.conditions ? JSON.stringify(data.conditions) : '{}',
       ]
     );
     return result.rows[0];
@@ -124,13 +173,44 @@ class DiscountRepository {
     const updates = [];
     const params = [];
     let paramCount = 1;
-    const numericOptional = new Set(['maximum_discount', 'current_usage']);
-    const numericDefault = new Set(['minimum_order_amount', 'value']);
-    const map = { name: 'name', description: 'description', code: 'code', type: 'type', value: 'value', maximumDiscount: 'maximum_discount', minimumOrderAmount: 'minimum_order_amount', applicableTo: 'applicable_to', validFrom: 'valid_from', validUntil: 'valid_until', isActive: 'is_active', currentUsage: 'current_usage', analytics: 'analytics', lastModifiedBy: 'last_modified_by' };
+    const numericOptional = new Set(['maximum_discount', 'current_usage', 'usage_limit', 'usage_limit_per_customer']);
+    const numericDefault = new Set(['minimum_order_amount', 'value', 'priority']);
+    const map = {
+      name: 'name',
+      description: 'description',
+      code: 'code',
+      type: 'type',
+      value: 'value',
+      maximumDiscount: 'maximum_discount',
+      minimumOrderAmount: 'minimum_order_amount',
+      applicableTo: 'applicable_to',
+      applicableProducts: 'applicable_products',
+      applicableCategories: 'applicable_categories',
+      applicableCustomers: 'applicable_customers',
+      productDiscountRules: 'product_discount_rules',
+      validFrom: 'valid_from',
+      validUntil: 'valid_until',
+      isActive: 'is_active',
+      currentUsage: 'current_usage',
+      usageLimit: 'usage_limit',
+      usageLimitPerCustomer: 'usage_limit_per_customer',
+      priority: 'priority',
+      combinableWithOtherDiscounts: 'combinable_with_other_discounts',
+      analytics: 'analytics',
+      lastModifiedBy: 'last_modified_by',
+    };
     for (const [k, col] of Object.entries(map)) {
       if (data[k] !== undefined) {
-        updates.push(`${col} = $${paramCount++}`);
-        let val = typeof data[k] === 'object' ? JSON.stringify(data[k]) : (k === 'code' ? (data[k] || '').toUpperCase() : data[k]);
+        const jsonbCastCols = new Set(['product_discount_rules', 'analytics', 'conditions']);
+        updates.push(`${col} = $${paramCount++}${jsonbCastCols.has(col) ? '::jsonb' : ''}`);
+        let val = data[k];
+        if (k === 'applicableProducts') val = toUuidArray(val);
+        else if (k === 'applicableCategories') val = toUuidArray(val);
+        else if (k === 'applicableCustomers') val = toUuidArray(val);
+        else if (k === 'productDiscountRules') {
+          val = Array.isArray(val) ? JSON.stringify(val) : (typeof val === 'string' ? val : '[]');
+        } else if (k === 'code') val = (data[k] || '').toUpperCase();
+        else if (typeof val === 'object' && val !== null && !Array.isArray(val)) val = JSON.stringify(val);
         if (numericOptional.has(col)) val = toNumericOptional(val);
         else if (numericDefault.has(col)) val = toNumericDefault(val);
         params.push(val);

@@ -1,7 +1,5 @@
 const DiscountRepository = require('../repositories/DiscountRepository');
 const SalesRepository = require('../repositories/SalesRepository');
-const CustomerRepository = require('../repositories/CustomerRepository');
-const ProductRepository = require('../repositories/ProductRepository');
 
 function discountToObject(d) {
   return d && typeof d === 'object' ? { ...d, _id: d.id, id: d.id } : d;
@@ -17,6 +15,126 @@ function calculateDiscountAmount(discount, orderTotal) {
     return Math.max(0, amount);
   }
   return Math.min(value, total);
+}
+
+function parseProductDiscountRules(discount) {
+  let r = discount.product_discount_rules ?? discount.productDiscountRules;
+  if (typeof r === 'string') {
+    try {
+      r = JSON.parse(r);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(r) ? r : [];
+}
+
+function getItemProductId(item) {
+  const p = item?.product_id ?? item?.productId ?? item?.product;
+  if (p == null) return '';
+  if (typeof p === 'object') return String(p._id ?? p.id ?? '');
+  return String(p);
+}
+
+/** Gross line amount before promo code (excludes cancelled SO lines). */
+function getSaleLineGrossAmount(item) {
+  const cancelled = (item?.confirmationStatus ?? item?.confirmation_status ?? 'pending') === 'cancelled';
+  if (cancelled) return 0;
+  const tp = Number(item?.totalPrice ?? item?.total_price);
+  if (Number.isFinite(tp) && tp > 0) return tp;
+  const qty = Number(item?.quantity ?? item?.qty ?? 0);
+  const price = Number(item?.unitPrice ?? item?.unit_price ?? item?.price ?? 0);
+  return Math.max(0, qty * price);
+}
+
+function getOrderItems(order) {
+  let items = order?.items;
+  if (items == null) return [];
+  if (typeof items === 'string') {
+    try {
+      items = JSON.parse(items);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(items) ? items : [];
+}
+
+function applicableProductIdSet(discount) {
+  const raw = discount.applicable_products ?? discount.applicableProducts;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  return new Set(raw.map((x) => String(x)));
+}
+
+function lineAmountFromRule(lineAmount, type, value) {
+  const t = type === 'percentage' || type === 'fixed_amount' ? type : 'percentage';
+  const v = Number(value ?? 0);
+  if (!Number.isFinite(lineAmount) || lineAmount <= 0) return 0;
+  if (t === 'percentage') {
+    return Math.max(0, (lineAmount * v) / 100);
+  }
+  return Math.max(0, Math.min(v, lineAmount));
+}
+
+/**
+ * Promo discount amount for an order: supports product_discount_rules (per product type/value),
+ * applicable_to === products (global type/value on matching lines only), or order total.
+ * @param {object} discount
+ * @param {object} ctx - sale/order row or { total, items? }
+ */
+function calculateDiscountAmountForOrder(discount, ctx) {
+  const orderTotal = Number(ctx?.total ?? ctx?.totalAmount ?? 0);
+  const items = getOrderItems(ctx);
+  const rules = parseProductDiscountRules(discount);
+  const defaultType = discount.type || discount.discount_type;
+  const maxCap = discount.maximum_discount ?? discount.maximumDiscount;
+
+  let rawAmount = 0;
+
+  if (rules.length > 0) {
+    if (items.length === 0) {
+      rawAmount = calculateDiscountAmount(discount, orderTotal);
+    } else {
+      const ruleMap = new Map();
+      for (const rule of rules) {
+        const pid = String(rule.productId ?? rule.product_id ?? '').trim();
+        if (!pid) continue;
+        const rt = rule.type && ['percentage', 'fixed_amount'].includes(rule.type) ? rule.type : defaultType;
+        const rv = Number(rule.value ?? 0);
+        ruleMap.set(pid, { type: rt, value: rv });
+      }
+      for (const item of items) {
+        const pid = getItemProductId(item);
+        if (!pid || !ruleMap.has(pid)) continue;
+        const line = getSaleLineGrossAmount(item);
+        const { type, value } = ruleMap.get(pid);
+        rawAmount += lineAmountFromRule(line, type, value);
+      }
+    }
+    if (maxCap != null && Number(maxCap) >= 0 && Number.isFinite(rawAmount)) {
+      rawAmount = Math.min(rawAmount, Number(maxCap));
+    }
+    return Math.max(0, rawAmount);
+  }
+
+  const applicableTo = discount.applicable_to ?? discount.applicableTo ?? 'all';
+  if (applicableTo === 'products' && items.length > 0) {
+    const idSet = applicableProductIdSet(discount);
+    if (idSet && idSet.size > 0) {
+      let eligible = 0;
+      for (const item of items) {
+        const pid = getItemProductId(item);
+        if (pid && idSet.has(pid)) eligible += getSaleLineGrossAmount(item);
+      }
+      rawAmount = calculateDiscountAmount(discount, eligible);
+    } else {
+      rawAmount = calculateDiscountAmount(discount, orderTotal);
+    }
+  } else {
+    rawAmount = calculateDiscountAmount(discount, orderTotal);
+  }
+
+  return Math.max(0, rawAmount);
 }
 
 function isApplicableToOrder(discount, order, orderCustomer) {
@@ -239,7 +357,7 @@ class DiscountService {
       throw new Error('Discount already applied to this order');
     }
 
-    const discountAmount = calculateDiscountAmount(discount, orderTotal);
+    const discountAmount = calculateDiscountAmountForOrder(discount, order);
     if (appliedDiscounts.length > 0 && !(discount.combinable_with_other_discounts ?? discount.combinableWithOtherDiscounts)) {
       throw new Error('This discount cannot be combined with other discounts');
     }
@@ -344,7 +462,7 @@ class DiscountService {
         ).length;
         if (customerUsageCount >= perCustomerLimit) continue;
       }
-      const amount = calculateDiscountAmount(d, orderTotal);
+      const amount = calculateDiscountAmountForOrder(d, { total: orderTotal, items: orderData.items });
       applicable.push({ discount: d, amount });
     }
     const priority = d => d.priority ?? 0;
@@ -398,6 +516,44 @@ class DiscountService {
 
     if (discountData.applicableTo === 'customers' && (!discountData.applicableCustomers || discountData.applicableCustomers.length === 0)) {
       errors.push('At least one customer must be selected when applicable to customers');
+    }
+
+    const rulesRaw = discountData.productDiscountRules ?? discountData.product_discount_rules;
+    const productRules = Array.isArray(rulesRaw) ? rulesRaw : [];
+    if (productRules.length > 0) {
+      const applicableToVal = discountData.applicableTo ?? discountData.applicable_to;
+      if (applicableToVal !== 'products') {
+        errors.push('Product-wise discount rules require applicable to "products"');
+      }
+      const applicableSet = new Set(
+        (discountData.applicableProducts ?? discountData.applicable_products ?? []).map((x) => String(x))
+      );
+      const seen = new Set();
+      for (let i = 0; i < productRules.length; i++) {
+        const r = productRules[i];
+        const pid = String(r?.productId ?? r?.product_id ?? '').trim();
+        if (!pid) {
+          errors.push(`Product discount rule ${i + 1}: productId is required`);
+          continue;
+        }
+        if (seen.has(pid)) errors.push(`Duplicate product in product discount rules: ${pid}`);
+        seen.add(pid);
+        if (applicableSet.size > 0 && !applicableSet.has(pid)) {
+          errors.push(`Product discount rule references a product not in applicable products: ${pid}`);
+        }
+        const rt = r?.type;
+        if (rt != null && rt !== '' && !['percentage', 'fixed_amount'].includes(rt)) {
+          errors.push(`Product discount rule for ${pid}: type must be percentage or fixed_amount`);
+        }
+        const rv = Number(r?.value);
+        if (!Number.isFinite(rv) || rv < 0) {
+          errors.push(`Product discount rule for ${pid}: value must be a non-negative number`);
+        }
+        const effType = rt && ['percentage', 'fixed_amount'].includes(rt) ? rt : discountData.type;
+        if (effType === 'percentage' && rv > 100) {
+          errors.push(`Product discount rule for ${pid}: percentage cannot exceed 100`);
+        }
+      }
     }
 
     // Validate usage limits
@@ -473,7 +629,7 @@ class DiscountService {
         throw new Error('Discount not found');
       }
 
-      const oldStatus = discount.isActive;
+      const oldStatus = discount.is_active ?? discount.isActive;
       const newStatus = !discount.isActive;
       
       // Update discount

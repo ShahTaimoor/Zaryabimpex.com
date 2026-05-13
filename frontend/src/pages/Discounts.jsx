@@ -146,6 +146,13 @@ const Discounts = () => {
     }).format(amount);
   };
 
+  /** Plain amount for stats (no currency symbol). */
+  const formatAmountPlain = (amount) =>
+    new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(Number(amount ?? 0));
+
   const formatDate = (date) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-US', { 
@@ -249,7 +256,7 @@ const Discounts = () => {
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Savings</p>
-          <h3 className="text-3xl font-black text-purple-600 tracking-tighter">{formatCurrency(stats.totalDiscountAmount || 0)}</h3>
+          <h3 className="text-3xl font-black text-purple-600 tracking-tighter">{formatAmountPlain(stats.totalDiscountAmount || 0)}</h3>
           <div className="mt-2 text-[10px] font-bold text-purple-500 uppercase tracking-tight">Customer savings</div>
         </div>
       </div>

@@ -225,13 +225,43 @@ const DiscountDetailModal = ({
                 <label className="block text-sm font-medium text-gray-500">Selected Products</label>
                 <div className="mt-2 max-h-32 overflow-y-auto">
                   {discount.applicableProducts.map((product) => (
-                    <div key={product._id} className="text-sm text-gray-900 py-1">
-                      • {product.name} ({typeof product.category === 'object' ? (product.category?.name ?? 'N/A') : (product.category || 'N/A')})
+                    <div
+                      key={typeof product === 'string' ? product : product._id}
+                      className="text-sm text-gray-900 py-1"
+                    >
+                      •{' '}
+                      {typeof product === 'string'
+                        ? product
+                        : `${product.name} (${typeof product.category === 'object' ? (product.category?.name ?? 'N/A') : (product.category || 'N/A')})`}
                     </div>
                   ))}
                 </div>
               </div>
             )}
+
+            {(() => {
+              const rules = discount.product_discount_rules ?? discount.productDiscountRules;
+              const rulesList = Array.isArray(rules) ? rules : [];
+              if (rulesList.length === 0) return null;
+              return (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-500">Per-product discount rules</label>
+                  <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded border border-green-100 bg-white p-2">
+                    {rulesList.map((r) => {
+                      const pid = r.productId ?? r.product_id;
+                      const typ = (r.type || discount.type || '').replace(/_/g, ' ');
+                      return (
+                        <div key={pid} className="text-sm text-gray-900">
+                          • Product <span className="font-mono text-xs">{pid}</span>: {typ}{' '}
+                          <span className="font-medium">{r.value}</span>
+                          {r.type === 'percentage' || (!r.type && discount.type === 'percentage') ? '%' : ''}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {discount.applicableTo === 'categories' && discount.applicableCategories?.length > 0 && (
               <div className="mt-4">

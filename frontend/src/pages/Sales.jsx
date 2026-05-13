@@ -839,6 +839,15 @@ export const Sales = ({ tabId, editData }) => {
   }, [customers]);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+  const discountCheckItems = useMemo(
+    () =>
+      cart.map((item) => ({
+        product: item.product?._id ?? item.product?.id ?? item.product,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+    [cart]
+  );
   const codeDiscountAmount = appliedDiscounts.reduce((sum, discount) => sum + discount.amount, 0);
 
   // Fetch applicable discount codes when cart subtotal or customer changes
@@ -849,7 +858,7 @@ export const Sales = ({ tabId, editData }) => {
     }
     let cancelled = false;
     checkApplicableDiscounts({
-      orderData: { total: subtotal },
+      orderData: { total: subtotal, items: discountCheckItems },
       customerData: selectedCustomer ? { id: selectedCustomer._id || selectedCustomer.id } : null
     })
       .unwrap()
@@ -862,7 +871,7 @@ export const Sales = ({ tabId, editData }) => {
         if (!cancelled) setApplicableDiscountList([]);
       });
     return () => { cancelled = true; };
-  }, [subtotal, selectedCustomer?._id, selectedCustomer?.id]);
+  }, [subtotal, discountCheckItems, selectedCustomer?._id, selectedCustomer?.id]);
 
   const {
     directDiscountAmount,

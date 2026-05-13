@@ -38,6 +38,8 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
     applicableProducts: [],
     applicableCategories: [],
     applicableCustomers: [],
+    useProductWiseDiscount: false,
+    perProductDiscount: {},
     customerTiers: [],
     businessTypes: [],
     usageLimit: '',
@@ -116,13 +118,47 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
   const { data: categoriesData, isFetching: categoriesListFetching } = useGetCategoriesQuery(categoryQueryParams, {
     skip: formData.applicableTo !== 'categories' || !isOpen,
   });
+  /** Resolve category names for the product picker (API returns categoryId, not nested category). */
+  const { data: categoriesForProductPicker } = useGetCategoriesQuery(
+    { limit: 500, page: 1 },
+    { skip: formData.applicableTo !== 'products' || !isOpen }
+  );
   const { data: customersData, isFetching: customersListFetching } = useGetCustomersQuery(customerQueryParams, {
     skip: formData.applicableTo !== 'customers' || !isOpen,
   });
 
   const products = productsData?.data?.products || productsData?.products || [];
   const categories = categoriesData?.data?.categories || categoriesData?.categories || [];
+  const categoriesForPicker =
+    categoriesForProductPicker?.data?.categories || categoriesForProductPicker?.categories || [];
   const customers = customersData?.data?.customers || customersData?.customers || [];
+
+  const categoryNameById = useMemo(() => {
+    const m = new Map();
+    for (const c of categoriesForPicker) {
+      const id = c._id ?? c.id;
+      if (id != null) m.set(String(id), (c.name || c.code || '').trim() || null);
+    }
+    return m;
+  }, [categoriesForPicker]);
+
+  const getProductPickerSubtitle = (product) => {
+    if (product?.category && typeof product.category === 'object') {
+      const n = product.category.name;
+      if (n) return String(n);
+    }
+    const cid = product?.categoryId ?? product?.category_id;
+    if (cid != null && cid !== '') {
+      const n = categoryNameById.get(String(cid));
+      if (n) return n;
+    }
+    if (typeof product?.category === 'string' && product.category.trim()) {
+      return product.category.trim();
+    }
+    const sku = product?.sku;
+    if (sku != null && String(sku).trim() !== '') return `SKU: ${String(sku).trim()}`;
+    return null;
+  };
   
   const [createDiscount, { isLoading: isCreating }] = useCreateDiscountMutation();
   const [generateCodeSuggestionsMutation] = useGenerateCodeSuggestionsMutation();
@@ -219,6 +255,23 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
     // Applicability validation
     if (formData.applicableTo === 'products' && formData.applicableProducts.length === 0) {
       newErrors.applicableProducts = 'At least one product must be selected';
+    }
+
+    if (formData.useProductWiseDiscount && formData.applicableTo === 'products') {
+      for (const pid of formData.applicableProducts) {
+        const d = formData.perProductDiscount[pid];
+        const val =
+          d?.value === '' || d?.value === undefined || d?.value === null
+            ? formData.value
+            : Number(d.value);
+        const typ = d?.type || formData.type;
+        if (!Number.isFinite(Number(val)) || Number(val) <= 0) {
+          newErrors[`perProduct_${pid}`] = 'Value must be greater than 0';
+        }
+        if (typ === 'percentage' && Number(val) > 100) {
+          newErrors[`perProduct_${pid}`] = 'Percentage cannot exceed 100';
+        }
+      }
     }
 
     if (formData.applicableTo === 'categories' && formData.applicableCategories.length === 0) {
@@ -324,7 +377,21 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
           ...formData.conditions,
           minimumQuantity: parseInt(formData.conditions.minimumQuantity),
           maximumQuantity: formData.conditions.maximumQuantity ? parseInt(formData.conditions.maximumQuantity) : null
-        }
+        },
+        productDiscountRules: formData.useProductWiseDiscount
+          ? formData.applicableProducts.map((productId) => {
+              const d = formData.perProductDiscount[productId] || {};
+              const v =
+                d.value === '' || d.value === undefined || d.value === null
+                  ? parseFloat(formData.value)
+                  : parseFloat(d.value);
+              return {
+                productId,
+                type: d.type || formData.type,
+                value: Number.isFinite(v) ? v : parseFloat(formData.value),
+              };
+            })
+          : [],
       };
 
       await createDiscount(submitData).unwrap();
@@ -450,6 +517,46 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
         ? [...prev[field], value]
         : prev[field].filter(item => item !== value)
     }));
+  };
+
+  const handleApplicableProductToggle = (productId, checked) => {
+    setFormData((prev) => {
+      const nextProducts = checked
+        ? [...prev.applicableProducts, productId]
+        : prev.applicableProducts.filter((p) => p !== productId);
+      let nextPer = { ...prev.perProductDiscount };
+      if (prev.useProductWiseDiscount) {
+        if (checked) {
+          nextPer[productId] = nextPer[productId] || { value: prev.value, type: prev.type };
+        } else {
+          delete nextPer[productId];
+        }
+      }
+      return { ...prev, applicableProducts: nextProducts, perProductDiscount: nextPer };
+    });
+  };
+
+  const setPerProductDiscountField = (productId, field, rawValue) => {
+    setFormData((prev) => {
+      const cur = prev.perProductDiscount[productId] || { value: prev.value, type: prev.type };
+      const nextRow =
+        field === 'value'
+          ? {
+              ...cur,
+              value:
+                rawValue === ''
+                  ? ''
+                  : (() => {
+                      const n = parseFloat(rawValue);
+                      return Number.isNaN(n) ? '' : n;
+                    })(),
+            }
+          : { ...cur, type: rawValue };
+      return {
+        ...prev,
+        perProductDiscount: { ...prev.perProductDiscount, [productId]: nextRow },
+      };
+    });
   };
 
   const handleCodeSuggestionSelect = (suggestion) => {
@@ -814,7 +921,16 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
                 </label>
                 <select
                   value={formData.applicableTo}
-                  onChange={(e) => handleChange('applicableTo', e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFormData((prev) => ({
+                      ...prev,
+                      applicableTo: v,
+                      ...(v !== 'products'
+                        ? { useProductWiseDiscount: false, perProductDiscount: {} }
+                        : {}),
+                    }));
+                  }}
                   className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   disabled={isCreating}
                 >
@@ -843,26 +959,107 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
                     <p className="text-xs text-gray-500 mb-2">Loading products…</p>
                   ) : null}
                   <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3">
-                    {products.map((product) => (
-                      <label key={product._id || product.id} className="flex items-center space-x-2 py-1">
+                    {products.map((product) => {
+                      const pid = product._id || product.id;
+                      const subtitle = getProductPickerSubtitle(product);
+                      return (
+                      <label key={pid} className="flex items-center space-x-2 py-1">
                         <input
                           type="checkbox"
-                          checked={formData.applicableProducts.includes(product._id || product.id)}
-                          onChange={(e) => handleArrayChange('applicableProducts', product._id || product.id, e.target.checked)}
+                          checked={formData.applicableProducts.includes(pid)}
+                          onChange={(e) =>
+                            handleApplicableProductToggle(pid, e.target.checked)
+                          }
                           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                           disabled={isCreating}
                         />
                         <span className="text-sm text-gray-900">
-                          {product.name} ({typeof product.category === 'object' ? (product.category?.name ?? 'N/A') : (product.category || 'N/A')})
+                          {product.name}
+                          {subtitle ? <span className="text-gray-500"> ({subtitle})</span> : null}
                         </span>
                       </label>
-                    ))}
+                    );
+                    })}
                   </div>
                   {errors.applicableProducts && (
                     <p className="mt-1 text-sm text-red-600 flex items-center">
                       <AlertCircle className="h-4 w-4 mr-1" />
                       {errors.applicableProducts}
                     </p>
+                  )}
+
+                  {formData.applicableProducts.length > 0 && (
+                    <label className="mt-4 flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={formData.useProductWiseDiscount}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setFormData((prev) => {
+                            if (checked) {
+                              const init = {};
+                              prev.applicableProducts.forEach((pid) => {
+                                init[pid] = { value: prev.value, type: prev.type };
+                              });
+                              return { ...prev, useProductWiseDiscount: true, perProductDiscount: init };
+                            }
+                            return { ...prev, useProductWiseDiscount: false, perProductDiscount: {} };
+                          });
+                        }}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        disabled={isCreating}
+                      />
+                      <span>Different discount per selected product</span>
+                    </label>
+                  )}
+
+                  {formData.useProductWiseDiscount && formData.applicableProducts.length > 0 && (
+                    <div className="mt-3 space-y-3 rounded-md border border-gray-200 bg-gray-50/80 p-3">
+                      <p className="text-xs text-gray-600">
+                        Set type and value for each product. These override the default type and value above for matching cart lines only.
+                      </p>
+                      {formData.applicableProducts.map((pid) => {
+                        const product = products.find((p) => (p._id || p.id) === pid);
+                        const row = formData.perProductDiscount[pid] || {
+                          value: formData.value,
+                          type: formData.type,
+                        };
+                        const rowVal = row.value === '' || row.value === undefined ? '' : row.value;
+                        return (
+                          <div
+                            key={pid}
+                            className="flex flex-wrap items-center gap-2 rounded border border-white bg-white p-2 shadow-sm"
+                          >
+                            <span className="min-w-[120px] flex-1 text-sm font-medium text-gray-900">
+                              {product?.name || pid}
+                            </span>
+                            <select
+                              value={row.type}
+                              onChange={(e) => setPerProductDiscountField(pid, 'type', e.target.value)}
+                              className="rounded border border-gray-300 px-2 py-1 text-sm"
+                              disabled={isCreating}
+                            >
+                              <option value="percentage">Percentage</option>
+                              <option value="fixed_amount">Fixed amount</option>
+                            </select>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={rowVal}
+                              onChange={(e) => setPerProductDiscountField(pid, 'value', e.target.value)}
+                              className={`w-28 rounded border px-2 py-1 text-sm ${
+                                errors[`perProduct_${pid}`] ? 'border-red-400' : 'border-gray-300'
+                              }`}
+                              disabled={isCreating}
+                            />
+                            {errors[`perProduct_${pid}`] && (
+                              <p className="w-full text-xs text-red-600">{errors[`perProduct_${pid}`]}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               )}

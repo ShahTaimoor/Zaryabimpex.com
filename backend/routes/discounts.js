@@ -379,15 +379,11 @@ router.post('/check-applicable', [
     const applicableDiscounts = await discountService.getApplicableDiscounts(orderData, customerData);
     
     res.json({
-      applicableDiscounts: applicableDiscounts.map(item => ({
+      applicableDiscounts: applicableDiscounts.map((item) => ({
         discount: item.discount,
         reason: item.reason,
-        calculatedAmount: item.discount.calculateDiscountAmount ? 
-          item.discount.calculateDiscountAmount(orderData.total) : 
-          (item.discount.type === 'percentage' ? 
-            (orderData.total * item.discount.value) / 100 : 
-            Math.min(item.discount.value, orderData.total))
-      }))
+        calculatedAmount: item.amount,
+      })),
     });
   } catch (error) {
     console.error('Error checking applicable discounts:', error);
