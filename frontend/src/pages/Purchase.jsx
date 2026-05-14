@@ -761,12 +761,34 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     }
 
     // Clear cart when supplier changes (only in new purchase mode, not in edit mode)
-    if (purchaseItems.length > 0 && !activeEditData?.isEditMode) {
+    // Only clear if we are changing from one supplier to another, not from no supplier to a supplier
+    const isChangingSupplier = selectedSupplier && supplier && selectedSupplier._id !== supplier._id;
+    if (purchaseItems.length > 0 && !activeEditData?.isEditMode && isChangingSupplier) {
       setPurchaseItems([]);
       setHighlightedPurchaseLineIndex(null);
       toast.success('Purchase items cleared due to supplier change. Please re-add products.');
     }
   };
+
+  const resetPurchaseDraft = useCallback(({ resetBillDate = false } = {}) => {
+    setPurchaseItems([]);
+    setHighlightedPurchaseLineIndex(null);
+    setAmountPaid(0);
+    setPaymentMethod('cash');
+    setInvoiceNumber('');
+    setExpectedDelivery(new Date().toISOString().split('T')[0]);
+    if (resetBillDate) {
+      setBillDate(getLocalDateString());
+    }
+    setNotes('');
+    setInlineEditData(null);
+
+    // Reset tab title to default
+    const activeTab = getActiveTab();
+    if (activeTab) {
+      updateTabTitle(activeTab.id, 'Purchase');
+    }
+  }, [getActiveTab, updateTabTitle]);
 
   // Handler functions for purchase invoice mutations
   const handleCreatePurchaseInvoice = async (invoiceData) => {
@@ -824,22 +846,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
         }
       }
 
-      setPurchaseItems([]);
-      setHighlightedPurchaseLineIndex(null);
-      // Don't clear selectedSupplier immediately - let it update from refetched data
-      // setSelectedSupplier(null);
-      setAmountPaid(0);
-      setPaymentMethod('cash');
-      setInvoiceNumber('');
-      setExpectedDelivery(new Date().toISOString().split('T')[0]);
-      setBillDate(getLocalDateString()); // Reset Bill Date to today
-      setNotes('');
-
-      // Reset tab title to default
-      const activeTab = getActiveTab();
-      if (activeTab) {
-        updateTabTitle(activeTab.id, 'Purchase');
-      }
+      resetPurchaseDraft({ resetBillDate: true });
     } catch (error) {
       toast.error(error?.data?.message || error?.message || 'Failed to complete purchase');
     }
@@ -902,9 +909,11 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
       }
 
       if (inlineEditData?.isEditMode) {
-        setInlineEditData(null);
+        resetPurchaseDraft();
         toast.success('Returned to new purchase mode');
       } else {
+        // Clear state before navigating
+        resetPurchaseDraft();
         // Navigate to Purchase Invoices page after successful update
         const componentInfo = getComponentInfo('/purchase-invoices');
         if (componentInfo) {
@@ -2165,7 +2174,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                         showLabel={false}
                       />
                     </div>
-                    
+
                     <div className="flex items-center gap-1 shrink-0">
                       <Button
                         type="button"
@@ -2177,16 +2186,16 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                         <Filter className={`h-4 w-4 ${showMobileFilters ? 'text-primary-600' : 'text-gray-500'}`} />
                       </Button>
 
-                      <ExcelExportButton 
+                      <ExcelExportButton
                         ref={excelExportRef}
-                        getData={getSavedPurchaseInvoicesExportData} 
-                        label="" 
+                        getData={getSavedPurchaseInvoicesExportData}
+                        label=""
                         className="h-10 w-10 p-0 hidden sm:flex"
                       />
-                      <PdfExportButton 
+                      <PdfExportButton
                         ref={pdfExportRef}
-                        getData={getSavedPurchaseInvoicesExportData} 
-                        label="" 
+                        getData={getSavedPurchaseInvoicesExportData}
+                        label=""
                         className="h-10 w-10 p-0 hidden sm:flex"
                       />
 
