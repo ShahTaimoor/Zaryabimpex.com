@@ -2417,9 +2417,13 @@ export const Sales = ({ tabId, editData }) => {
                   )}
                   {selectedCustomer && (() => {
                     // Match Print logic: invoiceBalance = net amount - received; previousBalance = ledger - invoiceBalance; totalReceivables = ledger
-                    const ledgerBalance = selectedCustomer.currentBalance !== undefined && selectedCustomer.currentBalance !== null
-                      ? Number(selectedCustomer.currentBalance)
-                      : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
+                    // Use same balance as CustomerBalanceStrip (unified ledger when API provides it), not raw selectedCustomer only
+                    const unifiedLedger = Number(currentBalanceNum);
+                    const ledgerBalance = Number.isFinite(unifiedLedger)
+                      ? unifiedLedger
+                      : (selectedCustomer.currentBalance !== undefined && selectedCustomer.currentBalance !== null
+                        ? Number(selectedCustomer.currentBalance)
+                        : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0)));
                     const receivedAmount = amountPaid || 0;
                     const invoiceBalance = total - receivedAmount;
                     // In edit mode, ledger already includes this invoice; in new sale, it does not

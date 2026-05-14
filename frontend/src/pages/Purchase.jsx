@@ -27,6 +27,7 @@ import { SupplierPartySelect, SupplierSummaryStrip } from '../components/order/S
 import { OrderNotesField } from '../components/order/OrderNotesField';
 import { PaymentMethodSelect } from '../components/order/PaymentMethodSelect';
 import { computePurchaseCheckoutPricing } from '../utils/orderPricing';
+import { getSupplierDisplayName } from '../utils/partyDisplay';
 import {
   useGetSupplierQuery,
   useLazySearchSuppliersQuery,
@@ -584,6 +585,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
       // Set the supplier (will be updated with complete data if available)
       if (activeEditData.supplier) {
         setSelectedSupplier(activeEditData.supplier);
+        setSupplierSearchTerm(getSupplierDisplayName(activeEditData.supplier));
       }
 
       // Set the invoice number
@@ -744,6 +746,8 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   const handleSupplierSelect = (supplier) => {
     // SearchableDropdown passes the full supplier object
     setSelectedSupplier(supplier);
+    // Controlled `searchValue` would otherwise keep the partial query (e.g. "S") in the input
+    setSupplierSearchTerm(supplier ? getSupplierDisplayName(supplier) : '');
 
     // Auto-generate invoice number if enabled
     if (autoGenerateInvoice && supplier) {
