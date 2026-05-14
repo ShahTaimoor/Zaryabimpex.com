@@ -33,7 +33,8 @@ import {
   FolderTree,
   Camera,
   PieChart,
-  ClipboardList
+  ClipboardList,
+  MapPin
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import ErrorBoundary from './ErrorBoundary';
@@ -112,6 +113,7 @@ export const navigation = [
       { name: 'Categories', href: '/categories', icon: Tag, permission: 'view_product_categories' },
       { name: 'Customers', href: '/customers', icon: Users, permission: 'view_customers' },
       { name: 'Suppliers', href: '/suppliers', icon: Building, permission: 'view_suppliers' },
+      { name: 'Cities', href: '/cities', icon: MapPin, permission: 'view_cities' },
       { name: 'Bank & cash opening', href: '/banks', icon: Building2, permission: PERMISSIONS.VIEW_BANKS },
       { name: 'Investors', href: '/investors', icon: TrendingUp, permission: 'view_investors' },
       { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight, permission: 'view_drop_shipping' },

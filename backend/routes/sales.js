@@ -892,7 +892,7 @@ router.put('/:id', [
     }
 
     // Post amount received change to account ledger so balance reflects the update
-    if (!customerChanged && req.body.amountReceived !== undefined) {
+    if (req.body.amountReceived !== undefined) {
       const oldAmountPaid = parseFloat(order.amount_paid) || 0;
       const newAmountPaid = parseFloat(req.body.amountReceived) || 0;
       const paymentMethodForAdjustment = req.body.paymentMethod || order.payment_method || order.payment?.method || 'cash';
@@ -902,10 +902,12 @@ router.put('/:id', [
         : null;
       if (Math.abs(newAmountPaid - oldAmountPaid) >= 0.01) {
         try {
+          const customerIdForPaymentLedger =
+            customerIdForLedger ?? updatedOrder?.customer_id ?? updatedOrder?.customer ?? order.customer ?? order.customer_id;
           await AccountingService.recordSalePaymentAdjustment({
             saleId: order.id || order._id,
             orderNumber: order.order_number || order.orderNumber,
-            customerId: order.customer_id,
+            customerId: customerIdForPaymentLedger,
             oldAmountPaid,
             newAmountPaid,
             paymentMethod: paymentMethodForAdjustment,

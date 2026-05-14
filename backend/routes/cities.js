@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult, query } = require('express-validator');
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requireAnyPermission } = require('../middleware/auth');
 const cityService = require('../services/cityService');
 const fs = require('fs');
 const path = require('path');
@@ -13,7 +13,7 @@ const router = express.Router();
 // @access  Private
 router.get('/', [
   auth,
-  requirePermission('view_reports'),
+  requireAnyPermission(['view_cities', 'view_reports']),
   query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
   query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
   query('search').optional().isString().trim().withMessage('Search must be a string'),
@@ -51,7 +51,7 @@ router.get('/', [
 // @access  Private
 router.get('/active', [
   auth,
-  requirePermission('view_reports')
+  requireAnyPermission(['view_cities', 'view_reports'])
 ], async (req, res) => {
   try {
     const cities = await cityService.getActiveCities();
@@ -74,7 +74,7 @@ router.get('/active', [
 // @access  Private
 router.get('/:id', [
   auth,
-  requirePermission('view_reports')
+  requireAnyPermission(['view_cities', 'view_reports'])
 ], async (req, res) => {
   try {
     const city = await cityService.getCityById(req.params.id);
@@ -97,7 +97,7 @@ router.get('/:id', [
 // @access  Private
 router.post('/', [
   auth,
-  requirePermission('manage_users'),
+  requireAnyPermission(['create_cities', 'manage_users']),
   body('name').trim().isLength({ min: 1, max: 100 }).withMessage('City name is required and must be less than 100 characters'),
   body('state').optional().trim().isLength({ max: 100 }).withMessage('State must be less than 100 characters'),
   body('country').optional().trim().isLength({ max: 100 }).withMessage('Country must be less than 100 characters'),
@@ -139,7 +139,7 @@ router.post('/', [
 // @access  Private
 router.put('/:id', [
   auth,
-  requirePermission('manage_users'),
+  requireAnyPermission(['edit_cities', 'manage_users']),
   body('name').optional().trim().isLength({ min: 1, max: 100 }).withMessage('City name must be less than 100 characters'),
   body('state').optional().trim().isLength({ max: 100 }).withMessage('State must be less than 100 characters'),
   body('country').optional().trim().isLength({ max: 100 }).withMessage('Country must be less than 100 characters'),
@@ -187,7 +187,7 @@ router.put('/:id', [
 // @access  Private
 router.delete('/:id', [
   auth,
-  requirePermission('manage_users')
+  requireAnyPermission(['delete_cities', 'manage_users'])
 ], async (req, res) => {
   try {
     // Call service to delete city

@@ -471,6 +471,13 @@ router.put('/:id', [
       if (Math.abs(newAmountPaid - oldAmountPaid) >= 0.01) {
         try {
           const supplierId = updatedInvoice.supplier_id || updatedInvoice.supplierId || invoice.supplier_id || invoice.supplierId;
+          const invoiceTxnDate =
+            updatedInvoice.invoice_date ||
+            updatedInvoice.invoiceDate ||
+            invoice.invoice_date ||
+            invoice.invoiceDate ||
+            updatedInvoice.created_at ||
+            invoice.created_at;
           await AccountingService.recordPurchasePaymentAdjustment({
             invoiceId: updatedInvoice.id || updatedInvoice._id,
             invoiceNumber: updatedInvoice.invoice_number || updatedInvoice.invoiceNumber,
@@ -478,6 +485,7 @@ router.put('/:id', [
             oldAmountPaid,
             newAmountPaid,
             paymentMethod: updatedPayment?.method || invoice.payment?.method || 'cash',
+            transactionDate: invoiceTxnDate,
             createdBy: req.user?.id || req.user?._id
           });
         } catch (ledgerErr) {

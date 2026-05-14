@@ -1844,10 +1844,19 @@ class AccountingService {
    * Posts the delta to account_ledger so balance reflects the change.
    * - Delta > 0: Dr AP (2000), Cr Cash/Bank (payment made)
    * - Delta < 0: Dr Cash/Bank, Cr AP (reversal)
-   * @param {Object} params - { invoiceId, invoiceNumber, supplierId, oldAmountPaid, newAmountPaid, paymentMethod, createdBy }
+   * @param {Object} params - { invoiceId, invoiceNumber, supplierId, oldAmountPaid, newAmountPaid, paymentMethod, transactionDate, createdBy }
    */
   static async recordPurchasePaymentAdjustment(params) {
-    const { invoiceId, invoiceNumber, supplierId, oldAmountPaid, newAmountPaid, paymentMethod = 'cash', createdBy } = params;
+    const {
+      invoiceId,
+      invoiceNumber,
+      supplierId,
+      oldAmountPaid,
+      newAmountPaid,
+      paymentMethod = 'cash',
+      transactionDate,
+      createdBy
+    } = params;
     const oldAmt = parseFloat(oldAmountPaid) || 0;
     const newAmt = parseFloat(newAmountPaid) || 0;
     const delta = newAmt - oldAmt;
@@ -1857,12 +1866,28 @@ class AccountingService {
     const creditAccount = (paymentMethod === 'bank' || paymentMethod === 'bank_transfer') ? '1001' : '1000'; // Cash or Bank
     const debitAccount = '2000'; // AP
 
+    let txnDate = new Date();
+    if (transactionDate != null && transactionDate !== '') {
+      const d = new Date(transactionDate);
+      if (!Number.isNaN(d.getTime())) txnDate = d;
+    }
+
+    const metaBase = {
+      referenceType: 'purchase_invoice_payment',
+      referenceId: invoiceId,
+      referenceNumber: refNum,
+      supplierId: supplierId || null,
+      transactionDate: txnDate,
+      currency: 'PKR',
+      createdBy
+    };
+
     if (delta > 0) {
       // Payment made: Dr AP, Cr Cash/Bank
       return await this.createTransaction(
         { accountCode: debitAccount, debitAmount: delta, creditAmount: 0, description: `Purchase payment (edit): ${refNum}` },
         { accountCode: creditAccount, debitAmount: 0, creditAmount: delta, description: `Payment for purchase: ${refNum}` },
-        { referenceType: 'purchase_invoice_payment', referenceId: invoiceId, referenceNumber: refNum, supplierId: supplierId || null, currency: 'PKR', createdBy }
+        metaBase
       );
     } else {
       // Reversal: Dr Cash/Bank, Cr AP
@@ -1870,7 +1895,7 @@ class AccountingService {
       return await this.createTransaction(
         { accountCode: creditAccount, debitAmount: absDelta, creditAmount: 0, description: `Purchase payment reversal (edit): ${refNum}` },
         { accountCode: debitAccount, debitAmount: 0, creditAmount: absDelta, description: `Reversal for purchase: ${refNum}` },
-        { referenceType: 'purchase_invoice_payment', referenceId: invoiceId, referenceNumber: refNum, supplierId: supplierId || null, currency: 'PKR', createdBy }
+        metaBase
       );
     }
   }
