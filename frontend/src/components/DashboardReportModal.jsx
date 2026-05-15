@@ -162,11 +162,6 @@ const DashboardReportModal = ({
           </div>
         )}
 
-        {/* Grouping Hint */}
-        <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded text-xs sm:text-sm text-gray-600 break-words">
-          Drag a column here to group by this column.
-        </div>
-
         {/* Table */}
         <div className="border border-gray-200 rounded-lg overflow-hidden">
           <div className="overflow-x-auto max-h-[50vh] sm:max-h-[55vh] md:max-h-[60vh]">
