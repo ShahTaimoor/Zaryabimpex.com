@@ -208,62 +208,48 @@ const CCTVAccess = ({ tabId }) => {
   };
 
   return (
-    <PageShell className="bg-gradient-to-b from-slate-100/90 via-slate-50 to-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
+    <PageShell className="bg-[#f8fafc]" maxWidthClassName="max-w-full">
+      <div className="w-full px-4 sm:px-12 lg:px-16 py-8 sm:py-14 space-y-8 sm:space-y-12">
         {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="flex gap-4 min-w-0">
-            <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-white shadow-lg shadow-slate-900/20">
-              <Camera className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-                CCTV Access
-              </h1>
-              <p className="mt-1 text-sm sm:text-base text-slate-600 max-w-xl leading-relaxed">
-                Find invoices and open matching camera playback windows using bill timestamps.
-              </p>
-            </div>
+        <header className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6 text-center sm:text-left">
+          <div className="flex h-16 w-16 sm:h-18 sm:w-18 items-center justify-center rounded-[20px] sm:rounded-[22px] bg-[#0f172a] text-white shadow-2xl shadow-slate-900/20 shrink-0">
+            <Camera className="h-8 w-8 sm:h-9 sm:w-9" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-[#0f172a] tracking-tight">
+              CCTV Access
+            </h1>
+            <p className="mt-2 text-base sm:text-lg text-slate-500 max-w-2xl leading-relaxed font-medium px-4 sm:px-0">
+              Find invoices and open matching camera playback windows using bill timestamps.
+            </p>
           </div>
         </header>
 
         {/* Filters */}
-        <section className="rounded-2xl border border-slate-200/90 bg-white shadow-sm shadow-slate-200/50 overflow-hidden">
-          <div className="h-1 bg-gradient-to-r from-slate-700 via-blue-600 to-slate-700" aria-hidden />
-          <div className="border-b border-slate-100 bg-slate-50/80 px-4 sm:px-6 py-3 sm:py-4">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600">
-                <Filter className="h-4 w-4" aria-hidden />
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Search &amp; filter</h2>
-                <p className="text-xs text-slate-500 hidden sm:block">Filter by order number and sale date range</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 sm:p-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-4">
+        <section className="rounded-2xl sm:rounded-[24px] border border-slate-200/60 bg-white shadow-[0_8px_40px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="h-[4px] bg-[#2563eb]" aria-hidden />
+          <div className="p-5 sm:p-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:gap-8">
               <div className="min-w-0 lg:flex-1">
-                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">
-                  Order number
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  ORDER NUMBER
                 </label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                <div className="relative group">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-300 transition-colors group-focus-within:text-[#2563eb]" />
                   <input
                     type="text"
                     value={orderNumber}
                     onChange={(e) => setOrderNumber(e.target.value)}
                     placeholder="e.g. INV-1001"
-                    className="w-full h-10 pl-10 pr-3 text-sm border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-900/15 focus:border-slate-400 transition-colors"
+                    className="w-full h-12 pl-12 pr-4 text-[15px] border border-slate-200 rounded-xl bg-slate-50/30 focus:bg-white focus:ring-4 focus:ring-blue-600/5 focus:border-[#2563eb] transition-all duration-200"
                   />
                 </div>
               </div>
 
-              <div className="min-w-0 lg:flex-[1.35]">
-                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">
-                  <Calendar className="inline h-3.5 w-3.5 mr-1 -mt-0.5 text-slate-400" aria-hidden />
-                  Date range
+              <div className="min-w-0 lg:flex-[1.5]">
+                <label className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 sm:mb-3">
+                  <Calendar className="inline h-3.5 w-3.5 mr-1.5 -mt-0.5 text-slate-300" aria-hidden />
+                  DATE RANGE
                 </label>
                 <DateFilter
                   compact
@@ -276,7 +262,7 @@ const CCTVAccess = ({ tabId }) => {
                   showPresets={false}
                   showClear={false}
                   showLabel={false}
-                  className="min-w-0 [&_button]:h-10 [&_button]:min-h-[2.5rem] [&_button]:rounded-xl [&_button]:border-slate-200 [&_button]:bg-slate-50/50 [&_button]:shadow-none [&_button]:hover:bg-white [&_button]:text-slate-900"
+                  className="min-w-0 [&_button]:h-12 sm:[&_button]:h-14 [&_button]:rounded-xl sm:[&_button]:rounded-2xl [&_button]:border-slate-200 [&_button]:bg-slate-50/30 [&_button]:shadow-none [&_button]:hover:bg-white [&_button]:text-slate-900 [&_button_svg:first-of-type]:h-5 [&_button_svg:first-of-type]:w-5 [&_button_svg:first-of-type]:text-[#2563eb]/60 transition-all duration-200"
                 />
               </div>
 
@@ -284,9 +270,9 @@ const CCTVAccess = ({ tabId }) => {
                 <button
                   type="button"
                   onClick={handleSearch}
-                  className="w-full lg:w-auto min-w-[7.5rem] inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white shadow-md shadow-slate-900/20 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 transition-colors"
+                  className="w-full lg:w-auto min-w-[8.5rem] inline-flex h-12 items-center justify-center gap-2.5 rounded-xl bg-[#0f172a] px-6 text-[15px] font-bold text-white shadow-lg shadow-slate-900/20 hover:bg-[#1e293b] active:scale-[0.98] transition-all duration-200"
                 >
-                  <Search className="h-4 w-4 shrink-0" />
+                  <Search className="h-5 w-5 shrink-0" />
                   Search
                 </button>
               </div>
@@ -321,15 +307,15 @@ const CCTVAccess = ({ tabId }) => {
         ) : (
           <>
             {/* Orders List */}
-            <div className="rounded-2xl border border-slate-200/90 bg-white shadow-sm shadow-slate-200/40 overflow-hidden">
-              <div className="border-b border-slate-100 bg-slate-50/80 px-4 sm:px-6 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="rounded-2xl border border-slate-200/70 bg-white shadow-[0_4px_20px_rgb(0,0,0,0.03)] overflow-hidden">
+              <div className="border-b border-slate-100 bg-white px-6 py-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-800">Matching invoices</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Bill times are used for CCTV playback windows</p>
+                  <h3 className="text-[17px] font-bold text-[#0f172a]">Matching invoices</h3>
+                  <p className="text-sm font-medium text-slate-400 mt-0.5">Bill times are used for CCTV playback windows</p>
                 </div>
                 <Link
                   to="/inventory-alerts"
-                  className="inline-flex items-center gap-0.5 text-sm font-medium text-slate-700 hover:text-slate-900 shrink-0"
+                  className="inline-flex items-center gap-1 text-[13px] font-bold text-slate-500 hover:text-slate-900 transition-colors shrink-0"
                 >
                   Inventory alerts
                   <ChevronRight className="h-4 w-4" aria-hidden />
@@ -351,130 +337,119 @@ const CCTVAccess = ({ tabId }) => {
                   onScroll={updateTableScrollState}
                   className="flex-1 min-w-0 overflow-x-auto scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
                 >
-                  <table className="w-full min-w-[760px] md:min-w-[900px] table-auto">
-                    <thead className="bg-slate-50/90 border-b border-slate-200">
+                  <table className="w-full min-w-[760px] md:min-w-[900px] table-auto border-separate border-spacing-0">
+                    <thead className="bg-[#f8fafc] border-b border-slate-200">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[140px]">
-                          Invoice #
+                        <th className="px-6 py-4 text-left text-[11px] font-bold text-[#64748b] uppercase tracking-widest min-w-[160px]">
+                          INVOICE #
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[120px]">
-                          Customer
+                        <th className="px-6 py-4 text-left text-[11px] font-bold text-[#64748b] uppercase tracking-widest min-w-[140px]">
+                          CUSTOMER
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[160px]">
-                          Bill Start Time
+                        <th className="px-6 py-4 text-left text-[11px] font-bold text-[#64748b] uppercase tracking-widest min-w-[180px]">
+                          BILL START TIME
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[160px]">
-                          Bill End Time
+                        <th className="px-6 py-4 text-left text-[11px] font-bold text-[#64748b] uppercase tracking-widest min-w-[180px]">
+                          BILL END TIME
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[100px] whitespace-nowrap">
-                          Duration
+                        <th className="px-6 py-4 text-left text-[11px] font-bold text-[#64748b] uppercase tracking-widest min-w-[120px] whitespace-nowrap">
+                          DURATION
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[80px] whitespace-nowrap">
-                          Amount
+                        <th className="px-6 py-4 text-left text-[11px] font-bold text-[#64748b] uppercase tracking-widest min-w-[100px] whitespace-nowrap">
+                          AMOUNT
                         </th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[180px] whitespace-nowrap">
-                          Actions
+                        <th className="px-6 py-4 text-center text-[11px] font-bold text-[#64748b] uppercase tracking-widest min-w-[120px] whitespace-nowrap">
+                          ACTIONS
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-slate-100">
                       {orders.map((order) => (
-                        <tr key={order._id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <FileText className="h-4 w-4 text-slate-400" />
-                              <span className="font-medium text-slate-900">{order.orderNumber}</span>
+                        <tr key={order._id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-50 last:border-0">
+                          <td className="px-6 py-5 whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              <FileText className="h-5 w-5 text-slate-300" />
+                              <div className="flex flex-col">
+                                <span className="font-bold text-[#0f172a] text-[15px]">{order.orderNumber}</span>
+                                <span className="text-[13px] font-medium text-slate-400 mt-0.5">
+                                  {order.billDate ? formatDateOnly(order.billDate) : formatDateOnly(order.createdAt)}
+                                </span>
+                              </div>
                               {/* Show warning icon if billDate differs from CCTV date */}
                               {order.billDate && order.billStartTime &&
                                 new Date(order.billDate).toDateString() !== new Date(order.billStartTime).toDateString() && (
-                                  <AlertTriangle className="h-4 w-4 text-yellow-600" title="Bill date differs from CCTV recording date" />
-                                )}
-                            </div>
-                            <div className="text-xs text-slate-500 mt-1">
-                              {order.billDate ? formatDateOnly(order.billDate) : formatDateOnly(order.createdAt)}
-                              {order.billDate && order.billStartTime &&
-                                new Date(order.billDate).toDateString() !== new Date(order.billStartTime).toDateString() && (
-                                  <span className="text-amber-600 ml-1" title={`CCTV: ${formatDateOnly(order.billStartTime)}`}>
-                                    (CCTV: {formatDateOnly(order.billStartTime)})
-                                  </span>
+                                  <AlertTriangle className="h-4 w-4 text-yellow-600 ml-1" title="Bill date differs from CCTV recording date" />
                                 )}
                             </div>
                           </td>
-                          <td className="px-4 py-4">
-                            <div className="flex items-center gap-2">
-                              <User className="h-4 w-4 text-slate-400" />
-                              <span className="text-slate-900">
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-3">
+                              <div className="h-8 w-8 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100">
+                                <User className="h-4 w-4 text-slate-300" />
+                              </div>
+                              <span className="text-[14px] font-bold text-[#475569]">
                                 {order.customer?.displayName ||
                                   order.customerInfo?.name ||
                                   'Walk-in Customer'}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-green-600 flex-shrink-0" />
-                              <span className="text-slate-900 font-mono text-sm">
+                          <td className="px-6 py-5 whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              <Clock className="h-4 w-4 text-[#10b981] flex-shrink-0" />
+                              <span className="text-[#334155] font-bold font-mono text-[14px]">
                                 {formatDateTime(order.billStartTime)}
                               </span>
                               <button
                                 onClick={() => copyToClipboard(formatDateTime(order.billStartTime), `start-${order._id}`)}
-                                className="text-slate-600 hover:text-slate-900 transition-colors"
+                                className="text-slate-300 hover:text-slate-600 transition-colors"
                                 title="Copy start time"
                               >
                                 {copiedTime === `start-${order._id}` ? (
-                                  <CheckCircle className="h-4 w-4" />
+                                  <CheckCircle className="h-4 w-4 text-[#10b981]" />
                                 ) : (
                                   <Copy className="h-4 w-4" />
                                 )}
                               </button>
                             </div>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-red-600 flex-shrink-0" />
-                              <span className="text-slate-900 font-mono text-sm">
+                          <td className="px-6 py-5 whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              <Clock className="h-4 w-4 text-[#ef4444] flex-shrink-0" />
+                              <span className="text-[#334155] font-bold font-mono text-[14px]">
                                 {formatDateTime(order.billEndTime)}
                               </span>
                               <button
                                 onClick={() => copyToClipboard(formatDateTime(order.billEndTime), `end-${order._id}`)}
-                                className="text-slate-600 hover:text-slate-900 transition-colors"
+                                className="text-slate-300 hover:text-slate-600 transition-colors"
                                 title="Copy end time"
                               >
                                 {copiedTime === `end-${order._id}` ? (
-                                  <CheckCircle className="h-4 w-4" />
+                                  <CheckCircle className="h-4 w-4 text-[#ef4444]" />
                                 ) : (
                                   <Copy className="h-4 w-4" />
                                 )}
                               </button>
                             </div>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <span className="text-slate-600 text-sm">
+                          <td className="px-6 py-5 whitespace-nowrap">
+                            <span className="text-slate-400 font-bold text-sm">
                               {calculateDuration(order.billStartTime, order.billEndTime)}
                             </span>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <span className="font-semibold text-slate-900">
+                          <td className="px-6 py-5 whitespace-nowrap">
+                            <span className="font-bold text-[#0f172a] text-[16px]">
                               {Math.round(order.pricing?.total || 0)}
                             </span>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                onClick={() => handleOpenCCTV(order)}
-                                className="bg-slate-900 text-white px-3 py-1.5 rounded-xl hover:bg-slate-800 transition-colors flex items-center gap-2 text-sm flex-shrink-0 shadow-sm"
-                                title="Open CCTV Playback"
-                              >
-                                <Eye className="h-4 w-4" />
-                                View Footage
-                              </button>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <div className="flex items-center justify-center gap-3">
                               <button
                                 onClick={() => handleViewDetails(order)}
-                                className="border border-slate-200 bg-white text-slate-700 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-2 text-sm flex-shrink-0"
+                                className="h-9 w-9 flex items-center justify-center rounded-xl bg-[#0f172a] text-white hover:bg-[#1e293b] active:scale-[0.95] transition-all shadow-md"
                                 title="View Details"
                               >
-                                <FileText className="h-4 w-4" />
-                                Details
+                                <Eye className="h-4 w-4" />
                               </button>
                             </div>
                           </td>
@@ -529,7 +504,7 @@ const CCTVAccess = ({ tabId }) => {
         {showDetails && selectedOrder && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-[2px]">
             <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20">
-              <div className="h-1 bg-gradient-to-r from-slate-700 via-blue-600 to-slate-700" aria-hidden />
+              <div className="h-1 bg-[#2563eb]" aria-hidden />
               <div className="overflow-y-auto max-h-[calc(90vh-0.25rem)] p-6 sm:p-8">
                 <div className="flex justify-between items-start gap-4 mb-6">
                   <div>
