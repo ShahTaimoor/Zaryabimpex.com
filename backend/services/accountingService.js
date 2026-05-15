@@ -1029,7 +1029,7 @@ class AccountingService {
    * @param {string} [params.referenceNumber]
    */
   static async updateSaleLedgerEntries(params) {
-    const { saleId, total, transactionDate, customerId, referenceNumber } = params || {};
+    const { saleId, total, transactionDate, customerId, referenceNumber, notes } = params || {};
     const saleIdStr = String(saleId);
     const updates = [];
     const values = [saleIdStr];
@@ -1061,6 +1061,8 @@ class AccountingService {
 
     const totalAmount = parseFloat(total) || 0;
     const refNum = referenceNumber || saleIdStr;
+    const finalDescription = notes || `Sale: ${refNum}`;
+    const revenueDescription = notes || `Sale Revenue: ${refNum}`;
     await query(
       `UPDATE account_ledger
        SET debit_amount = CASE WHEN account_code = '1100' THEN $2 ELSE debit_amount END,
@@ -1074,7 +1076,7 @@ class AccountingService {
          AND reference_id::text = $1
          AND reversed_at IS NULL
          AND account_code IN ('1100', '4000')`,
-      [saleIdStr, totalAmount, `Sale: ${refNum}`, `Sale Revenue: ${refNum}`]
+      [saleIdStr, totalAmount, finalDescription, revenueDescription]
     );
   }
 
@@ -1131,7 +1133,8 @@ class AccountingService {
       supplierId,
       referenceNumber,
       paidAmount,
-      paymentMethod
+      paymentMethod,
+      notes
     } = params || {};
     const invoiceIdStr = String(invoiceId);
     const updates = [];
@@ -1164,6 +1167,8 @@ class AccountingService {
 
     const totalAmount = parseFloat(total) || 0;
     const refNum = referenceNumber || invoiceIdStr;
+    const finalDescription = notes || `Purchase Invoice: ${refNum}`;
+    const creditDescription = notes || `Purchase Invoice on Credit: ${refNum}`;
     await query(
       `UPDATE account_ledger
        SET debit_amount = CASE WHEN account_code = '1200' THEN $2 ELSE debit_amount END,
@@ -1177,7 +1182,7 @@ class AccountingService {
          AND reference_id::text = $1
          AND reversed_at IS NULL
          AND account_code IN ('1200', '2000')`,
-      [invoiceIdStr, totalAmount, `Purchase Invoice: ${refNum}`, `Purchase Invoice on Credit: ${refNum}`]
+      [invoiceIdStr, totalAmount, finalDescription, creditDescription]
     );
 
     if (paidAmount !== undefined && paidAmount !== null) {
@@ -1706,13 +1711,13 @@ class AccountingService {
             accountCode: '1100', // AR
             debitAmount: total,
             creditAmount: 0,
-            description: `Sale: ${refNum}`
+            description: sale.notes || `Sale: ${refNum}`
           },
           {
             accountCode: '4000', // Sales Revenue
             debitAmount: 0,
             creditAmount: total,
-            description: `Sale Revenue: ${refNum}`
+            description: sale.notes || `Sale Revenue: ${refNum}`
           },
           {
             referenceType: 'sale',
@@ -1734,13 +1739,13 @@ class AccountingService {
             accountCode: '5000', // COGS
             debitAmount: totalCOGS,
             creditAmount: 0,
-            description: `COGS for Sale: ${refNum}`
+            description: sale.notes || `COGS for Sale: ${refNum}`
           },
           {
             accountCode: '1200', // Inventory
             debitAmount: 0,
             creditAmount: totalCOGS,
-            description: `Inventory Reduction: ${refNum}`
+            description: sale.notes || `Inventory Reduction: ${refNum}`
           },
           {
             referenceType: 'sale',
@@ -1915,13 +1920,13 @@ class AccountingService {
           accountCode: '1200', // Inventory
           debitAmount: total,
           creditAmount: 0,
-          description: `Purchase: ${purchase.purchase_order_number || purchase.purchaseOrderNumber || purchase.id}`
+          description: purchase.notes || `Purchase: ${purchase.purchase_order_number || purchase.purchaseOrderNumber || purchase.id}`
         },
         {
           accountCode: '2000', // AP
           debitAmount: 0,
           creditAmount: total,
-          description: `Purchase on Credit: ${purchase.purchase_order_number || purchase.purchaseOrderNumber || purchase.id}`
+          description: purchase.notes || `Purchase on Credit: ${purchase.purchase_order_number || purchase.purchaseOrderNumber || purchase.id}`
         },
         {
           referenceType: 'purchase',
@@ -1961,13 +1966,13 @@ class AccountingService {
           accountCode: '1200', // Inventory
           debitAmount: total,
           creditAmount: 0,
-          description: `Purchase Invoice: ${invoiceNumber || purchaseInvoice.id}`
+          description: purchaseInvoice.notes || `Purchase Invoice: ${invoiceNumber || purchaseInvoice.id}`
         },
         {
           accountCode: '2000', // Accounts Payable
           debitAmount: 0,
           creditAmount: total,
-          description: `Purchase Invoice on Credit: ${invoiceNumber || purchaseInvoice.id}`
+          description: purchaseInvoice.notes || `Purchase Invoice on Credit: ${invoiceNumber || purchaseInvoice.id}`
         },
         {
           referenceType: 'purchase_invoice',
@@ -1989,13 +1994,13 @@ class AccountingService {
             accountCode: '2000', // Accounts Payable
             debitAmount: paidAmount,
             creditAmount: 0,
-            description: `Payment for Invoice: ${invoiceNumber || purchaseInvoice.id}`
+            description: purchaseInvoice.notes || `Payment for Invoice: ${invoiceNumber || purchaseInvoice.id}`
           },
           {
             accountCode: paymentAccountCode, // Cash or Bank
             debitAmount: 0,
             creditAmount: paidAmount,
-            description: `Payment for Purchase Invoice: ${invoiceNumber || purchaseInvoice.id}`
+            description: purchaseInvoice.notes || `Payment for Purchase Invoice: ${invoiceNumber || purchaseInvoice.id}`
           },
           {
             referenceType: 'purchase_invoice_payment',

@@ -883,7 +883,8 @@ router.put('/:id', [
             total: newTotal,
             transactionDate: billDateChanged ? newSaleDate : undefined,
             customerId: customerChanged ? customerIdForLedger : undefined,
-            referenceNumber: refNum
+            referenceNumber: refNum,
+            notes: updatedOrder.notes
           });
         }
       }

@@ -1161,7 +1161,8 @@ class SalesService {
             total: sale.total,
             transactionDate: txnDate,
             customerId,
-            referenceNumber: refNum
+            referenceNumber: refNum,
+            notes: sale.notes
           });
           updated++;
         }

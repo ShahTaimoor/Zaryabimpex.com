@@ -500,6 +500,12 @@ const PrintDocument = ({
                             <div className="receipt-voucher__label w-1/3 font-semibold p-2">Payment Mode</div>
                             <div className="receipt-voucher__value flex-1 p-2 border-l border-black">{resolvedDocumentTitle.toLowerCase().includes('bank') ? 'Bank' : 'Cash'}</div>
                         </div>
+                        {orderData.notes && (
+                            <div className="receipt-voucher__row flex border-t border-black">
+                                <div className="receipt-voucher__label w-1/3 font-semibold p-2">Notes</div>
+                                <div className="receipt-voucher__value flex-1 p-2 border-l border-black text-sm">{orderData.notes}</div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Footer */}
@@ -524,37 +530,37 @@ const PrintDocument = ({
 
                 {/* Header Section — respects showCompanyDetails & showLogo */}
                 {showCompanyDetails && (
-                <div className="layout2-header">
-                    <div className="grid grid-cols-12 gap-4 items-center mb-2">
-                        <div className="col-span-3">
-                            {showLogo && safeCompanySettings.logo && (
-                                <img
-                                    src={safeCompanySettings.logo}
-                                    alt="Logo"
-                                    className="w-auto object-contain"
-                                    style={{ height: `${logoSize}px`, width: 'auto', objectFit: 'contain' }}
-                                />
-                            )}
-                        </div>
-                        <div className="col-span-7 text-center">
-                            <h1 className="layout2-company-name italic font-bold text-4xl mb-1">
-                                {resolvedCompanyName}
-                            </h1>
-                            <div className="layout2-company-address italic text-sm">
-                                {resolvedCompanyAddress}
+                    <div className="layout2-header">
+                        <div className="grid grid-cols-12 gap-4 items-center mb-2">
+                            <div className="col-span-3">
+                                {showLogo && safeCompanySettings.logo && (
+                                    <img
+                                        src={safeCompanySettings.logo}
+                                        alt="Logo"
+                                        className="w-auto object-contain"
+                                        style={{ height: `${logoSize}px`, width: 'auto', objectFit: 'contain' }}
+                                    />
+                                )}
                             </div>
-                            <div className="layout2-company-phone italic text-sm">
-                                Phone # {resolvedCompanyPhone}
-                            </div>
-                            {showEmail && safeCompanySettings.email && (
-                                <div className="layout2-company-email italic text-sm">
-                                    {safeCompanySettings.email}
+                            <div className="col-span-7 text-center">
+                                <h1 className="layout2-company-name italic font-bold text-4xl mb-1">
+                                    {resolvedCompanyName}
+                                </h1>
+                                <div className="layout2-company-address italic text-sm">
+                                    {resolvedCompanyAddress}
                                 </div>
-                            )}
+                                <div className="layout2-company-phone italic text-sm">
+                                    Phone # {resolvedCompanyPhone}
+                                </div>
+                                {showEmail && safeCompanySettings.email && (
+                                    <div className="layout2-company-email italic text-sm">
+                                        {safeCompanySettings.email}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="col-span-2"></div>
                         </div>
-                        <div className="col-span-2"></div>
                     </div>
-                </div>
                 )}
 
                 {/* Info Boxes — respects party detail toggles */}
@@ -562,10 +568,19 @@ const PrintDocument = ({
                     <tbody>
                         <tr>
                             <td className="border border-black p-2 font-medium" style={{ width: '65%' }}>
-                                {showPrintBusinessName && (<>{partyLabel}: <span className="uppercase">{partyInfo.name}</span>{' '}</>)}
-                                {canViewPartyPhone && partyInfo.phone !== 'N/A' && partyInfo.phone}
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        {showPrintBusinessName && (<>{partyLabel}: <span className="uppercase">{partyInfo.name}</span>{' '}</>)}
+                                        {canViewPartyPhone && partyInfo.phone !== 'N/A' && partyInfo.phone}
+                                    </div>
+                                    {orderData.notes && (
+                                        <div className="text-left max-w-[50%] ">
+                                            <span className="text-[16px] font-normal whitespace-pre-line">({orderData.notes})</span>
+                                        </div>
+                                    )}
+                                </div>
                             </td>
-                            <td className="border border-black p-2 font-medium text-right">
+                            <td className="border border-black p-2 font-medium text-right" style={{ width: '35%' }}>
                                 {showPrintInvoiceDate && <>Invoice Date: {formatDate(invoiceDate)}</>}
                             </td>
                         </tr>
@@ -647,32 +662,32 @@ const PrintDocument = ({
                 <div className="grid grid-cols-12 gap-0 mt-0">
                     <div className="col-span-8 p-4 italic">
                         {showDate && (
-                        <>
-                        <div className="mb-2">
-                            Printed By: <span className="underline font-bold uppercase">{currentUserName}</span>
-                        </div>
-                        <div>
-                            Entry Date Time: {formatDateTime(invoiceDate)}
-                        </div>
-                        <div className="mb-6">
-                            Print Date Time: {formatDateTime(generatedAt)}
-                        </div>
-                        </>
+                            <>
+                                <div className="mb-2">
+                                    Printed By: <span className="underline font-bold uppercase">{currentUserName}</span>
+                                </div>
+                                <div>
+                                    Entry Date Time: {formatDateTime(invoiceDate)}
+                                </div>
+                                <div className="mb-6">
+                                    Print Date Time: {formatDateTime(generatedAt)}
+                                </div>
+                            </>
                         )}
                         {showFooter && (
-                        <div className="urdu-note text-right font-bold text-lg mt-8" dir="rtl">
-                            نوٹ: پلٹی شدہ مال کی ٹوٹ پھوٹ کی ذمہ داری نہیں ہو گی۔ مال دوکان میں چیک
-                        </div>
+                            <div className="urdu-note text-right font-bold text-lg mt-8" dir="rtl">
+                                نوٹ: پلٹی شدہ مال کی ٹوٹ پھوٹ کی ذمہ داری نہیں ہو گی۔ مال دوکان میں چیک
+                            </div>
                         )}
                     </div>
                     <div className="col-span-4">
                         <table className="w-full border-collapse" style={{ border: '1px solid black' }}>
                             <tbody>
                                 {showDiscount && (
-                                <tr>
-                                    <td className="border border-black p-1 text-right font-bold">Invoice Discount</td>
-                                    <td className="border border-black p-1 text-right">{formatCurrency(discountValue)}</td>
-                                </tr>
+                                    <tr>
+                                        <td className="border border-black p-1 text-right font-bold">Invoice Discount</td>
+                                        <td className="border border-black p-1 text-right">{formatCurrency(discountValue)}</td>
+                                    </tr>
                                 )}
                                 <tr>
                                     <td className="border border-black p-1 text-right font-bold">Net Amount</td>
@@ -683,16 +698,16 @@ const PrintDocument = ({
                                     <td className="border border-black p-1 text-right">{formatCurrency(receivedAmount)}</td>
                                 </tr>
                                 {canViewPartyBalance && showPrintLedgerBalance && (
-                                  <>
-                                <tr>
-                                    <td className="border border-black p-1 text-right font-bold">Previous Balance</td>
-                                    <td className="border border-black p-1 text-right">{formatCurrency(previousBalance)}</td>
-                                </tr>
-                                <tr>
-                                    <td className="border border-black p-1 text-right font-bold">Total Receivables</td>
-                                    <td className="border border-black p-1 text-right font-bold">{formatCurrency(totalReceivables)}</td>
-                                </tr>
-                                  </>
+                                    <>
+                                        <tr>
+                                            <td className="border border-black p-1 text-right font-bold">Previous Balance</td>
+                                            <td className="border border-black p-1 text-right">{formatCurrency(previousBalance)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="border border-black p-1 text-right font-bold">Total Receivables</td>
+                                            <td className="border border-black p-1 text-right font-bold">{formatCurrency(totalReceivables)}</td>
+                                        </tr>
+                                    </>
                                 )}
                             </tbody>
                         </table>
@@ -790,6 +805,14 @@ const PrintDocument = ({
                                 <span className="print-document__info-value">{line.value}</span>
                             </div>
                         ))}
+                    </div>
+                )}
+                {orderData.notes && (
+                    <div className="print-document__info-block">
+                        <div className="print-document__section-label">Notes:</div>
+                        <div className="print-document__info-value" style={{ whiteSpace: 'pre-line', fontSize: '11px', lineHeight: '1.4' }}>
+                            {orderData.notes}
+                        </div>
                     </div>
                 )}
             </div>
@@ -910,19 +933,19 @@ const PrintDocument = ({
                 {/* Footer — left side */}
                 <div className="print-document__footer" style={{ margin: 0, textAlign: 'left', flex: 1 }}>
                     {showFooter && (
-                    <>
-                        <div>{formatDateTime(generatedAt)} &nbsp;•&nbsp; Generated By: <strong>{currentUserName}</strong></div>
-                        {showCompanyDetails && resolvedCompanyAddress && <div>{resolvedCompanyAddress}</div>}
-                        {showCompanyDetails && resolvedCompanyPhone && <div>Phone: {resolvedCompanyPhone}</div>}
-                        {footerText && (
-                            <div className="mt-2 text-gray-500">{footerText}</div>
-                        )}
-                        {receiptFooterText && (
-                            <div className="mt-3 pt-2" style={{ borderTop: '1px dashed #9ca3af', whiteSpace: 'pre-line', lineHeight: 1.35 }}>
-                                {receiptFooterText}
-                            </div>
-                        )}
-                    </>
+                        <>
+                            <div>{formatDateTime(generatedAt)} &nbsp;•&nbsp; Generated By: <strong>{currentUserName}</strong></div>
+                            {showCompanyDetails && resolvedCompanyAddress && <div>{resolvedCompanyAddress}</div>}
+                            {showCompanyDetails && resolvedCompanyPhone && <div>Phone: {resolvedCompanyPhone}</div>}
+                            {footerText && (
+                                <div className="mt-2 text-gray-500">{footerText}</div>
+                            )}
+                            {receiptFooterText && (
+                                <div className="mt-3 pt-2" style={{ borderTop: '1px dashed #9ca3af', whiteSpace: 'pre-line', lineHeight: 1.35 }}>
+                                    {receiptFooterText}
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 
@@ -951,14 +974,14 @@ const PrintDocument = ({
                         </div>
                         {canViewPartyBalance && showPrintLedgerBalance && (
                             <>
-                            <div className="print-document__summary-row">
-                                <span>Previous Balance</span>
-                                <span>{formatCurrency(previousBalance)}</span>
-                            </div>
-                            <div className="print-document__summary-row">
-                                <span>Ledger Balance</span>
-                                <span>{formatCurrency(ledgerBalance)}</span>
-                            </div>
+                                <div className="print-document__summary-row">
+                                    <span>Previous Balance</span>
+                                    <span>{formatCurrency(previousBalance)}</span>
+                                </div>
+                                <div className="print-document__summary-row">
+                                    <span>Ledger Balance</span>
+                                    <span>{formatCurrency(ledgerBalance)}</span>
+                                </div>
                             </>
                         )}
                     </div>

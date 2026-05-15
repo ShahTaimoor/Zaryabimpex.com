@@ -224,7 +224,8 @@ class PurchaseInvoiceService {
             supplierId,
             referenceNumber: refNum,
             paidAmount,
-            paymentMethod
+            paymentMethod,
+            notes: invoice.notes
           });
           const hasPayment = await AccountingService.hasPurchaseInvoicePaymentEntries(idStr);
           if (paidAmount > 0 && !hasPayment) {
