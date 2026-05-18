@@ -15,6 +15,10 @@ class AttendanceRepository {
       status: row.status,
       notesIn: row.notes_in,
       notesOut: row.notes_out,
+      imageIn: row.image_in,
+      imageOut: row.image_out,
+      locationIn: typeof row.location_in === 'string' ? JSON.parse(row.location_in) : row.location_in,
+      locationOut: typeof row.location_out === 'string' ? JSON.parse(row.location_out) : row.location_out,
       createdAt: row.created_at,
       employee: row.employee_id ? {
         _id: row.employee_id,
@@ -127,8 +131,8 @@ class AttendanceRepository {
 
   async create(data) {
     const result = await query(
-      `INSERT INTO attendance (employee_id, user_id, store_id, device_id, clocked_in_by, clock_in_at, clock_out_at, total_minutes, breaks, status, notes_in, notes_out, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `INSERT INTO attendance (employee_id, user_id, store_id, device_id, clocked_in_by, clock_in_at, clock_out_at, total_minutes, breaks, status, notes_in, notes_out, image_in, location_in, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING *`,
       [
         data.employee || data.employeeId,
@@ -142,7 +146,9 @@ class AttendanceRepository {
         data.breaks ? JSON.stringify(data.breaks) : '[]',
         data.status || 'open',
         data.notesIn || data.notes_in || '',
-        data.notesOut || data.notes_out || ''
+        data.notesOut || data.notes_out || '',
+        data.imageIn || data.image_in || null,
+        data.locationIn ? JSON.stringify(data.locationIn) : null
       ]
     );
     return result.rows[0];
@@ -154,7 +160,9 @@ class AttendanceRepository {
     let paramCount = 1;
     const map = {
       clockOutAt: 'clock_out_at', totalMinutes: 'total_minutes', breaks: 'breaks',
-      status: 'status', notesIn: 'notes_in', notesOut: 'notes_out'
+      status: 'status', notesIn: 'notes_in', notesOut: 'notes_out',
+      imageIn: 'image_in', imageOut: 'image_out',
+      locationIn: 'location_in', locationOut: 'location_out'
     };
     for (const [k, col] of Object.entries(map)) {
       if (data[k] !== undefined) {
@@ -173,7 +181,7 @@ class AttendanceRepository {
   }
 
   /** Close an open session (clock out). Returns updated row or null. */
-  async closeSession(id, notesOut) {
+  async closeSession(id, notesOut, imageOut, locationOut) {
     const row = await this.findById(id);
     if (!row || row.status !== 'open') return null;
     let breaks = Array.isArray(row.breaks) ? row.breaks : (typeof row.breaks === 'string' ? JSON.parse(row.breaks || '[]') : []);
@@ -193,7 +201,9 @@ class AttendanceRepository {
       totalMinutes,
       breaks,
       status: 'closed',
-      notesOut: notesOut || row.notes_out || ''
+      notesOut: notesOut || row.notes_out || '',
+      imageOut: imageOut || row.image_out || null,
+      locationOut: locationOut || row.location_out || null
     });
   }
 

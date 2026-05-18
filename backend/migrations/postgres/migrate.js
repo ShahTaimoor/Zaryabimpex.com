@@ -91,7 +91,8 @@ const MIGRATIONS = [
   '069_add_last_sale_price_to_products.sql',
   '070_market_purchase_prices.sql',
   '071_dashboard_api_indexes.sql',
-  '072_discounts_product_discount_rules.sql'
+  '072_discounts_product_discount_rules.sql',
+  '073_attendance_image_location.sql'
 ];
 
 async function ensureMigrationsTable() {

@@ -16,6 +16,8 @@ router.post('/clock-in', [
   body('storeId').optional().isString(),
   body('deviceId').optional().isString(),
   body('notesIn').optional().isString(),
+  body('imageIn').optional().isString(),
+  body('locationIn').optional().isObject(),
   body('employeeId').optional().isUUID(4), // For managers clocking in other employees
 ], async (req, res) => {
   try {
@@ -58,6 +60,8 @@ router.post('/clock-in', [
         deviceId: req.body.deviceId || null,
         clockInAt: new Date(),
         notesIn: req.body.notesIn || '',
+        imageIn: req.body.imageIn || null,
+        locationIn: req.body.locationIn || null,
         status: 'open'
       });
       const withEmployee = await attendanceRepository.findByIdWithEmployee(session.id);
@@ -82,6 +86,8 @@ router.post('/clock-out', [
   auth,
   requireAnyPermission(['clock_attendance', 'clock_out', 'end_session']),
   body('notesOut').optional().isString(),
+  body('imageOut').optional().isString(),
+  body('locationOut').optional().isObject(),
   body('employeeId').optional().isUUID(4), // For managers clocking out other employees
 ], async (req, res) => {
   try {
@@ -104,7 +110,7 @@ router.post('/clock-out', [
     if (!session) {
       return res.status(400).json({ message: 'Employee is not clocked in' });
     }
-    const updated = await attendanceRepository.closeSession(session.id, req.body.notesOut);
+    const updated = await attendanceRepository.closeSession(session.id, req.body.notesOut, req.body.imageOut, req.body.locationOut);
     const withEmployee = updated ? await attendanceRepository.findByIdWithEmployee(updated.id) : null;
     res.json({ success: true, data: withEmployee || updated });
   } catch (err) {

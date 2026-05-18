@@ -14,7 +14,10 @@ import {
   Clock3,
   User,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  Camera,
+  MapPin,
+  Loader2
 } from 'lucide-react';
 import {
   useGetStatusQuery,
@@ -25,6 +28,7 @@ import {
   useStartBreakMutation,
   useEndBreakMutation,
 } from '../store/services/attendanceApi';
+import { useUploadProductImageMutation } from '../store/services/productsApi';
 import { useGetEmployeesQuery } from '../store/services/employeesApi';
 import { useAuth } from '../contexts/AuthContext';
 import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
@@ -51,6 +55,15 @@ const Attendance = () => {
   // Confirmation states
   const [showClockInConfirm, setShowClockInConfirm] = useState(false);
   const [showClockOutConfirm, setShowClockOutConfirm] = useState(false);
+  
+  // Capture states
+  const [photo, setPhoto] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState('');
+  const [location, setLocation] = useState(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  
+  const [uploadImage, { isLoading: isUploadingImage }] = useUploadProductImageMutation();
 
   // Timer to update active shift duration
   useEffect(() => {
@@ -159,10 +172,72 @@ const Attendance = () => {
   // End break mutation
   const [endBreakMutation, { isLoading: endBreakLoading }] = useEndBreakMutation();
 
+  const handleOpenClockIn = () => {
+    resetCaptureStates();
+    fetchLocation();
+    setShowClockInConfirm(true);
+  };
+
+  const handleOpenClockOut = () => {
+    resetCaptureStates();
+    fetchLocation();
+    setShowClockOutConfirm(true);
+  };
+
+  const resetCaptureStates = () => {
+    setPhoto(null);
+    setPhotoPreview('');
+    setLocation(null);
+    setLocationError('');
+  };
+
+  const fetchLocation = () => {
+    setLocationLoading(true);
+    setLocationError('');
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          });
+          setLocationLoading(false);
+        },
+        (error) => {
+          setLocationError('Location access denied.');
+          setLocationLoading(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    } else {
+      setLocationError('Geolocation not supported.');
+      setLocationLoading(false);
+    }
+  };
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setPhoto(file);
+      setPhotoPreview(URL.createObjectURL(file));
+    }
+  };
+
   const handleClockIn = async () => {
     try {
+      let imageUrl = null;
+      if (photo) {
+        const formData = new FormData();
+        formData.append('image', photo);
+        const uploadRes = await uploadImage(formData).unwrap();
+        imageUrl = uploadRes.data?.urls?.optimized || uploadRes.data?.url || null;
+      }
+
       await clockInMutation({
-        notesIn: notesIn.trim() || undefined
+        notesIn: notesIn.trim() || undefined,
+        imageIn: imageUrl,
+        locationIn: location
       }).unwrap();
       showSuccessToast('Clocked in successfully');
       setNotesIn('');
@@ -176,8 +251,18 @@ const Attendance = () => {
 
   const handleClockOut = async () => {
     try {
+      let imageUrl = null;
+      if (photo) {
+        const formData = new FormData();
+        formData.append('image', photo);
+        const uploadRes = await uploadImage(formData).unwrap();
+        imageUrl = uploadRes.data?.urls?.optimized || uploadRes.data?.url || null;
+      }
+
       await clockOutMutation({
-        notesOut: notesOut.trim() || undefined
+        notesOut: notesOut.trim() || undefined,
+        imageOut: imageUrl,
+        locationOut: location
       }).unwrap();
       showSuccessToast('Clocked out successfully');
       setNotesOut('');
@@ -454,8 +539,8 @@ const Attendance = () => {
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm mb-4 resize-none h-24"
                     />
                     <button
-                      onClick={() => setShowClockOutConfirm(true)}
-                      disabled={clockOutLoading}
+                      onClick={handleOpenClockOut}
+                      disabled={clockOutLoading || isUploadingImage}
                       className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-slate-200 flex items-center justify-center space-x-3"
                     >
                       {clockOutLoading ? <LoadingSpinner size="sm" /> : <>
@@ -483,8 +568,8 @@ const Attendance = () => {
                   />
 
                   <button
-                    onClick={() => setShowClockInConfirm(true)}
-                    disabled={clockInLoading}
+                    onClick={handleOpenClockIn}
+                    disabled={clockInLoading || isUploadingImage}
                     className="w-full py-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-primary-200/50 flex items-center justify-center space-x-3"
                   >
                     {clockInLoading ? <LoadingSpinner size="sm" /> : <>
@@ -663,6 +748,20 @@ const Attendance = () => {
                         <td className="px-6 py-4">
                           <div className="text-sm font-bold text-slate-900">{formatDate(record.clockInAt)}</div>
                           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">System Ref: {record._id.slice(-8)}</div>
+                          {(record.imageIn || record.locationIn) && (
+                            <div className="flex items-center space-x-2 mt-2">
+                              {record.imageIn && (
+                                <a href={record.imageIn} target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:text-emerald-600 tooltip" title="View Check-In Photo">
+                                  <Camera className="h-3.5 w-3.5" />
+                                </a>
+                              )}
+                              {record.locationIn && (
+                                <a href={`https://maps.google.com/?q=${record.locationIn.latitude},${record.locationIn.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 tooltip" title="View Check-In Location">
+                                  <MapPin className="h-3.5 w-3.5" />
+                                </a>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center space-x-4">
@@ -676,6 +775,20 @@ const Attendance = () => {
                               <span className="text-sm font-bold text-slate-700">
                                 {record.clockOutAt ? formatTime(record.clockOutAt) : '---'}
                               </span>
+                              {(record.imageOut || record.locationOut) && (
+                                <div className="flex items-center space-x-2 mt-1">
+                                  {record.imageOut && (
+                                    <a href={record.imageOut} target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:text-emerald-600" title="View Check-Out Photo">
+                                      <Camera className="h-3 w-3" />
+                                    </a>
+                                  )}
+                                  {record.locationOut && (
+                                    <a href={`https://maps.google.com/?q=${record.locationOut.latitude},${record.locationOut.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600" title="View Check-Out Location">
+                                      <MapPin className="h-3 w-3" />
+                                    </a>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -721,8 +834,60 @@ const Attendance = () => {
         confirmText="Yes, Clock In"
         cancelText="Cancel"
         type="info"
-        isLoading={clockInLoading}
-      />
+        isLoading={clockInLoading || isUploadingImage}
+        confirmButtonProps={{ disabled: !photoPreview || locationLoading || !!locationError }}
+      >
+        <div className="mt-4 space-y-4 text-left">
+          {/* Location Status */}
+          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <MapPin className={`h-4 w-4 ${location ? 'text-emerald-500' : 'text-slate-400'}`} />
+              <span className="text-xs font-bold text-slate-700">Location</span>
+            </div>
+            <div className="text-xs">
+              {locationLoading ? (
+                <span className="text-amber-600 flex items-center"><Loader2 className="h-3 w-3 animate-spin mr-1"/> Fetching...</span>
+              ) : locationError ? (
+                <span className="text-rose-500 font-medium">{locationError}</span>
+              ) : location ? (
+                <span className="text-emerald-600 font-bold">Captured</span>
+              ) : (
+                <span className="text-slate-500">Not available</span>
+              )}
+            </div>
+          </div>
+
+          {/* Photo Capture */}
+          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2">
+                <Camera className={`h-4 w-4 ${photoPreview ? 'text-emerald-500' : 'text-slate-400'}`} />
+                <span className="text-xs font-bold text-slate-700">Selfie Required</span>
+              </div>
+            </div>
+            
+            {!photoPreview ? (
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-white hover:bg-slate-50 transition-colors">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <Camera className="w-8 h-8 mb-2 text-slate-400" />
+                  <p className="text-xs font-bold text-slate-500">Tap to Take Photo</p>
+                </div>
+                <input type="file" accept="image/*" capture="user" className="hidden" onChange={handlePhotoChange} />
+              </label>
+            ) : (
+              <div className="relative w-full h-32 rounded-lg overflow-hidden border border-slate-200">
+                <img src={photoPreview} alt="Selfie preview" className="w-full h-full object-cover" />
+                <button 
+                  onClick={() => { setPhoto(null); setPhotoPreview(''); }}
+                  className="absolute top-2 right-2 bg-rose-500 text-white p-1.5 rounded-full hover:bg-rose-600 shadow-sm"
+                >
+                  <XCircle className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </ConfirmationDialog>
 
       <ConfirmationDialog
         isOpen={showClockOutConfirm}
@@ -733,8 +898,60 @@ const Attendance = () => {
         confirmText="Yes, End Session"
         cancelText="Cancel"
         type="warning"
-        isLoading={clockOutLoading}
-      />
+        isLoading={clockOutLoading || isUploadingImage}
+        confirmButtonProps={{ disabled: !photoPreview || locationLoading || !!locationError }}
+      >
+        <div className="mt-4 space-y-4 text-left">
+          {/* Location Status */}
+          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <MapPin className={`h-4 w-4 ${location ? 'text-emerald-500' : 'text-slate-400'}`} />
+              <span className="text-xs font-bold text-slate-700">Location</span>
+            </div>
+            <div className="text-xs">
+              {locationLoading ? (
+                <span className="text-amber-600 flex items-center"><Loader2 className="h-3 w-3 animate-spin mr-1"/> Fetching...</span>
+              ) : locationError ? (
+                <span className="text-rose-500 font-medium">{locationError}</span>
+              ) : location ? (
+                <span className="text-emerald-600 font-bold">Captured</span>
+              ) : (
+                <span className="text-slate-500">Not available</span>
+              )}
+            </div>
+          </div>
+
+          {/* Photo Capture */}
+          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2">
+                <Camera className={`h-4 w-4 ${photoPreview ? 'text-emerald-500' : 'text-slate-400'}`} />
+                <span className="text-xs font-bold text-slate-700">Selfie Required</span>
+              </div>
+            </div>
+            
+            {!photoPreview ? (
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-white hover:bg-slate-50 transition-colors">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <Camera className="w-8 h-8 mb-2 text-slate-400" />
+                  <p className="text-xs font-bold text-slate-500">Tap to Take Photo</p>
+                </div>
+                <input type="file" accept="image/*" capture="user" className="hidden" onChange={handlePhotoChange} />
+              </label>
+            ) : (
+              <div className="relative w-full h-32 rounded-lg overflow-hidden border border-slate-200">
+                <img src={photoPreview} alt="Selfie preview" className="w-full h-full object-cover" />
+                <button 
+                  onClick={() => { setPhoto(null); setPhotoPreview(''); }}
+                  className="absolute top-2 right-2 bg-rose-500 text-white p-1.5 rounded-full hover:bg-rose-600 shadow-sm"
+                >
+                  <XCircle className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </ConfirmationDialog>
     </PageShell>
   );
 };
