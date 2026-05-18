@@ -32,6 +32,7 @@ import { handleApiError, showSuccessToast, showErrorToast } from '../utils/error
 import { formatDate, formatTime } from '../utils/formatters';
 import { toast } from 'sonner';
 import PageShell from '../components/PageShell';
+import ConfirmationDialog from '../components/ConfirmationDialog';
 
 const Attendance = () => {
   const { user, hasPermission } = useAuth();
@@ -46,6 +47,10 @@ const Attendance = () => {
   const [notesIn, setNotesIn] = useState('');
   const [notesOut, setNotesOut] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Confirmation states
+  const [showClockInConfirm, setShowClockInConfirm] = useState(false);
+  const [showClockOutConfirm, setShowClockOutConfirm] = useState(false);
 
   // Timer to update active shift duration
   useEffect(() => {
@@ -161,6 +166,7 @@ const Attendance = () => {
       }).unwrap();
       showSuccessToast('Clocked in successfully');
       setNotesIn('');
+      setShowClockInConfirm(false);
       refetchStatus();
       refetchMyAttendance();
     } catch (error) {
@@ -175,6 +181,7 @@ const Attendance = () => {
       }).unwrap();
       showSuccessToast('Clocked out successfully');
       setNotesOut('');
+      setShowClockOutConfirm(false);
       refetchStatus();
       refetchMyAttendance();
     } catch (error) {
@@ -447,7 +454,7 @@ const Attendance = () => {
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm mb-4 resize-none h-24"
                     />
                     <button
-                      onClick={handleClockOut}
+                      onClick={() => setShowClockOutConfirm(true)}
                       disabled={clockOutLoading}
                       className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-slate-200 flex items-center justify-center space-x-3"
                     >
@@ -476,7 +483,7 @@ const Attendance = () => {
                   />
 
                   <button
-                    onClick={handleClockIn}
+                    onClick={() => setShowClockInConfirm(true)}
                     disabled={clockInLoading}
                     className="w-full py-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-primary-200/50 flex items-center justify-center space-x-3"
                   >
@@ -704,6 +711,30 @@ const Attendance = () => {
           </div>
         </div>
       </div>
+      
+      <ConfirmationDialog
+        isOpen={showClockInConfirm}
+        onClose={() => setShowClockInConfirm(false)}
+        onConfirm={handleClockIn}
+        title="Confirm Clock In"
+        message="Are you sure you want to clock in now?"
+        confirmText="Yes, Clock In"
+        cancelText="Cancel"
+        type="info"
+        isLoading={clockInLoading}
+      />
+
+      <ConfirmationDialog
+        isOpen={showClockOutConfirm}
+        onClose={() => setShowClockOutConfirm(false)}
+        onConfirm={handleClockOut}
+        title="Confirm End Session"
+        message="Are you sure you want to end your session now?"
+        confirmText="Yes, End Session"
+        cancelText="Cancel"
+        type="warning"
+        isLoading={clockOutLoading}
+      />
     </PageShell>
   );
 };
