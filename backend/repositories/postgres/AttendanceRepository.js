@@ -1,6 +1,31 @@
 const { query } = require('../../config/postgres');
 
 class AttendanceRepository {
+  _mapAttendance(row) {
+    if (!row) return null;
+    return {
+      _id: row.id,
+      id: row.id,
+      employeeId: row.employee_id,
+      userId: row.user_id,
+      clockInAt: row.clock_in_at,
+      clockOutAt: row.clock_out_at,
+      totalMinutes: row.total_minutes,
+      breaks: typeof row.breaks === 'string' ? JSON.parse(row.breaks) : (row.breaks || []),
+      status: row.status,
+      notesIn: row.notes_in,
+      notesOut: row.notes_out,
+      createdAt: row.created_at,
+      employee: row.employee_id ? {
+        _id: row.employee_id,
+        id: row.employee_id,
+        firstName: row.emp_first_name || null,
+        lastName: row.emp_last_name || null,
+        employeeId: row.emp_employee_id || null
+      } : null
+    };
+  }
+
   async findById(id) {
     const result = await query(
       'SELECT * FROM attendance WHERE id = $1',
@@ -10,24 +35,24 @@ class AttendanceRepository {
   }
 
   async findAll(filters = {}, options = {}) {
-    let sql = 'SELECT * FROM attendance WHERE 1=1';
+    let sql = 'SELECT a.*, e.first_name AS emp_first_name, e.last_name AS emp_last_name, e.employee_id AS emp_employee_id FROM attendance a LEFT JOIN employees e ON e.id = a.employee_id WHERE 1=1';
     const params = [];
     let paramCount = 1;
 
     if (filters.employeeId || filters.employee) {
-      sql += ` AND employee_id = $${paramCount++}`;
+      sql += ` AND a.employee_id = $${paramCount++}`;
       params.push(filters.employeeId || filters.employee);
     }
     if (filters.userId || filters.user) {
-      sql += ` AND user_id = $${paramCount++}`;
+      sql += ` AND a.user_id = $${paramCount++}`;
       params.push(filters.userId || filters.user);
     }
     if (filters.status) {
-      sql += ` AND status = $${paramCount++}`;
+      sql += ` AND a.status = $${paramCount++}`;
       params.push(filters.status);
     }
 
-    sql += ' ORDER BY created_at DESC';
+    sql += ' ORDER BY a.created_at DESC';
     if (options.limit) {
       sql += ` LIMIT $${paramCount++}`;
       params.push(options.limit);
@@ -38,7 +63,7 @@ class AttendanceRepository {
     }
 
     const result = await query(sql, params);
-    return result.rows;
+    return result.rows.map(row => this._mapAttendance(row));
   }
 
   async findOne(filters = {}) {
@@ -205,15 +230,7 @@ class AttendanceRepository {
       [id]
     );
     const row = result.rows[0];
-    if (!row) return null;
-    return {
-      ...row,
-      employee: row.employee_id ? {
-        firstName: row.emp_first_name,
-        lastName: row.emp_last_name,
-        employeeId: row.emp_employee_id
-      } : null
-    };
+    return this._mapAttendance(row);
   }
 }
 

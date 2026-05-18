@@ -1,12 +1,46 @@
 const { query } = require('../../config/postgres');
 
 class EmployeeRepository {
+  _mapEmployee(row) {
+    if (!row) return null;
+    return {
+      _id: row.id,
+      id: row.id,
+      employeeId: row.employee_id,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      email: row.email,
+      phone: row.phone,
+      alternatePhone: row.alternate_phone,
+      address: typeof row.address === 'string' ? JSON.parse(row.address) : row.address,
+      position: row.position,
+      department: row.department,
+      hireDate: row.hire_date,
+      terminationDate: row.termination_date,
+      employmentType: row.employment_type,
+      salary: row.salary,
+      hourlyRate: row.hourly_rate,
+      payFrequency: row.pay_frequency,
+      workSchedule: row.work_schedule,
+      shift: row.shift,
+      emergencyContact: typeof row.emergency_contact === 'string' ? JSON.parse(row.emergency_contact) : row.emergency_contact,
+      dateOfBirth: row.date_of_birth,
+      gender: row.gender,
+      notes: row.notes,
+      userAccount: row.user_account,
+      status: row.status,
+      documents: typeof row.documents === 'string' ? JSON.parse(row.documents) : row.documents,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+
   async findById(id) {
     const result = await query(
       'SELECT * FROM employees WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
-    return result.rows[0] || null;
+    return this._mapEmployee(result.rows[0]);
   }
 
   async findOne(filters = {}) {
@@ -27,7 +61,7 @@ class EmployeeRepository {
     }
     sql += ' LIMIT 1';
     const result = await query(sql, params);
-    return result.rows[0] || null;
+    return this._mapEmployee(result.rows[0]);
   }
 
   async findAll(filters = {}, options = {}) {
@@ -59,7 +93,7 @@ class EmployeeRepository {
     }
 
     const result = await query(sql, params);
-    return result.rows;
+    return result.rows.map(r => this._mapEmployee(r));
   }
 
   async findByEmployeeId(employeeId, options = {}) {
@@ -112,7 +146,7 @@ class EmployeeRepository {
       ) ORDER BY created_at DESC LIMIT $2`,
       [term, options.limit || 100]
     );
-    return result.rows;
+    return result.rows.map(r => this._mapEmployee(r));
   }
 
   async getDistinctDepartments() {
@@ -179,7 +213,7 @@ class EmployeeRepository {
       'SELECT * FROM employees WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 1',
       []
     );
-    return result.rows[0] || null;
+    return this._mapEmployee(result.rows[0]);
   }
 
   async create(data) {
@@ -219,7 +253,7 @@ class EmployeeRepository {
         data.documents ? JSON.stringify(data.documents) : '[]'
       ]
     );
-    return result.rows[0];
+    return this._mapEmployee(result.rows[0]);
   }
 
   async updateById(id, data) {
@@ -248,7 +282,7 @@ class EmployeeRepository {
       `UPDATE employees SET ${updates.join(', ')} WHERE id = $${paramCount} AND deleted_at IS NULL RETURNING *`,
       params
     );
-    return result.rows[0] || null;
+    return this._mapEmployee(result.rows[0]);
   }
 
   async softDelete(id) {
@@ -256,7 +290,7 @@ class EmployeeRepository {
       'UPDATE employees SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
       [id]
     );
-    return result.rows[0] || null;
+    return this._mapEmployee(result.rows[0]);
   }
 }
 

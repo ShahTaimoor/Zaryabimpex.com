@@ -443,7 +443,8 @@ export const Settings2 = () => {
             { key: 'create_users', name: 'Create Users' },
             { key: 'edit_users', name: 'Edit Users' },
             { key: 'delete_users', name: 'Delete Users' },
-            { key: 'assign_roles', name: 'Assign Roles' }
+            { key: 'assign_roles', name: 'Assign Roles' },
+            { key: 'end_session', name: 'End Session' }
           ]
         },
         {
@@ -681,6 +682,9 @@ export const Settings2 = () => {
       pages: [
         { key: 'employees', name: 'Employees', view: 'manage_users', create: 'create_users', edit: 'edit_users', delete: 'delete_users' },
         { key: 'attendance', name: 'Attendance', view: 'view_own_attendance', create: 'clock_in', edit: 'manage_attendance_breaks', delete: 'delete_attendance' }
+      ],
+      extraPermissions: [
+        { key: 'end_session', name: 'End Session' }
       ]
     },
     settingsConfig: {
@@ -809,7 +813,7 @@ export const Settings2 = () => {
       settings_product_images: true, settings_product_fields: true,
       settings_customer_fields: true, settings_supplier_fields: true,
       settings_advanced_display: true, settings_advanced_features: true, settings_advanced_security: true,
-      create_users: true, edit_users: true, delete_users: true, assign_roles: true,
+      create_users: true, edit_users: true, delete_users: true, assign_roles: true, end_session: true,
       company_settings: true, system_settings: true, print_settings: true, security_settings: true,
       view_audit_logs: true, import_data: true,
       manage_integrations: true, configure_notifications: true

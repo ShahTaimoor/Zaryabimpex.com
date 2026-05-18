@@ -210,7 +210,10 @@ const Employees = () => {
     if (!data.email) delete data.email;
     if (!data.salary) delete data.salary;
     if (!data.hourlyRate) delete data.hourlyRate;
-    if (!data.userAccount) delete data.userAccount;
+    
+    if (!data.userAccount) {
+      data.userAccount = null;
+    }
 
     if (selectedEmployee) {
       handleUpdateEmployee({ id: selectedEmployee._id, data });

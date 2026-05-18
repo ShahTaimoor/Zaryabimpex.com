@@ -88,7 +88,7 @@ class SettingsRepository {
       `UPDATE settings SET ${setClauses.join(', ')} WHERE id = $${paramCount} RETURNING *`,
       params
     );
-    
+
     // Return transformed settings
     return await this.getSettings();
   }

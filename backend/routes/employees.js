@@ -101,7 +101,7 @@ router.post('/', [
   body('hireDate').optional().isISO8601().withMessage('Valid hire date is required'),
   body('employmentType').optional().isIn(['full_time', 'part_time', 'contract', 'temporary', 'intern']),
   body('status').optional().isIn(['active', 'inactive', 'terminated', 'on_leave']),
-  body('userAccount').optional().isUUID(4).withMessage('Invalid user account ID'),
+  body('userAccount').optional({ nullable: true }).isUUID(4).withMessage('Invalid user account ID'),
   handleValidationErrors, // Use as middleware
 ], async (req, res) => {
   try {
@@ -137,7 +137,7 @@ router.put('/:id', [
   body('position').optional().trim().isLength({ min: 1 }),
   body('department').optional().isString(),
   body('status').optional().isIn(['active', 'inactive', 'terminated', 'on_leave']),
-  body('userAccount').optional().isUUID(4),
+  body('userAccount').optional({ nullable: true }).isUUID(4),
   handleValidationErrors, // Use as middleware
 ], async (req, res) => {
   try {

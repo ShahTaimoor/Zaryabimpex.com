@@ -12,6 +12,15 @@ class UserService {
       populate: [{ path: 'permissionHistory.changedBy', select: 'firstName lastName email' }],
       sort: { createdAt: -1 }
     });
+
+    const employeeRepository = require('../repositories/postgres/EmployeeRepository');
+    const employees = await employeeRepository.findAll({}, { limit: 10000 });
+    const linkedUserIds = new Set(employees.filter(e => e.userAccount).map(e => e.userAccount));
+
+    users.forEach(u => {
+      u.employeeLinked = linkedUserIds.has(u.id);
+    });
+
     return users;
   }
 

@@ -80,7 +80,7 @@ router.post('/clock-in', [
 // Clock out
 router.post('/clock-out', [
   auth,
-  requireAnyPermission(['clock_attendance', 'clock_out']),
+  requireAnyPermission(['clock_attendance', 'clock_out', 'end_session']),
   body('notesOut').optional().isString(),
   body('employeeId').optional().isUUID(4), // For managers clocking out other employees
 ], async (req, res) => {

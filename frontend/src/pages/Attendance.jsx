@@ -45,6 +45,15 @@ const Attendance = () => {
   });
   const [notesIn, setNotesIn] = useState('');
   const [notesOut, setNotesOut] = useState('');
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Timer to update active shift duration
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+    return () => clearInterval(timer);
+  }, []);
 
   // Check if user can view team attendance
   useEffect(() => {
@@ -205,7 +214,7 @@ const Attendance = () => {
 
   const calculateCurrentDuration = (clockInAt) => {
     if (!clockInAt) return 0;
-    const now = new Date();
+    const now = currentTime;
     const clockIn = new Date(clockInAt);
     const diffMs = now - clockIn;
     const totalBreakMinutes = currentSession?.breaks?.reduce((sum, b) => {
@@ -226,6 +235,15 @@ const Attendance = () => {
     return currentSession?.breaks?.find(b => !b.endedAt);
   };
 
+  const calculateActiveBreakDuration = () => {
+    const activeBreak = getActiveBreak();
+    if (!activeBreak || !activeBreak.startedAt) return 0;
+    const now = currentTime;
+    const breakStart = new Date(activeBreak.startedAt);
+    const diffMs = now - breakStart;
+    return Math.max(0, Math.round(diffMs / 60000));
+  };
+
   const attendanceList = viewMode === 'my' 
     ? (myAttendanceData?.data || [])
     : (teamAttendanceData?.data || []);
@@ -234,7 +252,7 @@ const Attendance = () => {
 
   // Calculate weekly hours (for current week) - for "my" view
   const getWeeklyHours = () => {
-    const now = new Date();
+    const now = currentTime;
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
     startOfWeek.setHours(0, 0, 0, 0);
@@ -268,7 +286,7 @@ const Attendance = () => {
       return 0;
     }
     
-    const todayDate = new Date();
+    const todayDate = currentTime;
     todayDate.setHours(0, 0, 0, 0);
     
     // Get unique employees who clocked in today with open sessions
@@ -296,7 +314,7 @@ const Attendance = () => {
       return 0;
     }
     
-    const todayDate = new Date();
+    const todayDate = currentTime;
     todayDate.setHours(0, 0, 0, 0);
     const expectedStartTime = new Date(todayDate);
     expectedStartTime.setHours(9, 0, 0, 0); // 9 AM expected start
@@ -384,6 +402,9 @@ const Attendance = () => {
                             <p className="text-sm font-bold text-amber-900 capitalize">{getActiveBreak().type} Period</p>
                             <p className="text-xs text-amber-700 font-medium">Started {formatTime(getActiveBreak().startedAt)}</p>
                           </div>
+                        </div>
+                        <div className="text-xl font-black text-amber-700 tracking-tight bg-amber-100/50 px-3 py-1 rounded-lg">
+                          {formatDuration(calculateActiveBreakDuration())}
                         </div>
                       </div>
                       <button

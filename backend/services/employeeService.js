@@ -86,13 +86,6 @@ class EmployeeService {
       throw new Error('Employee not found');
     }
 
-    // Populate related fields
-    await employee.populate({
-      path: 'userAccount',
-      select: 'firstName lastName email role status',
-      options: { strictPopulate: false }
-    });
-
     return employee;
   }
 
@@ -146,13 +139,6 @@ class EmployeeService {
     // Create employee
     const employee = await employeeRepository.create(employeeData);
 
-    // Populate related fields
-    await employee.populate({
-      path: 'userAccount',
-      select: 'firstName lastName email role',
-      options: { strictPopulate: false }
-    });
-
     return employee;
   }
 
@@ -187,13 +173,6 @@ class EmployeeService {
 
     // Update employee
     const updatedEmployee = await employeeRepository.updateById(id, updateData);
-
-    // Populate related fields
-    await updatedEmployee.populate({
-      path: 'userAccount',
-      select: 'firstName lastName email role status',
-      options: { strictPopulate: false }
-    });
 
     return updatedEmployee;
   }
