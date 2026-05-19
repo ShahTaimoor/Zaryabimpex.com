@@ -26,7 +26,7 @@ export const PRINT_PAGE_STYLE = `
     print-color-adjust: exact !important;
   }
   .no-print, .btn, button, .print-toolbar { display: none !important; }
-  .print-wrapper, .print-preview-scale { box-shadow: none !important; border: none !important; }
+  .print-wrapper, .print-preview-scale, .print-modal-preview, .print-document { box-shadow: none !important; border: none !important; overflow: visible !important; }
 
   table { width: 100% !important; border-collapse: collapse !important; }
   th, td { border: 1px solid #000 !important; padding: 4px 6px !important; font-size: 11px !important; line-height: 1.2 !important; }
@@ -101,15 +101,18 @@ export const THERMAL_PRINT_PAGE_STYLE = `
   .thermal-receipt {
     width: 72mm !important;
     max-width: 72mm !important;
-    margin: 0 auto !important;
-    padding: 2mm 1mm !important;
+    margin: 0 0 0 0 !important;
+    padding: 1mm 0.5mm !important;
     font-family: Arial, Helvetica, sans-serif !important;
-    font-size: 13px !important;
+    font-size: 11px !important;
     font-weight: 600 !important;
     line-height: 1.1 !important;
     display: block !important;
     color: #000 !important;
     transform: none !important;
+  }
+  .thermal-receipt__store-name {
+    font-size: 19px !important;
   }
   .thermal-receipt table {
     border-collapse: collapse !important;
@@ -120,25 +123,26 @@ export const THERMAL_PRINT_PAGE_STYLE = `
   .thermal-receipt th, .thermal-receipt td {
     border: none !important;
     border-bottom: 1px solid #000 !important;
-    padding: 1mm 0 !important;
-    font-size: 12px !important;
+    padding: 0.8mm 0 !important;
+    font-size: 10px !important;
     font-weight: 600 !important;
     word-wrap: break-word !important;
     overflow: hidden !important;
   }
   /* Column widths for thermal */
-  .thermal-receipt th:nth-child(1), .thermal-receipt td:nth-child(1) { width: 40% !important; text-align: left !important; }
-  .thermal-receipt th:nth-child(2), .thermal-receipt td:nth-child(2) { width: 15% !important; text-align: center !important; }
-  .thermal-receipt th:nth-child(3), .thermal-receipt td:nth-child(3) { width: 20% !important; text-align: right !important; }
-  .thermal-receipt th:nth-child(4), .thermal-receipt td:nth-child(4) { width: 25% !important; text-align: right !important; }
+  .thermal-receipt th:nth-child(1), .thermal-receipt td:nth-child(1) { width: 8% !important; text-align: center !important; }
+  .thermal-receipt th:nth-child(2), .thermal-receipt td:nth-child(2) { width: 42% !important; text-align: left !important; }
+  .thermal-receipt th:nth-child(3), .thermal-receipt td:nth-child(3) { width: 10% !important; text-align: center !important; }
+  .thermal-receipt th:nth-child(4), .thermal-receipt td:nth-child(4) { width: 20% !important; text-align: right !important; }
+  .thermal-receipt th:nth-child(5), .thermal-receipt td:nth-child(5) { width: 20% !important; text-align: right !important; }
 
   .thermal-receipt__divider {
     border-top: 1px dashed #000 !important;
-    margin: 2mm 0 !important;
+    margin: 1mm 0 !important;
     width: 100% !important;
   }
   .thermal-receipt__summary-row--total {
-    font-size: 16px !important;
+    font-size: 13px !important;
     font-weight: bold !important;
     border-top: 1px solid #000 !important;
     margin-top: 1mm !important;
@@ -156,11 +160,12 @@ export const THERMAL_PRINT_PAGE_STYLE = `
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
+    overflow: visible !important;
   }
   .thermal-receipt canvas {
     width: 52mm !important;
     max-width: 52mm !important;
-    height: 14mm !important;
+    height: 10mm !important;
     display: block !important;
     margin: 0 auto !important;
     image-rendering: auto !important;

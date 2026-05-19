@@ -175,7 +175,13 @@ export const Settings2 = () => {
     footerText: '',
     receiptFooterText: '',
     invoiceLayout: 'standard',
-    logoSize: 100
+    logoSize: 100,
+    showThermalCustomerName: true,
+    showThermalPaidBy: true,
+    showThermalBarcode: true,
+    showThermalBarcodeValue: true,
+    showThermalFooter: true,
+    showThermalPrintDate: true
   });
 
   const [showSupplierSetting_contactPerson, setShowSupplierSetting_contactPerson] = useState(() =>
@@ -1114,7 +1120,13 @@ export const Settings2 = () => {
           printSize: (settings.printSettings.invoiceLayout || 'standard') === 'compact' ? '80mm' : 'standard',
           headerText: settings.printSettings.headerText || '',
           footerText: settings.printSettings.footerText || '',
-          receiptFooterText: settings.printSettings.receiptFooterText || ''
+          receiptFooterText: settings.printSettings.receiptFooterText || '',
+          showThermalCustomerName: settings.printSettings.showThermalCustomerName ?? true,
+          showThermalPaidBy: settings.printSettings.showThermalPaidBy ?? true,
+          showThermalBarcode: settings.printSettings.showThermalBarcode ?? true,
+          showThermalBarcodeValue: settings.printSettings.showThermalBarcodeValue ?? true,
+          showThermalFooter: settings.printSettings.showThermalFooter ?? true,
+          showThermalPrintDate: settings.printSettings.showThermalPrintDate ?? true
         }));
       }
     }
@@ -1238,7 +1250,13 @@ export const Settings2 = () => {
           footerText: ps.footerText || prev.footerText || '',
           receiptFooterText: ps.receiptFooterText || prev.receiptFooterText || '',
           invoiceLayout: ps.invoiceLayout || prev.invoiceLayout || 'standard',
-          logoSize: ps.logoSize ?? prev.logoSize ?? 100
+          logoSize: ps.logoSize ?? prev.logoSize ?? 100,
+          showThermalCustomerName: ps.showThermalCustomerName ?? true,
+          showThermalPaidBy: ps.showThermalPaidBy ?? true,
+          showThermalBarcode: ps.showThermalBarcode ?? true,
+          showThermalBarcodeValue: ps.showThermalBarcodeValue ?? true,
+          showThermalFooter: ps.showThermalFooter ?? true,
+          showThermalPrintDate: ps.showThermalPrintDate ?? true
         };
 
         // Only update if changed prevents verify infinite loop
@@ -2970,6 +2988,38 @@ export const Settings2 = () => {
                         ))}
                       </div>
                     </div>
+
+                    {/* Thermal Receipt (80mm) Options */}
+                    {printSettings.invoiceLayout === 'compact' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center space-x-2 border-b border-gray-100 pb-2">
+                          <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600"><Printer className="h-4 w-4" /></div>
+                          <h4 className="text-sm font-bold text-gray-700">Thermal Receipt (80mm) Options</h4>
+                        </div>
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                          {[
+                            { id: 'showThermalCustomerName', label: 'Customer Name' },
+                            { id: 'showThermalPaidBy', label: 'Date Paid / Paid By' },
+                            { id: 'showThermalBarcode', label: 'Barcode' },
+                            { id: 'showThermalBarcodeValue', label: 'Barcode Value' },
+                            { id: 'showThermalFooter', label: 'Thank You for Shopping' },
+                            { id: 'showThermalPrintDate', label: 'Print Date' },
+                          ].map(item => (
+                            <div key={item.id} className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                              <Checkbox
+                                id={item.id}
+                                className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                checked={printSettings[item.id] !== false}
+                                onCheckedChange={(checked) => handlePrintSettingsChange({ target: { name: item.id, type: 'checkbox', checked } })}
+                              />
+                              <Label htmlFor={item.id} className="text-sm font-semibold text-gray-700 cursor-pointer group-hover:text-blue-700">
+                                {item.label}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Post-Print Behavior */}
                     <div className="space-y-4">

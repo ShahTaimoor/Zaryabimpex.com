@@ -19,6 +19,15 @@ const ThermalReceipt = ({
   const receiptFooterText = printSettings?.receiptFooterText || '';
 
   const {
+    showThermalCustomerName = true,
+    showThermalPaidBy = true,
+    showThermalBarcode = true,
+    showThermalBarcodeValue = true,
+    showThermalFooter = true,
+    showThermalPrintDate = true
+  } = printSettings || {};
+
+  const {
     createdAt = new Date(),
     sale_date,
     items = [],
@@ -59,20 +68,20 @@ const ThermalReceipt = ({
   };
 
   useEffect(() => {
-    if (barcodeRef.current && invoiceNumber && invoiceNumber !== 'N/A') {
+    if (showThermalBarcode && barcodeRef.current && invoiceNumber && invoiceNumber !== 'N/A') {
       try {
         JsBarcode(barcodeRef.current, invoiceNumber, {
           format: 'CODE128',
           width: 2,
-          height: 56,
-          displayValue: true,
-          fontSize: 11,
-          margin: 4,
-          marginLeft: 6,
-          marginRight: 6,
-          marginTop: 4,
-          marginBottom: 4,
-          textMargin: 2,
+          height: 40,
+          displayValue: showThermalBarcodeValue,
+          fontSize: 9,
+          margin: 2,
+          marginLeft: 4,
+          marginRight: 4,
+          marginTop: 2,
+          marginBottom: 2,
+          textMargin: 1,
           lineColor: '#000000',
           background: '#ffffff',
           textAlign: 'center',
@@ -82,7 +91,7 @@ const ThermalReceipt = ({
         console.error('Barcode generation failed:', error);
       }
     }
-  }, [invoiceNumber]);
+  }, [invoiceNumber, showThermalBarcode, showThermalBarcodeValue]);
 
   return (
     <div className="thermal-receipt break-inside-avoid">
@@ -106,7 +115,7 @@ const ThermalReceipt = ({
           <span>Date:</span>
           <span>{formatDate(sale_date || createdAt)}</span>
         </div>
-        {customerInfo?.name && (
+        {showThermalCustomerName && customerInfo?.name && (
           <div className="thermal-receipt__info-row">
             <span>Customer:</span>
             <span>{customerInfo.name}</span>
@@ -119,7 +128,7 @@ const ThermalReceipt = ({
       <table className="thermal-receipt__table">
         <thead>
           <tr>
-            <th style={{ width: '25px', textAlign: 'center' }}>#</th>
+            <th>#</th>
             <th>Item</th>
             <th>Qty</th>
             <th>Price</th>
@@ -133,7 +142,7 @@ const ThermalReceipt = ({
             const lineTotal = item.total || (qty * price);
             return (
               <tr key={index}>
-                <td style={{ textAlign: 'center' }}>{index + 1}</td>
+                <td>{index + 1}</td>
                 <td className="thermal-receipt__item-name">
                   {item.product?.name || item.name || `Item ${index + 1}`}
                 </td>
@@ -172,25 +181,35 @@ const ThermalReceipt = ({
       </div>
 
       <div className="thermal-receipt__footer">
-        {payment.method && (
+        {showThermalPaidBy && payment.method && (
           <div className="thermal-receipt__info-row">
             <span>Paid by:</span>
             <span>{payment.method}</span>
           </div>
         )}
-        <div className="thermal-receipt__divider"></div>
-        <div className="thermal-receipt__barcode">
-          <canvas ref={barcodeRef} width="520" height="140"></canvas>
-        </div>
-        {receiptFooterText && (
-          <div className="thermal-receipt__custom-footer">
-            {receiptFooterText}
+        {showThermalBarcode && (
+          <>
+            <div className="thermal-receipt__divider"></div>
+            <div className="thermal-receipt__barcode">
+              <canvas ref={barcodeRef} width="520" height="100"></canvas>
+            </div>
+          </>
+        )}
+        {showThermalFooter && (
+          <>
+            {receiptFooterText && (
+              <div className="thermal-receipt__custom-footer">
+                {receiptFooterText}
+              </div>
+            )}
+            {!receiptFooterText && <div>Thank You for Shopping!</div>}
+          </>
+        )}
+        {showThermalPrintDate && (
+          <div style={{ fontSize: '9px', marginTop: '2mm' }}>
+            {new Date().toLocaleString()}
           </div>
         )}
-        {!receiptFooterText && <div>Thank You for Shopping!</div>}
-        <div style={{ fontSize: '9px', marginTop: '2mm' }}>
-          {new Date().toLocaleString()}
-        </div>
       </div>
     </div>
   );
