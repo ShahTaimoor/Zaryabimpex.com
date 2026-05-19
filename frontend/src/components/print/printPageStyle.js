@@ -99,10 +99,10 @@ export const THERMAL_PRINT_PAGE_STYLE = `
   .no-print, .btn, button, .print-toolbar { display: none !important; }
 
   .thermal-receipt {
-    width: 72mm !important;
-    max-width: 72mm !important;
-    margin: 0 0 0 0 !important;
-    padding: 1mm 0.5mm !important;
+    width: 68mm !important;
+    max-width: 68mm !important;
+    margin: 0 2mm !important;
+    padding: 1mm 0 !important;
     font-family: Arial, Helvetica, sans-serif !important;
     font-size: 11px !important;
     font-weight: 600 !important;
