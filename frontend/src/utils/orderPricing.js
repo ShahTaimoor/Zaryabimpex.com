@@ -29,7 +29,7 @@ export function computeLineItemSubtotal(items) {
   if (!Array.isArray(items)) return 0;
   return items.reduce((sum, item) => {
     if (!item) return sum;
-    const price = toNum(item.unitPrice ?? item.costPerUnit ?? item.price ?? 0);
+    const price = toNum(item.costPerUnit ?? item.unitPrice ?? item.price ?? 0);
     const qty = toNum(item.quantity ?? 0);
     return sum + price * qty;
   }, 0);
