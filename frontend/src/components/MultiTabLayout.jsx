@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -106,7 +106,7 @@ const withRouteAccess = (items) => {
 };
 
 export const navigation = withRouteAccess([
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'view_dashboard', allowMultiple: true },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'view_dashboard', allowMultiple: false, sidebarDefaultHidden: true },
 
   {
     name: 'Sales',
@@ -236,6 +236,7 @@ export function migrateSidebarConfig(parsed) {
 export function loadSidebarConfig() {
   const saved = localStorage.getItem('sidebarConfig');
   if (!saved) return {
+    'Dashboard': false,
     'Product Variants': false,
     'Product Transformations': false,
     'Customer Analytics': false,
@@ -264,6 +265,9 @@ export function loadSidebarConfig() {
     if (migrated['Import Purchase'] === undefined) {
       migrated['Import Purchase'] = false;
     }
+    if (migrated['Dashboard'] === undefined) {
+      migrated['Dashboard'] = false;
+    }
     delete migrated['Current Market Prices'];
     if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
       localStorage.setItem('sidebarConfig', JSON.stringify(migrated));
@@ -271,6 +275,7 @@ export function loadSidebarConfig() {
     return migrated;
   } catch {
     return {
+      'Dashboard': false,
       'Product Variants': false,
       'Product Transformations': false,
       'Customer Analytics': false,
@@ -286,6 +291,14 @@ export function loadSidebarConfig() {
       'Current Purchase Market Prices': false
     };
   }
+}
+
+function isSidebarNavItemVisible(item, sidebarConfig) {
+  if (!item?.name) return false;
+  if (item.sidebarDefaultHidden && sidebarConfig?.[item.name] === undefined) {
+    return false;
+  }
+  return sidebarConfig?.[item.name] !== false;
 }
 
 export function loadBottomNavConfig() {
@@ -348,7 +361,7 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
   }, [item, isActivePath, hasChildren]);
 
   // Check visibility and permission
-  if (sidebarConfig && sidebarConfig[item.name] === false) return null;
+  if (!isSidebarNavItemVisible(item, sidebarConfig)) return null;
   const isPermitted = isItemPermitted(item, user, hasPermission);
   if (!isPermitted) return null;
 
@@ -535,8 +548,14 @@ export const MultiTabLayout = ({ children }) => {
 
     const currentPath = location.pathname;
 
-    // Don't redirect if we are on settings, login, or any other critical page
-    if (currentPath === '/settings' || currentPath === '/settings2' || currentPath === '/login' || currentPath === '/profile') {
+    // Don't redirect if we are on settings, login, dashboard tab route, or any other critical page
+    if (
+      currentPath === '/dashboard' ||
+      currentPath === '/settings' ||
+      currentPath === '/settings2' ||
+      currentPath === '/login' ||
+      currentPath === '/profile'
+    ) {
       return;
     }
 
@@ -580,6 +599,35 @@ export const MultiTabLayout = ({ children }) => {
     '/settings',
     '/settings2'
   ]);
+
+  const openDashboardTab = useCallback(() => {
+    if (!hasPermission('view_dashboard')) return null;
+    const componentInfo = getComponentInfo('/dashboard');
+    if (!componentInfo) return null;
+
+    const existingTab = tabs.find((tab) => tab.path === '/dashboard');
+    if (existingTab) {
+      switchToTab(existingTab.id);
+      return existingTab.id;
+    }
+
+    return openTab({
+      title: componentInfo.title,
+      path: '/dashboard',
+      component: componentInfo.component,
+      icon: componentInfo.icon,
+      allowMultiple: false,
+    });
+  }, [hasPermission, openTab, switchToTab, tabs]);
+
+  // Dashboard opens as the default tab on login; reopens when all tabs are closed on /dashboard
+  useEffect(() => {
+    if (!user || !hasPermission('view_dashboard')) return;
+    if (location.pathname !== '/dashboard') return;
+    if (tabs.length > 0) return;
+
+    openDashboardTab();
+  }, [user, location.pathname, tabs.length, hasPermission, openDashboardTab]);
 
   const handleNavigationClick = (item) => {
     const componentInfo = getComponentInfo(item.href);
@@ -925,7 +973,8 @@ export const MultiTabLayout = ({ children }) => {
                 const pathname = location.pathname;
                 const isFormPage = pathname === '/customers/new' ||
                   /^\/customers\/[^/]+\/edit$/.test(pathname);
-                const showRoutes = tabs.length === 0 || isFormPage;
+                const onDashboardRoute = pathname === '/dashboard';
+                const showRoutes = (tabs.length === 0 && !onDashboardRoute) || isFormPage;
                 return showRoutes ? children : <TabContent />;
               })()}
             </ErrorBoundary>

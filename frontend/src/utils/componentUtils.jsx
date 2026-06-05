@@ -6,7 +6,7 @@ export const componentRegistry = {
   '/dashboard': {
     title: 'Dashboard',
     icon: 'LayoutDashboard',
-    allowMultiple: true,
+    allowMultiple: false,
     component: () => import('../pages/Dashboard').then(m => m.default || m.Dashboard)
   },
   '/sales': {

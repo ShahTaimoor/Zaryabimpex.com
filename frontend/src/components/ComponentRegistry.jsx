@@ -49,7 +49,7 @@ export const componentRegistry = {
   '/dashboard': {
     title: 'Dashboard',
     icon: 'LayoutDashboard',
-    allowMultiple: true
+    allowMultiple: false
   },
   '/sales': {
     title: 'Sales',

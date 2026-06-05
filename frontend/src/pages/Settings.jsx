@@ -77,6 +77,11 @@ import { LUCIDE_ICON_MAP } from '../utils/lucideIconMap';
 import { getVisibilityFlag } from '../utils/fieldVisibility';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
+import {
+  DASHBOARD_WIDGET_SECTIONS,
+  loadDashboardWidgetsConfig,
+  saveDashboardWidgetsConfig,
+} from '../config/dashboardConfig';
 
 export const Settings2 = () => {
   const { user, hasPermission } = useAuth();
@@ -93,6 +98,9 @@ export const Settings2 = () => {
 
   const isSidebarItemEnabled = (itemName) => {
     const current = sidebarConfig?.[itemName];
+    if (itemName === 'Dashboard' && current === undefined) {
+      return false;
+    }
     if (current === undefined && sidebarDefaultHiddenItems.has(itemName)) {
       return false;
     }
@@ -1766,6 +1774,7 @@ export const Settings2 = () => {
 
   // Sidebar Configuration State
   const [sidebarConfig, setSidebarConfig] = useState(() => loadSidebarConfig());
+  const [dashboardWidgetsConfig, setDashboardWidgetsConfig] = useState(() => loadDashboardWidgetsConfig());
 
   // Mobile Bottom Navigation State
   const [bottomNavConfig, setBottomNavConfig] = useState(() => loadBottomNavConfig());
@@ -1827,6 +1836,7 @@ export const Settings2 = () => {
     { id: 'company', name: 'Company Information', shortName: 'Company', icon: Building },
     { id: 'users', name: 'Users', shortName: 'Users', icon: Users, permission: 'manage_users' },
     { id: 'print', name: 'Print Preview Settings', shortName: 'Print', icon: Printer, permission: 'manage_print_settings' },
+    { id: 'dashboard', name: 'Dashboard Settings', shortName: 'Dashboard', icon: LayoutDashboard },
     { id: 'sidebar', name: 'Sidebar Configuration', shortName: 'Sidebar', icon: LayoutDashboard },
     { id: 'mobile-nav', name: 'Mobile Nav', shortName: 'Mobile Nav', icon: Smartphone },
     { id: 'products', name: 'Product Settings', shortName: 'Products', icon: Package, permission: 'manage_product_settings' },
@@ -3479,6 +3489,87 @@ export const Settings2 = () => {
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Dashboard Settings Tab */}
+        {activeTab === 'dashboard' && (
+          <div className="card shadow-lg border-gray-100">
+            <div className="card-header border-b border-gray-50 pb-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600 shadow-sm">
+                  <LayoutDashboard className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 leading-tight">Dashboard Settings</h2>
+                  <p className="text-sm text-gray-500 mt-1 font-medium">
+                    Control sidebar visibility and which dashboard metric cards are shown.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="card-content p-6 space-y-10">
+              <div className="rounded-xl border border-gray-200 bg-white p-4">
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="dashboard-sidebar-visible"
+                    checked={isSidebarItemEnabled('Dashboard')}
+                    onCheckedChange={(checked) => {
+                      const newConfig = { ...sidebarConfig, Dashboard: !!checked };
+                      setSidebarConfig(newConfig);
+                      localStorage.setItem('sidebarConfig', JSON.stringify(newConfig));
+                      toast.success(`Dashboard ${checked ? 'shown' : 'hidden'} in left sidebar`);
+                      window.dispatchEvent(new Event('sidebarConfigChanged'));
+                    }}
+                    className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                  />
+                  <Label htmlFor="dashboard-sidebar-visible" className="flex flex-col cursor-pointer">
+                    <span className="text-sm font-semibold text-gray-900">Show Dashboard in Left Sidebar</span>
+                    <span className="text-xs text-gray-500">
+                      Off by default. Dashboard still opens as the first tab after login.
+                    </span>
+                  </Label>
+                </div>
+              </div>
+
+              {DASHBOARD_WIDGET_SECTIONS.map((section) => (
+                <div key={section.id} className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <h3 className="text-[11px] font-black uppercase tracking-[0.2em] px-4 py-2 rounded-full border shadow-sm bg-gray-50 text-gray-600 border-gray-100">
+                      {section.label}
+                    </h3>
+                    <div className="h-[1px] flex-1 bg-gradient-to-r from-gray-100 to-transparent" />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {section.widgets.map((widget) => (
+                      <div
+                        key={widget.key}
+                        className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200"
+                      >
+                        <Checkbox
+                          id={`dashboard-widget-${widget.key}`}
+                          checked={dashboardWidgetsConfig[widget.key] !== false}
+                          onCheckedChange={(checked) => {
+                            const next = {
+                              ...dashboardWidgetsConfig,
+                              [widget.key]: checked === true,
+                            };
+                            setDashboardWidgetsConfig(next);
+                            saveDashboardWidgetsConfig(next);
+                            toast.success(`${widget.label} ${checked ? 'shown' : 'hidden'} on dashboard`);
+                          }}
+                          className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                        />
+                        <Label htmlFor={`dashboard-widget-${widget.key}`} className="flex flex-col cursor-pointer">
+                          <span className="text-sm font-semibold text-gray-900">{widget.label}</span>
+                          <span className="text-[10px] text-gray-400">{widget.description}</span>
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
