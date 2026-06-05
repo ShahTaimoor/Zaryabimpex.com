@@ -22,6 +22,7 @@ import {
 } from '../store/services/inventoryApi';
 import { useGetWarehousesQuery } from '../store/services/warehousesApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
+import { getProductDisplayName, getCategoryDisplayName } from '../utils/partyDisplay';
 import { LoadingSpinner, LoadingButton, LoadingPage } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { useResponsive, ResponsiveContainer } from '../components/ResponsiveContainer';
@@ -156,15 +157,15 @@ export const Inventory = () => {
     {
       key: 'product',
       header: 'Product',
-      accessor: (item) => item.product?.name || 'N/A',
+      accessor: (item) => getProductDisplayName(item.product, 'N/A'),
       render: (value, item) => (
         <div className="flex items-center space-x-3">
           <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center">
             <Package className="h-5 w-5 text-gray-400" />
           </div>
           <div>
-            <div className="font-medium text-gray-900">{item.product?.name || 'N/A'}</div>
-            <div className="text-sm text-gray-500">Category: {typeof item.product?.category === 'object' ? (item.product?.category?.name ?? 'N/A') : (item.product?.category || 'N/A')}</div>
+            <div className="font-medium text-gray-900">{getProductDisplayName(item.product, 'N/A')}</div>
+            <div className="text-sm text-gray-500">Category: {typeof item.product?.category === 'object' ? getCategoryDisplayName(item.product?.category, 'N/A') : getCategoryDisplayName(item.product?.category, 'N/A')}</div>
           </div>
         </div>
       ),
@@ -264,8 +265,8 @@ export const Inventory = () => {
             <Package className="h-5 w-5 text-gray-400" />
           </div>
           <div>
-            <h3 className="font-medium text-gray-900">{item.product?.name || 'N/A'}</h3>
-            <p className="text-sm text-gray-500">Category: {typeof item.product?.category === 'object' ? (item.product?.category?.name ?? 'N/A') : (item.product?.category || 'N/A')}</p>
+            <h3 className="font-medium text-gray-900">{getProductDisplayName(item.product, 'N/A')}</h3>
+            <p className="text-sm text-gray-500">Category: {typeof item.product?.category === 'object' ? getCategoryDisplayName(item.product?.category, 'N/A') : getCategoryDisplayName(item.product?.category, 'N/A')}</p>
           </div>
         </div>
         <div className="text-right">

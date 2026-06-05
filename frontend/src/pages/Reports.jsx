@@ -50,6 +50,82 @@ import PageShell from '../components/PageShell';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
+import {
+  getCustomerDisplayName,
+  getSupplierDisplayName,
+  getPartyDisplayName,
+  getProductDisplayName,
+  getCategoryDisplayName,
+} from '../utils/partyDisplay';
+import { toTitleCase } from '../utils/titleCase';
+
+const REPORT_TITLE_CASE_KEYS = new Set([
+  'name',
+  'businessName',
+  'productName',
+  'supplierName',
+  'customerName',
+  'categoryName',
+  'city',
+  'accountName',
+  'bankName',
+  'customerLabel',
+  'contactPerson',
+  'category',
+]);
+
+function formatReportCell(key, value) {
+  if (value == null || value === '') return value;
+  if (typeof value !== 'string') return value;
+  if (!REPORT_TITLE_CASE_KEYS.has(key)) return value;
+  return toTitleCase(value);
+}
+
+function renderReportCell(col, row, rowIndex) {
+  if (col.render) {
+    return rowIndex !== undefined ? col.render(row, rowIndex) : col.render(row);
+  }
+  return formatReportCell(col.key, row[col.key]);
+}
+
+function formatReportRowForExport(item, index) {
+  const row = {
+    ...item,
+    sno: index + 1,
+    productName: getProductDisplayName(
+      item.product || { name: item.productName },
+      item.productName || ''
+    ),
+    sku: item.product?.sku || item.sku,
+    customerLabel: getCustomerDisplayName(
+      item.customer,
+      item.customerName || item.businessName || item.name || ''
+    ),
+    lastOrderLabel: item.lastOrderDate
+      ? new Date(item.lastOrderDate).toLocaleDateString()
+      : '',
+    supplierName: item.supplierName
+      ? getSupplierDisplayName({ name: item.supplierName }, item.supplierName)
+      : item.supplierName,
+    customerName: item.customerName
+      ? getCustomerDisplayName({ businessName: item.customerName, name: item.name }, item.customerName)
+      : item.customerName,
+    name: getPartyDisplayName(
+      {
+        businessName: item.businessName,
+        name: item.name || item.accountName || item.productName || item.bankName || item.product?.name,
+      },
+      item.name || ''
+    ) || item.name,
+    businessName: getPartyDisplayName(item, item.businessName || item.name || ''),
+    categoryName: getCategoryDisplayName({ name: item.categoryName }, item.categoryName || ''),
+    city: item.city ? toTitleCase(item.city) : item.city,
+    accountName: item.accountName ? toTitleCase(item.accountName) : item.accountName,
+    bankName: item.bankName ? toTitleCase(item.bankName) : item.bankName,
+    category: item.category ? toTitleCase(item.category) : item.category,
+  };
+  return row;
+}
 
 export const Reports = () => {
   const { companyInfo: companySettings } = useCompanyInfo();
@@ -328,14 +404,20 @@ export const Reports = () => {
             header: 'Party Name',
             render: (row) => (
               <div>
-                <div className="font-medium">{row.businessName || row.name}</div>
-                {row.businessName && row.businessName !== row.contactPerson && row.contactPerson && (
-                  <div className="text-xs text-gray-500">Contact: {row.contactPerson}</div>
+                <div className="font-medium">{getPartyDisplayName(row, row.businessName || row.name || '—')}</div>
+                {row.contactPerson && (
+                  <div className="text-xs text-gray-500">
+                    Contact: {toTitleCase(row.contactPerson)}
+                  </div>
                 )}
               </div>
             )
           },
-          { header: 'City', key: 'city' },
+          {
+            header: 'City',
+            key: 'city',
+            render: (row) => (row.city ? toTitleCase(row.city) : '—'),
+          },
           {
             header: 'Opening Bal.',
             render: (row) => (row.openingBalance ?? 0).toLocaleString(),
@@ -380,7 +462,7 @@ export const Reports = () => {
         if (salesGroupBy === 'product') {
           return [
             { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
-            { header: 'Product', key: 'productName' },
+            { header: 'Product', render: (row) => getProductDisplayName({ name: row.productName }, row.productName || '—'), key: 'productName' },
             { header: 'SKU', key: 'sku' },
             { header: 'Qty Sold', render: (row) => (row.totalQuantity || 0).toLocaleString(), align: 'right' },
             { header: 'Revenue', render: (row) => (row.totalRevenue || 0).toLocaleString(), align: 'right', bold: true },
@@ -389,7 +471,7 @@ export const Reports = () => {
         if (salesGroupBy === 'category') {
           return [
             { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
-            { header: 'Category', key: 'categoryName' },
+            { header: 'Category', render: (row) => getCategoryDisplayName({ name: row.categoryName }, row.categoryName || '—'), key: 'categoryName' },
             { header: 'Items Sold', render: (row) => (row.itemCount || 0).toLocaleString(), align: 'right' },
             { header: 'Revenue', render: (row) => (row.totalRevenue || 0).toLocaleString(), align: 'right', bold: true },
           ];
@@ -397,7 +479,7 @@ export const Reports = () => {
         if (salesGroupBy === 'city') {
           return [
             { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
-            { header: 'City', key: 'city' },
+            { header: 'City', render: (row) => (row.city ? toTitleCase(row.city) : '—'), key: 'city' },
             { header: 'Orders', key: 'totalOrders', align: 'right' },
             { header: 'Revenue', render: (row) => (row.totalRevenue || 0).toLocaleString(), align: 'right', bold: true },
           ];
@@ -407,7 +489,7 @@ export const Reports = () => {
             { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'Invoice #', key: 'invoiceNo' },
             { header: 'Date', render: (row) => new Date(row.date).toLocaleDateString() },
-            { header: 'Customer', render: (row) => row.customerName || row.name || 'N/A' },
+            { header: 'Customer', render: (row) => getCustomerDisplayName({ businessName: row.customerName, name: row.name }, row.customerName || row.name || 'N/A') },
             { header: 'Total', render: (row) => (row.total || 0).toLocaleString(), align: 'right', bold: true },
             { header: 'Status', key: 'status' },
           ];
@@ -419,10 +501,10 @@ export const Reports = () => {
             { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             {
               header: 'Supplier',
-              render: (row) => row.supplierName || '—',
+              render: (row) => getSupplierDisplayName({ name: row.supplierName }, row.supplierName || '—'),
               key: 'supplierName'
             },
-            { header: 'Product Name', key: 'name' },
+            { header: 'Product Name', render: (row) => getProductDisplayName({ name: row.name }, row.name || '—'), key: 'name' },
             ...(showCostPrice ? [
               { header: 'Last Purchase Price', render: (row) => (row.lastPurchasePrice || 0).toLocaleString(), align: 'right' },
               { header: 'Op. Amount', render: (row) => (row.openingAmount || 0).toLocaleString(), align: 'right' },
@@ -459,12 +541,12 @@ export const Reports = () => {
           { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
           {
             header: 'Supplier',
-            render: (row) => row.supplierName || '—',
+            render: (row) => getSupplierDisplayName({ name: row.supplierName }, row.supplierName || '—'),
             key: 'supplierName'
           },
-          { header: 'Product Name', key: 'name' },
+          { header: 'Product Name', render: (row) => getProductDisplayName({ name: row.name }, row.name || '—'), key: 'name' },
           { header: 'SKU', key: 'sku' },
-          { header: 'Category', key: 'categoryName' },
+          { header: 'Category', render: (row) => getCategoryDisplayName({ name: row.categoryName }, row.categoryName || '—'), key: 'categoryName' },
           { header: 'Stock', render: (row) => `${(row.stockQuantity || 0).toLocaleString()} ${row.unit || ''}`, align: 'right' },
         ];
         if (inventoryType === 'valuation') {
@@ -495,7 +577,7 @@ export const Reports = () => {
           return [
             { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'Code', key: 'accountCode' },
-            { header: 'Account Name', key: 'accountName' },
+            { header: 'Account Name', render: (row) => (row.accountName ? toTitleCase(row.accountName) : '—'), key: 'accountName' },
             { header: 'Debit Balance', render: (row) => row.debitBalance > 0 ? row.debitBalance.toLocaleString() : '-', align: 'right' },
             { header: 'Credit Balance', render: (row) => row.creditBalance > 0 ? row.creditBalance.toLocaleString() : '-', align: 'right' },
           ];
@@ -503,8 +585,8 @@ export const Reports = () => {
         if (financialType === 'pl-statement') {
           return [
             { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
-            { header: 'Category', key: 'category' },
-            { header: 'Account', key: 'accountName' },
+            { header: 'Category', render: (row) => (row.category ? toTitleCase(row.category) : '—'), key: 'category' },
+            { header: 'Account', render: (row) => (row.accountName ? toTitleCase(row.accountName) : '—'), key: 'accountName' },
             { header: 'Type', key: 'accountType', render: (row) => <span className="capitalize">{row.accountType}</span> },
             { header: 'Amount', render: (row) => (row.amount || 0).toLocaleString(), align: 'right', bold: true },
           ];
@@ -513,8 +595,8 @@ export const Reports = () => {
           return [
             { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
             { header: 'Type', key: 'accountType', render: (row) => <span className="capitalize font-bold">{row.accountType}</span> },
-            { header: 'Category', key: 'category' },
-            { header: 'Account', key: 'accountName' },
+            { header: 'Category', render: (row) => (row.category ? toTitleCase(row.category) : '—'), key: 'category' },
+            { header: 'Account', render: (row) => (row.accountName ? toTitleCase(row.accountName) : '—'), key: 'accountName' },
             { header: 'Balance', render: (row) => (row.balance || 0).toLocaleString(), align: 'right', bold: true },
           ];
         }
@@ -522,7 +604,7 @@ export const Reports = () => {
       case 'bank-cash':
         return [
           { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
-          { header: 'Bank', render: (row) => row.bankName || 'N/A' },
+          { header: 'Bank', render: (row) => (row.bankName ? toTitleCase(row.bankName) : 'N/A') },
           { header: 'Account', render: (row) => row.accountNumber || row.accountName || '-' },
           { header: 'Opening', render: (row) => (row.openingBalance || 0).toLocaleString(), align: 'right' },
           { header: 'Receipts', render: (row) => (row.totalReceipts || 0).toLocaleString(), align: 'right' },
@@ -534,10 +616,10 @@ export const Reports = () => {
           { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
           {
             header: 'Supplier',
-            render: (row) => row.supplierName || '—',
+            render: (row) => getSupplierDisplayName({ name: row.supplierName }, row.supplierName || '—'),
             key: 'supplierName'
           },
-          { header: 'Product', render: (row) => row.product?.name || '—' },
+          { header: 'Product', render: (row) => getProductDisplayName(row.product, '—') },
           { header: 'SKU', render: (row) => row.product?.sku || '—' },
           { header: 'Qty sold', render: (row) => (row.totalQuantity || 0).toLocaleString(), align: 'right' },
           { header: 'Revenue', render: (row) => (row.totalRevenue || 0).toLocaleString(), align: 'right', bold: true },
@@ -549,12 +631,7 @@ export const Reports = () => {
           { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
           {
             header: 'Customer',
-            render: (row) =>
-              row.customer?.businessName ||
-              row.customer?.business_name ||
-              row.customer?.name ||
-              [row.customer?.firstName, row.customer?.lastName].filter(Boolean).join(' ') ||
-              '—'
+            render: (row) => getCustomerDisplayName(row.customer, '—')
           },
           { header: 'Orders', render: (row) => (row.totalOrders || 0).toLocaleString(), align: 'right' },
           { header: 'Revenue', render: (row) => (row.totalRevenue || 0).toLocaleString(), align: 'right', bold: true },
@@ -888,27 +965,7 @@ export const Reports = () => {
       title: reportTitle,
       filename: `${reportTitle.replace(/ /g, '_')}_${new Date().toLocaleDateString()}.xlsx`,
       columns,
-      data: data.map((item, i) => ({
-        ...item,
-        sno: i + 1,
-        productName: item.product?.name,
-        sku: item.product?.sku,
-        customerLabel:
-          item.customer?.businessName ||
-          [item.customer?.firstName, item.customer?.lastName].filter(Boolean).join(' ') ||
-          item.businessName ||
-          item.name,
-        lastOrderLabel: item.lastOrderDate
-          ? new Date(item.lastOrderDate).toLocaleDateString()
-          : '',
-        name:
-          item.businessName ||
-          item.name ||
-          item.accountName ||
-          item.productName ||
-          item.bankName ||
-          item.product?.name
-      })),
+      data: data.map(formatReportRowForExport),
       summary: (() => {
         if (activeTab === 'inventory' && inventoryType === 'stock-summary') {
           return {
@@ -1179,7 +1236,7 @@ export const Reports = () => {
                           <tr key={row.id || idx} className="hover:bg-gray-50 transition-colors">
                             {getColumns().map((col, colIdx) => (
                               <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                                {col.render ? col.render(row, rowIndex) : row[col.key]}
+                                {renderReportCell(col, row, rowIndex)}
                               </td>
                             ))}
                           </tr>
@@ -1207,7 +1264,7 @@ export const Reports = () => {
                                 <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
                                   {cols.map((col, colIdx) => (
                                     <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                                      {col.render ? col.render(row, rowIndex) : row[col.key]}
+                                      {renderReportCell(col, row, rowIndex)}
                                     </td>
                                   ))}
                                 </tr>
@@ -1327,7 +1384,7 @@ export const Reports = () => {
                         <tr key={idx} className="hover:bg-gray-50 transition-colors">
                           {getColumns().map((col, colIdx) => (
                             <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                              {col.render ? col.render(row) : row[col.key]}
+                              {renderReportCell(col, row)}
                             </td>
                           ))}
                         </tr>
@@ -1354,7 +1411,7 @@ export const Reports = () => {
                       <option value="">All suppliers</option>
                       {inventorySupplierOptions.map((s) => {
                         const id = s.id || s._id;
-                        const label = s.companyName || s.businessName || s.name || id;
+                        const label = getSupplierDisplayName(s, id);
                         return (
                           <option key={id} value={id}>
                             {label}
@@ -1407,7 +1464,7 @@ export const Reports = () => {
                         <tr key={row.product?.id || row.product?._id || idx} className="hover:bg-gray-50 transition-colors">
                           {getColumns().map((col, colIdx) => (
                             <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                              {col.render ? col.render(row, idx) : row[col.key]}
+                              {renderReportCell(col, row, idx)}
                             </td>
                           ))}
                         </tr>
@@ -1452,7 +1509,7 @@ export const Reports = () => {
                         <tr key={row.customer?.id || row.customer?._id || idx} className="hover:bg-gray-50 transition-colors">
                           {getColumns().map((col, colIdx) => (
                             <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                              {col.render ? col.render(row, idx) : row[col.key]}
+                              {renderReportCell(col, row, idx)}
                             </td>
                           ))}
                         </tr>
@@ -1518,7 +1575,7 @@ export const Reports = () => {
                       <option value="">All suppliers</option>
                       {inventorySupplierOptions.map((s) => {
                         const id = s.id || s._id;
-                        const label = s.companyName || s.businessName || s.name || id;
+                        const label = getSupplierDisplayName(s, id);
                         return (
                           <option key={id} value={id}>
                             {label}
@@ -1581,7 +1638,7 @@ export const Reports = () => {
                             <tr key={row.id || idx} className="hover:bg-gray-50 transition-colors">
                               {getColumns().map((col, colIdx) => (
                                 <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                                  {col.render ? col.render(row, idx) : row[col.key]}
+                                  {renderReportCell(col, row, idx)}
                                 </td>
                               ))}
                             </tr>
@@ -1591,12 +1648,11 @@ export const Reports = () => {
                             <tr key={row.id || idx} className="hover:bg-gray-50 transition-colors">
                               {getColumns().map((col, colIdx) => (
                                 <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                                  {col.render
-                                    ? col.render(
-                                      row,
-                                      (Math.min(stockSummaryPage, stockSummaryTotalPages) - 1) * stockSummaryPageSize + idx
-                                    )
-                                    : row[col.key]}
+                                  {renderReportCell(
+                                    col,
+                                    row,
+                                    (Math.min(stockSummaryPage, stockSummaryTotalPages) - 1) * stockSummaryPageSize + idx
+                                  )}
                                 </td>
                               ))}
                             </tr>
@@ -1623,7 +1679,7 @@ export const Reports = () => {
                                     <tr key={vr.key} className="hover:bg-gray-50 transition-colors" style={{ height: vr.size }}>
                                       {cols.map((col, colIdx) => (
                                         <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                                          {col.render ? col.render(row, rowIndex) : row[col.key]}
+                                          {renderReportCell(col, row, rowIndex)}
                                         </td>
                                       ))}
                                     </tr>
@@ -1773,7 +1829,7 @@ export const Reports = () => {
                           <tr key={idx} className="hover:bg-gray-50 transition-colors">
                             {getColumns().map((col, colIdx) => (
                               <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                                {col.render ? col.render(row) : row[col.key]}
+                                {renderReportCell(col, row)}
                               </td>
                             ))}
                           </tr>
@@ -2032,7 +2088,7 @@ export const Reports = () => {
                         <tr key={row.id || idx} className="hover:bg-gray-50 transition-colors">
                           {getColumns().map((col, colIdx) => (
                             <td key={colIdx} className={`px-6 py-4 whitespace-nowrap text-sm ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.bold ? 'font-bold' : ''}`}>
-                              {col.render ? col.render(row) : row[col.key]}
+                              {renderReportCell(col, row)}
                             </td>
                           ))}
                         </tr>
@@ -2051,7 +2107,7 @@ export const Reports = () => {
         isOpen={isPrintModalOpen}
         onClose={() => setIsPrintModalOpen(false)}
         reportTitle={getReportTitle()}
-        data={getReportData()}
+        data={getReportData().map((item, i) => formatReportRowForExport(item, i))}
         columns={getColumns()}
         filters={{
           dateFrom: dateRange.from,

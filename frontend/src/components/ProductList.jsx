@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Package, Edit, Trash2, Barcode, TrendingUp } from 'lucide-react';
 import { Checkbox } from './Checkbox';
 import { isLowStock, getExpiryStatus } from '../utils/productHelpers';
+import { getProductDisplayName, getCategoryDisplayName } from '../utils/partyDisplay';
 
 export const ProductList = ({
   products,
@@ -180,7 +181,7 @@ export const ProductList = ({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1 xl:gap-1.5 2xl:gap-2 flex-wrap">
                           <h3 className="text-[10px] xl:text-xs 2xl:text-sm font-medium text-gray-900 truncate">
-                            {product.name}
+                            {getProductDisplayName(product)}
                           </h3>
                           {showExpiryDate && product.expiryDate && (() => {
                             const expiryStatus = getExpiryStatus(product);
@@ -248,7 +249,7 @@ export const ProductList = ({
                   </div>
 
                   <div className="col-span-1 hidden lg:block xl:col-span-1">
-                    <p className="text-[10px] xl:text-xs 2xl:text-sm text-gray-600 truncate">{product.category?.name || '-'}</p>
+                    <p className="text-[10px] xl:text-xs 2xl:text-sm text-gray-600 truncate">{getCategoryDisplayName(product.category, '-')}</p>
                   </div>
 
                   <div className="col-span-1">
@@ -340,7 +341,7 @@ export const ProductList = ({
                             <div className="flex items-center gap-2 mb-0.5">
                               <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded flex-shrink-0">#{idx + 1}</span>
                               <h3 className="text-sm xl:text-base font-medium text-gray-900 truncate">
-                                {product.name}
+                                {getProductDisplayName(product)}
                               </h3>
                             </div>
 
@@ -397,7 +398,7 @@ export const ProductList = ({
                           <div className="col-span-2 sm:col-span-1">
                             <p className="text-[10px] xl:text-xs text-gray-500 mb-0.5">Category</p>
                             <p className="text-xs xl:text-sm font-semibold text-gray-900 truncate">
-                              {product.category?.name || '-'}
+                              {getCategoryDisplayName(product.category, '-')}
                             </p>
                           </div>
                           {showImportRefs && (product.importRefNo || product.gdNumber || product.invoiceRef) && (

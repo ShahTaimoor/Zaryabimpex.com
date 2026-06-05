@@ -1,5 +1,5 @@
 const { query } = require('../../config/postgres');
-const { splitSearchTokens } = require('../../utils/searchTokens');
+const { buildVariantListSearch, sqlNaturalCodeOrder } = require('../../utils/searchOrderBy');
 
 class ProductVariantRepository {
   async findById(id, includeDeleted = false) {
@@ -25,7 +25,7 @@ class ProductVariantRepository {
       sql += ` AND is_active = $${paramCount++}`;
       params.push(filters.isActive);
     }
-    sql += ' ORDER BY created_at DESC';
+    sql += ` ORDER BY ${sqlNaturalCodeOrder('sku', 'barcode', 'display_name')}, created_at DESC`;
     if (options.limit) { sql += ` LIMIT $${paramCount++}`; params.push(options.limit); }
     if (options.offset) { sql += ` OFFSET $${paramCount++}`; params.push(options.offset); }
     const result = await query(sql, params);
@@ -77,15 +77,18 @@ class ProductVariantRepository {
     } else if (filter.search || (filter.$or && filter.$or.length)) {
       const term = filter.search || (filter.$or && filter.$or[0] && (filter.$or[0].variantName || filter.$or[0].displayName || filter.$or[0].variantValue));
       if (term && typeof term === 'string') {
-        const tokens = splitSearchTokens(term);
-        for (const token of tokens) {
-          sql += ` AND (variant_name ILIKE $${paramCount} OR display_name ILIKE $${paramCount} OR variant_value ILIKE $${paramCount} OR sku ILIKE $${paramCount} OR barcode ILIKE $${paramCount})`;
-          params.push(`%${token}%`);
-          paramCount++;
-        }
+        const built = buildVariantListSearch(term, paramCount);
+        sql += built.whereSql;
+        params.push(...built.params);
+        paramCount = built.nextParamIndex;
+        options._searchOrderBy = built.orderBySql;
       }
     }
-    sql += ' ORDER BY created_at DESC';
+    if (options._searchOrderBy) {
+      sql += ` ORDER BY ${options._searchOrderBy}`;
+    } else {
+      sql += ` ORDER BY ${sqlNaturalCodeOrder('sku', 'barcode', 'display_name')}, created_at DESC`;
+    }
     if (options.limit) { sql += ` LIMIT $${paramCount++}`; params.push(options.limit); }
     if (options.offset) { sql += ` OFFSET $${paramCount++}`; params.push(options.offset); }
     const result = await query(sql, params);

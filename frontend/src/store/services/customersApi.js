@@ -102,13 +102,6 @@ export const customersApi = api.injectEndpoints({
         { type: 'Reports', id: 'SALES_REPORT' },
       ],
     }),
-    searchCustomers: builder.query({
-      query: (query) => ({
-        url: `customers/search/${encodeURIComponent(query)}`,
-        method: 'get',
-      }),
-      providesTags: [{ type: 'Customers', id: 'SEARCH' }],
-    }),
     checkEmail: builder.query({
       query: ({ email, excludeId }) => ({
         url: `customers/check-email/${encodeURIComponent(email)}`,
@@ -164,8 +157,6 @@ export const {
   useCreateCustomerMutation,
   useUpdateCustomerMutation,
   useDeleteCustomerMutation,
-  useSearchCustomersQuery,
-  useLazySearchCustomersQuery,
   useLazyCheckEmailQuery,
   useLazyCheckBusinessNameQuery,
   useCitiesQuery,

@@ -33,7 +33,9 @@ import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import ExcelImportButton from '../components/ExcelImportButton';
 import { exportTemplate } from '../utils/excelExport';
-import { useFuzzySearch } from '../hooks/useFuzzySearch';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { getSupplierDisplayName } from '../utils/partyDisplay';
+import { toTitleCase } from '../utils/titleCase';
 import { toast } from 'sonner';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 
@@ -835,6 +837,7 @@ export const Suppliers = () => {
   }, []);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_LIMIT);
   const [filters, setFilters] = useState({});
@@ -845,7 +848,7 @@ export const Suppliers = () => {
   const [notesEntity, setNotesEntity] = useState(null);
 
   const queryParams = {
-    search: searchTerm || undefined,
+    search: debouncedSearch || undefined,
     page: currentPage,
     limit: itemsPerPage,
     _refresh: refreshToken || undefined,
@@ -867,7 +870,7 @@ export const Suppliers = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [debouncedSearch]);
 
   const handleClearFilters = () => {
     setFilters({});
@@ -880,18 +883,8 @@ export const Suppliers = () => {
     setCurrentPage(1);
   };
 
-  const allSuppliers = suppliers?.data?.suppliers || suppliers?.suppliers || [];
+  const suppliersList = suppliers?.data?.suppliers || suppliers?.suppliers || [];
   const pagination = suppliers?.data?.pagination || suppliers?.pagination || {};
-  const filteredSuppliers = useFuzzySearch(
-    allSuppliers,
-    searchTerm,
-    ['companyName', 'contactPerson.name', 'email', 'phone'],
-    {
-      threshold: 0.4,
-      minScore: 0.3,
-      limit: null
-    }
-  );
 
   const handleSave = (formData) => {
     // Clean and validate form data before sending
@@ -1198,7 +1191,7 @@ export const Suppliers = () => {
             <p className="mt-2 text-gray-600">{error.message}</p>
           </div>
         </div>
-      ) : filteredSuppliers.length > 0 ? (
+      ) : suppliersList.length > 0 ? (
         <div className="card w-full min-w-0 overflow-hidden">
           <div className="card-content p-0 w-full min-w-0 overflow-x-auto">
             {/* Table Header - Hidden on mobile/tablet */}
@@ -1240,7 +1233,7 @@ export const Suppliers = () => {
 
             {/* Supplier Rows */}
             <div className="divide-y divide-gray-200">
-              {filteredSuppliers.map((supplier) => (
+              {suppliersList.map((supplier) => (
                 <div key={supplier.id || supplier._id} className="px-4 py-4 lg:px-8 lg:py-6 hover:bg-gray-50">
                   {/* Mobile Card Layout */}
                   <div className="md:hidden space-y-4">
@@ -1249,7 +1242,7 @@ export const Suppliers = () => {
                         <Building className="h-5 w-5 text-gray-400 flex-shrink-0" />
                         <div className="min-w-0 flex-1">
                           <h3 className="text-sm font-medium text-gray-900 truncate">
-                            {supplier.companyName || supplier.company_name || supplier.businessName || '-'}
+                            {getSupplierDisplayName(supplier, '-')}
                           </h3>
                           {visibilitySettings.contactPerson && (
                             <p className="text-xs text-gray-500 truncate">
@@ -1261,7 +1254,7 @@ export const Suppliers = () => {
                       <div className="flex items-center space-x-2 ml-2">
                         <button
                           onClick={() => {
-                            setNotesEntity({ type: 'Supplier', id: supplier.id || supplier._id, name: supplier.companyName || supplier.company_name || supplier.businessName || 'Supplier' });
+                            setNotesEntity({ type: 'Supplier', id: supplier.id || supplier._id, name: getSupplierDisplayName(supplier, 'Supplier') });
                             setShowNotes(true);
                           }}
                           className="text-green-600 hover:text-green-800 p-1"
@@ -1343,7 +1336,7 @@ export const Suppliers = () => {
                         <Building className="h-5 w-5 lg:h-6 lg:w-6 text-gray-400 flex-shrink-0" />
                         <div className="min-w-0">
                           <h3 className="text-sm lg:text-base font-medium text-gray-900 truncate">
-                            {supplier.companyName || supplier.company_name || supplier.businessName || '-'}
+                            {getSupplierDisplayName(supplier, '-')}
                           </h3>
                           {visibilitySettings.contactPerson && (
                             <p className="text-xs lg:text-sm text-gray-500 truncate">
@@ -1410,7 +1403,7 @@ export const Suppliers = () => {
                       <div className="flex items-center space-x-2 lg:space-x-3">
                         <button
                           onClick={() => {
-                            setNotesEntity({ type: 'Supplier', id: supplier.id || supplier._id, name: supplier.companyName || supplier.company_name || supplier.businessName || 'Supplier' });
+                            setNotesEntity({ type: 'Supplier', id: supplier.id || supplier._id, name: getSupplierDisplayName(supplier, 'Supplier') });
                             setShowNotes(true);
                           }}
                           className="text-green-600 hover:text-green-800 p-1"
@@ -1482,7 +1475,7 @@ export const Suppliers = () => {
         </div>
       )}
 
-      {!isLoading && !error && filteredSuppliers.length === 0 && (
+      {!isLoading && !error && suppliersList.length === 0 && (
         <div className="card">
           <div className="card-content text-center py-12">
             <Building className="mx-auto h-12 w-12 text-gray-400" />

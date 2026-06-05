@@ -8,18 +8,9 @@ const supplierService = require('../services/supplierServicePostgres');
 const supplierRepository = require('../repositories/postgres/SupplierRepository');
 const AccountingService = require('../services/accountingService');
 
-const router = express.Router();
+const { transformSupplierToUppercase } = require('../utils/displayTransforms');
 
-// Helper function to transform supplier names to uppercase
-const transformSupplierToUppercase = (supplier) => {
-  if (!supplier) return supplier;
-  if (supplier.toObject) supplier = supplier.toObject();
-  if (supplier.companyName) supplier.companyName = supplier.companyName.toUpperCase();
-  if (supplier.contactPerson && supplier.contactPerson.name) {
-    supplier.contactPerson.name = supplier.contactPerson.name.toUpperCase();
-  }
-  return supplier;
-};
+const router = express.Router();
 
 const parseOpeningBalance = (value) => {
   if (value === undefined || value === null || value === '') return null;
@@ -158,11 +149,12 @@ router.get('/deleted', [
 });
 
 // @route   GET /api/suppliers/search/:query
+// Legacy alias — prefer GET /api/suppliers?search=&page=1&limit=50
 router.get('/search/:query', auth, async (req, res) => {
   try {
-    const searchQuery = req.params.query;
-    const suppliers = await supplierService.searchSuppliers(searchQuery, 10);
-    res.json({ suppliers });
+    const search = String(req.params.query || '').trim();
+    const result = await supplierService.getSuppliers({ search, page: 1, limit: 50 });
+    res.json({ suppliers: result.suppliers, pagination: result.pagination });
   } catch (error) {
     console.error('Search suppliers error:', error);
     res.status(500).json({ message: 'Server error' });

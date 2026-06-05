@@ -24,7 +24,6 @@ import {
 } from 'lucide-react';
 
 import { useGetReportQuery } from '../store/services/inventoryApi';
-import { useGetProductsQuery } from '../store/services/productsApi';
 
 const InventoryReportDetailModal = ({ report, onClose, onDelete, onToggleFavorite }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -36,8 +35,6 @@ const InventoryReportDetailModal = ({ report, onClose, onDelete, onToggleFavorit
       skip: !report.reportId,
     }
   );
-  const { data: productsData } = useGetProductsQuery({ limit: 10000 });
-
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'decimal',
@@ -141,10 +138,6 @@ const InventoryReportDetailModal = ({ report, onClose, onDelete, onToggleFavorit
   ];
 
   const reportData = detailedReport || report;
-  const products = productsData?.data?.products || productsData?.products || [];
-  const productNameById = new Map(
-    products.map((p) => [String(p.id || p._id), p.name || p.productName || p.title || ''])
-  );
 
   const resolveProductName = (item) => {
     if (item?.product?.name) return item.product.name;
@@ -155,8 +148,6 @@ const InventoryReportDetailModal = ({ report, onClose, onDelete, onToggleFavorit
         ? (item.product?.id || item.product?._id)
         : item?.product;
     if (pid != null) {
-      const mapped = productNameById.get(String(pid));
-      if (mapped) return mapped;
       return `Product ${String(pid).slice(0, 8)}`;
     }
     return 'Unknown Product';

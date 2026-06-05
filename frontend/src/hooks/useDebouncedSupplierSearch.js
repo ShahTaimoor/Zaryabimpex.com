@@ -43,5 +43,6 @@ export function useDebouncedSupplierSearch(searchTerm, options = {}) {
     suppliers,
     isLoading: result.isLoading,
     isFetching: result.isFetching,
+    refetch: result.refetch,
   };
 }

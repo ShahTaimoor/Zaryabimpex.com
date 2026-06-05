@@ -1,4 +1,6 @@
 const express = require('express');
+const { transformCustomerToUppercase, transformProductToUppercase, transformSupplierToUppercase } = require('../utils/displayTransforms');
+
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const { auth, requirePermission } = require('../middleware/auth');
@@ -14,35 +16,6 @@ const handleValidationErrors = (req, res, next) => {
     return res.status(400).json({ errors: errors.array() });
   }
   next();
-};
-
-// Helper functions to transform names to uppercase
-const transformCustomerToUppercase = (customer) => {
-  if (!customer) return customer;
-  if (customer.toObject) customer = customer.toObject();
-  if (customer.name) customer.name = customer.name.toUpperCase();
-  if (customer.businessName) customer.businessName = customer.businessName.toUpperCase();
-  if (customer.firstName) customer.firstName = customer.firstName.toUpperCase();
-  if (customer.lastName) customer.lastName = customer.lastName.toUpperCase();
-  return customer;
-};
-
-const transformSupplierToUppercase = (supplier) => {
-  if (!supplier) return supplier;
-  if (supplier.toObject) supplier = supplier.toObject();
-  if (supplier.companyName) supplier.companyName = supplier.companyName.toUpperCase();
-  if (supplier.contactPerson && supplier.contactPerson.name) {
-    supplier.contactPerson.name = supplier.contactPerson.name.toUpperCase();
-  }
-  return supplier;
-};
-
-const transformProductToUppercase = (product) => {
-  if (!product) return product;
-  if (product.toObject) product = product.toObject();
-  if (product.name) product.name = product.name.toUpperCase();
-  if (product.description) product.description = product.description.toUpperCase();
-  return product;
 };
 
 // @route   GET /api/drop-shipping

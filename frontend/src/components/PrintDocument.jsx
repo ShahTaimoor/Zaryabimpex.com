@@ -1,5 +1,11 @@
 import React, { useMemo } from 'react';
 import { formatQuantityDisplay } from '../utils/dualUnitUtils';
+import {
+  getCustomerDisplayName,
+  getSupplierDisplayName,
+  getPartyDisplayName,
+  getProductDisplayName,
+} from '../utils/partyDisplay';
 import ThermalReceipt from './print/ThermalReceipt';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 import { useAuth } from '../contexts/AuthContext';
@@ -179,34 +185,16 @@ const PrintDocument = ({
         const isCustomer = (partyLabel?.toLowerCase() || '').includes('customer');
         const isSupplier = (partyLabel?.toLowerCase() || '').includes('supplier');
         const composedName = isCustomer
-            ? (customer.businessName ||
-                customer.business_name ||
-                orderData.customerInfo?.businessName ||
-                orderData.customerInfo?.business_name ||
-                customer.companyName ||
-                customer.name ||
-                customer.displayName ||
-                customer.fullName ||
-                '—')
+            ? getCustomerDisplayName(
+                { ...orderData.customerInfo, ...customer },
+                '—'
+              )
             : isSupplier
-                ? (customer.companyName ||
-                    customer.company_name ||
-                    customer.businessName ||
-                    customer.business_name ||
-                    orderData.supplierInfo?.companyName ||
-                    orderData.supplierInfo?.businessName ||
-                    orderData.supplierInfo?.business_name ||
-                    customer.name ||
-                    customer.displayName ||
-                    customer.fullName ||
-                    '—')
-                : (customer.name ||
-                    customer.displayName ||
-                    customer.businessName ||
-                    customer.business_name ||
-                    customer.companyName ||
-                    customer.fullName ||
-                    '—');
+                ? getSupplierDisplayName(
+                    { ...orderData.supplierInfo, ...customer },
+                    '—'
+                  )
+                : getPartyDisplayName(customer, '—');
         const businessName =
             customer.businessName ||
             customer.companyName ||
@@ -632,7 +620,7 @@ const PrintDocument = ({
                                                         className="w-8 h-8 object-cover rounded border border-gray-200"
                                                     />
                                                 )}
-                                                <span>{item.product?.name || item.name || `Item ${index + 1}`}</span>
+                                                <span>{getProductDisplayName(item.product || { name: item.name }, `Item ${index + 1}`)}</span>
                                             </div>
                                             {showDescription && item.description && (
                                                 <div className="text-[10px] text-gray-600 normal-case">{item.description}</div>

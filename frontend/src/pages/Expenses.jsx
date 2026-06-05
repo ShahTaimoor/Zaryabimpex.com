@@ -93,7 +93,7 @@ const Expenses = () => {
     return [];
   }, [expenseAccountsResponse]);
 
-  const { data: banksResponse, isLoading: banksLoading } = useGetBanksQuery({ isActive: true });
+  const { data: banksResponse, isLoading: banksLoading } = useGetBanksQuery({ isActive: true, all: 'true' });
   const banks = useMemo(
     () => banksResponse?.data?.banks || banksResponse?.banks || banksResponse?.data || [],
     [banksResponse]

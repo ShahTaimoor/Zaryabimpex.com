@@ -26,6 +26,8 @@ const { auth, requirePermission, maskSensitiveData } = require('../middleware/au
 const { handleValidationErrors } = require('../middleware/validation');
 const { preventPOSDuplicates } = require('../middleware/duplicatePrevention');
 
+const { transformCustomerToUppercase, transformProductToUppercase, transformSupplierToUppercase } = require('../utils/displayTransforms');
+
 const router = express.Router();
 
 // Helper function to parse date string as local date (not UTC)
@@ -51,39 +53,6 @@ const formatCustomerAddress = (customerData) => {
     return parts.join(', ');
   }
   return '';
-};
-
-// Helper functions to transform names to uppercase
-const transformCustomerToUppercase = (customer) => {
-  if (!customer) return customer;
-  if (customer.toObject) customer = customer.toObject();
-
-  // Postgres uses business_name, frontend uses businessName
-  if (customer.business_name && !customer.businessName) {
-    customer.businessName = customer.business_name;
-  }
-
-  if (customer.name) customer.name = customer.name.toUpperCase();
-  if (customer.businessName) customer.businessName = customer.businessName.toUpperCase();
-  if (customer.business_name) customer.business_name = customer.business_name.toUpperCase();
-  if (customer.firstName) customer.firstName = customer.firstName.toUpperCase();
-  if (customer.lastName) customer.lastName = customer.lastName.toUpperCase();
-  return customer;
-};
-
-const transformProductToUppercase = (product) => {
-  if (!product) return product;
-  if (product.toObject) product = product.toObject();
-  // Handle both products and variants
-  if (product.displayName) {
-    product.displayName = product.displayName.toUpperCase();
-  }
-  if (product.variantName) {
-    product.variantName = product.variantName.toUpperCase();
-  }
-  if (product.name) product.name = product.name.toUpperCase();
-  if (product.description) product.description = product.description.toUpperCase();
-  return product;
 };
 
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');

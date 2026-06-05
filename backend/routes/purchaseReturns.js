@@ -7,25 +7,9 @@ const returnManagementService = require('../services/returnManagementService');
 const ReturnRepository = require('../repositories/postgres/ReturnRepository');
 const PurchaseInvoiceRepository = require('../repositories/PurchaseInvoiceRepository');
 
+const { transformCustomerToUppercase, transformProductToUppercase, transformSupplierToUppercase } = require('../utils/displayTransforms');
+
 const router = express.Router();
-
-// Helper functions to transform names to uppercase
-const transformSupplierToUppercase = (supplier) => {
-  if (!supplier) return supplier;
-  if (supplier.toObject) supplier = supplier.toObject();
-  if (supplier.name) supplier.name = supplier.name.toUpperCase();
-  if (supplier.businessName) supplier.businessName = supplier.businessName.toUpperCase();
-  if (supplier.companyName) supplier.companyName = supplier.companyName.toUpperCase();
-  return supplier;
-};
-
-const transformProductToUppercase = (product) => {
-  if (!product) return product;
-  if (product.toObject) product = product.toObject();
-  if (product.name) product.name = product.name.toUpperCase();
-  if (product.description) product.description = product.description.toUpperCase();
-  return product;
-};
 
 // @route   POST /api/purchase-returns
 // @desc    Create a new purchase return request

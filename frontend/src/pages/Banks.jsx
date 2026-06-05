@@ -21,7 +21,8 @@ import {
   useDeleteBankMutation,
 } from '../store/services/banksApi';
 import { useCheckAccountQuery, useUpdateAccountMutation } from '../store/services/chartOfAccountsApi';
-import { useFuzzySearch } from '../hooks/useFuzzySearch';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { DEFAULT_LIST_LIMIT } from '../constants/listPagination';
 import { toast } from 'sonner';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
@@ -343,6 +344,9 @@ const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
 
 const Banks = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebouncedValue(searchTerm, 300);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_LIST_LIMIT);
   const [showModal, setShowModal] = useState(false);
   const [editingBank, setEditingBank] = useState(null);
   const [cashOpeningInput, setCashOpeningInput] = useState('');
@@ -366,18 +370,25 @@ const Banks = () => {
 
   const [updateCoaAccount] = useUpdateAccountMutation();
 
-  // Fetch banks
-  const { data: banksResponse, isLoading, error, refetch } = useGetBanksQuery(undefined);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch]);
 
-  // Extract banks array from response
-  const allBanks = React.useMemo(() => {
+  const { data: banksResponse, isLoading, error, refetch } = useGetBanksQuery({
+    search: debouncedSearch || undefined,
+    page: currentPage,
+    limit: itemsPerPage,
+  });
+
+  const banksList = React.useMemo(() => {
     if (!banksResponse) return [];
-    if (banksResponse?.data?.data?.banks) return banksResponse.data.data.banks;
     if (banksResponse?.data?.banks) return banksResponse.data.banks;
     if (banksResponse?.banks) return banksResponse.banks;
     if (Array.isArray(banksResponse)) return banksResponse;
     return [];
   }, [banksResponse]);
+
+  const pagination = banksResponse?.pagination || banksResponse?.data?.pagination || {};
 
   // Mutations
   const [createBank] = useCreateBankMutation();
@@ -460,27 +471,9 @@ const Banks = () => {
     setShowModal(true);
   };
 
-  // Apply fuzzy search on client side for better UX
-  // Hook must be called before any early returns
-  const searchedBanks = useFuzzySearch(
-    allBanks,
-    searchTerm,
-    ['bankName', 'accountName', 'accountNumber', 'branchName'],
-    {
-      threshold: 0.4,
-      minScore: 0.3,
-      limit: null // Show all matches
-    }
-  );
+  const filteredBanks = banksList.filter((bank) => bank && bank.isActive !== false);
 
-  // Filter to show active banks by default (isActive defaults to true if not specified)
-  const filteredBanks = searchedBanks.filter(bank => {
-    if (!bank) return false;
-    const isActive = bank.isActive !== false;
-    return isActive;
-  });
-
-  const isSubmitting = false; // Can track mutation loading states if needed
+  const isSubmitting = false;
 
   if (isLoading) {
     return <LoadingPage message="Loading banks..." />;
@@ -728,6 +721,37 @@ const Banks = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {!isLoading && !error && (pagination?.pages > 1 || pagination?.total > itemsPerPage) && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+          <p className="text-sm text-gray-600">
+            Showing {((pagination.current || currentPage) - 1) * (pagination.limit || itemsPerPage) + 1}–
+            {Math.min((pagination.current || currentPage) * (pagination.limit || itemsPerPage), pagination.total || 0)} of{' '}
+            {pagination.total || 0}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!(pagination.hasPrev ?? currentPage > 1)}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-gray-600">
+              Page {pagination.current || currentPage} of {pagination.pages || 1}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!(pagination.hasNext)}
+              onClick={() => setCurrentPage((p) => Math.min(pagination.pages || 1, p + 1))}
+            >
+              Next
+            </Button>
           </div>
         </div>
       )}

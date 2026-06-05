@@ -112,13 +112,6 @@ export const productsApi = api.injectEndpoints({
         { type: 'Inventory', id: 'SUMMARY' },
       ],
     }),
-    searchProducts: builder.query({
-      query: (query) => ({
-        url: `products/search/${encodeURIComponent(query)}`,
-        method: 'get',
-      }),
-      providesTags: [{ type: 'Products', id: 'SEARCH' }],
-    }),
     lowStock: builder.query({
       query: () => ({
         url: 'products/low-stock',
@@ -184,7 +177,6 @@ export const {
   useDeleteProductMutation,
   useBulkUpdateProductsMutation,
   useBulkDeleteProductsMutation,
-  useSearchProductsQuery,
   useLowStockQuery,
   useGetLastPurchasePriceQuery,
   useLazyGetLastPurchasePriceQuery,

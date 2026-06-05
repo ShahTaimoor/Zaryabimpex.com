@@ -2,6 +2,7 @@ import React from 'react';
 import { Plus, Minus, Trash2, Package } from 'lucide-react';
 import { useResponsive } from './ResponsiveContainer';
 import { OptimizedImage } from './OptimizedImage';
+import { getProductDisplayName, getCategoryDisplayName } from '../utils/partyDisplay';
 
 const MobileProductCard = ({ 
   product, 
@@ -37,7 +38,7 @@ const MobileProductCard = ({
               <OptimizedImage
                 src={product.imageUrl || product.image}
                 webpSrc={product.imageWebp || (product.imageUrl || product.image)?.replace(/\.(jpg|jpeg|png)$/i, '.webp')}
-                alt={product.name}
+                alt={getProductDisplayName(product)}
                 className="h-16 w-16 object-cover rounded-lg"
                 sizes={{ thumbnail: true, small: true }}
                 lazy={true}
@@ -53,10 +54,10 @@ const MobileProductCard = ({
         {/* Product Details */}
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-medium text-gray-900 truncate">
-            {product.name}
+            {getProductDisplayName(product)}
           </h3>
           <p className="text-xs text-gray-500 truncate">
-            Category: {typeof product.category === 'object' ? (product.category?.name ?? 'N/A') : (product.category || 'N/A')}
+            Category: {typeof product.category === 'object' ? getCategoryDisplayName(product.category, 'N/A') : getCategoryDisplayName(product.category, 'N/A')}
           </p>
           <p className="text-xs text-gray-500">
             ${product.unitPrice?.toFixed(2) || '0.00'} each

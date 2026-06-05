@@ -28,36 +28,17 @@ class PurchaseOrderService {
    * @returns {object} - Transformed supplier
    */
   transformSupplierToUppercase(supplier) {
+    const { formatSupplierEntity } = require('../utils/entityTextFormat');
     if (!supplier) return supplier;
-    if (supplier.toObject) supplier = supplier.toObject();
-    const name = supplier.companyName || supplier.company_name;
-    if (name) supplier.companyName = (typeof name === 'string' ? name : '').toUpperCase();
-    const cp = supplier.contactPerson || supplier.contact_person;
-    if (cp && (typeof cp === 'object' ? cp.name : cp)) {
-      if (!supplier.contactPerson) supplier.contactPerson = {};
-      supplier.contactPerson.name = String(cp.name || cp).toUpperCase();
-    }
-    return supplier;
+    const s = supplier.toObject ? supplier.toObject() : { ...supplier };
+    return formatSupplierEntity(s);
   }
 
-  /**
-   * Transform product names to uppercase
-   * @param {object} product - Product to transform
-   * @returns {object} - Transformed product
-   */
   transformProductToUppercase(product) {
+    const { formatProductEntity } = require('../utils/entityTextFormat');
     if (!product) return product;
-    if (product.toObject) product = product.toObject();
-    // Handle both products and variants
-    if (product.displayName) {
-      product.displayName = product.displayName.toUpperCase();
-    }
-    if (product.variantName) {
-      product.variantName = product.variantName.toUpperCase();
-    }
-    if (product.name) product.name = product.name.toUpperCase();
-    if (product.description) product.description = product.description.toUpperCase();
-    return product;
+    const p = product.toObject ? product.toObject() : { ...product };
+    return formatProductEntity(p);
   }
 
   /**

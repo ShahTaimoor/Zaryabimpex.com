@@ -10,15 +10,15 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AsyncSelect from 'react-select/async';
-import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
-import { useGetBanksQuery } from '../store/services/banksApi';
+import { useGetAccountsQuery, useLazyGetAccountsQuery } from '../store/services/chartOfAccountsApi';
+import { useGetBanksQuery, useLazyGetBanksQuery } from '../store/services/banksApi';
 import {
   useGetJournalVouchersQuery,
   useCreateJournalVoucherMutation,
   usePostJournalVoucherMutation,
 } from '../store/services/journalVouchersApi';
-import { useLazySearchCustomersQuery } from '../store/services/customersApi';
-import { useLazySearchSuppliersQuery } from '../store/services/suppliersApi';
+import { useLazyGetCustomersQuery } from '../store/services/customersApi';
+import { useLazyGetSuppliersQuery } from '../store/services/suppliersApi';
 import { handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -128,22 +128,22 @@ const ViewModal = ({ voucher, onClose }) => {
 
 /* ─── Party‑Selector Component ────────────────────────────────────────── */
 const PartySelector = ({ type, value, onChange, placeholder }) => {
-  const [searchCustomers] = useLazySearchCustomersQuery();
-  const [searchSuppliers] = useLazySearchSuppliersQuery();
+  const [triggerCustomers] = useLazyGetCustomersQuery();
+  const [triggerSuppliers] = useLazyGetSuppliersQuery();
 
   const loadOptions = async (inputValue) => {
     if (!inputValue || inputValue.length < 2) return [];
     try {
       if (type === 'customer') {
-        const result = await searchCustomers(inputValue).unwrap();
-        const list = result?.data || result || [];
+        const result = await triggerCustomers({ search: inputValue, limit: 50 }).unwrap();
+        const list = result?.data?.customers ?? result?.customers ?? [];
         return list.map(c => ({
           value: c.id || c._id,
           label: c.name || c.businessName || 'Unnamed Customer'
         }));
       } else {
-        const result = await searchSuppliers(inputValue).unwrap();
-        const list = result?.data || result || [];
+        const result = await triggerSuppliers({ search: inputValue, limit: 50 }).unwrap();
+        const list = result?.data?.suppliers ?? result?.suppliers ?? [];
         return list.map(s => ({
           value: s.id || s._id,
           label: s.name || s.business_name || s.company_name || 'Unnamed Supplier'
@@ -227,7 +227,7 @@ export const JournalVouchers = () => {
   }, [accountsResponse, extractAccounts, updateAccountMap]);
 
   /* ── banks ── */
-  const { data: banksResponse } = useGetBanksQuery({ isActive: 'true' });
+  const { data: banksResponse } = useGetBanksQuery({ isActive: 'true', all: 'true' });
   const banks = React.useMemo(() => {
     const list = banksResponse?.data?.banks || banksResponse?.banks || [];
     return list.filter(b => !b.deletedAt && b.isActive !== false);
@@ -274,32 +274,50 @@ export const JournalVouchers = () => {
     return groups;
   }, [accountMap, buildGroups, bankOptions]);
 
+  const [triggerAccountsSearch] = useLazyGetAccountsQuery();
+  const [triggerBanksSearch] = useLazyGetBanksQuery();
+
   const loadAccountOptions = useCallback(async (inputValue) => {
     const searchQuery = inputValue?.trim() || '';
-    const accounts = extractAccounts(accountsResponse);
-    const filtered = searchQuery
-      ? accounts.filter(acc =>
-        acc.accountCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        acc.accountName?.toLowerCase().includes(searchQuery.toLowerCase()))
-      : accounts;
-    updateAccountMap(filtered);
-    const groups = buildGroups(filtered);
-    // Also filter banks
-    const filteredBanks = searchQuery
-      ? banks.filter(b => {
-        const name = `${b.bankName || b.bank_name} ${b.accountName || b.account_name}`.toLowerCase();
-        return name.includes(searchQuery.toLowerCase());
-      })
-      : banks;
-    const bankGroup = {
-      label: 'Bank Accounts',
-      options: filteredBanks.map(b => ({
-        value: `BANK::${b._id || b.id}`,
-        label: `${b.bankName || b.bank_name} — ${b.accountName || b.account_name}`
-      }))
-    };
-    return filteredBanks.length > 0 ? [...groups, bankGroup] : groups;
-  }, [extractAccounts, updateAccountMap, buildGroups, accountsResponse, banks]);
+    if (searchQuery.length < 2) {
+      return groupedAccountOptions;
+    }
+    try {
+      const [accountsRes, banksRes] = await Promise.all([
+        triggerAccountsSearch({
+          search: searchQuery,
+          limit: 50,
+          includePartyAccounts: true,
+        }).unwrap(),
+        triggerBanksSearch({
+          search: searchQuery,
+          limit: 50,
+          isActive: 'true',
+        }).unwrap(),
+      ]);
+      const accounts = extractAccounts(accountsRes);
+      updateAccountMap(accounts);
+      const groups = buildGroups(accounts);
+      const bankRows = banksRes?.data?.banks || banksRes?.banks || [];
+      const bankGroup = {
+        label: 'Bank Accounts',
+        options: bankRows.map((b) => ({
+          value: `BANK::${b._id || b.id}`,
+          label: `${b.bankName || b.bank_name} — ${b.accountName || b.account_name}`,
+        })),
+      };
+      return bankGroup.options.length > 0 ? [...groups, bankGroup] : groups;
+    } catch {
+      return groupedAccountOptions;
+    }
+  }, [
+    extractAccounts,
+    updateAccountMap,
+    buildGroups,
+    groupedAccountOptions,
+    triggerAccountsSearch,
+    triggerBanksSearch,
+  ]);
 
   /* ── queries ── */
   const {

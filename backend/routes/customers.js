@@ -10,17 +10,7 @@ const { preventDuplicates } = require('../middleware/duplicatePrevention');
 const customerAuditLogService = require('../services/customerAuditLogService');
 const customerTransactionService = require('../services/customerTransactionService');
 const customerCreditPolicyService = require('../services/customerCreditPolicyService');
-
-const transformCustomerToUppercase = (customer) => {
-  if (!customer) return customer;
-  if (customer.toObject) customer = customer.toObject();
-  if (customer.name) customer.name = customer.name.toUpperCase();
-  if (customer.businessName) customer.businessName = customer.businessName.toUpperCase();
-  if (customer.business_name) customer.business_name = customer.business_name.toUpperCase();
-  if (customer.firstName) customer.firstName = customer.firstName.toUpperCase();
-  if (customer.lastName) customer.lastName = customer.lastName.toUpperCase();
-  return customer;
-};
+const { transformCustomerToUppercase } = require('../utils/displayTransforms');
 
 const router = express.Router();
 
@@ -168,11 +158,12 @@ router.get('/:id', [auth, validateUuidParam('id'), handleValidationErrors], asyn
 // @route   GET /api/customers/search/:query
 // @desc    Search customers by name, email, or phone
 // @access  Private
+// Legacy alias — prefer GET /api/customers?search=&page=1&limit=50
 router.get('/search/:query', auth, async (req, res) => {
   try {
-    const query = req.params.query;
-    const customers = await customerService.searchCustomers(query, 10);
-    res.json({ customers });
+    const search = String(req.params.query || '').trim();
+    const result = await customerService.getCustomers({ search, page: 1, limit: 50 });
+    res.json({ customers: result.customers, pagination: result.pagination });
   } catch (error) {
     console.error('Search customers error:', error);
     res.status(500).json({ message: 'Server error' });

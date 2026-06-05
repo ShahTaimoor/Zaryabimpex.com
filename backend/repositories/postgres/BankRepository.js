@@ -1,6 +1,34 @@
 const { query } = require('../../config/postgres');
+const { buildBankListSearch } = require('../../utils/searchOrderBy');
 
 class BankRepository {
+  _buildFilterSql(filter = {}, startParamIndex = 1) {
+    let sql = ' FROM banks WHERE deleted_at IS NULL';
+    const params = [];
+    let paramIndex = startParamIndex;
+
+    if (filter.isActive !== undefined) {
+      sql += ` AND is_active = $${paramIndex++}`;
+      params.push(filter.isActive);
+    }
+
+    let searchOrderBy = null;
+    if (filter.search) {
+      const built = buildBankListSearch(filter.search, paramIndex);
+      sql += built.whereSql;
+      params.push(...built.params);
+      paramIndex = built.nextParamIndex;
+      searchOrderBy = built.orderBySql;
+    }
+
+    return { sql, params, nextParamIndex: paramIndex, searchOrderBy };
+  }
+
+  async countWithFilters(filter = {}) {
+    const { sql, params } = this._buildFilterSql(filter, 1);
+    const result = await query(`SELECT COUNT(*)::int AS total ${sql}`, params);
+    return parseInt(result.rows[0]?.total, 10) || 0;
+  }
   async findById(id) {
     const result = await query(
       'SELECT * FROM banks WHERE id = $1 AND deleted_at IS NULL',
@@ -14,27 +42,26 @@ class BankRepository {
   }
 
   async findWithFilters(filter = {}, options = {}) {
-    let sql = 'SELECT * FROM banks WHERE deleted_at IS NULL';
-    const params = [];
-    let paramCount = 1;
+    const { sql: filterSql, params, searchOrderBy } = this._buildFilterSql(filter, 1);
+    let sql = `SELECT * ${filterSql}`;
+    let paramCount = params.length + 1;
 
-    if (filter.isActive !== undefined) {
-      sql += ` AND is_active = $${paramCount++}`;
-      params.push(filter.isActive);
+    if (searchOrderBy) {
+      sql += ` ORDER BY ${searchOrderBy}`;
+    } else {
+      const { toSortString } = require('../../utils/sortParam');
+      const sortStr = toSortString(options.sort, 'bank_name ASC');
+      const [field, direction] = sortStr.split(' ');
+      const sortColMap = { bankName: 'bank_name', accountNumber: 'account_number', accountName: 'account_name', branchName: 'branch_name' };
+      const col = sortColMap[field] || field || 'bank_name';
+      sql += ` ORDER BY ${col} ${direction || 'ASC'}`;
     }
 
-    const { toSortString } = require('../../utils/sortParam');
-    const sortStr = toSortString(options.sort, 'bank_name ASC');
-    const [field, direction] = sortStr.split(' ');
-    const sortColMap = { bankName: 'bank_name', accountNumber: 'account_number', accountName: 'account_name', branchName: 'branch_name' };
-    const col = sortColMap[field] || field || 'bank_name';
-    sql += ` ORDER BY ${col} ${direction || 'ASC'}`;
-
-    if (options.limit) {
+    if (options.limit != null) {
       sql += ` LIMIT $${paramCount++}`;
       params.push(options.limit);
     }
-    if (options.offset) {
+    if (options.offset != null) {
       sql += ` OFFSET $${paramCount++}`;
       params.push(options.offset);
     }

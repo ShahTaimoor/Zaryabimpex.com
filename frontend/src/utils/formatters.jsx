@@ -1,3 +1,8 @@
+import { toTitleCase } from './titleCase';
+
+export { toTitleCase };
+export const formatTitleCase = toTitleCase;
+
 // Date formatting utilities
 export const formatDate = (dateString) => {
   if (!dateString) return '';

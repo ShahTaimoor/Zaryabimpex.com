@@ -27,11 +27,9 @@ import { SupplierPartySelect, SupplierSummaryStrip } from '../components/order/S
 import { OrderNotesField } from '../components/order/OrderNotesField';
 import { PaymentMethodSelect } from '../components/order/PaymentMethodSelect';
 import { computePurchaseCheckoutPricing } from '../utils/orderPricing';
-import { getSupplierDisplayName } from '../utils/partyDisplay';
-import {
-  useGetSupplierQuery,
-  useLazySearchSuppliersQuery,
-} from '../store/services/suppliersApi';
+import { getSupplierDisplayName, getProductDisplayName } from '../utils/partyDisplay';
+import { useGetSupplierQuery } from '../store/services/suppliersApi';
+import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch';
 import {
   useCreatePurchaseInvoiceMutation,
   useUpdatePurchaseInvoiceMutation,
@@ -122,9 +120,7 @@ const PurchaseItem = ({
   const isLowStock = currentStock <= reorderPoint;
 
   // Get display name for variants
-  const displayName = product.isVariant
-    ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
-    : (product.name || 'Unknown Product');
+  const displayName = getProductDisplayName(product, 'Unknown Product');
 
   return (
     <div className={`py-2 sm:py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
@@ -517,7 +513,11 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   const [refetchProducts, setRefetchProducts] = useState(null);
 
   // RTK Query hooks
-  const [searchSuppliers, { data: suppliersSearchResult, isLoading: suppliersLoading, refetch: refetchSuppliers }] = useLazySearchSuppliersQuery();
+  const {
+    suppliers: supplierOptions,
+    isLoading: suppliersLoading,
+    refetch: refetchSuppliers,
+  } = useDebouncedSupplierSearch(supplierSearchTerm, { selectedSupplier });
   const [createPurchaseInvoice] = useCreatePurchaseInvoiceMutation();
   const [updatePurchaseInvoice] = useUpdatePurchaseInvoiceMutation();
   const [deletePurchaseInvoice] = useDeletePurchaseInvoiceMutation();
@@ -541,7 +541,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   );
 
   const { data: banksData, isLoading: banksLoading } = useGetBanksQuery(
-    { isActive: true },
+    { isActive: true, all: 'true' },
     { staleTime: 5 * 60_000 }
   );
 
@@ -677,24 +677,11 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     skip: !supplierIdForBalance
   });
 
-  // Trigger search when supplier search term changes
-  useEffect(() => {
-    if (supplierSearchTerm.length > 0) {
-      searchSuppliers(supplierSearchTerm);
-    }
-  }, [supplierSearchTerm, searchSuppliers]);
-
-  // Extract suppliers from search result
-  const suppliers = React.useMemo(() => {
-    if (!suppliersSearchResult) return { data: { suppliers: [] } };
-    return suppliersSearchResult;
-  }, [suppliersSearchResult]);
-
   // Update selected supplier when suppliers data changes (e.g., after cash/bank payment updates balance)
   useEffect(() => {
-    if (selectedSupplier && suppliers?.data?.suppliers) {
-      const updatedSupplier = suppliers.data.suppliers.find(
-        s => s._id === selectedSupplier._id
+    if (selectedSupplier && supplierOptions.length) {
+      const updatedSupplier = supplierOptions.find(
+        (s) => (s._id || s.id) === (selectedSupplier._id || selectedSupplier.id)
       );
       if (updatedSupplier && (
         updatedSupplier.pendingBalance !== selectedSupplier.pendingBalance ||
@@ -705,9 +692,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    // Note: selectedSupplier is intentionally excluded from deps to prevent infinite loops.
-    // We only want to sync when the suppliers list updates, not when selectedSupplier changes.
-  }, [suppliers?.data?.suppliers]);
+  }, [supplierOptions]);
 
 
   // Generate invoice number
@@ -838,13 +823,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
         }
       }
 
-      // Also trigger supplier search to update suppliers list (for the useEffect that syncs balances)
-      if (selectedSupplier && searchSuppliers) {
-        const searchTerm = selectedSupplier.companyName || selectedSupplier.name || '';
-        if (searchTerm) {
-          searchSuppliers(searchTerm);
-        }
-      }
+      refetchSuppliers?.();
 
       resetPurchaseDraft({ resetBillDate: true });
     } catch (error) {
@@ -896,17 +875,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
         }
       }
 
-      // Also trigger supplier search to update suppliers list (for the useEffect that syncs balances)
-      if (selectedSupplier && searchSuppliers) {
-        try {
-          const searchTerm = selectedSupplier.companyName || selectedSupplier.name || '';
-          if (searchTerm) {
-            searchSuppliers(searchTerm);
-          }
-        } catch (error) {
-          // Failed to search suppliers - silent fail
-        }
-      }
+      refetchSuppliers?.();
 
       if (inlineEditData?.isEditMode) {
         resetPurchaseDraft();
@@ -1003,9 +972,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     if (existingIndex >= 0) {
       const existingItem = purchaseItems[existingIndex];
       const product = newItem.product || {};
-      const displayName = product.isVariant
-        ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
-        : (product.name || 'Unknown Product');
+      const displayName = getProductDisplayName(product, 'Unknown Product');
       setPurchaseDuplicateMerge({
         productId: String(product._id),
         displayName,
@@ -1514,7 +1481,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                 </div>
                 <SupplierPartySelect
                   innerRef={supplierSearchRef}
-                  items={suppliers?.data?.suppliers || suppliers?.suppliers || []}
+                  items={supplierOptions}
                   selectedItem={selectedSupplier}
                   onSelect={handleSupplierSelect}
                   onSearch={setSupplierSearchTerm}
@@ -1818,9 +1785,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                                 customerInfo: supplierInfoForPrint,
                                 items: purchaseItems.map(item => {
                                   const product = item.product || {};
-                                  const displayName = product.isVariant
-                                    ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
-                                    : (product.name || 'Unknown Product');
+                                  const displayName = getProductDisplayName(product, 'Unknown Product');
 
                                   return {
                                     product: {
@@ -1892,9 +1857,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                                 customerInfo: supplierInfoForPrint,
                                 items: purchaseItems.map(item => {
                                   const product = item.product || {};
-                                  const displayName = product.isVariant
-                                    ? (product.displayName || product.variantName || product.name || 'Unknown Variant')
-                                    : (product.name || 'Unknown Product');
+                                  const displayName = getProductDisplayName(product, 'Unknown Product');
 
                                   return {
                                     product: {

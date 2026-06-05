@@ -39,13 +39,10 @@ class CustomerService {
    * @returns {object} - Transformed customer
    */
   transformCustomerToUppercase(customer) {
+    const { formatCustomerEntity } = require('../utils/entityTextFormat');
     if (!customer) return customer;
     const c = customer.toObject ? customer.toObject() : { ...customer };
-    if (c.name) c.name = c.name.toUpperCase();
-    if (c.businessName) c.businessName = c.businessName.toUpperCase();
-    if (c.firstName) c.firstName = c.firstName.toUpperCase();
-    if (c.lastName) c.lastName = c.lastName.toUpperCase();
-    return c;
+    return formatCustomerEntity(c);
   }
 
   /**
@@ -136,7 +133,7 @@ class CustomerService {
         currentBalance: netBalance,
         pendingBalance: netBalance > 0 ? netBalance : 0,
         advanceBalance: netBalance < 0 ? Math.abs(netBalance) : 0,
-        displayName: (transformed.businessName || transformed.name || '').toUpperCase()
+        displayName: require('../utils/titleCase').toTitleCase(transformed.businessName || transformed.name || '')
       };
     });
   }

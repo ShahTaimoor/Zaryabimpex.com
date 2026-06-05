@@ -918,7 +918,7 @@ export const ChartOfAccounts = () => {
   });
 
   // Fetch banks to show them in the Chart of Accounts list
-  const { data: banksResponse, isLoading: banksLoading } = useGetBanksQuery({ isActive: 'true' });
+  const { data: banksResponse, isLoading: banksLoading } = useGetBanksQuery({ isActive: 'true', all: 'true' });
   const banks = React.useMemo(() => {
     const list = banksResponse?.data?.banks || banksResponse?.banks || [];
     return list.filter(b => !b.deletedAt && b.isActive !== false);

@@ -1,5 +1,7 @@
 import React from 'react';
 import { Users, Building, User, Edit, Trash2, MessageSquare } from 'lucide-react';
+import { getCustomerDisplayName } from '../utils/partyDisplay';
+import { toTitleCase } from '../utils/titleCase';
 import { getContactPersonVisible } from '../utils/fieldVisibility';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 
@@ -92,11 +94,11 @@ export const CustomerList = ({
                     )}
                     <div className="min-w-0 flex-1">
                       <h3 className="text-sm font-medium text-gray-900 truncate">
-                        {customer.businessName || customer.business_name || customer.displayName}
+                        {getCustomerDisplayName(customer, '—')}
                       </h3>
                       {visibilitySettings.contactPerson && (
                         <p className="text-xs text-gray-500 truncate">
-                          {customer.name}
+                          {customer.name ? toTitleCase(customer.name) : ''}
                         </p>
                       )}
                     </div>
@@ -183,12 +185,12 @@ export const CustomerList = ({
                       <Building className="h-5 w-5 lg:h-6 lg:w-6 text-gray-400 flex-shrink-0" />
                     )}
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-sm lg:text-base font-medium text-gray-900 truncate" title={customer.businessName || customer.business_name || customer.displayName}>
-                        {customer.businessName || customer.business_name || customer.displayName}
+                      <h3 className="text-sm lg:text-base font-medium text-gray-900 truncate" title={getCustomerDisplayName(customer, '—')}>
+                        {getCustomerDisplayName(customer, '—')}
                       </h3>
                       {visibilitySettings.contactPerson && (
-                        <p className="text-xs lg:text-sm text-gray-500 truncate" title={customer.name}>
-                          {customer.name}
+                        <p className="text-xs lg:text-sm text-gray-500 truncate" title={customer.name ? toTitleCase(customer.name) : ''}>
+                          {customer.name ? toTitleCase(customer.name) : ''}
                         </p>
                       )}
                     </div>

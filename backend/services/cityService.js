@@ -1,4 +1,5 @@
 const cityRepository = require('../repositories/CityRepository');
+const { normalizeCityInput, toTitleCase } = require('../utils/entityTextFormat');
 const customerRepository = require('../repositories/CustomerRepository');
 const supplierRepository = require('../repositories/SupplierRepository');
 
@@ -79,6 +80,7 @@ class CityService {
    * @returns {Promise<{city: City, message: string}>}
    */
   async createCity(cityData, userId) {
+    cityData = normalizeCityInput(cityData);
     // Check if city name already exists
     const nameExists = await cityRepository.nameExists(cityData.name);
     if (nameExists) {

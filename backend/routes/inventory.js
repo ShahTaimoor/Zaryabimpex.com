@@ -6,18 +6,12 @@ const inventoryService = require('../services/inventoryService');
 const inventoryRepository = require('../repositories/InventoryRepository');
 const productRepository = require('../repositories/ProductRepository');
 const productService = require('../services/productServicePostgres');
+const { parseListQuery, buildPaginationMeta } = require('../utils/listQuery');
 const stockAdjustmentRepository = require('../repositories/StockAdjustmentRepository');
 
-const router = express.Router();
+const { transformCustomerToUppercase, transformProductToUppercase, transformSupplierToUppercase } = require('../utils/displayTransforms');
 
-// Helper function to transform product names to uppercase
-const transformProductToUppercase = (product) => {
-  if (!product) return product;
-  if (product.toObject) product = product.toObject();
-  if (product.name) product.name = product.name.toUpperCase();
-  if (product.description) product.description = product.description.toUpperCase();
-  return product;
-};
+const router = express.Router();
 
 // @route   GET /api/inventory
 // @desc    Get inventory list with filters and pagination
@@ -71,52 +65,59 @@ router.get('/', [
   handleValidationErrors,
 ], async (req, res) => {
   try {
-    const { page = 1, limit = 10, search, status, lowStock, warehouse } = req.query;
-    const skip = (page - 1) * limit;
+    const { search, page, limit } = parseListQuery(req.query);
+    const { status, lowStock, warehouse } = req.query;
 
-    // Get API-shaped products (all products so inventory page shows full catalog; filter by status in UI if needed)
     const productResult = await productService.getProducts({
       search: search || undefined,
-      limit: 9999,
-      all: 'true'
+      page,
+      limit,
+      status: status === 'inactive' ? 'inactive' : status === 'active' ? 'active' : undefined,
+      lowStock: lowStock === 'true' ? 'true' : undefined,
     });
-    const allProducts = productResult.products || [];
+    const pageProducts = productResult.products || [];
+    const productIds = pageProducts.map((p) => (p.id || p._id).toString()).filter(Boolean);
 
-    // Get existing inventory records (PostgreSQL)
-    const invFilters = {};
-    if (status) invFilters.status = status;
-    if (warehouse) invFilters.warehouse = warehouse;
-    const existingInventoryRows = await inventoryRepository.findAll(invFilters, { limit: 10000 });
+    const inventoryRows =
+      productIds.length > 0
+        ? await inventoryRepository.findByProductIds(productIds)
+        : [];
+    const inventoryByProduct = new Map();
+    for (const invRow of inventoryRows || []) {
+      const pid = (invRow.product_id || invRow.productId || '').toString();
+      if (pid) inventoryByProduct.set(pid, invRow);
+    }
 
-    // Map product_id -> inventory row (with product attached from allProducts)
-    const productById = new Map(allProducts.map(p => [(p.id || p._id).toString(), p]));
-    const inventoryMap = new Map();
-    existingInventoryRows.forEach(invRow => {
-      const product = productById.get((invRow.product_id || invRow.productId || '').toString());
-      if (product) {
-        const location = (typeof invRow.location === 'string' ? (invRow.location ? JSON.parse(invRow.location) : {}) : invRow.location) || {};
-        inventoryMap.set((invRow.product_id || invRow.productId).toString(), {
+    let combinedResults = pageProducts.map((product) => {
+      const pid = (product.id || product._id).toString();
+      const invRow = inventoryByProduct.get(pid);
+      const transformedProduct = transformProductToUppercase(product);
+      if (invRow) {
+        const location =
+          (typeof invRow.location === 'string'
+            ? invRow.location
+              ? JSON.parse(invRow.location)
+              : {}
+            : invRow.location) || {};
+        return {
           _id: invRow.id,
           id: invRow.id,
-          product: transformProductToUppercase(product),
+          product: transformedProduct,
           currentStock: invRow.current_stock ?? invRow.currentStock ?? 0,
           reorderPoint: invRow.reorder_point ?? invRow.reorderPoint ?? 0,
           reorderQuantity: invRow.reorder_quantity ?? invRow.reorderQuantity ?? 0,
           status: invRow.status || 'active',
-          movements: (typeof invRow.movements === 'string' ? (invRow.movements ? JSON.parse(invRow.movements) : []) : invRow.movements) || [],
+          movements:
+            (typeof invRow.movements === 'string'
+              ? invRow.movements
+                ? JSON.parse(invRow.movements)
+                : []
+              : invRow.movements) || [],
           location,
           createdAt: invRow.created_at ?? invRow.createdAt,
-          updatedAt: invRow.updated_at ?? invRow.updatedAt
-        });
+          updatedAt: invRow.updated_at ?? invRow.updatedAt,
+        };
       }
-    });
-
-    // Combine products with their inventory records (or synthetic)
-    const combinedResults = allProducts.map(product => {
-      const pid = (product.id || product._id).toString();
-      const existingInv = inventoryMap.get(pid);
-      if (existingInv) return existingInv;
-      const transformedProduct = transformProductToUppercase(product);
       return {
         _id: `temp_${pid}`,
         product: transformedProduct,
@@ -127,43 +128,35 @@ router.get('/', [
         movements: [],
         location: { warehouse: 'Main Warehouse' },
         createdAt: product.createdAt ?? product.created_at,
-        updatedAt: product.updatedAt ?? product.updated_at
+        updatedAt: product.updatedAt ?? product.updated_at,
       };
     });
-    
-    // Apply additional filters
-    let filteredResults = combinedResults;
-    
-    if (status) {
-      filteredResults = filteredResults.filter(item => item.status === status);
+
+    if (status && status !== 'active' && status !== 'inactive') {
+      combinedResults = combinedResults.filter((item) => item.status === status);
     }
-    
     if (warehouse) {
-      filteredResults = filteredResults.filter(item => 
-        item.location?.warehouse?.toLowerCase().includes(warehouse.toLowerCase())
+      const wh = String(warehouse).toLowerCase();
+      combinedResults = combinedResults.filter((item) =>
+        item.location?.warehouse?.toLowerCase().includes(wh)
       );
     }
-    
-    if (lowStock === 'true') {
-      filteredResults = filteredResults.filter(item => 
-        item.currentStock <= item.reorderPoint
-      );
-    }
-    
-    // Apply pagination
-    const startIndex = skip;
-    const endIndex = skip + parseInt(limit);
-    const paginatedResults = filteredResults.slice(startIndex, endIndex);
-    
-    
+
+    const pagination = productResult.pagination || buildPaginationMeta({
+      page,
+      limit,
+      total: combinedResults.length,
+    });
+
     res.json({
-      inventory: paginatedResults,
+      inventory: combinedResults,
       pagination: {
-        current: parseInt(page),
-        pages: Math.ceil(filteredResults.length / limit),
-        total: filteredResults.length,
-        hasNext: endIndex < filteredResults.length,
+        current: pagination.current ?? pagination.page ?? page,
+        pages: pagination.pages ?? 1,
+        total: pagination.total ?? combinedResults.length,
+        hasNext: pagination.hasMore ?? pagination.hasNext ?? false,
         hasPrev: page > 1,
+        limit: pagination.limit ?? limit,
       },
     });
     return;

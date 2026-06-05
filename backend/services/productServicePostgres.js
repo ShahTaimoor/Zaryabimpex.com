@@ -5,6 +5,8 @@ const inventoryRepository = require('../repositories/postgres/InventoryRepositor
 const investorRepository = require('../repositories/postgres/InvestorRepository');
 const AccountingService = require('./accountingService');
 const settingsService = require('./settingsService');
+const { parseListQuery } = require('../utils/listQuery');
+const { formatProductEntity, normalizeProductInput } = require('../utils/entityTextFormat');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -64,7 +66,7 @@ function toApiProduct(row, categoryMap = null) {
   const id = row.id;
   const categoryId = row.category_id;
   const cat = categoryMap && categoryId ? categoryMap.get(categoryId) : null;
-  return {
+  const apiShape = {
     _id: id,
     id,
     name: row.name,
@@ -101,6 +103,7 @@ function toApiProduct(row, categoryMap = null) {
     updatedAt: row.updated_at,
     imageUrl: row.image_url || null
   };
+  return formatProductEntity(apiShape);
 }
 
 function attachInvestorsToApiProduct(apiProduct, linkRows) {
@@ -167,29 +170,7 @@ class ProductServicePostgres {
   }
 
   async getProducts(queryParams) {
-    const MAX_PAGE = 200;
-    const MAX_EXPORT = 10000;
-    const getAll = queryParams.all === 'true' || queryParams.all === true ||
-      (queryParams.limit && parseInt(queryParams.limit, 10) >= 999999);
-    const page = getAll ? 1 : (parseInt(queryParams.page, 10) || 1);
-
-    const requestedLimit = parseInt(queryParams.limit, 10);
-    const hasExplicitLimit =
-      queryParams.limit != null &&
-      String(queryParams.limit).trim() !== '' &&
-      Number.isFinite(requestedLimit) &&
-      requestedLimit > 0;
-
-    let limit;
-    if (getAll) {
-      limit = Math.min(requestedLimit || MAX_EXPORT, MAX_EXPORT);
-    } else if (hasExplicitLimit) {
-      // Explicit limit (e.g. pickers sending limit=10000) — honor up to route max, not MAX_PAGE (200).
-      limit = Math.min(requestedLimit, MAX_EXPORT);
-    } else {
-      limit = Math.min(20, MAX_PAGE);
-    }
-    if (!getAll && (!Number.isFinite(limit) || limit < 1)) limit = 20;
+    const { page, limit, getAll } = parseListQuery(queryParams);
 
     const filters = this.buildFilter(queryParams);
     const listMode = queryParams.listMode === 'minimal' ? 'minimal' : 'full';
@@ -304,6 +285,7 @@ class ProductServicePostgres {
   }
 
   async createProduct(productData, userId, req = null) {
+    productData = normalizeProductInput(productData);
     const pricing = productData.pricing || {};
     const cost = pricing.cost !== undefined && pricing.cost !== null ? Number(pricing.cost) : 0;
     const retail = pricing.retail !== undefined && pricing.retail !== null ? Number(pricing.retail) : 0;
@@ -384,6 +366,7 @@ class ProductServicePostgres {
   }
 
   async updateProduct(id, updateData, userId, req = null) {
+    updateData = normalizeProductInput(updateData);
     const current = await productRepository.findById(id);
     if (!current) throw new Error('Product not found');
 

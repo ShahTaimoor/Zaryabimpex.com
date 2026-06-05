@@ -108,6 +108,10 @@ app.use(express.urlencoded({ extended: true }));
 // Cookie parsing middleware (for HTTP-only cookies)
 app.use(cookieParser());
 
+// Title Case normalization for all mutating API requests (before route handlers)
+const { normalizeTextRequest } = require('./middleware/normalizeText');
+app.use('/api', normalizeTextRequest);
+
 // Idempotency key middleware - prevents duplicate requests
 // Note: This middleware uses in-memory storage - consider Redis for production scaling
 const { preventDuplicates } = require('./middleware/duplicatePrevention');

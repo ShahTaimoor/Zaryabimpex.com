@@ -147,7 +147,7 @@ const AccountLedgerSummary = () => {
     return suppliersData?.data?.suppliers || suppliersData?.suppliers || suppliersData?.data || suppliersData || [];
   }, [suppliersData]);
 
-  const { data: banksData } = useGetBanksQuery({ isActive: true }, { skip: false });
+  const { data: banksData } = useGetBanksQuery({ isActive: true, all: 'true' }, { skip: false });
   const banks = useMemo(() => {
     return banksData?.data?.banks || banksData?.banks || [];
   }, [banksData]);

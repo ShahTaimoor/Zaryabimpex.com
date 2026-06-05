@@ -27,7 +27,7 @@ import {
   useCreateStockMovementAdjustmentMutation,
   useReverseStockMovementMutation,
 } from '../store/services/inventoryApi';
-import { useGetProductsQuery } from '../store/services/productsApi';
+import { useLazyGetProductsQuery } from '../store/services/productsApi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -83,7 +83,7 @@ export const StockMovements = () => {
       ...filters,
       page: currentPage,
       cursor: currentCursor,
-      limit: 20
+      limit: 50
     },
     {
       onError: (error) => handleApiError(error, 'Stock Movements')
@@ -91,30 +91,8 @@ export const StockMovements = () => {
   );
   const [movementTypeOptions, setMovementTypeOptions] = useState([]);
 
-  // Fetch products for filter
-  const { data: productsData, isLoading: productsLoading } = useGetProductsQuery(
-    { limit: 100 },
-    {
-      onError: (error) => handleApiError(error, 'Products')
-    }
-  );
+  const [triggerProducts] = useLazyGetProductsQuery();
   const [productMap, setProductMap] = useState(new Map());
-
-  useEffect(() => {
-    const initialProducts = productsData?.data?.products || productsData?.products || [];
-    if (Array.isArray(initialProducts) && initialProducts.length > 0) {
-      setProductMap(prev => {
-        const next = new Map(prev);
-        initialProducts.forEach(product => {
-          const pid = product.id || product._id;
-          if (pid) {
-            next.set(pid, product);
-          }
-        });
-        return next;
-      });
-    }
-  }, [productsData]);
 
   const formatProductOption = useCallback((product) => {
     if (!product) return null;
@@ -133,34 +111,33 @@ export const StockMovements = () => {
   }, [productMap, formatProductOption]);
 
   const loadProductOptions = useCallback(async (inputValue) => {
+    const term = String(inputValue ?? '').trim();
+    if (term.length < 2) return [];
     try {
-      // Use products from the query cache or return cached options
-      const products = productsData?.data?.products || productsData?.products || productsData?.data?.data || [];
-      const filtered = inputValue
-        ? products.filter(p =>
-          p.name?.toLowerCase().includes(inputValue.toLowerCase()) ||
-          p.sku?.toLowerCase().includes(inputValue.toLowerCase())
-        )
-        : products;
-
-      if (Array.isArray(filtered) && filtered.length > 0) {
-        setProductMap(prev => {
+      const res = await triggerProducts({
+        search: term,
+        status: 'active',
+        limit: 50,
+        page: 1,
+        listMode: 'minimal',
+      }).unwrap();
+      const products = res?.products ?? res?.data?.products ?? [];
+      if (Array.isArray(products) && products.length > 0) {
+        setProductMap((prev) => {
           const next = new Map(prev);
-          filtered.forEach(product => {
+          products.forEach((product) => {
             const pid = product.id || product._id;
-            if (pid) {
-              next.set(pid, product);
-            }
+            if (pid) next.set(pid, product);
           });
           return next;
         });
       }
-      return filtered.slice(0, 50).map(formatProductOption).filter(Boolean);
+      return products.map(formatProductOption).filter(Boolean);
     } catch (error) {
       handleApiError(error, 'Products');
       return [];
     }
-  }, [formatProductOption, productsData]);
+  }, [formatProductOption, triggerProducts]);
 
   const getProductOptionById = useCallback((productId) => {
     if (!productId) return null;
@@ -422,7 +399,7 @@ export const StockMovements = () => {
                 value={getProductOptionById(filters.product)}
                 onChange={(option) => handleFilterChange('product', option ? option.value : '', { silent: true })}
                 isClearable
-                isLoading={productsLoading}
+                isLoading={false}
                 placeholder="All Products"
                 styles={{
                   control: (provided) => ({
@@ -723,7 +700,7 @@ export const StockMovements = () => {
                     value={getProductOptionById(adjustmentData.productId)}
                     onChange={(option) => setAdjustmentData(prev => ({ ...prev, productId: option ? option.value : '' }))}
                     isClearable
-                    isLoading={productsLoading}
+                    isLoading={false}
                     placeholder="Select product"
                     styles={{
                       control: (provided) => ({
