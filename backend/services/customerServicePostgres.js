@@ -153,7 +153,7 @@ class CustomerService {
           normalBalance: 'debit',
           openingBalance: 0,
           currentBalance: 0,
-          allowDirectPosting: false,
+          allowDirectPosting: true,
           isSystemAccount: false,
           isActive: true,
           description: `Customer Account: ${accountName}`,

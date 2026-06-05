@@ -19,6 +19,8 @@ import {
 } from '../store/services/journalVouchersApi';
 import { useLazyGetCustomersQuery } from '../store/services/customersApi';
 import { useLazyGetSuppliersQuery } from '../store/services/suppliersApi';
+import { getCustomerDisplayName, getSupplierDisplayName } from '../utils/partyDisplay';
+import { getAccountRecordId, resolvePartyAccountOption } from '../utils/journalPartyAccounts';
 import { handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -139,14 +141,14 @@ const PartySelector = ({ type, value, onChange, placeholder }) => {
         const list = result?.data?.customers ?? result?.customers ?? [];
         return list.map(c => ({
           value: c.id || c._id,
-          label: c.name || c.businessName || 'Unnamed Customer'
+          label: getCustomerDisplayName(c, 'Unnamed Customer')
         }));
       } else {
         const result = await triggerSuppliers({ search: inputValue, limit: 50 }).unwrap();
         const list = result?.data?.suppliers ?? result?.suppliers ?? [];
         return list.map(s => ({
           value: s.id || s._id,
-          label: s.name || s.business_name || s.company_name || 'Unnamed Supplier'
+          label: getSupplierDisplayName(s, 'Unnamed Supplier')
         }));
       }
     } catch (err) {
@@ -250,9 +252,12 @@ export const JournalVouchers = () => {
   const buildGroups = useCallback((accounts) => {
     const groups = accounts.reduce((acc, account) => {
       let groupLabel;
-      if (Array.isArray(account.tags) && account.tags.includes('customer')) groupLabel = 'Customer Accounts';
-      else if (Array.isArray(account.tags) && account.tags.includes('supplier')) groupLabel = 'Supplier Accounts';
-      else {
+      const code = account.accountCode || '';
+      if (code.startsWith('CUST-') || (Array.isArray(account.tags) && account.tags.includes('customer'))) {
+        groupLabel = 'Customer Accounts';
+      } else if (code.startsWith('SUPP-') || (Array.isArray(account.tags) && account.tags.includes('supplier'))) {
+        groupLabel = 'Supplier Accounts';
+      } else {
         const type = account.accountType || 'other';
         groupLabel = `${type.charAt(0).toUpperCase()}${type.slice(1)} Accounts`;
       }
@@ -263,9 +268,54 @@ export const JournalVouchers = () => {
     return Object.entries(groups).map(([label, records]) => ({
       label,
       options: records
-        .sort((a, b) => a.accountCode.localeCompare(b.accountCode))
-        .map((a) => ({ value: a._id, label: getAccountDisplayLabel(a) }))
+        .sort((a, b) => (a.accountCode || '').localeCompare(b.accountCode || ''))
+        .map((a) => ({ value: getAccountRecordId(a), label: getAccountDisplayLabel(a) }))
+        .filter((o) => o.value)
     }));
+  }, []);
+
+  const buildPartyGroups = useCallback((customers, suppliers, accounts) => {
+    const sortOpts = (opts) =>
+      opts.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+
+    const customerOptions = sortOpts(
+      customers
+        .map((c) => {
+          const resolved = resolvePartyAccountOption(c, 'customer', accounts);
+          if (!resolved?.value) return null;
+          return { value: resolved.value, label: getCustomerDisplayName(c, 'Unnamed Customer') };
+        })
+        .filter(Boolean)
+    );
+
+    const supplierOptions = sortOpts(
+      suppliers
+        .map((s) => {
+          const resolved = resolvePartyAccountOption(s, 'supplier', accounts);
+          if (!resolved?.value) return null;
+          return { value: resolved.value, label: getSupplierDisplayName(s, 'Unnamed Supplier') };
+        })
+        .filter(Boolean)
+    );
+
+    const groups = [];
+    if (customerOptions.length) groups.push({ label: 'Customers', options: customerOptions });
+    if (supplierOptions.length) groups.push({ label: 'Suppliers', options: supplierOptions });
+    return groups;
+  }, []);
+
+  const dedupeOptionGroups = useCallback((groupList) => {
+    const seen = new Set();
+    return groupList
+      .map((group) => ({
+        ...group,
+        options: group.options.filter((opt) => {
+          if (!opt?.value || seen.has(opt.value)) return false;
+          seen.add(opt.value);
+          return true;
+        }),
+      }))
+      .filter((group) => group.options.length > 0);
   }, []);
 
   const groupedAccountOptions = useMemo(() => {
@@ -276,6 +326,8 @@ export const JournalVouchers = () => {
 
   const [triggerAccountsSearch] = useLazyGetAccountsQuery();
   const [triggerBanksSearch] = useLazyGetBanksQuery();
+  const [triggerCustomers] = useLazyGetCustomersQuery();
+  const [triggerSuppliers] = useLazyGetSuppliersQuery();
 
   const loadAccountOptions = useCallback(async (inputValue) => {
     const searchQuery = inputValue?.trim() || '';
@@ -283,7 +335,7 @@ export const JournalVouchers = () => {
       return groupedAccountOptions;
     }
     try {
-      const [accountsRes, banksRes] = await Promise.all([
+      const [accountsRes, banksRes, customersRes, suppliersRes] = await Promise.all([
         triggerAccountsSearch({
           search: searchQuery,
           limit: 50,
@@ -294,9 +346,16 @@ export const JournalVouchers = () => {
           limit: 50,
           isActive: 'true',
         }).unwrap(),
+        triggerCustomers({ search: searchQuery, limit: 50 }).unwrap(),
+        triggerSuppliers({ search: searchQuery, limit: 50 }).unwrap(),
       ]);
       const accounts = extractAccounts(accountsRes);
-      updateAccountMap(accounts);
+      const mergedAccounts = [...accounts, ...Array.from(accountMap.values())];
+      updateAccountMap(mergedAccounts);
+
+      const customers = customersRes?.data?.customers ?? customersRes?.customers ?? [];
+      const suppliers = suppliersRes?.data?.suppliers ?? suppliersRes?.suppliers ?? [];
+      const partyGroups = buildPartyGroups(customers, suppliers, mergedAccounts);
       const groups = buildGroups(accounts);
       const bankRows = banksRes?.data?.banks || banksRes?.banks || [];
       const bankGroup = {
@@ -306,17 +365,26 @@ export const JournalVouchers = () => {
           label: `${b.bankName || b.bank_name} — ${b.accountName || b.account_name}`,
         })),
       };
-      return bankGroup.options.length > 0 ? [...groups, bankGroup] : groups;
+      return dedupeOptionGroups([
+        ...partyGroups,
+        ...groups,
+        ...(bankGroup.options.length > 0 ? [bankGroup] : []),
+      ]);
     } catch {
       return groupedAccountOptions;
     }
   }, [
+    accountMap,
     extractAccounts,
     updateAccountMap,
     buildGroups,
+    buildPartyGroups,
+    dedupeOptionGroups,
     groupedAccountOptions,
     triggerAccountsSearch,
     triggerBanksSearch,
+    triggerCustomers,
+    triggerSuppliers,
   ]);
 
   /* ── queries ── */
@@ -350,6 +418,9 @@ export const JournalVouchers = () => {
   /* resolve the correct { value, label } for an entry in the AsyncSelect */
   const getSelectedOption = (entry) => {
     if (!entry.accountId) return null;
+    if (entry.accountId.startsWith('SUPP_PARTY::') || entry.accountId.startsWith('CUST_PARTY::')) {
+      return { value: entry.accountId, label: entry.partyName || entry.accountId };
+    }
     if (entry.accountId.startsWith('BANK::')) {
       const bankId = entry.accountId.replace('BANK::', '');
       const bank = bankMap.get(bankId);
@@ -375,26 +446,30 @@ export const JournalVouchers = () => {
     };
   }, [formState.entries]);
 
-  /* ── entry change ── */
-  const handleEntryChange = (index, field, value) => {
-    setFormState(prev => {
+  const handleAccountSelection = (index, option) => {
+    setFormState((prev) => {
       const nextEntries = prev.entries.map((entry, idx) => {
         if (idx !== index) return entry;
-        const updated = { ...entry, [field]: value };
-        if (field === 'debit' && value) updated.credit = '';
-        if (field === 'credit' && value) updated.debit = '';
-
-        // If account changes, clear or auto-set party
-        if (field === 'accountId') {
-          const account = value ? accountMap.get(value) : null;
+        if (!option) {
+          return { ...entry, accountId: '', partyId: '', partyName: '' };
+        }
+        const updated = { ...entry, accountId: option.value };
+        if (option.value.startsWith('CUST_PARTY::')) {
+          updated.partyId = option.value.replace('CUST_PARTY::', '');
+          updated.partyName = option.label || '';
+        } else if (option.value.startsWith('SUPP_PARTY::')) {
+          updated.partyId = option.value.replace('SUPP_PARTY::', '');
+          updated.partyName = option.label || '';
+        } else {
+          const account = accountMap.get(option.value);
           if (account) {
             const code = account.accountCode || '';
             if (code.startsWith('CUST-')) {
               updated.partyId = code.replace('CUST-', '');
-              updated.partyName = account.accountName;
+              updated.partyName = account.accountName || '';
             } else if (code.startsWith('SUPP-')) {
               updated.partyId = code.replace('SUPP-', '');
-              updated.partyName = account.accountName;
+              updated.partyName = account.accountName || '';
             } else {
               updated.partyId = '';
               updated.partyName = '';
@@ -404,6 +479,20 @@ export const JournalVouchers = () => {
             updated.partyName = '';
           }
         }
+        return updated;
+      });
+      return { ...prev, entries: nextEntries };
+    });
+  };
+
+  /* ── entry change ── */
+  const handleEntryChange = (index, field, value) => {
+    setFormState(prev => {
+      const nextEntries = prev.entries.map((entry, idx) => {
+        if (idx !== index) return entry;
+        const updated = { ...entry, [field]: value };
+        if (field === 'debit' && value) updated.credit = '';
+        if (field === 'credit' && value) updated.debit = '';
 
         return updated;
       });
@@ -476,6 +565,24 @@ export const JournalVouchers = () => {
             debitAmount: entry.debit ? parseFloat(entry.debit) : 0,
             creditAmount: entry.credit ? parseFloat(entry.credit) : 0,
             bankId: bankId
+          };
+        }
+        if (entry.accountId?.startsWith('CUST_PARTY::')) {
+          return {
+            accountCode: '1100',
+            particulars: entry.particulars?.trim() || entry.partyName || '',
+            debitAmount: entry.debit ? parseFloat(entry.debit) : 0,
+            creditAmount: entry.credit ? parseFloat(entry.credit) : 0,
+            customerId: entry.accountId.replace('CUST_PARTY::', '') || entry.partyId || undefined,
+          };
+        }
+        if (entry.accountId?.startsWith('SUPP_PARTY::')) {
+          return {
+            accountCode: '2000',
+            particulars: entry.particulars?.trim() || entry.partyName || '',
+            debitAmount: entry.debit ? parseFloat(entry.debit) : 0,
+            creditAmount: entry.credit ? parseFloat(entry.credit) : 0,
+            supplierId: entry.accountId.replace('SUPP_PARTY::', '') || entry.partyId || undefined,
           };
         }
         const account = entry.accountId ? accountMap.get(entry.accountId) : null;
@@ -611,7 +718,7 @@ export const JournalVouchers = () => {
                         defaultOptions={groupedAccountOptions}
                         loadOptions={loadAccountOptions}
                         value={getSelectedOption(entry)}
-                        onChange={(option) => handleEntryChange(index, 'accountId', option ? option.value : '')}
+                        onChange={(option) => handleAccountSelection(index, option)}
                         isLoading={accountsLoading || accountsFetching}
                         placeholder="Select account"
                         menuPortalTarget={document.body}
@@ -626,7 +733,7 @@ export const JournalVouchers = () => {
                       {(() => {
                         const account = accountMap.get(entry.accountId);
                         const code = account?.accountCode || '';
-                        if (code === '1100' || code.startsWith('CUST-')) {
+                        if (code === '1100' || code.startsWith('CUST-') || entry.accountId?.startsWith('CUST_PARTY::')) {
                           return (
                             <PartySelector
                               type="customer"
@@ -636,7 +743,7 @@ export const JournalVouchers = () => {
                             />
                           );
                         }
-                        if (code === '2000' || code.startsWith('SUPP-')) {
+                        if (code === '2000' || code.startsWith('SUPP-') || entry.accountId?.startsWith('SUPP_PARTY::')) {
                           return (
                             <PartySelector
                               type="supplier"

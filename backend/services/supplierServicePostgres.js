@@ -141,7 +141,7 @@ class SupplierService {
           normalBalance: 'credit',
           openingBalance: 0,
           currentBalance: 0,
-          allowDirectPosting: false,
+          allowDirectPosting: true,
           isSystemAccount: false,
           isActive: true,
           description: `Supplier Account: ${accountName}`,
