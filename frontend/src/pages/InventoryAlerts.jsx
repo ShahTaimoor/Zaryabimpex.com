@@ -22,6 +22,7 @@ import { showSuccessToast, showErrorToast, handleApiError } from '../utils/error
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { POLLING_INTERVALS } from '../config/polling';
+import { PageLayout } from '@/components/layout/PageLayout';
 
 const LIMIT_OPTIONS = [50, 500, 1000, 5000];
 
@@ -173,7 +174,7 @@ const InventoryAlerts = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <PageLayout>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -522,7 +523,7 @@ const InventoryAlerts = () => {
           </div>
         )}
       </div>
-    </div>
+    </PageLayout>
   );
 };
 

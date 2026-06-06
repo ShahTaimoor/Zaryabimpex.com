@@ -56,6 +56,7 @@ import {
   customerSearchLabel,
   supplierSearchLabel,
 } from '@/components/payments/PaymentPartyFields';
+import { PageLayout } from '@/components/layout/PageLayout';
 
 const today = getLocalDateString();
 
@@ -425,7 +426,7 @@ const Expenses = () => {
     'rounded-md p-2 text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900';
 
   return (
-    <div className="space-y-6">
+    <PageLayout>
       <PaymentFormCard variant="expense">
         <form onSubmit={handleSubmit}>
           <PaymentFormGrid>
@@ -647,7 +648,7 @@ const Expenses = () => {
                 Expenses recorded here will appear in this list for quick reference.
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="table-scroll">
                 <table className="min-w-full divide-y divide-neutral-200">
                   <thead className="bg-neutral-50">
                     <tr>
@@ -826,7 +827,7 @@ const Expenses = () => {
           </div>
         </PrintModal>
       )}
-    </div>
+    </PageLayout>
   );
 };
 

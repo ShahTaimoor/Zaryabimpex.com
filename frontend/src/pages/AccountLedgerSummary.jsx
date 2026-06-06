@@ -26,8 +26,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTableRowVirtualizer, getVirtualTablePadding } from '../hooks/useTableRowVirtualizer';
 import PageShell from '../components/PageShell';
+import { PageHeader } from '../components/layout/PageHeader';
 import { useGetAccountsQuery } from '../store/services/chartOfAccountsApi';
-
 const AccountLedgerSummary = () => {
   const ALL_BANKS_VALUE = '__all_banks__';
 
@@ -854,19 +854,17 @@ const AccountLedgerSummary = () => {
 
   return (
     <PageShell className="bg-gray-50" contentClassName="px-4 sm:px-6 py-6 space-y-6" maxWidthClassName="max-w-[1600px]">
-        {/* Header - professional card */}
         <header className="bg-white border border-gray-200 rounded-lg shadow-sm px-6 py-5">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">Account Ledger Summary</h1>
-              <p className="text-sm text-gray-500 mt-0.5">Customer receivables, supplier payables, banks, and expense accounts</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
+          <PageHeader
+            title="Account Ledger Summary"
+            subtitle="Customer receivables, supplier payables, banks, and expense accounts"
+            icon={FileText}
+            actions={
               <Button
                 onClick={handlePrint}
                 variant="outline"
                 size="sm"
-                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50 w-full sm:w-auto"
                 disabled={!selectedCustomerId && !selectedSupplierId && !selectedExpenseAccountCode}
                 title={
                   !selectedCustomerId && !selectedSupplierId && !selectedExpenseAccountCode
@@ -877,9 +875,8 @@ const AccountLedgerSummary = () => {
                 <Printer className="h-4 w-4" />
                 Print
               </Button>
-
-            </div>
-          </div>
+            }
+          />
         </header>
 
         {/* Filters - clean card */}
@@ -1058,7 +1055,7 @@ const AccountLedgerSummary = () => {
             <LoadingSpinner />
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="page-container">
             {/* Customers Section - Show only if customer is selected and supplier is not */}
             {selectedCustomerId && !selectedSupplierId && !selectedExpenseAccountCode && (
               <div className="bg-white border border-emerald-200 rounded-lg shadow-sm overflow-hidden">

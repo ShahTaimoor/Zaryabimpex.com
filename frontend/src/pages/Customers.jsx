@@ -34,6 +34,7 @@ import { useDeleteConfirmation } from '../hooks/useConfirmation';
 
 import CustomerFilters from '../components/CustomerFilters';
 import { PageHeader } from '../components/layout/PageHeader';
+import { PageLayout } from '../components/layout/PageLayout';
 import NotesPanel from '../components/NotesPanel';
 import { CustomerFormModal } from '../components/CustomerFormModal';
 import { CustomerList } from '../components/CustomerList';
@@ -189,7 +190,7 @@ export const Customers = () => {
   }
 
   return (
-    <div className="space-y-6 w-full ">
+    <PageLayout>
       <PageHeader
         title="Customers"
         icon={BarChart3}
@@ -395,6 +396,6 @@ export const Customers = () => {
           }}
         />
       )}
-    </div>
+    </PageLayout>
   );
 };

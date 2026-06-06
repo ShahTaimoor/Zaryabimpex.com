@@ -151,15 +151,67 @@
   }
 
   .card {
-    @apply rounded-lg border border-gray-200 bg-white shadow-soft;
+    @apply rounded-lg border border-gray-200 bg-white shadow-soft min-w-0 overflow-hidden;
   }
 
   .card-header {
-    @apply flex flex-col space-y-1.5 p-6;
+    @apply flex flex-col space-y-1.5 p-4 sm:p-5 lg:p-6;
   }
 
   .card-content {
-    @apply p-6 pt-0;
+    @apply p-4 pt-0 sm:p-5 sm:pt-0 lg:p-6 lg:pt-0;
+  }
+
+  /* Standard page wrapper — consistent vertical rhythm across all pages */
+  .page-container {
+    @apply space-y-4 sm:space-y-6 min-w-0 max-w-full;
+  }
+
+  /* Responsive form grid: 1 col mobile → multi-col desktop */
+  .form-grid {
+    @apply grid grid-cols-1 gap-4 sm:gap-5;
+  }
+
+  .form-grid-2 {
+    @apply form-grid sm:grid-cols-2;
+  }
+
+  .form-grid-3 {
+    @apply form-grid sm:grid-cols-2 lg:grid-cols-3;
+  }
+
+  .form-grid-4 {
+    @apply form-grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+  }
+
+  /* Scrollable table container — prevents horizontal page overflow */
+  .table-scroll {
+    @apply overflow-x-auto min-w-0 max-w-full -mx-1 px-1;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-scroll table {
+    @apply w-full;
+  }
+
+  /* Mobile-first action buttons in page headers */
+  .page-actions {
+    @apply flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto shrink-0;
+  }
+
+  .page-actions > button,
+  .page-actions > a,
+  .page-actions > .btn {
+    @apply w-full sm:w-auto;
+  }
+
+  /* Filter toolbar row */
+  .filter-toolbar {
+    @apply flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 min-w-0;
+  }
+
+  .filter-toolbar .filter-search {
+    @apply flex-1 min-w-0 w-full;
   }
 
   .badge {

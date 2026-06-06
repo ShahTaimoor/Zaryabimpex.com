@@ -34,14 +34,14 @@ export function FiltersCard({
   return (
     <div className="card">
       <div className="card-header">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+          <div className="flex items-center space-x-2 min-w-0">
             {IconComponent && (
-              <IconComponent className="h-5 w-5 text-gray-400" />
+              <IconComponent className="h-5 w-5 text-gray-400 shrink-0" />
             )}
-            <h3 className="text-lg font-medium text-gray-900">{title}</h3>
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 truncate">{title}</h3>
           </div>
-          {headerExtra}
+          {headerExtra && <div className="shrink-0">{headerExtra}</div>}
         </div>
       </div>
       <div className={contentClassName}>{children}</div>

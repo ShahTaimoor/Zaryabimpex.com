@@ -28,6 +28,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import ValidatedInput, { ValidatedSelect } from '../components/ValidatedInput';
+import { PageLayout } from '../components/layout/PageLayout';
+import { PageHeader } from '../components/layout/PageHeader';
 import BarcodeLabelPrinter from '../components/BarcodeLabelPrinter';
 
 /** Rows for BarcodeLabelPrinter: base product + target variant (labels for both). */
@@ -195,13 +197,12 @@ const ProductTransformations = () => {
   ];
 
   return (
-    <div className="p-3 sm:p-5 xl:p-6 2xl:p-8">
-      <div className="mb-4 xl:mb-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-          <div>
-            <h1 className="text-xl sm:text-2xl xl:text-3xl font-bold text-gray-900">Product Transformations</h1>
-            <p className="mt-0.5 xl:mt-1 text-xs sm:text-sm xl:text-base text-gray-600">Convert base products to variants and track transformations</p>
-          </div>
+    <PageLayout>
+      <PageHeader
+        title="Product Transformations"
+        subtitle="Convert base products to variants and track transformations"
+        icon={Package}
+        actions={
           <Button
             onClick={() => setIsModalOpen(true)}
             variant="default"
@@ -211,8 +212,8 @@ const ProductTransformations = () => {
             <Plus className="h-3.5 w-3.5 xl:h-4 xl:w-4" />
             New Transformation
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-3 xl:p-4 mb-4 xl:mb-6">
@@ -270,7 +271,7 @@ const ProductTransformations = () => {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -394,7 +395,7 @@ const ProductTransformations = () => {
           modalTitle="Print product / variant barcode labels"
         />
       )}
-    </div>
+    </PageLayout>
   );
 };
 

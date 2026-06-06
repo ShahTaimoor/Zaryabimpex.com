@@ -207,7 +207,7 @@ export const Login = () => {
               </button>
             </div>
 
-            <form className="space-y-6" onSubmit={onFormSubmit}>
+            <form className="page-container" onSubmit={onFormSubmit}>
               {activeTab === TAB_PASSWORD && (
                 <>
                   <div>

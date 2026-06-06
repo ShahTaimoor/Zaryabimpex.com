@@ -21,6 +21,7 @@ import { useGetCCTVOrdersQuery } from '../store/services/salesApi';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import DateFilter from '../components/DateFilter';
 import PageShell from '../components/PageShell';
+import { PageHeader } from '../components/layout/PageHeader';
 import { getDatePresets } from '../utils/dateUtils';
 import { showSuccessToast, showErrorToast } from '../utils/errorHandler';
 
@@ -210,20 +211,11 @@ const CCTVAccess = ({ tabId }) => {
   return (
     <PageShell className="bg-[#f8fafc]" maxWidthClassName="max-w-full">
       <div className="w-full px-4 sm:px-12 lg:px-16 py-8 sm:py-14 space-y-8 sm:space-y-12">
-        {/* Header */}
-        <header className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6 text-center sm:text-left">
-          <div className="flex h-16 w-16 sm:h-18 sm:w-18 items-center justify-center rounded-[20px] sm:rounded-[22px] bg-[#0f172a] text-white shadow-2xl shadow-slate-900/20 shrink-0">
-            <Camera className="h-8 w-8 sm:h-9 sm:w-9" aria-hidden />
-          </div>
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-[#0f172a] tracking-tight">
-              CCTV Access
-            </h1>
-            <p className="mt-2 text-base sm:text-lg text-slate-500 max-w-2xl leading-relaxed font-medium px-4 sm:px-0">
-              Find invoices and open matching camera playback windows using bill timestamps.
-            </p>
-          </div>
-        </header>
+        <PageHeader
+          title="CCTV Access"
+          subtitle="Find invoices and open matching camera playback windows using bill timestamps."
+          icon={Camera}
+        />
 
         {/* Filters */}
         <section className="rounded-2xl sm:rounded-[24px] border border-slate-200/60 bg-white shadow-[0_8px_40px_rgb(0,0,0,0.04)] overflow-hidden">

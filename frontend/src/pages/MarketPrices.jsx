@@ -8,6 +8,8 @@ import {
   useGetMarketPriceHistoryQuery,
   usePreviewMarketPriceImportMutation,
 } from '../store/services/marketPricesApi';
+import { PageLayout } from '../components/layout/PageLayout';
+import { PageHeader } from '../components/layout/PageHeader';
 
 const defaultMapping = {
   productName: 1,
@@ -88,7 +90,12 @@ export default function MarketPrices() {
   };
 
   return (
-    <div className="space-y-4">
+    <PageLayout className="space-y-4">
+      <PageHeader
+        title="Market Prices"
+        subtitle="Update and import purchase market prices for products"
+      />
+
       <div className="rounded-lg border bg-white p-4">
         <h2 className="text-lg font-semibold">Current Purchase Market Prices</h2>
         <p className="text-sm text-gray-600">Manual update for a single product purchase price.</p>
@@ -242,6 +249,6 @@ export default function MarketPrices() {
           </table>
         </div>
       </div>
-    </div>
+    </PageLayout>
   );
 }

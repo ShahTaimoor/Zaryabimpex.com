@@ -27,6 +27,8 @@ import PaginationControls from '../components/PaginationControls';
 import { flattenCategoryApiTree } from '../utils/categoryTree';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import PageShell from '../components/PageShell';
+import { PageLayout } from '../components/layout/PageLayout';
+import { PageHeader } from '../components/layout/PageHeader';
 
 const CategoryModal = ({ category, isOpen, onClose, onSave, isSubmitting, categories = [], categoryType = 'parent' }) => {
   const [formData, setFormData] = useState({
@@ -418,15 +420,13 @@ export const Categories = () => {
   }
 
   return (
-    <div className="space-y-6 w-full">
-      {/* Header with Add Category Button */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Categories</h1>
-            <p className="text-gray-600">Manage your product categories</p>
-          </div>
-          <div className="flex-shrink-0 flex flex-col sm:flex-row gap-3">
+    <PageLayout>
+      <PageHeader
+        title="Categories"
+        subtitle="Manage your product categories"
+        icon={Tag}
+        actions={(
+          <>
             <Button
               onClick={() => {
                 setSelectedCategory(null);
@@ -435,9 +435,9 @@ export const Categories = () => {
               }}
               variant="default"
               size="lg"
-              className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-shadow"
+              className="flex items-center gap-2 shadow-lg hover:shadow-xl transition-shadow"
             >
-              <FolderOpen className="h-5 w-5 mr-2" />
+              <FolderOpen className="h-5 w-5" />
               Add Parent Category
             </Button>
             <Button
@@ -448,14 +448,14 @@ export const Categories = () => {
               }}
               variant="outline"
               size="lg"
-              className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-shadow"
+              className="flex items-center gap-2 shadow-lg hover:shadow-xl transition-shadow"
             >
-              <Folder className="h-5 w-5 mr-2" />
+              <Folder className="h-5 w-5" />
               Add Child Category
             </Button>
-          </div>
-        </div>
-      </div>
+          </>
+        )}
+      />
 
 
 
@@ -646,7 +646,7 @@ export const Categories = () => {
         itemName={confirmation.message?.match(/"([^"]*)"/)?.[1] || ''}
         itemType={confirmation.message?.split(' ')[1] || ''}
       />
-    </div>
+    </PageLayout>
   );
 };
 

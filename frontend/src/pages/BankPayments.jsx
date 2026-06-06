@@ -60,6 +60,7 @@ import {
   customerSearchLabel,
   supplierSearchLabel,
 } from '@/components/payments/PaymentPartyFields';
+import { PageLayout } from '@/components/layout/PageLayout';
 
 
 const BankPayments = () => {
@@ -479,7 +480,7 @@ const BankPayments = () => {
   const paginationInfo = getPaginationInfo(bankPaymentsData);
 
   return (
-    <div className="space-y-6">
+    <PageLayout>
       {/* Bank Payment Form */}
       <PaymentFormCard variant="bank-payment">
         <PaymentFormGrid>
@@ -754,7 +755,7 @@ const BankPayments = () => {
           >
             <>
               {/* Table */}
-              <div className="overflow-x-auto">
+              <div className="table-scroll">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -1141,7 +1142,7 @@ const BankPayments = () => {
         itemType="Bank Payment"
         isLoading={deleteConfirmation.isLoading}
       />
-    </div>
+    </PageLayout>
   );
 };
 

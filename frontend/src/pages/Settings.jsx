@@ -59,7 +59,7 @@ import {
   useResetPasswordMutation,
   useUpdateRolePermissionsMutation,
 } from '../store/services/usersApi';
-import { navigation, loadSidebarConfig, loadBottomNavConfig } from '../components/MultiTabLayout';
+import { navigation, loadSidebarConfig, loadBottomNavConfig } from '../config/navigation';
 import {
   TOP_BAR_ACTION_ITEMS,
   loadTopBarConfig,
@@ -92,6 +92,8 @@ import {
   isReceiptsCombined,
   isPaymentsCombined,
 } from '../config/dashboardConfig';
+import { PageLayout } from '@/components/layout/PageLayout';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 export const Settings2 = () => {
   const { user, hasPermission } = useAuth();
@@ -2010,13 +2012,8 @@ export const Settings2 = () => {
   };
 
   return (
-    <div className="space-y-6 overflow-x-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        </div>
-      </div>
+    <PageLayout className="overflow-x-hidden">
+      <PageHeader title="Settings" />
 
       {/* Tabs */}
       <div className="border-b border-gray-200 -mx-4 px-4 md:mx-0 md:px-0 w-full">
@@ -3211,7 +3208,7 @@ export const Settings2 = () => {
               </p>
             </div>
             <div className="card-content">
-              <div className="space-y-6">
+              <div className="page-container">
                 <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4">Financial Help</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm text-gray-700">
@@ -3499,7 +3496,7 @@ export const Settings2 = () => {
               </p>
             </div>
             <div className="card-content">
-              <div className="space-y-6">
+              <div className="page-container">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4 px-1">Field Visibility</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[
@@ -3566,7 +3563,7 @@ export const Settings2 = () => {
               </p>
             </div>
             <div className="card-content">
-              <div className="space-y-6">
+              <div className="page-container">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4 px-1">Field visibility</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[
@@ -3785,7 +3782,7 @@ export const Settings2 = () => {
                   }
                   return acc;
                 }, []).map((section, sIdx) => (
-                  <div key={sIdx} className="space-y-6">
+                  <div key={sIdx} className="page-container">
                     <div className="flex items-center gap-4">
                       <h3 className={`text-[11px] font-black uppercase tracking-[0.2em] px-4 py-2 rounded-full border shadow-sm ${section.heading.color || 'bg-gray-50 text-gray-500 border-gray-100'} ${section.heading.color ? 'text-white border-transparent' : ''}`}>
                         {section.heading.name}
@@ -4262,7 +4259,7 @@ export const Settings2 = () => {
                   <LoadingSpinner />
                 </div>
               ) : selectedUserActivity.activity ? (
-                <div className="space-y-6">
+                <div className="page-container">
                   {/* Activity Summary */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="bg-blue-50 p-4 rounded-lg">
@@ -4624,7 +4621,7 @@ export const Settings2 = () => {
         itemType="User"
         isLoading={deleteUserConfirmation.isLoading}
       />
-    </div>
+    </PageLayout>
   );
 };
 

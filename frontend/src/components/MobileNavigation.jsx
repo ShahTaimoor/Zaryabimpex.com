@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { useResponsive } from './ResponsiveContainer';
 import { useAuth } from '../contexts/AuthContext';
-import { loadSidebarConfig } from './MultiTabLayout';
+import { loadSidebarConfig } from '../config/navigation';
 import { canAccessRoute } from '../config/routeAccess';
 
 const MobileNavigation = ({ user, onLogout, isLoggingOut = false }) => {

@@ -46,6 +46,8 @@ import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import PaginationControls from '../components/PaginationControls';
 import { useCursorPagination } from '../hooks/useCursorPagination';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
+import { PageLayout } from '../components/layout/PageLayout';
+import { PageHeader } from '../components/layout/PageHeader';
 
 const INVOICE_PAGE_SIZE = 50;
 
@@ -572,14 +574,11 @@ export const Orders = () => {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden px-2 sm:px-0">
-      {/* Header Section */}
+    <PageLayout className="w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Sales Invoices</h1>
-        </div>
+        <PageHeader title="Sales Invoices" icon={ShoppingCart} />
 
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto shrink-0">
           {/* Post to Ledger Button (Desktop & Mobile) */}
           <button
             type="button"
@@ -1026,7 +1025,7 @@ export const Orders = () => {
             {/* Items Table */}
             <div className="mb-8">
               <h3 className="font-semibold text-gray-900 border-b border-gray-300 pb-2 mb-4">Items:</h3>
-              <div className="overflow-x-auto">
+              <div className="table-scroll">
                 <table className="w-full border-collapse border border-gray-300">
                   <thead>
                     <tr className="bg-gray-50">
@@ -1129,6 +1128,6 @@ export const Orders = () => {
         itemType="Sales Invoice"
         isLoading={deleteConfirmation.isLoading}
       />
-    </div>
+    </PageLayout>
   );
 };

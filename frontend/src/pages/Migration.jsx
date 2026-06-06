@@ -3,6 +3,8 @@ import { RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
 import { useUpdateInvoicePrefixMutation } from '../store/services/migrationApi';
+import { PageLayout } from '../components/layout/PageLayout';
+import { PageHeader } from '../components/layout/PageHeader';
 
 const Migration = () => {
   const [migrationResult, setMigrationResult] = useState(null);
@@ -26,27 +28,25 @@ const Migration = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <PageLayout className="max-w-4xl mx-auto">
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Invoice Prefix Migration</h1>
-            <p className="text-gray-600">Update existing ORD- invoices to SI- format</p>
-          </div>
-          <Button
-            onClick={handleRunMigration}
-            disabled={isRunning}
-            variant="default"
-            className="flex items-center space-x-2"
-          >
-            {isRunning ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            <span>{isRunning ? 'Running Migration...' : 'Run Migration'}</span>
-          </Button>
-        </div>
+        <PageHeader
+          title="Invoice Prefix Migration"
+          subtitle="Update existing ORD- invoices to SI- format"
+          icon={RefreshCw}
+          actions={
+            <Button
+              onClick={handleRunMigration}
+              disabled={isRunning}
+              variant="default"
+              className="flex items-center gap-2 w-full sm:w-auto"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRunning ? 'animate-spin' : ''}`} />
+              <span>{isRunning ? 'Running Migration...' : 'Run Migration'}</span>
+            </Button>
+          }
+          className="mb-6"
+        />
 
         {migrationResult && (
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
@@ -115,7 +115,7 @@ const Migration = () => {
           </ul>
         </div>
       </div>
-    </div>
+    </PageLayout>
   );
 };
 

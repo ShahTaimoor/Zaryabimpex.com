@@ -94,6 +94,7 @@ import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 
 
 import AsyncErrorBoundary from '../components/AsyncErrorBoundary';
+import { PageLayout } from '../components/layout/PageLayout';
 import { useResponsive } from '../components/ResponsiveContainer';
 import { ProductSearch as SharedSalesProductSearch } from '../components/sales/ProductSearch';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
@@ -1413,7 +1414,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
 
   return (
     <AsyncErrorBoundary>
-      <div className="space-y-4 lg:space-y-6">
+      <PageLayout className="space-y-4 lg:space-y-6">
         {/* Modern Header Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
           <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-2">
@@ -2251,7 +2252,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
+                <div className="table-scroll">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
@@ -2447,7 +2448,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
           onClose={() => setPreviewImageProduct(null)}
         />
 
-      </div>
+      </PageLayout>
     </AsyncErrorBoundary>
   );
 };

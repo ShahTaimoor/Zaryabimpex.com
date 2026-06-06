@@ -126,6 +126,7 @@ import { useResponsive } from '../components/ResponsiveContainer';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
+import { PageLayout } from '../components/layout/PageLayout';
 
 
 // Helper function to safely render values
@@ -2041,7 +2042,7 @@ const SalesOrders = ({ tabId }) => {
   } = calculateTotals();
 
   return (
-    <div className="space-y-4 lg:space-y-6 w-full max-w-full overflow-x-hidden px-2 sm:px-0">
+    <PageLayout className="w-full max-w-full overflow-x-hidden">
       {/* Modern Header Section */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
         <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4">
@@ -2986,7 +2987,7 @@ const SalesOrders = ({ tabId }) => {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className="table-scroll">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -3357,7 +3358,7 @@ const SalesOrders = ({ tabId }) => {
                   isUpdating={updatingItemsConfirmation}
                 />
               )}
-              <div className="overflow-x-auto">
+              <div className="table-scroll">
                 <table className="min-w-full border border-gray-200 rounded-lg">
                   <thead className="bg-gray-50">
                     <tr>
@@ -3657,7 +3658,7 @@ const SalesOrders = ({ tabId }) => {
         isLoading={deleteConfirmation.isLoading}
       />
 
-    </div>
+    </PageLayout>
   );
 };
 

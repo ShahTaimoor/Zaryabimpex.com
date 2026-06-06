@@ -31,6 +31,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import BaseModal from '../components/BaseModal';
+import { PageHeader } from '../components/layout/PageHeader';
+import { PageLayout } from '../components/layout/PageLayout';
 
 const BankFormModal = ({ bank, onSave, onCancel, isSubmitting }) => {
   const { register, handleSubmit, formState: { errors }, reset } = useForm({
@@ -493,23 +495,23 @@ const Banks = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Bank Accounts</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your bank accounts</p>
-        </div>
-        <Button
-          onClick={handleAddNew}
-          variant="default"
-          size="default"
-          className="flex items-center justify-center gap-2 w-full sm:w-auto"
-        >
-          <Plus className="h-4 w-4" />
-          Add Bank Account
-        </Button>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="Bank Accounts"
+        subtitle="Manage your bank accounts"
+        icon={Building2}
+        actions={(
+          <Button
+            onClick={handleAddNew}
+            variant="default"
+            size="default"
+            className="flex items-center justify-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Bank Account
+          </Button>
+        )}
+      />
 
       {/* Cash opening balance (GL) — account 1000 */}
       {cashCheckError?.status === 404 ? (
@@ -592,8 +594,8 @@ const Banks = () => {
       )}
 
       {/* Search */}
-      <div className="flex items-center space-x-4">
-        <div className="flex-1 relative">
+      <div className="filter-toolbar">
+        <div className="filter-search relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
             type="text"
@@ -616,7 +618,7 @@ const Banks = () => {
         </div>
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -778,7 +780,7 @@ const Banks = () => {
         itemType="Bank Account"
         isLoading={false}
       />
-    </div>
+    </PageLayout>
   );
 };
 

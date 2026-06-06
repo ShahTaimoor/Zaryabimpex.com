@@ -24,6 +24,8 @@ import {
   useUpdateCityMutation,
   useDeleteCityMutation,
 } from '../store/services/citiesApi';
+import { PageLayout } from '@/components/layout/PageLayout';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 // List of all countries
 const countries = [
@@ -266,25 +268,18 @@ export const Cities = () => {
   const pagination = data?.data?.pagination || data?.pagination || data?.meta || {};
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Cities</h1>
-          <p className="text-gray-600">Manage cities for customer and supplier addresses</p>
-        </div>
-        <div className="flex-shrink-0">
-          <Button
-            onClick={handleAddNew}
-            variant="default"
-            size="default"
-            className="w-full sm:w-auto"
-          >
-            <Plus className="h-4 w-4 mr-2" />
+    <PageLayout>
+      <PageHeader
+        title="Cities"
+        subtitle="Manage cities for customer and supplier addresses"
+        icon={MapPin}
+        actions={(
+          <Button onClick={handleAddNew} variant="default" size="default" className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
             Add New City
           </Button>
-        </div>
-      </div>
+        )}
+      />
 
 
 
@@ -358,7 +353,7 @@ export const Cities = () => {
             </Button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -464,7 +459,7 @@ export const Cities = () => {
         itemType="city"
         isLoading={confirmation.isLoading}
       />
-    </div>
+    </PageLayout>
   );
 };
 

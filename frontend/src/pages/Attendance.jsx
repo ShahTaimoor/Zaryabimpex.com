@@ -36,6 +36,7 @@ import { handleApiError, showSuccessToast, showErrorToast } from '../utils/error
 import { formatDate, formatTime } from '../utils/formatters';
 import { toast } from 'sonner';
 import PageShell from '../components/PageShell';
+import { PageHeader } from '../components/layout/PageHeader';
 import ConfirmationDialog from '../components/ConfirmationDialog';
 
 const Attendance = () => {
@@ -430,32 +431,25 @@ const Attendance = () => {
 
   return (
     <PageShell className="bg-gray-50/30" maxWidthClassName="max-w-7xl" contentClassName="space-y-6 p-4 md:p-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center">
-            <div className="bg-primary-100 p-2 rounded-lg mr-4">
-              <Clock className="h-7 w-7 text-primary-600" />
-            </div>
-            Workforce Attendance
-          </h1>
-          <p className="text-slate-500 mt-1 font-medium">Manage clock-ins, breaks, and workforce efficiency</p>
-        </div>
-        
-        <div className="flex items-center space-x-3">
-          <button 
+      <PageHeader
+        title="Workforce Attendance"
+        subtitle="Manage clock-ins, breaks, and workforce efficiency"
+        icon={Clock}
+        actions={
+          <button
+            type="button"
             onClick={() => {
               if (viewMode === 'my') refetchMyAttendance();
               else refetchTeamAttendance();
               refetchStatus();
             }}
-            className="flex items-center space-x-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all shadow-sm"
+            className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all shadow-sm w-full sm:w-auto"
           >
             <RefreshCw className={`h-4 w-4 ${statusLoading || isLoading ? 'animate-spin' : ''}`} />
             <span>Sync Data</span>
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Main Grid: Clocking and Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -706,7 +700,7 @@ const Attendance = () => {
               </div>
             )}
 
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
               {isLoading ? (
                 <div className="py-20 text-center"><LoadingSpinner /></div>
               ) : attendanceList.length === 0 ? (

@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import PageShell from '../components/PageShell';
+import { PageHeader } from '../components/layout/PageHeader';
 
 /** Initial rows when opening customer/supplier dropdown (no search yet) */
 const ENTITY_DROPDOWN_INITIAL_LIMIT = 20;
@@ -345,20 +346,12 @@ export const StockLedger = () => {
   return (
     <PageShell className="bg-slate-50/90 print:bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 print:px-4 print:py-4">
-        {/* Page header — hidden when printing */}
-        <header className="mb-8 print:hidden">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 shadow-md shadow-blue-600/20">
-              <FileText className="h-6 w-6 text-white" aria-hidden />
-            </div>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Stock Ledger</h1>
-              <p className="mt-1.5 text-sm text-slate-500 leading-relaxed max-w-2xl">
-                View stock movement history with detailed filters and comprehensive reporting.
-              </p>
-            </div>
-          </div>
-        </header>
+        <PageHeader
+          className="mb-8 print:hidden"
+          title="Stock Ledger"
+          subtitle="View stock movement history with detailed filters and comprehensive reporting."
+          icon={FileText}
+        />
 
         {/* Filter card — hidden when printing */}
         <section className="mb-6 rounded-2xl border border-slate-200/90 bg-white p-5 sm:p-6 shadow-sm print:hidden">

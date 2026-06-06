@@ -27,7 +27,7 @@ import { handleApiError, showSuccessToast, showErrorToast } from '../utils/error
 import { getProductDisplayName, getCategoryDisplayName } from '../utils/partyDisplay';
 import { LoadingSpinner, LoadingButton, LoadingPage } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
-import { useResponsive, ResponsiveContainer } from '../components/ResponsiveContainer';
+import { useResponsive } from '../components/ResponsiveContainer';
 import ResponsiveTable from '../components/ResponsiveTable';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
@@ -37,6 +37,7 @@ import StockUpdateModal from '../components/StockUpdateModal';
 import { useNavigate } from 'react-router-dom';
 import { useTab } from '../contexts/TabContext';
 import { PageHeader } from '../components/layout/PageHeader';
+import { PageLayout } from '../components/layout/PageLayout';
 import { getComponentInfo } from '../utils/componentUtils';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { isWarehouseInventoryEnabled } from '../utils/warehouseInventory';
@@ -431,8 +432,7 @@ export const Inventory = () => {
   }
 
   return (
-    <ResponsiveContainer className="space-y-4 xl:space-y-6 min-w-0">
-      {/* Header */}
+    <PageLayout>
       <PageHeader
         title="Inventory Management"
         subtitle={warehouseMode
@@ -707,6 +707,6 @@ export const Inventory = () => {
           setSelectedProduct(null);
         }}
       />
-    </ResponsiveContainer>
+    </PageLayout>
   );
 };

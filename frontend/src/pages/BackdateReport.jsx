@@ -3,6 +3,7 @@ import { formatCurrency, formatDate } from '../utils/formatters';
 import { useGetBackdateReportQuery } from '../store/services/reportsApi';
 import { LoadingPage } from '../components/LoadingSpinner';
 import PageShell from '../components/PageShell';
+import { PageHeader } from '../components/layout/PageHeader';
 
 const BackdateReport = () => {
   const [filter, setFilter] = useState('all'); // all, backdate, future, recent
@@ -78,14 +79,11 @@ const BackdateReport = () => {
   }
 
   return (
-    <PageShell className="bg-gray-50" maxWidthClassName="max-w-7xl" contentClassName="p-6">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Backdate & Future Date Report</h1>
-          <p className="text-gray-600">
-            Entries with dates significantly different from their creation date
-          </p>
-        </div>
+    <PageShell className="bg-gray-50" maxWidthClassName="max-w-7xl" contentClassName="space-y-6 p-4 md:p-6">
+        <PageHeader
+          title="Backdate & Future Date Report"
+          subtitle="Entries with dates significantly different from their creation date"
+        />
 
         {/* Summary Cards */}
         {reportData?.summary && (
@@ -215,7 +213,7 @@ const BackdateReport = () => {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>

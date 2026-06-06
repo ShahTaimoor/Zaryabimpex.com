@@ -42,6 +42,7 @@ import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, L
 import SupplierFilters from '../components/SupplierFilters';
 import NotesPanel from '../components/NotesPanel';
 import { PageHeader } from '../components/layout/PageHeader';
+import { PageLayout } from '../components/layout/PageLayout';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import {
@@ -1062,7 +1063,7 @@ export const Suppliers = () => {
 
 
   return (
-    <div className="space-y-4 xl:space-y-6 min-w-0">
+    <PageLayout>
       <PageHeader
         title="Suppliers"
         subtitle="Manage your supplier relationships and information"
@@ -1532,6 +1533,6 @@ export const Suppliers = () => {
         itemType="Supplier"
         isLoading={deleteConfirmation.isLoading}
       />
-    </div>
+    </PageLayout>
   );
 };

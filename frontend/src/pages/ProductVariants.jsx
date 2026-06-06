@@ -24,6 +24,7 @@ import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import ValidatedInput, { ValidatedSelect } from '../components/ValidatedInput';
 import { PageHeader } from '../components/layout/PageHeader';
+import { PageLayout } from '../components/layout/PageLayout';
 import { useFormValidation } from '../hooks/useFormValidation';
 
 const ProductVariants = () => {
@@ -98,9 +99,8 @@ const ProductVariants = () => {
   ];
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
+    <PageLayout>
       <PageHeader
-        className="mb-6"
         title="Product Variants"
         subtitle="Manage product variants and transformations"
         actions={
@@ -163,7 +163,7 @@ const ProductVariants = () => {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -259,7 +259,7 @@ const ProductVariants = () => {
         itemName={itemToDelete?.name || ''}
         itemType="variant"
       />
-    </div>
+    </PageLayout>
   );
 };
 

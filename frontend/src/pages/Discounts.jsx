@@ -34,6 +34,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import CreateDiscountModal from '../components/CreateDiscountModal';
 import DiscountDetailModal from '../components/DiscountDetailModal';
 import PageShell from '../components/PageShell';
+import { PageHeader } from '../components/layout/PageHeader';
 import DiscountFilters from '../components/DiscountFilters';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
@@ -205,35 +206,31 @@ const Discounts = () => {
 
   return (
     <PageShell className="bg-gray-50/30" maxWidthClassName="max-w-7xl" contentClassName="space-y-6 p-4 md:p-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center">
-            <div className="bg-primary-100 p-2 rounded-lg mr-4">
-              <Tag className="h-7 w-7 text-primary-600" />
-            </div>
-            Discount Management
-          </h1>
-          <p className="text-slate-500 mt-1 font-medium">Manage percentage and fixed amount discounts</p>
-        </div>
-        
-        <div className="flex items-center space-x-3">
-          <button 
-            onClick={() => refetchDiscounts()}
-            className="flex items-center space-x-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all shadow-sm"
-          >
-            <RefreshCw className={`h-4 w-4 ${discountsLoading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </button>
-          <button 
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center space-x-2 px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg transition-all shadow-md"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add Discount</span>
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Discount Management"
+        subtitle="Manage percentage and fixed amount discounts"
+        icon={Tag}
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => refetchDiscounts()}
+              className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all shadow-sm w-full sm:w-auto"
+            >
+              <RefreshCw className={`h-4 w-4 ${discountsLoading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center justify-center gap-2 px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg transition-all shadow-md w-full sm:w-auto"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add Discount</span>
+            </button>
+          </>
+        }
+      />
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -336,7 +333,7 @@ const Discounts = () => {
 
       {/* Discounts Table */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-scroll">
           {discountsLoading ? (
             <div className="py-20 text-center"><LoadingSpinner /></div>
           ) : discounts.length === 0 ? (

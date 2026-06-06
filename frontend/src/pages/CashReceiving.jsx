@@ -25,6 +25,7 @@ import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import PrintModal from '../components/PrintModal';
 import PrintReportModal from '../components/PrintReportModal';
 import PageShell from '../components/PageShell';
+import { PageHeader } from '../components/layout/PageHeader';
 import { getLocalDateString } from '../utils/dateUtils';
 import { getCustomerDisplayName } from '../utils/partyDisplay';
 import { toTitleCase } from '../utils/titleCase';
@@ -543,20 +544,14 @@ const CashReceiving = () => {
       <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
         <div className="border-b border-neutral-200 border-l-4 border-l-neutral-900 bg-white px-5 py-4 sm:px-6 sm:py-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-neutral-900">
-                <Banknote className="h-5 w-5" aria-hidden />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-lg font-semibold tracking-tight text-neutral-900 sm:text-xl">
-                  Cash Receipt Voucher
-                </h1>
-                <p className="mt-0.5 text-sm text-neutral-500 leading-snug">
-                  Record bulk cash receipts by city and customer balance
-                </p>
-              </div>
-            </div>
-            <span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-800">
+            <PageHeader
+              title="Cash Receipt Voucher"
+              subtitle="Record bulk cash receipts by city and customer balance"
+              icon={Banknote}
+              titleClassName="text-lg font-semibold tracking-tight text-neutral-900 sm:text-xl"
+              subtitleClassName="mt-0.5 text-sm text-neutral-500 leading-snug"
+            />
+            <span className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-800">
               Bulk Receipt
             </span>
           </div>
@@ -874,7 +869,7 @@ const CashReceiving = () => {
                 </span>
               </h2>
             </div>
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
               <table className="min-w-full divide-y divide-neutral-200">
                 <thead className="bg-neutral-50">
                   <tr>

@@ -33,6 +33,7 @@ import { useDeleteConfirmation } from '../hooks/useConfirmation';
 
 import ProductFilters from '../components/ProductFilters';
 import { PageHeader } from '../components/layout/PageHeader';
+import { PageLayout } from '../components/layout/PageLayout';
 import { useTab } from '../contexts/TabContext';
 import { useBulkOperations } from '../hooks/useBulkOperations';
 import BulkOperationsBar from '../components/BulkOperationsBar';
@@ -312,7 +313,7 @@ export const Products = () => {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0">
+    <PageLayout>
       <PageHeader
         title="Products"
         subtitle="Manage your product catalog"
@@ -658,7 +659,7 @@ export const Products = () => {
           }}
         />
       )}
-    </div>
+    </PageLayout>
   );
 };
 

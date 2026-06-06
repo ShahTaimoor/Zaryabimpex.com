@@ -1,49 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Package,
-  Users,
-  ShoppingCart,
-  Warehouse,
-  BarChart3,
   Settings,
   LogOut,
   Menu,
   X,
   User,
-  CreditCard,
-  Truck,
-  Building,
-  Building2,
-  FileText,
-  RotateCcw,
-  Tag,
-  TrendingUp,
-  Receipt,
-  ArrowUpDown,
-  ArrowRightLeft,
-  ArrowDown,
-  ArrowUp,
-  ArrowRight,
-  FolderTree,
-  Search,
-  Clock,
-  MapPin,
   AlertTriangle,
-  Wallet,
   ChevronRight,
   ChevronDown,
-  Camera,
-  Eye,
-  EyeOff,
-  PieChart,
-  ClipboardList,
   HelpCircle,
-  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { canAccessRoute, getRouteAccess } from '../config/routeAccess';
+import { canAccessRoute } from '../config/routeAccess';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../utils/componentUtils';
 import TabBar from './TabBar';
@@ -58,285 +27,17 @@ import { Button } from '@/components/ui/button';
 import PresenceHeartbeat from './PresenceHeartbeat';
 import OnlineAvatarStack from './OnlineAvatarStack';
 import { loadTopBarConfig, TOP_BAR_CONFIG_CHANGED } from '../config/topBarConfig';
+import {
+  navigation,
+  loadSidebarConfig,
+  isSidebarNavItemVisible,
+  getHeaderColors,
+  defaultOpenSections,
+} from '../config/navigation';
 import { TopBarActionButtonsDesktop, TopBarActionButtonsMobile } from './TopBarActionButtons';
 
-// Helper for Database icon
-function DatabaseIcon(props) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <ellipse cx="12" cy="5" rx="9" ry="3" />
-      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-    </svg>
-  )
-}
-
-const withRouteAccess = (items) => {
-  return items.map((item) => {
-    const next = { ...item };
-
-    if (item.href) {
-      const access = getRouteAccess(item.href);
-      if (access) {
-        if (Object.prototype.hasOwnProperty.call(access, 'permission')) {
-          next.permission = access.permission;
-        }
-        if (Object.prototype.hasOwnProperty.call(access, 'permissionAny')) {
-          next.permissionAny = access.permissionAny;
-        } else {
-          delete next.permissionAny;
-        }
-      }
-    }
-
-    if (item.children?.length) {
-      next.children = withRouteAccess(item.children);
-    }
-
-    return next;
-  });
-};
-
-export const navigation = withRouteAccess([
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'view_dashboard', allowMultiple: false, sidebarDefaultHidden: true },
-
-  {
-    name: 'Sales',
-    icon: ShoppingCart,
-    permission: 'view_sales',
-    children: [
-      { name: 'Sales Orders', href: '/sales-orders', icon: FileText, permission: 'view_sales_orders' },
-      { name: 'Sales', href: '/sales', icon: CreditCard, permission: 'view_sales' },
-      { name: 'Sale Returns', href: '/sale-returns', icon: RotateCcw, permission: 'view_sale_returns' },
-    ]
-  },
-
-  {
-    name: 'Purchase',
-    icon: Truck,
-    permission: 'view_purchase_orders',
-    children: [
-      { name: 'Purchase Orders', href: '/purchase-orders', icon: FileText, permission: 'view_purchase_orders' },
-      { name: 'Purchase', href: '/purchase', icon: Truck, permission: 'view_purchase_orders' },
-      { name: 'Import Purchase', href: '/import-purchase', icon: Truck, permission: 'view_import_purchase' },
-      { name: 'Current Purchase Market Prices', href: '/market-prices', icon: Tag, permissionAny: ['view_market_prices', 'create_market_prices', 'edit_market_prices', 'delete_market_prices', 'manage_market_prices', 'import_market_prices'] },
-      { name: 'Purchase Returns', href: '/purchase-returns', icon: RotateCcw, permission: 'view_purchase_returns' },
-    ]
-  },
-
-  {
-    name: 'Financials',
-    icon: Wallet,
-    permissionAny: ['view_cash_receiving', 'view_cash_receipts', 'view_cash_payments', 'view_bank_receipts', 'view_bank_payments', 'view_expenses'],
-    children: [
-      { name: 'Multi Cash Receipt', href: '/cash-receiving', icon: Receipt, permission: 'view_cash_receiving' },
-      { name: 'Cash Receipts', href: '/cash-receipts', icon: Receipt, permission: 'view_cash_receipts' },
-      { name: 'Cash Payments', href: '/cash-payments', icon: CreditCard, permission: 'view_cash_payments' },
-      { name: 'Bank Receipts', href: '/bank-receipts', icon: Building, permission: 'view_bank_receipts' },
-      { name: 'Bank Payments', href: '/bank-payments', icon: ArrowUpDown, permission: 'view_bank_payments' },
-      { name: 'Record Expense', href: '/expenses', icon: Wallet, permission: 'view_expenses' },
-    ]
-  },
-
-  {
-    name: 'Master Data',
-    icon: DatabaseIcon,
-    children: [
-      { name: 'Products', href: '/products', icon: Package, permission: 'view_products' },
-      { name: 'Product Variants', href: '/product-variants', icon: Tag, permission: 'view_product_variants' },
-      { name: 'Product Transformations', href: '/product-transformations', icon: ArrowRight, permission: 'view_product_transformations' },
-      { name: 'Categories', href: '/categories', icon: Tag, permission: 'view_product_categories' },
-      { name: 'Customers', href: '/customers', icon: Users, permission: 'view_customers' },
-      { name: 'Customer Analytics', href: '/customer-analytics', icon: BarChart3, permission: 'view_customer_analytics' },
-      { name: 'Suppliers', href: '/suppliers', icon: Building, permission: 'view_suppliers' },
-      { name: 'Bank & cash opening', href: '/banks', icon: Building2, permission: 'view_banks' },
-      { name: 'Investors', href: '/investors', icon: TrendingUp, permission: 'view_investors' },
-      { name: 'Drop Shipping', href: '/drop-shipping', icon: ArrowRight, permission: 'view_drop_shipping' },
-      { name: 'Cities', href: '/cities', icon: MapPin, permission: 'view_cities' },
-      { name: 'Discounts', href: '/discounts', icon: Tag, permission: 'view_discounts' },
-      { name: 'CCTV Access', href: '/cctv-access', icon: Camera, permission: 'view_cctv_access', allowMultiple: true },
-    ]
-  },
-
-  {
-    name: 'Inventory',
-    icon: Warehouse,
-    permission: 'view_inventory',
-    children: [
-      { name: 'Inventory', href: '/inventory', icon: Warehouse, permission: 'view_inventory' },
-      { name: 'Inventory Alerts', href: '/inventory-alerts', icon: AlertTriangle, permission: 'view_inventory', allowMultiple: true },
-      { name: 'Warehouses', href: '/warehouses', icon: Warehouse, permission: 'view_warehouses' },
-      { name: 'Stock Movements', href: '/stock-movements', icon: ArrowUpDown, permission: 'view_stock_movements' },
-      { name: 'Stock Transfers', href: '/stock-transfers', icon: ArrowRightLeft, permission: 'manage_inventory', sidebarDefaultHidden: true },
-      { name: 'Stock Ledger', href: '/stock-ledger', icon: FileText, permission: 'view_inventory_levels' },
-    ]
-  },
-
-  {
-    name: 'Accounting',
-    icon: ClipboardList,
-    permissionAny: ['view_chart_of_accounts', 'view_journal_vouchers', 'view_accounting_summary'],
-    children: [
-      { name: 'Chart of Accounts', href: '/chart-of-accounts', icon: FolderTree, permission: 'view_chart_of_accounts' },
-      { name: 'Journal Vouchers', href: '/journal-vouchers', icon: FileText, permission: 'view_journal_vouchers', allowMultiple: true },
-      { name: 'Account Ledger Summary', href: '/account-ledger', icon: FileText, permission: 'view_accounting_summary', allowMultiple: true },
-    ]
-  },
-
-  {
-    name: 'Analytics',
-    icon: BarChart3,
-    permission: 'view_reports',
-    children: [
-      { name: 'P&L Statements', href: '/pl-statements', icon: BarChart3, permission: 'view_pl_statements' },
-      { name: 'Balance Sheet', href: '/balance-sheet-statement', icon: FileText, permission: 'view_balance_sheets' },
-      { name: 'Anomaly Detection', href: '/anomaly-detection', icon: AlertTriangle, permission: 'view_anomaly_detection' },
-      { name: 'Reports', href: '/reports', icon: BarChart3, permission: 'view_general_reports' },
-      { name: 'Backdate Report', href: '/backdate-report', icon: Clock, permission: 'view_backdate_report' },
-    ]
-  },
-
-  {
-    name: 'HR/Admin',
-    icon: Users,
-    children: [
-      { name: 'Employees', href: '/employees', icon: Users, permission: 'manage_users', allowMultiple: true },
-      { name: 'Attendance', href: '/attendance', icon: Clock, permission: 'view_own_attendance' },
-    ]
-  },
-
-]);
-
-/** Migrate legacy parent-only sidebar keys to per-child keys (see Settings → Sidebar). */
-export function migrateSidebarConfig(parsed) {
-  if (!parsed || typeof parsed !== 'object') return {};
-  const next = { ...parsed };
-  navigation.forEach((n) => {
-    if (n.children && n.children.length) {
-      if (next[n.name] === false) {
-        n.children.forEach((child) => {
-          next[child.name] = false;
-        });
-      }
-      delete next[n.name];
-    }
-  });
-  return next;
-}
-
-export function loadSidebarConfig() {
-  const saved = localStorage.getItem('sidebarConfig');
-  if (!saved) return {
-    'Dashboard': false,
-    'Product Variants': false,
-    'Product Transformations': false,
-    'Customer Analytics': false,
-    'Investors': false,
-    'Drop Shipping': false,
-    'Import Purchase': false,
-    'CCTV Access': false,
-    'Warehouses': false,
-    'Stock Movements': false,
-    'Backdate Report': false,
-    'Current Purchase Market Prices': false
-  };
-  try {
-    const parsed = JSON.parse(saved);
-    const migrated = migrateSidebarConfig(parsed);
-    // Carry over old key if it exists.
-    if (migrated['Current Purchase Market Prices'] === undefined) {
-      if (migrated['Current Market Prices'] !== undefined) {
-        migrated['Current Purchase Market Prices'] = migrated['Current Market Prices'];
-      } else {
-        migrated['Current Purchase Market Prices'] = false;
-      }
-    }
-    if (migrated['Import Purchase'] === undefined) {
-      migrated['Import Purchase'] = false;
-    }
-    if (migrated['Dashboard'] === undefined) {
-      migrated['Dashboard'] = false;
-    }
-    if (migrated['Stock Transfers'] === undefined) {
-      migrated['Stock Transfers'] = false;
-    }
-    delete migrated['Current Market Prices'];
-    if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
-      localStorage.setItem('sidebarConfig', JSON.stringify(migrated));
-    }
-    return migrated;
-  } catch {
-    return {
-      'Dashboard': false,
-      'Product Variants': false,
-      'Product Transformations': false,
-      'Customer Analytics': false,
-      'Investors': false,
-      'Drop Shipping': false,
-      'Import Purchase': false,
-      'CCTV Access': false,
-      'Warehouses': false,
-      'Stock Movements': false,
-      'Backdate Report': false,
-      'Current Purchase Market Prices': false,
-      'Stock Transfers': false,
-    };
-  }
-}
-
-function isSidebarNavItemVisible(item, sidebarConfig) {
-  if (!item?.name) return false;
-  if (item.sidebarDefaultHidden && sidebarConfig?.[item.name] === undefined) {
-    return false;
-  }
-  return sidebarConfig?.[item.name] !== false;
-}
-
-export function loadBottomNavConfig() {
-  const saved = localStorage.getItem('bottomNavConfig');
-  if (!saved) return [
-    { name: 'Cash Receipts', href: '/cash-receipts', icon: 'Receipt' },
-    { name: 'Bank Receipts', href: '/bank-receipts', icon: 'Receipt' },
-    { name: 'Cash Payments', href: '/cash-payments', icon: 'CreditCard' },
-    { name: 'Bank Payments', href: '/bank-payments', icon: 'CreditCard' }
-  ];
-  try {
-    return JSON.parse(saved);
-  } catch {
-    return [
-      { name: 'Cash Receipts', href: '/cash-receipts', icon: 'Receipt' },
-      { name: 'Bank Receipts', href: '/bank-receipts', icon: 'Receipt' },
-      { name: 'Cash Payments', href: '/cash-payments', icon: 'CreditCard' },
-      { name: 'Bank Payments', href: '/bank-payments', icon: 'CreditCard' }
-    ];
-  }
-}
-
-// Sidebar header colors per section - Black and White theme
-const sidebarHeaderColors = {
-  Dashboard: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
-  Sales: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
-  Purchase: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
-  Financials: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
-  'Master Data': { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
-  Inventory: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
-  Accounting: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
-  Analytics: { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
-  'HR/Admin': { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' },
-};
-const getHeaderColors = (name) => sidebarHeaderColors[name] || { bg: 'bg-black', text: 'text-white', hover: 'hover:bg-gray-800' };
-const defaultOpenSections = ['Sales', 'Purchase'];
+// Re-export for backward compatibility
+export { navigation, loadSidebarConfig, loadBottomNavConfig, migrateSidebarConfig } from '../config/navigation';
 const isItemPermitted = (item, user, hasPermission) => {
   if (!item) return false;
   if (item.href) {
@@ -521,6 +222,16 @@ export const MultiTabLayout = ({ children }) => {
       window.removeEventListener('topBarVisibilityChanged', handleTopBarVisibilityChange);
     };
   }, []);
+
+  // Lock body scroll when mobile sidebar drawer is open
+  useEffect(() => {
+    if (!sidebarOpen || !isMobile) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [sidebarOpen, isMobile]);
 
   // Get alert summary for mobile bottom navbar
   const { data: summaryData } = useGetAlertSummaryQuery(undefined, {
@@ -709,10 +420,23 @@ export const MultiTabLayout = ({ children }) => {
       {/* Mobile Navigation */}
       <MobileNavigation user={user} onLogout={handleLogout} isLoggingOut={isLoggingOut} />
 
-      {/* Mobile sidebar */}
-      <div className={`fixed inset-0 z-[60] lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
-        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-gray-100 shadow-xl">
+      {/* Mobile sidebar drawer */}
+      <div
+        className={`fixed inset-0 z-[60] lg:hidden transition-opacity duration-200 ${
+          sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        aria-hidden={!sidebarOpen}
+      >
+        <div
+          className="fixed inset-0 bg-gray-900/50 backdrop-blur-[1px]"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close navigation menu"
+        />
+        <div
+          className={`fixed inset-y-0 left-0 flex w-[min(16rem,85vw)] max-w-xs flex-col bg-gray-100 shadow-xl transition-transform duration-200 ease-out ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
           <div className="flex h-14 items-center justify-between px-4 bg-gray-100">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded bg-black font-black text-white">Z</div>
@@ -890,8 +614,8 @@ export const MultiTabLayout = ({ children }) => {
         <TabBar />
 
         {/* Page content */}
-        <main className={`${isMobile ? 'py-2 pb-20' : 'py-4'} overflow-x-hidden max-w-full`}>
-          <div className={`mx-auto max-w-full w-full overflow-x-hidden ${isMobile ? 'px-2' : 'px-2 sm:px-4 lg:px-6'}`}>
+        <main className={`${isMobile ? 'py-2 pb-20' : isTablet ? 'py-3 pb-4' : 'py-4'} overflow-x-hidden max-w-full min-w-0`}>
+          <div className={`mx-auto max-w-full w-full min-w-0 overflow-x-hidden [&_.card]:min-w-0 [&_table]:max-w-none ${isMobile ? 'px-2' : 'px-2 sm:px-4 lg:px-6'}`}>
             <ErrorBoundary>
               {(() => {
                 const pathname = location.pathname;

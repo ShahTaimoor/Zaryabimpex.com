@@ -43,6 +43,8 @@ import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
+import { PageLayout } from '@/components/layout/PageLayout';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 const AccountTypeBadge = ({ type }) => {
   const config = {
@@ -1055,7 +1057,7 @@ export const ChartOfAccounts = () => {
 
   if (error) {
     return (
-      <div className="space-y-6">
+      <PageLayout>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Chart of Accounts</h1>
@@ -1077,56 +1079,41 @@ export const ChartOfAccounts = () => {
             </Button>
           </div>
         </div>
-      </div>
+      </PageLayout>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Chart of Accounts</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your accounting structure and account heads</p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto items-stretch sm:items-center">
-          <Button
-            onClick={() => setShowCategoryManagement(!showCategoryManagement)}
-            variant="secondary"
-            size="default"
-            className="flex items-center justify-center gap-2 h-10"
-          >
-            <FolderTree className="h-4 w-4" />
-            <span className="hidden sm:inline">{showCategoryManagement ? 'Hide Categories' : 'Manage Categories'}</span>
-            <span className="sm:hidden">Categories</span>
-          </Button>
-
-          {/* Desktop Export Buttons */}
-          <div className="hidden sm:flex items-center gap-2">
-            <ExcelExportButton 
-              ref={excelExportRef}
-              getData={getExportData}
-              label="Export"
-            />
-            <PdfExportButton 
-              ref={pdfExportRef}
-              getData={getExportData}
-              label="PDF"
-            />
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+    <PageLayout>
+      <PageHeader
+        title="Chart of Accounts"
+        subtitle="Manage your accounting structure and account heads"
+        icon={FolderTree}
+        actions={(
+          <>
+            <Button
+              onClick={() => setShowCategoryManagement(!showCategoryManagement)}
+              variant="secondary"
+              size="default"
+              className="flex items-center justify-center gap-2 h-10"
+            >
+              <FolderTree className="h-4 w-4" />
+              <span className="hidden sm:inline">{showCategoryManagement ? 'Hide Categories' : 'Manage Categories'}</span>
+              <span className="sm:hidden">Categories</span>
+            </Button>
+            <div className="hidden sm:flex items-center gap-2">
+              <ExcelExportButton ref={excelExportRef} getData={getExportData} label="Export" />
+              <PdfExportButton ref={pdfExportRef} getData={getExportData} label="PDF" />
+            </div>
             <Button
               onClick={handleAddNew}
               variant="default"
               size="default"
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 h-10"
+              className="flex items-center justify-center gap-2 h-10"
             >
               <Plus className="h-4 w-4" />
-              <span>Create Account</span>
+              Create Account
             </Button>
-
-            {/* Mobile Actions Dropdown */}
             <div className="sm:hidden">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1146,9 +1133,9 @@ export const ChartOfAccounts = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-          </div>
-        </div>
-      </div>
+          </>
+        )}
+      />
 
       {/* Quick Create Buttons */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
@@ -1265,7 +1252,7 @@ export const ChartOfAccounts = () => {
 
       {/* Accounts Table */}
       <div className="card">
-        <div className="overflow-x-auto">
+        <div className="table-scroll">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -1478,7 +1465,7 @@ export const ChartOfAccounts = () => {
         itemType="Account"
         isLoading={deleteConfirmation.isLoading}
       />
-    </div>
+    </PageLayout>
   );
 };
 

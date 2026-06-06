@@ -47,6 +47,7 @@ import { useGetSuppliersQuery } from '../store/services/suppliersApi';
 import DateFilter from '../components/DateFilter';
 import PrintReportModal from '../components/PrintReportModal';
 import PageShell from '../components/PageShell';
+import { PageHeader } from '../components/layout/PageHeader';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
@@ -1014,12 +1015,12 @@ export const Reports = () => {
     <PageShell className="bg-gray-50" contentClassName="space-y-6 p-4 md:p-6">
       {/* Header & Global Filters */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Reporting Dashboard</h1>
-          <p className="text-gray-500 text-sm">Real-time business analytics & financial reports</p>
-        </div>
+        <PageHeader
+          title="Reporting Dashboard"
+          subtitle="Real-time business analytics & financial reports"
+        />
 
-        <div className="flex flex-wrap md:flex-nowrap items-center gap-3">
+        <div className="flex flex-wrap md:flex-nowrap items-center gap-3 shrink-0">
           {(activeTab !== 'bank-cash') && (activeTab !== 'inventory' || inventoryType === 'stock-summary') && (
             <DateFilter
               startDate={dateRange.from}

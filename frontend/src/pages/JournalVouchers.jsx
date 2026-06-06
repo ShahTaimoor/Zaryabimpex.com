@@ -35,6 +35,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import DateFilter from '../components/DateFilter';
 import PageShell from '../components/PageShell';
+import { PageHeader } from '../components/layout/PageHeader';
 import { getCurrentDatePakistan } from '../utils/dateUtils';
 
 const todayISO = () => getCurrentDatePakistan();
@@ -797,6 +798,12 @@ export const JournalVouchers = () => {
   return (
     <PageShell className="bg-slate-50/50" maxWidthClassName="max-w-full" contentClassName="space-y-6 p-4 md:p-6">
       <ViewModal voucherId={viewVoucherId} onClose={() => setViewVoucherId(null)} />
+
+      <PageHeader
+        title="Journal Vouchers"
+        subtitle="Create and manage general ledger journal entries"
+        icon={BookOpen}
+      />
 
       {/* ── ENTRY FORM ──────────────────────────────────────────────────── */}
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

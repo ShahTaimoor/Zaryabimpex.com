@@ -33,6 +33,7 @@ import { formatDate } from '../utils/formatters';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import PageShell from '../components/PageShell';
+import { PageHeader } from '../components/layout/PageHeader';
 
 const Employees = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -235,31 +236,24 @@ const Employees = () => {
 
   return (
     <PageShell className="bg-gray-50/30" maxWidthClassName="max-w-7xl" contentClassName="space-y-6 p-4 md:p-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center">
-            <div className="bg-primary-100 p-2 rounded-lg mr-4">
-              <Users className="h-7 w-7 text-primary-600" />
-            </div>
-            Employee Directory
-          </h1>
-          <p className="text-slate-500 mt-1 font-medium">Manage human resources and organizational structure</p>
-        </div>
-        
-        <div className="flex items-center space-x-3">
-          <button 
+      <PageHeader
+        title="Employee Directory"
+        subtitle="Manage human resources and organizational structure"
+        icon={Users}
+        actions={
+          <button
+            type="button"
             onClick={() => {
               resetForm();
               setShowForm(true);
             }}
-            className="flex items-center space-x-2 px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg transition-all shadow-md"
+            className="flex items-center justify-center gap-2 px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg transition-all shadow-md w-full sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             <span>Add Employee</span>
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -365,7 +359,7 @@ const Employees = () => {
 
       {/* Employee Table */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-scroll">
           {isLoading ? (
             <div className="py-20 text-center"><LoadingSpinner /></div>
           ) : employees.length === 0 ? (

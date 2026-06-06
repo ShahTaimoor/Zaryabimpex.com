@@ -48,6 +48,8 @@ import { useCursorPagination } from '../hooks/useCursorPagination';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 import ConfirmationDialog from '../components/ConfirmationDialog';
 import { useConfirmation } from '../hooks/useConfirmation';
+import { PageLayout } from '../components/layout/PageLayout';
+import { PageHeader } from '../components/layout/PageHeader';
 
 const PI_PAGE_SIZE = 50;
 
@@ -567,13 +569,11 @@ export const PurchaseInvoices = () => {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden px-2 sm:px-0">
+    <PageLayout className="w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Purchase Invoices</h1>
-        </div>
+        <PageHeader title="Purchase Invoices" icon={FileText} />
 
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto items-stretch sm:items-center">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto items-stretch sm:items-center shrink-0">
           {/* Desktop Actions */}
           <div className="hidden sm:flex items-center gap-2">
             <ExcelExportButton
@@ -956,6 +956,6 @@ export const PurchaseInvoices = () => {
       />
 
       {/* Edit modal removed: editing handled via opening /purchase tab */}
-    </div>
+    </PageLayout>
   );
 };

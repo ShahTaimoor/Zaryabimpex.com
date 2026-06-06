@@ -11,6 +11,7 @@ import { useGetSummaryQuery } from '../store/services/plStatementsApi';
 import { handleApiError } from '../utils/errorHandler';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import PageShell from '../components/PageShell';
+import { PageHeader } from '../components/layout/PageHeader';
 import { formatCurrency } from '../utils/formatters';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getStartOfMonth, formatDatePakistan } from '../utils/dateUtils';
@@ -103,25 +104,12 @@ export const PLStatements = () => {
 
   return (
     <PageShell className="bg-gray-100" maxWidthClassName="max-w-6xl" contentClassName="p-4 sm:p-6 lg:p-8">
-      {/* Step 1: Header */}
-      <header className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white">
-              <FileText className="h-6 w-6 text-gray-700" />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
-                Profit & Loss Statement
-              </h1>
-              <p className="text-sm text-gray-500 mt-0.5">
-                Financial performance for selected period
-              </p>
-            </div>
-          </div>
-
-        </div>
-      </header>
+      <PageHeader
+        title="Profit & Loss Statement"
+        subtitle="Financial performance for selected period"
+        icon={FileText}
+        className="mb-6"
+      />
 
       {/* Step 2: Date filter and Generate */}
       <section className="bg-white border border-gray-200 rounded-lg shadow-sm mb-6 overflow-hidden no-print">
@@ -197,7 +185,7 @@ export const PLStatements = () => {
 
       {/* Report Content */}
       {!isButtonLoading && !error && showData && summary && (
-        <div id="pl-statement-content" className="space-y-6">
+        <div id="pl-statement-content" className="page-container">
           {/* Step 3: Summary Cards */}
           <section>
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
@@ -233,7 +221,7 @@ export const PLStatements = () => {
               <h2 className="text-base font-semibold text-gray-900">Statement of Financial Performance</h2>
               <p className="text-sm text-gray-500 mt-0.5">{formatDate(searchFromDate)} – {formatDate(searchToDate)}</p>
             </div>
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
               <table className="w-full text-left min-w-[400px]">
                 <tbody className="divide-y divide-gray-200">
                   <tr className="bg-gray-100">

@@ -101,6 +101,7 @@ import { buildReceiptLabelProductsFromLineItems } from '../utils/receiptLabelUti
 import { useResponsive } from '../components/ResponsiveContainer';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
+import { PageLayout } from '../components/layout/PageLayout';
 
 function normalizePoLineProductId(item) {
   const raw = item?.productData?._id ?? item?.productData?.id ?? item?.product;
@@ -1432,7 +1433,7 @@ export const PurchaseOrders = ({ tabId }) => {
   }, [fetchPurchaseOrdersForExport, purchaseOrdersExportParams, filters.fromDate, filters.toDate, companySettings]);
 
   return (
-    <div className="space-y-4 lg:space-y-6">
+    <PageLayout className="space-y-4 lg:space-y-6">
       {/* Modern Header Section */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
         <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-2">
@@ -3054,7 +3055,7 @@ export const PurchaseOrders = ({ tabId }) => {
                     isUpdating={updatingItemsConfirmation}
                   />
                 )}
-                <div className="overflow-x-auto">
+                <div className="table-scroll">
                   <table className="min-w-full border border-gray-200 rounded-lg">
                     <thead className="bg-gray-50">
                       <tr>
@@ -3277,7 +3278,7 @@ export const PurchaseOrders = ({ tabId }) => {
         isLoading={deleteConfirmation.isLoading}
       />
 
-    </div>
+    </PageLayout>
   );
 };
 

@@ -35,6 +35,8 @@ import {
 } from '../components/LoadingSpinner';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
+import { PageLayout } from '@/components/layout/PageLayout';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 const defaultFormValues = {
   name: '',
@@ -447,19 +449,18 @@ const Warehouses = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Warehouses</h1>
-          <p className="text-xs sm:text-sm text-gray-600 mt-1">
-            Manage warehouse locations, contacts, capacity, and availability.
-          </p>
-        </div>
-        <Button onClick={handleAdd} variant="default" size="default" className="flex items-center justify-center gap-2 w-full sm:w-auto">
-          <Plus className="h-4 w-4" />
-          <span>Add Warehouse</span>
-        </Button>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="Warehouses"
+        subtitle="Manage warehouse locations, contacts, capacity, and availability."
+        icon={Warehouse}
+        actions={(
+          <Button onClick={handleAdd} variant="default" size="default" className="flex items-center justify-center gap-2">
+            <Plus className="h-4 w-4" />
+            Add Warehouse
+          </Button>
+        )}
+      />
 
       <div className="rounded-lg bg-white p-4 shadow">
         <div className="grid gap-4 md:grid-cols-3">
@@ -690,7 +691,7 @@ const Warehouses = () => {
       )}
 
       {deleteDialog}
-    </div>
+    </PageLayout>
   );
 };
 

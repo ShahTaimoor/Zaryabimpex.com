@@ -25,6 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { LoadingButton } from '../components/LoadingSpinner';
 import { toast } from 'sonner';
 import { PageHeader } from '../components/layout/PageHeader';
+import { PageLayout } from '../components/layout/PageLayout';
 
 const DropShipping = () => {
   // Supplier Section
@@ -317,9 +318,8 @@ const DropShipping = () => {
   };
 
   return (
-    <div className="container mx-auto p-4 sm:p-6">
+    <PageLayout>
       <PageHeader
-        className="mb-6"
         title="Drop Shipping"
         subtitle="Manage drop shipping transactions"
       />
@@ -665,7 +665,7 @@ const DropShipping = () => {
             <h3 className="text-base sm:text-lg font-semibold text-gray-900">Product List</h3>
           </div>
           <div className="card-content">
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50 border-b">
@@ -762,7 +762,7 @@ const DropShipping = () => {
           Reset
         </Button>
       </div>
-    </div>
+    </PageLayout>
   );
 };
 

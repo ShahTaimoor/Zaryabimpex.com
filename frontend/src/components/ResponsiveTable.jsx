@@ -87,7 +87,7 @@ const ResponsiveTable = ({
     }
 
     return (
-      <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm min-w-0">
         {/* Main content */}
         <div className="space-y-2">
           {columns.slice(0, 3).map((column, colIndex) => {
@@ -199,8 +199,8 @@ const ResponsiveTable = ({
 
   // Desktop table component
   const DesktopTable = () => (
-    <div className="overflow-x-auto min-w-0">
-      <table className="w-full divide-y divide-gray-200 min-w-[520px] sm:min-w-[600px]">
+    <div className="table-scroll">
+      <table className="w-full divide-y divide-gray-200 min-w-[480px] sm:min-w-[560px]">
         <thead className="bg-gray-50">
           <tr>
             {columns.map((column) => (

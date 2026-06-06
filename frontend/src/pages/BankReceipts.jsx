@@ -62,6 +62,7 @@ import {
   customerSearchLabel,
   supplierSearchLabel,
 } from '@/components/payments/PaymentPartyFields';
+import { PageLayout } from '@/components/layout/PageLayout';
 
 
 const BankReceipts = () => {
@@ -396,7 +397,7 @@ const BankReceipts = () => {
   const paginationInfo = getPaginationInfo(bankReceiptsData);
 
   return (
-    <div className="space-y-6">
+    <PageLayout>
       {/* Bank Receipt Form */}
       <PaymentFormCard variant="bank-receipt">
           <PaymentFormGrid>
@@ -641,7 +642,7 @@ const BankReceipts = () => {
           >
             <>
               {/* Table */}
-              <div className="overflow-x-auto">
+              <div className="table-scroll">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -1132,7 +1133,7 @@ const BankReceipts = () => {
         itemType="Bank Receipt"
         isLoading={deleteConfirmation.isLoading}
       />
-    </div>
+    </PageLayout>
   );
 };
 

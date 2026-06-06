@@ -18,6 +18,8 @@ import AsyncSelect from 'react-select/async';
 import { useNavigate } from 'react-router-dom';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { isWarehouseInventoryEnabled } from '../utils/warehouseInventory';
+import { PageLayout } from '../components/layout/PageLayout';
+import { PageHeader } from '../components/layout/PageHeader';
 
 const asyncSelectStyles = {
   control: (base) => ({ ...base, minHeight: '2.5rem' }),
@@ -218,24 +220,20 @@ export default function StockTransfers() {
   if (isLoading && !transfers.length) return <LoadingPage />;
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <ArrowRightLeft className="h-7 w-7 text-emerald-600" />
-            Stock Transfers
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Move bulk stock from warehouse to shop. Sales use shop inventory only.
-          </p>
-        </div>
-        <Button onClick={openModal} className="gap-2">
-          <Plus className="h-4 w-4" />
-          New Transfer
-        </Button>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="Stock Transfers"
+        subtitle="Move bulk stock from warehouse to shop. Sales use shop inventory only."
+        icon={ArrowRightLeft}
+        actions={
+          <Button onClick={openModal} className="gap-2 w-full sm:w-auto">
+            <Plus className="h-4 w-4" />
+            New Transfer
+          </Button>
+        }
+      />
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm table-scroll">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
             <tr>
@@ -421,6 +419,6 @@ export default function StockTransfers() {
           </div>
         </form>
       </BaseModal>
-    </div>
+    </PageLayout>
   );
 }

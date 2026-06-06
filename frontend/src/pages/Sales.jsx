@@ -68,6 +68,7 @@ import { CartItemsTableSection } from '../components/order/CartItemsTableSection
 import { CartTableHeader } from '../components/order/CartTableHeader';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import AsyncErrorBoundary from '../components/AsyncErrorBoundary';
+import { PageLayout } from '../components/layout/PageLayout';
 import { ClearConfirmationDialog } from '../components/ConfirmationDialog';
 import { useClearConfirmation } from '../hooks/useConfirmation';
 import PaymentModal from '../components/PaymentModal';
@@ -1646,7 +1647,7 @@ export const Sales = ({ tabId, editData }) => {
 
   return (
     <AsyncErrorBoundary>
-      <div className="space-y-4 lg:space-y-6">
+      <PageLayout className="space-y-4 lg:space-y-6">
         {/* Modern Header Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
           <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4">
@@ -2771,7 +2772,7 @@ export const Sales = ({ tabId, editData }) => {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
+                <div className="table-scroll">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
@@ -2893,7 +2894,7 @@ export const Sales = ({ tabId, editData }) => {
             )}
           </div>
         </div>
-      </div>
+      </PageLayout>
 
       {/* Clear Cart Confirmation Dialog */}
       <ClearConfirmationDialog

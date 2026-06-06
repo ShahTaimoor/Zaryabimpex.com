@@ -17,6 +17,8 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { showErrorToast, handleApiError } from '../utils/errorHandler';
+import { PageLayout } from '@/components/layout/PageLayout';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 const CustomerAnalytics = () => {
   const [filters, setFilters] = useState({
@@ -90,14 +92,12 @@ const CustomerAnalytics = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Customer Analytics</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">AI-powered customer segmentation, CLV prediction, and churn risk analysis</p>
-        </div>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="Customer Analytics"
+        subtitle="AI-powered customer segmentation, CLV prediction, and churn risk analysis"
+        icon={Users}
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
@@ -221,7 +221,7 @@ const CustomerAnalytics = () => {
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900">Top Customers by Predicted CLV</h2>
         </div>
-        <div className="overflow-x-auto">
+        <div className="table-scroll">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -304,7 +304,7 @@ const CustomerAnalytics = () => {
               Customer Details ({analytics.filteredCount || analytics.customers.length} customers)
             </h2>
           </div>
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -402,7 +402,7 @@ const CustomerAnalytics = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 };
 

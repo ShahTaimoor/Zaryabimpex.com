@@ -37,6 +37,8 @@ import { toast } from 'sonner';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo } from '../utils/dateUtils';
 import { useCursorPagination } from '../hooks/useCursorPagination';
+import { PageLayout } from '@/components/layout/PageLayout';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 export const StockMovements = () => {
   const defaultDateTo = getCurrentDatePakistan();
@@ -304,14 +306,12 @@ export const StockMovements = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Stock Movement Tracking</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">Detailed inventory history and movement tracking</p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
+    <PageLayout>
+      <PageHeader
+        title="Stock Movement Tracking"
+        subtitle="Detailed inventory history and movement tracking"
+        icon={Package}
+        actions={(
           <Button
             onClick={() => setShowAdjustmentModal(true)}
             variant="default"
@@ -321,9 +321,8 @@ export const StockMovements = () => {
             <Plus className="h-4 w-4" />
             Stock Adjustment
           </Button>
-
-        </div>
-      </div>
+        )}
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
@@ -510,7 +509,7 @@ export const StockMovements = () => {
       {/* Movements Table */}
       <div className="card">
         <div className="card-content">
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -874,7 +873,7 @@ export const StockMovements = () => {
                   </div>
                 )}
 
-                ||                {selectedMovement.notes && (
+                {selectedMovement.notes && (
                   <div>
                     <label className="text-sm font-medium text-gray-500">Notes</label>
                     <p className="text-sm text-gray-900">{selectedMovement.notes}</p>
@@ -885,6 +884,6 @@ export const StockMovements = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 };

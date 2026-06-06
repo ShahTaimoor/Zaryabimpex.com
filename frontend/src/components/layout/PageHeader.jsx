@@ -1,46 +1,29 @@
-import React from 'react';
+import React, { memo } from 'react';
+import { cn } from '@/lib/utils';
 
 /**
  * Reusable page-title block used at the top of every list/management page.
- *
- * Replaces the duplicated 4-line block:
- *
- *   <div className="flex items-center justify-between gap-2">
- *     <div className="min-w-0">
- *       <h1 className="text-lg sm:text-3xl font-bold text-gray-900 truncate">{title}</h1>
- *       <p className="hidden sm:block text-sm sm:text-base text-gray-600 mt-1">{subtitle}</p>
- *     </div>
- *     <div className="flex-shrink-0 flex items-center gap-2">{actions}</div>
- *   </div>
- *
- * Usage:
- *   <PageHeader title="Bank Receipts" />
- *   <PageHeader
- *     title="Customers"
- *     subtitle="Manage your customer list"
- *     icon={BarChart3}
- *     actions={<Button>Add</Button>}
- *   />
+ * Stacks title and actions vertically on mobile; inline on tablet+.
  */
-export function PageHeader({
+export const PageHeader = memo(function PageHeader({
   title,
   subtitle,
   icon: IconComponent,
   actions,
   className = '',
-  titleClassName = 'text-lg sm:text-3xl font-bold text-gray-900 truncate',
-  subtitleClassName = 'hidden sm:block text-sm sm:text-base text-gray-600 mt-1',
+  titleClassName = 'text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate',
+  subtitleClassName = 'text-sm sm:text-base text-gray-600 mt-0.5 sm:mt-1 line-clamp-2 sm:line-clamp-none',
 }) {
   const hasRightSide = !!actions;
   const containerClass = hasRightSide
-    ? `flex items-center justify-between gap-2 ${className}`.trim()
-    : `min-w-0 ${className}`.trim();
+    ? cn('flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 min-w-0', className)
+    : cn('min-w-0', className);
 
   const titleBlock = (
-    <div className={`min-w-0 ${IconComponent ? 'flex items-center gap-2' : ''}`.trim()}>
+    <div className={cn('min-w-0 flex-1', IconComponent && 'flex items-start sm:items-center gap-2 sm:gap-3')}>
       {IconComponent && (
         <IconComponent
-          className="h-7 w-7 text-primary-600 shrink-0 hidden sm:block"
+          className="h-6 w-6 sm:h-7 sm:w-7 text-primary-600 shrink-0 mt-0.5 sm:mt-0"
           aria-hidden
         />
       )}
@@ -58,9 +41,9 @@ export function PageHeader({
   return (
     <div className={containerClass}>
       {titleBlock}
-      <div className="flex-shrink-0 flex items-center gap-2">{actions}</div>
+      <div className="page-actions">{actions}</div>
     </div>
   );
-}
+});
 
 export default PageHeader;

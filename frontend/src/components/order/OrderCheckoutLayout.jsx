@@ -9,7 +9,7 @@ export function OrderCheckoutCard({ children, className }) {
   return (
     <div
       className={cn(
-        'ml-auto mt-4 w-full max-w-5xl overflow-hidden rounded-2xl border-2 border-blue-200/90 bg-gradient-to-br from-sky-50/95 via-blue-50 to-indigo-50/95 shadow-[0_8px_30px_rgba(30,58,138,0.09)] ring-1 ring-blue-100/70',
+        'mx-auto mt-4 w-full max-w-5xl overflow-hidden rounded-xl sm:rounded-2xl border-2 border-blue-200/90 bg-gradient-to-br from-sky-50/95 via-blue-50 to-indigo-50/95 shadow-[0_8px_30px_rgba(30,58,138,0.09)] ring-1 ring-blue-100/70',
         className
       )}
     >
@@ -34,7 +34,7 @@ export function OrderDetailsSection({
   return (
     <div
       className={cn(
-        'border-b border-blue-200/60 bg-white/40 px-5 py-5 sm:px-7',
+        'border-b border-blue-200/60 bg-white/40 px-3 py-4 sm:px-5 sm:py-5 lg:px-7',
         stripClassName
       )}
     >

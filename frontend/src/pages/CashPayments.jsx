@@ -60,6 +60,7 @@ import {
   customerSearchLabel,
   supplierSearchLabel,
 } from '@/components/payments/PaymentPartyFields';
+import { PageLayout } from '@/components/layout/PageLayout';
 
 
 const CashPayments = () => {
@@ -441,7 +442,7 @@ const CashPayments = () => {
   const paginationInfo = getPaginationInfo(cashPaymentsData);
 
   return (
-    <div className="space-y-6">
+    <PageLayout>
       {/* Cash Payment Form */}
       <PaymentFormCard variant="cash-payment">
           <PaymentFormGrid>
@@ -705,7 +706,7 @@ const CashPayments = () => {
           >
             <>
               {/* Table */}
-              <div className="overflow-x-auto">
+              <div className="table-scroll">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -994,7 +995,7 @@ const CashPayments = () => {
         itemType="Cash Payment"
         isLoading={deleteConfirmation.isLoading}
       />
-    </div>
+    </PageLayout>
   );
 };
 

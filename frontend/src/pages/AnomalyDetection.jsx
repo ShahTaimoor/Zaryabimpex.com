@@ -19,6 +19,8 @@ import { formatCurrency } from '../utils/formatters';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { showErrorToast, handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
+import { PageLayout } from '../components/layout/PageLayout';
+import { PageHeader } from '../components/layout/PageHeader';
 
 const AnomalyDetection = () => {
   const [filters, setFilters] = useState({
@@ -99,14 +101,12 @@ const AnomalyDetection = () => {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      {/* Header */}
-      <div className="flex flex-col">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Anomaly Detection & Fraud Prevention</h1>
-          <p className="text-gray-600 text-sm md:text-base mt-1">AI-powered detection of unusual patterns and potential fraud</p>
-        </div>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="Anomaly Detection & Fraud Prevention"
+        subtitle="AI-powered detection of unusual patterns and potential fraud"
+        icon={AlertTriangle}
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -326,7 +326,7 @@ const AnomalyDetection = () => {
           </p>
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 };
 

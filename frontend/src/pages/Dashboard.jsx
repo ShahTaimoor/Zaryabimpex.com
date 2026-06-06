@@ -60,6 +60,7 @@ import PeriodComparisonCard from '../components/PeriodComparisonCard';
 import ComparisonChart from '../components/ComparisonChart';
 import { usePeriodComparison } from '../hooks/usePeriodComparison';
 import DateFilter from '../components/DateFilter';
+import { PageLayout } from '../components/layout/PageLayout';
 import { getCurrentDatePakistan } from '../utils/dateUtils';
 import { toast } from 'sonner';
 import { POLLING_INTERVALS } from '../config/polling';
@@ -882,7 +883,7 @@ export const Dashboard = () => {
   ];
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
+    <PageLayout>
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">Dashboard</h1>
@@ -1699,6 +1700,6 @@ export const Dashboard = () => {
           />
         </>
       )}
-    </div>
+    </PageLayout>
   );
 };

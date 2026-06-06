@@ -39,6 +39,7 @@ import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import { useTab } from '../contexts/TabContext';
 import { PageHeader } from '../components/layout/PageHeader';
+import { PageLayout } from '../components/layout/PageLayout';
 
 /** Amount display without a currency prefix (e.g. no leading $). */
 function formatAmount(value) {
@@ -510,9 +511,8 @@ export const Investors = ({ tabId }) => {
   if (error) return <div className="p-6 text-red-600">Error loading investors: {error.message}</div>;
 
   return (
-    <div className="p-4 sm:p-6">
+    <PageLayout>
       <PageHeader
-        className="mb-6"
         title="Investors"
         subtitle="Manage investors and track profit distributions"
         actions={
@@ -828,7 +828,7 @@ export const Investors = ({ tabId }) => {
         title={confirmation.title}
         message={confirmation.message}
       />
-    </div>
+    </PageLayout>
   );
 };
 
@@ -1094,7 +1094,7 @@ const ProfitSharesModal = ({ investorId, investorName, onClose }) => {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -1268,7 +1268,7 @@ const PayoutHistoryModal = ({ investorId, investorName, onClose }) => {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>

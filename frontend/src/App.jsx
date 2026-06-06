@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorProvider } from './contexts/ErrorContext';
 import { TabProvider } from './contexts/TabContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { Layout } from './components/Layout';
 import { MultiTabLayout } from './components/MultiTabLayout';
 import ErrorBoundary from './components/ErrorBoundary';
 import NetworkStatus from './components/NetworkStatus';

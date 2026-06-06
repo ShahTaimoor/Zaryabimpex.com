@@ -515,7 +515,7 @@ export function PaymentFormActions({
           type="button"
           onClick={onReset}
           disabled={isSubmitting}
-          className="inline-flex h-11 min-w-[8.5rem] items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white px-5 text-sm font-medium text-neutral-700 shadow-sm transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-11 w-full sm:w-auto sm:min-w-[8.5rem] items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white px-5 text-sm font-medium text-neutral-700 shadow-sm transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RotateCcw className="h-4 w-4" aria-hidden />
           <span>{resetLabel}</span>
@@ -527,7 +527,7 @@ export function PaymentFormActions({
           onClick={onSubmit}
           disabled={isSubmitting || submitDisabled}
           className={cn(
-            'inline-flex h-11 min-w-[10rem] items-center justify-center gap-2 rounded-lg border px-5 text-sm font-semibold shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+            'inline-flex h-11 w-full sm:w-auto sm:min-w-[10rem] items-center justify-center gap-2 rounded-lg border px-5 text-sm font-semibold shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50',
             theme.submitBtnClass
           )}
         >
