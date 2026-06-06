@@ -33,6 +33,8 @@ export function CustomerPartySelect({
   showSecondaryName = false,
   innerRef,
   renderExtra,
+  serverSideSearch = false,
+  openOnFocus = false,
 }) {
   const displayKey = useCallback(
     (customer) => {
@@ -80,6 +82,8 @@ export function CustomerPartySelect({
       emptyMessage={emptyMessage}
       rightContentKey={rightContentKey}
       value={searchValue}
+      serverSideSearch={serverSideSearch}
+      openOnFocus={openOnFocus}
     />
   );
 }

@@ -24,6 +24,8 @@ export function SupplierPartySelect({
   showSecondaryName = false,
   innerRef,
   renderExtra,
+  serverSideSearch = false,
+  openOnFocus = false,
 }) {
   const displayKey = useCallback(
     (supplier) => {
@@ -71,6 +73,8 @@ export function SupplierPartySelect({
       loading={loading}
       emptyMessage={emptyMessage}
       value={searchValue}
+      serverSideSearch={serverSideSearch}
+      openOnFocus={openOnFocus}
     />
   );
 }

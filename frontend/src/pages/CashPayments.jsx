@@ -2,11 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Search,
   Calendar,
-  Phone,
-  Mail,
-  MapPin,
-  Building,
-  User
 } from 'lucide-react';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatDate } from '../utils/formatters';
@@ -31,7 +26,7 @@ import { useAppDispatch } from '../store/hooks';
 import { api } from '../store/api';
 import DateFilter from '../components/DateFilter';
 import BaseModal from '../components/BaseModal';
-import FormField from '../components/FormField';
+import FormField from '@/components/FormField';
 import { InputWithIcon } from '@/components/ui/input-with-icon';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
@@ -42,17 +37,35 @@ import { ListResultsHeader } from '../components/list/ListResultsHeader';
 import { SortableTableHeader } from '../components/list/SortableTableHeader';
 import { DataStateMessage } from '../components/list/DataStateMessage';
 import { RowActionButtons } from '../components/list/RowActionButtons';
-import { PageHeader } from '../components/layout/PageHeader';
-import { FormActionsFooter } from '../components/layout/FormActionsFooter';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
+import {
+  PaymentFormCard,
+  PaymentFormGrid,
+  PaymentFormColumn,
+  PaymentFormSection,
+  PaymentPartyTypeRadio,
+  PaymentFormField,
+  PaymentAmountField,
+  PaymentBalancePanel,
+  PaymentFormActions,
+  paymentFormInputClass,
+} from '@/components/payments/PaymentFormLayout';
+import { Users, FileText } from 'lucide-react';
+import {
+  PaymentCustomerField,
+  PaymentSupplierField,
+  PaymentExpenseAccountField,
+  partyIdFromSelect,
+  customerSearchLabel,
+  supplierSearchLabel,
+} from '@/components/payments/PaymentPartyFields';
 
 
 const CashPayments = () => {
   const {
     canViewCustomerBalance,
     canViewSupplierBalance,
-    canViewCustomerPhone,
     canViewSupplierPhone
   } = useSensitiveDataPermissions();
   const today = getCurrentDatePakistan();
@@ -108,9 +121,6 @@ const CashPayments = () => {
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [expenseSearchTerm, setExpenseSearchTerm] = useState('');
   const [paymentType, setPaymentType] = useState('supplier'); // 'supplier', 'customer', or 'expense'
-  const [supplierDropdownIndex, setSupplierDropdownIndex] = useState(-1);
-  const [customerDropdownIndex, setCustomerDropdownIndex] = useState(-1);
-  const [expenseDropdownIndex, setExpenseDropdownIndex] = useState(-1);
 
   // Fetch cash payments
   const {
@@ -206,22 +216,31 @@ const CashPayments = () => {
     setCustomerSearchTerm('');
     setExpenseSearchTerm('');
     setPaymentType('supplier');
-    setSupplierDropdownIndex(-1);
-    setCustomerDropdownIndex(-1);
-    setExpenseDropdownIndex(-1);
   };
 
-  const handleSupplierSelect = (supplierId) => {
-    const supplier = suppliers.find(s => (s.id || s._id) === supplierId);
-    setSelectedSupplier(supplier);
+  const handleSupplierSelect = (supplierOrId) => {
+    const supplierId = partyIdFromSelect(supplierOrId);
+    if (!supplierId) return;
+    const supplier =
+      typeof supplierOrId === 'object' && supplierOrId
+        ? supplierOrId
+        : suppliers?.find((s) => (s.id || s._id) === supplierId);
+    setSelectedSupplier(supplier || null);
+    setSupplierSearchTerm(supplier ? supplierSearchLabel(supplier) : '');
     setFormData(prev => ({ ...prev, supplier: supplierId, customer: '' }));
     setSelectedCustomer(null);
     setCustomerSearchTerm('');
   };
 
-  const handleCustomerSelect = (customerId) => {
-    const customer = customers.find(c => (c.id || c._id) === customerId);
-    setSelectedCustomer(customer);
+  const handleCustomerSelect = (customerOrId) => {
+    const customerId = partyIdFromSelect(customerOrId);
+    if (!customerId) return;
+    const customer =
+      typeof customerOrId === 'object' && customerOrId
+        ? customerOrId
+        : customers?.find((c) => (c.id || c._id) === customerId);
+    setSelectedCustomer(customer || null);
+    setCustomerSearchTerm(customer ? customerSearchLabel(customer) : '');
     setFormData(prev => ({ ...prev, customer: customerId, supplier: '' }));
     setSelectedSupplier(null);
     setSupplierSearchTerm('');
@@ -229,7 +248,6 @@ const CashPayments = () => {
 
   const handleSupplierSearch = (searchTerm) => {
     setSupplierSearchTerm(searchTerm);
-    setSupplierDropdownIndex(-1); // Reset index when searching
     if (searchTerm === '') {
       setSelectedSupplier(null);
       setFormData(prev => ({ ...prev, supplier: '' }));
@@ -238,148 +256,28 @@ const CashPayments = () => {
 
   const handleCustomerSearch = (searchTerm) => {
     setCustomerSearchTerm(searchTerm);
-    setCustomerDropdownIndex(-1); // Reset index when searching
     if (searchTerm === '') {
       setSelectedCustomer(null);
       setFormData(prev => ({ ...prev, customer: '' }));
     }
   };
 
-  const handleExpenseAccountSelect = (accountId) => {
-    const account = expenseAccounts?.find(a => a._id === accountId);
+  const handleExpenseAccountSelect = (accountOrId) => {
+    const accountId = partyIdFromSelect(accountOrId);
+    const account =
+      typeof accountOrId === 'object' && accountOrId
+        ? accountOrId
+        : expenseAccounts?.find((a) => (a.id || a._id) === accountId);
     setSelectedExpenseAccount(account);
+    setExpenseSearchTerm(account?.accountName || '');
     setFormData(prev => ({ ...prev, particular: account?.accountName || '' }));
   };
 
   const handleExpenseSearch = (searchTerm) => {
     setExpenseSearchTerm(searchTerm);
-    setExpenseDropdownIndex(-1); // Reset index when searching
     if (searchTerm === '') {
       setSelectedExpenseAccount(null);
       setFormData(prev => ({ ...prev, particular: '' }));
-    }
-  };
-
-  const handleExpenseKeyDown = (e) => {
-    const filteredAccounts = expenseAccounts?.filter(account =>
-      (account.accountName || '').toLowerCase().includes(expenseSearchTerm.toLowerCase()) ||
-      (account.accountCode || '').includes(expenseSearchTerm)
-    ) || [];
-
-    if (!expenseSearchTerm || filteredAccounts.length === 0) {
-      return;
-    }
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setExpenseDropdownIndex(prev =>
-          prev < filteredAccounts.length - 1 ? prev + 1 : 0
-        );
-        break;
-
-      case 'ArrowUp':
-        e.preventDefault();
-        setExpenseDropdownIndex(prev =>
-          prev > 0 ? prev - 1 : filteredAccounts.length - 1
-        );
-        break;
-
-      case 'Enter':
-        e.preventDefault();
-        if (expenseDropdownIndex >= 0 && expenseDropdownIndex < filteredAccounts.length) {
-          const account = filteredAccounts[expenseDropdownIndex];
-          handleExpenseAccountSelect(account.id || account._id);
-          setExpenseSearchTerm(account.accountName || '');
-          setExpenseDropdownIndex(-1);
-        }
-        break;
-
-      case 'Escape':
-        e.preventDefault();
-        setExpenseSearchTerm('');
-        setExpenseDropdownIndex(-1);
-        break;
-    }
-  };
-
-  const handleSupplierKeyDown = (e) => {
-    const filteredSuppliers = suppliers || [];
-
-    if (!supplierSearchTerm || filteredSuppliers.length === 0) {
-      return;
-    }
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSupplierDropdownIndex(prev =>
-          prev < filteredSuppliers.length - 1 ? prev + 1 : 0
-        );
-        break;
-
-      case 'ArrowUp':
-        e.preventDefault();
-        setSupplierDropdownIndex(prev =>
-          prev > 0 ? prev - 1 : filteredSuppliers.length - 1
-        );
-        break;
-
-      case 'Enter':
-        e.preventDefault();
-        if (supplierDropdownIndex >= 0 && supplierDropdownIndex < filteredSuppliers.length) {
-          const supplier = filteredSuppliers[supplierDropdownIndex];
-          handleSupplierSelect(supplier.id || supplier._id);
-          setSupplierSearchTerm(getSupplierDisplayName(supplier, ''));
-          setSupplierDropdownIndex(-1);
-        }
-        break;
-
-      case 'Escape':
-        e.preventDefault();
-        setSupplierSearchTerm('');
-        setSupplierDropdownIndex(-1);
-        break;
-    }
-  };
-
-  const handleCustomerKeyDown = (e) => {
-    const filteredCustomers = customers || [];
-
-    if (!customerSearchTerm || filteredCustomers.length === 0) {
-      return;
-    }
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setCustomerDropdownIndex(prev =>
-          prev < filteredCustomers.length - 1 ? prev + 1 : 0
-        );
-        break;
-
-      case 'ArrowUp':
-        e.preventDefault();
-        setCustomerDropdownIndex(prev =>
-          prev > 0 ? prev - 1 : filteredCustomers.length - 1
-        );
-        break;
-
-      case 'Enter':
-        e.preventDefault();
-        if (customerDropdownIndex >= 0 && customerDropdownIndex < filteredCustomers.length) {
-          const customer = filteredCustomers[customerDropdownIndex];
-          handleCustomerSelect(customer.id || customer._id);
-          setCustomerSearchTerm(getCustomerDisplayName(customer, customer.email || ''));
-          setCustomerDropdownIndex(-1);
-        }
-        break;
-
-      case 'Escape':
-        e.preventDefault();
-        setCustomerSearchTerm('');
-        setCustomerDropdownIndex(-1);
-        break;
     }
   };
 
@@ -544,473 +442,169 @@ const CashPayments = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <PageHeader title="Cash Payments" />
-
       {/* Cash Payment Form */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="text-base sm:text-lg font-medium text-gray-900">Payment Details</h3>
-        </div>
-        <div className="card-content">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            {/* Left Column */}
-            <div className="space-y-4">
-              {/* Payment Type Selection */}
-              <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-                  Payment Type
-                </label>
-                <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input
-                      type="radio"
-                      value="supplier"
-                      checked={paymentType === 'supplier'}
-                      onChange={(e) => {
-                        setPaymentType(e.target.value);
-                        setSelectedCustomer(null);
-                        setCustomerSearchTerm('');
-                        setFormData(prev => ({ ...prev, customer: '' }));
-                      }}
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">Supplier</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input
-                      type="radio"
-                      value="customer"
-                      checked={paymentType === 'customer'}
-                      onChange={(e) => {
-                        setPaymentType(e.target.value);
-                        setSelectedSupplier(null);
-                        setSupplierSearchTerm('');
-                        setFormData(prev => ({ ...prev, supplier: '' }));
-                      }}
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">Customer</span>
-                  </label>
-                </div>
-              </div>
+      <PaymentFormCard variant="cash-payment">
+          <PaymentFormGrid>
+            <PaymentFormColumn>
+              <PaymentFormSection
+                title="Party & Amount"
+                description="Who received the payment and how much was paid"
+                icon={Users}
+              >
+              <PaymentPartyTypeRadio
+                label="Payment Type"
+                value={paymentType}
+                onChange={setPaymentType}
+                options={[
+                  { value: 'supplier', label: 'Supplier' },
+                  { value: 'customer', label: 'Customer' },
+                  { value: 'expense', label: 'Expense' },
+                ]}
+                onOptionChange={(type) => {
+                  if (type === 'supplier') {
+                    setSelectedCustomer(null);
+                    setCustomerSearchTerm('');
+                    setSelectedExpenseAccount(null);
+                    setExpenseSearchTerm('');
+                    setFormData((prev) => ({ ...prev, customer: '', particular: '' }));
+                    return;
+                  }
+                  if (type === 'customer') {
+                    setSelectedSupplier(null);
+                    setSupplierSearchTerm('');
+                    setSelectedExpenseAccount(null);
+                    setExpenseSearchTerm('');
+                    setFormData((prev) => ({ ...prev, supplier: '', particular: '' }));
+                    return;
+                  }
+                  setSelectedSupplier(null);
+                  setSelectedCustomer(null);
+                  setSupplierSearchTerm('');
+                  setCustomerSearchTerm('');
+                  setFormData((prev) => ({ ...prev, supplier: '', customer: '' }));
+                }}
+              />
 
-              {/* Supplier Selection */}
               {paymentType === 'supplier' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Supplier
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      autoComplete="off"
-                      value={supplierSearchTerm}
-                      onChange={(e) => handleSupplierSearch(e.target.value)}
-                      onKeyDown={handleSupplierKeyDown}
-                      className="w-full pr-10"
-                      placeholder="Search or select supplier..."
-                    />
-                    <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
-                  {supplierSearchTerm && (
-                    <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {(suppliers || []).map((supplier, index) => {
-                        const supplierId = supplier.id || supplier._id;
-                        return (
-                          <div
-                            key={supplierId}
-                            onClick={() => {
-                              handleSupplierSelect(supplierId);
-                              setSupplierSearchTerm(getSupplierDisplayName(supplier, ''));
-                              setSupplierDropdownIndex(-1);
-                            }}
-                            className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${supplierDropdownIndex === index ? 'bg-blue-50' : ''
-                              }`}
-                          >
-                            <div className="font-medium text-gray-900">
-                              {getSupplierDisplayName(supplier, 'Unknown')}
-                            </div>
-                            <div className="text-sm text-gray-600 capitalize mt-0.5">
-                              {supplier.businessType && supplier.reliability
-                                ? `${supplier.businessType} • ${supplier.reliability}`
-                                : supplier.businessType || supplier.reliability || ''
-                              }
-                            </div>
-                            <div className="flex items-center space-x-3 mt-1">
-                              {canViewSupplierBalance && (
-                                <div className="text-sm text-gray-600">
-                                  <span className="text-gray-500">Outstanding Balance:</span>{' '}
-                                  <span className={`font-medium ${(supplier.pendingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                    {Math.round(supplier.pendingBalance || 0)}
-                                  </span>
-                                </div>
-                              )}
-                              {canViewSupplierPhone && supplier.phone && (
-                                <div className="flex items-center space-x-1 text-sm text-gray-500">
-                                  <Phone className="h-3 w-3" />
-                                  <span>{supplier.phone}</span>
-                                </div>
-                              )}
-                              {supplier.email && (
-                                <div className="flex items-center space-x-1 text-sm text-gray-500">
-                                  <Mail className="h-3 w-3" />
-                                  <span>{supplier.email}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Supplier Information Card */}
-                  {selectedSupplier && (
-                    <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                      <div className="flex items-center space-x-3">
-                        <Building className="h-5 w-5 text-gray-400" />
-                        <div className="flex-1">
-                          <p className="font-medium">
-                            {getSupplierDisplayName(selectedSupplier, 'Unknown Supplier')}
-                          </p>
-                          <p className="text-sm text-gray-600 capitalize">
-                            {selectedSupplier.businessType && selectedSupplier.reliability
-                              ? `${selectedSupplier.businessType} • ${selectedSupplier.reliability}`
-                              : selectedSupplier.businessType || selectedSupplier.reliability || 'Supplier Information'
-                            }
-                          </p>
-                          <div className="flex items-center space-x-4 mt-2">
-                            {canViewSupplierBalance && (
-                              <div className="flex items-center space-x-1">
-                                <span className="text-xs text-gray-500">Outstanding Balance:</span>
-                                <span className={`text-sm font-medium ${(selectedSupplier.pendingBalance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                  {Math.round(selectedSupplier.pendingBalance || 0)}
-                                </span>
-                              </div>
-                            )}
-                            {canViewSupplierPhone && selectedSupplier.phone && (
-                              <div className="flex items-center space-x-1">
-                                <Phone className="h-3 w-3 text-gray-400" />
-                                <span className="text-xs text-gray-500">{selectedSupplier.phone}</span>
-                              </div>
-                            )}
-                            {selectedSupplier.email && (
-                              <div className="flex items-center space-x-1">
-                                <Mail className="h-3 w-3 text-gray-400" />
-                                <span className="text-xs text-gray-500">{selectedSupplier.email}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Customer Selection */}
-              {paymentType === 'customer' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Customer
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      autoComplete="off"
-                      value={customerSearchTerm}
-                      onChange={(e) => handleCustomerSearch(e.target.value)}
-                      onKeyDown={handleCustomerKeyDown}
-                      className="w-full pr-10"
-                      placeholder="Search customers by name, email, or business..."
-                    />
-                    <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
-                  {customerSearchTerm && (
-                    <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {(customers || []).map((customer, index) => {
-                        const customerId = customer.id || customer._id;
-                        const currentBalance = customer.currentBalance !== undefined
-                          ? customer.currentBalance
-                          : ((customer.pendingBalance || 0) - (customer.advanceBalance || 0));
-                        const isPayable = currentBalance < 0;
-                        const isReceivable = currentBalance > 0;
-                        const hasBalance = Math.abs(currentBalance) > 0.01;
-                        return (
-                          <div
-                            key={customerId}
-                            onClick={() => {
-                              handleCustomerSelect(customerId);
-                              setCustomerSearchTerm(getCustomerDisplayName(customer, customer.email || ''));
-                              setCustomerDropdownIndex(-1);
-                            }}
-                            className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${customerDropdownIndex === index ? 'bg-blue-50' : ''
-                              }`}
-                          >
-                            <div className="font-medium text-gray-900">{getCustomerDisplayName(customer, customer.email || 'Unknown')}</div>
-                            <div className="text-sm text-gray-600 capitalize mt-0.5">
-                              {customer.businessType || ''}
-                            </div>
-                            <div className="flex items-center space-x-3 mt-1">
-                              {canViewCustomerBalance && hasBalance && (
-                                <div className="text-sm text-gray-600">
-                                  <span className="text-gray-500">{isPayable ? 'Payables:' : 'Receivables:'}</span>{' '}
-                                  <span className={`font-medium ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'}`}>
-                                    {Math.abs(currentBalance).toFixed(2)}
-                                  </span>
-                                </div>
-                              )}
-                              {canViewCustomerPhone && customer.phone && (
-                                <div className="flex items-center space-x-1 text-sm text-gray-500">
-                                  <Phone className="h-3 w-3" />
-                                  <span>{customer.phone}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Customer Information Card */}
-                  {selectedCustomer && (
-                    <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                      <div className="flex items-center space-x-3">
-                        <User className="h-5 w-5 text-gray-400" />
-                        <div className="flex-1">
-                          <p className="font-medium">
-                            {getCustomerDisplayName(selectedCustomer, selectedCustomer.email || 'Unknown Customer')}
-                          </p>
-                          {selectedCustomer.name && (
-                            <p className="text-xs text-gray-500">
-                              Contact: {getCustomerDisplayName({ name: selectedCustomer.name }, selectedCustomer.name)}
-                            </p>
-                          )}
-                          <p className="text-sm text-gray-600 capitalize">
-                            {selectedCustomer.businessType ? `${selectedCustomer.businessType} • ` : ''}
-                            {canViewCustomerPhone ? (selectedCustomer.phone || 'No phone') : ''}
-                          </p>
-                          <div className="flex items-center space-x-4 mt-2">
-                            {canViewCustomerBalance && (() => {
-                              const currentBalance = selectedCustomer.currentBalance !== undefined
-                                ? selectedCustomer.currentBalance
-                                : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
-                              const isPayable = currentBalance < 0;
-                              const isReceivable = currentBalance > 0;
-                              const hasBalance = Math.abs(currentBalance) > 0.01;
-
-                              return hasBalance ? (
-                                <div className="flex items-center space-x-1">
-                                  <span className="text-xs text-gray-500">{isPayable ? 'Payables:' : 'Receivables:'}</span>
-                                  <span className={`text-sm font-medium ${isPayable ? 'text-red-600' : isReceivable ? 'text-green-600' : 'text-gray-600'
-                                    }`}>
-                                    {Math.abs(currentBalance).toFixed(2)}
-                                  </span>
-                                </div>
-                              ) : null;
-                            })()}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Expense Description */}
-              {paymentType === 'expense' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Expense Description *
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      autoComplete="off"
-                      value={expenseSearchTerm}
-                      onChange={(e) => handleExpenseSearch(e.target.value)}
-                      onKeyDown={handleExpenseKeyDown}
-                      className="w-full pr-10"
-                      placeholder="Search expense account (e.g., Rent Expense, Utilities Expense, etc.)"
-                      required
-                    />
-                    <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
-                  {expenseSearchTerm && (
-                    <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {expenseAccounts?.filter(account =>
-                        (account.accountName || '').toLowerCase().includes(expenseSearchTerm.toLowerCase()) ||
-                        (account.accountCode || '').includes(expenseSearchTerm)
-                      ).map((account, index) => {
-                        const accountId = account.id || account._id;
-                        return (
-                          <div
-                            key={accountId}
-                            onClick={() => {
-                              handleExpenseAccountSelect(accountId);
-                              setExpenseSearchTerm(account.accountName || '');
-                              setExpenseDropdownIndex(-1);
-                            }}
-                            className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${expenseDropdownIndex === index ? 'bg-blue-50' : ''
-                              }`}
-                          >
-                            <div className="font-medium text-gray-900">{account.accountName || 'Unknown'}</div>
-                            {account.accountCode && (
-                              <div className="text-sm text-gray-500">Code: {account.accountCode}</div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Balance Display */}
-              {((selectedSupplier && canViewSupplierBalance) || (selectedCustomer && canViewCustomerBalance)) && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Balance
-                  </label>
-                  <div className="space-y-1">
-                    {paymentType === 'supplier' && selectedSupplier && canViewSupplierBalance && (
-                      <>
-                        {(() => {
-                          const currentBalance = selectedSupplier.currentBalance !== undefined
-                            ? selectedSupplier.currentBalance
-                            : ((selectedSupplier.advanceBalance || 0) - (selectedSupplier.pendingBalance || 0));
-                          const isPayable = currentBalance < 0;
-                          const isReceivable = currentBalance > 0;
-                          const hasBalance = Math.abs(currentBalance) > 0.01;
-
-                          return hasBalance ? (
-                            <div className={`flex items-center justify-between px-3 py-2 rounded ${isPayable ? 'bg-red-50 border border-red-200' : isReceivable ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
-                              <span className={`text-sm font-medium ${isPayable ? 'text-red-700' : isReceivable ? 'text-green-700' : 'text-gray-700'}`}>
-                                {isPayable ? 'Payables:' : isReceivable ? 'Receivables:' : 'Balance:'}
-                              </span>
-                              <span className={`text-sm font-bold ${isPayable ? 'text-red-700' : isReceivable ? 'text-green-700' : 'text-gray-700'}`}>
-                                {Math.abs(currentBalance).toFixed(2)}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 text-center">
-                              No balance
-                            </div>
-                          );
-                        })()}
-                      </>
-                    )}
-                    {paymentType === 'customer' && selectedCustomer && canViewCustomerBalance && (
-                      <>
-                        {(() => {
-                          const currentBalance = selectedCustomer.currentBalance !== undefined
-                            ? selectedCustomer.currentBalance
-                            : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0));
-                          const isPayable = currentBalance < 0;
-                          const isReceivable = currentBalance > 0;
-                          const hasBalance = Math.abs(currentBalance) > 0.01;
-
-                          return hasBalance ? (
-                            <div className={`flex items-center justify-between px-3 py-2 rounded ${isPayable ? 'bg-red-50 border border-red-200' : isReceivable ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
-                              <span className={`text-sm font-medium ${isPayable ? 'text-red-700' : isReceivable ? 'text-green-700' : 'text-gray-700'}`}>
-                                {isPayable ? 'Payables:' : isReceivable ? 'Receivables:' : 'Balance:'}
-                              </span>
-                              <span className={`text-sm font-bold ${isPayable ? 'text-red-700' : isReceivable ? 'text-green-700' : 'text-gray-700'}`}>
-                                {Math.abs(currentBalance).toFixed(2)}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 text-center">
-                              No balance
-                            </div>
-                          );
-                        })()}
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Amount */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Amount *
-                </label>
-                <Input
-                  type="number"
-                  autoComplete="off"
-                  step="0.01"
-                  min="0"
-                  value={formData.amount}
-                  onChange={(e) => {
-                    const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
-                    setFormData(prev => ({ ...prev, amount: value }));
-                  }}
-                  className="w-full"
-                  placeholder="0.00"
-                  required
+                <PaymentSupplierField
+                  suppliers={suppliers}
+                  selectedSupplier={selectedSupplier}
+                  onSelect={handleSupplierSelect}
+                  onSearch={handleSupplierSearch}
+                  searchValue={supplierSearchTerm}
+                  loading={suppliersLoading || suppliersFetching}
+                  canViewBalance={canViewSupplierBalance}
+                  canViewPhone={canViewSupplierPhone}
                 />
-              </div>
-            </div>
+              )}
 
-            {/* Right Column */}
-            <div className="space-y-4">
-              {/* Payment Date */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Date
-                </label>
+              {paymentType === 'customer' && (
+                <PaymentCustomerField
+                  customers={customers}
+                  selectedCustomer={selectedCustomer}
+                  onSelect={handleCustomerSelect}
+                  onSearch={handleCustomerSearch}
+                  searchValue={customerSearchTerm}
+                  loading={customersLoading || customersFetching}
+                  canViewBalance={canViewCustomerBalance}
+                />
+              )}
+
+              {paymentType === 'expense' && (
+                <PaymentExpenseAccountField
+                  label="Expense Description"
+                  required
+                  accounts={expenseAccounts || []}
+                  selectedAccount={selectedExpenseAccount}
+                  onSelect={handleExpenseAccountSelect}
+                  onSearch={handleExpenseSearch}
+                  searchValue={expenseSearchTerm}
+                  placeholder="Search expense account (e.g., Rent Expense, Utilities Expense, etc.)"
+                />
+              )}
+
+              {paymentType === 'supplier' && selectedSupplier && canViewSupplierBalance && (
+                <PaymentBalancePanel
+                  balance={
+                    selectedSupplier.currentBalance !== undefined
+                      ? selectedSupplier.currentBalance
+                      : (selectedSupplier.advanceBalance || 0) - (selectedSupplier.pendingBalance || 0)
+                  }
+                  pendingBalance={selectedSupplier.pendingBalance}
+                  advanceBalance={selectedSupplier.advanceBalance}
+                />
+              )}
+              {paymentType === 'customer' && selectedCustomer && canViewCustomerBalance && (
+                <PaymentBalancePanel
+                  balance={
+                    selectedCustomer.currentBalance !== undefined
+                      ? selectedCustomer.currentBalance
+                      : (selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0)
+                  }
+                  pendingBalance={selectedCustomer.pendingBalance}
+                  advanceBalance={selectedCustomer.advanceBalance}
+                />
+              )}
+
+              <PaymentAmountField
+                value={formData.amount}
+                onChange={(e) => {
+                  const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
+                  setFormData((prev) => ({ ...prev, amount: value }));
+                }}
+              />
+              </PaymentFormSection>
+            </PaymentFormColumn>
+
+            <PaymentFormColumn>
+              <PaymentFormSection
+                title="Voucher Details"
+                description="Date, description, and internal notes"
+                icon={FileText}
+              >
+              <PaymentFormField label="Payment Date">
                 <InputWithIcon
                   icon={Calendar}
                   type="date"
                   autoComplete="off"
                   value={formData.date}
                   onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                  className={paymentFormInputClass}
                 />
-              </div>
+              </PaymentFormField>
 
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
+              <PaymentFormField label="Description">
                 <Input
                   type="text"
                   autoComplete="off"
                   value={formData.particular}
                   onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
-                  className="w-full"
+                  className={paymentFormInputClass}
                   placeholder="Enter payment description or notes..."
                 />
-              </div>
+              </PaymentFormField>
 
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Notes (Optional)
-                </label>
+              <PaymentFormField label="Notes">
                 <Textarea
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full h-20 resize-none"
+                  className="min-h-[6rem] resize-none rounded-lg border-slate-200 shadow-sm"
                   placeholder="Additional notes..."
                 />
-              </div>
-            </div>
-          </div>
+              </PaymentFormField>
+              </PaymentFormSection>
+            </PaymentFormColumn>
+          </PaymentFormGrid>
 
           {/* Action Buttons */}
-          <FormActionsFooter
+          <PaymentFormActions
             onReset={resetForm}
             onSubmit={handleCreate}
             isSubmitting={creating}
             submitLabel="Save Payment"
             submittingLabel="Saving..."
           />
-        </div>
-      </div>
+      </PaymentFormCard>
 
       {/* Filters */}
       <FiltersCard>

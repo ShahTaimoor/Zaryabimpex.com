@@ -28,7 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import BaseModal from '../components/BaseModal';
-import FormField from '../components/FormField';
+import FormField from '@/components/FormField';
 import { InputWithIcon } from '@/components/ui/input-with-icon';
 import { getCurrentDatePakistan, formatDateForInput } from '../utils/dateUtils';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
@@ -39,10 +39,29 @@ import { ListResultsHeader } from '../components/list/ListResultsHeader';
 import { SortableTableHeader } from '../components/list/SortableTableHeader';
 import { DataStateMessage } from '../components/list/DataStateMessage';
 import { RowActionButtons } from '../components/list/RowActionButtons';
-import { PageHeader } from '../components/layout/PageHeader';
-import { FormActionsFooter } from '../components/layout/FormActionsFooter';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
+import {
+  PaymentFormCard,
+  PaymentFormGrid,
+  PaymentFormColumn,
+  PaymentFormSection,
+  PaymentPartyTypeRadio,
+  PaymentFormField,
+  PaymentAmountField,
+  PaymentBalancePanel,
+  PaymentBankSelect,
+  PaymentFormActions,
+  paymentFormInputClass,
+} from '@/components/payments/PaymentFormLayout';
+import { Users, Landmark, FileText } from 'lucide-react';
+import {
+  PaymentCustomerField,
+  PaymentSupplierField,
+  partyIdFromSelect,
+  customerSearchLabel,
+  supplierSearchLabel,
+} from '@/components/payments/PaymentPartyFields';
 
 
 const BankReceipts = () => {
@@ -168,11 +187,16 @@ const BankReceipts = () => {
     setPaymentType('customer');
   };
 
-  const handleCustomerSelect = (customerId) => {
-    const customer = customers?.find(c => (c.id || c._id) === customerId);
-    setSelectedCustomer(customer);
+  const handleCustomerSelect = (customerOrId) => {
+    const customerId = partyIdFromSelect(customerOrId);
+    if (!customerId) return;
+    const customer =
+      typeof customerOrId === 'object' && customerOrId
+        ? customerOrId
+        : customers?.find((c) => (c.id || c._id) === customerId);
+    setSelectedCustomer(customer || null);
+    setCustomerSearchTerm(customer ? customerSearchLabel(customer) : '');
     setFormData(prev => ({ ...prev, customer: customerId }));
-    setCustomerSearchTerm(getCustomerDisplayName(customer, ''));
   };
 
   const handleCustomerSearch = (searchTerm) => {
@@ -183,9 +207,15 @@ const BankReceipts = () => {
     }
   };
 
-  const handleSupplierSelect = (supplierId) => {
-    const supplier = suppliers?.find(s => (s.id || s._id) === supplierId);
-    setSelectedSupplier(supplier);
+  const handleSupplierSelect = (supplierOrId) => {
+    const supplierId = partyIdFromSelect(supplierOrId);
+    if (!supplierId) return;
+    const supplier =
+      typeof supplierOrId === 'object' && supplierOrId
+        ? supplierOrId
+        : suppliers?.find((s) => (s.id || s._id) === supplierId);
+    setSelectedSupplier(supplier || null);
+    setSupplierSearchTerm(supplier ? supplierSearchLabel(supplier) : '');
     setFormData(prev => ({ ...prev, supplier: supplierId, customer: '' }));
     setSelectedCustomer(null);
     setCustomerSearchTerm('');
@@ -367,334 +397,153 @@ const BankReceipts = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <PageHeader title="Bank Receipts" />
-
       {/* Bank Receipt Form */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="text-base sm:text-lg font-medium text-gray-900">Receipt Details</h3>
-        </div>
-        <div className="card-content">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            {/* Left Column */}
-            <div className="space-y-4">
-              {/* Payment Type Selection */}
-              <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-                  Receipt Type
-                </label>
-                <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input
-                      type="radio"
-                      value="customer"
-                      checked={paymentType === 'customer'}
-                      onChange={(e) => {
-                        setPaymentType(e.target.value);
-                        setSelectedSupplier(null);
-                        setSupplierSearchTerm('');
-                        setFormData(prev => ({ ...prev, supplier: '' }));
-                      }}
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">Customer</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input
-                      type="radio"
-                      value="supplier"
-                      checked={paymentType === 'supplier'}
-                      onChange={(e) => {
-                        setPaymentType(e.target.value);
-                        setSelectedCustomer(null);
-                        setCustomerSearchTerm('');
-                        setFormData(prev => ({ ...prev, customer: '' }));
-                      }}
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <span className="text-xs sm:text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">Supplier</span>
-                  </label>
-                </div>
-              </div>
+      <PaymentFormCard variant="bank-receipt">
+          <PaymentFormGrid>
+            <PaymentFormColumn>
+              <PaymentFormSection
+                title="Party & Amount"
+                description="Select payer and receipt amount"
+                icon={Users}
+              >
+              <PaymentPartyTypeRadio
+                label="Receipt Type"
+                value={paymentType}
+                onChange={setPaymentType}
+                onOptionChange={(type) => {
+                  if (type === 'customer') {
+                    setSelectedSupplier(null);
+                    setSupplierSearchTerm('');
+                    setFormData((prev) => ({ ...prev, supplier: '' }));
+                    return;
+                  }
+                  setSelectedCustomer(null);
+                  setCustomerSearchTerm('');
+                  setFormData((prev) => ({ ...prev, customer: '' }));
+                }}
+              />
 
-              {/* Customer Selection */}
               {paymentType === 'customer' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Customer
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      value={customerSearchTerm}
-                      onChange={(e) => handleCustomerSearch(e.target.value)}
-                      className="w-full pr-10"
-                      placeholder="Search or select customer..."
-                    />
-                    <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
-                  {customerSearchTerm && (
-                    <div className="mt-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {(customers || []).map((customer) => {
-                        const receivables = customer.pendingBalance || 0;
-                        const advance = customer.advanceBalance || 0;
-                        const netBalance = receivables - advance;
-                        const isPayable = netBalance < 0;
-                        const isReceivable = netBalance > 0;
-                        const hasBalance = receivables > 0 || advance > 0;
-
-                        return (
-                          <div
-                            key={customer.id || customer._id}
-                            onClick={() => {
-                              handleCustomerSelect(customer.id || customer._id);
-                            }}
-                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-                          >
-                            <div className="font-medium text-gray-900">{getCustomerDisplayName(customer, 'Unknown')}</div>
-                            {(customer.businessName || customer.business_name) && customer.name && (
-                              <div className="text-xs text-gray-500">Contact: {customer.name}</div>
-                            )}
-                            {canViewCustomerBalance && hasBalance && (
-                              <div className={`text-sm ${isPayable ? 'text-red-600' : 'text-green-600'}`}>
-                                {isPayable ? 'Payables:' : 'Receivables:'} {Math.abs(netBalance).toFixed(2)}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Balance Display */}
-              {selectedCustomer && canViewCustomerBalance && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Balance
-                  </label>
-                  <div className="space-y-1">
-                    {(() => {
-                      const receivables = selectedCustomer.pendingBalance || 0;
-                      const advance = selectedCustomer.advanceBalance || 0;
-                      const netBalance = receivables - advance;
-                      const isPayable = netBalance < 0;
-                      const isReceivable = netBalance > 0;
-                      const hasBalance = receivables > 0 || advance > 0;
-
-                      return hasBalance ? (
-                        <div className={`flex items-center justify-between px-3 py-2 rounded ${isPayable ? 'bg-red-50 border border-red-200' : isReceivable ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
-                          <span className={`text-sm font-medium ${isPayable ? 'text-red-700' : isReceivable ? 'text-green-700' : 'text-gray-700'}`}>
-                            {isPayable ? 'Payables:' : isReceivable ? 'Receivables:' : 'Balance:'}
-                          </span>
-                          <span className={`text-sm font-bold ${isPayable ? 'text-red-700' : isReceivable ? 'text-green-700' : 'text-gray-700'}`}>
-                            {Math.abs(netBalance).toFixed(2)}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 text-center">
-                          No balance
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
-
-              {/* Supplier Selection */}
-              {paymentType === 'supplier' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Supplier
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      value={supplierSearchTerm}
-                      onChange={(e) => handleSupplierSearch(e.target.value)}
-                      className="w-full pr-10"
-                      placeholder="Search or select supplier..."
-                    />
-                    <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
-                  {supplierSearchTerm && (
-                    <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-lg">
-                      {(suppliers || []).map((supplier) => (
-                        <div
-                          key={supplier.id || supplier._id}
-                          onClick={() => {
-                            handleSupplierSelect(supplier.id || supplier._id);
-                            setSupplierSearchTerm(supplier.companyName || supplier.name || '');
-                          }}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-                        >
-                          <div className="font-medium text-gray-900">{supplier.companyName || supplier.name || 'Unknown'}</div>
-                          {canViewSupplierPhone && supplier.phone && (
-                            <div className="text-sm text-gray-500">Phone: {supplier.phone}</div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Supplier Balance Display */}
-              {paymentType === 'supplier' && selectedSupplier && canViewSupplierBalance && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Balance
-                  </label>
-                  <div className="space-y-1">
-                    {selectedSupplier.pendingBalance > 0 && (
-                      <div className="flex items-center justify-between px-3 py-2 bg-red-50 border border-red-200 rounded">
-                        <span className="text-sm font-medium text-red-700">Payables:</span>
-                        <span className="text-sm font-bold text-red-700">{selectedSupplier.pendingBalance.toFixed(2)}</span>
-                      </div>
-                    )}
-                    {selectedSupplier.advanceBalance > 0 && (
-                      <div className="flex items-center justify-between px-3 py-2 bg-green-50 border border-green-200 rounded">
-                        <span className="text-sm font-medium text-green-700">Advance:</span>
-                        <span className="text-sm font-bold text-green-700">{selectedSupplier.advanceBalance.toFixed(2)}</span>
-                      </div>
-                    )}
-                    {selectedSupplier.pendingBalance === 0 && selectedSupplier.advanceBalance === 0 && (
-                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600 text-center">
-                        No balance
-                      </div>
-                    )}
-                    {selectedSupplier.pendingBalance > 0 && selectedSupplier.advanceBalance > 0 && (
-                      <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border-2 border-blue-300 rounded">
-                        <span className="text-sm font-bold text-blue-700">Net Balance:</span>
-                        <span className={`text-sm font-bold ${(selectedSupplier.pendingBalance - selectedSupplier.advanceBalance) > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                          {(selectedSupplier.pendingBalance - selectedSupplier.advanceBalance).toFixed(2)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Amount */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Amount *
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.amount}
-                  onChange={(e) => {
-                    const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
-                    setFormData(prev => ({ ...prev, amount: value }));
-                  }}
-                  className="w-full"
-                  placeholder="0.00"
-                  required
+                <PaymentCustomerField
+                  customers={customers}
+                  selectedCustomer={selectedCustomer}
+                  onSelect={handleCustomerSelect}
+                  onSearch={handleCustomerSearch}
+                  searchValue={customerSearchTerm}
+                  loading={customersLoading || customersFetching}
+                  canViewBalance={canViewCustomerBalance}
                 />
-              </div>
-            </div>
+              )}
 
-            {/* Right Column */}
-            <div className="space-y-4">
-              {/* Receipt Date */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Receipt Date
-                </label>
+              {selectedCustomer && canViewCustomerBalance && (
+                <PaymentBalancePanel
+                  balance={(selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0)}
+                  pendingBalance={selectedCustomer.pendingBalance}
+                  advanceBalance={selectedCustomer.advanceBalance}
+                />
+              )}
+
+              {paymentType === 'supplier' && (
+                <PaymentSupplierField
+                  suppliers={suppliers}
+                  selectedSupplier={selectedSupplier}
+                  onSelect={handleSupplierSelect}
+                  onSearch={handleSupplierSearch}
+                  searchValue={supplierSearchTerm}
+                  loading={suppliersLoading || suppliersFetching}
+                  canViewBalance={canViewSupplierBalance}
+                  canViewPhone={canViewSupplierPhone}
+                />
+              )}
+
+              {paymentType === 'supplier' && selectedSupplier && canViewSupplierBalance && (
+                <PaymentBalancePanel
+                  balance={(selectedSupplier.pendingBalance || 0) - (selectedSupplier.advanceBalance || 0)}
+                  pendingBalance={selectedSupplier.pendingBalance}
+                  advanceBalance={selectedSupplier.advanceBalance}
+                />
+              )}
+
+              <PaymentAmountField
+                value={formData.amount}
+                onChange={(e) => {
+                  const value = e.target.value === '' ? '' : parseFloat(e.target.value) || '';
+                  setFormData((prev) => ({ ...prev, amount: value }));
+                }}
+              />
+              </PaymentFormSection>
+            </PaymentFormColumn>
+
+            <PaymentFormColumn>
+              <PaymentFormSection
+                title="Bank & Voucher Details"
+                description="Bank account, reference, and notes"
+                icon={Landmark}
+              >
+              <PaymentFormField label="Receipt Date">
                 <InputWithIcon
                   icon={Calendar}
                   type="date"
                   value={formData.date}
                   onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                  className={paymentFormInputClass}
                 />
-              </div>
+              </PaymentFormField>
 
-              {/* Bank Account */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Bank Account *
-                </label>
-                <select
-                  value={formData.bank}
-                  onChange={(e) => setFormData(prev => ({ ...prev, bank: e.target.value }))}
-                  className="input w-full"
-                  required
-                >
-                  <option value="">Select bank account...</option>
-                  {(banks || []).map((bank) => (
-                    <option key={bank._id || bank.id} value={bank._id || bank.id}>
-                      {bank.bankName} - {bank.accountNumber} {bank.accountName ? `(${bank.accountName})` : ''}
-                    </option>
-                  ))}
-                </select>
-                {banksLoading && (
-                  <p className="text-sm text-gray-500 mt-1">Loading banks...</p>
-                )}
-                {banksError && (
-                  <p className="text-sm text-red-500 mt-1">Error loading banks</p>
-                )}
-                {!banksLoading && !banksError && (!banks || banks.length === 0) && (
-                  <p className="text-sm text-amber-600 mt-1">No bank accounts. Add one in Settings → Banks.</p>
-                )}
-              </div>
+              <PaymentBankSelect
+                value={formData.bank}
+                onChange={(e) => setFormData(prev => ({ ...prev, bank: e.target.value }))}
+                banks={banks || []}
+                loading={banksLoading}
+                error={banksError ? 'Error loading bank accounts' : null}
+                emptyHint={
+                  !banksLoading && !banksError && (!banks || banks.length === 0)
+                    ? 'No bank accounts. Add one in Settings → Banks.'
+                    : null
+                }
+              />
 
-              {/* Transaction Reference */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Transaction Reference
-                </label>
+              <PaymentFormField label="Transaction Reference">
                 <Input
                   type="text"
                   value={formData.transactionReference}
                   onChange={(e) => setFormData(prev => ({ ...prev, transactionReference: e.target.value }))}
-                  className="w-full"
-                  placeholder="Enter transaction reference..."
+                  className={paymentFormInputClass}
+                  placeholder="Cheque no., transfer ref., etc."
                 />
-              </div>
+              </PaymentFormField>
 
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
+              <PaymentFormField label="Description">
                 <Input
                   type="text"
                   value={formData.particular}
                   onChange={(e) => setFormData(prev => ({ ...prev, particular: e.target.value }))}
-                  className="w-full"
-                  placeholder="Enter receipt description or notes..."
+                  className={paymentFormInputClass}
+                  placeholder="Enter receipt description..."
                 />
-              </div>
+              </PaymentFormField>
 
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Notes (Optional)
-                </label>
+              <PaymentFormField label="Notes">
                 <Textarea
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full h-20 resize-none"
+                  className="min-h-[6rem] resize-none rounded-lg border-slate-200 shadow-sm"
                   placeholder="Additional notes..."
                 />
-              </div>
-            </div>
-          </div>
+              </PaymentFormField>
+              </PaymentFormSection>
+            </PaymentFormColumn>
+          </PaymentFormGrid>
 
           {/* Action Buttons */}
-          <FormActionsFooter
+          <PaymentFormActions
             onReset={resetForm}
             onSubmit={handleCreate}
             isSubmitting={creating}
             submitLabel="Save Receipt"
             submittingLabel="Saving..."
           />
-        </div>
-      </div>
+      </PaymentFormCard>
 
       {/* Filters */}
       <FiltersCard>
