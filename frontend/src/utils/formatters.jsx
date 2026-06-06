@@ -1,7 +1,23 @@
 import { toTitleCase } from './titleCase';
+import {
+  getCustomerDisplayName,
+  getSupplierDisplayName,
+  getProductDisplayName,
+  getCategoryDisplayName,
+  getPartyDisplayName,
+  formatPartyAddress,
+} from './partyDisplay';
 
 export { toTitleCase };
 export const formatTitleCase = toTitleCase;
+export {
+  getCustomerDisplayName,
+  getSupplierDisplayName,
+  getProductDisplayName,
+  getCategoryDisplayName,
+  getPartyDisplayName,
+  formatPartyAddress,
+};
 
 // Date formatting utilities
 export const formatDate = (dateString) => {
@@ -151,24 +167,28 @@ export const formatName = (firstName, lastName) => {
   return `${first} ${last}`.trim();
 };
 
-// Format address
+// Format address (Title Case text parts)
 export const formatAddress = (address) => {
   if (!address) return '';
-  
-  // Handle string addresses (legacy format)
+
   if (typeof address === 'string') {
-    return address;
+    return toTitleCase(address);
   }
-  
-  // Handle object addresses
+
   const parts = [
     address.street,
     address.city,
     address.state || address.province,
     address.zipCode || address.zip || address.postalCode,
-    address.country
-  ].filter(Boolean);
-  
+    address.country,
+  ]
+    .filter(Boolean)
+    .map((part, index) => {
+      const raw = String(part).trim();
+      const isZip = index === 3;
+      return isZip ? raw : toTitleCase(raw);
+    });
+
   return parts.join(', ');
 };
 

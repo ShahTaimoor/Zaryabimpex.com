@@ -1,5 +1,10 @@
 import { toTitleCase } from './titleCase';
 
+function formatProductNameForDisplay(name) {
+  if (!name || typeof name !== 'string') return name;
+  return name.replace(/\(([^)]*)\)/g, (_, inner) => `(${inner.toUpperCase()})`);
+}
+
 /**
  * Centralized helpers for resolving display names and formatted addresses
  * for parties (customers, suppliers, employees, etc.). Replaces the long
@@ -74,16 +79,16 @@ export function getSupplierDisplayName(supplier, fallback = 'Unknown Supplier') 
   return name ? toTitleCase(name) : fallback;
 }
 
-/** Resolve a product or variant display name (as stored by the backend). */
+/** Resolve a product or variant display name in Title Case. */
 export function getProductDisplayName(product, fallback = 'Unknown Product') {
   if (!product) return fallback;
   if (typeof product === 'string') {
     if (UUID_RE.test(product)) return fallback;
-    return product;
+    return formatProductNameForDisplay(toTitleCase(product));
   }
   if (typeof product === 'object') {
     const name = pickFirst(product, PRODUCT_NAME_KEYS);
-    return name || fallback;
+    return name ? formatProductNameForDisplay(toTitleCase(name)) : fallback;
   }
   return fallback;
 }
@@ -126,7 +131,7 @@ function flattenAddressObject(a) {
   const lineParts = [];
   for (const k of ADDRESS_LINE_KEYS) {
     if (a[k]) {
-      lineParts.push(String(a[k]).trim());
+      lineParts.push(toTitleCase(String(a[k]).trim()));
       break;
     }
   }
@@ -140,7 +145,13 @@ function flattenAddressObject(a) {
       break;
     }
   }
-  return [lineParts[0], city, state, country, zip].filter(Boolean).join(', ');
+  return [
+    lineParts[0],
+    city ? toTitleCase(city) : null,
+    state ? toTitleCase(state) : null,
+    country ? toTitleCase(country) : null,
+    zip,
+  ].filter(Boolean).join(', ');
 }
 
 function pickPreferredAddress(addresses) {
@@ -168,7 +179,7 @@ export function formatPartyAddress(party) {
   if (!party) return '';
 
   const directString = trimOrNull(party.address);
-  if (directString) return directString;
+  if (directString) return toTitleCase(directString);
 
   const raw = party.address ?? party.addresses;
   if (Array.isArray(raw)) {
@@ -179,10 +190,10 @@ export function formatPartyAddress(party) {
   }
 
   const location = trimOrNull(party.location);
-  if (location) return location;
+  if (location) return toTitleCase(location);
 
   const companyAddress = trimOrNull(party.companyAddress);
-  if (companyAddress) return companyAddress;
+  if (companyAddress) return toTitleCase(companyAddress);
 
   return '';
 }

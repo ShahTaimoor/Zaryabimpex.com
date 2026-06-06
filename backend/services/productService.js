@@ -155,19 +155,8 @@ class ProductService {
    * @returns {object} - Transformed product
    */
   transformProductToUppercase(product) {
-    if (!product) return product;
-    if (product.toObject) product = product.toObject();
-    // Handle both products and variants
-    if (product.displayName) {
-      product.displayName = product.displayName.toUpperCase();
-    }
-    if (product.variantName) {
-      product.variantName = product.variantName.toUpperCase();
-    }
-    if (product.name) product.name = product.name.toUpperCase();
-    if (product.description) product.description = product.description.toUpperCase();
-    if (product.category && product.category.name) product.category.name = product.category.name.toUpperCase();
-    return product;
+    const { formatProductEntity } = require('../utils/entityTextFormat');
+    return formatProductEntity(product?.toObject ? product.toObject() : product);
   }
 
   /**

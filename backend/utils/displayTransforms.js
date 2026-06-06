@@ -6,12 +6,16 @@ const {
   formatCustomerEntity,
   formatSupplierEntity,
   formatProductEntity,
+  formatResponseBody,
+  toTitleCase,
 } = require('./entityTextFormat');
 
 module.exports = {
   formatCustomerEntity,
   formatSupplierEntity,
   formatProductEntity,
+  formatResponseBody,
+  toTitleCase,
   transformCustomerToTitleCase: formatCustomerEntity,
   transformProductToTitleCase: formatProductEntity,
   transformSupplierToTitleCase: formatSupplierEntity,

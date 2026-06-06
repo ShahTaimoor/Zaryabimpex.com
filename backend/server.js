@@ -110,7 +110,9 @@ app.use(cookieParser());
 
 // Title Case normalization for all mutating API requests (before route handlers)
 const { normalizeTextRequest } = require('./middleware/normalizeText');
+const { formatTextResponse } = require('./middleware/formatTextResponse');
 app.use('/api', normalizeTextRequest);
+app.use('/api', formatTextResponse);
 
 // Idempotency key middleware - prevents duplicate requests
 // Note: This middleware uses in-memory storage - consider Redis for production scaling

@@ -1,11 +1,9 @@
+const { toTitleCase } = require('./titleCase');
+
 /**
  * Uppercase only text inside parentheses in a product name.
- * The main name text is preserved exactly as entered.
  *
- * @example formatProductNameBrackets('LED light (grp4040)') => 'LED light (GRP4040)'
- * @example formatProductNameBrackets('widget (abc123) XL') => 'widget (ABC123) XL'
- * @param {unknown} value
- * @returns {unknown}
+ * @example formatProductNameBrackets('Led Light (grp4040)') => 'Led Light (GRP4040)'
  */
 function formatProductNameBrackets(value) {
   if (value == null) return value;
@@ -13,4 +11,11 @@ function formatProductNameBrackets(value) {
   return value.replace(/\(([^)]*)\)/g, (_, inner) => `(${inner.toUpperCase()})`);
 }
 
-module.exports = { formatProductNameBrackets };
+/** Title Case product name; codes inside parentheses stay uppercase. */
+function formatProductDisplayName(value) {
+  if (value == null) return value;
+  if (typeof value !== 'string') return value;
+  return formatProductNameBrackets(toTitleCase(value));
+}
+
+module.exports = { formatProductNameBrackets, formatProductDisplayName };
