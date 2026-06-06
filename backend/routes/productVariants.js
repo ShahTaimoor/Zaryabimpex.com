@@ -37,10 +37,18 @@ router.get('/', [
       filter.search = search;
     }
 
-    const variants = await productVariantRepository.findWithFilter(filter, {
+    let variants = await productVariantRepository.findWithFilter(filter, {
       sort: { createdAt: -1 },
       limit
     });
+
+    if (filter.exactCode && !variants.length) {
+      const { exactCode, ...searchFilter } = filter;
+      variants = await productVariantRepository.findWithFilter(
+        { ...searchFilter, search: exactCode },
+        { sort: { createdAt: -1 }, limit }
+      );
+    }
 
     res.json({
       success: true,

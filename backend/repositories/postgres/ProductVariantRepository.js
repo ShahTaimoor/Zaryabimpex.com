@@ -79,9 +79,12 @@ class ProductVariantRepository {
       if (term && typeof term === 'string') {
         const built = buildVariantListSearch(term, paramCount);
         sql += built.whereSql;
-        params.push(...built.params);
+        params.push(...built.whereParams);
+        if (built.orderBySql) {
+          options._searchOrderBy = built.orderBySql;
+          params.push(...built.orderByParams);
+        }
         paramCount = built.nextParamIndex;
-        options._searchOrderBy = built.orderBySql;
       }
     }
     if (options._searchOrderBy) {

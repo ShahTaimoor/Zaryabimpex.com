@@ -172,7 +172,32 @@ export const SearchableDropdown = forwardRef(({
     const currentDisplayKey = displayKeyRef.current;
 
     if (serverSideSearch) {
-      setFilteredItems(items);
+      // Server returns matches, but still cap rows when the box is empty (browse on focus).
+      if (!currentSearchTerm) {
+        if (maxInitialItems == null || maxInitialItems === false || maxInitialItems <= 0) {
+          setFilteredItems(items);
+        } else if (items.length <= maxInitialItems) {
+          setFilteredItems(items);
+        } else {
+          const seen = new Set();
+          const out = [];
+          const selId = getItemId(selectedItem, valueKey);
+          if (selectedItem && selId != null) {
+            out.push(selectedItem);
+            seen.add(selId);
+          }
+          for (let i = 0; i < items.length && out.length < maxInitialItems; i++) {
+            const item = items[i];
+            const id = getItemId(item, valueKey);
+            if (id != null && seen.has(id)) continue;
+            if (id != null) seen.add(id);
+            out.push(item);
+          }
+          setFilteredItems(out);
+        }
+      } else {
+        setFilteredItems(items);
+      }
       setSelectedIndex(-1);
       return;
     }

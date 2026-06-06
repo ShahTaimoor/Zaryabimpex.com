@@ -209,12 +209,23 @@ class ProductServicePostgres {
 
     const filters = this.buildFilter(queryParams);
     const listMode = queryParams.listMode === 'minimal' ? 'minimal' : 'full';
-    const result = await productRepository.findWithPagination(filters, {
+    const paginationOpts = {
       page,
       limit,
       listMode,
-      cursor: queryParams.cursor
-    });
+      cursor: queryParams.cursor,
+    };
+
+    let result = await productRepository.findWithPagination(filters, paginationOpts);
+
+    // Exact SKU/barcode miss → flexible name search (e.g. "125" matching "125 x 2.5 mm")
+    if (filters.exactCode && !(result.products || []).length) {
+      const { exactCode, ...searchFilters } = filters;
+      result = await productRepository.findWithPagination(
+        { ...searchFilters, search: exactCode },
+        paginationOpts
+      );
+    }
 
     const categoryIds = [...new Set(result.products.map(p => p.category_id).filter(Boolean))];
     const categoryMap = await getCategoryMap(categoryIds);

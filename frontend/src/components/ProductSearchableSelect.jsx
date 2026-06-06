@@ -4,9 +4,10 @@ import { SearchableDropdown } from './SearchableDropdown';
 import { Button } from '@/components/ui/button';
 import { useDebouncedProductSearch } from '@/hooks/useDebouncedProductSearch';
 import { useGetProductQuery } from '@/store/services/productsApi';
+import { PRODUCT_SEARCH_DROPDOWN_LIMIT } from '@/constants/listPagination';
 
 /**
- * Server-backed searchable product picker (GET /api/products?search=&page=1&limit=50).
+ * Server-backed searchable product picker (GET /api/products?search=&page=1&limit=20).
  */
 export function ProductSearchableSelect({
   label,
@@ -20,7 +21,7 @@ export function ProductSearchableSelect({
   allowClear = false,
   clearLabel = 'Clear',
   listMode = 'minimal',
-  searchLimit = 50,
+  searchLimit = PRODUCT_SEARCH_DROPDOWN_LIMIT,
 }) {
   const [searchTerm, setSearchTerm] = useState('');
 

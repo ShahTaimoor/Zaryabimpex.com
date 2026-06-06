@@ -588,12 +588,12 @@ export const PurchaseOrders = ({ tabId }) => {
     items: productsData,
     isLoading: lineProductSearchLoading,
     emptyMessage: lineProductEmptyMessage,
-  } = useDebouncedPosProductSearch(productSearchTerm, { dropdownLimit: 120 });
+  } = useDebouncedPosProductSearch(productSearchTerm);
 
   const {
     items: modalProductsData,
     isLoading: modalProductSearchLoading,
-  } = useDebouncedPosProductSearch(modalProductSearchTerm, { dropdownLimit: 120 });
+  } = useDebouncedPosProductSearch(modalProductSearchTerm);
 
   const modalProductsLoading = modalProductSearchLoading;
 

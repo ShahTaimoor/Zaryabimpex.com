@@ -1,4 +1,10 @@
 const { splitSearchTokens } = require('./searchTokens');
+const {
+  expandTokenVariants,
+  compactSearchPhrase,
+  SQL_PRODUCT_NAME_COMPACT,
+  SQL_VARIANT_DISPLAY_COMPACT,
+} = require('./searchNormalize');
 
 const NUMERIC_TOKEN_RE = /^[0-9]+$/;
 
@@ -84,6 +90,67 @@ function buildTextTokenWhere(cols, token, paramIndex) {
 }
 
 /**
+ * Flexible product-name token match (spacing, x-notation, compact, fuzzy trgm).
+ */
+function buildFlexibleProductTokenWhere(cols, token, paramIndex, options = {}) {
+  const nameCompactSql = options.nameCompactSql || SQL_PRODUCT_NAME_COMPACT;
+  const variants = expandTokenVariants(token);
+  const orParts = [];
+  const params = [];
+  let idx = paramIndex;
+  let primaryContainsIdx = null;
+
+  for (const variant of variants) {
+    const like = `%${variant}%`;
+    if (!primaryContainsIdx) primaryContainsIdx = idx;
+
+    for (const col of cols.text) {
+      orParts.push(`${col} ILIKE $${idx}`);
+      params.push(like);
+      idx++;
+      if (/^\d+(\.\d+)?$/.test(variant)) {
+        orParts.push(`${col} ILIKE $${idx}`);
+        params.push(`${variant} %`);
+        idx++;
+      }
+    }
+
+    const similarityCol = options.similarityCol || (cols.text.includes('name') ? 'name' : null);
+    if (nameCompactSql) {
+      orParts.push(`${nameCompactSql} LIKE $${idx}`);
+      params.push(`%${compactSearchPhrase(variant)}%`);
+      idx++;
+
+      if (similarityCol && variant.length >= 3) {
+        orParts.push(`similarity(${similarityCol}, $${idx}) > 0.12`);
+        params.push(variant);
+        idx++;
+      }
+    }
+
+    for (const col of cols.code) {
+      orParts.push(`LOWER(TRIM(COALESCE(${col}, ''))) = LOWER($${idx})`);
+      params.push(variant);
+      idx++;
+      orParts.push(`${col} ILIKE $${idx}`);
+      params.push(`${variant}%`);
+      idx++;
+      orParts.push(`${col} ILIKE $${idx}`);
+      params.push(like);
+      idx++;
+    }
+  }
+
+  return {
+    clause: ` AND (${orParts.join(' OR ')})`,
+    params,
+    nextParamIndex: idx,
+    rank: { containsIdx: primaryContainsIdx || paramIndex },
+    isNumeric: /^\d+(\.\d+)?$/.test(String(token).trim()),
+  };
+}
+
+/**
  * Product list/search WHERE + ORDER BY (reuses bound params in ORDER BY).
  */
 function buildProductListSearch(search, startParamIndex = 1) {
@@ -101,34 +168,42 @@ function buildProductListSearch(search, startParamIndex = 1) {
   const params = [];
   let idx = startParamIndex;
   let firstRank = null;
-  let firstNumeric = false;
 
   for (const token of tokens) {
-    const built = isNumericToken(token)
-      ? buildNumericTokenWhere(cols, token, idx)
-      : buildTextTokenWhere(cols, token, idx);
+    const built = buildFlexibleProductTokenWhere(cols, token, idx);
     whereSql += built.clause;
     params.push(...built.params);
     idx = built.nextParamIndex;
-    if (!firstRank) {
-      firstRank = built.rank;
-      firstNumeric = built.isNumeric;
-    }
+    if (!firstRank) firstRank = built.rank;
   }
 
-  let orderBySql;
-  if (firstNumeric) {
-    orderBySql = `${sqlProductSearchRank(firstRank)}, ${sqlNaturalCodeOrder()}`;
-  } else {
-    const c = firstRank.containsIdx;
-    orderBySql = `CASE
-      WHEN name ILIKE $${c} THEN 0
-      WHEN sku ILIKE $${c} OR barcode ILIKE $${c} THEN 1
-      ELSE 2
-    END ASC, ${sqlNaturalCodeOrder()}`;
-  }
+  const whereParams = params;
+  const whereNextParamIndex = idx;
 
-  return { whereSql, params, nextParamIndex: idx, orderBySql };
+  const rankContains = firstRank?.containsIdx ?? startParamIndex;
+  const firstToken = tokens[0] || '';
+  const compactIdx = whereNextParamIndex;
+  const orderByParams = [`%${compactSearchPhrase(firstToken)}%`];
+  const similarityIdx = compactIdx + 1;
+  orderByParams.push(firstToken);
+
+  const orderBySql = `CASE
+    WHEN name ILIKE $${rankContains} THEN 0
+    WHEN ${SQL_PRODUCT_NAME_COMPACT} LIKE $${compactIdx} THEN 1
+    WHEN similarity(name, $${similarityIdx}) > 0.12 THEN 2
+    WHEN sku ILIKE $${rankContains} OR barcode ILIKE $${rankContains} THEN 3
+    ELSE 4
+  END ASC, ${sqlNaturalCodeOrder()}`;
+
+  return {
+    whereSql,
+    whereParams,
+    whereNextParamIndex,
+    orderBySql,
+    orderByParams,
+    params: [...whereParams, ...orderByParams],
+    nextParamIndex: whereNextParamIndex + orderByParams.length,
+  };
 }
 
 /**
@@ -149,35 +224,48 @@ function buildVariantListSearch(search, startParamIndex = 1) {
   const params = [];
   let idx = startParamIndex;
   let firstRank = null;
-  let firstNumeric = false;
 
   for (const token of tokens) {
-    const built = isNumericToken(token)
-      ? buildNumericTokenWhere(cols, token, idx)
-      : buildTextTokenWhere(cols, token, idx);
+    const built = buildFlexibleProductTokenWhere(
+      { code: cols.code, text: ['display_name', 'variant_name', 'variant_value'] },
+      token,
+      idx,
+      {
+        nameCompactSql: SQL_VARIANT_DISPLAY_COMPACT,
+        similarityCol: 'display_name',
+      }
+    );
     whereSql += built.clause;
     params.push(...built.params);
     idx = built.nextParamIndex;
-    if (!firstRank) {
-      firstRank = built.rank;
-      firstNumeric = built.isNumeric;
-    }
+    if (!firstRank) firstRank = built.rank;
   }
 
-  let orderBySql;
-  if (firstNumeric) {
-    orderBySql = `${sqlVariantSearchRank(firstRank)}, ${sqlNaturalCodeOrder('sku', 'barcode', 'display_name')}`;
-  } else {
-    const c = firstRank.containsIdx;
-    orderBySql = `CASE
-      WHEN display_name ILIKE $${c} OR variant_name ILIKE $${c} THEN 0
-      WHEN variant_value ILIKE $${c} THEN 1
-      WHEN sku ILIKE $${c} OR barcode ILIKE $${c} THEN 2
-      ELSE 3
-    END ASC, ${sqlNaturalCodeOrder('sku', 'barcode', 'display_name')}`;
-  }
+  const whereParams = params;
+  const whereNextParamIndex = idx;
 
-  return { whereSql, params, nextParamIndex: idx, orderBySql };
+  const rankContains = firstRank?.containsIdx ?? startParamIndex;
+  const firstToken = tokens[0] || '';
+  const compactIdx = whereNextParamIndex;
+  const orderByParams = [`%${compactSearchPhrase(firstToken)}%`];
+
+  const orderBySql = `CASE
+    WHEN display_name ILIKE $${rankContains} OR variant_name ILIKE $${rankContains} THEN 0
+    WHEN ${SQL_VARIANT_DISPLAY_COMPACT} LIKE $${compactIdx} THEN 1
+    WHEN variant_value ILIKE $${rankContains} THEN 2
+    WHEN sku ILIKE $${rankContains} OR barcode ILIKE $${rankContains} THEN 3
+    ELSE 4
+  END ASC, ${sqlNaturalCodeOrder('sku', 'barcode', 'display_name')}`;
+
+  return {
+    whereSql,
+    whereParams,
+    whereNextParamIndex,
+    orderBySql,
+    orderByParams,
+    params: [...whereParams, ...orderByParams],
+    nextParamIndex: whereNextParamIndex + orderByParams.length,
+  };
 }
 
 /**

@@ -104,9 +104,12 @@ class ProductRepository {
     } else if (filters.search) {
       const built = buildProductListSearch(filters.search, paramCount);
       sql += built.whereSql;
-      params.push(...built.params);
+      params.push(...built.whereParams);
+      if (built.orderBySql) {
+        options._searchOrderBy = built.orderBySql;
+        params.push(...built.orderByParams);
+      }
       paramCount = built.nextParamIndex;
-      options._searchOrderBy = built.orderBySql;
     }
     if (filters.lowStock) {
       sql += ' AND stock_quantity <= min_stock_level';
@@ -353,8 +356,8 @@ class ProductRepository {
     } else if (filters.search) {
       const built = buildProductListSearch(filters.search, cn);
       countSql += built.whereSql;
-      countParams.push(...built.params);
-      cn = built.nextParamIndex;
+      countParams.push(...built.whereParams);
+      cn = built.whereNextParamIndex;
     }
     if (filters.lowStock) {
       countSql += ' AND stock_quantity <= min_stock_level';

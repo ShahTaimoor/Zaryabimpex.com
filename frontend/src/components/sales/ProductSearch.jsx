@@ -16,9 +16,7 @@ import BaseModal from '@/components/BaseModal';
 import { useSensitiveDataPermissions } from '@/hooks/useSensitiveDataPermissions';
 import { compressImageFileToDataUrl } from '@/utils/imageCompress';
 import { getProductDisplayName } from '@/utils/partyDisplay';
-
-/** Max rows shown in dropdown (server search caps higher; we slice in hook). */
-const PRODUCT_DROPDOWN_LIMIT = 50;
+import { PRODUCT_SEARCH_DROPDOWN_LIMIT } from '@/constants/listPagination';
 /** Cap manual line images stored as data URLs on sales.items */
 const MAX_MANUAL_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -78,7 +76,7 @@ function ProductSearchComponent({
     items: products,
     isLoading: productsLoading,
     emptyMessage: emptySearchMessage,
-  } = useDebouncedPosProductSearch(productSearchTerm, { dropdownLimit: PRODUCT_DROPDOWN_LIMIT });
+  } = useDebouncedPosProductSearch(productSearchTerm, { dropdownLimit: PRODUCT_SEARCH_DROPDOWN_LIMIT });
 
   const dropdownItems = itemsOverride ?? (products || []);
   const dropdownLoading = loadingOverride ?? productsLoading;
@@ -685,6 +683,8 @@ function ProductSearchComponent({
                       emptyMessage={dropdownEmptyMessage}
                       value={productSearchTerm}
                       serverSideSearch
+                      openOnFocus
+                      maxInitialItems={PRODUCT_SEARCH_DROPDOWN_LIMIT}
                     />
                   </div>
                   <button
@@ -1007,6 +1007,8 @@ function ProductSearchComponent({
                       emptyMessage={dropdownEmptyMessage}
                       value={productSearchTerm}
                       serverSideSearch
+                      openOnFocus
+                      maxInitialItems={PRODUCT_SEARCH_DROPDOWN_LIMIT}
                     />
                   </div>
                   <button

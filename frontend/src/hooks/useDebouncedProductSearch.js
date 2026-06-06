@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLazyGetProductsQuery } from '@/store/services/productsApi';
+import { PRODUCT_SEARCH_DROPDOWN_LIMIT } from '@/constants/listPagination';
 
 const DEBOUNCE_MS = 280;
-const DEFAULT_LIMIT = 50;
+const DEFAULT_LIMIT = PRODUCT_SEARCH_DROPDOWN_LIMIT;
 const EMPTY_PARAMS = {};
 
 function mergeSelected(list, selected) {
@@ -15,7 +16,7 @@ function mergeSelected(list, selected) {
 
 /**
  * Debounced server-side product list for pickers (variants, transformations, filters).
- * Empty search loads the first `limit` rows from GET /api/products?search=&page=1&limit=50.
+ * Empty search loads the first `limit` rows from GET /api/products?search=&page=1&limit=20.
  */
 export function useDebouncedProductSearch(searchTerm, options = {}) {
   const {
