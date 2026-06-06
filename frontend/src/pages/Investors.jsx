@@ -1420,7 +1420,7 @@ const PayoutModal = ({ investor, onSave, onCancel, isSubmitting }) => {
                 type="text"
                 value={debitAccountCode}
                 onChange={(e) => setDebitAccountCode(e.target.value)}
-                placeholder="3100 (default: Retained Earnings) or 2350 Due to Investors"
+                placeholder="3100 (default: Owner Capital) or 2350 Due to Investors"
                 className="font-mono text-sm"
               />
               <p className="text-xs text-gray-500 mt-1">

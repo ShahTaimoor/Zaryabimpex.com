@@ -345,8 +345,12 @@ class JournalVoucherService {
     const jv = await journalVoucherRepository.findById(id);
     if (!jv) throw new Error('Journal Voucher not found');
 
-    // Get audit trail
-    jv.auditTrail = await journalVoucherRepository.getAuditTrail(id);
+    try {
+      jv.auditTrail = await journalVoucherRepository.getAuditTrail(id);
+    } catch (err) {
+      console.warn('JV audit trail load failed:', err.message);
+      jv.auditTrail = [];
+    }
 
     return jv;
   }

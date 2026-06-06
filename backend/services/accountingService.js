@@ -1,6 +1,7 @@
 const { query, transaction } = require('../config/postgres');
 const { v4: uuidv4 } = require('uuid');
 const { invalidateByPrefix } = require('../utils/ttlCache');
+const { getSystemAccountCodes } = require('../config/basicAccounts');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function isValidUuid(v) {
@@ -42,17 +43,7 @@ class AccountingService {
    * Get default account codes for system operations
    */
   static async getDefaultAccountCodes() {
-    return {
-      cash: '1000',
-      bank: '1001',
-      accountsReceivable: '1100',
-      inventory: '1200',
-      accountsPayable: '2000',
-      salesRevenue: '4000',
-      salesReturns: '4100', // Assuming 4100 for Sales Returns
-      costOfGoodsSold: '5000',
-      purchaseReturns: '5050' // Purchase Returns (contra-COGS)
-    };
+    return getSystemAccountCodes();
   }
 
   /**
@@ -345,8 +336,8 @@ class AccountingService {
       description: `${reason} (${Math.abs(delta)} units)`
     };
 
-    // Offset account: Retained Earnings (3100) for adjustments, or specific accounts based on reference
-    let offsetAccount = '3100';
+    // Offset account: Owner Capital (3100) for adjustments, or specific accounts based on reference
+    let offsetAccount = getSystemAccountCodes().ownerCapital;
     if (referenceType === 'sale') offsetAccount = '5000'; // COGS
     if (referenceType === 'purchase_invoice') offsetAccount = '2000'; // Accounts Payable (usually handled by recordPurchaseInvoice)
 
@@ -539,7 +530,7 @@ class AccountingService {
       const txnDate = transactionDate || new Date();
 
       if (amt > 0) {
-        // Positive: we owe supplier - Credit AP (2000), Debit Retained Earnings (3100)
+        // Positive: we owe supplier - Credit AP (2000), Debit Owner Capital (3100)
         await this.createTransaction(
           { accountCode: codes.accountsPayable, creditAmount: amt, description: 'Supplier opening balance (payable)' },
           { accountCode: '3100', debitAmount: amt, description: 'Supplier opening balance (equity offset)' },
@@ -554,7 +545,7 @@ class AccountingService {
           clientToUse
         );
       } else {
-        // Negative: advance to supplier - Debit AP (2000), Credit Retained Earnings (3100)
+        // Negative: advance to supplier - Debit AP (2000), Credit Owner Capital (3100)
         await this.createTransaction(
           { accountCode: codes.accountsPayable, debitAmount: Math.abs(amt), description: 'Supplier opening balance (advance)' },
           { accountCode: '3100', creditAmount: Math.abs(amt), description: 'Supplier opening balance (equity offset)' },
@@ -585,8 +576,8 @@ class AccountingService {
    * Reverses previous bank opening entries for the bank and posts current amount.
    *
    * Double-entry policy:
-   * - Positive opening: Dr Bank (1001), Cr Retained Earnings (3100)
-   * - Negative opening: Dr Retained Earnings (3100), Cr Bank (1001)
+   * - Positive opening: Dr Bank (1001), Cr Owner Capital (3100)
+   * - Negative opening: Dr Owner Capital (3100), Cr Bank (1001)
    *
    * @param {string} bankId - Bank UUID
    * @param {number} amount - Opening balance amount
@@ -681,8 +672,8 @@ class AccountingService {
    * so totals stay consistent with {@link getAccountBalance} (opening is not double-counted).
    *
    * Double-entry policy (same pattern as bank, account 1001):
-   * - Positive opening: Dr Cash (1000), Cr Retained Earnings (3100)
-   * - Negative opening: Dr Retained Earnings (3100), Cr Cash (1000)
+   * - Positive opening: Dr Cash (1000), Cr Owner Capital (3100)
+   * - Negative opening: Dr Owner Capital (3100), Cr Cash (1000)
    *
    * @param {number} amount - Opening cash amount
    * @param {Object} options - { createdBy, transactionDate, client }
@@ -762,8 +753,8 @@ class AccountingService {
    * Reverses previous customer opening entries for the customer and posts current amount.
    *
    * Double-entry policy:
-   * - Positive opening (customer owes us): Dr AR (1100), Cr Retained Earnings (3100)
-   * - Negative opening (we owe customer/advance): Dr Retained Earnings (3100), Cr AR (1100)
+   * - Positive opening (customer owes us): Dr AR (1100), Cr Owner Capital (3100)
+   * - Negative opening (we owe customer/advance): Dr Owner Capital (3100), Cr AR (1100)
    *
    * @param {string} customerId - Customer UUID
    * @param {number} amount - Opening balance amount
@@ -830,7 +821,7 @@ class AccountingService {
 
   /**
    * Post product opening stock to the ledger (new product registration with initial quantity).
-   * Dr Inventory (1200), Cr Retained Earnings (3100) — same equity offset pattern as customer/bank opening balances.
+   * Dr Inventory (1200), Cr Owner Capital (3100) — same equity offset pattern as customer/bank opening balances.
    *
    * @param {string} productId - Product UUID
    * @param {number} quantity - Opening stock quantity (units)
@@ -882,8 +873,8 @@ class AccountingService {
 
   /**
    * Post manual stock adjustment to the ledger.
-   * If qty delta > 0: Dr Inventory (1200), Cr Retained Earnings (3100)
-   * If qty delta < 0: Dr Retained Earnings (3100), Cr Inventory (1200)
+   * If qty delta > 0: Dr Inventory (1200), Cr Owner Capital (3100)
+   * If qty delta < 0: Dr Owner Capital (3100), Cr Inventory (1200)
    *
    * @param {string} productId - Product UUID
    * @param {number} deltaQty - Change in quantity (positive for increase, negative for decrease)
@@ -1463,7 +1454,7 @@ class AccountingService {
 
   /**
    * Investor payout: reduce equity or liability (debit), reduce cash or bank (credit).
-   * Default debit is Retained Earnings (3100); optional 2350 Due to Investors if you accrue payables on the ledger.
+   * Default debit is Owner Capital (3100); optional 2350 Due to Investors if you accrue payables on the ledger.
    * @param {object} ctx
    * @param {string} ctx.investorPayoutId - UUID of investor_payouts row (ledger reference_id)
    * @param {string} ctx.investorId
@@ -1512,7 +1503,7 @@ class AccountingService {
     const accType = typeRes.rows[0].account_type;
     if (accType !== 'equity' && accType !== 'liability') {
       throw new Error(
-        `Investor payout debit account must be equity or liability (e.g. 3100 Retained Earnings or 2350 Due to Investors), not ${accType}`
+        `Investor payout debit account must be equity or liability (e.g. 3100 Owner Capital or 2350 Due to Investors), not ${accType}`
       );
     }
 

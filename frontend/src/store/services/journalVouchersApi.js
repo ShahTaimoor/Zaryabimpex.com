@@ -7,6 +7,8 @@ const JV_TAGS = [
   { type: 'Accounting', id: 'LEDGER_ENTRIES' },
   { type: 'Accounting', id: 'ALL_ENTRIES' },
   { type: 'Accounting', id: 'TRIAL_BALANCE' },
+  { type: 'Accounting', id: 'CUSTOMER_BALANCE' },
+  { type: 'Accounting', id: 'SUPPLIER_BALANCE' },
   { type: 'ChartOfAccounts', id: 'LIST' },
   { type: 'ChartOfAccounts', id: 'STATS' },
   { type: 'ChartOfAccounts', id: 'HIERARCHY' },
@@ -42,6 +44,12 @@ export const journalVouchersApi = api.injectEndpoints({
         url: `journal-vouchers/${id}`,
         method: 'get',
       }),
+      transformResponse: (response) => {
+        const root = response?.data ?? response;
+        if (root?.voucherNumber || Array.isArray(root?.entries)) return root;
+        if (root?.data?.voucherNumber || Array.isArray(root?.data?.entries)) return root.data;
+        return root;
+      },
       providesTags: (_r, _e, id) => [{ type: 'JournalVouchers', id }],
     }),
 

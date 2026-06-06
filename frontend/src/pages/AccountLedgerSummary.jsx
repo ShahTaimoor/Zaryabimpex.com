@@ -7,8 +7,7 @@ import { useGetSuppliersQuery } from '../store/services/suppliersApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { useGetBankReceiptsQuery } from '../store/services/bankReceiptsApi';
 import { useGetBankPaymentsQuery } from '../store/services/bankPaymentsApi';
-import { useLazyGetOrderByIdQuery, usePostMissingSalesToLedgerMutation, useSyncSalesLedgerMutation } from '../store/services/salesApi';
-import { useSyncPurchaseInvoicesLedgerMutation } from '../store/services/purchaseInvoicesApi';
+import { useLazyGetOrderByIdQuery } from '../store/services/salesApi';
 import { useLazyGetCashReceiptByIdQuery } from '../store/services/cashReceiptsApi';
 import { useLazyGetBankReceiptByIdQuery } from '../store/services/bankReceiptsApi';
 import { useLazyGetPurchaseInvoiceQuery } from '../store/services/purchaseInvoicesApi';
@@ -74,9 +73,6 @@ const AccountLedgerSummary = () => {
   const [printLoading, setPrintLoading] = useState(false);
 
   const [getOrderById] = useLazyGetOrderByIdQuery();
-  const [postMissingSalesToLedger, { isLoading: isBackfillLoading }] = usePostMissingSalesToLedgerMutation();
-  const [syncSalesLedger, { isLoading: isSyncLoading }] = useSyncSalesLedgerMutation();
-  const [syncPurchaseInvoicesLedger, { isLoading: isSyncPurchaseLoading }] = useSyncPurchaseInvoicesLedgerMutation();
   const [getCashReceiptById] = useLazyGetCashReceiptByIdQuery();
   const [getBankReceiptById] = useLazyGetBankReceiptByIdQuery();
   const [getPurchaseInvoiceById] = useLazyGetPurchaseInvoiceQuery();
@@ -816,53 +812,6 @@ const AccountLedgerSummary = () => {
 
 
 
-  const handleBackfillSales = async () => {
-    try {
-      const result = await postMissingSalesToLedger({
-        dateFrom: filters.startDate,
-        dateTo: filters.endDate
-      }).unwrap();
-      const posted = result?.posted ?? 0;
-      const failed = result?.errors?.length ?? 0;
-      toast.success(`Backfilled ${posted} sale(s).${failed ? ` ${failed} failed.` : ''}`);
-      refetch();
-    } catch (err) {
-      handleApiError(err, 'Failed to backfill sales to ledger');
-    }
-  };
-
-  const handleSyncSalesLedger = async () => {
-    try {
-      const result = await syncSalesLedger({
-        dateFrom: filters.startDate,
-        dateTo: filters.endDate
-      }).unwrap();
-      const updated = result?.updated ?? 0;
-      const posted = result?.posted ?? 0;
-      const failed = result?.errors?.length ?? 0;
-      toast.success(`Synced ${updated} sale(s), posted ${posted}.${failed ? ` ${failed} failed.` : ''}`);
-      refetch();
-    } catch (err) {
-      handleApiError(err, 'Failed to sync sales ledger');
-    }
-  };
-
-  const handleSyncPurchaseLedger = async () => {
-    try {
-      const result = await syncPurchaseInvoicesLedger({
-        dateFrom: filters.startDate,
-        dateTo: filters.endDate
-      }).unwrap();
-      const updated = result?.updated ?? 0;
-      const posted = result?.posted ?? 0;
-      const failed = result?.errors?.length ?? 0;
-      toast.success(`Synced ${updated} purchase invoice(s), posted ${posted}.${failed ? ` ${failed} failed.` : ''}`);
-      refetch();
-    } catch (err) {
-      handleApiError(err, 'Failed to sync purchase invoices ledger');
-    }
-  };
-
   const ledgerPartyName = selectedExpenseAccountCode
     ? (expenseAccountDetail?.accountName || summaryData?.data?.expenseAccount?.accountName || 'Expense account')
     : selectedCustomerId
@@ -913,39 +862,6 @@ const AccountLedgerSummary = () => {
               <p className="text-sm text-gray-500 mt-0.5">Customer receivables, supplier payables, banks, and expense accounts</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                onClick={handleSyncPurchaseLedger}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
-                disabled={isSyncPurchaseLoading}
-                title="Sync purchase invoices ledger for this date range"
-              >
-                <FileText className="h-4 w-4" />
-                {isSyncPurchaseLoading ? 'Syncing...' : 'Sync Purchase Ledger'}
-              </Button>
-              <Button
-                onClick={handleSyncSalesLedger}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
-                disabled={isSyncLoading}
-                title="Sync sales ledger for edited invoices in this date range"
-              >
-                <FileText className="h-4 w-4" />
-                {isSyncLoading ? 'Syncing...' : 'Sync Sales Ledger'}
-              </Button>
-              <Button
-                onClick={handleBackfillSales}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
-                disabled={isBackfillLoading}
-                title="Post missing sales to ledger for the selected date range"
-              >
-                <FileText className="h-4 w-4" />
-                {isBackfillLoading ? 'Backfilling...' : 'Backfill Sales'}
-              </Button>
               <Button
                 onClick={handlePrint}
                 variant="outline"

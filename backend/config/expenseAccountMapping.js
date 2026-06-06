@@ -13,23 +13,7 @@
  */
 
 const expenseAccountMapping = {
-  // Selling & Marketing Expenses (5220 series)
-  '5220': {
-    expenseType: 'selling',
-    category: 'marketing',
-    description: 'Selling & Marketing Expenses',
-    priority: 10
-  },
-  
-  // General & Administrative Expenses (5210 series)
-  '5210': {
-    expenseType: 'administrative',
-    category: 'general_administrative',
-    description: 'General & Administrative Expenses',
-    priority: 10
-  },
-  
-  // Specific account code mappings (can be extended)
+  // Specific account code mappings for user-created expense accounts
   // Selling Expenses
   '5221': { expenseType: 'selling', category: 'advertising', description: 'Advertising Expenses', priority: 5 },
   '5222': { expenseType: 'selling', category: 'marketing', description: 'Marketing Expenses', priority: 5 },

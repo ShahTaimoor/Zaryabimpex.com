@@ -8,8 +8,6 @@
  */
 
 const SalesRepository = require('../repositories/SalesRepository');
-const TransactionRepository = require('../repositories/TransactionRepository');
-const ChartOfAccountsRepository = require('../repositories/ChartOfAccountsRepository');
 
 class TaxCalculationService {
   constructor() {
@@ -71,39 +69,12 @@ class TaxCalculationService {
       }
     });
 
-    // Also check for sales tax payable account transactions
-    const salesTaxPayableAccount = await ChartOfAccountsRepository.findOne({
-      accountCode: '2120',
-      accountName: { $regex: /sales.*tax.*payable/i },
-      isActive: true
-    });
-
-    let salesTaxFromTransactions = 0;
-    if (salesTaxPayableAccount) {
-      const salesTaxTransactions = await TransactionRepository.findAll({
-        accountCode: salesTaxPayableAccount.accountCode,
-        createdAt: { $gte: period.startDate, $lte: period.endDate },
-        status: 'completed',
-        creditAmount: { $gt: 0 } // Sales tax payable is a credit
-      }, {
-        lean: true
-      });
-
-      salesTaxTransactions.forEach(transaction => {
-        salesTaxFromTransactions += transaction.creditAmount || 0;
-      });
-    }
-
-    // Use the higher of the two (sales tax from orders or transactions)
-    // This handles cases where tax might be recorded differently
-    const finalSalesTax = Math.max(totalSalesTax, salesTaxFromTransactions);
-
     return {
-      salesTax: finalSalesTax,
+      salesTax: totalSalesTax,
       taxableSales: taxableSales,
       taxExemptSales: taxExemptSales,
       taxByMonth: taxByMonth,
-      source: totalSalesTax >= salesTaxFromTransactions ? 'sales_orders' : 'transactions'
+      source: 'sales_orders'
     };
   }
 

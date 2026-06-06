@@ -40,6 +40,7 @@ function entryCamel(row) {
     bankId: row.bank_id,
     customerName: row.customer_name,
     supplierName: row.supplier_name,
+    bankName: row.bank_name,
     createdAt: row.created_at
   };
 }
@@ -132,13 +133,18 @@ class JournalVoucherRepository {
 
     // Get entries with party names
     const entriesResult = await query(
-      `SELECT e.*, 
+      `SELECT e.*,
               c.name as customer_name,
-              COALESCE(s.business_name, s.name) as supplier_name
+              COALESCE(s.business_name, s.name) as supplier_name,
+              COALESCE(b.bank_name, '') || CASE
+                WHEN COALESCE(b.account_name, '') <> '' THEN ' — ' || b.account_name
+                ELSE ''
+              END as bank_name
        FROM journal_voucher_entries e
        LEFT JOIN customers c ON e.customer_id = c.id
        LEFT JOIN suppliers s ON e.supplier_id = s.id
-       WHERE e.journal_voucher_id = $1 
+       LEFT JOIN banks b ON e.bank_id = b.id
+       WHERE e.journal_voucher_id = $1
        ORDER BY e.line_number`,
       [id]
     );
@@ -189,6 +195,16 @@ class JournalVoucherRepository {
       if (Array.isArray(data.entries) && data.entries.length > 0) {
         for (let i = 0; i < data.entries.length; i++) {
           const entry = data.entries[i];
+          let accountName = entry.accountName || entry.account_name || '';
+          if (!accountName) {
+            const accRes = await clientToUse.query(
+              `SELECT account_name FROM chart_of_accounts
+               WHERE account_code = $1 AND deleted_at IS NULL
+               LIMIT 1`,
+              [entry.accountCode || entry.account_code]
+            );
+            accountName = accRes.rows[0]?.account_name || '';
+          }
           const entryResult = await clientToUse.query(
             `INSERT INTO journal_voucher_entries 
              (journal_voucher_id, line_number, account_code, account_name, particulars, debit_amount, credit_amount, description, customer_id, supplier_id, bank_id)
@@ -198,7 +214,7 @@ class JournalVoucherRepository {
               jvId,
               i + 1,
               entry.accountCode || entry.account_code,
-              entry.accountName || entry.account_name || '',
+              accountName,
               entry.particulars || '',
               parseFloat(entry.debitAmount || entry.debit_amount || 0),
               parseFloat(entry.creditAmount || entry.credit_amount || 0),
@@ -278,6 +294,16 @@ class JournalVoucherRepository {
       if (Array.isArray(data.entries) && data.entries.length > 0) {
         for (let i = 0; i < data.entries.length; i++) {
           const entry = data.entries[i];
+          let accountName = entry.accountName || entry.account_name || '';
+          if (!accountName) {
+            const accRes = await clientToUse.query(
+              `SELECT account_name FROM chart_of_accounts
+               WHERE account_code = $1 AND deleted_at IS NULL
+               LIMIT 1`,
+              [entry.accountCode || entry.account_code]
+            );
+            accountName = accRes.rows[0]?.account_name || '';
+          }
           const entryResult = await clientToUse.query(
             `INSERT INTO journal_voucher_entries 
              (journal_voucher_id, line_number, account_code, account_name, particulars, debit_amount, credit_amount, description, customer_id, supplier_id, bank_id)
@@ -287,7 +313,7 @@ class JournalVoucherRepository {
               id,
               i + 1,
               entry.accountCode || entry.account_code,
-              entry.accountName || entry.account_name || '',
+              accountName,
               entry.particulars || '',
               parseFloat(entry.debitAmount || entry.debit_amount || 0),
               parseFloat(entry.creditAmount || entry.credit_amount || 0),
@@ -398,11 +424,13 @@ class JournalVoucherRepository {
        ORDER BY changed_at DESC`,
       [journalVoucherId]
     );
-    return result.rows.map(row => ({
+    return result.rows.map((row) => ({
       id: row.id,
       action: row.action,
       changedBy: row.changed_by,
-      changeDetails: row.change_details ? JSON.parse(row.change_details) : null,
+      changeDetails: row.change_details
+        ? (typeof row.change_details === 'string' ? JSON.parse(row.change_details) : row.change_details)
+        : null,
       changedAt: row.changed_at
     }));
   }

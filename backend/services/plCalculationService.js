@@ -1,5 +1,5 @@
 const { query } = require('../config/postgres');
-const AccountingService = require('./accountingService');
+const { getSystemAccountCodes } = require('../config/basicAccounts');
 const { getStartOfDayPakistan, getEndOfDayPakistan } = require('../utils/dateFilter');
 
 /**
@@ -13,7 +13,6 @@ class PLCalculationService {
    * Used as primary source for P&L sales revenue so it matches Sale Invoice totals.
    */
   async getRevenueAndCOGSFromSales(startDate, endDate) {
-    // Use Pakistan date range so P&L matches Sales Invoices list (same dates)
     const start = startDate ? getStartOfDayPakistan(startDate) : null;
     const end = endDate ? getEndOfDayPakistan(endDate) : null;
     if (!start || !end) return { revenue: 0, cogs: 0 };
@@ -43,37 +42,38 @@ class PLCalculationService {
   }
 
   /**
-   * Calculate revenue for a period
+   * Calculate revenue for a period from Sales Revenue account
    */
   async calculateRevenue(startDate, endDate) {
+    const { salesRevenue } = getSystemAccountCodes();
     const result = await query(
       `SELECT COALESCE(SUM(credit_amount - debit_amount), 0) AS revenue
        FROM account_ledger
-       WHERE account_code IN ('4000', '4200')
-         AND transaction_date >= $1
-         AND transaction_date <= $2
+       WHERE account_code = $1
+         AND transaction_date >= $2
+         AND transaction_date <= $3
          AND status = 'completed'
          AND reversed_at IS NULL`,
-      [startDate, endDate]
+      [salesRevenue, startDate, endDate]
     );
     return parseFloat(result.rows[0]?.revenue || 0);
   }
 
   /**
-   * Get COGS reversals (credits to 5000) from Sale Return entries in the period.
-   * Used to compute net COGS = sales COGS - return reversals when ledger sale debits may be missing.
+   * Get COGS reversals (credits to COGS) from Sale Return entries in the period.
    */
   async getReturnCOGSReversals(startDate, endDate) {
+    const { costOfGoodsSold } = getSystemAccountCodes();
     const result = await query(
       `SELECT COALESCE(SUM(credit_amount), 0) AS reversals
        FROM account_ledger
-       WHERE account_code = '5000'
+       WHERE account_code = $1
          AND reference_type IN ('Sale Return', 'return')
-         AND transaction_date >= $1
-         AND transaction_date <= $2
+         AND transaction_date >= $2
+         AND transaction_date <= $3
          AND status = 'completed'
          AND reversed_at IS NULL`,
-      [startDate, endDate]
+      [costOfGoodsSold, startDate, endDate]
     );
     return parseFloat(result.rows[0]?.reversals || 0);
   }
@@ -82,16 +82,17 @@ class PLCalculationService {
    * Calculate cost of goods sold for a period
    */
   async calculateCOGS(startDate, endDate) {
+    const { costOfGoodsSold } = getSystemAccountCodes();
     const result = await query(
       `SELECT COALESCE(SUM(al.debit_amount - al.credit_amount), 0) AS cogs
        FROM account_ledger al
-       WHERE al.account_code = '5000'
-         AND al.transaction_date >= $1
-         AND al.transaction_date <= $2
+       WHERE al.account_code = $1
+         AND al.transaction_date >= $2
+         AND al.transaction_date <= $3
          AND al.status = 'completed'
          AND al.reversed_at IS NULL
          AND NOT (al.reference_type = 'sale' AND al.reference_id::text IN (SELECT id::text FROM sales WHERE deleted_at IS NOT NULL))`,
-      [startDate, endDate]
+      [costOfGoodsSold, startDate, endDate]
     );
     return parseFloat(result.rows[0]?.cogs || 0);
   }
@@ -106,56 +107,21 @@ class PLCalculationService {
   }
 
   /**
-   * Calculate operating expenses for a period
-   */
-  async calculateOperatingExpenses(startDate, endDate) {
-    const result = await query(
-      `SELECT COALESCE(SUM(debit_amount - credit_amount), 0) AS expenses
-       FROM account_ledger
-       WHERE account_code IN ('5100', '5200', '5300', '5400', '5500')
-         AND transaction_date >= $1
-         AND transaction_date <= $2
-         AND status = 'completed'
-         AND reversed_at IS NULL`,
-      [startDate, endDate]
-    );
-    return parseFloat(result.rows[0]?.expenses || 0);
-  }
-
-  /**
-   * Calculate other expenses (account 5600 only)
-   */
-  async calculateOtherExpenses(startDate, endDate) {
-    const result = await query(
-      `SELECT COALESCE(SUM(debit_amount - credit_amount), 0) AS expenses
-       FROM account_ledger
-       WHERE account_code = '5600'
-         AND transaction_date >= $1
-         AND transaction_date <= $2
-         AND status = 'completed'
-         AND reversed_at IS NULL`,
-      [startDate, endDate]
-    );
-    return parseFloat(result.rows[0]?.expenses || 0);
-  }
-
-  /**
-   * Get all expense account codes from chart of accounts (excluding COGS 5000).
-   * Used so Record Expense and any expense account impact P&L.
+   * Get all expense account codes from chart of accounts (excluding COGS).
    */
   async getExpenseAccountCodes() {
+    const { costOfGoodsSold } = getSystemAccountCodes();
     const result = await query(
       `SELECT account_code FROM chart_of_accounts
-       WHERE account_type = 'expense' AND account_code != '5000'
+       WHERE account_type = 'expense' AND account_code != $1
          AND deleted_at IS NULL AND is_active = TRUE`,
-      []
+      [costOfGoodsSold]
     );
     return (result.rows || []).map((r) => r.account_code);
   }
 
   /**
-   * Calculate total expenses from ledger for ALL expense-type accounts in period.
-   * Ensures Record Expense (and any expense account) impacts P&L.
+   * Calculate total expenses from ledger for ALL active expense-type accounts in period.
    */
   async calculateTotalExpensesFromLedger(startDate, endDate) {
     const codes = await this.getExpenseAccountCodes();
@@ -174,16 +140,14 @@ class PLCalculationService {
   }
 
   /**
-   * Calculate net income (includes all expense accounts so Record Expense impacts P&L).
-   * Uses sales table for revenue (matches Sale Invoices) and ledger for returns, other income, expenses.
+   * Calculate net income (includes user-added expense accounts; core chart has COGS only).
    */
   async calculateNetIncome(startDate, endDate) {
     const fromSales = await this.getRevenueAndCOGSFromSales(startDate, endDate);
     let salesRevenue = fromSales.revenue;
     let cogs = fromSales.cogs;
-    const salesReturns = await this.calculateAccountRevenue('4100', startDate, endDate);
-    const otherIncome = await this.calculateAccountRevenue('4200', startDate, endDate);
-    const totalRevenue = salesRevenue - salesReturns + otherIncome;
+    const salesReturns = await this.calculateReturnRevenue(startDate, endDate);
+    const totalRevenue = salesRevenue - salesReturns;
     if (salesReturns > 0) {
       const returnCogsReversals = await this.getReturnCOGSReversals(startDate, endDate);
       cogs = Math.max(0, cogs - returnCogsReversals);
@@ -196,29 +160,21 @@ class PLCalculationService {
 
   /**
    * Generate complete P&L statement
-   * Uses sales table for revenue (matches Sale Invoice totals); ledger for returns, other income, COGS fallback, expenses
    */
   async generatePLStatement(startDate, endDate) {
     const rawStart = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1);
     const rawEnd = endDate ? new Date(endDate) : new Date();
     rawStart.setHours(0, 0, 0, 0);
     rawEnd.setHours(23, 59, 59, 999);
-    // Use Pakistan date range for ALL sources (sales, returns, COGS) so period is consistent
     const start = getStartOfDayPakistan(rawStart) || rawStart;
     const end = getEndOfDayPakistan(rawEnd) || rawEnd;
 
-    // Sales revenue: use sales table as primary source so P&L matches Sale Invoice totals
     const fromSales = await this.getRevenueAndCOGSFromSales(rawStart, rawEnd);
     let salesRevenue = fromSales.revenue;
     let cogs = fromSales.cogs;
 
-    // Sales returns and other income from ledger (not in sales table)
-    const salesReturns = await this.calculateAccountRevenue('4100', start, end);
-    const otherIncome = await this.calculateAccountRevenue('4200', start, end);
+    const salesReturns = await this.calculateReturnRevenue(start, end);
 
-    // COGS: when sale returns exist, use net = sales COGS - return reversals.
-    // Pure ledger COGS can be wrong when sale debits are in another period (date mismatch) or missing,
-    // leaving only return credits → negative COGS. Hybrid formula avoids that.
     if (salesReturns > 0) {
       const returnCogsReversals = await this.getReturnCOGSReversals(start, end);
       cogs = Math.max(0, cogs - returnCogsReversals);
@@ -226,28 +182,10 @@ class PLCalculationService {
       cogs = await this.calculateCOGS(start, end);
     }
 
-    const totalRevenue = salesRevenue - salesReturns + otherIncome;
+    const totalRevenue = salesRevenue - salesReturns;
     const grossProfit = totalRevenue - cogs;
-
-    // Operating Expenses (breakdown by standard accounts)
-    const salaries = await this.calculateAccountExpense('5200', start, end);
-    const rent = await this.calculateAccountExpense('5300', start, end);
-    const utilities = await this.calculateAccountExpense('5400', start, end);
-    const depreciation = await this.calculateAccountExpense('5500', start, end);
-    const otherOperating = await this.calculateAccountExpense('5100', start, end);
-    const standardOperatingTotal = salaries + rent + utilities + depreciation + otherOperating;
-
-    // Other Expenses (5600)
-    const otherExpenses = await this.calculateOtherExpenses(start, end);
-
-    // Total expenses from ALL expense accounts in ledger (so Record Expense impacts P&L)
-    const totalExpensesFromLedger = await this.calculateTotalExpensesFromLedger(start, end);
-    const otherExpenseAccounts = Math.max(0, totalExpensesFromLedger - standardOperatingTotal - otherExpenses);
-    const totalOperatingExpenses = standardOperatingTotal + otherExpenseAccounts;
-
-    // Net Income (uses full expense total so every recorded expense is included)
-    const totalExpensesForNet = totalOperatingExpenses + otherExpenses;
-    const netIncome = grossProfit - totalExpensesForNet;
+    const totalOperatingExpenses = await this.calculateTotalExpensesFromLedger(start, end);
+    const netIncome = grossProfit - totalOperatingExpenses;
 
     return {
       period: {
@@ -255,48 +193,63 @@ class PLCalculationService {
         endDate: end
       },
       returns: {
-        salesReturns: salesReturns,
+        salesReturns,
         totalReturns: salesReturns
       },
       revenue: {
-        salesRevenue: salesRevenue,
-        salesReturns: salesReturns,
+        salesRevenue,
+        salesReturns,
         netSales: salesRevenue - salesReturns,
-        otherIncome: otherIncome,
+        otherIncome: 0,
         total: totalRevenue
       },
       costOfGoodsSold: {
         total: cogs
       },
-      grossProfit: grossProfit,
+      grossProfit,
       operatingExpenses: {
-        salaries: salaries,
-        rent: rent,
-        utilities: utilities,
-        depreciation: depreciation,
-        otherOperating: otherOperating,
-        otherExpenseAccounts: otherExpenseAccounts,
+        salaries: 0,
+        rent: 0,
+        utilities: 0,
+        depreciation: 0,
+        otherOperating: totalOperatingExpenses,
+        otherExpenseAccounts: 0,
         total: totalOperatingExpenses
       },
       otherExpenses: {
-        total: otherExpenses
+        total: 0
       },
-      totalExpenses: totalExpensesForNet,
-      netIncome: netIncome,
+      totalExpenses: totalOperatingExpenses,
+      netIncome,
       generatedAt: new Date()
     };
   }
 
   /**
-   * Calculate revenue for a specific account.
-   * For Sales Revenue (4000), Other Income (4200): credit - debit (credits increase revenue).
-   * For Sales Returns (4100) contra-revenue: debit - credit (debits = returns, we need positive amount to subtract).
+   * Sale return amounts posted to revenue accounts (debit reduces net sales).
+   */
+  async calculateReturnRevenue(startDate, endDate) {
+    const result = await query(
+      `SELECT COALESCE(SUM(al.debit_amount - al.credit_amount), 0) AS returns
+       FROM account_ledger al
+       JOIN chart_of_accounts coa ON UPPER(coa.account_code) = UPPER(al.account_code)
+       WHERE coa.account_type = 'revenue'
+         AND al.reference_type IN ('Sale Return', 'return')
+         AND al.transaction_date >= $1
+         AND al.transaction_date <= $2
+         AND al.status = 'completed'
+         AND al.reversed_at IS NULL`,
+      [startDate, endDate]
+    );
+    return parseFloat(result.rows[0]?.returns || 0);
+  }
+
+  /**
+   * Calculate revenue for a specific account (credit - debit).
    */
   async calculateAccountRevenue(accountCode, startDate, endDate) {
-    const isContraRevenue = accountCode === '4100'; // Sales Returns
-    const sign = isContraRevenue ? 'debit_amount - credit_amount' : 'credit_amount - debit_amount';
     const result = await query(
-      `SELECT COALESCE(SUM(${sign}), 0) AS revenue
+      `SELECT COALESCE(SUM(credit_amount - debit_amount), 0) AS revenue
        FROM account_ledger
        WHERE account_code = $1
          AND transaction_date >= $2

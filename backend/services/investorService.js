@@ -140,7 +140,7 @@ class InvestorService {
 
   /**
    * Record a payout: investor balances + investor_payouts row + double-entry ledger (atomic).
-   * Dr equity/liability (default 3100), Cr 1000 cash or 1001 bank.
+   * Dr equity/liability (default 3100 Owner Capital), Cr 1000 cash or 1001 bank.
    * @param {string} id - Investor ID
    * @param {number} amount - Payout amount
    * @param {string|null} createdBy - User UUID

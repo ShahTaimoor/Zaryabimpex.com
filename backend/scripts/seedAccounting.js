@@ -5,9 +5,9 @@
  *
  * Uses double-entry: each line posts Dr asset (or Dr equity for AP offset) vs Cr equity / Cr liability.
  *
- * Inventory (SEED_OPENING_INVENTORY): Dr 1200 Inventory, Cr 3100 Retained Earnings — same pattern as
+ * Inventory (SEED_OPENING_INVENTORY): Dr 1200 Inventory, Cr 3100 Owner Capital — same pattern as
  * product registration opening stock (`AccountingService.postProductOpeningStock`, reference_type
- * `product_opening_stock`). Cash/bank/AR seed lines still credit 3000 Owner Equity.
+ * `product_opening_stock`). All equity offsets credit 3100 Owner Capital.
  *
  * Optional env (defaults are demo amounts in PKR):
  *   SEED_OPENING_CASH=50000
@@ -53,7 +53,7 @@ async function refreshBalancesAfterDelete(client, codes) {
 }
 
 /** Accounts to refresh after deleting/re-posting seed rows (includes 3100 for inventory seed + product opening stock) */
-const BS_ACCOUNTS = ['1000', '1001', '1100', '1200', '2000', '3000', '3100'];
+const BS_ACCOUNTS = ['1000', '1001', '1100', '1200', '2000', '3100'];
 
 async function main() {
   const cash = num('SEED_OPENING_CASH', 50000);
@@ -108,30 +108,30 @@ async function main() {
     if (cash > 0) {
       pairs.push([
         { accountCode: '1000', debitAmount: cash, creditAmount: 0, description: 'Seed opening: cash' },
-        { accountCode: '3000', debitAmount: 0, creditAmount: cash, description: 'Seed opening: owner equity (cash)' },
+        { accountCode: '3100', debitAmount: 0, creditAmount: cash, description: 'Seed opening: owner capital (cash)' },
       ]);
     }
     if (bank > 0) {
       pairs.push([
         { accountCode: '1001', debitAmount: bank, creditAmount: 0, description: 'Seed opening: bank' },
-        { accountCode: '3000', debitAmount: 0, creditAmount: bank, description: 'Seed opening: owner equity (bank)' },
+        { accountCode: '3100', debitAmount: 0, creditAmount: bank, description: 'Seed opening: owner capital (bank)' },
       ]);
     }
     if (ar > 0) {
       pairs.push([
         { accountCode: '1100', debitAmount: ar, creditAmount: 0, description: 'Seed opening: accounts receivable' },
-        { accountCode: '3000', debitAmount: 0, creditAmount: ar, description: 'Seed opening: owner equity (AR)' },
+        { accountCode: '3100', debitAmount: 0, creditAmount: ar, description: 'Seed opening: owner capital (AR)' },
       ]);
     }
     if (inventory > 0) {
       pairs.push([
         { accountCode: '1200', debitAmount: inventory, creditAmount: 0, description: 'Seed opening: inventory' },
-        { accountCode: '3100', debitAmount: 0, creditAmount: inventory, description: 'Seed opening: retained earnings (inventory)' },
+        { accountCode: '3100', debitAmount: 0, creditAmount: inventory, description: 'Seed opening: owner capital (inventory)' },
       ]);
     }
     if (ap > 0) {
       pairs.push([
-        { accountCode: '3000', debitAmount: ap, creditAmount: 0, description: 'Seed opening: equity offset for AP' },
+        { accountCode: '3100', debitAmount: ap, creditAmount: 0, description: 'Seed opening: owner capital offset for AP' },
         { accountCode: '2000', debitAmount: 0, creditAmount: ap, description: 'Seed opening: accounts payable' },
       ]);
     }
@@ -143,7 +143,7 @@ async function main() {
     console.log('✅ Posted seed opening balances:');
     console.log(`   Cash ${cash}, Bank ${bank}, AR ${ar}, Inventory ${inventory} (Cr 3100), AP ${ap}`);
     console.log(`   Transaction date: ${txnDate.toISOString().slice(0, 10)}`);
-    console.log('   Balance sheet accounts: 1000, 1001, 1100, 1200, 2000, 3000, 3100');
+    console.log('   Balance sheet accounts: 1000, 1001, 1100, 1200, 2000, 3100');
     console.log('   Note: New products with opening stock post Dr 1200 / Cr 3100 as product_opening_stock (not this script).');
   });
 
