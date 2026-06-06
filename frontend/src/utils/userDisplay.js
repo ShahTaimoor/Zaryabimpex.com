@@ -1,3 +1,28 @@
+export function getOnlineUserId(entry) {
+  if (!entry) return '';
+  return String(entry.userId ?? entry.id ?? entry._id ?? '');
+}
+
+export function isUserInOnlineList(user, onlineList) {
+  if (!user || !Array.isArray(onlineList)) return false;
+  const selfId = getOnlineUserId(user);
+  if (!selfId) return false;
+  return onlineList.some((entry) => getOnlineUserId(entry) === selfId);
+}
+
+export function getUserPrimaryLabel(user) {
+  const fullName = String(user?.fullName || '').trim();
+  if (fullName) return fullName;
+  return user?.email || 'User';
+}
+
+export function getUserSecondaryEmail(user) {
+  const fullName = String(user?.fullName || '').trim();
+  const email = String(user?.email || '').trim();
+  if (!fullName || !email || fullName === email) return null;
+  return email;
+}
+
 export function getUserInitials(user) {
   const fullName = String(user?.fullName || '').trim();
   if (fullName) {

@@ -7,10 +7,18 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import OnlineAvatarStack from '../OnlineAvatarStack';
+import { OnlineStatusDot } from '../OnlineStatusDot';
 import { useGetOnlineUsersQuery } from '../../store/services/presenceApi';
 import { POLLING_INTERVALS } from '../../config/polling';
 import { getRoleLabel } from '../../utils/roleLabels';
-import { getUserInitials, getAvatarColorClass, formatAlertCount } from '../../utils/userDisplay';
+import {
+  getUserInitials,
+  getAvatarColorClass,
+  formatAlertCount,
+  getUserPrimaryLabel,
+  getUserSecondaryEmail,
+  isUserInOnlineList,
+} from '../../utils/userDisplay';
 import { cn } from '@/lib/utils';
 
 const Divider = () => (
@@ -64,9 +72,7 @@ export const UserAvatar = memo(function UserAvatar({
       )}
     >
       {initials}
-      {showOnline && (
-        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
-      )}
+      {showOnline && <OnlineStatusDot className="h-3 w-3" />}
     </span>
   );
 });
@@ -88,22 +94,32 @@ export const TopBarUserCluster = memo(function TopBarUserCluster({
   userMenuRef,
 }) {
   const roleLabel = getRoleLabel(user?.role);
-  const displayName = user?.fullName || user?.email || 'User';
+  const primaryLabel = getUserPrimaryLabel(user);
+  const secondaryEmail = getUserSecondaryEmail(user);
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
   const { data: onlineData } = useGetOnlineUsersQuery(undefined, {
     pollingInterval: POLLING_INTERVALS.ONLINE_USERS_MS,
     skipPollingIfUnfocused: true,
     refetchOnFocus: true,
-    skip: !user || !isAdmin || !showTeamPresence,
+    skip: !user || !isAdmin,
   });
-  const teamOnlineCount = useMemo(() => {
+  const onlineUsers = useMemo(() => {
     const list = onlineData?.data ?? onlineData ?? [];
-    const online = Array.isArray(list) ? list : [];
-    return online.filter((u) => {
-      const uid = String(u.userId ?? u.id ?? '');
-      return user?.id == null || uid !== String(user.id);
-    }).length;
-  }, [onlineData, user?.id]);
+    return Array.isArray(list) ? list : [];
+  }, [onlineData]);
+  const isCurrentUserOnline = useMemo(
+    () => (isAdmin ? isUserInOnlineList(user, onlineUsers) : Boolean(user)),
+    [isAdmin, user, onlineUsers]
+  );
+  const teamOnlineCount = useMemo(
+    () =>
+      onlineUsers.filter((entry) => {
+        const uid = String(entry.userId ?? entry.id ?? '');
+        const selfId = String(user?.id ?? user?._id ?? '');
+        return !selfId || uid !== selfId;
+      }).length,
+    [onlineUsers, user?.id, user?._id]
+  );
   const showTeamStack = showTeamPresence && teamOnlineCount > 0;
 
   return (
@@ -142,12 +158,12 @@ export const TopBarUserCluster = memo(function TopBarUserCluster({
             'hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/10',
             userMenuOpen && 'bg-gray-50'
           )}
-          title={`${displayName} — ${roleLabel}`}
+          title={`${primaryLabel} — ${roleLabel}`}
         >
-          <UserAvatar user={user} showOnline size="sm" />
+          <UserAvatar user={user} showOnline={isCurrentUserOnline} size="sm" />
           <span className="hidden md:flex flex-col items-start min-w-0 max-w-[140px] lg:max-w-[180px]">
             <span className="text-sm font-semibold text-gray-900 truncate w-full text-left leading-tight">
-              {displayName}
+              {primaryLabel}
             </span>
             <span className="mt-0.5 inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-600">
               {roleLabel}
@@ -168,11 +184,11 @@ export const TopBarUserCluster = memo(function TopBarUserCluster({
           className="absolute right-0 top-[calc(100%+8px)] z-[60] w-64 overflow-hidden rounded-xl border border-gray-200/80 bg-white shadow-xl ring-1 ring-black/5"
         >
           <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50/80 px-4 py-3">
-            <UserAvatar user={user} showOnline />
+            <UserAvatar user={user} showOnline={isCurrentUserOnline} />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-gray-900">{displayName}</p>
-              {user?.email ? (
-                <p className="truncate text-xs text-gray-500">{user.email}</p>
+              <p className="truncate text-sm font-semibold text-gray-900">{primaryLabel}</p>
+              {secondaryEmail ? (
+                <p className="truncate text-xs text-gray-500">{secondaryEmail}</p>
               ) : null}
               <span className="mt-1 inline-flex rounded-md bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600 ring-1 ring-gray-200">
                 {roleLabel}

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useGetOnlineUsersQuery } from '../store/services/presenceApi';
 import { getRoleLabel } from '../utils/roleLabels';
 import { getUserInitials, getAvatarColorClass } from '../utils/userDisplay';
+import { OnlineStatusDot } from './OnlineStatusDot';
 import { cn } from '@/lib/utils';
 import { POLLING_INTERVALS } from '../config/polling';
 
@@ -61,7 +62,7 @@ export default function OnlineAvatarStack({
                 initial={{ opacity: 0, scale: 0.85 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.85 }}
-                title={`${u.fullName} (${getRoleLabel(u.role)})`}
+                title={`${u.fullName} (${getRoleLabel(u.role)}) — online`}
                 className={cn(
                   'relative flex items-center justify-center rounded-full font-semibold text-white shadow-sm ring-2 ring-white transition-transform hover:z-10 hover:scale-105',
                   sizeClass,
@@ -69,6 +70,7 @@ export default function OnlineAvatarStack({
                 )}
               >
                 {initials}
+                <OnlineStatusDot />
               </motion.div>
             );
           })}
