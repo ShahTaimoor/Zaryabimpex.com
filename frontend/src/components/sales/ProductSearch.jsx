@@ -17,6 +17,7 @@ import { useSensitiveDataPermissions } from '@/hooks/useSensitiveDataPermissions
 import { compressImageFileToDataUrl } from '@/utils/imageCompress';
 import { getProductDisplayName } from '@/utils/partyDisplay';
 import { PRODUCT_SEARCH_DROPDOWN_LIMIT } from '@/constants/listPagination';
+import { useCompanyInfo } from '@/hooks/useCompanyInfo';
 /** Cap manual line images stored as data URLs on sales.items */
 const MAX_MANUAL_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -39,6 +40,9 @@ function ProductSearchComponent({
   onFocusReady,
 }) {
   const { canViewStock } = useSensitiveDataPermissions();
+  const { companyInfo } = useCompanyInfo();
+  const productSearchCameraEnabled =
+    companyInfo?.orderSettings?.productSearchCameraEnabled === true;
 
   const formatDisplayNumber = (value) => {
     const num = Number(value);
@@ -687,14 +691,16 @@ function ProductSearchComponent({
                       maxInitialItems={PRODUCT_SEARCH_DROPDOWN_LIMIT}
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowBarcodeScanner(true)}
-                    className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center flex-shrink-0"
-                    title="Scan barcode to search product"
-                  >
-                    <Camera className="h-5 w-5 text-gray-600" />
-                  </button>
+                  {productSearchCameraEnabled ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowBarcodeScanner(true)}
+                      className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center flex-shrink-0"
+                      title="Scan barcode to search product"
+                    >
+                      <Camera className="h-5 w-5 text-gray-600" />
+                    </button>
+                  ) : null}
                   {allowSaleWithoutProduct && (
                     <button
                       type="button"
@@ -1011,14 +1017,16 @@ function ProductSearchComponent({
                       maxInitialItems={PRODUCT_SEARCH_DROPDOWN_LIMIT}
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowBarcodeScanner(true)}
-                    className="h-10 px-2 border border-gray-300 rounded-md hover:bg-gray-100 hover:border-gray-400 transition-all flex items-center justify-center flex-shrink-0 bg-white"
-                    title="Scan barcode"
-                  >
-                    <Camera className="h-4 w-4 text-gray-600" />
-                  </button>
+                  {productSearchCameraEnabled ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowBarcodeScanner(true)}
+                      className="h-10 px-2 border border-gray-300 rounded-md hover:bg-gray-100 hover:border-gray-400 transition-all flex items-center justify-center flex-shrink-0 bg-white"
+                      title="Scan barcode"
+                    >
+                      <Camera className="h-4 w-4 text-gray-600" />
+                    </button>
+                  ) : null}
                   {allowSaleWithoutProduct && (
                     <button
                       type="button"
@@ -1215,14 +1223,16 @@ function ProductSearchComponent({
       </div>
 
       {/* Barcode Scanner Modal */}
-      <BarcodeScanner
-        isOpen={showBarcodeScanner}
-        onClose={() => setShowBarcodeScanner(false)}
-        onScan={(barcodeValue) => {
-          handleBarcodeSubmit(barcodeValue);
-          setShowBarcodeScanner(false);
-        }}
-      />
+      {productSearchCameraEnabled ? (
+        <BarcodeScanner
+          isOpen={showBarcodeScanner}
+          onClose={() => setShowBarcodeScanner(false)}
+          onScan={(barcodeValue) => {
+            handleBarcodeSubmit(barcodeValue);
+            setShowBarcodeScanner(false);
+          }}
+        />
+      ) : null}
 
       {/* Product Image Preview Modal */}
       <BaseModal

@@ -1813,6 +1813,7 @@ export const Settings2 = () => {
   const [useMarketPurchasePrices, setUseMarketPurchasePrices] = useState(false);
   const [enableImportPurchaseLandedCost, setEnableImportPurchaseLandedCost] = useState(false);
   const [warehouseInventoryEnabled, setWarehouseInventoryEnabled] = useState(false);
+  const [productSearchCameraEnabled, setProductSearchCameraEnabled] = useState(false);
 
   // Product Visibility Settings
   const [showProductSetting_reorderPoint, setShowProductSetting_reorderPoint] = useState(() => localStorage.getItem('showProductSetting_reorderPoint') === 'true');
@@ -1883,6 +1884,11 @@ export const Settings2 = () => {
     const enabled = settings?.orderSettings?.warehouseInventoryEnabled === true;
     setWarehouseInventoryEnabled(enabled);
   }, [settings?.orderSettings?.warehouseInventoryEnabled]);
+
+  useEffect(() => {
+    const enabled = settings?.orderSettings?.productSearchCameraEnabled === true;
+    setProductSearchCameraEnabled(enabled);
+  }, [settings?.orderSettings?.productSearchCameraEnabled]);
 
   const syncMarketPricesSidebarVisibility = (enabled) => {
     const savedSidebarRaw = localStorage.getItem('sidebarConfig');
@@ -1981,6 +1987,25 @@ export const Settings2 = () => {
       setWarehouseInventoryEnabled(previousChecked);
       syncWarehouseInventorySidebarVisibility(previousChecked);
       handleApiError(error, 'Update Warehouse Inventory Setting');
+    }
+  };
+
+  const handleProductSearchCameraToggle = async (checked) => {
+    const nextChecked = !!checked;
+    const previousChecked = productSearchCameraEnabled;
+    setProductSearchCameraEnabled(nextChecked);
+    try {
+      await updateCompanySettings({
+        orderSettings: {
+          ...(settings?.orderSettings || {}),
+          productSearchCameraEnabled: nextChecked,
+        },
+      }).unwrap();
+      toast.success(`Product search camera ${nextChecked ? 'enabled' : 'disabled'}.`);
+      refetchSettings();
+    } catch (error) {
+      setProductSearchCameraEnabled(previousChecked);
+      handleApiError(error, 'Update Product Search Camera Setting');
     }
   };
 
@@ -3298,6 +3323,22 @@ export const Settings2 = () => {
                     <Label htmlFor="warehouseInventoryEnabled" className="flex flex-col cursor-pointer group-hover:text-blue-700">
                       <span className="text-sm font-semibold">Enable Warehouse Inventory</span>
                       <span className="text-[10px] text-gray-400">When on: purchases go to warehouse, sales use shop stock, and stock transfers move warehouse → shop. Off by default.</span>
+                    </Label>
+                  </div>
+
+                  <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                    <Checkbox
+                      id="productSearchCameraEnabled"
+                      className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                      checked={productSearchCameraEnabled}
+                      onCheckedChange={(checked) => handleProductSearchCameraToggle(!!checked)}
+                    />
+                    <Label htmlFor="productSearchCameraEnabled" className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                      <span className="text-sm font-semibold flex items-center gap-1.5">
+                        <Camera className="h-4 w-4 text-gray-600" aria-hidden />
+                        Show Product Search Camera
+                      </span>
+                      <span className="text-[10px] text-gray-400">Shows the camera scan button in Product Selection &amp; Cart (Sales, Purchases, etc.). Off by default.</span>
                     </Label>
                   </div>
                 </div>
