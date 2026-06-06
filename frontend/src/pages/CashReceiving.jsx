@@ -1,13 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Calendar, 
-  Save, 
+import {
+  Calendar,
+  Save,
   RotateCcw,
   Printer,
   RefreshCw,
   Loader2,
-  Search
+  Search,
+  Banknote,
+  Users,
+  MapPin,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatCurrency } from '../utils/formatters';
 import { 
@@ -20,7 +25,6 @@ import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import PrintModal from '../components/PrintModal';
 import PrintReportModal from '../components/PrintReportModal';
 import PageShell from '../components/PageShell';
-import { Button } from '@/components/ui/button';
 import { getLocalDateString } from '../utils/dateUtils';
 import { getCustomerDisplayName } from '../utils/partyDisplay';
 import { toTitleCase } from '../utils/titleCase';
@@ -28,6 +32,58 @@ import { toTitleCase } from '../utils/titleCase';
 function formatCashReceiptCustomerLabel(customer) {
   if (customer.accountName) return toTitleCase(customer.accountName);
   return getCustomerDisplayName(customer, '—');
+}
+
+const crInputClass =
+  'h-11 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm shadow-sm transition-colors focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-200';
+const crLabelClass =
+  'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500';
+const crPanelClass = 'rounded-xl border border-neutral-200 bg-neutral-50 p-4 sm:p-5 space-y-4';
+const crCheckboxBoxClass =
+  'h-[18px] w-[18px] shrink-0 rounded-[4px] border-2 border-neutral-400 bg-white shadow-none data-[state=checked]:border-neutral-900 data-[state=checked]:bg-neutral-900 data-[state=checked]:text-white';
+const crBtnPrimary =
+  'inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-neutral-900 bg-neutral-900 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50';
+const crBtnSecondary =
+  'inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-700 shadow-sm transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50';
+
+/** Full-row checkbox: click text or box to toggle (black & white). */
+function CrCheckboxOption({ label, checked, onCheckedChange, compact = false, whiteBg = false }) {
+  const toggle = () => onCheckedChange(!checked);
+
+  return (
+    <div
+      role="checkbox"
+      aria-checked={checked}
+      tabIndex={0}
+      onClick={toggle}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggle();
+        }
+      }}
+      className={cn(
+        'flex w-full cursor-pointer items-center gap-3 rounded-lg border px-3 text-sm transition-colors select-none outline-none focus-visible:ring-2 focus-visible:ring-neutral-400',
+        compact ? 'py-2' : 'py-2.5',
+        checked
+          ? whiteBg
+            ? 'border-neutral-900 bg-white text-neutral-900'
+            : compact
+              ? 'border-neutral-300 bg-neutral-100 text-neutral-900'
+              : 'border-neutral-900 bg-neutral-900 text-white'
+          : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50'
+      )}
+    >
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(value) => onCheckedChange(value === true)}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        className={crCheckboxBoxClass}
+      />
+      <span className="pointer-events-none flex-1 leading-snug">{label}</span>
+    </div>
+  );
 }
 
 const CashReceiving = () => {
@@ -483,19 +539,43 @@ const CashReceiving = () => {
   };
 
   return (
-    <PageShell className="bg-gray-50" contentClassName="space-y-4 sm:space-y-6 p-3 sm:p-6">
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6">Cash Receipt Voucher</h1>
+    <PageShell className="bg-neutral-50" contentClassName="space-y-4 sm:space-y-6 p-3 sm:p-6">
+      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+        <div className="border-b border-neutral-200 border-l-4 border-l-neutral-900 bg-white px-5 py-4 sm:px-6 sm:py-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-neutral-900">
+                <Banknote className="h-5 w-5" aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-lg font-semibold tracking-tight text-neutral-900 sm:text-xl">
+                  Cash Receipt Voucher
+                </h1>
+                <p className="mt-0.5 text-sm text-neutral-500 leading-snug">
+                  Record bulk cash receipts by city and customer balance
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-neutral-300 bg-neutral-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-800">
+              Bulk Receipt
+            </span>
+          </div>
+        </div>
 
-        {/* Voucher Form */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-          {/* Left Panel */}
-          <div className="space-y-3 sm:space-y-4">
+        <div className="p-5 sm:p-6 lg:p-7">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-3 xl:gap-6">
+          <section className={crPanelClass}>
+            <div className="flex items-start gap-2.5">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-neutral-200">
+                <Banknote className="h-4 w-4 text-neutral-900" aria-hidden />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-900">Payment</h2>
+                <p className="mt-0.5 text-xs text-neutral-500">Method and receipt total</p>
+              </div>
+            </div>
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                Payment Method
-              </label>
+              <label className={crLabelClass}>Payment Method</label>
               <select
                 value={
                   paymentMethod === 'bank' && selectedBankAccount
@@ -512,7 +592,7 @@ const CashReceiving = () => {
                     setSelectedBankAccount('');
                   }
                 }}
-                className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={crInputClass}
               >
                 <option value="cash">Cash</option>
                 {activeBanks.map((bank) => {
@@ -549,184 +629,174 @@ const CashReceiving = () => {
                 <option value="split">Split Payment</option>
               </select>
               {activeBanks.length === 0 && !banksLoading && (
-                <p className="text-xs text-amber-700 mt-1">No banks found. Add banks under Settings → Banks.</p>
+                <p className="mt-1.5 text-xs text-neutral-600">
+                  No banks found. Add banks under Settings → Banks.
+                </p>
               )}
             </div>
 
-            <div className="bg-blue-50 p-3 sm:p-4 rounded-md">
-              <div className="text-xs sm:text-sm text-gray-600">Total:</div>
-              <div className="text-lg sm:text-2xl font-bold text-blue-600">
+            <div className="rounded-xl border border-neutral-300 bg-white px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Receipt Total
+              </div>
+              <div className="mt-1 text-2xl font-bold tabular-nums text-neutral-900 sm:text-3xl">
                 {formatCurrency(total)}
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Middle Panel */}
-          <div className="space-y-3 sm:space-y-4">
+          <section className={crPanelClass}>
+            <div className="flex items-start gap-2.5">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-neutral-200">
+                <Users className="h-4 w-4 text-neutral-900" aria-hidden />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-900">Voucher &amp; Customers</h2>
+                <p className="mt-0.5 text-xs text-neutral-500">Date, number, balance filters, and load</p>
+              </div>
+            </div>
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                Voucher Date
-              </label>
+              <label className={crLabelClass}>Voucher Date</label>
               <div className="relative">
                 <input
                   type="date"
                   value={voucherData.voucherDate}
                   onChange={(e) => setVoucherData(prev => ({ ...prev, voucherDate: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={crInputClass}
                 />
-                <Calendar className="absolute right-3 top-2.5 h-4 w-4 sm:h-5 sm:w-5 text-gray-400 pointer-events-none" />
+                <Calendar className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                Voucher No
-              </label>
+              <label className={crLabelClass}>Voucher No</label>
               <input
                 type="text"
                 value={voucherData.voucherNo}
                 readOnly
-                className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-md bg-gray-50 focus:outline-none"
+                className={cn(crInputClass, 'bg-neutral-50 text-neutral-700')}
               />
             </div>
 
-            {/* Balance Filter Options */}
             <div className="space-y-2">
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-                Filter by Balance
-              </label>
-              <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-4">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="filterPositive"
-                    checked={balanceFilters.positive}
-                    onChange={(e) => setBalanceFilters(prev => ({ ...prev, positive: e.target.checked }))}
-                    className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="filterPositive" className="text-xs sm:text-sm text-gray-700">
-                    Positive Balance (&gt; 0)
-                  </label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="filterNegative"
-                    checked={balanceFilters.negative}
-                    onChange={(e) => setBalanceFilters(prev => ({ ...prev, negative: e.target.checked }))}
-                    className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="filterNegative" className="text-xs sm:text-sm text-gray-700">
-                    Negative Balance (&lt; 0)
-                  </label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="filterZero"
-                    checked={balanceFilters.zero}
-                    onChange={(e) => setBalanceFilters(prev => ({ ...prev, zero: e.target.checked }))}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="filterZero" className="text-xs sm:text-sm text-gray-700">
-                    Zero Balance (= 0)
-                  </label>
-                </div>
+              <label className={crLabelClass}>Filter by Balance</label>
+              <div className="grid grid-cols-1 gap-2">
+                <CrCheckboxOption
+                  label="Positive Balance (> 0)"
+                  checked={balanceFilters.positive}
+                  whiteBg
+                  onCheckedChange={(checked) =>
+                    setBalanceFilters((prev) => ({ ...prev, positive: checked }))
+                  }
+                />
+                <CrCheckboxOption
+                  label="Negative Balance (< 0)"
+                  checked={balanceFilters.negative}
+                  whiteBg
+                  onCheckedChange={(checked) =>
+                    setBalanceFilters((prev) => ({ ...prev, negative: checked }))
+                  }
+                />
+                <CrCheckboxOption
+                  label="Zero Balance (= 0)"
+                  checked={balanceFilters.zero}
+                  whiteBg
+                  onCheckedChange={(checked) =>
+                    setBalanceFilters((prev) => ({ ...prev, zero: checked }))
+                  }
+                />
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <button
+                type="button"
                 onClick={handlePrintCustomerList}
                 disabled={customers.length === 0}
-                variant="success"
-                size="default"
-                className="flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={crBtnSecondary}
                 title="Print customer balance list"
               >
-                <Printer className="h-4 w-4" />
+                <Printer className="h-4 w-4" aria-hidden />
                 <span>Print List</span>
-              </Button>
-              <Button
-                onClick={handleUnselectAll}
-                variant="secondary"
-                size="default"
-              >
+              </button>
+              <button type="button" onClick={handleUnselectAll} className={crBtnSecondary}>
                 UnSelect All
-              </Button>
-              <Button
+              </button>
+              <button
+                type="button"
                 onClick={loadCustomers}
                 disabled={customersLoading || selectedCities.length === 0}
-                variant="default"
-                size="default"
-                className="flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={crBtnPrimary}
               >
                 {customersLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                 ) : (
-                  <RefreshCw className="h-4 w-4" />
+                  <RefreshCw className="h-4 w-4" aria-hidden />
                 )}
                 <span>Load</span>
-              </Button>
+              </button>
             </div>
-          </div>
+          </section>
 
-          {/* Right Panel - City Selection */}
-          <div>
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-              Select Cities
-            </label>
-            {/* Search Input */}
-            <div className="relative mb-2">
+          <section className={crPanelClass}>
+            <div className="flex items-start gap-2.5">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-neutral-200">
+                <MapPin className="h-4 w-4 text-neutral-900" aria-hidden />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-900">Select Cities</h2>
+                <p className="mt-0.5 text-xs text-neutral-500">Choose cities to load customer balances</p>
+              </div>
+            </div>
+            <div className="relative">
               <input
                 type="text"
                 value={citySearchTerm}
                 onChange={(e) => setCitySearchTerm(e.target.value)}
                 placeholder="Search cities..."
-                className="w-full px-3 py-2 pl-10 text-sm sm:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={cn(crInputClass, 'pl-10')}
               />
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" aria-hidden />
             </div>
-            <div className="border border-gray-300 rounded-md h-48 sm:h-64 overflow-y-auto bg-white">
+            <div className="h-48 overflow-y-auto rounded-lg border border-neutral-200 bg-white sm:h-64">
               {citiesLoading ? (
-                <div className="p-4 text-center text-gray-500">
-                  <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
+                <div className="p-4 text-center text-neutral-500">
+                  <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" aria-hidden />
                   Loading cities...
                 </div>
               ) : cities.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">No cities available</div>
+                <div className="p-4 text-center text-neutral-500">No cities available</div>
               ) : (() => {
-                // Filter cities based on search term
                 const filteredCities = cities.filter(city =>
                   city.toLowerCase().includes(citySearchTerm.toLowerCase())
                 );
-                
+
                 return filteredCities.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500">No cities found matching "{citySearchTerm}"</div>
+                  <div className="p-4 text-center text-neutral-500">
+                    No cities found matching &quot;{citySearchTerm}&quot;
+                  </div>
                 ) : (
-                  <div className="p-2">
-                    {filteredCities.map((city) => (
-                      <div key={city} className="flex items-center p-2 hover:bg-gray-50">
-                        <input
-                          type="checkbox"
-                          id={`city-${city}`}
-                          checked={selectedCities.includes(city)}
-                          onChange={() => handleCityToggle(city)}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-2"
+                  <div className="space-y-1 p-1.5">
+                    {filteredCities.map((city) => {
+                      const isSelected = selectedCities.includes(city);
+                      return (
+                        <CrCheckboxOption
+                          key={city}
+                          label={toTitleCase(city)}
+                          checked={isSelected}
+                          compact
+                          onCheckedChange={(checked) => {
+                            if (checked !== isSelected) handleCityToggle(city);
+                          }}
                         />
-                        <label
-                          htmlFor={`city-${city}`}
-                          className="text-sm text-gray-700 cursor-pointer flex-1"
-                        >
-                          {toTitleCase(city)}
-                        </label>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 );
               })()}
             </div>
-          </div>
+          </section>
+        </div>
         </div>
       </div>
 
@@ -784,8 +854,8 @@ const CashReceiving = () => {
 
         if (filteredEntries.length === 0) {
           return (
-            <div className="bg-white rounded-lg shadow p-6 sm:p-8 text-center">
-              <p className="text-gray-500 text-sm sm:text-lg">
+            <div className="rounded-xl border border-neutral-200 bg-white p-6 text-center shadow-sm sm:p-8">
+              <p className="text-sm text-neutral-500 sm:text-base">
                 {activeFilters.length === 0
                   ? 'Please select at least one balance filter to display customers.'
                   : `No customers found matching the selected filters (${filterDescription}).`}
@@ -795,58 +865,58 @@ const CashReceiving = () => {
         }
 
         return (
-          <div className="bg-white rounded-lg shadow">
-            <div className="p-3 sm:p-4 border-b border-gray-200">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-800">
+          <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+            <div className="border-b border-neutral-200 px-4 py-3 sm:px-5 sm:py-4">
+              <h2 className="text-base font-semibold text-neutral-900 sm:text-lg">
                 Customer Receipts
-                <span className="block sm:inline sm:ml-2 text-xs sm:text-sm font-normal text-gray-500 mt-1 sm:mt-0">
-                  (Showing {filteredEntries.length} of {customerEntries.length} customers - Filters: {filterDescription})
+                <span className="mt-1 block text-xs font-normal text-neutral-500 sm:ml-2 sm:mt-0 sm:inline">
+                  Showing {filteredEntries.length} of {customerEntries.length} — Filters: {filterDescription}
                 </span>
               </h2>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-neutral-200">
+                <thead className="bg-neutral-50">
                   <tr>
-                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 sm:px-6">
                       Account Name
                     </th>
-                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 sm:px-6">
                       Balance
                     </th>
-                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 sm:px-6">
                       Particular
                     </th>
-                    <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 sm:px-6">
                       Amount
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredEntries.map((entry, index) => {
-                    // Find the original index in customerEntries to maintain proper handleEntryChange functionality
+                <tbody className="divide-y divide-neutral-100 bg-white">
+                  {filteredEntries.map((entry) => {
                     const originalIndex = customerEntries.findIndex(e => e.customerId === entry.customerId);
+                    const hasAmount = parseFloat(entry.amount) > 0;
                     return (
                       <tr
                         key={entry.customerId}
-                        className={parseFloat(entry.amount) > 0 ? 'bg-yellow-50' : ''}
+                        className={hasAmount ? 'border-l-2 border-l-neutral-900 bg-neutral-50' : ''}
                       >
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
+                        <td className="whitespace-nowrap px-3 py-3 text-xs text-neutral-900 sm:px-6 sm:text-sm">
                           {entry.accountName}
                         </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
+                        <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-neutral-900 sm:px-6 sm:text-sm">
                           {formatCurrency(entry.balance)}
                         </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                        <td className="whitespace-nowrap px-3 py-3 sm:px-6">
                           <input
                             type="text"
                             value={entry.particular}
                             onChange={(e) => handleEntryChange(originalIndex, 'particular', e.target.value)}
                             placeholder="Enter description"
-                            className="w-full px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-lg border border-neutral-200 px-2 py-1.5 text-xs shadow-sm focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-200 sm:px-3 sm:text-sm"
                           />
                         </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                        <td className="whitespace-nowrap px-3 py-3 sm:px-6">
                           <input
                             type="number"
                             value={entry.amount}
@@ -854,7 +924,7 @@ const CashReceiving = () => {
                             placeholder="0.00"
                             min="0"
                             step="0.01"
-                            className="w-full px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-lg border border-neutral-200 px-2 py-1.5 text-xs tabular-nums shadow-sm focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-200 sm:px-3 sm:text-sm"
                           />
                         </td>
                       </tr>
@@ -867,41 +937,37 @@ const CashReceiving = () => {
         );
       })()}
 
-      {/* Action Buttons */}
-      <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 bg-white rounded-lg shadow p-4 sm:p-6">
-        <Button
-          onClick={handleSave}
-          disabled={creating || total === 0}
-          variant="default"
-          size="default"
-          className="flex items-center justify-center gap-2 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {creating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          <span>Save</span>
-        </Button>
-        <Button
+      <div className="flex flex-col-reverse gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">
+        <button
+          type="button"
           onClick={handleReset}
-          variant="outline"
-          size="default"
-          className="flex items-center justify-center gap-2 w-full sm:w-auto"
+          className={cn(crBtnSecondary, 'w-full sm:w-auto sm:min-w-[8.5rem]')}
         >
-          <RotateCcw className="h-4 w-4" />
+          <RotateCcw className="h-4 w-4" aria-hidden />
           <span>Reset</span>
-        </Button>
-        <Button
+        </button>
+        <button
+          type="button"
           onClick={handlePrint}
           disabled={customerEntries.filter(e => parseFloat(e.amount) > 0).length === 0}
-          variant="success"
-          size="default"
-          className="flex items-center justify-center gap-2 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+          className={cn(crBtnSecondary, 'w-full sm:w-auto sm:min-w-[8.5rem]')}
         >
-          <Printer className="h-4 w-4" />
+          <Printer className="h-4 w-4" aria-hidden />
           <span>Print</span>
-        </Button>
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={creating || total === 0}
+          className={cn(crBtnPrimary, 'w-full sm:w-auto sm:min-w-[10rem]')}
+        >
+          {creating ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Save className="h-4 w-4" aria-hidden />
+          )}
+          <span>{creating ? 'Saving...' : 'Save'}</span>
+        </button>
       </div>
 
       {/* Print Modal */}
