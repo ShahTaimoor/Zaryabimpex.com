@@ -159,6 +159,7 @@ export const chartOfAccountsApi = api.injectEndpoints({
 
 export const {
   useGetAccountsQuery,
+  useLazyGetAccountsQuery,
   useGetAccountQuery,
   useCheckAccountQuery,
   useCreateAccountMutation,

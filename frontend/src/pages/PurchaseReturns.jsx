@@ -197,7 +197,7 @@ const PurchaseReturns = () => {
 
   const stats = statsData?.data || {};
   const { data: banksData } = useGetBanksQuery(
-    { isActive: true },
+    { isActive: true, all: 'true' },
     { staleTime: 5 * 60_000 }
   );
   const activeBanks = useMemo(

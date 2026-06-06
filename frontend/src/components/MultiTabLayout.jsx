@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -56,6 +56,8 @@ import { POLLING_INTERVALS } from '../config/polling';
 import { Button } from '@/components/ui/button';
 import PresenceHeartbeat from './PresenceHeartbeat';
 import OnlineAvatarStack from './OnlineAvatarStack';
+import { loadTopBarConfig, TOP_BAR_CONFIG_CHANGED } from '../config/topBarConfig';
+import { TopBarActionButtonsDesktop, TopBarActionButtonsMobile } from './TopBarActionButtons';
 
 // Helper for Database icon
 function DatabaseIcon(props) {
@@ -106,7 +108,7 @@ const withRouteAccess = (items) => {
 };
 
 export const navigation = withRouteAccess([
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'view_dashboard', allowMultiple: true },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'view_dashboard', allowMultiple: false, sidebarDefaultHidden: true },
 
   {
     name: 'Sales',
@@ -197,8 +199,6 @@ export const navigation = withRouteAccess([
     children: [
       { name: 'P&L Statements', href: '/pl-statements', icon: BarChart3, permission: 'view_pl_statements' },
       { name: 'Balance Sheet', href: '/balance-sheet-statement', icon: FileText, permission: 'view_balance_sheets' },
-      { name: 'Sales Performance', href: '/sales-performance', icon: TrendingUp, permission: 'view_sales_performance' },
-      { name: 'Inventory Reports', href: '/inventory-reports', icon: Warehouse, permission: 'view_inventory_reports' },
       { name: 'Anomaly Detection', href: '/anomaly-detection', icon: AlertTriangle, permission: 'view_anomaly_detection' },
       { name: 'Reports', href: '/reports', icon: BarChart3, permission: 'view_general_reports' },
       { name: 'Backdate Report', href: '/backdate-report', icon: Clock, permission: 'view_backdate_report' },
@@ -236,6 +236,7 @@ export function migrateSidebarConfig(parsed) {
 export function loadSidebarConfig() {
   const saved = localStorage.getItem('sidebarConfig');
   if (!saved) return {
+    'Dashboard': false,
     'Product Variants': false,
     'Product Transformations': false,
     'Customer Analytics': false,
@@ -245,9 +246,7 @@ export function loadSidebarConfig() {
     'CCTV Access': false,
     'Warehouses': false,
     'Stock Movements': false,
-    'Inventory Reports': false,
     'Backdate Report': false,
-    'Sales Performance': false,
     'Current Purchase Market Prices': false
   };
   try {
@@ -264,6 +263,9 @@ export function loadSidebarConfig() {
     if (migrated['Import Purchase'] === undefined) {
       migrated['Import Purchase'] = false;
     }
+    if (migrated['Dashboard'] === undefined) {
+      migrated['Dashboard'] = false;
+    }
     delete migrated['Current Market Prices'];
     if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
       localStorage.setItem('sidebarConfig', JSON.stringify(migrated));
@@ -271,6 +273,7 @@ export function loadSidebarConfig() {
     return migrated;
   } catch {
     return {
+      'Dashboard': false,
       'Product Variants': false,
       'Product Transformations': false,
       'Customer Analytics': false,
@@ -280,12 +283,18 @@ export function loadSidebarConfig() {
       'CCTV Access': false,
       'Warehouses': false,
       'Stock Movements': false,
-      'Inventory Reports': false,
       'Backdate Report': false,
-      'Sales Performance': false,
       'Current Purchase Market Prices': false
     };
   }
+}
+
+function isSidebarNavItemVisible(item, sidebarConfig) {
+  if (!item?.name) return false;
+  if (item.sidebarDefaultHidden && sidebarConfig?.[item.name] === undefined) {
+    return false;
+  }
+  return sidebarConfig?.[item.name] !== false;
 }
 
 export function loadBottomNavConfig() {
@@ -348,7 +357,7 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
   }, [item, isActivePath, hasChildren]);
 
   // Check visibility and permission
-  if (sidebarConfig && sidebarConfig[item.name] === false) return null;
+  if (!isSidebarNavItemVisible(item, sidebarConfig)) return null;
   const isPermitted = isItemPermitted(item, user, hasPermission);
   if (!isPermitted) return null;
 
@@ -476,8 +485,9 @@ export const MultiTabLayout = ({ children }) => {
     window.dispatchEvent(new CustomEvent('dashboardVisibilityChanged', { detail: { hidden: next } }));
   };
 
-  // Sidebar visibility state
+  // Sidebar and top bar quick actions (independent configs)
   const [sidebarConfig, setSidebarConfig] = useState(() => loadSidebarConfig());
+  const [topBarConfig, setTopBarConfig] = useState(() => loadTopBarConfig());
   const [showTopBar, setShowTopBar] = useState(() => {
     const saved = localStorage.getItem('showTopBarUI');
     return saved === null ? true : saved === 'true';
@@ -488,15 +498,20 @@ export const MultiTabLayout = ({ children }) => {
     const handleSidebarChange = () => {
       setSidebarConfig(loadSidebarConfig());
     };
+    const handleTopBarConfigChange = () => {
+      setTopBarConfig(loadTopBarConfig());
+    };
     const handleTopBarVisibilityChange = () => {
       const saved = localStorage.getItem('showTopBarUI');
       setShowTopBar(saved === null ? true : saved === 'true');
     };
 
     window.addEventListener('sidebarConfigChanged', handleSidebarChange);
+    window.addEventListener(TOP_BAR_CONFIG_CHANGED, handleTopBarConfigChange);
     window.addEventListener('topBarVisibilityChanged', handleTopBarVisibilityChange);
     return () => {
       window.removeEventListener('sidebarConfigChanged', handleSidebarChange);
+      window.removeEventListener(TOP_BAR_CONFIG_CHANGED, handleTopBarConfigChange);
       window.removeEventListener('topBarVisibilityChanged', handleTopBarVisibilityChange);
     };
   }, []);
@@ -535,8 +550,14 @@ export const MultiTabLayout = ({ children }) => {
 
     const currentPath = location.pathname;
 
-    // Don't redirect if we are on settings, login, or any other critical page
-    if (currentPath === '/settings' || currentPath === '/settings2' || currentPath === '/login' || currentPath === '/profile') {
+    // Don't redirect if we are on settings, login, dashboard tab route, or any other critical page
+    if (
+      currentPath === '/dashboard' ||
+      currentPath === '/settings' ||
+      currentPath === '/settings2' ||
+      currentPath === '/login' ||
+      currentPath === '/profile'
+    ) {
       return;
     }
 
@@ -580,6 +601,35 @@ export const MultiTabLayout = ({ children }) => {
     '/settings',
     '/settings2'
   ]);
+
+  const openDashboardTab = useCallback(() => {
+    if (!hasPermission('view_dashboard')) return null;
+    const componentInfo = getComponentInfo('/dashboard');
+    if (!componentInfo) return null;
+
+    const existingTab = tabs.find((tab) => tab.path === '/dashboard');
+    if (existingTab) {
+      switchToTab(existingTab.id);
+      return existingTab.id;
+    }
+
+    return openTab({
+      title: componentInfo.title,
+      path: '/dashboard',
+      component: componentInfo.component,
+      icon: componentInfo.icon,
+      allowMultiple: false,
+    });
+  }, [hasPermission, openTab, switchToTab, tabs]);
+
+  // Dashboard opens as the default tab on login; reopens when all tabs are closed on /dashboard
+  useEffect(() => {
+    if (!user || !hasPermission('view_dashboard')) return;
+    if (location.pathname !== '/dashboard') return;
+    if (tabs.length > 0) return;
+
+    openDashboardTab();
+  }, [user, location.pathname, tabs.length, hasPermission, openDashboardTab]);
 
   const handleNavigationClick = (item) => {
     const componentInfo = getComponentInfo(item.href);
@@ -729,102 +779,18 @@ export const MultiTabLayout = ({ children }) => {
 
           {/* Main Navigation Container */}
           <div className="flex flex-1 items-center gap-2 sm:gap-3 lg:gap-4 min-w-0">
-            {/* Mobile Top Bar Buttons - Multi Cash Receipt and Record Expense */}
-            <div className="flex-shrink-0 lg:hidden flex items-center gap-2">
-              {sidebarConfig['Cash Receipts'] !== false && isItemPermitted({ permission: 'view_cash_receipts' }, user, hasPermission) && (
-                <button
-                  onClick={() => handleNavigationClick({ href: '/cash-receipts', name: 'Cash Receipts' })}
-                  className="bg-black hover:bg-gray-800 text-white px-2.5 py-2 rounded-md shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-1.5 text-xs font-medium whitespace-nowrap"
-                >
-                  <Receipt className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span>Receiving</span>
-                </button>
-              )}
-              {sidebarConfig['Record Expense'] !== false && isItemPermitted({ permission: 'view_expenses' }, user, hasPermission) && (
-                <button
-                  onClick={() => handleNavigationClick({ href: '/expenses', name: 'Record Expense' })}
-                  className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-900 px-2.5 py-2 rounded-md shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-1.5 text-xs font-medium whitespace-nowrap"
-                >
-                  <CreditCard className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span>Expense</span>
-                </button>
-              )}
-            </div>
-
-            {/* Action Buttons - Shrink when zoom/screen percentage increases (responsive) */}
-            <div className="hidden lg:flex items-center gap-1 xl:gap-1.5 2xl:gap-2 overflow-x-auto flex-1 min-w-0 scrollbar-hide overflow-y-visible">
-              {sidebarConfig['Multi Cash Receipt'] !== false && isItemPermitted({ permission: 'view_accounting' }, user, hasPermission) && (
-                <button
-                  onClick={() => handleNavigationClick({ href: '/cash-receiving', name: 'Multi Cash Receipt' })}
-                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
-                >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
-                    <Receipt className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
-                  </span>
-                  <span>Multi Cash Receipt</span>
-                </button>
-              )}
-              {sidebarConfig['Cash Receipts'] !== false && isItemPermitted({ permission: 'view_cash_receipts' }, user, hasPermission) && (
-                <button
-                  onClick={() => handleNavigationClick({ href: '/cash-receipts', name: 'Cash Receipts' })}
-                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
-                >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
-                    <ArrowDown className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
-                  </span>
-                  <span className="hidden sm:inline">Cash Receipt</span>
-                  <span className="sm:hidden">Cash R.</span>
-                </button>
-              )}
-              {sidebarConfig['Bank Receipts'] !== false && isItemPermitted({ permission: 'view_bank_receipts' }, user, hasPermission) && (
-                <button
-                  onClick={() => handleNavigationClick({ href: '/bank-receipts', name: 'Bank Receipts' })}
-                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
-                >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
-                    <ArrowDown className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
-                  </span>
-                  <span className="hidden sm:inline">Bank Receipt</span>
-                  <span className="sm:hidden">Bank R.</span>
-                </button>
-              )}
-              {sidebarConfig['Cash Payments'] !== false && isItemPermitted({ permission: 'view_cash_payments' }, user, hasPermission) && (
-                <button
-                  onClick={() => handleNavigationClick({ href: '/cash-payments', name: 'Cash Payments' })}
-                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
-                >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
-                    <ArrowUp className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
-                  </span>
-                  <span className="hidden sm:inline">Cash Payment</span>
-                  <span className="sm:hidden">Cash P.</span>
-                </button>
-              )}
-              {sidebarConfig['Bank Payments'] !== false && isItemPermitted({ permission: 'view_bank_payments' }, user, hasPermission) && (
-                <button
-                  onClick={() => handleNavigationClick({ href: '/bank-payments', name: 'Bank Payments' })}
-                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
-                >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
-                    <ArrowUp className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
-                  </span>
-                  <span className="hidden sm:inline">Bank Payment</span>
-                  <span className="sm:hidden">Bank P.</span>
-                </button>
-              )}
-              {sidebarConfig['Record Expense'] !== false && isItemPermitted({ permission: 'view_expenses' }, user, hasPermission) && (
-                <button
-                  onClick={() => handleNavigationClick({ href: '/expenses', name: 'Record Expense' })}
-                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
-                >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
-                    <Wallet className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
-                  </span>
-                  <span className="hidden sm:inline">Record Expense</span>
-                  <span className="sm:hidden">Expense</span>
-                </button>
-              )}
-            </div>
+            <TopBarActionButtonsMobile
+              topBarConfig={topBarConfig}
+              user={user}
+              hasPermission={hasPermission}
+              onNavigate={handleNavigationClick}
+            />
+            <TopBarActionButtonsDesktop
+              topBarConfig={topBarConfig}
+              user={user}
+              hasPermission={hasPermission}
+              onNavigate={handleNavigationClick}
+            />
 
 
             {/* User Profile Section - Right Aligned with Dropdown */}
@@ -925,7 +891,8 @@ export const MultiTabLayout = ({ children }) => {
                 const pathname = location.pathname;
                 const isFormPage = pathname === '/customers/new' ||
                   /^\/customers\/[^/]+\/edit$/.test(pathname);
-                const showRoutes = tabs.length === 0 || isFormPage;
+                const onDashboardRoute = pathname === '/dashboard';
+                const showRoutes = (tabs.length === 0 && !onDashboardRoute) || isFormPage;
                 return showRoutes ? children : <TabContent />;
               })()}
             </ErrorBoundary>

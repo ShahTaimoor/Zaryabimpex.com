@@ -22,6 +22,13 @@ import PrintReportModal from '../components/PrintReportModal';
 import PageShell from '../components/PageShell';
 import { Button } from '@/components/ui/button';
 import { getLocalDateString } from '../utils/dateUtils';
+import { getCustomerDisplayName } from '../utils/partyDisplay';
+import { toTitleCase } from '../utils/titleCase';
+
+function formatCashReceiptCustomerLabel(customer) {
+  if (customer.accountName) return toTitleCase(customer.accountName);
+  return getCustomerDisplayName(customer, '—');
+}
 
 const CashReceiving = () => {
   const today = getLocalDateString();
@@ -64,7 +71,7 @@ const CashReceiving = () => {
   });
 
   const { data: banksPayload, isLoading: banksLoading } = useGetBanksQuery(
-    { isActive: true },
+    { isActive: true, all: 'true' },
     { refetchOnMountOrArgChange: true }
   );
   const banksList = useMemo(() => {
@@ -159,13 +166,13 @@ const CashReceiving = () => {
           
           return {
             customerId: customer.id || customer._id,
-            accountName: customer.accountName || customer.businessName || customer.business_name || customer.name,
+            accountName: formatCashReceiptCustomerLabel(customer),
             balance: netBalance, // Use net balance to match account ledger
             particular: '',
             amount: '',
-            city: customerCity, // Store city for printing
-            phone: customer.phone || '', // Store phone for printing
-            name: customer.businessName || customer.business_name || customer.name || '', // Store name for printing
+            city: customerCity ? toTitleCase(customerCity) : '',
+            phone: customer.phone || '',
+            name: getCustomerDisplayName(customer, ''),
           };
         });
 
@@ -335,7 +342,7 @@ const CashReceiving = () => {
         .map((entry, index) => ({
           _id: entry.customerId,
           product: {
-            name: entry.accountName || 'N/A'
+            name: entry.accountName || entry.name || 'N/A',
           },
           quantity: 1,
           unitPrice: parseFloat(entry.amount) || 0,
@@ -348,7 +355,7 @@ const CashReceiving = () => {
             ? banksList.find((b) => String(b.id || b._id) === String(selectedBankAccount))
             : null;
         const bankPart = bank
-          ? ` | Bank: ${bank.bankName || bank.bank_name || 'Bank'}${bank.accountNumber || bank.account_number ? ` (${bank.accountNumber || bank.account_number})` : ''}`
+          ? ` | Bank: ${toTitleCase(bank.bankName || bank.bank_name || 'Bank')}${bank.accountNumber || bank.account_number ? ` (${bank.accountNumber || bank.account_number})` : ''}`
           : '';
         const methodLabel =
           paymentMethod === 'bank'
@@ -441,13 +448,15 @@ const CashReceiving = () => {
       return {
         name: entry.name || entry.accountName || 'N/A',
         phone: entry.phone || customer?.phone || 'N/A',
-        city: customerCity || 'N/A',
+        city: customerCity ? toTitleCase(customerCity) : 'N/A',
         balance: entry.balance || 0
       };
     });
 
     const totalBalance = customerListData.reduce((sum, c) => sum + (c.balance || 0), 0);
-    const selectedCitiesText = selectedCities.length > 0 ? selectedCities.join(', ') : 'All Cities';
+    const selectedCitiesText = selectedCities.length > 0
+      ? selectedCities.map((c) => toTitleCase(c)).join(', ')
+      : 'All Cities';
 
     setCustomerListPrintData({
       data: customerListData,
@@ -509,10 +518,13 @@ const CashReceiving = () => {
                 {activeBanks.map((bank) => {
                   const bid = bank._id || bank.id;
                   if (!bid) return null;
-                  const label = [bank.bankName || bank.bank_name, bank.accountNumber || bank.account_number]
+                  const label = [
+                    toTitleCase(bank.bankName || bank.bank_name || ''),
+                    bank.accountNumber || bank.account_number,
+                  ]
                     .filter(Boolean)
                     .join(' — ');
-                  const acc = bank.accountName ? ` (${bank.accountName})` : '';
+                  const acc = bank.accountName ? ` (${toTitleCase(bank.accountName)})` : '';
                   return (
                     <option key={bid} value={`bank:${bid}`}>
                       Bank · {label}
@@ -706,7 +718,7 @@ const CashReceiving = () => {
                           htmlFor={`city-${city}`}
                           className="text-sm text-gray-700 cursor-pointer flex-1"
                         >
-                          {city}
+                          {toTitleCase(city)}
                         </label>
                       </div>
                     ))}

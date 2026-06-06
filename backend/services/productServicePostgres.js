@@ -5,6 +5,8 @@ const inventoryRepository = require('../repositories/postgres/InventoryRepositor
 const investorRepository = require('../repositories/postgres/InvestorRepository');
 const AccountingService = require('./accountingService');
 const settingsService = require('./settingsService');
+const { parseListQuery } = require('../utils/listQuery');
+const { formatProductEntity, normalizeProductInput } = require('../utils/entityTextFormat');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -59,12 +61,45 @@ async function resolveOrCreateCategoryId(categoryOrName) {
   }
 }
 
+function normalizeImportKey(key) {
+  return String(key || '').toLowerCase().replace(/[\s_\-]+/g, '');
+}
+
+function pickImportField(item, aliases = []) {
+  if (!item || typeof item !== 'object') return undefined;
+  for (const alias of aliases) {
+    if (Object.prototype.hasOwnProperty.call(item, alias)) {
+      const value = item[alias];
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+  }
+  const normalizedKeys = new Map(Object.keys(item).map((key) => [normalizeImportKey(key), key]));
+  for (const alias of aliases) {
+    const matchedKey = normalizedKeys.get(normalizeImportKey(alias));
+    if (matchedKey) {
+      const value = item[matchedKey];
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+  }
+  return undefined;
+}
+
+function parseImportNumber(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const parsed = parseFloat(String(value).replace(/,/g, '').trim());
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function numbersDiffer(a, b) {
+  return Math.abs(Number(a) - Number(b)) > 0.0001;
+}
+
 function toApiProduct(row, categoryMap = null) {
   if (!row) return null;
   const id = row.id;
   const categoryId = row.category_id;
   const cat = categoryMap && categoryId ? categoryMap.get(categoryId) : null;
-  return {
+  const apiShape = {
     _id: id,
     id,
     name: row.name,
@@ -101,6 +136,7 @@ function toApiProduct(row, categoryMap = null) {
     updatedAt: row.updated_at,
     imageUrl: row.image_url || null
   };
+  return formatProductEntity(apiShape);
 }
 
 function attachInvestorsToApiProduct(apiProduct, linkRows) {
@@ -167,29 +203,7 @@ class ProductServicePostgres {
   }
 
   async getProducts(queryParams) {
-    const MAX_PAGE = 200;
-    const MAX_EXPORT = 10000;
-    const getAll = queryParams.all === 'true' || queryParams.all === true ||
-      (queryParams.limit && parseInt(queryParams.limit, 10) >= 999999);
-    const page = getAll ? 1 : (parseInt(queryParams.page, 10) || 1);
-
-    const requestedLimit = parseInt(queryParams.limit, 10);
-    const hasExplicitLimit =
-      queryParams.limit != null &&
-      String(queryParams.limit).trim() !== '' &&
-      Number.isFinite(requestedLimit) &&
-      requestedLimit > 0;
-
-    let limit;
-    if (getAll) {
-      limit = Math.min(requestedLimit || MAX_EXPORT, MAX_EXPORT);
-    } else if (hasExplicitLimit) {
-      // Explicit limit (e.g. pickers sending limit=10000) — honor up to route max, not MAX_PAGE (200).
-      limit = Math.min(requestedLimit, MAX_EXPORT);
-    } else {
-      limit = Math.min(20, MAX_PAGE);
-    }
-    if (!getAll && (!Number.isFinite(limit) || limit < 1)) limit = 20;
+    const { page, limit, getAll } = parseListQuery(queryParams);
 
     const filters = this.buildFilter(queryParams);
     const listMode = queryParams.listMode === 'minimal' ? 'minimal' : 'full';
@@ -304,6 +318,7 @@ class ProductServicePostgres {
   }
 
   async createProduct(productData, userId, req = null) {
+    productData = normalizeProductInput(productData);
     const pricing = productData.pricing || {};
     const cost = pricing.cost !== undefined && pricing.cost !== null ? Number(pricing.cost) : 0;
     const retail = pricing.retail !== undefined && pricing.retail !== null ? Number(pricing.retail) : 0;
@@ -384,6 +399,7 @@ class ProductServicePostgres {
   }
 
   async updateProduct(id, updateData, userId, req = null) {
+    updateData = normalizeProductInput(updateData);
     const current = await productRepository.findById(id);
     if (!current) throw new Error('Product not found');
 
@@ -797,33 +813,95 @@ class ProductServicePostgres {
   }
   async bulkCreateProducts(productsData, userId, req = null, options = {}) {
     const { autoCreateCategories = true } = options;
-    const results = { created: 0, failed: 0, errors: [] };
-    
+    const results = { created: 0, updated: 0, unchanged: 0, failed: 0, errors: [] };
+
     for (const item of productsData) {
       try {
-        // Map Excel-style fields to DB-style fields (handles both spaces and underscores)
-        const formattedProduct = {
-          name: item.name || item.product_name || item.productName || item['Product Name'],
-          sku: item.sku || item.product_sku || item['SKU'],
-          barcode: item.barcode || item['Barcode'],
-          category: item.category || item.category_name || item['Category'] || item['category'],
-          pricing: {
-            cost: item.cost || item.cost_price || item.costPrice || item['Cost Price'] || 0,
-            retail: item.retail || item.retail_price || item.retailPrice || item['Retail Price'] || 0,
-            wholesale: item.wholesale || item.wholesale_price || item.wholesalePrice || item['Wholesale Price'] || 0
-          },
-          inventory: {
-            currentStock: item.stock || item.opening_stock || item.openingStock || item['Opening Stock'] || 0,
-            reorderPoint: 10
-          },
-          status: (item.status || item['Status'] || 'active').toLowerCase()
-        };
+        const rawName = pickImportField(item, ['name', 'product_name', 'productName', 'Product Name', 'product name']);
+        const normalizedItem = normalizeProductInput({
+          name: rawName != null && rawName !== '' ? String(rawName).trim() : undefined,
+        });
+        const productName = normalizedItem?.name;
 
-        if (!formattedProduct.name) {
+        if (!productName) {
           throw new Error('Product name is missing');
         }
 
-        // Import behavior toggle: create missing category names only when enabled.
+        const importCost = parseImportNumber(
+          pickImportField(item, ['cost', 'cost_price', 'costPrice', 'Cost Price', 'cost price'])
+        );
+        const importRetail = parseImportNumber(
+          pickImportField(item, ['retail', 'retail_price', 'retailPrice', 'Retail Price', 'retail price'])
+        );
+        const importWholesale = parseImportNumber(
+          pickImportField(item, ['wholesale', 'wholesale_price', 'wholesalePrice', 'Wholesale Price', 'wholesale price'])
+        );
+        const importStockRaw = pickImportField(item, ['stock', 'opening_stock', 'openingStock', 'Opening Stock', 'opening stock']);
+        const importStock = parseImportNumber(importStockRaw);
+
+        const existing = await productRepository.findByName(productName);
+
+        if (existing) {
+          const updatePayload = {};
+          const pricing = {};
+
+          if (importCost !== undefined && numbersDiffer(importCost, existing.cost_price)) {
+            pricing.cost = importCost;
+          }
+          if (importRetail !== undefined && numbersDiffer(importRetail, existing.selling_price)) {
+            pricing.retail = importRetail;
+          }
+          const existingWholesale = existing.wholesale_price ?? existing.selling_price ?? 0;
+          if (importWholesale !== undefined && numbersDiffer(importWholesale, existingWholesale)) {
+            pricing.wholesale = importWholesale;
+          }
+
+          if (Object.keys(pricing).length > 0) {
+            updatePayload.pricing = pricing;
+          }
+
+          if (importStock !== undefined) {
+            const existingInv = await inventoryRepository.findOne({
+              productId: existing.id,
+              product: existing.id,
+            });
+            const existingStock = Number(
+              existingInv?.current_stock ?? existingInv?.currentStock ?? existing.stock_quantity ?? 0
+            ) || 0;
+
+            if (numbersDiffer(importStock, existingStock)) {
+              updatePayload.inventory = { currentStock: importStock };
+            }
+          }
+
+          if (Object.keys(updatePayload).length === 0) {
+            results.unchanged++;
+            continue;
+          }
+
+          updatePayload.reason = 'Product import update';
+          await this.updateProduct(existing.id, updatePayload, userId, req);
+          results.updated++;
+          continue;
+        }
+
+        const formattedProduct = {
+          name: productName,
+          sku: pickImportField(item, ['sku', 'product_sku', 'SKU', 'product sku']),
+          barcode: pickImportField(item, ['barcode', 'Barcode']),
+          category: pickImportField(item, ['category', 'category_name', 'Category', 'category name']),
+          pricing: {
+            cost: importCost ?? 0,
+            retail: importRetail ?? 0,
+            wholesale: importWholesale ?? importRetail ?? 0,
+          },
+          inventory: {
+            currentStock: importStock ?? 0,
+            reorderPoint: 10,
+          },
+          status: String(pickImportField(item, ['status', 'Status']) || 'active').toLowerCase(),
+        };
+
         if (formattedProduct.category) {
           const resolvedCategoryId = autoCreateCategories
             ? await resolveOrCreateCategoryId(formattedProduct.category)
@@ -835,13 +913,13 @@ class ProductServicePostgres {
         results.created++;
       } catch (error) {
         results.failed++;
-        results.errors.push({ 
-          name: item.name || 'Unknown', 
-          error: error.message 
+        results.errors.push({
+          name: pickImportField(item, ['name', 'product_name', 'productName', 'Product Name']) || 'Unknown',
+          error: error.message,
         });
       }
     }
-    
+
     return results;
   }
 }

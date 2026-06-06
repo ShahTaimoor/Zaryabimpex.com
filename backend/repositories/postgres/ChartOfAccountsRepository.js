@@ -126,6 +126,9 @@ class ChartOfAccountsRepository {
       sql += ` AND reconciliation_status = $${paramCount++}`;
       params.push(filters.reconciliationStatus ?? filters.reconciliation_status);
     }
+    if (filters.partyAccountCodes) {
+      sql += ` AND (account_code LIKE 'CUST-%' OR account_code LIKE 'SUPP-%')`;
+    }
     if (filters.search) {
       sql += ` AND (account_name ILIKE $${paramCount} OR account_code ILIKE $${paramCount} OR description ILIKE $${paramCount})`;
       params.push(`%${filters.search}%`);
@@ -163,6 +166,9 @@ class ChartOfAccountsRepository {
       params.push(filters.isActive);
     }
     
+    if (filters.partyAccountCodes) {
+      sql += ` AND (account_code LIKE 'CUST-%' OR account_code LIKE 'SUPP-%')`;
+    }
     if (filters.search) {
       sql += ` AND (account_name ILIKE $${paramCount} OR account_code ILIKE $${paramCount} OR description ILIKE $${paramCount})`;
       params.push(`%${filters.search}%`);

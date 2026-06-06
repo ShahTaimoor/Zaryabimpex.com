@@ -98,7 +98,7 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
     data: banksData,
     isLoading: banksLoading
   } = useGetBanksQuery(
-    { isActive: true },
+    { isActive: true, all: 'true' },
     {
       staleTime: 5 * 60_000
     }

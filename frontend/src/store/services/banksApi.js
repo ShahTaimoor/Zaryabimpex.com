@@ -72,6 +72,7 @@ export const banksApi = api.injectEndpoints({
 
 export const {
   useGetBanksQuery,
+  useLazyGetBanksQuery,
   useGetBankQuery,
   useCreateBankMutation,
   useUpdateBankMutation,

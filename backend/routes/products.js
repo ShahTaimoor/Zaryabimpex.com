@@ -8,6 +8,7 @@ const productService = require('../services/productServicePostgres');
 const auditLogService = require('../services/auditLogService');
 const expiryManagementService = require('../services/expiryManagementService');
 const costingService = require('../services/costingService');
+const { transformProductToUppercase } = require('../utils/displayTransforms');
 
 const router = express.Router();
 
@@ -22,9 +23,8 @@ const coerceImportPrice = (value) => {
   return Math.max(0, n);
 };
 
-// Import text normalizer:
-// keep symbols like "&" as-is, and decode common HTML entities
-const normalizeImportText = (value) => {
+// Import text normalizer: decode HTML entities from spreadsheet cells
+function normalizeImportTextRaw(value) {
   if (value === undefined || value === null) return '';
   return String(value)
     .replace(/&amp;/gi, '&')
@@ -34,20 +34,7 @@ const normalizeImportText = (value) => {
     .replace(/&#x27;|&#39;/gi, "'")
     .replace(/&#x2f;|&#47;/gi, '/')
     .trim();
-};
-
-// Helper function to transform product names to uppercase
-const transformProductToUppercase = (product) => {
-  if (!product) return product;
-  if (product.toObject) product = product.toObject();
-  if (product.name) product.name = product.name.toUpperCase();
-  if (product.description) product.description = product.description.toUpperCase();
-  if (product.category && product.category.name) product.category.name = product.category.name.toUpperCase();
-  return product;
-};
-
-
-
+}
 
 // @route   GET /api/products
 // @desc    Get all products with filtering and pagination
@@ -376,11 +363,12 @@ router.get('/deleted', [
 // @route   GET /api/products/search/:query
 // @desc    Search products by name
 // @access  Private
+// Legacy alias — prefer GET /api/products?search=&page=1&limit=50
 router.get('/search/:query', auth, maskSensitiveData('view_product_costs', 'pricing.cost'), async (req, res, next) => {
   try {
-    const query = req.params.query;
-    const products = await productService.searchProducts(query, 10);
-    res.json({ products });
+    const search = String(req.params.query || '').trim();
+    const result = await productService.getProducts({ search, page: 1, limit: 50 });
+    res.json({ products: result.products, pagination: result.pagination });
   } catch (error) {
     return next(error);
   }

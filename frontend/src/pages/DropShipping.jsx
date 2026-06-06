@@ -15,8 +15,8 @@ import {
 } from 'lucide-react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useCreateTransactionMutation } from '../store/services/dropShippingApi';
-import { useLazySearchSuppliersQuery, useGetActiveSuppliersQuery } from '../store/services/suppliersApi';
 import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
+import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch';
 import { useGetProductsQuery } from '../store/services/productsApi';
 import { SearchableDropdown } from '../components/SearchableDropdown';
 import { Button } from '@/components/ui/button';
@@ -50,7 +50,6 @@ const DropShipping = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const debouncedProductSearch = useDebouncedValue(productSearchTerm, 300);
-  const debouncedSupplierSearch = useDebouncedValue(supplierSearchTerm, 300);
   const [quantity, setQuantity] = useState(1);
   const [supplierRate, setSupplierRate] = useState('');
   const [customerRate, setCustomerRate] = useState('');
@@ -61,21 +60,11 @@ const DropShipping = () => {
   // Date
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Queries - Always enabled so users can see options when typing
-  const [searchSuppliers] = useLazySearchSuppliersQuery();
-  const { data: activeSuppliersData } = useGetActiveSuppliersQuery(undefined, { skip: supplierSearchTerm.length > 0 });
-
-  const [suppliersData, setSuppliersData] = React.useState(null);
-
-  React.useEffect(() => {
-    if (debouncedSupplierSearch.length > 0) {
-      searchSuppliers(debouncedSupplierSearch).then(({ data }) => {
-        setSuppliersData(data);
-      });
-    } else {
-      setSuppliersData(activeSuppliersData);
-    }
-  }, [debouncedSupplierSearch, activeSuppliersData, searchSuppliers]);
+  const {
+    suppliers: supplierList,
+    isLoading: suppliersLoading,
+    isFetching: suppliersFetching,
+  } = useDebouncedSupplierSearch(supplierSearchTerm, { selectedSupplier: supplier, limit: 50 });
 
   const {
     customers,
@@ -83,12 +72,13 @@ const DropShipping = () => {
     isFetching: customersFetching,
   } = useDebouncedCustomerSearch(customerSearchTerm, { selectedCustomer: customer });
 
-  const { data: productsData } = useGetProductsQuery(
-    { search: debouncedProductSearch, limit: 50 },
+  const { data: productsData, isLoading: productsLoading } = useGetProductsQuery(
     {
-      skip: debouncedProductSearch.length === 0,
-      keepPreviousData: true,
-    }
+      search: debouncedProductSearch || undefined,
+      limit: 50,
+      listMode: 'minimal',
+    },
+    { keepPreviousData: true }
   );
   const products = React.useMemo(() => {
     return productsData?.data?.products || productsData?.products || [];
@@ -366,9 +356,11 @@ const DropShipping = () => {
               </div>
               <SearchableDropdown
                 placeholder="Select supplier..."
-                items={suppliersData?.data?.suppliers || suppliersData?.suppliers || suppliersData || []}
+                items={supplierList}
                 onSelect={handleSupplierSelect}
                 onSearch={setSupplierSearchTerm}
+                loading={suppliersLoading || suppliersFetching}
+                serverSideSearch
                 displayKey={(supplier) => supplier.companyName}
                 selectedItem={supplier}
               />
@@ -498,6 +490,7 @@ const DropShipping = () => {
                 onSearch={setCustomerSearchTerm}
                 value={customerSearchTerm}
                 loading={customersLoading || customersFetching}
+                serverSideSearch
                 emptyMessage="No customers found"
                 displayKey={(customer) => customer.displayName || customer.name}
                 selectedItem={customer}
@@ -588,6 +581,8 @@ const DropShipping = () => {
                 items={products}
                 onSelect={handleProductSelect}
                 onSearch={setProductSearchTerm}
+                loading={productsLoading}
+                serverSideSearch
                 displayKey={(product) => product.name}
                 selectedItem={selectedProduct}
               />

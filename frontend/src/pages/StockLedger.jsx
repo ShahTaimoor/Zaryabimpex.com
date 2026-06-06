@@ -4,7 +4,6 @@ import {
   Search,
   Printer,
   Calendar,
-  X,
   ChevronDown,
   Eye,
   User,
@@ -58,6 +57,8 @@ export const StockLedger = () => {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
+  const [partyDropdownIndex, setPartyDropdownIndex] = useState(-1);
+  const [productDropdownIndex, setProductDropdownIndex] = useState(-1);
 
   const customerDropdownRef = useRef(null);
   const supplierDropdownRef = useRef(null);
@@ -169,6 +170,20 @@ export const StockLedger = () => {
     return allProducts.slice(0, ENTITY_DROPDOWN_INITIAL_LIMIT);
   }, [allProducts, productSearchQuery]);
 
+  /** Flat list for keyboard navigation in customer/supplier search */
+  const partyDropdownOptions = useMemo(() => {
+    if (filters.customer) {
+      return filteredCustomers.map((item) => ({ type: 'customer', item }));
+    }
+    if (filters.supplier) {
+      return filteredSuppliers.map((item) => ({ type: 'supplier', item }));
+    }
+    return [
+      ...filteredCustomers.map((item) => ({ type: 'customer', item })),
+      ...filteredSuppliers.map((item) => ({ type: 'supplier', item })),
+    ];
+  }, [filters.customer, filters.supplier, filteredCustomers, filteredSuppliers]);
+
   const handleFilterChange = (field, value) => {
     setFilters({ ...filters, [field]: value });
     if (field === 'customer') {
@@ -189,6 +204,7 @@ export const StockLedger = () => {
     setCustomerSearchQuery(customer.businessName || customer.business_name || customer.displayName || customer.name || '');
     setShowCustomerDropdown(false);
     setSupplierSearchQuery('');
+    setPartyDropdownIndex(-1);
   };
 
   const handleSupplierSelect = (supplier) => {
@@ -196,12 +212,86 @@ export const StockLedger = () => {
     setSupplierSearchQuery(supplier.companyName || supplier.company_name || supplier.businessName || supplier.business_name || supplier.displayName || supplier.name || '');
     setShowSupplierDropdown(false);
     setCustomerSearchQuery('');
+    setPartyDropdownIndex(-1);
   };
 
   const handleProductSelect = (product) => {
     setFilters({ ...filters, product: entityId(product) });
     setProductSearchQuery(product.name || '');
     setShowProductDropdown(false);
+    setProductDropdownIndex(-1);
+  };
+
+  const handlePartyKeyDown = (e) => {
+    const dropdownOpen = showCustomerDropdown || showSupplierDropdown;
+    if (!dropdownOpen || partyDropdownOptions.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setPartyDropdownIndex((prev) =>
+          prev < partyDropdownOptions.length - 1 ? prev + 1 : 0
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setPartyDropdownIndex((prev) =>
+          prev > 0 ? prev - 1 : partyDropdownOptions.length - 1
+        );
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (partyDropdownIndex >= 0 && partyDropdownIndex < partyDropdownOptions.length) {
+          const selected = partyDropdownOptions[partyDropdownIndex];
+          if (selected.type === 'customer') {
+            handleCustomerSelect(selected.item);
+          } else {
+            handleSupplierSelect(selected.item);
+          }
+          setPartyDropdownIndex(-1);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setShowCustomerDropdown(false);
+        setShowSupplierDropdown(false);
+        setPartyDropdownIndex(-1);
+        break;
+      default:
+        break;
+    }
+  };
+
+  const handleProductKeyDown = (e) => {
+    if (!showProductDropdown || filteredProducts.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setProductDropdownIndex((prev) =>
+          prev < filteredProducts.length - 1 ? prev + 1 : 0
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setProductDropdownIndex((prev) =>
+          prev > 0 ? prev - 1 : filteredProducts.length - 1
+        );
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (productDropdownIndex >= 0 && productDropdownIndex < filteredProducts.length) {
+          handleProductSelect(filteredProducts[productDropdownIndex]);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setShowProductDropdown(false);
+        setProductDropdownIndex(-1);
+        break;
+      default:
+        break;
+    }
   };
 
   const handleView = () => {
@@ -307,10 +397,21 @@ export const StockLedger = () => {
               <div className="relative">
                 <input
                   type="text"
+                  autoComplete="off"
                   placeholder="Select customer or supplier..."
                   value={customerSearchQuery || supplierSearchQuery}
                   onChange={(e) => {
                     const value = e.target.value;
+                    setPartyDropdownIndex(-1);
+                    if (!value.trim()) {
+                      handleFilterChange('customer', '');
+                      handleFilterChange('supplier', '');
+                      setCustomerSearchQuery('');
+                      setSupplierSearchQuery('');
+                      setShowCustomerDropdown(true);
+                      setShowSupplierDropdown(true);
+                      return;
+                    }
                     if (filters.customer) {
                       setCustomerSearchQuery(value);
                       setShowCustomerDropdown(true);
@@ -320,7 +421,6 @@ export const StockLedger = () => {
                       setShowSupplierDropdown(true);
                       setShowCustomerDropdown(false);
                     } else {
-                      // Single search filters both: show one dropdown with customers + suppliers
                       setCustomerSearchQuery(value);
                       setSupplierSearchQuery(value);
                       setShowCustomerDropdown(true);
@@ -328,6 +428,7 @@ export const StockLedger = () => {
                     }
                   }}
                   onFocus={() => {
+                    setPartyDropdownIndex(-1);
                     if (filters.customer) {
                       setShowCustomerDropdown(true);
                       setShowSupplierDropdown(false);
@@ -339,17 +440,22 @@ export const StockLedger = () => {
                       setShowSupplierDropdown(true);
                     }
                   }}
+                  onKeyDown={handlePartyKeyDown}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 pr-10 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 hover:border-slate-300"
                 />
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 {/* When a customer is already selected: show only customer list for re-search */}
                 {showCustomerDropdown && filters.customer && filteredCustomers.length > 0 && (
                   <div className="absolute z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
-                    {filteredCustomers.map((customer) => (
+                    {filteredCustomers.map((customer, index) => (
                       <button
                         key={customer.id || customer._id}
+                        type="button"
                         onClick={() => handleCustomerSelect(customer)}
-                        className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
+                        className={cn(
+                          'w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0',
+                          partyDropdownIndex === index && 'bg-blue-50'
+                        )}
                       >
                         <div className="text-sm font-semibold text-gray-900">
                           {customer.businessName || customer.business_name || customer.displayName || customer.name}
@@ -364,11 +470,15 @@ export const StockLedger = () => {
                 {/* When a supplier is already selected: show only supplier list for re-search */}
                 {showSupplierDropdown && filters.supplier && filteredSuppliers.length > 0 && (
                   <div className="absolute z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
-                    {filteredSuppliers.map((supplier) => (
+                    {filteredSuppliers.map((supplier, index) => (
                       <button
                         key={supplier.id || supplier._id}
+                        type="button"
                         onClick={() => handleSupplierSelect(supplier)}
-                        className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
+                        className={cn(
+                          'w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0',
+                          partyDropdownIndex === index && 'bg-blue-50'
+                        )}
                       >
                         <div className="text-sm font-semibold text-gray-900">
                           {supplier.companyName || supplier.company_name || supplier.businessName || supplier.business_name || supplier.displayName || supplier.name}
@@ -383,16 +493,26 @@ export const StockLedger = () => {
                 {/* When neither selected: one combined dropdown with customers + suppliers filtered by search */}
                 {!filters.customer && !filters.supplier && (showCustomerDropdown || showSupplierDropdown) && (filteredCustomers.length > 0 || filteredSuppliers.length > 0) && (
                   <div className="absolute z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                    {(() => {
+                      let partyOptionIndex = 0;
+                      return (
+                        <>
                     {filteredCustomers.length > 0 && (
                       <>
                         <div className="px-3 py-2 bg-gray-100 text-xs font-semibold text-gray-600 uppercase tracking-wider sticky top-0">
                           Customers
                         </div>
-                        {filteredCustomers.map((customer) => (
+                        {filteredCustomers.map((customer) => {
+                          const optionIndex = partyOptionIndex++;
+                          return (
                           <button
                             key={`c-${customer.id || customer._id}`}
+                            type="button"
                             onClick={() => handleCustomerSelect(customer)}
-                            className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
+                            className={cn(
+                              'w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0',
+                              partyDropdownIndex === optionIndex && 'bg-blue-50'
+                            )}
                           >
                             <div className="text-sm font-semibold text-gray-900">
                               {customer.businessName || customer.business_name || customer.displayName || customer.name}
@@ -401,7 +521,8 @@ export const StockLedger = () => {
                               <div className="text-xs text-gray-500 mt-0.5">{customer.email}</div>
                             )}
                           </button>
-                        ))}
+                          );
+                        })}
                       </>
                     )}
                     {filteredSuppliers.length > 0 && (
@@ -409,11 +530,17 @@ export const StockLedger = () => {
                         <div className="px-3 py-2 bg-gray-100 text-xs font-semibold text-gray-600 uppercase tracking-wider sticky top-0">
                           Suppliers
                         </div>
-                        {filteredSuppliers.map((supplier) => (
+                        {filteredSuppliers.map((supplier) => {
+                          const optionIndex = partyOptionIndex++;
+                          return (
                           <button
                             key={`s-${supplier.id || supplier._id}`}
+                            type="button"
                             onClick={() => handleSupplierSelect(supplier)}
-                            className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
+                            className={cn(
+                              'w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0',
+                              partyDropdownIndex === optionIndex && 'bg-blue-50'
+                            )}
                           >
                             <div className="text-sm font-semibold text-gray-900">
                               {supplier.companyName || supplier.company_name || supplier.businessName || supplier.business_name || supplier.displayName || supplier.name}
@@ -422,26 +549,16 @@ export const StockLedger = () => {
                               <div className="text-xs text-gray-500 mt-0.5">{supplier.email}</div>
                             )}
                           </button>
-                        ))}
+                          );
+                        })}
                       </>
                     )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
-              {(filters.customer || filters.supplier) && (
-                <button
-                  onClick={() => {
-                    handleFilterChange('customer', '');
-                    handleFilterChange('supplier', '');
-                    setCustomerSearchQuery('');
-                    setSupplierSearchQuery('');
-                  }}
-                  className="absolute right-3 top-11 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all"
-                  title="Clear selection"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
             </div>
 
             {/* Invoice No */}
@@ -468,23 +585,39 @@ export const StockLedger = () => {
               <div className="relative">
                 <input
                   type="text"
+                  autoComplete="off"
                   placeholder="Select product..."
                   value={productSearchQuery}
                   onChange={(e) => {
-                    setProductSearchQuery(e.target.value);
+                    const value = e.target.value;
+                    setProductDropdownIndex(-1);
+                    if (!value.trim()) {
+                      handleFilterChange('product', '');
+                      setProductSearchQuery('');
+                    } else {
+                      setProductSearchQuery(value);
+                    }
                     setShowProductDropdown(true);
                   }}
-                  onFocus={() => setShowProductDropdown(true)}
+                  onFocus={() => {
+                    setProductDropdownIndex(-1);
+                    setShowProductDropdown(true);
+                  }}
+                  onKeyDown={handleProductKeyDown}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 pr-10 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 hover:border-slate-300"
                 />
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 {showProductDropdown && filteredProducts.length > 0 && (
                   <div className="absolute z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
-                    {filteredProducts.map((product) => (
+                    {filteredProducts.map((product, index) => (
                       <button
                         key={product.id || product._id}
+                        type="button"
                         onClick={() => handleProductSelect(product)}
-                        className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
+                        className={cn(
+                          'w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0',
+                          productDropdownIndex === index && 'bg-blue-50'
+                        )}
                       >
                         <div className="text-sm font-semibold text-gray-900">{product.name}</div>
                         {product.sku && (
@@ -495,18 +628,6 @@ export const StockLedger = () => {
                   </div>
                 )}
               </div>
-              {filters.product && (
-                <button
-                  onClick={() => {
-                    handleFilterChange('product', '');
-                    setProductSearchQuery('');
-                  }}
-                  className="absolute right-3 top-11 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all"
-                  title="Clear selection"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
             </div>
 
           </div>

@@ -1,33 +1,53 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { SearchableDropdown } from './SearchableDropdown';
 import { Button } from '@/components/ui/button';
+import { useDebouncedProductSearch } from '@/hooks/useDebouncedProductSearch';
+import { useGetProductQuery } from '@/store/services/productsApi';
 
 /**
- * Searchable product picker (name / SKU / barcode filter via SearchableDropdown).
- * Use with `useGetProductsQuery({ limit: 10000 })` so the full catalog is available.
- * Dropdown lists **maxInitialItems** rows until the user types; then **all** matching products are shown.
+ * Server-backed searchable product picker (GET /api/products?search=&page=1&limit=50).
  */
 export function ProductSearchableSelect({
   label,
-  products = [],
   value,
   onValueChange,
   placeholder = 'Search by name, SKU, or barcode…',
   disabled = false,
-  loading = false,
   className = '',
   showStock = true,
-  /** When not searching, show this many rows (default 20). Type to search the full `products` list. */
   maxInitialItems = 20,
   allowClear = false,
   clearLabel = 'Clear',
+  listMode = 'minimal',
+  searchLimit = 50,
 }) {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const { data: selectedProductResponse } = useGetProductQuery(value, {
+    skip: !value,
+  });
+  const selectedFromApi = useMemo(() => {
+    const data = selectedProductResponse;
+    return data?.data?.product ?? data?.product ?? data?.data ?? data ?? null;
+  }, [selectedProductResponse]);
+
+  const { products, isLoading, isFetching } = useDebouncedProductSearch(searchTerm, {
+    selectedProduct: selectedFromApi,
+    limit: searchLimit,
+    listMode,
+  });
+
   const selectedItem = useMemo(() => {
     if (value == null || value === '') return null;
     const v = String(value);
-    return products.find((p) => String(p._id ?? p.id) === v) ?? null;
-  }, [products, value]);
+    const fromList = products.find((p) => String(p._id ?? p.id) === v);
+    if (fromList) return fromList;
+    if (selectedFromApi && String(selectedFromApi._id ?? selectedFromApi.id) === v) {
+      return selectedFromApi;
+    }
+    return null;
+  }, [products, value, selectedFromApi]);
 
   const displayKey = (p) => p?.name ?? p?.productName ?? '—';
 
@@ -58,10 +78,12 @@ export function ProductSearchableSelect({
             onSelect={(item) =>
               onValueChange(item ? String(item._id ?? item.id ?? '') : '')
             }
-            loading={loading}
+            onSearch={setSearchTerm}
+            loading={isLoading || isFetching}
             disabled={disabled}
             maxInitialItems={maxInitialItems}
             rightContentKey={rightContentKey}
+            serverSideSearch
             className="w-full"
             openOnFocus
           />

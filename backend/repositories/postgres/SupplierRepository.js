@@ -1,4 +1,5 @@
 const { query } = require('../../config/postgres');
+const { buildSupplierListSearch } = require('../../utils/searchOrderBy');
 
 class SupplierRepository {
   async findById(id, includeDeleted = false) {
@@ -30,16 +31,23 @@ class SupplierRepository {
       params.push(filters.isActive);
     }
 
+    let searchOrderBy = null;
     if (filters.search) {
-      sql += ` AND (company_name ILIKE $${paramCount} OR business_name ILIKE $${paramCount} OR name ILIKE $${paramCount} OR email ILIKE $${paramCount} OR COALESCE(contact_person,'') ILIKE $${paramCount} OR COALESCE(phone,'') ILIKE $${paramCount})`;
-      params.push(`%${filters.search}%`);
-      paramCount++;
+      const built = buildSupplierListSearch(filters.search, paramCount);
+      sql += built.whereSql;
+      params.push(...built.params);
+      paramCount = built.nextParamIndex;
+      searchOrderBy = built.orderBySql;
     }
 
-    const { toSortString } = require('../../utils/sortParam');
-    const sortStr = toSortString(options.sort, 'created_at DESC');
-    const [field, direction] = sortStr.split(' ');
-    sql += ` ORDER BY ${field} ${direction || 'ASC'}`;
+    if (searchOrderBy) {
+      sql += ` ORDER BY ${searchOrderBy}`;
+    } else {
+      const { toSortString } = require('../../utils/sortParam');
+      const sortStr = toSortString(options.sort, 'company_name ASC');
+      const [field, direction] = sortStr.split(' ');
+      sql += ` ORDER BY ${field} ${direction || 'ASC'}`;
+    }
 
     if (options.limit) {
       sql += ` LIMIT $${paramCount++}`;
@@ -64,7 +72,12 @@ class SupplierRepository {
     const countParams = [];
     let paramCount = 1;
     if (filters.isActive !== undefined) { countSql += ` AND is_active = $${paramCount++}`; countParams.push(filters.isActive); }
-    if (filters.search) { countSql += ` AND (company_name ILIKE $${paramCount} OR business_name ILIKE $${paramCount} OR name ILIKE $${paramCount} OR email ILIKE $${paramCount} OR COALESCE(contact_person,'') ILIKE $${paramCount} OR COALESCE(phone,'') ILIKE $${paramCount})`; countParams.push(`%${filters.search}%`); paramCount++; }
+    if (filters.search) {
+      const built = buildSupplierListSearch(filters.search, paramCount);
+      countSql += built.whereSql;
+      countParams.push(...built.params);
+      paramCount = built.nextParamIndex;
+    }
     const countResult = await query(countSql, countParams);
     const total = parseInt(countResult.rows[0].count, 10);
 

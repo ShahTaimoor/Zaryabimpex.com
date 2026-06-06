@@ -10,7 +10,10 @@ const bankService = require('../services/bankService');
 router.get('/', [
   auth,
   requireAnyPermission(['view_banks', 'view_reports']),
-  query('isActive').optional().isBoolean().withMessage('isActive must be a boolean')
+  query('isActive').optional().isBoolean().withMessage('isActive must be a boolean'),
+  query('search').optional().isString().trim(),
+  query('page').optional().isInt({ min: 1 }),
+  query('limit').optional().isInt({ min: 1, max: 10000 }),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -18,13 +21,12 @@ router.get('/', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const banks = await bankService.getBanks({
-      isActive: req.query.isActive
-    });
+    const result = await bankService.getBanks(req.query);
 
     res.json({
       success: true,
-      data: { banks }
+      data: { banks: result.banks },
+      pagination: result.pagination,
     });
   } catch (error) {
     console.error('Get banks error:', error);

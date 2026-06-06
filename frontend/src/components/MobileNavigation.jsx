@@ -94,8 +94,6 @@ const MobileNavigation = ({ user, onLogout, isLoggingOut = false }) => {
     { path: '/stock-ledger', icon: FileText, label: 'Stock Ledger', badge: null },
     { path: '/pl-statements', icon: BarChart3, label: 'P&L Statements', badge: null },
     { path: '/balance-sheet-statement', icon: FileText, label: 'Balance Sheet', badge: null },
-    { path: '/sales-performance', icon: TrendingUp, label: 'Sales Performance', badge: null },
-    { path: '/inventory-reports', icon: Warehouse, label: 'Inventory Reports', badge: null },
     { path: '/reports', icon: BarChart3, label: 'Reports', badge: null },
     { path: '/backdate-report', icon: Clock, label: 'Backdate Report', badge: null },
     { path: '/chart-of-accounts', icon: FolderTree, label: 'Chart of Accounts', badge: null },

@@ -47,7 +47,9 @@ export const SearchableDropdown = forwardRef(({
   openOnFocus = false,
   rightContentKey = null, // Function or key to get right-side content (e.g., city)
   /** Max rows when not searching; type to see full filtered list. Set null to show all (legacy). */
-  maxInitialItems = DEFAULT_INITIAL_LIMIT
+  maxInitialItems = DEFAULT_INITIAL_LIMIT,
+  /** When true, items are pre-filtered by the server; skip local token matching. */
+  serverSideSearch = false,
 }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -169,6 +171,12 @@ export const SearchableDropdown = forwardRef(({
     const currentSearchTerm = typeof rawTerm === 'string' ? rawTerm.trim() : '';
     const currentDisplayKey = displayKeyRef.current;
 
+    if (serverSideSearch) {
+      setFilteredItems(items);
+      setSelectedIndex(-1);
+      return;
+    }
+
     if (currentSearchTerm) {
       const tokensLower = splitSearchTokensLower(currentSearchTerm);
       const filtered = items.filter(item => {
@@ -244,7 +252,7 @@ export const SearchableDropdown = forwardRef(({
     }
     setFilteredItems(out);
     setSelectedIndex(-1);
-  }, [value, searchTerm, items, selectedItem, valueKey, maxInitialItems]); // displayKey via ref
+  }, [value, searchTerm, items, selectedItem, valueKey, maxInitialItems, serverSideSearch]); // displayKey via ref
 
   // Handle search
   const handleSearch = (term) => {

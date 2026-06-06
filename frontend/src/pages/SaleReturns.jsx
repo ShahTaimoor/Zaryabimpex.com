@@ -27,6 +27,7 @@ import {
 } from '../store/services/saleReturnsApi';
 import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
+import { getCustomerDisplayName } from '../utils/partyDisplay';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingTable } from '../components/LoadingSpinner';
 import { useResponsive } from '../components/ResponsiveContainer';
 import { useTab } from '../contexts/TabContext';
@@ -253,7 +254,7 @@ const SaleReturns = () => {
 
   const stats = statsData?.data || {};
   const { data: banksData } = useGetBanksQuery(
-    { isActive: true },
+    { isActive: true, all: 'true' },
     { staleTime: 5 * 60_000 }
   );
   const activeBanks = useMemo(
@@ -270,13 +271,7 @@ const SaleReturns = () => {
   // Handle customer selection
   const handleCustomerSelect = (customer) => {
     setSelectedCustomer(customer);
-    setCustomerSearchTerm(
-      customer?.businessName ||
-      customer?.business_name ||
-      customer?.displayName ||
-      customer?.name ||
-      ''
-    );
+    setCustomerSearchTerm(getCustomerDisplayName(customer, ''));
     setStep('product-search');
     setProductSearchTerm('');
   };
@@ -1089,8 +1084,7 @@ const SaleReturns = () => {
                         {returnItem.returnNumber}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                        {returnItem.customer?.businessName || returnItem.customer?.business_name ||
-                          returnItem.customer?.displayName || returnItem.customer?.name || 'N/A'}
+                        {getCustomerDisplayName(returnItem.customer, 'N/A')}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                         {returnItem.originalOrder?.orderNumber ||

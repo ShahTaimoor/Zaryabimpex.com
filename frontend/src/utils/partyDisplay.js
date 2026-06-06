@@ -1,3 +1,5 @@
+import { toTitleCase } from './titleCase';
+
 /**
  * Centralized helpers for resolving display names and formatted addresses
  * for parties (customers, suppliers, employees, etc.). Replaces the long
@@ -45,34 +47,69 @@ const SUPPLIER_NAME_KEYS = [
   'supplier_name',
 ];
 
+const PRODUCT_NAME_KEYS = [
+  'displayName',
+  'display_name',
+  'variantName',
+  'variant_name',
+  'name',
+  'company_name',
+  'companyName',
+];
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Resolve a customer's display name. Falls back to `fallback` (default
  * "Walk-in") so callers don't have to repeat the same `?? 'Walk-in'`.
  */
 export function getCustomerDisplayName(customer, fallback = 'Walk-in') {
-  return pickFirst(customer, CUSTOMER_NAME_KEYS) ?? fallback;
+  const name = pickFirst(customer, CUSTOMER_NAME_KEYS);
+  return name ? toTitleCase(name) : fallback;
 }
 
 /** Resolve a supplier's display name. */
 export function getSupplierDisplayName(supplier, fallback = 'Unknown Supplier') {
-  return pickFirst(supplier, SUPPLIER_NAME_KEYS) ?? fallback;
+  const name = pickFirst(supplier, SUPPLIER_NAME_KEYS);
+  return name ? toTitleCase(name) : fallback;
+}
+
+/** Resolve a product or variant display name (as stored by the backend). */
+export function getProductDisplayName(product, fallback = 'Unknown Product') {
+  if (!product) return fallback;
+  if (typeof product === 'string') {
+    if (UUID_RE.test(product)) return fallback;
+    return product;
+  }
+  if (typeof product === 'object') {
+    const name = pickFirst(product, PRODUCT_NAME_KEYS);
+    return name || fallback;
+  }
+  return fallback;
+}
+
+/** Resolve a category display name. */
+export function getCategoryDisplayName(category, fallback = '') {
+  if (!category) return fallback;
+  if (typeof category === 'string') return toTitleCase(category);
+  const name = pickFirst(category, ['name', 'label', 'title']);
+  return name ? toTitleCase(name) : fallback;
 }
 
 /** Generic party (customer/supplier/employee/etc.) display name. */
 export function getPartyDisplayName(party, fallback = '') {
   if (!party) return fallback;
-  if (typeof party === 'string') return party;
-  return (
-    pickFirst(party, [
-      ...CUSTOMER_NAME_KEYS,
-      ...SUPPLIER_NAME_KEYS,
-      'firstName',
-      'lastName',
-      'first_name',
-      'last_name',
-      'title',
-    ]) ?? fallback
-  );
+  if (typeof party === 'string') return toTitleCase(party);
+  const raw = pickFirst(party, [
+    ...CUSTOMER_NAME_KEYS,
+    ...SUPPLIER_NAME_KEYS,
+    'firstName',
+    'lastName',
+    'first_name',
+    'last_name',
+    'title',
+  ]);
+  return raw ? toTitleCase(raw) : fallback;
 }
 
 const ADDRESS_LINE_KEYS = [

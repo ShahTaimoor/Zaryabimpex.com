@@ -48,6 +48,12 @@ import { useGetCompanySettingsQuery } from '../store/services/settingsApi';
 import { useGetSummaryQuery } from '../store/services/plStatementsApi';
 import { useFetchCompanyQuery } from '../store/services/companyApi';
 import { formatCurrency, formatDate } from '../utils/formatters';
+import {
+  DASHBOARD_CONFIG_CHANGED,
+  loadDashboardWidgetsConfig,
+  isDashboardWidgetVisible,
+  isDashboardSectionVisible,
+} from '../config/dashboardConfig';
 import { LoadingSpinner, LoadingButton, LoadingCard, LoadingGrid, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import PeriodComparisonSection from '../components/PeriodComparisonSection';
 import PeriodComparisonCard from '../components/PeriodComparisonCard';
@@ -114,14 +120,22 @@ export const Dashboard = () => {
     } catch (_) { }
   };
 
+  const [widgetsConfig, setWidgetsConfig] = useState(() => loadDashboardWidgetsConfig());
+  const showWidget = (key) => isDashboardWidgetVisible(key, widgetsConfig);
+
   // Listen for dashboard visibility changes from MultiTabLayout
   useEffect(() => {
     const handleVisibilityChange = (event) => {
       setDashboardHidden(event.detail.hidden);
     };
+    const handleWidgetsConfigChange = () => {
+      setWidgetsConfig(loadDashboardWidgetsConfig());
+    };
     window.addEventListener('dashboardVisibilityChanged', handleVisibilityChange);
+    window.addEventListener(DASHBOARD_CONFIG_CHANGED, handleWidgetsConfigChange);
     return () => {
       window.removeEventListener('dashboardVisibilityChanged', handleVisibilityChange);
+      window.removeEventListener(DASHBOARD_CONFIG_CHANGED, handleWidgetsConfigChange);
     };
   }, []);
 
@@ -1035,6 +1049,7 @@ export const Dashboard = () => {
               </div>
 
               {/* REVENUE, COST & DISCOUNT SECTION - Responsive scaling */}
+              {isDashboardSectionVisible('revenue', widgetsConfig) && (
               <div>
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex-grow h-px bg-gray-200"></div>
@@ -1046,6 +1061,7 @@ export const Dashboard = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 sm:gap-2 xl:gap-3 2xl:gap-4">
 
                   {/* Sales */}
+                  {showWidget('salesRevenue') && (
                   <div
                     className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
                     onClick={() => setShowSalesInvoicesModal(true)}
@@ -1063,8 +1079,10 @@ export const Dashboard = () => {
                     <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">SO: {Math.round(salesOrdersTotal)} | SI: {Math.round(salesInvoicesTotal)}</p>
                     <p className="text-[9px] sm:text-[10px] xl:text-xs text-primary-600 font-medium mt-0.5">Net: {Math.round(netRevenue).toLocaleString()}</p>
                   </div>
+                  )}
 
                   {/* Purchase (COGS) */}
+                  {showWidget('purchaseCogs') && (
                   <div
                     className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
                     onClick={() => setShowPurchaseInvoicesModal(true)}
@@ -1081,8 +1099,10 @@ export const Dashboard = () => {
                     <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{Math.round(totalPurchases).toLocaleString()}</p>
                     <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">PO: {Math.round(purchaseOrdersTotal)} | PI: {Math.round(purchaseInvoicesTotal)}</p>
                   </div>
+                  )}
 
                   {/* Discount */}
+                  {showWidget('discountGiven') && (
                   <div
                     className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
                     onClick={() => setShowDiscountsModal(true)}
@@ -1098,8 +1118,10 @@ export const Dashboard = () => {
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Discount Given</p>
                     <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{Math.round(totalDiscounts).toLocaleString()}</p>
                   </div>
+                  )}
 
                   {/* Pending Sales Orders */}
+                  {showWidget('pendingSalesOrders') && (
                   <div
                     className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm min-w-0"
                     onClick={() => setShowSalesOrdersModal(true)}
@@ -1112,8 +1134,10 @@ export const Dashboard = () => {
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Pending Sales Orders</p>
                     <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{pendingSalesOrdersCount}</p>
                   </div>
+                  )}
 
                   {/* Pending Purchase Orders */}
+                  {showWidget('pendingPurchaseOrders') && (
                   <div
                     className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm min-w-0"
                     onClick={() => setShowPurchaseOrdersModal(true)}
@@ -1126,10 +1150,13 @@ export const Dashboard = () => {
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Pending Purchase Orders</p>
                     <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{pendingPurchaseOrdersCount}</p>
                   </div>
+                  )}
                 </div>
               </div>
+              )}
 
               {/* PROFITABILITY & CASH FLOW SECTION - Responsive scaling */}
+              {isDashboardSectionVisible('profitability', widgetsConfig) && (
               <div>
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex-grow h-px bg-gray-200"></div>
@@ -1141,6 +1168,7 @@ export const Dashboard = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2 xl:gap-3 2xl:gap-4">
 
                   {/* Gross Profit */}
+                  {showWidget('grossProfit') && (
                   <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
                       <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-blue-100 rounded-full">
@@ -1153,8 +1181,10 @@ export const Dashboard = () => {
                     </p>
                     <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">Revenue - COGS</p>
                   </div>
+                  )}
 
                   {/* Total Receipts */}
+                  {showWidget('totalReceipts') && (
                   <div
                     className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
                     onClick={() => setShowAllReceiptsModal(true)}
@@ -1175,8 +1205,70 @@ export const Dashboard = () => {
                       Cash: {isNaN(totalCashReceipts) ? '0' : Math.round(totalCashReceipts)} | Bank: {isNaN(totalBankReceipts) ? '0' : Math.round(totalBankReceipts)} | Sales: {isNaN(salesInvoicePayments) ? '0' : Math.round(salesInvoicePayments)}
                     </p>
                   </div>
+                  )}
+
+                  {showWidget('cashReceipts') && (
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                    onClick={() => setShowCashReceiptsModal(true)}
+                  >
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                    </div>
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-green-100 rounded-full">
+                        <Banknote className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-green-700" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Cash Receipts</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">
+                      {isNaN(totalCashReceipts) ? '0' : Math.round(totalCashReceipts).toLocaleString()}
+                    </p>
+                  </div>
+                  )}
+
+                  {showWidget('bankReceipts') && (
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                    onClick={() => setShowBankReceiptsModal(true)}
+                  >
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                    </div>
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-teal-100 rounded-full">
+                        <Building className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-teal-700" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Bank Receipts</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">
+                      {isNaN(totalBankReceipts) ? '0' : Math.round(totalBankReceipts).toLocaleString()}
+                    </p>
+                  </div>
+                  )}
+
+                  {showWidget('salesReceipts') && (
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                    onClick={() => setShowSalesInvoicesModal(true)}
+                  >
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                    </div>
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-emerald-100 rounded-full">
+                        <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-emerald-700" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Sales Receipts</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">
+                      {isNaN(salesInvoicePayments) ? '0' : Math.round(salesInvoicePayments).toLocaleString()}
+                    </p>
+                  </div>
+                  )}
 
                   {/* Total Payments */}
+                  {showWidget('totalPayments') && (
                   <div
                     className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
                     onClick={() => setShowAllPaymentsModal(true)}
@@ -1197,8 +1289,50 @@ export const Dashboard = () => {
                       Cash: {isNaN(totalCashPayments) ? '0' : Math.round(totalCashPayments)} | Bank: {isNaN(totalBankPayments) ? '0' : Math.round(totalBankPayments)}
                     </p>
                   </div>
+                  )}
+
+                  {showWidget('cashPayments') && (
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                    onClick={() => setShowCashPaymentsModal(true)}
+                  >
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                    </div>
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-amber-100 rounded-full">
+                        <ArrowDownCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-amber-700" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Cash Payments</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">
+                      {isNaN(totalCashPayments) ? '0' : Math.round(totalCashPayments).toLocaleString()}
+                    </p>
+                  </div>
+                  )}
+
+                  {showWidget('bankPayments') && (
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                    onClick={() => setShowBankPaymentsModal(true)}
+                  >
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                    </div>
+                    <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
+                      <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-orange-100 rounded-full">
+                        <Building className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-orange-700" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Bank Payments</p>
+                    <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">
+                      {isNaN(totalBankPayments) ? '0' : Math.round(totalBankPayments).toLocaleString()}
+                    </p>
+                  </div>
+                  )}
 
                   {/* Net Cash Flow */}
+                  {showWidget('netCashFlow') && (
                   <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
                       <div className={`p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 rounded-full ${netCashFlow >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
@@ -1211,8 +1345,10 @@ export const Dashboard = () => {
                     </p>
                     <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">Receipts - Payments</p>
                   </div>
+                  )}
 
                   {/* Total Orders */}
+                  {showWidget('totalTransactions') && (
                   <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
                       <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-yellow-100 rounded-full">
@@ -1222,9 +1358,11 @@ export const Dashboard = () => {
                     <p className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">Total Transactions</p>
                     <p className="text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold text-gray-900 break-words">{summary.totalOrders || 0}</p>
                   </div>
+                  )}
 
                 </div>
               </div>
+              )}
             </div>
           </div>
 

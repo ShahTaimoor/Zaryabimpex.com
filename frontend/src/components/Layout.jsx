@@ -40,6 +40,8 @@ import { useAuth } from '../contexts/AuthContext';
 import ErrorBoundary from './ErrorBoundary';
 import MobileNavigation from './MobileNavigation';
 import { loadSidebarConfig } from './MultiTabLayout';
+import { loadTopBarConfig, TOP_BAR_CONFIG_CHANGED } from '../config/topBarConfig';
+import { TopBarActionButtonsDesktop } from './TopBarActionButtons';
 import { useResponsive } from './ResponsiveContainer';
 import { WhatsAppFloat } from './WhatsAppFloat';
 import { useGetCategoryTreeQuery } from '../store/services/categoriesApi';
@@ -148,12 +150,10 @@ export const navigation = [
   {
     name: 'Analytics',
     icon: BarChart3,
-    permissionAny: ['view_pl_statements', 'view_balance_sheets', 'view_sales_performance', 'view_inventory_reports', 'view_general_reports', PERMISSIONS.VIEW_BACKDATE_REPORT],
+    permissionAny: ['view_pl_statements', 'view_balance_sheets', 'view_general_reports', PERMISSIONS.VIEW_BACKDATE_REPORT],
     children: [
       { name: 'P&L Statements', href: '/pl-statements', icon: BarChart3, permission: 'view_pl_statements' },
       { name: 'Balance Sheet', href: '/balance-sheet-statement', icon: FileText, permission: 'view_balance_sheets' },
-      { name: 'Sales Performance', href: '/sales-performance', icon: TrendingUp, permission: 'view_sales_performance' },
-      { name: 'Inventory Reports', href: '/inventory-reports', icon: Warehouse, permission: 'view_inventory_reports' },
       { name: 'Reports', href: '/reports', icon: BarChart3, permission: 'view_general_reports' },
       { name: 'Backdate Report', href: '/backdate-report', icon: Clock, permission: PERMISSIONS.VIEW_BACKDATE_REPORT },
     ]
@@ -387,12 +387,14 @@ const CategoryTreeItem = ({ category, subcategories, isActive, level = 0 }) => {
 export const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout, isLoggingOut } = useAuth();
+  const checkPermission = (permissionKey) => hasPermission(user, permissionKey);
   const location = useLocation();
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
 
   // Sidebar visibility state (keys align with MultiTabLayout / Settings; migration in loadSidebarConfig)
   const [sidebarConfig, setSidebarConfig] = useState(() => loadSidebarConfig());
+  const [topBarConfig, setTopBarConfig] = useState(() => loadTopBarConfig());
   const [showTopBar, setShowTopBar] = useState(() => {
     const saved = localStorage.getItem('showTopBarUI');
     return saved === null ? true : saved === 'true';
@@ -403,15 +405,20 @@ export const Layout = ({ children }) => {
     const handleSidebarChange = () => {
       setSidebarConfig(loadSidebarConfig());
     };
+    const handleTopBarConfigChange = () => {
+      setTopBarConfig(loadTopBarConfig());
+    };
     const handleTopBarVisibilityChange = () => {
       const saved = localStorage.getItem('showTopBarUI');
       setShowTopBar(saved === null ? true : saved === 'true');
     };
 
     window.addEventListener('sidebarConfigChanged', handleSidebarChange);
+    window.addEventListener(TOP_BAR_CONFIG_CHANGED, handleTopBarConfigChange);
     window.addEventListener('topBarVisibilityChanged', handleTopBarVisibilityChange);
     return () => {
       window.removeEventListener('sidebarConfigChanged', handleSidebarChange);
+      window.removeEventListener(TOP_BAR_CONFIG_CHANGED, handleTopBarConfigChange);
       window.removeEventListener('topBarVisibilityChanged', handleTopBarVisibilityChange);
     };
   }, []);
@@ -510,64 +517,12 @@ export const Layout = ({ children }) => {
           </button>
 
           <div className="flex flex-1 gap-x-2 sm:gap-x-4 self-stretch lg:gap-x-6 min-w-0 overflow-hidden">
-            {/* Action Buttons - Shrink when zoom/screen percentage increases (responsive) */}
-            <div className="hidden lg:flex items-center gap-1 xl:gap-1.5 2xl:gap-2 overflow-x-auto flex-1 min-w-0 scrollbar-hide overflow-y-visible">
-              {sidebarConfig['Cash Receipts'] !== false && (
-                <button
-                  onClick={() => navigate('/cash-receipts')}
-                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
-                >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
-                    <Receipt className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
-                  </span>
-                  <span className="hidden md:inline">Cash Receipts</span>
-                </button>
-              )}
-              {sidebarConfig['Bank Receipts'] !== false && (
-                <button
-                  onClick={() => navigate('/bank-receipts')}
-                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
-                >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
-                    <Building className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
-                  </span>
-                  <span className="hidden md:inline">Bank Receipts</span>
-                </button>
-              )}
-              {sidebarConfig['Cash Payments'] !== false && (
-                <button
-                  onClick={() => navigate('/cash-payments')}
-                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
-                >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
-                    <CreditCard className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
-                  </span>
-                  <span className="hidden md:inline">Cash Payments</span>
-                </button>
-              )}
-              {sidebarConfig['Bank Payments'] !== false && (
-                <button
-                  onClick={() => navigate('/bank-payments')}
-                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
-                >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
-                    <ArrowUpDown className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
-                  </span>
-                  <span className="hidden md:inline">Bank Payments</span>
-                </button>
-              )}
-              {sidebarConfig['Record Expense'] !== false && (
-                <button
-                  onClick={() => navigate('/expenses')}
-                  className="bg-white text-gray-900 border border-gray-200 hover:bg-black hover:text-white px-2 py-1.5 xl:px-3 xl:py-2 rounded-md shadow-sm transition-all duration-200 flex items-center gap-1 xl:gap-1.5 text-[10px] xl:text-xs 2xl:text-sm font-medium flex-shrink-0 whitespace-nowrap min-w-0 group/btn"
-                >
-                  <span className="inline-flex items-center justify-center w-5 h-5 xl:w-6 xl:h-6 rounded bg-gray-100 group-hover/btn:bg-gray-800 flex-shrink-0">
-                    <Wallet className="h-2.5 w-2.5 xl:h-3.5 xl:w-3.5 text-gray-900 group-hover/btn:text-white" />
-                  </span>
-                  <span className="hidden md:inline">Record Expense</span>
-                </button>
-              )}
-            </div>
+            <TopBarActionButtonsDesktop
+              topBarConfig={topBarConfig}
+              user={user}
+              hasPermission={checkPermission}
+              onNavigate={({ href }) => navigate(href)}
+            />
             <div className="flex flex-1 min-w-0"></div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
               {/* User menu */}

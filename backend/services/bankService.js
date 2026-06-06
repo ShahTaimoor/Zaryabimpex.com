@@ -1,14 +1,16 @@
 const BankRepository = require('../repositories/BankRepository');
+const { parseListQuery, buildPaginationMeta } = require('../utils/listQuery');
 const BankPaymentRepository = require('../repositories/BankPaymentRepository');
 const BankReceiptRepository = require('../repositories/BankReceiptRepository');
 const AccountingService = require('./accountingService');
+const { normalizeBankInput, formatBankEntity } = require('../utils/entityTextFormat');
 
 /**
  * Map DB bank row (snake_case) to API response format (camelCase)
  */
 function mapBankForResponse(row) {
   if (!row) return row;
-  return {
+  return formatBankEntity({
     id: row.id,
     _id: row.id,
     bankName: row.bank_name ?? row.bankName,
@@ -28,7 +30,7 @@ function mapBankForResponse(row) {
     updatedBy: row.updated_by ?? row.updatedBy,
     createdAt: row.created_at ?? row.createdAt,
     updatedAt: row.updated_at ?? row.updatedAt
-  };
+  });
 }
 
 class BankService {
@@ -37,29 +39,37 @@ class BankService {
    * @param {object} queryParams - Query parameters
    * @returns {Promise<Array>}
    */
-  async getBanks(queryParams) {
-    const filter = {};
+  async getBanks(queryParams = {}) {
+    const { search, page, limit, offset } = parseListQuery(queryParams);
 
+    const filter = {};
     if (queryParams.isActive !== undefined) {
       filter.isActive = queryParams.isActive === 'true';
     }
+    if (search) filter.search = search;
 
+    const total = await BankRepository.countWithFilters(filter);
     const rows = await BankRepository.findWithFilters(filter, {
-      sort: { bankName: 1, accountNumber: 1 }
+      sort: { bankName: 1, accountNumber: 1 },
+      limit,
+      offset,
     });
-    
-    const banks = rows.map(mapBankForResponse);
-    const bankIds = banks.map(b => b.id).filter(Boolean);
-    
+
+    let banks = rows.map(mapBankForResponse);
+    const bankIds = banks.map((b) => b.id).filter(Boolean);
+
     if (bankIds.length > 0) {
       const balances = await AccountingService.getBulkBankBalances(bankIds);
-      return banks.map(bank => ({
+      banks = banks.map((bank) => ({
         ...bank,
-        currentBalance: balances[bank.id] || 0
+        currentBalance: balances[bank.id] || 0,
       }));
     }
-    
-    return banks;
+
+    return {
+      banks,
+      pagination: buildPaginationMeta({ page, limit, total }),
+    };
   }
 
   /**
@@ -86,6 +96,7 @@ class BankService {
    * @returns {Promise<object>}
    */
   async createBank(bankData, userId) {
+    bankData = normalizeBankInput(bankData);
     const processedData = {
       accountName: bankData.accountName.trim(),
       accountNumber: bankData.accountNumber.trim(),
@@ -124,6 +135,7 @@ class BankService {
       throw new Error('Bank not found');
     }
 
+    updateData = normalizeBankInput(updateData);
     const processedData = {};
     if (updateData.accountName !== undefined) processedData.accountName = updateData.accountName.trim();
     if (updateData.accountNumber !== undefined) processedData.accountNumber = updateData.accountNumber.trim();

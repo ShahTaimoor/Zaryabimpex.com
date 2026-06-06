@@ -1,7 +1,7 @@
 const { query } = require('../../config/postgres');
 const inventoryBalanceRepository = require('./InventoryBalanceRepository');
 const { decodeCursor, encodeCursor } = require('../../utils/keysetCursor');
-const { splitSearchTokens } = require('../../utils/searchTokens');
+const { buildProductListSearch, sqlNaturalCodeOrder } = require('../../utils/searchOrderBy');
 
 
 function rowToProduct(row) {
@@ -102,20 +102,11 @@ class ProductRepository {
         paramCount++;
       }
     } else if (filters.search) {
-      const tokens = splitSearchTokens(filters.search);
-      for (const token of tokens) {
-        sql += ` AND (
-        name ILIKE $${paramCount}
-        OR sku ILIKE $${paramCount}
-        OR barcode ILIKE $${paramCount}
-        OR hs_code ILIKE $${paramCount}
-        OR import_ref_no ILIKE $${paramCount}
-        OR gd_number ILIKE $${paramCount}
-        OR invoice_ref ILIKE $${paramCount}
-      )`;
-        params.push(`%${token}%`);
-        paramCount++;
-      }
+      const built = buildProductListSearch(filters.search, paramCount);
+      sql += built.whereSql;
+      params.push(...built.params);
+      paramCount = built.nextParamIndex;
+      options._searchOrderBy = built.orderBySql;
     }
     if (filters.lowStock) {
       sql += ' AND stock_quantity <= min_stock_level';
@@ -134,13 +125,13 @@ class ProductRepository {
 
     if (useKeyset && !filters.sortBy) {
       sql += ' ORDER BY created_at DESC, id DESC';
+    } else if (filters.sortBy === 'name') {
+      const dir = filters.sortOrder === 'desc' ? 'DESC' : 'ASC';
+      sql += ` ORDER BY name ${dir}`;
+    } else if (options._searchOrderBy) {
+      sql += ` ORDER BY ${options._searchOrderBy}`;
     } else {
-      if (filters.sortBy === 'name') {
-        const dir = filters.sortOrder === 'desc' ? 'DESC' : 'ASC';
-        sql += ` ORDER BY name ${dir}`;
-      } else {
-        sql += ' ORDER BY created_at DESC, name ASC';
-      }
+      sql += ` ORDER BY ${sqlNaturalCodeOrder()}, created_at DESC`;
     }
     if (options.limit) {
       sql += ` LIMIT $${paramCount++}`;
@@ -360,20 +351,10 @@ class ProductRepository {
         cn++;
       }
     } else if (filters.search) {
-      const tokens = splitSearchTokens(filters.search);
-      for (const token of tokens) {
-        countSql += ` AND (
-        name ILIKE $${cn}
-        OR sku ILIKE $${cn}
-        OR barcode ILIKE $${cn}
-        OR hs_code ILIKE $${cn}
-        OR import_ref_no ILIKE $${cn}
-        OR gd_number ILIKE $${cn}
-        OR invoice_ref ILIKE $${cn}
-      )`;
-        countParams.push(`%${token}%`);
-        cn++;
-      }
+      const built = buildProductListSearch(filters.search, cn);
+      countSql += built.whereSql;
+      countParams.push(...built.params);
+      cn = built.nextParamIndex;
     }
     if (filters.lowStock) {
       countSql += ' AND stock_quantity <= min_stock_level';

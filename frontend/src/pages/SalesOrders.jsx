@@ -94,7 +94,12 @@ import {
   LineItemPriceStatusBadge,
 } from '../components/order/CartLineItemAtoms';
 import { CostPriceToggleButton, ProfitToggleButton } from '../components/order/CostPriceToggleButton';
-import { formatPartyAddress as formatAddressForDisplay } from '../utils/partyDisplay';
+import {
+  formatPartyAddress as formatAddressForDisplay,
+  getCustomerDisplayName,
+  getProductDisplayName,
+  getPartyDisplayName,
+} from '../utils/partyDisplay';
 import { computeSalesCheckoutPricing } from '../utils/orderPricing';
 import { PriceTypeSelector } from '../components/order/PriceTypeSelector';
 import {
@@ -128,7 +133,7 @@ const safeRender = (value) => {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string' || typeof value === 'number') return value;
   if (typeof value === 'object') {
-    return value.businessName || value.business_name || value.name || value.title || value.fullName || value.companyName || value.displayName || JSON.stringify(value);
+    return getPartyDisplayName(value, JSON.stringify(value));
   }
   return String(value);
 };
@@ -226,7 +231,7 @@ const SalesOrders = ({ tabId }) => {
       const time = String(now.getTime()).slice(-4); // Last 4 digits of timestamp
 
       const customerInitials = customer
-        ? (customer.businessName || customer.business_name || customer.name || customer.displayName || '')
+        ? getCustomerDisplayName(customer, '')
           .split(' ')
           .map((word) => word.charAt(0).toUpperCase())
           .join('')
@@ -449,7 +454,7 @@ const SalesOrders = ({ tabId }) => {
     if (!updateTabTitle || !tabIdToUpdate) return;
 
     const newTitle = selectedCustomer
-      ? `SO - ${selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name || 'Unknown'}`
+      ? `SO - ${getCustomerDisplayName(selectedCustomer, 'Unknown')}`
       : 'SO';
 
     updateTabTitle(tabIdToUpdate, newTitle);
@@ -659,7 +664,7 @@ const SalesOrders = ({ tabId }) => {
       customer: customerId,
       orderNumber: autoGenerateOrderNumber ? generateOrderNumber(customerObj) : prev.orderNumber
     }));
-    setCustomerSearchTerm(customerObj?.businessName || customerObj?.business_name || customerObj?.displayName || customerObj?.name || '');
+    setCustomerSearchTerm(getCustomerDisplayName(customerObj, ''));
 
     // Auto-set price type based on customer business type. Skip when
     // editing an existing order so we don't overwrite the price type
@@ -711,10 +716,7 @@ const SalesOrders = ({ tabId }) => {
     setIsAddingProduct(true);
 
     // Show selected product/variant name in search field
-    const displayName = product.isVariant
-      ? (product.displayName || product.variantName || product.name)
-      : product.name;
-    setProductSearchTerm(displayName);
+    setProductSearchTerm(getProductDisplayName(product, ''));
 
     // Fetch last purchase price (always, for loss alerts)
     // For variants, use the base product ID to get purchase price
@@ -790,8 +792,7 @@ const SalesOrders = ({ tabId }) => {
     setModalSelectedProduct(product);
     setCustomRate(calculatePrice(product, priceType));
     setQuantity(1);
-    const displayName = product.isVariant ? (product.displayName || product.variantName || product.name) : product.name;
-    setModalProductSearchTerm(displayName);
+    setModalProductSearchTerm(getProductDisplayName(product, ''));
   };
 
   const handleProductKeyDown = (e) => {
@@ -820,10 +821,7 @@ const SalesOrders = ({ tabId }) => {
     const isLowStock = inventory.currentStock <= (inventory.reorderPoint || inventory.minStock || 0);
     const isOutOfStock = inventory.currentStock === 0;
 
-    // Get display name - use variant display name if it's a variant
-    const displayName = product.isVariant
-      ? (product.displayName || product.variantName || product.name)
-      : product.name;
+    const displayName = getProductDisplayName(product, 'Product');
 
     // Get pricing based on selected price type
     const pricing = product.pricing || {};
@@ -1001,12 +999,9 @@ const SalesOrders = ({ tabId }) => {
 
     if (existingIndex >= 0) {
       const existingItem = soItemsRef.current[existingIndex];
-      const displayName = product.isVariant
-        ? (product.displayName || product.variantName || product.name)
-        : product.name;
       setSoDuplicateMerge({
         productId,
-        displayName: displayName || 'Product',
+        displayName: getProductDisplayName(product, 'Product'),
         currentQuantity: Number(existingItem.quantity) || 0,
         addQuantity: qty,
         source: 'sharedSearch',
@@ -1682,7 +1677,7 @@ const SalesOrders = ({ tabId }) => {
     // Set the selected customer
     if (order.customer) {
       setSelectedCustomer(order.customer);
-      setCustomerSearchTerm(order.customer.businessName || order.customer.name || '');
+      setCustomerSearchTerm(getCustomerDisplayName(order.customer, ''));
     } else {
       setSelectedCustomer(null);
       setCustomerSearchTerm('');
@@ -2016,7 +2011,7 @@ const SalesOrders = ({ tabId }) => {
           sno: i + 1,
           imageUrl: order.items?.[0]?.product?.imageUrl ?? order.items?.[0]?.productData?.imageUrl ?? null,
           orderNumber: order?.soNumber ?? order?.so_number ?? order?.orderNumber ?? order?.invoiceNumber ?? '—',
-          customerName: order?.customer?.businessName ?? order?.customer?.business_name ?? order?.customer?.displayName ?? order?.customer?.name ?? 'Walk-in',
+          customerName: getCustomerDisplayName(order?.customer, 'Walk-in'),
           date: formatDate(order?.orderDate ?? order?.order_date ?? order?.createdAt ?? order?.created_at),
           orderType: (order?.orderType || '—').toUpperCase(),
           status: (order?.status || '—').toUpperCase(),
@@ -2279,7 +2274,7 @@ const SalesOrders = ({ tabId }) => {
                           <div className="flex flex-col min-w-0 w-full">
                             <span className="font-medium text-sm truncate min-w-0">
                               {product?.isVariant
-                                ? (safeRender(product?.displayName || product?.variantName || product?.name) || 'Unknown Variant')
+                                ? getProductDisplayName(product, 'Unknown Variant')
                                 : (safeRender(product?.name) || 'Unknown Product')}
                               {isLowStock && <span className="text-yellow-600 text-xs ml-2">⚠️ Low Stock</span>}
                               {lastPurchasePrices[item.product?.toString()] !== undefined &&
@@ -3028,7 +3023,7 @@ const SalesOrders = ({ tabId }) => {
                           {order?.so_number ?? order?.soNumber ?? order?.invoiceNumber ?? '—'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {order?.customer?.businessName ?? order?.customer?.business_name ?? order?.customer?.displayName ?? order?.customer?.name ?? 'Walk-in'}
+                          {getCustomerDisplayName(order?.customer, 'Walk-in')}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
                           {order?.order_type ?? order?.orderType ?? '—'}
@@ -3303,7 +3298,7 @@ const SalesOrders = ({ tabId }) => {
               <div className="text-right">
                 <h5 className="font-semibold text-gray-900 mb-2">Customer Details</h5>
                 <div className="space-y-1 text-sm">
-                  <p><span className="font-medium">Customer:</span> {safeRender(selectedOrder.customer?.business_name ?? selectedOrder.customer?.businessName ?? selectedOrder.customer?.name ?? selectedOrder.customer?.displayName) ?? 'Walk-in'}</p>
+                  <p><span className="font-medium">Customer:</span> {getCustomerDisplayName(selectedOrder.customer, 'Walk-in')}</p>
                   {selectedOrder.customer?.email && (
                     <p><span className="font-medium">Email:</span> {safeRender(selectedOrder.customer.email)}</p>
                   )}
@@ -3398,8 +3393,8 @@ const SalesOrders = ({ tabId }) => {
                           <div>
                             <div className="font-medium">
                               {typeof item.product === 'object' && item.product !== null
-                                ? (item.product.name || item.product.displayName || item.product.display_name || item.product.variantName || item.product.variant_name || 'Unknown Product')
-                                : (safeRender(item.product) || item.productData?.name || 'Unknown Product')}
+                                ? getProductDisplayName(item.product, 'Unknown Product')
+                                : (getProductDisplayName(item.productData, safeRender(item.product) || 'Unknown Product'))}
                             </div>
                             {item.product?.description && (
                               <div className="text-gray-500 text-xs">{safeRender(item.product.description)}</div>

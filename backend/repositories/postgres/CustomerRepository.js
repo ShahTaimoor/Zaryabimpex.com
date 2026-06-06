@@ -1,5 +1,6 @@
 const { query, transaction } = require('../../config/postgres');
 const { toSortString } = require('../../utils/sortParam');
+const { buildPartyListSearch } = require('../../utils/searchOrderBy');
 
 function run(q, params, client) {
   return client ? client.query(q, params) : query(q, params);
@@ -21,13 +22,16 @@ class CustomerRepository {
    * Find all customers with filters
    */
   async findAll(filters = {}, options = {}) {
-    const { sql: whereClause, params } = this._buildWhereClause(filters);
+    const { sql: whereClause, params, searchOrderBy } = this._buildWhereClause(filters);
     let sql = `SELECT * FROM customers ${whereClause}`;
     let paramCount = params.length + 1;
-
-    const sortStr = toSortString(options.sort, 'created_at DESC');
-    const [field, direction] = sortStr.split(' ');
-    sql += ` ORDER BY ${field} ${direction || 'ASC'}`;
+    if (searchOrderBy) {
+      sql += ` ORDER BY ${searchOrderBy}`;
+    } else {
+      const sortStr = toSortString(options.sort, 'business_name ASC');
+      const [field, direction] = sortStr.split(' ');
+      sql += ` ORDER BY ${field} ${direction || 'ASC'}`;
+    }
 
     if (options.limit) {
       sql += ` LIMIT $${paramCount++}`;
@@ -75,12 +79,15 @@ class CustomerRepository {
       sql += ` AND customer_tier = $${paramCount++}`;
       params.push(filters.customerTier || filters.customer_tier);
     }
+    let searchOrderBy = null;
     if (filters.search) {
-      sql += ` AND (business_name ILIKE $${paramCount} OR name ILIKE $${paramCount} OR email ILIKE $${paramCount} OR COALESCE(phone,'') ILIKE $${paramCount})`;
-      params.push(`%${filters.search}%`);
-      paramCount++;
+      const built = buildPartyListSearch(filters.search, paramCount);
+      sql += built.whereSql;
+      params.push(...built.params);
+      paramCount = built.nextParamIndex;
+      searchOrderBy = built.orderBySql;
     }
-    return { sql, params };
+    return { sql, params, searchOrderBy };
   }
 
   /**

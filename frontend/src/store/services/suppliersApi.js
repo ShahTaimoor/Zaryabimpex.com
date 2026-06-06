@@ -123,13 +123,6 @@ export const suppliersApi = api.injectEndpoints({
       }),
       providesTags: (_r, _e, id) => [{ type: 'Suppliers', id }],
     }),
-    searchSuppliers: builder.query({
-      query: (searchTerm) => ({
-        url: `suppliers/search/${encodeURIComponent(searchTerm)}`,
-        method: 'get',
-      }),
-      providesTags: [{ type: 'Suppliers', id: 'SEARCH' }],
-    }),
     bulkCreateSuppliers: builder.mutation({
       query: ({ suppliers, autoCreateCities = true }) => ({
         url: 'suppliers/bulk-create',
@@ -158,7 +151,5 @@ export const {
   useGetActiveSuppliersQuery,
   useGetSupplierQuery,
   useLazyGetSupplierQuery,
-  useSearchSuppliersQuery,
-  useLazySearchSuppliersQuery,
   useBulkCreateSuppliersMutation,
 } = suppliersApi;

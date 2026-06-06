@@ -22,18 +22,9 @@ const inventoryRepository = require('../repositories/InventoryRepository');
 const settingsService = require('../services/settingsService');
 const { applyGlobalTaxToSalesOrderItems } = require('../utils/globalTax');
 
-const router = express.Router();
+const { transformCustomerToUppercase, transformProductToUppercase, transformSupplierToUppercase } = require('../utils/displayTransforms');
 
-// Helper functions to transform names to uppercase
-const transformCustomerToUppercase = (customer) => {
-  if (!customer) return customer;
-  if (customer.toObject) customer = customer.toObject();
-  if (customer.name) customer.name = customer.name.toUpperCase();
-  if (customer.businessName) customer.businessName = customer.businessName.toUpperCase();
-  if (customer.firstName) customer.firstName = customer.firstName.toUpperCase();
-  if (customer.lastName) customer.lastName = customer.lastName.toUpperCase();
-  return customer;
-};
+const router = express.Router();
 
 /** UUID or manual_* line id (same rule as POST /sales) */
 const isValidSalesOrderProductId = (val) => {
@@ -42,21 +33,6 @@ const isValidSalesOrderProductId = (val) => {
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
   if (isUuid) return true;
   return s.startsWith('manual_');
-};
-
-const transformProductToUppercase = (product) => {
-  if (!product) return product;
-  if (product.toObject) product = product.toObject();
-  // Handle both products and variants
-  if (product.displayName) {
-    product.displayName = product.displayName.toUpperCase();
-  }
-  if (product.variantName) {
-    product.variantName = product.variantName.toUpperCase();
-  }
-  if (product.name) product.name = product.name.toUpperCase();
-  if (product.description) product.description = product.description.toUpperCase();
-  return product;
 };
 
 // Format customer address for print (handles string, array, object)

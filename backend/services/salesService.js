@@ -105,26 +105,12 @@ const formatCustomerAddress = (customerData) => {
 };
 
 class SalesService {
-  /**
-   * Transform customer names to uppercase
-   * @param {object} customer - Customer to transform
-   * @returns {object} - Transformed customer
-   */
   transformCustomerToUppercase(customer) {
+    const { formatCustomerEntity } = require('../utils/entityTextFormat');
     if (!customer) return customer;
-    if (customer.toObject) customer = customer.toObject();
-
-    // Postgres uses business_name, frontend uses businessName
-    if (customer.business_name && !customer.businessName) {
-      customer.businessName = customer.business_name;
-    }
-
-    if (customer.name) customer.name = customer.name.toUpperCase();
-    if (customer.businessName) customer.businessName = customer.businessName.toUpperCase();
-    if (customer.business_name) customer.business_name = customer.business_name.toUpperCase();
-    if (customer.firstName) customer.firstName = customer.firstName.toUpperCase();
-    if (customer.lastName) customer.lastName = customer.lastName.toUpperCase();
-    return customer;
+    const c = customer.toObject ? customer.toObject() : { ...customer };
+    if (c.business_name && !c.businessName) c.businessName = c.business_name;
+    return formatCustomerEntity(c);
   }
 
   /**
@@ -238,24 +224,11 @@ class SalesService {
     return results;
   }
 
-  /**
-   * Transform product names to uppercase
-   * @param {object} product - Product to transform
-   * @returns {object} - Transformed product
-   */
   transformProductToUppercase(product) {
+    const { formatProductEntity } = require('../utils/entityTextFormat');
     if (!product) return product;
-    if (product.toObject) product = product.toObject();
-    // Handle both products and variants
-    if (product.displayName) {
-      product.displayName = product.displayName.toUpperCase();
-    }
-    if (product.variantName) {
-      product.variantName = product.variantName.toUpperCase();
-    }
-    if (product.name) product.name = product.name.toUpperCase();
-    if (product.description) product.description = product.description.toUpperCase();
-    return product;
+    const p = product.toObject ? product.toObject() : { ...product };
+    return formatProductEntity(p);
   }
 
   /**

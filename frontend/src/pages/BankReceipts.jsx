@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatDate } from '../utils/formatters';
+import { getCustomerDisplayName } from '../utils/partyDisplay';
 import { customersApi } from '../store/services/customersApi';
 import { suppliersApi } from '../store/services/suppliersApi';
 import { useAppDispatch } from '../store/hooks';
@@ -131,7 +132,7 @@ const BankReceipts = () => {
 
   // Fetch banks for dropdown
   const { data: banksData, isLoading: banksLoading, error: banksError } = useGetBanksQuery(
-    { isActive: true },
+    { isActive: true, all: 'true' },
     { skip: false }
   );
   const banks = React.useMemo(() => {
@@ -171,7 +172,7 @@ const BankReceipts = () => {
     const customer = customers?.find(c => (c.id || c._id) === customerId);
     setSelectedCustomer(customer);
     setFormData(prev => ({ ...prev, customer: customerId }));
-    setCustomerSearchTerm(customer?.businessName || customer?.business_name || customer?.displayName || customer?.name || '');
+    setCustomerSearchTerm(getCustomerDisplayName(customer, ''));
   };
 
   const handleCustomerSearch = (searchTerm) => {
@@ -324,7 +325,7 @@ const BankReceipts = () => {
     if (receipt.customer) {
       setPaymentType('customer');
       setSelectedCustomer(receipt.customer);
-      setCustomerSearchTerm(receipt.customer.displayName || receipt.customer.businessName || receipt.customer.name || '');
+      setCustomerSearchTerm(getCustomerDisplayName(receipt.customer, ''));
       setSelectedSupplier(null);
       setSupplierSearchTerm('');
     } else if (receipt.supplier) {
@@ -451,7 +452,7 @@ const BankReceipts = () => {
                             }}
                             className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
                           >
-                            <div className="font-medium text-gray-900">{customer.businessName || customer.business_name || customer.name || 'Unknown'}</div>
+                            <div className="font-medium text-gray-900">{getCustomerDisplayName(customer, 'Unknown')}</div>
                             {(customer.businessName || customer.business_name) && customer.name && (
                               <div className="text-xs text-gray-500">Contact: {customer.name}</div>
                             )}
@@ -858,7 +859,7 @@ const BankReceipts = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {receipt.customer ? (
                             <div>
-                              <div className="font-medium">{(receipt.customer.businessName || receipt.customer.business_name || receipt.customer.name || '').toUpperCase()}</div>
+                              <div className="font-medium">{getCustomerDisplayName(receipt.customer, '—')}</div>
                               <div className="text-gray-500 text-xs">{receipt.customer.email}</div>
                             </div>
                           ) : (
@@ -949,7 +950,7 @@ const BankReceipts = () => {
                             }}
                             className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
                           >
-                            <div className="font-medium text-gray-900">{customer.businessName || customer.business_name || customer.name || 'Unknown'}</div>
+                            <div className="font-medium text-gray-900">{getCustomerDisplayName(customer, 'Unknown')}</div>
                             {(customer.businessName || customer.business_name) && customer.name && (
                               <div className="text-xs text-gray-500">Contact: {customer.name}</div>
                             )}
@@ -1251,7 +1252,7 @@ const BankReceipts = () => {
                 {selectedReceipt.customer && (
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <span className="font-medium text-gray-500">Customer:</span>
-                    <span className="text-gray-900">{selectedReceipt.customer.businessName || selectedReceipt.customer.business_name || selectedReceipt.customer.displayName || selectedReceipt.customer.name}</span>
+                    <span className="text-gray-900">{getCustomerDisplayName(selectedReceipt.customer, '—')}</span>
                   </div>
                 )}
                 {selectedReceipt.supplier && (

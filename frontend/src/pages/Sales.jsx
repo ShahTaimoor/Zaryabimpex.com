@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import BaseModal from '../components/BaseModal';
 import { useLazyGetLastPurchasePriceQuery, useGetLastPurchasePricesMutation } from '../store/services/productsApi';
-import { useGetCustomerQuery, useLazySearchCustomersQuery } from '../store/services/customersApi';
+import { useGetCustomerQuery } from '../store/services/customersApi';
 import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
 import {
   useCreateSaleMutation,
@@ -38,7 +38,6 @@ import {
 } from '../store/services/salesApi';
 import { useCheckApplicableDiscountsMutation } from '../store/services/discountsApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
-import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { DualUnitQuantityInput } from '../components/DualUnitQuantityInput';
 import {
   usePostJournalMutation,
@@ -88,6 +87,7 @@ import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { PERMISSIONS } from '../config/rbacConfig';
 import { getLocalDateString, getCurrentDatePakistan } from '../utils/dateUtils';
 import { formatDate } from '../utils/formatters';
+import { getCustomerDisplayName, getProductDisplayName } from '../utils/partyDisplay';
 import DateFilter from '../components/DateFilter';
 import PaginationControls from '../components/PaginationControls';
 import ExcelExportButton from '../components/ExcelExportButton';
@@ -301,7 +301,7 @@ export const Sales = ({ tabId, editData }) => {
     const time = String(now.getTime()).slice(-4); // Last 4 digits of timestamp
 
     // Format: CUSTOMER-INITIALS-YYYYMMDD-XXXX (displayName may be missing from API; use businessName/name fallback)
-    const nameStr = customer.displayName ?? customer.businessName ?? customer.name ?? 'CUST';
+    const nameStr = getCustomerDisplayName(customer, 'CUST');
     const customerInitials = String(nameStr)
       .split(' ')
       .map(word => word.charAt(0).toUpperCase())
@@ -448,7 +448,7 @@ export const Sales = ({ tabId, editData }) => {
 
   // RTK Query hooks
   const { data: banksData, isLoading: banksLoading } = useGetBanksQuery(
-    { isActive: true },
+    { isActive: true, all: 'true' },
     { staleTime: 5 * 60_000 }
   );
 
@@ -920,8 +920,7 @@ export const Sales = ({ tabId, editData }) => {
     // Update tab title to show customer name
     const activeTab = getActiveTab();
     if (activeTab && customer) {
-      const customerLabel = customer.businessName ?? customer.business_name ?? customer.displayName ?? customer.name ?? 'Customer';
-      updateTabTitle(activeTab.id, `Sales - ${customerLabel}`);
+      updateTabTitle(activeTab.id, `Sales - ${getCustomerDisplayName(customer, 'Customer')}`);
     }
   };
 
@@ -970,13 +969,10 @@ export const Sales = ({ tabId, editData }) => {
     );
 
     if (existingIndex >= 0) {
-      const displayName = product.isVariant
-        ? (product.displayName || product.variantName || product.name)
-        : product.name;
       setDuplicateCartMerge({
         productId,
         pendingItem: item,
-        displayName: displayName || 'Product',
+        displayName: getProductDisplayName(product, 'Product'),
       });
       return;
     }
@@ -1036,10 +1032,7 @@ export const Sales = ({ tabId, editData }) => {
       const availableStock = product.inventory?.currentStock || 0;
 
       if (combinedQuantity > availableStock) {
-        const displayName = product.isVariant
-          ? (product.displayName || product.variantName || product.name)
-          : product.name;
-        toast.warning(`Stock for ${displayName} is insufficient. Adding ${item.quantity} units anyway.`);
+        toast.warning(`Stock for ${getProductDisplayName(product, 'Product')} is insufficient. Adding ${item.quantity} units anyway.`);
       }
 
       const newQty = existingItem.quantity + item.quantity;
@@ -1844,9 +1837,7 @@ export const Sales = ({ tabId, editData }) => {
                                   variant="mobile"
                                 />
                                 <span className="font-medium text-sm truncate">
-                                  {item.product.isVariant
-                                    ? (item.product.displayName || item.product.variantName || item.product.name)
-                                    : item.product.name}
+                                  {getProductDisplayName(item.product, 'Product')}
                                 </span>
                               </div>
                               {item.product.isVariant && (
@@ -1982,9 +1973,7 @@ export const Sales = ({ tabId, editData }) => {
                                     ? (item.product.displayName || item.product.variantName || item.product.name)
                                     : item.product.name}
                                 >
-                                  {item.product.isVariant
-                                    ? (item.product.displayName || item.product.variantName || item.product.name)
-                                    : item.product.name}
+                                  {getProductDisplayName(item.product, 'Product')}
                                 </span>
                                 {isLowStock && <span className="text-yellow-600 text-xs whitespace-nowrap">⚠️ Low Stock</span>}
                                 {/* Warning if sale price is below cost price (only if has permission) */}

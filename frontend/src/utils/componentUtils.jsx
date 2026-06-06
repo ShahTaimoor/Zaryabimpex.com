@@ -6,7 +6,7 @@ export const componentRegistry = {
   '/dashboard': {
     title: 'Dashboard',
     icon: 'LayoutDashboard',
-    allowMultiple: true,
+    allowMultiple: false,
     component: () => import('../pages/Dashboard').then(m => m.default || m.Dashboard)
   },
   '/sales': {
@@ -155,16 +155,6 @@ export const componentRegistry = {
     title: 'Discounts',
     icon: 'Tag',
     component: () => import('../pages/Discounts').then(m => m.default || m.Discounts)
-  },
-  '/sales-performance': {
-    title: 'Sales Performance',
-    icon: 'TrendingUp',
-    component: () => import('../pages/SalesPerformanceReports').then(m => m.default || m.SalesPerformanceReports)
-  },
-  '/inventory-reports': {
-    title: 'Inventory Reports',
-    icon: 'Warehouse',
-    component: () => import('../pages/InventoryReports').then(m => m.default || m.InventoryReports)
   },
   '/cash-payments': {
     title: 'Cash Payments',

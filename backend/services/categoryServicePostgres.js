@@ -1,4 +1,5 @@
 const categoryRepository = require('../repositories/postgres/CategoryRepository');
+const { formatCategoryEntity, normalizeCategoryInput } = require('../utils/entityTextFormat');
 const productRepository = require('../repositories/postgres/ProductRepository');
 
 function toCamel(row) {
@@ -12,7 +13,7 @@ function toCamel(row) {
 }
 
 function mapTree(tree) {
-  return tree.map(node => ({
+  return tree.map(node => formatCategoryEntity({
     ...toCamel(node),
     subcategories: node.subcategories ? mapTree(node.subcategories) : []
   }));
@@ -30,7 +31,7 @@ class CategoryServicePostgres {
     const result = await categoryRepository.findWithPagination(filters, { page, limit });
 
     return {
-      categories: result.categories.map(toCamel),
+      categories: result.categories.map((row) => formatCategoryEntity(toCamel(row))),
       pagination: result.pagination
     };
   }
@@ -45,10 +46,11 @@ class CategoryServicePostgres {
     if (!category) {
       throw new Error('Category not found');
     }
-    return toCamel(category);
+    return formatCategoryEntity(toCamel(category));
   }
 
   async createCategory(categoryData, userId) {
+    categoryData = normalizeCategoryInput(categoryData);
     const nameExists = await categoryRepository.nameExists(categoryData.name);
     if (nameExists) {
       throw new Error('Category name already exists');
@@ -56,12 +58,13 @@ class CategoryServicePostgres {
 
     const category = await categoryRepository.create(categoryData);
     return {
-      category: toCamel(category),
+      category: formatCategoryEntity(toCamel(category)),
       message: 'Category created successfully'
     };
   }
 
   async updateCategory(id, updateData) {
+    updateData = normalizeCategoryInput(updateData);
     if (updateData.name) {
       const nameExists = await categoryRepository.nameExists(updateData.name, id);
       if (nameExists) {
@@ -75,7 +78,7 @@ class CategoryServicePostgres {
     }
 
     return {
-      category: toCamel(category),
+      category: formatCategoryEntity(toCamel(category)),
       message: 'Category updated successfully'
     };
   }

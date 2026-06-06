@@ -16,6 +16,7 @@ router.get('/', auth, chartView, async (req, res) => {
       accountCategory, 
       isActive, 
       includeBalances,
+      includePartyAccounts,
       page = 1,
       limit = 1000,
       search
@@ -39,7 +40,21 @@ router.get('/', auth, chartView, async (req, res) => {
       }
     }
 
-    const accounts = await chartOfAccountsRepository.findAll(filters, { limit: limitNum, offset });
+    let accounts = await chartOfAccountsRepository.findAll(filters, { limit: limitNum, offset });
+
+    if (includePartyAccounts === 'true' || includePartyAccounts === true) {
+      const partyFilters = { partyAccountCodes: true };
+      if (filters.isActive !== undefined) partyFilters.isActive = filters.isActive;
+      if (search) partyFilters.search = search;
+      const partyAccounts = await chartOfAccountsRepository.findAll(partyFilters, { limit: 50000, offset: 0 });
+      const byId = new Map();
+      accounts.forEach((a) => byId.set(a.id, a));
+      partyAccounts.forEach((a) => byId.set(a.id, a));
+      accounts = Array.from(byId.values()).sort((a, b) =>
+        String(a.accountCode || '').localeCompare(String(b.accountCode || ''))
+      );
+    }
+
     const total = await chartOfAccountsRepository.count(filters);
     
     // If includeBalances is true, calculate real-time balances for customer/supplier accounts
@@ -338,7 +353,6 @@ router.post('/sync-party-accounts', auth, chartManage, async (req, res) => {
         // Check if account already exists
         const existing = await chartOfAccountsRepository.findByAccountCode(accountCode);
         if (!existing) {
-          // Create customer account
           await chartOfAccountsRepository.create({
             accountCode: accountCode,
             accountName: accountName,
@@ -354,6 +368,8 @@ router.post('/sync-party-accounts', auth, chartManage, async (req, res) => {
             createdBy: req.user?.id || req.user?._id
           });
           results.customersCreated++;
+        } else if (!existing.allowDirectPosting) {
+          await chartOfAccountsRepository.updateById(existing.id, { allowDirectPosting: true });
         }
       } catch (err) {
         results.errors.push({
@@ -379,7 +395,6 @@ router.post('/sync-party-accounts', auth, chartManage, async (req, res) => {
         // Check if account already exists
         const existing = await chartOfAccountsRepository.findByAccountCode(accountCode);
         if (!existing) {
-          // Create supplier account
           await chartOfAccountsRepository.create({
             accountCode: accountCode,
             accountName: accountName,
@@ -395,6 +410,8 @@ router.post('/sync-party-accounts', auth, chartManage, async (req, res) => {
             createdBy: req.user?.id || req.user?._id
           });
           results.suppliersCreated++;
+        } else if (!existing.allowDirectPosting) {
+          await chartOfAccountsRepository.updateById(existing.id, { allowDirectPosting: true });
         }
       } catch (err) {
         results.errors.push({

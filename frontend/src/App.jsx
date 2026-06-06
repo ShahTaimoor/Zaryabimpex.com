@@ -37,8 +37,6 @@ const BalanceSheetStatement = lazy(() => import('./pages/BalanceSheetStatement')
 const SaleReturns = lazy(() => import('./pages/SaleReturns'));
 const PurchaseReturns = lazy(() => import('./pages/PurchaseReturns'));
 const Discounts = lazy(() => import('./pages/Discounts'));
-const SalesPerformanceReports = lazy(() => import('./pages/SalesPerformanceReports'));
-const InventoryReports = lazy(() => import('./pages/InventoryReports'));
 const CashReceipts = lazy(() => import('./pages/CashReceipts'));
 const CashReceiving = lazy(() => import('./pages/CashReceiving'));
 const CashPayments = lazy(() => import('./pages/CashPayments'));
@@ -129,8 +127,8 @@ function App() {
                       <Route path="/purchase-returns" element={withRouteGuard('/purchase-returns', <Suspense fallback={<LoadingPage />}><PurchaseReturns /></Suspense>)} />
                       <Route path="/purchase-by-supplier" element={<Navigate to="/reports" replace />} />
                       <Route path="/discounts" element={withRouteGuard('/discounts', <Suspense fallback={<LoadingPage />}><Discounts /></Suspense>)} />
-                      <Route path="/sales-performance" element={withRouteGuard('/sales-performance', <Suspense fallback={<LoadingPage />}><SalesPerformanceReports /></Suspense>)} />
-                      <Route path="/inventory-reports" element={withRouteGuard('/inventory-reports', <Suspense fallback={<LoadingPage />}><InventoryReports /></Suspense>)} />
+                      <Route path="/sales-performance" element={<Navigate to="/reports" replace />} />
+                      <Route path="/inventory-reports" element={<Navigate to="/reports" replace />} />
                       <Route path="/cash-receipts" element={withRouteGuard('/cash-receipts', <Suspense fallback={<LoadingPage />}><CashReceipts /></Suspense>)} />
                       <Route path="/cash-receiving" element={withRouteGuard('/cash-receiving', <Suspense fallback={<LoadingPage />}><CashReceiving /></Suspense>)} />
                       <Route path="/cash-payments" element={withRouteGuard('/cash-payments', <Suspense fallback={<LoadingPage />}><CashPayments /></Suspense>)} />

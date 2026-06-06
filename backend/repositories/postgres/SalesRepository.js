@@ -754,29 +754,6 @@ class SalesRepository {
     }));
   }
 
-  /**
-   * Get sales summary for a date range
-   */
-  async getSalesPerformanceSummary(dateFrom, dateTo) {
-    const sql = `
-      SELECT 
-        COALESCE(SUM(total), 0) as "totalRevenue",
-        COUNT(*) as "totalOrders",
-        COUNT(DISTINCT customer_id) as "totalCustomers"
-      FROM sales
-      WHERE created_at BETWEEN $1 AND $2
-        AND status IN ('completed', 'delivered')
-        AND deleted_at IS NULL
-    `;
-    const result = await query(sql, [dateFrom, dateTo]);
-    const row = result.rows[0];
-    return {
-      totalRevenue: parseFloat(row.totalRevenue) || 0,
-      totalOrders: parseInt(row.totalOrders, 10) || 0,
-      totalCustomers: parseInt(row.totalCustomers, 10) || 0,
-      averageOrderValue: row.totalOrders > 0 ? parseFloat(row.totalRevenue) / parseInt(row.totalOrders, 10) : 0
-    };
-  }
 }
 
 module.exports = new SalesRepository();

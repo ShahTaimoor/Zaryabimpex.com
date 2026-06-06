@@ -30,8 +30,6 @@ export const ROUTE_ACCESS = {
   '/sale-returns': { permissionAny: [PERMISSIONS.VIEW_SALE_RETURNS, PERMISSIONS.CREATE_SALE_RETURNS, PERMISSIONS.EDIT_SALE_RETURNS] },
   '/purchase-returns': { permissionAny: [PERMISSIONS.VIEW_PURCHASE_RETURNS, PERMISSIONS.CREATE_PURCHASE_RETURNS, PERMISSIONS.EDIT_PURCHASE_RETURNS] },
   '/discounts': { permission: 'view_discounts' },
-  '/sales-performance': { permission: 'view_sales_performance' },
-  '/inventory-reports': { permission: 'view_inventory_reports' },
   '/cash-receipts': { permissionAny: [PERMISSIONS.VIEW_CASH_RECEIPTS, 'create_cash_receipts', 'edit_cash_receipts'] },
   '/cash-receiving': { permissionAny: ['view_cash_receiving', 'create_cash_receiving', 'edit_cash_receiving'] },
   '/cash-payments': { permissionAny: [PERMISSIONS.VIEW_CASH_PAYMENTS, 'create_cash_payments', 'edit_cash_payments'] },

@@ -2,11 +2,13 @@ const customerRepository = require('../repositories/postgres/CustomerRepository'
 const AccountingService = require('./accountingService');
 const chartOfAccountsRepository = require('../repositories/postgres/ChartOfAccountsRepository');
 const cityRepository = require('../repositories/postgres/CityRepository');
+const { parseListQuery } = require('../utils/listQuery');
+const { formatCustomerEntity, normalizeCustomerInput, toTitleCase } = require('../utils/entityTextFormat');
 
 /** Normalize customer row: add camelCase aliases for businessType, customerTier (frontend expects these) */
 function normalizeCustomer(c) {
   if (!c) return c;
-  return {
+  return formatCustomerEntity({
     ...c,
     id: c.id,
     businessName: c.business_name || c.businessName || '',
@@ -17,8 +19,8 @@ function normalizeCustomer(c) {
     businessType: c.business_type ?? c.businessType ?? 'wholesale',
     customerTier: c.customer_tier ?? c.customerTier ?? 'bronze',
     // Handle city extraction from address if needed
-    city: c.city || (typeof c.address === 'object' ? c.address?.city : '') || ''
-  };
+    city: c.city || (typeof c.address === 'object' ? c.address?.city : '') || '',
+  });
 }
 
 /**
@@ -26,7 +28,7 @@ function normalizeCustomer(c) {
  */
 class CustomerService {
   async resolveOrCreateCityName(cityName, userId) {
-    const normalized = String(cityName || '').trim();
+    const normalized = toTitleCase(String(cityName || '').trim());
     if (!normalized) return '';
     const existingCity = await cityRepository.findByName(normalized);
     if (existingCity) return existingCity.name;
@@ -82,9 +84,10 @@ class CustomerService {
         }
       };
     } else {
+      const { page, limit } = parseListQuery(queryParams);
       result = await customerRepository.findWithPagination(filters, {
-        page: parseInt(queryParams.page) || 1,
-        limit: parseInt(queryParams.limit) || 20,
+        page,
+        limit,
         sort: 'created_at DESC'
       });
     }
@@ -130,7 +133,7 @@ class CustomerService {
   }
 
   async createCustomer(customerData, userId, options = {}) {
-    const data = { ...customerData, createdBy: userId };
+    const data = { ...normalizeCustomerInput(customerData), createdBy: userId };
     if (options.openingBalance != null) data.openingBalance = options.openingBalance;
     const customer = await customerRepository.create(data);
 
@@ -150,7 +153,7 @@ class CustomerService {
           normalBalance: 'debit',
           openingBalance: 0,
           currentBalance: 0,
-          allowDirectPosting: false,
+          allowDirectPosting: true,
           isSystemAccount: false,
           isActive: true,
           description: `Customer Account: ${accountName}`,
@@ -180,7 +183,7 @@ class CustomerService {
   }
 
   async updateCustomer(id, customerData, userId, options = {}) {
-    const data = { ...customerData, updatedBy: userId };
+    const data = { ...normalizeCustomerInput(customerData), updatedBy: userId };
     if (options.openingBalance != null) data.openingBalance = options.openingBalance;
     const customer = await customerRepository.update(id, data);
     if (!customer) throw new Error('Customer not found');

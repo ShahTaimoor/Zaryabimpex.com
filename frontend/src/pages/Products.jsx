@@ -244,8 +244,13 @@ export const Products = () => {
         products: data,
         autoCreateCategories: autoCreateImportCategories
       }).unwrap();
-      if (response.created > 0) {
-        toast.success(`Successfully imported ${response.created} products!`, { id: toastId });
+      const summaryParts = [];
+      if (response.created > 0) summaryParts.push(`${response.created} created`);
+      if (response.updated > 0) summaryParts.push(`${response.updated} updated`);
+      if (response.unchanged > 0) summaryParts.push(`${response.unchanged} unchanged`);
+
+      if (summaryParts.length > 0) {
+        toast.success(`Import complete: ${summaryParts.join(', ')}`, { id: toastId });
         if (response.failed > 0) {
           toast.warning(`${response.failed} products failed to import. Check console for details.`);
           console.warn('Import failures:', response.errors);

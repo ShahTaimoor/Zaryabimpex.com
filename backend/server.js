@@ -108,6 +108,10 @@ app.use(express.urlencoded({ extended: true }));
 // Cookie parsing middleware (for HTTP-only cookies)
 app.use(cookieParser());
 
+// Title Case normalization for all mutating API requests (before route handlers)
+const { normalizeTextRequest } = require('./middleware/normalizeText');
+app.use('/api', normalizeTextRequest);
+
 // Idempotency key middleware - prevents duplicate requests
 // Note: This middleware uses in-memory storage - consider Redis for production scaling
 const { preventDuplicates } = require('./middleware/duplicatePrevention');
@@ -189,8 +193,6 @@ app.use('/api/account-ledger', require('./routes/accountLedger'));
 app.use('/api/journal-vouchers', require('./routes/journalVouchers'));
 app.use('/api/discounts', require('./routes/discounts'));
 app.use('/api/categories', require('./routes/categories'));
-app.use('/api/sales-performance', require('./routes/salesPerformance'));
-app.use('/api/inventory-reports', require('./routes/inventoryReports'));
 app.use('/api/cash-receipts', require('./routes/cashReceipts'));
 app.use('/api/cash-payments', require('./routes/cashPayments'));
 app.use('/api/bank-receipts', require('./routes/bankReceipts'));

@@ -24,8 +24,6 @@ const componentLoader = {
   '/pl-statements': () => import('../pages/PLStatements').then(module => module.PLStatements),
   '/balance-sheet-statement': () => import('../pages/BalanceSheetStatement').then(module => module.BalanceSheetStatement),
   '/discounts': () => import('../pages/Discounts').then(module => module.default),
-  '/sales-performance': () => import('../pages/SalesPerformanceReports').then(module => module.default),
-  '/inventory-reports': () => import('../pages/InventoryReports').then(module => module.default),
   '/cash-payments': () => import('../pages/CashPayments').then(module => module.default),
   '/expenses': () => import('../pages/Expenses').then(module => module.default),
   '/bank-payments': () => import('../pages/BankPayments').then(module => module.default),
@@ -49,7 +47,7 @@ export const componentRegistry = {
   '/dashboard': {
     title: 'Dashboard',
     icon: 'LayoutDashboard',
-    allowMultiple: true
+    allowMultiple: false
   },
   '/sales': {
     title: 'Sales',
@@ -143,14 +141,6 @@ export const componentRegistry = {
   '/discounts': {
     title: 'Discounts',
     icon: 'Tag'
-  },
-  '/sales-performance': {
-    title: 'Sales Performance',
-    icon: 'TrendingUp'
-  },
-  '/inventory-reports': {
-    title: 'Inventory Reports',
-    icon: 'Warehouse'
   },
   '/cash-payments': {
     title: 'Cash Payments',

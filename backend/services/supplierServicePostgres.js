@@ -2,6 +2,8 @@ const supplierRepository = require('../repositories/postgres/SupplierRepository'
 const AccountingService = require('./accountingService');
 const chartOfAccountsRepository = require('../repositories/postgres/ChartOfAccountsRepository');
 const cityRepository = require('../repositories/postgres/CityRepository');
+const { parseListQuery } = require('../utils/listQuery');
+const { formatSupplierEntity, normalizeSupplierInput } = require('../utils/entityTextFormat');
 
 /**
  * Map DB supplier row to API response format (contactPerson, status, businessType, rating)
@@ -14,7 +16,7 @@ function mapSupplierForResponse(supplier) {
   const name = supplier.name || '';
   const displayName = companyName || businessName || name || 'Unknown Supplier';
 
-  return {
+  return formatSupplierEntity({
     ...supplier,
     companyName,
     businessName,
@@ -26,9 +28,8 @@ function mapSupplierForResponse(supplier) {
     status: supplier.status ?? (supplier.is_active ? 'active' : 'inactive'),
     businessType: supplier.businessType ?? supplier.supplier_type ?? 'other',
     rating: supplier.rating != null ? Number(supplier.rating) : 3,
-    // Add extra aliasing for Excel matching
-    contactPersonName: contactPersonValue
-  };
+    contactPersonName: contactPersonValue,
+  });
 }
 
 /**
@@ -67,8 +68,7 @@ class SupplierService {
       filters.search = queryParams.search;
     }
 
-    const page = parseInt(queryParams.page) || 1;
-    const limit = parseInt(queryParams.limit) || 20;
+    const { page, limit } = parseListQuery(queryParams);
 
     const result = await supplierRepository.findWithPagination(filters, {
       page,
@@ -121,7 +121,7 @@ class SupplierService {
    */
   async createSupplier(supplierData, userId) {
     const supplier = await supplierRepository.create({
-      ...supplierData,
+      ...normalizeSupplierInput(supplierData),
       createdBy: userId
     });
 
@@ -141,7 +141,7 @@ class SupplierService {
           normalBalance: 'credit',
           openingBalance: 0,
           currentBalance: 0,
-          allowDirectPosting: false,
+          allowDirectPosting: true,
           isSystemAccount: false,
           isActive: true,
           description: `Supplier Account: ${accountName}`,
@@ -176,7 +176,7 @@ class SupplierService {
    */
   async updateSupplier(id, supplierData, userId) {
     const supplier = await supplierRepository.update(id, {
-      ...supplierData,
+      ...normalizeSupplierInput(supplierData),
       updatedBy: userId
     });
 

@@ -39,7 +39,7 @@ import {
   LineItemBoxInputCell,
 } from '../components/order/CartLineItemAtoms';
 import { useListControls } from '../hooks/useListControls';
-import { formatPartyAddress as formatAddressForDisplay } from '../utils/partyDisplay';
+import { formatPartyAddress as formatAddressForDisplay, getProductDisplayName } from '../utils/partyDisplay';
 import PaginationControls from '../components/PaginationControls';
 import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
@@ -101,20 +101,6 @@ import { buildReceiptLabelProductsFromLineItems } from '../utils/receiptLabelUti
 import { useResponsive } from '../components/ResponsiveContainer';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
-
-// Helper to get product display name (handles object with name/displayName or UUID string)
-const getProductDisplayName = (product) => {
-  if (!product) return 'Unknown Product';
-  if (typeof product === 'object') {
-    const name = product.displayName || product.variantName || product.name || product.company_name || '';
-    return name || 'Product';
-  }
-  // UUID-like string - don't show raw ID
-  if (typeof product === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(product)) {
-    return 'Product';
-  }
-  return product;
-};
 
 function normalizePoLineProductId(item) {
   const raw = item?.productData?._id ?? item?.productData?.id ?? item?.product;
@@ -1303,7 +1289,7 @@ export const PurchaseOrders = ({ tabId }) => {
     const items = (order.items || []).map((item) => {
       const product = item.product || item.productData || {};
       const productName = typeof product === 'object' && product !== null
-        ? (product.name || product.displayName || product.display_name || product.variantName || product.variant_name)
+        ? getProductDisplayName(product, 'Product')
         : getProductDisplayName(product);
       const name = productName || 'Product';
       const qty = Number(item.quantity) || 0;
@@ -3104,7 +3090,7 @@ export const PurchaseOrders = ({ tabId }) => {
                             <div>
                               <div className="font-medium">
                                 {typeof item.product === 'object' && item.product !== null
-                                  ? (item.product.name || item.product.displayName || item.product.display_name || item.product.variantName || item.product.variant_name || 'Unknown Product')
+                                  ? getProductDisplayName(item.product, 'Unknown Product')
                                   : (getProductDisplayName(item.product) || item.productData?.name || 'Unknown Product')}
                               </div>
                               {item.product?.description && typeof item.product === 'object' && (

@@ -58,34 +58,17 @@ class PurchaseInvoiceService {
    * @returns {object} - Transformed supplier
    */
   transformSupplierToUppercase(supplier) {
+    const { formatSupplierEntity } = require('../utils/entityTextFormat');
     if (!supplier) return supplier;
-    if (supplier.toObject) supplier = supplier.toObject();
-    if (supplier.companyName) supplier.companyName = supplier.companyName.toUpperCase();
-    if (supplier.name) supplier.name = supplier.name.toUpperCase();
-    if (supplier.contactPerson && supplier.contactPerson.name) {
-      supplier.contactPerson.name = supplier.contactPerson.name.toUpperCase();
-    }
-    return supplier;
+    const s = supplier.toObject ? supplier.toObject() : { ...supplier };
+    return formatSupplierEntity(s);
   }
 
-  /**
-   * Transform product names to uppercase
-   * @param {object} product - Product to transform
-   * @returns {object} - Transformed product
-   */
   transformProductToUppercase(product) {
+    const { formatProductEntity } = require('../utils/entityTextFormat');
     if (!product) return product;
-    if (product.toObject) product = product.toObject();
-    // Handle both products and variants
-    if (product.displayName) {
-      product.displayName = product.displayName.toUpperCase();
-    }
-    if (product.variantName) {
-      product.variantName = product.variantName.toUpperCase();
-    }
-    if (product.name) product.name = product.name.toUpperCase();
-    if (product.description) product.description = product.description.toUpperCase();
-    return product;
+    const p = product.toObject ? product.toObject() : { ...product };
+    return formatProductEntity(p);
   }
 
   /**

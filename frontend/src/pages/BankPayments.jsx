@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatDate } from '../utils/formatters';
+import { getCustomerDisplayName, getSupplierDisplayName } from '../utils/partyDisplay';
 import ReceiptPaymentPrintModal from '../components/ReceiptPaymentPrintModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -142,7 +143,7 @@ const BankPayments = () => {
 
   // Fetch banks for dropdown
   const { data: banksData, isLoading: banksLoading, error: banksError } = useGetBanksQuery(
-    { isActive: true },
+    { isActive: true, all: 'true' },
     { refetchOnMountOrArgChange: true }
   );
   const banks = React.useMemo(() => {
@@ -237,7 +238,7 @@ const BankPayments = () => {
     setFormData(prev => ({ ...prev, customer: customerId, supplier: '' }));
     setSelectedSupplier(null);
     setSupplierSearchTerm('');
-    setCustomerSearchTerm(customer?.businessName || customer?.business_name || customer?.displayName || customer?.name || '');
+    setCustomerSearchTerm(getCustomerDisplayName(customer, ''));
   };
 
   const handleSupplierSearch = (searchTerm) => {
@@ -382,10 +383,8 @@ const BankPayments = () => {
         e.preventDefault();
         if (customerDropdownIndex >= 0 && customerDropdownIndex < filteredCustomers.length) {
           const customer = filteredCustomers[customerDropdownIndex];
-          const displayName = customer.businessName || customer.business_name || customer.displayName || customer.name ||
-            `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || '';
           handleCustomerSelect(customer.id || customer._id);
-          setCustomerSearchTerm(displayName);
+          setCustomerSearchTerm(getCustomerDisplayName(customer, customer.email || ''));
           setCustomerDropdownIndex(-1);
         }
         break;
@@ -541,7 +540,7 @@ const BankPayments = () => {
     } else if (payment.customer) {
       setPaymentType('customer');
       setSelectedCustomer(payment.customer);
-      setCustomerSearchTerm(payment.customer.businessName || payment.customer.business_name || payment.customer.displayName || payment.customer.name || '');
+      setCustomerSearchTerm(getCustomerDisplayName(payment.customer, ''));
       setSelectedSupplier(null);
       setSupplierSearchTerm('');
     } else if (payment.expenseAccount) {
@@ -779,9 +778,6 @@ const BankPayments = () => {
                         const isPayable = netBalance < 0;
                         const isReceivable = netBalance > 0;
                         const hasBalance = receivables > 0 || advance > 0;
-                        const displayName = customer.displayName || customer.businessName || customer.name ||
-                          `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || 'Unknown';
-
                         return (
                           <div
                             key={customer.id || customer._id}
@@ -791,12 +787,12 @@ const BankPayments = () => {
                             className={`px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0 ${customerDropdownIndex === index ? 'bg-blue-50' : ''
                               }`}
                           >
-                            <div className="font-medium text-gray-900">{displayName}</div>
+                            <div className="font-medium text-gray-900">{getCustomerDisplayName(customer, customer.email || 'Unknown')}</div>
                             <div className="text-xs text-gray-600">
-                              {customer.businessName || customer.business_name || 'No Business Name'}
+                              {getCustomerDisplayName(customer, 'No Business Name')}
                             </div>
-                            {(customer.businessName || customer.business_name) && customer.name && (
-                              <div className="text-xs text-gray-500">Contact: {customer.name}</div>
+                            {customer.name && (
+                              <div className="text-xs text-gray-500">Contact: {getCustomerDisplayName({ name: customer.name }, customer.name)}</div>
                             )}
                             <div className="text-sm text-gray-600 capitalize mt-0.5">
                               {customer.businessType || ''}
@@ -830,13 +826,11 @@ const BankPayments = () => {
                         <User className="h-5 w-5 text-gray-400" />
                         <div className="flex-1">
                           <p className="font-medium">
-                            {selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name ||
-                              `${selectedCustomer.firstName || ''} ${selectedCustomer.lastName || ''}`.trim() ||
-                              selectedCustomer.email || 'Unknown Customer'}
+                            {getCustomerDisplayName(selectedCustomer, selectedCustomer.email || 'Unknown Customer')}
                           </p>
-                          {(selectedCustomer.businessName || selectedCustomer.business_name) && (selectedCustomer.displayName || selectedCustomer.name) && (
+                          {selectedCustomer.name && (
                             <p className="text-xs text-gray-500">
-                              Contact: {selectedCustomer.displayName || selectedCustomer.name}
+                              Contact: {getCustomerDisplayName({ name: selectedCustomer.name }, selectedCustomer.name)}
                             </p>
                           )}
                           <p className="text-sm text-gray-600 capitalize">
@@ -1270,16 +1264,14 @@ const BankPayments = () => {
                           {payment.supplier ? (
                             <div>
                               <div className="font-medium">
-                                {payment.supplier.businessName || payment.supplier.business_name || payment.supplier.companyName || payment.supplier.displayName || payment.supplier.name || 'Unknown Supplier'}
+                                {getSupplierDisplayName(payment.supplier, 'Unknown Supplier')}
                               </div>
                               <div className="text-gray-500 text-xs">Supplier</div>
                             </div>
                           ) : payment.customer ? (
                             <div>
                               <div className="font-medium">
-                                {((payment.customer.businessName || payment.customer.business_name || payment.customer.displayName || payment.customer.name ||
-                                  `${payment.customer.firstName || ''} ${payment.customer.lastName || ''}`.trim() ||
-                                  payment.customer.email || 'Unknown Customer') || '').toUpperCase()}
+                                {getCustomerDisplayName(payment.customer, payment.customer?.email || 'Unknown Customer')}
                               </div>
                               <div className="text-gray-500 text-xs">Customer</div>
                             </div>
@@ -1447,7 +1439,7 @@ const BankPayments = () => {
                             }}
                             className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
                           >
-                            <div className="font-medium text-gray-900">{customer.businessName || customer.business_name || customer.name || 'Unknown'}</div>
+                            <div className="font-medium text-gray-900">{getCustomerDisplayName(customer, 'Unknown')}</div>
                             {(customer.businessName || customer.business_name) && customer.name && (
                               <div className="text-xs text-gray-500">Contact: {customer.name}</div>
                             )}
@@ -1875,7 +1867,7 @@ const BankPayments = () => {
                 {selectedPayment.customer && (
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <span className="font-medium text-gray-500">Customer:</span>
-                    <span className="text-gray-900">{selectedPayment.customer.businessName || selectedPayment.customer.business_name || selectedPayment.customer.displayName || selectedPayment.customer.name}</span>
+                    <span className="text-gray-900">{getCustomerDisplayName(selectedPayment.customer, '—')}</span>
                   </div>
                 )}
                 {selectedPayment.expenseAccount && (

@@ -15,6 +15,7 @@ import BarcodeScanner from '@/components/BarcodeScanner';
 import BaseModal from '@/components/BaseModal';
 import { useSensitiveDataPermissions } from '@/hooks/useSensitiveDataPermissions';
 import { compressImageFileToDataUrl } from '@/utils/imageCompress';
+import { getProductDisplayName } from '@/utils/partyDisplay';
 
 /** Max rows shown in dropdown (server search caps higher; we slice in hook). */
 const PRODUCT_DROPDOWN_LIMIT = 50;
@@ -163,10 +164,7 @@ function ProductSearchComponent({
     setIsAddingProduct(true);
 
     // Show selected product/variant name in search field
-    const displayName = product.isVariant
-      ? (product.displayName || product.variantName || product.name)
-      : product.name;
-    setProductSearchTerm(displayName);
+    setProductSearchTerm(getProductDisplayName(product, ''));
 
     // Fetch last purchase price (always, for loss alerts)
     // For variants, use the base product ID to get purchase price
@@ -250,7 +248,7 @@ function ProductSearchComponent({
       // Check stock if not allowed to oversell
       const currentStock = product.inventory?.currentStock || 0;
       if (!allowOutOfStock && currentStock === 0) {
-        toast.error(`${product.name} is out of stock.`);
+        toast.error(`${getProductDisplayName(product, 'Product')} is out of stock.`);
         return;
       }
 
@@ -274,7 +272,7 @@ function ProductSearchComponent({
       // Check for loss warning (sale < cost)
       const costPrice = getCostPrice(product); // Simplified for auto-add to avoid blocking confirm dialogs
       if (unitPrice < costPrice) {
-        toast.warning(`Auto-added ${product.name} with price BELOW cost!`, { duration: 4000 });
+        toast.warning(`Auto-added ${getProductDisplayName(product, 'Product')} with price BELOW cost!`, { duration: 4000 });
       }
 
       // Add to cart
@@ -288,7 +286,7 @@ function ProductSearchComponent({
         unitPrice: unitPrice
       });
 
-      toast.success(`Scanned: ${product.name}`, {
+      toast.success(`Scanned: ${getProductDisplayName(product, 'Product')}`, {
         icon: '✅',
         duration: 2000,
         position: 'top-center'
@@ -589,10 +587,7 @@ function ProductSearchComponent({
     const isLowStock = inventory.currentStock <= inventory.reorderPoint;
     const isOutOfStock = inventory.currentStock === 0;
 
-    // Get display name - use variant display name if it's a variant
-    const displayName = product.isVariant
-      ? (product.displayName || product.variantName || product.name)
-      : product.name;
+    const displayName = getProductDisplayName(product, 'Product');
 
     // Get pricing based on selected price type
     const pricing = product.pricing || {};
@@ -689,6 +684,7 @@ function ProductSearchComponent({
                       loading={dropdownLoading}
                       emptyMessage={dropdownEmptyMessage}
                       value={productSearchTerm}
+                      serverSideSearch
                     />
                   </div>
                   <button
@@ -1010,6 +1006,7 @@ function ProductSearchComponent({
                       loading={dropdownLoading}
                       emptyMessage={dropdownEmptyMessage}
                       value={productSearchTerm}
+                      serverSideSearch
                     />
                   </div>
                   <button

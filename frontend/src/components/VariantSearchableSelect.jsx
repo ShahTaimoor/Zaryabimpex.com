@@ -1,35 +1,58 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { SearchableDropdown } from './SearchableDropdown';
+import { useDebouncedVariantSearch } from '@/hooks/useDebouncedVariantSearch';
+import { useGetVariantQuery } from '@/store/services/productVariantsApi';
 
 /**
- * Searchable picker for product variants (same UX as ProductSearchableSelect).
- * Pass variants for one base product; initial list capped; typing searches full list.
+ * Server-backed variant picker scoped to a base product.
  */
 export function VariantSearchableSelect({
   label,
-  variants = [],
+  baseProductId,
   value,
   onValueChange,
   placeholder = 'Search variant by name, SKU, barcode…',
   disabled = false,
-  loading = false,
   className = '',
   maxInitialItems = 20,
+  searchLimit = 50,
 }) {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const { data: selectedVariantResponse } = useGetVariantQuery(value, {
+    skip: !value,
+  });
+  const selectedFromApi = useMemo(() => {
+    const data = selectedVariantResponse;
+    return data?.data?.variant ?? data?.variant ?? data?.data ?? data ?? null;
+  }, [selectedVariantResponse]);
+
+  const { variants, isLoading, isFetching } = useDebouncedVariantSearch(searchTerm, {
+    baseProductId,
+    selectedVariant: selectedFromApi,
+    enabled: !!baseProductId,
+    limit: searchLimit,
+  });
+
   const selectedItem = useMemo(() => {
     if (value == null || value === '') return null;
     const v = String(value);
-    return variants.find((x) => String(x._id ?? x.id) === v) ?? null;
-  }, [variants, value]);
+    const fromList = variants.find((x) => String(x._id ?? x.id) === v);
+    if (fromList) return fromList;
+    if (selectedFromApi && String(selectedFromApi._id ?? selectedFromApi.id) === v) {
+      return selectedFromApi;
+    }
+    return null;
+  }, [variants, value, selectedFromApi]);
 
   const displayKey = (x) => {
     if (!x) return '—';
-    const label =
+    const name =
       x.displayName ??
       x.display_name ??
       x.variantName ??
       x.variant_name;
-    if (label) return label;
+    if (name) return name;
     const t = [x.variantType ?? x.variant_type, x.variantValue ?? x.variant_value]
       .filter(Boolean)
       .join(' · ');
@@ -47,13 +70,15 @@ export function VariantSearchableSelect({
     return `Stock: ${stock}${active ? '' : ' · inactive'}`;
   };
 
+  const pickerDisabled = disabled || !baseProductId;
+
   return (
     <div className={className}>
       {label ? (
         <label className="block text-sm font-medium text-foreground mb-2">{label}</label>
       ) : null}
       <SearchableDropdown
-        placeholder={placeholder}
+        placeholder={baseProductId ? placeholder : 'Select a base product first…'}
         items={variants}
         displayKey={displayKey}
         valueKey="_id"
@@ -61,10 +86,12 @@ export function VariantSearchableSelect({
         onSelect={(item) =>
           onValueChange(item ? String(item._id ?? item.id ?? '') : '')
         }
-        loading={loading}
-        disabled={disabled}
+        onSearch={setSearchTerm}
+        loading={isLoading || isFetching}
+        disabled={pickerDisabled}
         maxInitialItems={maxInitialItems}
         rightContentKey={rightContentKey}
+        serverSideSearch
         className="w-full"
         openOnFocus
       />
