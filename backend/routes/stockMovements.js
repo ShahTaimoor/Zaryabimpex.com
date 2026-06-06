@@ -256,17 +256,24 @@ router.post('/adjustment', [
       });
     }
 
-    const currentStock = product.stock_quantity ?? product.inventory?.currentStock ?? 0;
-    const newStock = movementType === 'adjustment_in'
-      ? currentStock + quantity
-      : currentStock - quantity;
+    const inventoryService = require('../services/inventoryService');
+    const refNumber = `ADJ-${Date.now()}`;
 
-    if (newStock < 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Insufficient stock for adjustment'
-      });
-    }
+    const result = await inventoryService.updateStock({
+      productId,
+      type: movementType === 'adjustment_in' ? 'in' : 'out',
+      quantity,
+      cost: unitCost,
+      reason: reason || 'Manual warehouse adjustment',
+      reference: 'Warehouse adjustment',
+      referenceModel: 'StockAdjustment',
+      referenceNumber: refNumber,
+      performedBy: req.user.id || req.user._id,
+      notes,
+    });
+
+    const newStock = Number(result?.newQuantity ?? result?.currentStock ?? 0);
+    const previousStock = Number(result?.previousQuantity ?? 0);
 
     const movement = await stockMovementRepository.create({
       product: productId,
@@ -277,11 +284,11 @@ router.post('/adjustment', [
       quantity,
       unitCost,
       totalValue: quantity * unitCost,
-      previousStock: currentStock,
+      previousStock,
       newStock,
       referenceType: 'adjustment',
       referenceId: productId,
-      referenceNumber: `ADJ-${Date.now()}`,
+      referenceNumber: refNumber,
       location,
       user: req.user.id || req.user._id,
       userId: req.user.id || req.user._id,
@@ -291,11 +298,9 @@ router.post('/adjustment', [
       status: 'completed'
     });
 
-    await productRepository.update(productId, { stockQuantity: newStock });
-
     res.status(201).json({
       success: true,
-      message: 'Stock adjustment created successfully',
+      message: 'Warehouse stock adjustment created successfully',
       data: movement
     });
   } catch (error) {

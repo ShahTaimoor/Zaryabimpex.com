@@ -13,7 +13,9 @@ import {
   Edit,
   BarChart3,
   Settings,
-  Warehouse
+  Warehouse,
+  ArrowRightLeft,
+  Store,
 } from 'lucide-react';
 import {
   useGetInventoryQuery,
@@ -36,6 +38,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTab } from '../contexts/TabContext';
 import { PageHeader } from '../components/layout/PageHeader';
 import { getComponentInfo } from '../utils/componentUtils';
+import { useCompanyInfo } from '../hooks/useCompanyInfo';
+import { isWarehouseInventoryEnabled } from '../utils/warehouseInventory';
 
 const LIMIT_OPTIONS = [50, 500, 1000, 5000];
 const DEFAULT_LIMIT = 50;
@@ -53,6 +57,8 @@ export const Inventory = () => {
   const { isMobile, isTablet } = useResponsive();
   const navigate = useNavigate();
   const { openTab } = useTab();
+  const { companyInfo } = useCompanyInfo();
+  const warehouseMode = isWarehouseInventoryEnabled(companyInfo);
 
   const debouncedSearch = useDebouncedValue(searchTerm, 350);
 
@@ -130,6 +136,20 @@ export const Inventory = () => {
     return options;
   }, [warehouseList, warehouseFilter]);
 
+  const handleOpenStockTransfers = () => {
+    const componentInfo = getComponentInfo('/stock-transfers');
+    if (componentInfo) {
+      openTab({
+        id: `stock_transfers_${Date.now()}`,
+        title: componentInfo.title,
+        path: '/stock-transfers',
+        icon: componentInfo.icon,
+      });
+    } else {
+      navigate('/stock-transfers');
+    }
+  };
+
   const handleOpenWarehousesTab = () => {
     const componentInfo = getComponentInfo('/warehouses');
     if (componentInfo) {
@@ -147,8 +167,61 @@ export const Inventory = () => {
     }
   };
 
+  const warehouseColumn = {
+    key: 'warehouseStock',
+    header: 'Warehouse',
+    accessor: (item) => item.warehouseStock ?? 0,
+    render: (value, item) => (
+      <div className="text-center">
+        <div className="inline-flex items-center gap-1 text-indigo-700 font-semibold">
+          <Warehouse className="h-3.5 w-3.5" />
+          {Number(value ?? 0)}
+        </div>
+        <div className="text-[10px] text-gray-500 truncate max-w-[120px] mx-auto">
+          {item.warehouseName || 'Warehouse'}
+        </div>
+      </div>
+    ),
+  };
+
+  const shopStockColumn = {
+    key: 'currentStock',
+    header: warehouseMode ? 'Shop (Sales)' : 'Current Stock',
+    accessor: (item) => item.currentStock,
+    render: (value, item) => {
+      const isLowStock = value <= item.reorderPoint;
+      const isOutOfStock = value === 0;
+      const pending = Number(item.pendingTransfer ?? 0);
+
+      return (
+        <div className={`text-center ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-yellow-600' : 'text-green-600'}`}>
+          <div className={`inline-flex items-center gap-1 font-semibold ${warehouseMode ? '' : ''}`}>
+            {warehouseMode && <Store className="h-3.5 w-3.5" />}
+            {value}
+          </div>
+          {isLowStock && (
+            <div className="text-xs">Reorder: {item.reorderPoint}</div>
+          )}
+          {warehouseMode && pending > 0 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenStockTransfers();
+              }}
+              className="mt-1 text-[10px] text-amber-700 hover:text-amber-900 underline"
+              title="Transfer warehouse stock to shop"
+            >
+              {pending} to transfer
+            </button>
+          )}
+        </div>
+      );
+    },
+  };
+
   // Table columns configuration
-  const columns = [
+  const columns = useMemo(() => [
     {
       key: 'sno',
       header: 'S.NO',
@@ -170,24 +243,8 @@ export const Inventory = () => {
         </div>
       ),
     },
-    {
-      key: 'currentStock',
-      header: 'Current Stock',
-      accessor: (item) => item.currentStock,
-      render: (value, item) => {
-        const isLowStock = value <= item.reorderPoint;
-        const isOutOfStock = value === 0;
-        
-        return (
-          <div className={`text-center ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-yellow-600' : 'text-green-600'}`}>
-            <div className="font-semibold">{value}</div>
-            {isLowStock && (
-              <div className="text-xs">Reorder: {item.reorderPoint}</div>
-            )}
-          </div>
-        );
-      },
-    },
+    ...(warehouseMode ? [warehouseColumn] : []),
+    shopStockColumn,
     {
       key: 'availableStock',
       header: 'Available',
@@ -254,7 +311,7 @@ export const Inventory = () => {
         <div className="text-sm text-gray-600">{value}</div>
       ),
     },
-  ];
+  ], [warehouseMode, currentPage, itemsPerPage]);
 
   // Mobile card component for responsive table
   const MobileInventoryCard = ({ item, index }) => (
@@ -269,24 +326,46 @@ export const Inventory = () => {
             <p className="text-sm text-gray-500">Category: {typeof item.product?.category === 'object' ? getCategoryDisplayName(item.product?.category, 'N/A') : getCategoryDisplayName(item.product?.category, 'N/A')}</p>
           </div>
         </div>
-        <div className="text-right">
+        <div className="text-right space-y-1">
+          {warehouseMode && (
+            <div className="text-xs text-indigo-600 font-medium">
+              WH: {Number(item.warehouseStock ?? 0)}
+            </div>
+          )}
           <div className={`text-lg font-semibold ${item.currentStock === 0 ? 'text-red-600' : item.currentStock <= item.reorderPoint ? 'text-yellow-600' : 'text-green-600'}`}>
-            {item.currentStock}
+            {warehouseMode ? `Shop: ${item.currentStock}` : item.currentStock}
           </div>
-          <div className="text-xs text-gray-500">in stock</div>
         </div>
       </div>
       
-      <div className="grid grid-cols-2 gap-4 mb-3">
+      <div className={`grid ${warehouseMode ? 'grid-cols-3' : 'grid-cols-2'} gap-3 mb-3`}>
+        {warehouseMode && (
+          <div>
+            <div className="text-xs text-gray-500">WH Avail.</div>
+            <div className="font-medium">{Number(item.warehouseAvailableStock ?? item.warehouseStock ?? 0)}</div>
+          </div>
+        )}
         <div>
-          <div className="text-xs text-gray-500">Available</div>
-          <div className="font-medium">{item.availableStock}</div>
+          <div className="text-xs text-gray-500">{warehouseMode ? 'Shop Avail.' : 'Available'}</div>
+          <div className="font-medium">{item.availableStock ?? item.currentStock}</div>
         </div>
         <div>
           <div className="text-xs text-gray-500">Reserved</div>
-          <div className="font-medium">{item.reservedStock}</div>
+          <div className="font-medium">{item.reservedStock ?? 0}</div>
         </div>
       </div>
+      {warehouseMode && Number(item.pendingTransfer ?? 0) > 0 && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleOpenStockTransfers();
+          }}
+          className="mb-2 text-xs text-amber-700 font-medium"
+        >
+          {item.pendingTransfer} in warehouse — transfer to shop
+        </button>
+      )}
       
       <div className="flex items-center justify-between mb-2">
         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -356,9 +435,22 @@ export const Inventory = () => {
       {/* Header */}
       <PageHeader
         title="Inventory Management"
-        subtitle="Track and manage product stock levels"
+        subtitle={warehouseMode
+          ? 'Warehouse bulk stock and shop sellable stock (sales use shop only)'
+          : 'Track product stock levels and availability'}
         actions={
           <>
+            {warehouseMode && (
+              <Button
+                onClick={handleOpenStockTransfers}
+                variant="outline"
+                size="default"
+                className="flex items-center justify-center gap-2"
+              >
+                <ArrowRightLeft className="h-4 w-4" />
+                Stock Transfers
+              </Button>
+            )}
             {!lowStockFilter && (
               <Button
                 onClick={() => setShowAdjustmentModal(true)}

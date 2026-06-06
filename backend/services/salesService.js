@@ -739,6 +739,7 @@ class SalesService {
             quantity: item.quantity,
             reason: 'Sales Invoice Creation',
             reference: 'Sales Invoice',
+            referenceModel: 'Sale',
             performedBy: user._id,
             notes: 'Stock reduced due to sales invoice creation'
           }, { client, skipAccountingEntry: true });
@@ -1012,7 +1013,8 @@ class SalesService {
                 type: 'in',
                 quantity: item.quantity || 0,
                 reason: 'Sale cancelled',
-                reference: 'Sales',
+                reference: 'Sales Invoice',
+                referenceModel: 'Sale',
                 referenceId: order.id,
                 performedBy: user.id || user._id?.toString(),
                 notes: 'Stock restored due to sale cancellation'

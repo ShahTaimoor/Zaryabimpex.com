@@ -22,6 +22,7 @@ import {
   TrendingUp,
   Receipt,
   ArrowUpDown,
+  ArrowRightLeft,
   ArrowDown,
   ArrowUp,
   ArrowRight,
@@ -177,6 +178,7 @@ export const navigation = withRouteAccess([
       { name: 'Inventory Alerts', href: '/inventory-alerts', icon: AlertTriangle, permission: 'view_inventory', allowMultiple: true },
       { name: 'Warehouses', href: '/warehouses', icon: Warehouse, permission: 'view_warehouses' },
       { name: 'Stock Movements', href: '/stock-movements', icon: ArrowUpDown, permission: 'view_stock_movements' },
+      { name: 'Stock Transfers', href: '/stock-transfers', icon: ArrowRightLeft, permission: 'manage_inventory', sidebarDefaultHidden: true },
       { name: 'Stock Ledger', href: '/stock-ledger', icon: FileText, permission: 'view_inventory_levels' },
     ]
   },
@@ -266,6 +268,9 @@ export function loadSidebarConfig() {
     if (migrated['Dashboard'] === undefined) {
       migrated['Dashboard'] = false;
     }
+    if (migrated['Stock Transfers'] === undefined) {
+      migrated['Stock Transfers'] = false;
+    }
     delete migrated['Current Market Prices'];
     if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
       localStorage.setItem('sidebarConfig', JSON.stringify(migrated));
@@ -284,7 +289,8 @@ export function loadSidebarConfig() {
       'Warehouses': false,
       'Stock Movements': false,
       'Backdate Report': false,
-      'Current Purchase Market Prices': false
+      'Current Purchase Market Prices': false,
+      'Stock Transfers': false,
     };
   }
 }

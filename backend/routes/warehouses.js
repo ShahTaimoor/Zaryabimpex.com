@@ -3,6 +3,7 @@ const { body, param, query, validationResult } = require('express-validator');
 const { auth, requirePermission } = require('../middleware/auth');
 const { sanitizeRequest } = require('../middleware/validation');
 const warehouseService = require('../services/warehouseService');
+const { requireWarehouseInventoryEnabled } = require('../utils/warehouseInventory');
 
 const router = express.Router();
 
@@ -337,6 +338,32 @@ router.delete(
         message: 'Server error deleting warehouse',
         error: process.env.NODE_ENV === 'development' ? error.message : undefined,
       });
+    }
+  }
+);
+
+router.get(
+  '/:id/stock',
+  [
+    auth,
+    requireWarehouseInventoryEnabled,
+    requirePermission('view_inventory'),
+    ...validateWarehouseId,
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 500 }),
+    query('search').optional().isString().trim(),
+    handleValidation,
+  ],
+  async (req, res, next) => {
+    try {
+      const warehouseStockService = require('../services/warehouseStockService');
+      const result = await warehouseStockService.getWarehouseStock(req.params.id, req.query);
+      res.json({ success: true, ...result });
+    } catch (error) {
+      if (error.message === 'Warehouse not found') {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      next(error);
     }
   }
 );

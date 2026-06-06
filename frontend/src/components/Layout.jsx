@@ -22,6 +22,7 @@ import {
   TrendingUp,
   Receipt,
   ArrowUpDown,
+  ArrowRightLeft,
   ArrowRight,
   RefreshCw,
   Search,
@@ -132,6 +133,7 @@ export const navigation = [
       { name: 'Inventory', href: '/inventory', icon: Warehouse, permission: PERMISSIONS.VIEW_INVENTORY },
       { name: 'Warehouses', href: '/warehouses', icon: Warehouse, permission: PERMISSIONS.VIEW_WAREHOUSES },
       { name: 'Stock Movements', href: '/stock-movements', icon: ArrowUpDown, permission: 'view_stock_movements' },
+      { name: 'Stock Transfers', href: '/stock-transfers', icon: ArrowRightLeft, permission: PERMISSIONS.MANAGE_INVENTORY },
       { name: 'Stock Ledger', href: '/stock-ledger', icon: FileText, permission: 'view_inventory_levels' },
     ]
   },

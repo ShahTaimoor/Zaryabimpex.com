@@ -48,6 +48,7 @@ const BankPayments = lazy(() => import('./pages/BankPayments'));
 const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
 const Settings2 = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings2 })));
 const StockMovements = lazy(() => import('./pages/StockMovements').then(m => ({ default: m.StockMovements })));
+const StockTransfers = lazy(() => import('./pages/StockTransfers'));
 const StockLedger = lazy(() => import('./pages/StockLedger'));
 const ChartOfAccounts = lazy(() => import('./pages/ChartOfAccounts'));
 const AccountLedgerSummary = lazy(() => import('./pages/AccountLedgerSummary'));
@@ -119,6 +120,7 @@ function App() {
                       <Route path="/anomaly-detection" element={withRouteGuard('/anomaly-detection', <Suspense fallback={<LoadingPage />}><AnomalyDetection /></Suspense>)} />
                       <Route path="/warehouses" element={withRouteGuard('/warehouses', <Suspense fallback={<LoadingPage />}><Warehouses /></Suspense>)} />
                       <Route path="/stock-movements" element={withRouteGuard('/stock-movements', <Suspense fallback={<LoadingPage />}><StockMovements /></Suspense>)} />
+                      <Route path="/stock-transfers" element={withRouteGuard('/stock-transfers', <Suspense fallback={<LoadingPage />}><StockTransfers /></Suspense>)} />
                       <Route path="/stock-ledger" element={withRouteGuard('/stock-ledger', <Suspense fallback={<LoadingPage />}><StockLedger /></Suspense>)} />
 
                       <Route path="/pl-statements" element={withRouteGuard('/pl-statements', <Suspense fallback={<LoadingPage />}><PLStatements /></Suspense>)} />

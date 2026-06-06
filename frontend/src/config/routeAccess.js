@@ -24,6 +24,7 @@ export const ROUTE_ACCESS = {
   '/anomaly-detection': { permission: 'view_anomaly_detection' },
   '/warehouses': { permission: PERMISSIONS.VIEW_WAREHOUSES },
   '/stock-movements': { permission: 'view_stock_movements' },
+  '/stock-transfers': { permission: PERMISSIONS.MANAGE_INVENTORY },
   '/stock-ledger': { permission: 'view_inventory_levels' },
   '/pl-statements': { permission: 'view_pl_statements' },
   '/balance-sheet-statement': { permission: 'view_balance_sheets' },

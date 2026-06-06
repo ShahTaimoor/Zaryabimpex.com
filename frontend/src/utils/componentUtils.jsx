@@ -88,6 +88,11 @@ export const componentRegistry = {
     icon: 'ArrowUpDown',
     component: () => import('../pages/StockMovements').then(m => m.default || m.StockMovements)
   },
+  '/stock-transfers': {
+    title: 'Stock Transfers',
+    icon: 'ArrowRightLeft',
+    component: () => import('../pages/StockTransfers').then(m => m.default)
+  },
   '/stock-ledger': {
     title: 'Stock Ledger',
     icon: 'FileText',

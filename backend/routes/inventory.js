@@ -8,6 +8,10 @@ const productRepository = require('../repositories/ProductRepository');
 const productService = require('../services/productServicePostgres');
 const { parseListQuery, buildPaginationMeta } = require('../utils/listQuery');
 const stockAdjustmentRepository = require('../repositories/StockAdjustmentRepository');
+const warehouseRepository = require('../repositories/WarehouseRepository');
+const locationStockService = require('../services/locationStockService');
+const settingsService = require('../services/settingsService');
+const { isWarehouseInventoryEnabled } = require('../utils/warehouseInventory');
 
 const { transformCustomerToUppercase, transformProductToUppercase, transformSupplierToUppercase } = require('../utils/displayTransforms');
 
@@ -88,10 +92,87 @@ router.get('/', [
       if (pid) inventoryByProduct.set(pid, invRow);
     }
 
+    const companySettings = await settingsService.getCompanySettings();
+    const warehouseInventoryEnabled = isWarehouseInventoryEnabled(companySettings);
+
+    let resolvedWarehouseId = null;
+    let warehouseStockCtx = { stockByProduct: new Map(), warehouseName: 'Warehouse', warehouseCode: '' };
+    if (warehouseInventoryEnabled) {
+      if (warehouse) {
+        const whName = String(warehouse).trim().toLowerCase();
+        const whList = await warehouseRepository.findAll({ isActive: true }, { limit: 200 });
+        const match = (whList || []).find(
+          (w) =>
+            String(w.name || '').toLowerCase() === whName
+            || String(w.code || '').toLowerCase() === whName
+            || String(w.name || '').toLowerCase().includes(whName)
+        );
+        resolvedWarehouseId = match?.id || null;
+      }
+
+      if (productIds.length > 0) {
+        try {
+          warehouseStockCtx = await locationStockService.getWarehouseStockForProducts(
+            resolvedWarehouseId,
+            productIds
+          );
+        } catch (_) {
+          /* location tables optional during migration */
+        }
+      }
+    }
+
     let combinedResults = pageProducts.map((product) => {
       const pid = (product.id || product._id).toString();
       const invRow = inventoryByProduct.get(pid);
       const transformedProduct = transformProductToUppercase(product);
+      const shopCur = Number(product.inventory?.currentStock ?? 0);
+      const shopReserved = Number(product.inventory?.reservedStock ?? 0);
+      const shopAvailable = Number(
+        product.inventory?.availableStock ?? Math.max(0, shopCur - shopReserved)
+      );
+      const legacyCur = Number(
+        invRow?.current_stock ?? invRow?.currentStock ?? shopCur
+      );
+      const legacyReserved = Number(
+        invRow?.reserved_stock ?? invRow?.reservedStock ?? shopReserved
+      );
+      const legacyAvailable = Number(
+        invRow?.available_stock ?? invRow?.availableStock ?? Math.max(0, legacyCur - legacyReserved)
+      );
+
+      const whRow = warehouseStockCtx.stockByProduct.get(pid);
+      const warehouseStock = Number(whRow?.quantity ?? 0);
+      const warehouseReserved = Number(whRow?.reserved_quantity ?? 0);
+      const warehouseAvailable = Math.max(0, warehouseStock - warehouseReserved);
+
+      const base = warehouseInventoryEnabled
+        ? {
+          product: transformedProduct,
+          currentStock: shopCur,
+          availableStock: shopAvailable,
+          reservedStock: shopReserved,
+          stockSource: product.inventory?.stockSource || 'shop',
+          warehouseStock,
+          warehouseAvailableStock: warehouseAvailable,
+          warehouseReservedStock: warehouseReserved,
+          warehouseName: warehouseStockCtx.warehouseName,
+          warehouseCode: warehouseStockCtx.warehouseCode,
+          reorderPoint: product.inventory?.reorderPoint ?? product.inventory?.minStock ?? 0,
+          reorderQuantity: product.inventory?.reorderQuantity ?? 0,
+          pendingTransfer: Math.max(0, warehouseAvailable - shopAvailable),
+          warehouseInventoryEnabled: true,
+        }
+        : {
+          product: transformedProduct,
+          currentStock: legacyCur,
+          availableStock: legacyAvailable,
+          reservedStock: legacyReserved,
+          reorderPoint: product.inventory?.reorderPoint ?? product.inventory?.minStock ?? 0,
+          reorderQuantity: product.inventory?.reorderQuantity ?? 0,
+          warehouseInventoryEnabled: false,
+        };
+
       if (invRow) {
         const location =
           (typeof invRow.location === 'string'
@@ -100,11 +181,10 @@ router.get('/', [
               : {}
             : invRow.location) || {};
         return {
+          ...base,
           _id: invRow.id,
           id: invRow.id,
-          product: transformedProduct,
-          currentStock: invRow.current_stock ?? invRow.currentStock ?? 0,
-          reorderPoint: invRow.reorder_point ?? invRow.reorderPoint ?? 0,
+          reorderPoint: invRow.reorder_point ?? invRow.reorderPoint ?? base.reorderPoint,
           reorderQuantity: invRow.reorder_quantity ?? invRow.reorderQuantity ?? 0,
           status: invRow.status || 'active',
           movements:
@@ -113,20 +193,20 @@ router.get('/', [
                 ? JSON.parse(invRow.movements)
                 : []
               : invRow.movements) || [],
-          location,
+          location: {
+            ...location,
+            warehouse: warehouseStockCtx.warehouseName || location.warehouse || 'Main Warehouse',
+          },
           createdAt: invRow.created_at ?? invRow.createdAt,
           updatedAt: invRow.updated_at ?? invRow.updatedAt,
         };
       }
       return {
+        ...base,
         _id: `temp_${pid}`,
-        product: transformedProduct,
-        currentStock: product.inventory?.currentStock ?? 0,
-        reorderPoint: product.inventory?.reorderPoint ?? product.inventory?.minStock ?? 0,
-        reorderQuantity: product.inventory?.reorderQuantity ?? 0,
         status: 'active',
         movements: [],
-        location: { warehouse: 'Main Warehouse' },
+        location: { warehouse: warehouseStockCtx.warehouseName || 'Main Warehouse' },
         createdAt: product.createdAt ?? product.created_at,
         updatedAt: product.updatedAt ?? product.updated_at,
       };
@@ -296,9 +376,9 @@ router.post('/update-stock', [
       type,
       quantity,
       reason,
-      reference,
+      reference: reference || 'Admin stock entry',
       referenceId,
-      referenceModel,
+      referenceModel: referenceModel || 'StockAdjustment',
       cost,
       performedBy: req.user.id,
       notes,

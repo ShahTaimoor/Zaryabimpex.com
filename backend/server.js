@@ -206,6 +206,8 @@ app.use('/api/backdate-report', require('./routes/backdateReport'));
 app.use('/api/stock-movements', require('./routes/stockMovements'));
 app.use('/api/stock-ledger', require('./routes/stockLedger'));
 app.use('/api/warehouses', require('./routes/warehouses'));
+app.use('/api/shops', require('./routes/shops'));
+app.use('/api/stock-transfers', require('./routes/stockTransfers'));
 app.use('/api/employees', require('./routes/employees'));
 app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/tills', require('./routes/tills'));

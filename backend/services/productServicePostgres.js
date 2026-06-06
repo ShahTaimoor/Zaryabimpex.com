@@ -2,6 +2,8 @@ const { query, transaction } = require('../config/postgres');
 const productRepository = require('../repositories/postgres/ProductRepository');
 const categoryRepository = require('../repositories/postgres/CategoryRepository');
 const inventoryRepository = require('../repositories/postgres/InventoryRepository');
+const locationStockService = require('./locationStockService');
+const { isWarehouseInventoryEnabled } = require('../utils/warehouseInventory');
 const investorRepository = require('../repositories/postgres/InvestorRepository');
 const AccountingService = require('./accountingService');
 const settingsService = require('./settingsService');
@@ -219,22 +221,33 @@ class ProductServicePostgres {
 
     let products = result.products.map(p => toApiProduct(p, categoryMap));
 
-    // Use inventory table as source of truth for stock (POS and returns update inventory, not products.stock_quantity)
     const productIds = products.map(p => p.id).filter(Boolean);
     if (productIds.length > 0) {
+      const companySettings = await settingsService.getCompanySettings();
+      const warehouseInventoryEnabled = isWarehouseInventoryEnabled(companySettings);
+      let shopStockMap = new Map();
+      if (warehouseInventoryEnabled) {
+        try {
+          const { stockByProduct } = await locationStockService.getShopStockForProducts(null, productIds);
+          shopStockMap = stockByProduct;
+        } catch (_) {
+          /* fall back to legacy inventory */
+        }
+      }
       const inventoryRows = await inventoryRepository.findByProductIds(productIds);
-      const stockByProduct = new Map();
+      const legacyStockByProduct = new Map();
       (inventoryRows || []).forEach(inv => {
         const pid = inv.product_id || inv.productId;
-        if (pid) stockByProduct.set(String(pid), inv);
+        if (pid) legacyStockByProduct.set(String(pid), inv);
       });
       products = products.map(p => {
-        const inv = stockByProduct.get(String(p.id));
-        if (inv) {
-          const cur = Number(inv.current_stock ?? inv.currentStock ?? 0);
-          const reserved = Number(inv.reserved_stock ?? inv.reservedStock ?? 0);
-          const available = Number(inv.available_stock ?? inv.availableStock ?? cur - reserved);
-          const reorder = Number(inv.reorder_point ?? inv.reorderPoint ?? p.inventory?.reorderPoint ?? 0);
+        const shopRow = warehouseInventoryEnabled ? shopStockMap.get(String(p.id)) : null;
+        const inv = legacyStockByProduct.get(String(p.id));
+        const reorder = Number(inv?.reorder_point ?? inv?.reorderPoint ?? p.inventory?.reorderPoint ?? 0);
+        if (shopRow) {
+          const cur = Number(shopRow.quantity ?? 0);
+          const reserved = Number(shopRow.reserved_quantity ?? 0);
+          const available = Math.max(0, cur - reserved);
           return {
             ...p,
             inventory: {
@@ -243,8 +256,25 @@ class ProductServicePostgres {
               availableStock: available,
               reservedStock: reserved,
               reorderPoint: reorder,
-              minStock: reorder
-            }
+              minStock: reorder,
+              stockSource: 'shop',
+            },
+          };
+        }
+        if (inv) {
+          const cur = Number(inv.current_stock ?? inv.currentStock ?? 0);
+          const reserved = Number(inv.reserved_stock ?? inv.reservedStock ?? 0);
+          const available = Number(inv.available_stock ?? inv.availableStock ?? cur - reserved);
+          return {
+            ...p,
+            inventory: {
+              ...p.inventory,
+              currentStock: cur,
+              availableStock: available,
+              reservedStock: reserved,
+              reorderPoint: reorder,
+              minStock: reorder,
+            },
           };
         }
         return p;
@@ -289,24 +319,60 @@ class ProductServicePostgres {
     const categoryMap =
       row.category_id && isValidUuid(row.category_id) ? await getCategoryMap([row.category_id]) : null;
     let product = toApiProduct(row, categoryMap);
-    // Use inventory table as source of truth for stock (sale returns update inventory.current_stock)
     const inv = await inventoryRepository.findOne({ productId: id, product: id });
-    if (inv) {
-      const cur = Number(inv.current_stock ?? inv.currentStock ?? 0);
-      const reserved = Number(inv.reserved_stock ?? inv.reservedStock ?? 0);
-      const available = Number(inv.available_stock ?? inv.availableStock ?? cur - reserved);
-      const reorder = Number(inv.reorder_point ?? inv.reorderPoint ?? product.inventory?.reorderPoint ?? 0);
-      product = {
-        ...product,
-        inventory: {
-          ...product.inventory,
-          currentStock: cur,
-          availableStock: available,
-          reservedStock: reserved,
-          reorderPoint: reorder,
-          minStock: reorder
-        }
-      };
+    const reorder = Number(inv?.reorder_point ?? inv?.reorderPoint ?? product.inventory?.reorderPoint ?? 0);
+    const companySettings = await settingsService.getCompanySettings();
+    const warehouseInventoryEnabled = isWarehouseInventoryEnabled(companySettings);
+    try {
+      const shopRow = warehouseInventoryEnabled
+        ? (await locationStockService.getShopStockForProducts(null, [id])).stockByProduct.get(String(id))
+        : null;
+      if (shopRow) {
+        const cur = Number(shopRow.quantity ?? 0);
+        const reserved = Number(shopRow.reserved_quantity ?? 0);
+        product = {
+          ...product,
+          inventory: {
+            ...product.inventory,
+            currentStock: cur,
+            availableStock: Math.max(0, cur - reserved),
+            reservedStock: reserved,
+            reorderPoint: reorder,
+            minStock: reorder,
+            stockSource: 'shop',
+          },
+        };
+      } else if (inv) {
+        const cur = Number(inv.current_stock ?? inv.currentStock ?? 0);
+        const reserved = Number(inv.reserved_stock ?? inv.reservedStock ?? 0);
+        product = {
+          ...product,
+          inventory: {
+            ...product.inventory,
+            currentStock: cur,
+            availableStock: Number(inv.available_stock ?? inv.availableStock ?? cur - reserved),
+            reservedStock: reserved,
+            reorderPoint: reorder,
+            minStock: reorder,
+          },
+        };
+      }
+    } catch (_) {
+      if (inv) {
+        const cur = Number(inv.current_stock ?? inv.currentStock ?? 0);
+        const reserved = Number(inv.reserved_stock ?? inv.reservedStock ?? 0);
+        product = {
+          ...product,
+          inventory: {
+            ...product.inventory,
+            currentStock: cur,
+            availableStock: Number(inv.available_stock ?? inv.availableStock ?? cur - reserved),
+            reservedStock: reserved,
+            reorderPoint: reorder,
+            minStock: reorder,
+          },
+        };
+      }
     }
     const invMap = await productRepository.findInvestorsByProductIds([id]);
     const withInvestors = attachInvestorsToApiProduct(product, invMap.get(String(id)) || []);

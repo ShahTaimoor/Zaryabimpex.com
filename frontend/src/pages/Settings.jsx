@@ -104,6 +104,7 @@ export const Settings2 = () => {
   const sidebarDefaultHiddenItems = useMemo(() => new Set([
     'Import Purchase',
     'Current Purchase Market Prices',
+    'Stock Transfers',
   ]), []);
 
   const isSidebarItemEnabled = (itemName) => {
@@ -658,6 +659,7 @@ export const Settings2 = () => {
         { key: 'inventory', name: 'Inventory', view: 'view_inventory', create: 'create_inventory', edit: 'edit_inventory', delete: 'delete_inventory' },
         { key: 'warehouses', name: 'Warehouses', view: 'view_warehouses', create: 'create_warehouses', edit: 'edit_warehouses', delete: 'delete_warehouses' },
         { key: 'stock-movements', name: 'Stock Movements', view: 'view_stock_movements' },
+        { key: 'stock-transfers', name: 'Stock Transfers', view: 'manage_inventory' },
         { key: 'stock-ledger', name: 'Stock Ledger', view: 'view_inventory_levels' },
         { key: 'inventory-alerts', name: 'Inventory Alerts', view: 'view_low_stock_alerts' }
       ]
@@ -1810,6 +1812,7 @@ export const Settings2 = () => {
   });
   const [useMarketPurchasePrices, setUseMarketPurchasePrices] = useState(false);
   const [enableImportPurchaseLandedCost, setEnableImportPurchaseLandedCost] = useState(false);
+  const [warehouseInventoryEnabled, setWarehouseInventoryEnabled] = useState(false);
 
   // Product Visibility Settings
   const [showProductSetting_reorderPoint, setShowProductSetting_reorderPoint] = useState(() => localStorage.getItem('showProductSetting_reorderPoint') === 'true');
@@ -1876,6 +1879,11 @@ export const Settings2 = () => {
     setEnableImportPurchaseLandedCost(enabled);
   }, [settings?.orderSettings?.enableImportPurchaseLandedCost]);
 
+  useEffect(() => {
+    const enabled = settings?.orderSettings?.warehouseInventoryEnabled === true;
+    setWarehouseInventoryEnabled(enabled);
+  }, [settings?.orderSettings?.warehouseInventoryEnabled]);
+
   const syncMarketPricesSidebarVisibility = (enabled) => {
     const savedSidebarRaw = localStorage.getItem('sidebarConfig');
     let savedSidebar = {};
@@ -1933,6 +1941,46 @@ export const Settings2 = () => {
     } catch (error) {
       setEnableImportPurchaseLandedCost(previousChecked);
       handleApiError(error, 'Update Import Purchase Landed Cost Setting');
+    }
+  };
+
+  const syncWarehouseInventorySidebarVisibility = (enabled) => {
+    const savedSidebarRaw = localStorage.getItem('sidebarConfig');
+    let savedSidebar = {};
+    if (savedSidebarRaw) {
+      try {
+        savedSidebar = JSON.parse(savedSidebarRaw) || {};
+      } catch (_) {
+        savedSidebar = {};
+      }
+    }
+    const nextSidebar = {
+      ...savedSidebar,
+      'Stock Transfers': !!enabled,
+    };
+    localStorage.setItem('sidebarConfig', JSON.stringify(nextSidebar));
+    setSidebarConfig(nextSidebar);
+    window.dispatchEvent(new Event('sidebarConfigChanged'));
+  };
+
+  const handleWarehouseInventoryToggle = async (checked) => {
+    const nextChecked = !!checked;
+    const previousChecked = warehouseInventoryEnabled;
+    setWarehouseInventoryEnabled(nextChecked);
+    syncWarehouseInventorySidebarVisibility(nextChecked);
+    try {
+      await updateCompanySettings({
+        orderSettings: {
+          ...(settings?.orderSettings || {}),
+          warehouseInventoryEnabled: nextChecked,
+        },
+      }).unwrap();
+      toast.success(`Warehouse inventory ${nextChecked ? 'enabled' : 'disabled'}.`);
+      refetchSettings();
+    } catch (error) {
+      setWarehouseInventoryEnabled(previousChecked);
+      syncWarehouseInventorySidebarVisibility(previousChecked);
+      handleApiError(error, 'Update Warehouse Inventory Setting');
     }
   };
 
@@ -3237,6 +3285,19 @@ export const Settings2 = () => {
                     <Label htmlFor="enableImportPurchaseLandedCost" className="flex flex-col cursor-pointer group-hover:text-blue-700">
                       <span className="text-sm font-semibold">Enable Import Purchase Duties & Landed Cost</span>
                       <span className="text-[10px] text-gray-400">When off (default), Import Purchase works like old purchase flow</span>
+                    </Label>
+                  </div>
+
+                  <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 group">
+                    <Checkbox
+                      id="warehouseInventoryEnabled"
+                      className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                      checked={warehouseInventoryEnabled}
+                      onCheckedChange={(checked) => handleWarehouseInventoryToggle(!!checked)}
+                    />
+                    <Label htmlFor="warehouseInventoryEnabled" className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                      <span className="text-sm font-semibold">Enable Warehouse Inventory</span>
+                      <span className="text-[10px] text-gray-400">When on: purchases go to warehouse, sales use shop stock, and stock transfers move warehouse → shop. Off by default.</span>
                     </Label>
                   </div>
                 </div>

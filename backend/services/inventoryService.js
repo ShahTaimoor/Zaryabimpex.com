@@ -4,6 +4,9 @@ const productRepository = require('../repositories/ProductRepository');
 const { query: pgQuery } = require('../config/postgres');
 const productVariantRepository = require('../repositories/ProductVariantRepository');
 const AccountingService = require('./accountingService');
+const locationStockService = require('./locationStockService');
+const settingsService = require('./settingsService');
+const { isWarehouseInventoryEnabled } = require('../utils/warehouseInventory');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function isValidUuid(v) {
@@ -39,93 +42,201 @@ const ensureInventoryRecord = async (productId, client = null) => {
   return inv;
 };
 
-// Update stock levels with Average Cost Method for incoming stock
-const updateStock = async ({ productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes }, options = {}) => {
-  const { client = null, skipAccountingEntry = false } = options;
-  try {
-    const inv = await ensureInventoryRecord(productId, client);
-    const current = getCurrentStock(inv);
-    const isIn = ['in', 'return'].includes(type);
-    const newStock = isIn ? current + quantity : current - quantity;
+function isPurchaseStockFlow({ referenceModel, reference }) {
+  const ref = String(reference || '');
+  return referenceModel === 'PurchaseInvoice'
+    || referenceModel === 'PurchaseOrder'
+    || ref.includes('Purchase');
+}
 
-    let finalCost = cost; // Default to provided cost
+function isSaleStockFlow({ referenceModel, reference }) {
+  const ref = String(reference || '');
+  return referenceModel === 'Sale'
+    || referenceModel === 'SalesOrder'
+    || ref.includes('Sales')
+    || ref === 'Sales Invoice';
+}
 
-    // Implement Average Cost Method for incoming stock
-    if (cost !== undefined && cost !== null && isIn && current > 0) {
-      // Get current product cost price
-      const productRow = await productRepository.findById(productId, true);
-      const currentCostPrice = parseFloat(productRow?.cost_price || productRow?.costPrice || 0);
-
-      if (currentCostPrice > 0) {
-        // Calculate new average cost using weighted average formula
-        // New Average Cost = (Old Stock Value + New Stock Value) / Total Quantity
-        const oldStockValue = current * currentCostPrice;
-        const newStockValue = quantity * cost;
-        const totalValue = oldStockValue + newStockValue;
-        const newAverageCost = Math.round((totalValue / newStock) * 100) / 100; // Round to 2 decimal places
-
-        finalCost = newAverageCost;
-
-        console.log(`Average Cost Calculation for Product ${productId}:`);
-        console.log(`  Current Stock: ${current} units @ ${currentCostPrice} = ${oldStockValue}`);
-        console.log(`  New Stock: ${quantity} units @ ${cost} = ${newStockValue}`);
-        console.log(`  Total Value: ${totalValue}, Total Quantity: ${newStock}`);
-        console.log(`  New Average Cost: ${newAverageCost}`);
-      }
-    }
-
-    const updatePayload = { currentStock: newStock };
-    if (finalCost !== undefined && finalCost !== null && isIn) {
-      const costObj = getCost(inv);
-      updatePayload.cost = { ...costObj, average: finalCost, lastPurchase: cost || finalCost };
-    }
-    const updated = await inventoryRepository.updateByProductId(productId, updatePayload, client);
-
-    const productRow = await productRepository.findById(productId, true);
-    if (productRow) {
-      await productRepository.update(productId, {
-        stockQuantity: newStock,
-        ...(finalCost !== undefined && finalCost !== null && isIn ? { costPrice: finalCost } : {})
-      }, client);
-
-      // Update Accounting Ledger (Ensure physical stock matches financial value)
-      if (!skipAccountingEntry) {
-        try {
-          const delta = isIn ? quantity : -quantity;
-          const unitCost = cost || parseFloat(productRow.cost_price || productRow.costPrice) || 0;
-          const validatedUserId = isValidUuid(performedBy) ? performedBy : null;
-
-          await AccountingService.recordInventoryValueChange({
-            productId,
-            delta,
-            unitCost,
-            reason: reason || `Inventory ${type}`,
-            referenceType: referenceModel === 'PurchaseInvoice' ? 'purchase_invoice' : (referenceModel === 'Sale' ? 'sale' : 'inventory_adjustment'),
-            referenceId,
-            referenceNumber,
-            createdBy: validatedUserId,
-            transactionDate: new Date()
-          }, client);
-        } catch (accErr) {
-          // When called inside an explicit transaction, fail fast to preserve atomicity.
-          if (client) {
-            console.error('Ledger update failed within transaction. Aborting stock update.');
-            throw accErr;
-          }
-          console.error('Failed to update ledger for inventory movement (non-critical outside transaction):', accErr);
-        }
-      }
-    } else {
-      await productVariantRepository.updateById(productId, {
-        inventory: { currentStock: newStock }
-      }, client);
-    }
-
-    return updated || inv;
-  } catch (error) {
-    console.error('Error updating stock:', error);
-    throw error;
+/** Manual/admin stock changes — warehouse only (never shop or legacy inventory). */
+function isWarehouseAdminFlow({ referenceModel, reference, type }) {
+  if (isPurchaseStockFlow({ referenceModel, reference }) || isSaleStockFlow({ referenceModel, reference })) {
+    return false;
   }
+  if (referenceModel === 'Transfer') return false;
+  return referenceModel === 'StockAdjustment'
+    || ['in', 'out', 'adjustment', 'damage', 'theft'].includes(type);
+}
+
+async function applyWarehouseAdminStock(flowParams, options = {}) {
+  const mapped = mapLocationStockParams(flowParams);
+  const { type, quantity } = flowParams;
+
+  if (type === 'adjustment') {
+    return locationStockService.setWarehouseStockLevel({
+      ...mapped,
+      targetQuantity: quantity,
+      referenceNumber: mapped.referenceNumber || 'WH-ADJ',
+    }, options);
+  }
+
+  if (type === 'in') {
+    return locationStockService.receiveAtWarehouse({
+      ...mapped,
+      movementType: 'adjustment_in',
+      referenceNumber: mapped.referenceNumber || 'WH-IN',
+    }, options);
+  }
+
+  if (type === 'out' || type === 'damage' || type === 'theft') {
+    return locationStockService.issueFromWarehouse({
+      ...mapped,
+      movementType: type === 'theft' ? 'adjustment_out' : (type === 'damage' ? 'adjustment_out' : 'adjustment_out'),
+      referenceNumber: mapped.referenceNumber || 'WH-OUT',
+    }, options);
+  }
+
+  throw new Error(`Unsupported warehouse admin stock type: ${type}`);
+}
+
+function mapLocationStockParams(params) {
+  return {
+    productId: params.productId,
+    quantity: params.quantity,
+    cost: params.cost,
+    warehouseId: params.warehouseId,
+    shopId: params.shopId,
+    reason: params.reason,
+    reference: params.reference,
+    referenceId: params.referenceId,
+    referenceNumber: params.referenceNumber || params.reference,
+    performedBy: params.performedBy,
+    notes: params.notes,
+  };
+}
+
+// Legacy single-location inventory (used when warehouse feature is off)
+async function updateStockLegacy(
+  { productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes },
+  options = {}
+) {
+  const { client = null, skipAccountingEntry = false } = options;
+  const inv = await ensureInventoryRecord(productId, client);
+  const current = getCurrentStock(inv);
+  const isIn = ['in', 'return'].includes(type);
+  const newStock = isIn ? current + quantity : current - quantity;
+
+  let finalCost = cost;
+
+  if (cost !== undefined && cost !== null && isIn && current > 0) {
+    const productRow = await productRepository.findById(productId, true);
+    const currentCostPrice = parseFloat(productRow?.cost_price || productRow?.costPrice || 0);
+    if (currentCostPrice > 0) {
+      const oldStockValue = current * currentCostPrice;
+      const newStockValue = quantity * cost;
+      const totalValue = oldStockValue + newStockValue;
+      finalCost = Math.round((totalValue / newStock) * 100) / 100;
+    }
+  }
+
+  const updatePayload = { currentStock: newStock };
+  if (finalCost !== undefined && finalCost !== null && isIn) {
+    const costObj = getCost(inv);
+    updatePayload.cost = { ...costObj, average: finalCost, lastPurchase: cost || finalCost };
+  }
+  const updated = await inventoryRepository.updateByProductId(productId, updatePayload, client);
+
+  const productRow = await productRepository.findById(productId, true);
+  if (productRow) {
+    await productRepository.update(productId, {
+      stockQuantity: newStock,
+      ...(finalCost !== undefined && finalCost !== null && isIn ? { costPrice: finalCost } : {}),
+    }, client);
+
+    if (!skipAccountingEntry) {
+      try {
+        const delta = isIn ? quantity : -quantity;
+        const unitCost = cost || parseFloat(productRow.cost_price || productRow.costPrice) || 0;
+        const validatedUserId = isValidUuid(performedBy) ? performedBy : null;
+
+        await AccountingService.recordInventoryValueChange({
+          productId,
+          delta,
+          unitCost,
+          reason: reason || `Inventory ${type}`,
+          referenceType: referenceModel === 'PurchaseInvoice'
+            ? 'purchase_invoice'
+            : (referenceModel === 'Sale' ? 'sale' : 'inventory_adjustment'),
+          referenceId,
+          referenceNumber: reference,
+          createdBy: validatedUserId,
+          transactionDate: new Date(),
+        }, client);
+      } catch (accErr) {
+        if (client) {
+          console.error('Ledger update failed within transaction. Aborting stock update.');
+          throw accErr;
+        }
+        console.error('Failed to update ledger for inventory movement (non-critical outside transaction):', accErr);
+      }
+    }
+  } else {
+    await productVariantRepository.updateById(productId, {
+      inventory: { currentStock: newStock },
+    }, client);
+  }
+
+  return updated || inv;
+}
+
+// Update stock levels with Average Cost Method for incoming stock
+const updateStock = async ({ productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes, warehouseId, shopId }, options = {}) => {
+  const { client = null, skipAccountingEntry = false, warehouseInventoryEnabled } = options;
+  const flowParams = { productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes, warehouseId, shopId };
+
+  let warehouseEnabled = warehouseInventoryEnabled;
+  if (warehouseEnabled === undefined) {
+    const settings = await settingsService.getCompanySettings();
+    warehouseEnabled = isWarehouseInventoryEnabled(settings);
+  }
+
+  if (!warehouseEnabled) {
+    return updateStockLegacy(flowParams, { client, skipAccountingEntry });
+  }
+
+  if (isPurchaseStockFlow(flowParams)) {
+    if (type === 'in') {
+      return locationStockService.receiveAtWarehouse(mapLocationStockParams(flowParams), { client });
+    }
+    if (type === 'out') {
+      return locationStockService.issueFromWarehouse({
+        ...mapLocationStockParams(flowParams),
+        movementType: 'return_out',
+      }, { client });
+    }
+    throw new Error('Purchase stock changes must be warehouse in or out only');
+  }
+
+  if (isSaleStockFlow(flowParams)) {
+    if (type === 'out') {
+      return locationStockService.issueFromShop(mapLocationStockParams(flowParams), { client });
+    }
+    if (type === 'in' || type === 'return') {
+      return locationStockService.restoreToShop(mapLocationStockParams(flowParams), { client });
+    }
+    throw new Error('Sales stock changes must use shop inventory (out or return only)');
+  }
+
+  if (isWarehouseAdminFlow(flowParams)) {
+    return applyWarehouseAdminStock(flowParams, { client });
+  }
+
+  if (type === 'transfer') {
+    throw new Error('Use stock transfer API to move stock from warehouse to shop');
+  }
+
+  throw new Error(
+    'Direct legacy inventory updates are disabled. Purchases update warehouse stock; sales update shop stock; admin entry uses warehouse stock.'
+  );
 };
 
 // Reserve stock for an order (simple reserve; for expiring reservations use stockReservationService)

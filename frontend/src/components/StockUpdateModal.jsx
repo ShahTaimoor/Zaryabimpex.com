@@ -10,8 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { useUpdateStockMutation } from '../store/services/inventoryApi';
+import { useCompanyInfo } from '../hooks/useCompanyInfo';
+import { isWarehouseInventoryEnabled } from '../utils/warehouseInventory';
 
 const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
+  const { companyInfo } = useCompanyInfo();
+  const warehouseMode = isWarehouseInventoryEnabled(companyInfo);
   const [updateType, setUpdateType] = useState('adjustment');
   const [updateStock, { isLoading: updating }] = useUpdateStockMutation();
 
@@ -79,6 +83,8 @@ const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
       type: movementType,
       quantity: updateType === 'adjustment' ? quantity : Math.abs(quantity),
       reason: values.reason,
+      reference: 'Admin stock entry',
+      referenceModel: 'StockAdjustment',
       cost: values.cost ? parseFloat(values.cost) : undefined,
       notes: values.notes,
     };
@@ -86,7 +92,7 @@ const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
     updateStock(stockData)
       .unwrap()
       .then(() => {
-        showSuccessToast('Stock updated successfully');
+        showSuccessToast(warehouseMode ? 'Warehouse stock updated successfully' : 'Stock updated successfully');
         onSuccess();
         resetModal();
       })
@@ -109,13 +115,14 @@ const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
   };
 
   const getMovementLabel = () => {
+    const wh = warehouseMode ? 'Warehouse ' : '';
     switch (updateType) {
       case 'add':
-        return 'Add Stock';
+        return `Add ${wh}Stock`.trim();
       case 'remove':
-        return 'Remove Stock';
+        return `Remove ${wh}Stock`.trim();
       case 'adjustment':
-        return 'Adjust Stock';
+        return `Adjust ${wh}Stock`.trim();
       default:
         return 'Update Stock';
     }
@@ -128,7 +135,7 @@ const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
       case 'remove':
         return 'Quantity to Remove';
       case 'adjustment':
-        return 'New Stock Level';
+        return warehouseMode ? 'New Warehouse Stock Level' : 'New Stock Level';
       default:
         return 'Quantity';
     }
@@ -197,17 +204,29 @@ const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-4">
+                  <div className={`mt-3 grid ${warehouseMode ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
+                    {warehouseMode && (
+                      <div>
+                        <div className="text-sm text-gray-600">Warehouse</div>
+                        <div className="font-semibold text-lg text-indigo-700">
+                          {product?.warehouseStock ?? 0}
+                        </div>
+                      </div>
+                    )}
                     <div>
-                      <div className="text-sm text-gray-600">Current Stock</div>
+                      <div className="text-sm text-gray-600">{warehouseMode ? 'Shop (sales)' : 'Current stock'}</div>
                       <div className="font-semibold text-lg">
                         {product?.currentStock || product?.inventory?.currentStock || 0}
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600">Available</div>
+                      <div className="text-sm text-gray-600">{warehouseMode ? 'Shop available' : 'Available'}</div>
                       <div className="font-semibold text-lg">
-                        {product?.availableStock || (product?.currentStock || 0) - (product?.reservedStock || 0)}
+                        {product?.availableStock ?? Math.max(
+                          0,
+                          (product?.currentStock || product?.inventory?.currentStock || 0)
+                            - (product?.reservedStock || 0)
+                        )}
                       </div>
                     </div>
                   </div>
@@ -320,6 +339,11 @@ const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
                       min="0"
                       step="0.01"
                     />
+                    {warehouseMode && (
+                      <p className="text-xs text-amber-700 mt-2 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+                        Updates warehouse stock only. Transfer warehouse → shop before selling.
+                      </p>
+                    )}
                     <p className="text-xs text-gray-500 mt-1">Optional: Cost per unit for inventory valuation</p>
                   </div>
 
