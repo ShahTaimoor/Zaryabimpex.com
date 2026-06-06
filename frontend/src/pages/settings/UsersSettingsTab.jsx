@@ -1,6 +1,7 @@
 import React, { useState, memo } from 'react';
 import {
   Users,
+  User,
   Plus,
   Trash2,
   Edit,
@@ -17,6 +18,8 @@ import {
   RefreshCw,
   UserPlus,
   BarChart3,
+  Mail,
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -434,10 +437,7 @@ export const UsersSettingsTab = memo(function UsersSettingsTab() {
               >
                 <div className="flex items-center space-x-5 flex-1 min-w-0">
                   {/* Avatar */}
-                  <div className={`h-14 w-14 rounded-2xl flex items-center justify-center flex-shrink-0 text-white font-bold text-xl shadow-sm ${systemUser.role === 'admin' ? 'bg-gradient-to-br from-gray-700 to-gray-900' :
-                    systemUser.role === 'manager' ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
-                      'bg-gradient-to-br from-emerald-400 to-emerald-600'
-                    }`}>
+                  <div className="h-14 w-14 rounded-2xl flex items-center justify-center flex-shrink-0 bg-black text-white font-bold text-xl shadow-sm">
                     {systemUser.firstName?.charAt(0) || ''}{systemUser.lastName?.charAt(0) || ''}
                   </div>
 

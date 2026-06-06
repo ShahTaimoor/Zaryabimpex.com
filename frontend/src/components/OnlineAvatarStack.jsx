@@ -3,41 +3,20 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { useGetOnlineUsersQuery } from '../store/services/presenceApi';
 import { getRoleLabel } from '../utils/roleLabels';
+import { getUserInitials, getAvatarColorClass } from '../utils/userDisplay';
 import { cn } from '@/lib/utils';
 import { POLLING_INTERVALS } from '../config/polling';
 
-const BG_CLASSES = [
-  'bg-gray-100',
-];
-
-function hashPick(str, mod) {
-  let h = 0;
-  if (!str) return 0;
-  for (let i = 0; i < str.length; i += 1) {
-    h = (h << 5) - h + str.charCodeAt(i);
-    h |= 0;
-  }
-  return Math.abs(h) % mod;
-}
-
-function getInitials(fullName) {
-  const n = String(fullName || '').trim();
-  if (n) {
-    const parts = n.split(/\s+/).filter(Boolean);
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    }
-    return n.slice(0, 2).toUpperCase();
-  }
-  return '?';
-}
-
 const MAX_VISIBLE = 4;
 
-export default function OnlineAvatarStack({ className = '' }) {
+export default function OnlineAvatarStack({
+  className = '',
+  compact = false,
+  excludeSelf = false,
+}) {
   const { user } = useAuth();
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
-  const { data, isFetching } = useGetOnlineUsersQuery(undefined, {
+  const { data } = useGetOnlineUsersQuery(undefined, {
     pollingInterval: POLLING_INTERVALS.ONLINE_USERS_MS,
     skipPollingIfUnfocused: true,
     refetchOnFocus: true,
@@ -49,52 +28,64 @@ export default function OnlineAvatarStack({ className = '' }) {
 
   if (!user || !isAdmin) return null;
 
-  const visible = online.slice(0, MAX_VISIBLE);
-  const overflow = online.length - visible.length;
+  const filtered = excludeSelf
+    ? online.filter((u) => {
+        const uid = String(u.userId ?? u.id ?? '');
+        return user?.id == null || uid !== String(user.id);
+      })
+    : online;
+
+  if (filtered.length === 0) return null;
+
+  const visible = filtered.slice(0, MAX_VISIBLE);
+  const overflow = filtered.length - visible.length;
+  const sizeClass = compact ? 'h-7 w-7 text-[10px]' : 'h-8 w-8 text-[10px]';
+  const overlapClass = compact ? '-space-x-2' : '-space-x-3';
 
   return (
-    <div className={cn("flex items-center gap-3 px-2 py-1 rounded-full bg-gray-50/50 backdrop-blur-sm transition-all hover:bg-gray-100/50", className)}>
-      <div className="flex items-center -space-x-3">
+    <div
+      className={cn('flex items-center', className)}
+      title={`${filtered.length} team member${filtered.length === 1 ? '' : 's'} online`}
+    >
+      <div className={cn('flex items-center', overlapClass)}>
         <AnimatePresence mode="popLayout">
           {visible.map((u, idx) => {
             const uid = String(u.userId ?? u.id ?? idx);
-            const isSelf = user?.id != null && String(user.id) === uid;
-            const initials = getInitials(u.fullName);
-            const bg = BG_CLASSES[hashPick(uid, BG_CLASSES.length)];
+            const initials = getUserInitials(u);
+            const colorClass = getAvatarColorClass(uid);
 
             return (
               <motion.div
                 key={uid}
                 layout
-                initial={{ opacity: 0, scale: 0.8, x: -10 }}
-                animate={{ opacity: 1, scale: 1, x: 0 }}
-                exit={{ opacity: 0, scale: 0.8, x: 10 }}
-                title={`${u.fullName} (${getRoleLabel(u.role)})${isSelf ? ' - You' : ''}`}
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.85 }}
+                title={`${u.fullName} (${getRoleLabel(u.role)})`}
                 className={cn(
-                  "relative flex h-8 w-8 items-center justify-center rounded-full border border-black text-[10px] font-bold text-black shadow-sm cursor-pointer transition-transform hover:scale-110 hover:z-50",
-                  bg,
-                  isSelf && "z-40"
+                  'relative flex items-center justify-center rounded-full font-semibold text-white shadow-sm ring-2 ring-white transition-transform hover:z-10 hover:scale-105',
+                  sizeClass,
+                  colorClass
                 )}
               >
                 {initials}
-                {isSelf && (
-                  <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500 border border-black"></span>
-                  </span>
-                )}
               </motion.div>
             );
           })}
         </AnimatePresence>
 
         {overflow > 0 && (
-          <div className="relative flex h-8 w-8 items-center justify-center rounded-full border border-black bg-gray-100 text-[10px] font-bold text-black shadow-sm z-0">
+          <div
+            className={cn(
+              'relative z-0 flex items-center justify-center rounded-full bg-gray-100 font-semibold text-gray-600 ring-2 ring-white',
+              sizeClass,
+              'text-[10px]'
+            )}
+          >
             +{overflow}
           </div>
         )}
       </div>
-
     </div>
   );
 }

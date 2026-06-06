@@ -1,15 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Settings,
-  LogOut,
   Menu,
   X,
-  User,
-  AlertTriangle,
   ChevronRight,
   ChevronDown,
-  HelpCircle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { canAccessRoute } from '../config/routeAccess';
@@ -25,8 +20,8 @@ import { useGetAlertSummaryQuery } from '../store/services/inventoryAlertsApi';
 import { POLLING_INTERVALS } from '../config/polling';
 import { Button } from '@/components/ui/button';
 import PresenceHeartbeat from './PresenceHeartbeat';
-import OnlineAvatarStack from './OnlineAvatarStack';
 import { loadTopBarConfig, TOP_BAR_CONFIG_CHANGED } from '../config/topBarConfig';
+import { TopBarUserCluster } from './layout/TopBarUserCluster';
 import {
   navigation,
   loadSidebarConfig,
@@ -137,37 +132,6 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
   );
 };
 
-// Inventory Alerts Badge Component - Always visible with professional design
-const InventoryAlertsBadge = ({ onNavigate }) => {
-  const { data: summaryData } = useGetAlertSummaryQuery(undefined, {
-    pollingInterval: POLLING_INTERVALS.INVENTORY_ALERT_SUMMARY_MS,
-    skipPollingIfUnfocused: true,
-    refetchOnFocus: true,
-    skip: false,
-  });
-
-  const summary = summaryData?.data || summaryData || {};
-  const criticalCount = summary.critical || 0;
-  const outOfStockCount = summary.outOfStock || 0;
-  const totalAlerts = summary.total || 0;
-  const displayCount = criticalCount > 0 ? criticalCount : (totalAlerts > 0 ? totalAlerts : 3);
-
-  return (
-    <button
-      onClick={() => onNavigate({ href: '/inventory-alerts', name: 'Inventory Alerts' })}
-      className="relative flex items-center justify-center h-10 w-10 rounded-xl bg-white hover:bg-gray-50 text-gray-900 transition-all border border-gray-200 shadow-sm hover:shadow-md group/alert"
-      title={`${criticalCount} critical alert(s), ${outOfStockCount} out of stock`}
-    >
-      <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 transition-transform group-hover/alert:scale-110" />
-      {displayCount > 0 && (
-        <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold rounded-full h-5 w-7 flex items-center justify-center border-2 border-white shadow-sm ring-1 ring-red-100">
-          {displayCount > 99 ? '99+' : (displayCount < 10 ? `00${displayCount}` : (displayCount < 100 ? `0${displayCount}` : displayCount))}
-        </span>
-      )}
-    </button>
-  );
-};
-
 export const MultiTabLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -242,8 +206,12 @@ export const MultiTabLayout = ({ children }) => {
   });
   const summary = summaryData?.data || summaryData || {};
   const criticalCount = summary.critical || 0;
+  const outOfStockCount = summary.outOfStock || 0;
   const totalAlerts = summary.total || 0;
-  const displayCount = criticalCount > 0 ? criticalCount : (totalAlerts > 0 ? totalAlerts : 3);
+  const inventoryAlertCount = criticalCount > 0 ? criticalCount : totalAlerts;
+  const showInventoryAlerts =
+    sidebarConfig['Inventory Alerts'] !== false &&
+    isItemPermitted({ permission: 'view_inventory' }, user, hasPermission);
 
   // Flatten grouped navigation for redirect logic
   const flattenedNavigation = React.useMemo(() => {
@@ -497,7 +465,7 @@ export const MultiTabLayout = ({ children }) => {
       <div className="lg:pl-64">
         {/* Top bar — matches TabBar (bg-gray-100) */}
         {showTopBar && (
-          <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center bg-gray-100 px-3 sm:px-4 lg:px-6 overflow-visible">
+          <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center bg-gray-100 pl-3 pr-2 sm:pl-4 sm:pr-2 lg:pl-6 lg:pr-3 overflow-visible">
           {/* Mobile Menu Button */}
           <button
             type="button"
@@ -523,89 +491,35 @@ export const MultiTabLayout = ({ children }) => {
             />
 
 
-            {/* User Profile Section - Right Aligned with Dropdown */}
-            <div className="relative flex items-center gap-2 sm:gap-4 ml-auto flex-shrink-0 overflow-visible" ref={userMenuRef}>
-              {/* Presence Hook */}
-              <PresenceHeartbeat />
-              
-              <div className="hidden min-[1100px]:block">
-                <OnlineAvatarStack />
-              </div>
-
-              {/* Alerts Button - Right side, left of Admin user */}
-              {sidebarConfig['Inventory Alerts'] !== false && isItemPermitted({ permission: 'view_inventory' }, user, hasPermission) && (
-                <div className="flex-shrink-0 ml-1">
-                  <InventoryAlertsBadge onNavigate={handleNavigationClick} />
-                </div>
-              )}
-              <button
-                onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:bg-gray-50 rounded-lg px-2 py-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                title={`${user?.fullName} - ${user?.role}`}
-              >
-                <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                  <User className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
-                </div>
-                <div className="hidden md:block text-left">
-                  <p className="text-sm font-semibold text-gray-900 leading-tight">{user?.fullName || 'User'}</p>
-                  <p className="text-xs text-gray-500 capitalize leading-tight">{user?.role || 'Admin'}</p>
-                </div>
-                <ChevronRight className={`h-4 w-4 sm:h-5 sm:w-5 text-gray-400 flex-shrink-0 hidden sm:block transition-transform ${userMenuOpen ? 'rotate-90' : ''}`} />
-              </button>
-
-              {/* Dropdown Menu */}
-              {userMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-md shadow-xl border border-gray-200 py-1 z-[60]">
-                  <div className="px-4 py-2 border-b border-gray-200">
-                    <p className="text-sm font-semibold text-gray-900">{user?.fullName || 'User'}</p>
-                    {user?.email ? (
-                      <p className="text-xs text-gray-500">{user.email}</p>
-                    ) : (
-                      <p className="text-xs text-gray-500 capitalize">{user?.role || 'Admin'}</p>
-                    )}
-                  </div>
-                  <div className="py-1">
-                    {isItemPermitted({ permission: 'manage_users' }, user, hasPermission) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleNavigationClick({ href: '/settings2', name: 'Settings' });
-                          setUserMenuOpen(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors"
-                      >
-                        <Settings className="h-4 w-4 flex-shrink-0" />
-                        <span>Settings</span>
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleNavigationClick({ href: '/help', name: 'Help' });
-                        setUserMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 transition-colors"
-                    >
-                      <HelpCircle className="h-4 w-4 flex-shrink-0" />
-                      <span>Help</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (isLoggingOut) return;
-                        setUserMenuOpen(false);
-                        handleLogout();
-                      }}
-                      disabled={isLoggingOut}
-                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
-                    >
-                      <LogOut className="h-4 w-4 flex-shrink-0" />
-                      <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <PresenceHeartbeat />
+            <TopBarUserCluster
+              user={user}
+              userMenuOpen={userMenuOpen}
+              onToggleUserMenu={() => setUserMenuOpen((open) => !open)}
+              onNavigateSettings={() => {
+                handleNavigationClick({ href: '/settings2', name: 'Settings' });
+                setUserMenuOpen(false);
+              }}
+              onNavigateHelp={() => {
+                handleNavigationClick({ href: '/help', name: 'Help' });
+                setUserMenuOpen(false);
+              }}
+              onLogout={() => {
+                if (isLoggingOut) return;
+                setUserMenuOpen(false);
+                handleLogout();
+              }}
+              isLoggingOut={isLoggingOut}
+              canManageSettings={isItemPermitted({ permission: 'manage_users' }, user, hasPermission)}
+              alertCount={inventoryAlertCount}
+              alertTitle={`${criticalCount} critical, ${outOfStockCount} out of stock`}
+              onAlertClick={() =>
+                handleNavigationClick({ href: '/inventory-alerts', name: 'Inventory Alerts' })
+              }
+              showAlerts={showInventoryAlerts}
+              showTeamPresence={String(user?.role || '').toLowerCase() === 'admin'}
+              userMenuRef={userMenuRef}
+            />
           </div>
           </div>
         )}
