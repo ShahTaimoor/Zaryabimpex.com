@@ -9,8 +9,19 @@ import {
   FileText,
   RotateCcw,
   Save,
+  Calendar as CalendarIcon,
+  ChevronDown,
 } from 'lucide-react';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { formatDateForInput } from '../../utils/dateUtils';
 
 /** Shared black & white theme for all cash/bank voucher forms. */
 const MONO_THEME = {
@@ -60,6 +71,14 @@ const VOUCHER_VARIANTS = {
     Icon: Landmark,
     BadgeIcon: ArrowUpRight,
     badgeText: 'Bank Out',
+  },
+  expense: {
+    ...MONO_THEME,
+    title: 'Record Expense',
+    subtitle: 'Log operating expenses from cash or bank to the right expense account',
+    Icon: Wallet,
+    BadgeIcon: ArrowUpRight,
+    badgeText: 'Expense',
   },
 };
 
@@ -259,6 +278,67 @@ export function PaymentFormField({
   );
 }
 
+/** Single-date picker matching dashboard DateFilter popover design. */
+export function PaymentDateField({
+  label = 'Date',
+  value,
+  onChange,
+  required = false,
+  placeholder = 'Pick a date',
+  className = '',
+}) {
+  const [open, setOpen] = React.useState(false);
+  const selectedDate = value ? new Date(`${value}T00:00:00`) : undefined;
+
+  const handleSelect = (date) => {
+    if (!date) {
+      onChange?.('');
+      return;
+    }
+    onChange?.(formatDateForInput(date));
+    setOpen(false);
+  };
+
+  return (
+    <PaymentFormField label={label} required={required} className={className}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className={cn(
+              'h-11 w-full justify-start rounded-lg border-neutral-200 bg-white text-left text-sm font-normal shadow-sm hover:bg-neutral-50',
+              !value && 'text-neutral-500'
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4 shrink-0 text-neutral-400" />
+            {selectedDate ? (
+              <span className="truncate text-neutral-900">
+                {format(selectedDate, 'dd MMM yy')}
+              </span>
+            ) : (
+              <span>{placeholder}</span>
+            )}
+            <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-neutral-400" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          className="w-auto border-neutral-200 p-0 shadow-lg"
+          align="start"
+        >
+          <Calendar
+            mode="single"
+            defaultMonth={selectedDate || new Date()}
+            selected={selectedDate}
+            onSelect={handleSelect}
+            className="p-3"
+          />
+        </PopoverContent>
+      </Popover>
+    </PaymentFormField>
+  );
+}
+
 /** Prominent amount input for voucher forms. */
 export function PaymentAmountField({
   label = 'Amount',
@@ -273,11 +353,11 @@ export function PaymentAmountField({
     <PaymentFormField label={label} required={required} className={className}>
       <div
         className={cn(
-          'flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 shadow-sm transition-shadow focus-within:ring-2',
+          'flex h-11 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 shadow-sm transition-shadow focus-within:ring-2',
           theme.amountRing
         )}
       >
-        <span className={cn('text-lg font-bold', theme.amountText)}>Rs</span>
+        <span className={cn('shrink-0 text-sm font-bold', theme.amountText)}>Rs</span>
         <input
           type="number"
           autoComplete="off"
@@ -287,7 +367,7 @@ export function PaymentAmountField({
           onChange={onChange}
           placeholder={placeholder}
           required={required}
-          className="h-11 w-full border-0 bg-transparent text-2xl font-semibold text-neutral-900 placeholder:text-neutral-300 focus:outline-none focus:ring-0"
+          className="h-full w-full border-0 bg-transparent text-sm font-semibold text-neutral-900 placeholder:text-neutral-300 focus:outline-none focus:ring-0"
         />
       </div>
     </PaymentFormField>

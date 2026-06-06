@@ -228,18 +228,18 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
   };
 
   return (
-    <div className="card">
-      <div className="card-header flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 lg:gap-4">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-xl sm:text-2xl font-semibold text-gray-900 flex items-center space-x-2">
-            <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-primary-600 flex-shrink-0" />
+    <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-neutral-200 px-4 py-3 sm:gap-4 sm:px-5 sm:py-4">
+        <div className="min-w-0">
+          <h2 className="flex items-center space-x-2 text-base font-semibold text-neutral-900 sm:text-lg">
+            <Bell className="h-5 w-5 shrink-0 text-neutral-700 sm:h-6 sm:w-6" />
             <span className="min-w-0">Recurring Expense Reminders</span>
           </h2>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">
+          <p className="mt-1 text-sm text-neutral-600 sm:text-base">
             Track monthly obligations and record payments in a single click.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full lg:w-auto flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           <div className="flex items-center gap-2 flex-shrink-0">
             <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Show next</label>
             <select
@@ -281,10 +281,10 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
         </div>
       </div>
 
-      <div className="card-content space-y-6">
+      <div className="space-y-6 p-4 sm:p-5">
         {showCreateForm && (
-          <div className="border border-dashed border-primary-200 rounded-lg p-4 bg-primary-50/40">
-            <h3 className="text-sm font-semibold text-primary-700 flex items-center space-x-2 mb-3">
+          <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-4">
+            <h3 className="mb-3 flex items-center space-x-2 text-sm font-semibold text-neutral-900">
               <Plus className="h-4 w-4" />
               <span>Create Recurring Expense</span>
             </h3>
@@ -429,11 +429,11 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-          <div className="border rounded-lg p-4 md:p-5 lg:p-6 bg-gray-50 flex flex-col min-h-0">
+        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2 2xl:gap-6">
+          <div className="flex min-h-0 flex-col rounded-lg border border-neutral-200 bg-neutral-50 p-4 md:p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base md:text-lg font-semibold text-gray-700 flex items-center space-x-2">
-                <Clock className="h-5 w-5 md:h-6 md:w-6 text-primary-500 flex-shrink-0" />
+                <Clock className="h-5 w-5 shrink-0 text-neutral-600 md:h-6 md:w-6" />
                 <span>Upcoming</span>
               </h3>
               {(upcomingLoading || upcomingFetching) && (
@@ -461,7 +461,7 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
                         <div>
                           <div className="flex items-center flex-wrap gap-2 mb-2">
                             <h4 className="text-base md:text-lg font-semibold text-gray-900">{expense.name}</h4>
-                            <span className="text-xs md:text-sm px-2 md:px-2.5 py-1 md:py-1.5 rounded-full bg-primary-100 text-primary-700">
+                            <span className="rounded-full bg-neutral-100 px-2 py-1 text-xs text-neutral-800 md:px-2.5 md:py-1.5 md:text-sm">
                               {expense.defaultPaymentType === 'bank' ? 'Bank' : 'Cash'}
                             </span>
                           </div>
@@ -472,45 +472,45 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
                             {getPayeeLabel(expense)}
                           </p>
                         </div>
-                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pt-3 border-t border-gray-100">
+                        <div className="flex flex-col gap-3 border-t border-neutral-100 pt-3">
                           <div
-                            className={`flex items-center space-x-1.5 text-sm md:text-base font-semibold ${
-                              isOverdue ? 'text-danger-600' : 'text-primary-600'
+                            className={`flex items-center gap-1.5 text-sm font-semibold ${
+                              isOverdue ? 'text-danger-600' : 'text-neutral-700'
                             }`}
                           >
                             {isOverdue ? (
                               <>
-                                <AlertTriangle className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
+                                <AlertTriangle className="h-4 w-4 shrink-0" />
                                 <span>{Math.abs(daysLeft)} day(s) overdue</span>
                               </>
                             ) : (
                               <>
-                                <Calendar className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
+                                <Calendar className="h-4 w-4 shrink-0" />
                                 <span>{daysLeft} day(s) left</span>
                               </>
                             )}
                           </div>
-                          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                          <div className="flex flex-col gap-2 sm:flex-row">
                             <Button
                               type="button"
                               variant="outline"
-                              size="default"
-                              className="flex items-center justify-center gap-2 text-sm md:text-base"
+                              size="sm"
+                              className="w-full border-neutral-300 sm:flex-1"
                               onClick={() => handleSnoozeClick(expense, 3)}
                               disabled={false}
                             >
-                              <Clock className="h-4 w-4 flex-shrink-0" />
+                              <Clock className="h-4 w-4 shrink-0" />
                               <span>Snooze 3d</span>
                             </Button>
                             <Button
                               type="button"
                               variant="default"
-                              size="default"
-                              className="flex items-center justify-center gap-2 text-sm md:text-base"
+                              size="sm"
+                              className="w-full border-neutral-900 bg-neutral-900 hover:bg-neutral-800 sm:flex-1"
                               onClick={() => handleRecordPaymentClick(expense)}
                               disabled={false}
                             >
-                              <Banknote className="h-4 w-4 flex-shrink-0" />
+                              <Banknote className="h-4 w-4 shrink-0" />
                               <span>Record Payment</span>
                             </Button>
                           </div>
@@ -523,38 +523,47 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
             )}
           </div>
 
-          <div className="border rounded-lg p-4 md:p-5 lg:p-6 bg-white flex flex-col min-h-0">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base md:text-lg font-semibold text-gray-700 flex items-center space-x-2">
-                <Calendar className="h-5 w-5 md:h-6 md:w-6 text-gray-500 flex-shrink-0" />
+          <div className="flex min-h-0 flex-col rounded-lg border border-neutral-200 bg-white p-4 md:p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 className="flex items-center space-x-2 text-base font-semibold text-neutral-700 md:text-lg">
+                <Calendar className="h-5 w-5 shrink-0 text-neutral-500 md:h-6 md:w-6" />
                 <span>Active Recurring Expenses</span>
               </h3>
-              {activeLoading && <span className="text-xs md:text-sm text-gray-500">Loading...</span>}
+              {activeLoading ? (
+                <span className="shrink-0 text-xs text-neutral-500 md:text-sm">Loading...</span>
+              ) : null}
             </div>
             {activeExpenses.length === 0 ? (
-              <div className="text-center text-sm md:text-base text-gray-500 border border-dashed border-gray-200 rounded-lg py-8 md:py-10 px-4 flex-1 flex flex-col items-center justify-center">
-                <p>No recurring expenses configured yet.</p>
+              <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-neutral-200 px-4 py-8 text-center md:py-10">
+                <p className="text-sm text-neutral-500 md:text-base">
+                  No recurring expenses configured yet.
+                </p>
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto max-h-[600px] divide-y">
+              <div className="max-h-[600px] flex-1 space-y-3 overflow-y-auto">
                 {activeExpenses.map((expense) => (
-                  <div key={expense._id} className="py-4 md:py-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 md:gap-4">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm md:text-base font-semibold text-gray-800">{expense.name}</p>
-                      <p className="text-xs md:text-sm text-gray-500 mt-1">
-                        Due every month on day {expense.dayOfMonth} •{' '}
+                  <div
+                    key={expense._id}
+                    className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 sm:p-4"
+                  >
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold text-neutral-900 sm:text-base">
+                        {expense.name}
+                      </p>
+                      <p className="mt-1 text-xs text-neutral-500 sm:text-sm">
+                        Due every month on day {expense.dayOfMonth} ·{' '}
                         {expense.reminderDaysBefore} day(s) reminder
                       </p>
-                      <p className="text-xs md:text-sm text-gray-500 mt-1">
-                        Next: {formatDate(expense.nextDueDate)} • {formatCurrency(expense.amount)}
+                      <p className="mt-1 text-xs text-neutral-500 sm:text-sm">
+                        Next: {formatDate(expense.nextDueDate)} · {formatCurrency(expense.amount)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 w-full md:w-auto">
+                    <div className="mt-3 flex flex-col gap-2 border-t border-neutral-200 pt-3 sm:flex-row sm:justify-end">
                       <Button
                         type="button"
                         variant="outline"
-                        size="default"
-                        className="flex items-center justify-center gap-2 flex-1 md:flex-none text-sm md:text-base"
+                        size="sm"
+                        className="w-full border-neutral-300 text-neutral-700 sm:w-auto"
                         onClick={() => handleSnoozeClick(expense, 30)}
                         disabled={isSubmitting}
                       >
@@ -563,8 +572,8 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
                       <Button
                         type="button"
                         variant="destructive"
-                        size="default"
-                        className="flex items-center justify-center gap-2 flex-1 md:flex-none text-sm md:text-base"
+                        size="sm"
+                        className="w-full sm:w-auto"
                         onClick={() => handleDeactivateClick(expense._id)}
                         disabled={isSubmitting}
                       >

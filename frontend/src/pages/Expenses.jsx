@@ -1,16 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Plus,
-  Wallet,
-  TrendingUp,
-  Calendar,
   ClipboardList,
-  RefreshCw,
+  RotateCcw,
   ArrowLeftRight,
   Eye,
   Printer,
   Pencil,
   Trash2,
+  Landmark,
+  FileText,
 } from 'lucide-react';
 import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
 import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch';
@@ -29,7 +27,6 @@ import {
   useDeleteBankPaymentMutation,
 } from '../store/services/bankPaymentsApi';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency, formatDate } from '../utils/formatters';
@@ -39,7 +36,19 @@ import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import { PrintModal } from '../components/print';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
-import { PaymentPartyTypeRadio } from '@/components/payments/PaymentFormLayout';
+import {
+  PaymentFormCard,
+  PaymentFormGrid,
+  PaymentFormColumn,
+  PaymentFormSection,
+  PaymentPartyTypeRadio,
+  PaymentFormField,
+  PaymentAmountField,
+  PaymentDateField,
+  PaymentBankSelect,
+  PaymentFormActions,
+  paymentFormInputClass,
+} from '@/components/payments/PaymentFormLayout';
 import {
   PaymentCustomerField,
   PaymentSupplierField,
@@ -406,348 +415,314 @@ const Expenses = () => {
     setPrintExpense(expense);
   };
 
+  const isSaving =
+    creatingCashPayment ||
+    updatingCashPayment ||
+    creatingBankPayment ||
+    updatingBankPayment;
+
+  const expenseActionBtnClass =
+    'rounded-md p-2 text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900';
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center space-x-2">
-          <Wallet className="h-5 w-5 sm:h-6 sm:w-6 text-primary-600" />
-          <span>Record Expense</span>
-        </h1>
-        <div className="mt-1 lg:mt-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.45fr)] gap-3 lg:gap-6 lg:items-start lg:mt-1">
-          <p className="text-sm sm:text-base text-gray-600 lg:mt-1">
-            Log operating expenses directly from cash or bank while posting to the right expense account.
-          </p>
-          <div className="border border-gray-200 rounded-lg p-3 sm:p-4 bg-gray-50 w-full">
-            <p className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Payment Method</p>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mt-1">
-              {[
-                { value: 'cash', label: 'Cash', helper: 'Use cash on hand' },
-                { value: 'bank', label: 'Bank', helper: 'Use a bank account' }
-              ].map((option) => {
-                const isActive = paymentMethod === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => {
-                      setPaymentMethod(option.value);
-                      if (option.value === 'cash') {
-                        setFormData((prev) => ({ ...prev, bank: '' }));
-                      }
-                    }}
-                    className={`flex-1 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border-2 text-left transition-all duration-200 ${
-                      isActive
-                        ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-sm'
-                        : 'border-gray-200 text-gray-600 hover:border-primary-300 hover:bg-primary-50/40'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <div
-                        className={`h-4 w-4 rounded-full border flex-shrink-0 ${
-                          isActive ? 'border-primary-500 bg-primary-500' : 'border-gray-300 bg-white'
-                        }`}
-                      />
-                      <span className="text-xs sm:text-sm font-semibold">{option.label}</span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">{option.helper}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
+      <PaymentFormCard variant="expense">
+        <form onSubmit={handleSubmit}>
+          <PaymentFormGrid>
+            <PaymentFormColumn>
+              <PaymentFormSection
+                title="Payment Method"
+                description="Pay from cash on hand or a bank account"
+                icon={Landmark}
+              >
+                <PaymentPartyTypeRadio
+                  label="Pay From"
+                  value={paymentMethod}
+                  onChange={setPaymentMethod}
+                  options={[
+                    { value: 'cash', label: 'Cash' },
+                    { value: 'bank', label: 'Bank' },
+                  ]}
+                  onOptionChange={(type) => {
+                    if (type === 'cash') {
+                      setFormData((prev) => ({ ...prev, bank: '' }));
+                    }
+                  }}
+                />
+              </PaymentFormSection>
 
-      <div className="card relative">
-        <div className="card-content pt-4">
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <label className="form-label flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
-                  <span>Expense Account</span>
-                  <Button
+              <PaymentFormSection
+                title="Expense Details"
+                description="Account, amount, date, and optional party"
+                icon={ClipboardList}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <PaymentFormField label="Expense Account" required className="flex-1">
+                    <select
+                      className={paymentFormInputClass}
+                      value={formData.expenseAccount}
+                      onChange={(e) => handleExpenseAccountChange(e.target.value)}
+                      required
+                      disabled={expenseAccountsLoading}
+                    >
+                      <option value="">Select expense account</option>
+                      {expenseAccounts.map((account) => (
+                        <option key={account._id} value={account._id}>
+                          {account.accountName} ({account.accountCode})
+                        </option>
+                      ))}
+                    </select>
+                  </PaymentFormField>
+                  <button
                     type="button"
                     onClick={resetForm}
-                    variant="outline"
-                    size="default"
-                    className="flex items-center justify-center gap-2 text-xs sm:text-sm"
+                    className="mt-6 inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-700 shadow-sm hover:bg-neutral-50"
                   >
-                    <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <RotateCcw className="h-4 w-4" aria-hidden />
                     <span>Reset</span>
-                  </Button>
-                </label>
-                <select
-                  className="input"
-                  value={formData.expenseAccount}
-                  onChange={(e) => handleExpenseAccountChange(e.target.value)}
-                  required
-                  disabled={expenseAccountsLoading}
-                >
-                  <option value="">Select expense account</option>
-                  {expenseAccounts.map((account) => (
-                    <option key={account._id} value={account._id}>
-                      {account.accountName} ({account.accountCode})
-                    </option>
-                  ))}
-                </select>
-                {selectedAccount && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  </button>
+                </div>
+                {selectedAccount ? (
+                  <p className="text-xs text-neutral-500">
                     Selected account will be debited when this expense is posted.
                   </p>
-                )}
-              </div>
+                ) : null}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="form-label">Amount</label>
-                  <div className="relative">
-                    <TrendingUp className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className="input pl-9"
-                      value={formData.amount}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
-                      required
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="form-label">Date</label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <input
-                      type="date"
-                      className="input pl-9"
-                      value={formData.date}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="form-label">Description (optional)</label>
-                <Input
-                  type="text"
-                  placeholder={selectedAccount ? selectedAccount.accountName : 'e.g., Rent for November'}
-                  value={formData.particular}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, particular: e.target.value }))}
-                />
-              </div>
-              {paymentMethod === 'bank' && (
-                <div>
-                  <label className="form-label">Bank Account</label>
-                  <select
-                    className="input"
-                    value={formData.bank}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, bank: e.target.value }))}
-                    required
-                    disabled={banksLoading}
-                  >
-                    <option value="">Select bank account</option>
-                    {banks.map((bank) => (
-                      <option key={bank._id} value={bank._id}>
-                        {bank.bankName} • {bank.accountNumber}
-                        {bank.accountName ? ` (${bank.accountName})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div className="pt-2">
-                <label className="form-label mb-3 text-gray-600">Party Association (Optional)</label>
-                <PaymentPartyTypeRadio
-                  label="Party Type"
-                  value={partyType}
-                  onChange={setPartyType}
-                  onOptionChange={(type) => {
-                    if (type === 'supplier') {
-                      setSelectedCustomer(null);
-                      setCustomerSearchTerm('');
-                      setFormData(prev => ({ ...prev, customer: '' }));
-                      return;
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <PaymentAmountField
+                    value={formData.amount}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, amount: e.target.value }))
                     }
-                    setSelectedSupplier(null);
-                    setSupplierSearchTerm('');
-                    setFormData(prev => ({ ...prev, supplier: '' }));
-                  }}
-                  className="mb-4"
-                />
-
-                {partyType === 'supplier' ? (
-                  <PaymentSupplierField
-                    suppliers={suppliers}
-                    selectedSupplier={selectedSupplier}
-                    onSelect={handleSupplierSelect}
-                    onSearch={handleSupplierSearch}
-                    searchValue={supplierSearchTerm}
-                    placeholder="Search or select supplier..."
                   />
-                ) : (
-                  <PaymentCustomerField
-                    customers={customers}
-                    selectedCustomer={selectedCustomer}
-                    onSelect={handleCustomerSelect}
-                    onSearch={handleCustomerSearch}
-                    searchValue={customerSearchTerm}
-                    placeholder="Search or select customer..."
+                  <PaymentDateField
+                    value={formData.date}
+                    onChange={(date) =>
+                      setFormData((prev) => ({ ...prev, date }))
+                    }
                   />
-                )}
-              </div>
+                </div>
 
-            </div>
+                <PaymentFormField label="Description (optional)">
+                  <Input
+                    type="text"
+                    className={paymentFormInputClass}
+                    placeholder={
+                      selectedAccount ? selectedAccount.accountName : 'e.g., Rent for November'
+                    }
+                    value={formData.particular}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, particular: e.target.value }))
+                    }
+                  />
+                </PaymentFormField>
 
-            <div className="space-y-4">
-              <div>
-                <label className="form-label">Notes</label>
-                <Textarea
-                  rows={6}
-                  placeholder="Optional internal notes..."
-                  value={formData.notes}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
-                />
-              </div>
+                {paymentMethod === 'bank' ? (
+                  <PaymentBankSelect
+                    value={formData.bank}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, bank: e.target.value }))
+                    }
+                    banks={banks}
+                    loading={banksLoading}
+                  />
+                ) : null}
 
-              <div className="border rounded-lg bg-primary-50/40 p-4">
-                <h3 className="text-sm font-semibold text-primary-700 mb-2">Posting Preview</h3>
-                <div className="space-y-2 text-sm text-gray-700">
-                  <div className="flex items-center justify-between">
-                    <span>Debit</span>
-                    <span>{selectedAccount ? `${selectedAccount.accountName} (${selectedAccount.accountCode})` : 'Select expense account'}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Credit</span>
-                    <span>{paymentMethod === 'cash' ? 'Cash on Hand' : 'Bank Account'}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Amount</span>
-                    <span>
-                      {formData.amount
-                        ? formatCurrency(parseFloat(formData.amount) || 0)
-                        : formatCurrency(0)}
-                    </span>
+                <div className="border-t border-neutral-200 pt-4">
+                  <PaymentPartyTypeRadio
+                    label="Party Association (Optional)"
+                    value={partyType}
+                    onChange={setPartyType}
+                    onOptionChange={(type) => {
+                      if (type === 'supplier') {
+                        setSelectedCustomer(null);
+                        setCustomerSearchTerm('');
+                        setFormData((prev) => ({ ...prev, customer: '' }));
+                        return;
+                      }
+                      setSelectedSupplier(null);
+                      setSupplierSearchTerm('');
+                      setFormData((prev) => ({ ...prev, supplier: '' }));
+                    }}
+                    className="mb-4"
+                  />
+                  {partyType === 'supplier' ? (
+                    <PaymentSupplierField
+                      suppliers={suppliers}
+                      selectedSupplier={selectedSupplier}
+                      onSelect={handleSupplierSelect}
+                      onSearch={handleSupplierSearch}
+                      searchValue={supplierSearchTerm}
+                      placeholder="Search or select supplier..."
+                    />
+                  ) : (
+                    <PaymentCustomerField
+                      customers={customers}
+                      selectedCustomer={selectedCustomer}
+                      onSelect={handleCustomerSelect}
+                      onSearch={handleCustomerSearch}
+                      searchValue={customerSearchTerm}
+                      placeholder="Search or select customer..."
+                    />
+                  )}
+                </div>
+              </PaymentFormSection>
+            </PaymentFormColumn>
+
+            <PaymentFormColumn>
+              <PaymentFormSection
+                title="Notes & Posting"
+                description="Internal notes and ledger preview"
+                icon={FileText}
+              >
+                <PaymentFormField label="Notes">
+                  <Textarea
+                    rows={5}
+                    className="min-h-[120px] rounded-lg border-neutral-200 bg-white text-sm shadow-sm focus-visible:ring-neutral-300"
+                    placeholder="Optional internal notes..."
+                    value={formData.notes}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, notes: e.target.value }))
+                    }
+                  />
+                </PaymentFormField>
+
+                <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                    Posting Preview
+                  </h3>
+                  <div className="space-y-2.5 text-sm text-neutral-700">
+                    <div className="flex items-start justify-between gap-3 border-b border-neutral-100 pb-2">
+                      <span className="font-medium text-neutral-500">Debit</span>
+                      <span className="text-right text-neutral-900">
+                        {selectedAccount
+                          ? `${selectedAccount.accountName} (${selectedAccount.accountCode})`
+                          : 'Select expense account'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 border-b border-neutral-100 pb-2">
+                      <span className="font-medium text-neutral-500">Credit</span>
+                      <span className="text-neutral-900">
+                        {paymentMethod === 'cash' ? 'Cash on Hand' : 'Bank Account'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium text-neutral-500">Amount</span>
+                      <span className="text-lg font-bold tabular-nums text-neutral-900">
+                        {formData.amount
+                          ? formatCurrency(parseFloat(formData.amount) || 0)
+                          : formatCurrency(0)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </PaymentFormSection>
+            </PaymentFormColumn>
+          </PaymentFormGrid>
 
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  variant="default"
-                  size="default"
-                  className="flex items-center justify-center gap-2 w-full sm:w-auto"
-                  disabled={
-                    creatingCashPayment ||
-                    updatingCashPayment ||
-                    creatingBankPayment ||
-                    updatingBankPayment
-                  }
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>{editingExpense ? 'Update Expense' : 'Save Expense'}</span>
-                </Button>
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>
+          <PaymentFormActions
+            onReset={resetForm}
+            onSubmit={() => handleSubmit({ preventDefault: () => {} })}
+            isSubmitting={isSaving}
+            submitLabel={editingExpense ? 'Update Expense' : 'Save Expense'}
+            submittingLabel={editingExpense ? 'Updating...' : 'Saving...'}
+          />
+        </form>
+      </PaymentFormCard>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="card">
-          <div className="card-header flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
-              <ArrowLeftRight className="h-5 w-5 text-primary-600" />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 sm:px-5 sm:py-4">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-neutral-900 sm:text-lg">
+              <ArrowLeftRight className="h-5 w-5 text-neutral-700" aria-hidden />
               <span>Recent Expense Entries</span>
             </h2>
             {(cashExpensesLoading || bankExpensesLoading) && (
-              <span className="text-xs text-gray-500">Refreshing...</span>
+              <span className="text-xs text-neutral-500">Refreshing...</span>
             )}
           </div>
-          <div className="card-content">
+          <div className="p-4 sm:p-5">
             {combinedRecentExpenses.length === 0 ? (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-neutral-500">
                 Expenses recorded here will appear in this list for quick reference.
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-neutral-200">
+                  <thead className="bg-neutral-50">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Voucher</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Expense Account</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Description</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Party</th>
-                      <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Amount</th>
-                      <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Method</th>
-                      <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Date</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Voucher</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Expense Account</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Description</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Party</th>
+                      <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-neutral-500">Amount</th>
+                      <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-neutral-500">Method</th>
+                      <th className="px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-neutral-500">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="divide-y divide-neutral-100 bg-white">
                     {combinedRecentExpenses.map((expense) => (
-                      <tr key={expense._id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                      <tr key={expense._id} className="hover:bg-neutral-50">
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-neutral-700">
                           {formatDate(expense.date || expense.createdAt)}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-neutral-700">
                           {expense.voucherCode || expense._id}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-700">
+                        <td className="px-4 py-3 text-sm text-neutral-700">
                           {expense.expenseAccount?.accountName
                             ? `${expense.expenseAccount.accountName} (${expense.expenseAccount.accountCode})`
                             : '—'}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
+                        <td className="px-4 py-3 text-sm text-neutral-600">
                           {expense.particular || '—'}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
+                        <td className="px-4 py-3 text-sm text-neutral-600">
                           {expense.supplier?.displayName || expense.customer?.displayName || '—'}
                         </td>
-                        <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right whitespace-nowrap">
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold tabular-nums text-neutral-900">
                           {formatCurrency(expense.amount || 0)}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 text-center capitalize whitespace-nowrap">
+                        <td className="whitespace-nowrap px-4 py-3 text-center text-sm capitalize text-neutral-600">
                           {resolvePaymentMethodLabel(expense)}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 text-center whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1.5">
+                        <td className="whitespace-nowrap px-4 py-3 text-center text-sm text-neutral-600">
+                          <div className="flex items-center justify-center gap-1">
                             <button
                               type="button"
                               onClick={() => handleViewExpense(expense)}
-                              className="p-2 rounded-md text-blue-600 hover:bg-blue-50 transition-colors"
+                              className={expenseActionBtnClass}
                               title="View Expense"
                             >
-                              <Eye className="h-4 w-4" />
+                              <Eye className="h-4 w-4" aria-hidden />
                               <span className="sr-only">View</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => handlePrintExpense(expense)}
-                              className="p-2 rounded-md text-green-600 hover:bg-green-50 transition-colors"
+                              className={expenseActionBtnClass}
                               title="Print Expense"
                             >
-                              <Printer className="h-4 w-4" />
+                              <Printer className="h-4 w-4" aria-hidden />
                               <span className="sr-only">Print</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => handleEditExpense(expense)}
-                              className="p-2 rounded-md text-blue-600 hover:bg-blue-50 transition-colors"
+                              className={expenseActionBtnClass}
                               title="Edit Expense"
                             >
-                              <Pencil className="h-4 w-4" />
+                              <Pencil className="h-4 w-4" aria-hidden />
                               <span className="sr-only">Edit</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDeleteExpense(expense)}
-                              className="p-2 rounded-md text-red-600 hover:bg-red-50 transition-colors"
+                              className={expenseActionBtnClass}
                               title="Delete Expense"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" aria-hidden />
                               <span className="sr-only">Delete</span>
                             </button>
                           </div>
