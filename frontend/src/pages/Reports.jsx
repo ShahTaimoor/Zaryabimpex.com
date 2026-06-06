@@ -62,6 +62,7 @@ import { toTitleCase } from '../utils/titleCase';
 const REPORT_TITLE_CASE_KEYS = new Set([
   'name',
   'businessName',
+  'productName',
   'supplierName',
   'customerName',
   'categoryName',
