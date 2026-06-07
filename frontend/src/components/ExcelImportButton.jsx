@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { FileUp, Upload } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { LoadingSpinner } from './LoadingSpinner';
 
 /**
  * A professional Excel Import button component
@@ -78,7 +79,7 @@ const ExcelImportButton = React.forwardRef(({ onDataImported, label = "Import Ex
                 className={`flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-gray-200 hover:border-blue-500 hover:bg-blue-50 text-gray-700 hover:text-blue-700 rounded-lg transition-all duration-200 shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed group ${className}`}
             >
                 {isImporting ? (
-                    <div className="h-4 w-4 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
+                    <LoadingSpinner size="sm" inline />
                 ) : (
                     <FileUp className="h-4 w-4 text-blue-600 group-hover:scale-110 transition-transform" />
                 )}

@@ -22,7 +22,7 @@ import { useGetProductsQuery } from '../store/services/productsApi';
 import { useGetCategoriesQuery } from '../store/services/categoriesApi';
 import { useGetCustomersQuery } from '../store/services/customersApi';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingButton } from '../components/LoadingSpinner';
 import { Input } from '@/components/ui/input';
 
 const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
@@ -1495,17 +1495,13 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
               </button>
               {/* Only show Create Discount button on the last tab (advanced) */}
               {activeTab === 'advanced' && (
-                <button
+                <LoadingButton
                   type="submit"
                   className="px-8 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={isCreating}
+                  isLoading={isCreating}
                 >
-                  {isCreating ? (
-                    <LoadingSpinner size="sm" />
-                  ) : (
-                    'Create Discount'
-                  )}
-                </button>
+                  Create Discount
+                </LoadingButton>
               )}
             </div>
           </div>

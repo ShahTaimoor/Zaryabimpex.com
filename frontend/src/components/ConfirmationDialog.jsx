@@ -9,6 +9,7 @@ import {
   Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { LoadingButton } from '@/components/LoadingSpinner';
 
 const ConfirmationDialog = ({
   isOpen,
@@ -151,23 +152,17 @@ const ConfirmationDialog = ({
 
           {/* Actions */}
           <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse sm:gap-3">
-            <Button
+            <LoadingButton
               type="button"
               onClick={onConfirm}
-              disabled={isLoading}
+              isLoading={isLoading}
+              loadingText="Processing..."
               variant="outline"
               className={`w-full sm:w-auto sm:text-sm ${getConfirmButtonColor()}`}
               {...confirmButtonProps}
             >
-              {isLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
-                  Processing...
-                </>
-              ) : (
-                confirmText
-              )}
-            </Button>
+              {confirmText}
+            </LoadingButton>
             <Button
               type="button"
               onClick={onClose}

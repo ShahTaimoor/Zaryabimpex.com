@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import DateFilter from './DateFilter';
+import { LoadingInline } from './LoadingSpinner';
 
 const DashboardReportModal = ({ 
   isOpen, 
@@ -192,8 +193,7 @@ const DashboardReportModal = ({
                 {isLoading ? (
                   <tr>
                     <td colSpan={columns.length} className="px-3 sm:px-4 md:px-6 py-6 sm:py-8 text-center">
-                      <RefreshCw className="h-6 w-6 sm:h-8 sm:w-8 animate-spin mx-auto text-gray-400" />
-                      <p className="mt-2 text-xs sm:text-sm text-gray-500">Loading data...</p>
+                      <LoadingInline message="Loading data..." />
                     </td>
                   </tr>
                 ) : data.length === 0 ? (

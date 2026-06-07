@@ -1,5 +1,6 @@
 import React from 'react';
 import { RefreshCw } from 'lucide-react';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
 
 /**
  * Standard "Results" card-header used by Bank/Cash Receipts/Payments and
@@ -65,9 +66,11 @@ export function ListResultsHeader({
               className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
               title="Refresh"
             >
-              <RefreshCw
-                className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
-              />
+              {refreshing ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
             </button>
           )}
         </div>

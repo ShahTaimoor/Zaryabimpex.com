@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Minus, AlertCircle } from 'lucide-react';
 import { useCreatePurchaseReturnMutation } from '../store/services/purchaseReturnsApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingButton } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -162,14 +162,15 @@ const CreatePurchaseReturnModal = ({ isOpen, onClose, onSuccess, purchaseInvoice
           <Button type="button" onClick={onClose} variant="secondary">
             Cancel
           </Button>
-          <Button
+          <LoadingButton
             type="submit"
             form="purchase-return-form"
-            disabled={isCreatingReturn || formData.items.length === 0}
+            isLoading={isCreatingReturn}
+            disabled={formData.items.length === 0}
             variant="default"
           >
-            {isCreatingReturn ? <LoadingSpinner size="sm" /> : 'Create Return Request'}
-          </Button>
+            Create Return Request
+          </LoadingButton>
         </div>
       }
     >

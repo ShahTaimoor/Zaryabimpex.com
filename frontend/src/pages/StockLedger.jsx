@@ -13,7 +13,7 @@ import { useGetStockLedgerQuery } from '../store/services/inventoryApi';
 import { useGetProductsQuery } from '../store/services/productsApi';
 import { useGetCustomersQuery } from '../store/services/customersApi';
 import { useGetSuppliersQuery } from '../store/services/suppliersApi';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingButton, LoadingInline } from '../components/LoadingSpinner';
 import { handleApiError } from '../utils/errorHandler';
 import DateFilter from '../components/DateFilter';
 import { getCurrentDatePakistan, getDateDaysAgo, formatDateForInput } from '../utils/dateUtils';
@@ -648,15 +648,17 @@ export const StockLedger = () => {
                     className="!space-y-0"
                   />
                 </div>
-                <Button
+                <LoadingButton
                   type="button"
                   onClick={handleView}
-                  disabled={isLoading || isFetching}
+                  isLoading={isLoading || isFetching}
                   className="h-11 min-w-[160px] shrink-0 gap-2 rounded-lg bg-blue-600 px-6 text-sm font-semibold text-white shadow-md shadow-blue-600/25 hover:bg-blue-700 disabled:opacity-50"
                 >
-                  <Eye className="h-4 w-4" />
-                  {isLoading || isFetching ? 'Loading…' : 'View Report'}
-                </Button>
+                  <>
+                    <Eye className="h-4 w-4" />
+                    View Report
+                  </>
+                </LoadingButton>
               </div>
             </div>
           </div>
@@ -698,10 +700,7 @@ export const StockLedger = () => {
             {/* Report Content */}
             {isLoading || isFetching ? (
               <div className="bg-slate-50/50 px-6 py-16 text-center">
-                <div className="mx-auto mb-4 inline-flex rounded-full bg-blue-50 p-4">
-                  <LoadingSpinner />
-                </div>
-                <p className="text-sm font-medium text-slate-600">Loading stock ledger data…</p>
+                <LoadingInline message="Loading stock ledger data…" />
               </div>
             ) : ledger.length === 0 ? (
               <div className="px-6 py-16 text-center">

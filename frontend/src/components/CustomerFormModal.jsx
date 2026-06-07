@@ -369,7 +369,7 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
               />
               {businessNameChecking && (
                 <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <LoadingInline size="sm" />
+                  <LoadingInline />
                 </div>
               )}
             </div>
@@ -419,7 +419,7 @@ export const CustomerFormModal = ({ customer, onSave, onCancel, isSubmitting }) 
                 />
                 {emailChecking && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <LoadingInline size="sm" />
+                    <LoadingInline />
                   </div>
                 )}
               </div>

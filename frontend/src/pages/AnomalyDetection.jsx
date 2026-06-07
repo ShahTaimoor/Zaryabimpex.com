@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useGetAnomaliesQuery, useGetSummaryQuery } from '../store/services/anomalyDetectionApi';
 import { formatCurrency } from '../utils/formatters';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingPage } from '../components/LoadingSpinner';
 import { showErrorToast, handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
 import { PageLayout } from '../components/layout/PageLayout';
@@ -97,7 +97,7 @@ const AnomalyDetection = () => {
   };
 
   if (isLoading) {
-    return <LoadingSpinner />;
+    return <LoadingPage useSpinningText={false} />;
   }
 
   return (

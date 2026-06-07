@@ -32,7 +32,7 @@ import { handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingSpinner, LoadingInline, LoadingButton } from '../components/LoadingSpinner';
 import DateFilter from '../components/DateFilter';
 import PageShell from '../components/PageShell';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -320,7 +320,7 @@ const JournalPartyBalance = ({ type, partyId }) => {
   if (isLoading && balances === undefined) {
     return (
       <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-1">
-        <LoadingSpinner size="sm" inline /> Loading balance…
+        <LoadingInline message="Loading balance…" />
       </p>
     );
   }
@@ -863,7 +863,7 @@ export const JournalVouchers = () => {
 
           {accountsFetching && (
             <div className="text-sm text-slate-500 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5">
-              <LoadingSpinner size="sm" inline /> Fetching accounts…
+              <LoadingInline message="Fetching accounts…" />
             </div>
           )}
 
@@ -1022,19 +1022,19 @@ export const JournalVouchers = () => {
             >
               Clear Form
             </Button>
-            <Button
+            <LoadingButton
               type="submit"
               variant="default"
               size="default"
               className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800"
-              disabled={recording || accountsLoading || !isBalanced}
+              isLoading={recording}
+              loadingText="Recording…"
+              disabled={accountsLoading || !isBalanced}
             >
-              {recording ? (
-                <><LoadingSpinner size="sm" inline className="mr-2" /> Recording…</>
-              ) : (
-                <><Save className="h-4 w-4" /> Record Journal Entry</>
-              )}
-            </Button>
+              <>
+                <Save className="h-4 w-4" /> Record Journal Entry
+              </>
+            </LoadingButton>
           </div>
         </div>
       </form>
@@ -1053,7 +1053,12 @@ export const JournalVouchers = () => {
             size="sm"
             className="flex items-center gap-2 border-slate-200 self-start sm:self-auto"
           >
-            <RefreshCcw className={`h-4 w-4 ${vouchersFetching ? 'animate-spin' : ''}`} /> Refresh
+            {vouchersFetching ? (
+              <LoadingSpinner size="sm" />
+            ) : (
+              <RefreshCcw className="h-4 w-4" />
+            )}{' '}
+            Refresh
           </Button>
         </div>
 

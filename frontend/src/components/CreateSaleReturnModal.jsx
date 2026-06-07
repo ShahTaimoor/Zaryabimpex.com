@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateSaleReturnMutation } from '../store/services/saleReturnsApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingButton } from '../components/LoadingSpinner';
 import BaseModal from './BaseModal';
 import FormField from './FormField';
 
@@ -163,14 +163,15 @@ const CreateSaleReturnModal = ({ isOpen, onClose, onSuccess, sale, customer }) =
           <Button type="button" onClick={onClose} variant="secondary">
             Cancel
           </Button>
-          <Button
+          <LoadingButton
             type="submit"
             form="sale-return-form"
-            disabled={isCreatingReturn || formData.items.length === 0}
+            isLoading={isCreatingReturn}
+            disabled={formData.items.length === 0}
             variant="default"
           >
-            {isCreatingReturn ? <LoadingSpinner size="sm" /> : 'Create Return Request'}
-          </Button>
+            Create Return Request
+          </LoadingButton>
         </div>
       }
     >

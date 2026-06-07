@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { 
   Edit, 
   Trash2, 
@@ -50,7 +51,7 @@ export const BulkOperationsBar = ({
           
           {isOperationInProgress && (
             <div className="flex items-center space-x-2">
-              <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-2 border-primary-600 border-t-transparent"></div>
+              <LoadingSpinner size="sm" />
               <span className="text-xs sm:text-sm text-gray-600">
                 {operationProgress.message || 'Processing...'} ({operationProgress.current}/{operationProgress.total})
               </span>

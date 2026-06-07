@@ -26,7 +26,7 @@ import {
 import { useLazyGetSupplierQuery } from '../store/services/suppliersApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingPage } from '../components/LoadingSpinner';
 import { useTab } from '../contexts/TabContext';
 import { getComponentInfo } from '../components/ComponentRegistry';
 import PrintModal from '../components/PrintModal';
@@ -554,7 +554,7 @@ export const PurchaseInvoices = () => {
   };
 
   if (isLoading) {
-    return <LoadingSpinner />;
+    return <LoadingPage useSpinningText={false} />;
   }
 
   if (error) {

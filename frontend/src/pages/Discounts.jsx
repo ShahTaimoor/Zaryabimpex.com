@@ -30,7 +30,7 @@ import {
   useDeleteDiscountMutation,
 } from '../store/services/discountsApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingSpinner, LoadingPage } from '../components/LoadingSpinner';
 import CreateDiscountModal from '../components/CreateDiscountModal';
 import DiscountDetailModal from '../components/DiscountDetailModal';
 import PageShell from '../components/PageShell';
@@ -217,7 +217,11 @@ const Discounts = () => {
               onClick={() => refetchDiscounts()}
               className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all shadow-sm w-full sm:w-auto"
             >
-              <RefreshCw className={`h-4 w-4 ${discountsLoading ? 'animate-spin' : ''}`} />
+              {discountsLoading ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
               <span>Refresh</span>
             </button>
             <button
@@ -335,7 +339,7 @@ const Discounts = () => {
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="table-scroll">
           {discountsLoading ? (
-            <div className="py-20 text-center"><LoadingSpinner /></div>
+            <div className="py-20 text-center"><LoadingPage useSpinningText={false} /></div>
           ) : discounts.length === 0 ? (
             <div className="py-24 text-center">
               <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">

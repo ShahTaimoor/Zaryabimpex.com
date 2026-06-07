@@ -31,7 +31,7 @@ import { useLazyGetProductsQuery } from '../store/services/productsApi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
+import { LoadingSpinner, LoadingButton, LoadingPage } from '../components/LoadingSpinner';
 import { handleApiError } from '../utils/errorHandler';
 import { toast } from 'sonner';
 import DateFilter from '../components/DateFilter';
@@ -302,7 +302,7 @@ export const StockMovements = () => {
   }, [rawPagination, updateFromPagination]);
 
   if (isLoading && !movementsData) {
-    return <LoadingSpinner />;
+    return <LoadingPage useSpinningText={false} />;
   }
 
   return (
@@ -481,26 +481,21 @@ export const StockMovements = () => {
                 <RotateCcw className="h-4 w-4" />
                 Reset
               </Button>
-              <Button
+              <LoadingButton
                 type="button"
                 onClick={handleSearch}
                 variant="default"
                 size="default"
                 className="flex items-center gap-2"
+                isLoading={isFetching && !isLoading}
+                loadingText="Searching..."
                 disabled={isFetching && !isLoading}
               >
-                {isFetching && !isLoading ? (
-                  <>
-                    <LoadingSpinner size="sm" inline className="mr-2" />
-                    Searching...
-                  </>
-                ) : (
-                  <>
-                    <Search className="h-4 w-4" />
-                    Search
-                  </>
-                )}
-              </Button>
+                <>
+                  <Search className="h-4 w-4" />
+                  Search
+                </>
+              </LoadingButton>
             </div>
           </div>
         </div>

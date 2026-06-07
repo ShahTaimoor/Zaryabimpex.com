@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from '@/components/ui/button';
+import { LoadingSpinner, LoadingInline } from '../components/LoadingSpinner';
 import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import {
@@ -1118,7 +1119,11 @@ export const Reports = () => {
             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors h-10 w-10 flex items-center justify-center border border-gray-200 bg-white"
             title="Refresh data (bypasses server report cache for ~90s TTL)"
           >
-            <RefreshCcw className={`h-5 w-5 ${(summaryLoading || partyLoading || salesLoading || productReportLoading || customerReportLoading || inventoryLoading || financialLoading || bankCashLoading) ? 'animate-spin' : ''}`} />
+            {(summaryLoading || partyLoading || salesLoading || productReportLoading || customerReportLoading || inventoryLoading || financialLoading || bankCashLoading) ? (
+              <LoadingSpinner size="sm" />
+            ) : (
+              <RefreshCcw className="h-5 w-5" />
+            )}
           </button>
 
           {/* Desktop Actions */}
@@ -1325,7 +1330,7 @@ export const Reports = () => {
                     {partyLoading ? (
                       <tr>
                         <td colSpan={getColumns().length} className="px-6 py-10 text-center">
-                          <div className="flex justify-center"><RefreshCcw className="h-6 w-6 animate-spin text-gray-400" /></div>
+                          <div className="flex justify-center"><LoadingSpinner size="lg" /></div>
                         </td>
                       </tr>
                     ) : partyBalanceTotal === 0 ? (
@@ -1475,7 +1480,7 @@ export const Reports = () => {
                     {salesLoading ? (
                       <tr>
                         <td colSpan={getColumns().length} className="px-6 py-10 text-center">
-                          <div className="flex justify-center"><RefreshCcw className="h-6 w-6 animate-spin text-gray-400" /></div>
+                          <div className="flex justify-center"><LoadingSpinner size="lg" /></div>
                         </td>
                       </tr>
                     ) : salesReportData?.data?.length === 0 ? (
@@ -1555,7 +1560,7 @@ export const Reports = () => {
                     {productReportLoading ? (
                       <tr>
                         <td colSpan={getColumns().length} className="px-6 py-10 text-center">
-                          <div className="flex justify-center"><RefreshCcw className="h-6 w-6 animate-spin text-gray-400" /></div>
+                          <div className="flex justify-center"><LoadingSpinner size="lg" /></div>
                         </td>
                       </tr>
                     ) : (productReportData?.products?.length ?? 0) === 0 ? (
@@ -1600,7 +1605,7 @@ export const Reports = () => {
                     {customerReportLoading ? (
                       <tr>
                         <td colSpan={getColumns().length} className="px-6 py-10 text-center">
-                          <div className="flex justify-center"><RefreshCcw className="h-6 w-6 animate-spin text-gray-400" /></div>
+                          <div className="flex justify-center"><LoadingSpinner size="lg" /></div>
                         </td>
                       </tr>
                     ) : (customerReportData?.customers?.length ?? 0) === 0 ? (
@@ -1725,7 +1730,7 @@ export const Reports = () => {
                     {inventoryLoading ? (
                       <tr>
                         <td colSpan={getColumns().length} className="px-6 py-10 text-center">
-                          <div className="flex justify-center"><RefreshCcw className="h-6 w-6 animate-spin text-gray-400" /></div>
+                          <div className="flex justify-center"><LoadingSpinner size="lg" /></div>
                         </td>
                       </tr>
                     ) : (isInventoryPaginated
@@ -1934,7 +1939,7 @@ export const Reports = () => {
                     {financialLoading ? (
                       <tr>
                         <td colSpan={getColumns().length} className="px-6 py-10 text-center">
-                          <div className="flex justify-center"><RefreshCcw className="h-6 w-6 animate-spin text-gray-400" /></div>
+                          <div className="flex justify-center"><LoadingSpinner size="lg" /></div>
                         </td>
                       </tr>
                     ) : financialReportData?.data?.length === 0 ? (
@@ -2194,7 +2199,7 @@ export const Reports = () => {
                     {bankCashLoading ? (
                       <tr>
                         <td colSpan={getColumns().length} className="px-6 py-10 text-center">
-                          <div className="flex justify-center"><RefreshCcw className="h-6 w-6 animate-spin text-gray-400" /></div>
+                          <div className="flex justify-center"><LoadingSpinner size="lg" /></div>
                         </td>
                       </tr>
                     ) : bankCashSummaryData?.banks?.length === 0 ? (

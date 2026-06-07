@@ -4,6 +4,7 @@ import { useResponsive } from './ResponsiveContainer';
 import { useTrackInteractionMutation } from '../store/services/recommendationsApi';
 import { handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
+import { LoadingButton } from './LoadingSpinner';
 import { OptimizedImage } from './OptimizedImage';
 
 const ProductRecommendationCard = ({ 
@@ -202,22 +203,19 @@ const ProductRecommendationCard = ({
 
         {/* Actions */}
         <div className="flex flex-col gap-2">
-          <Button
+          <LoadingButton
             onClick={handleAddToCart}
-            disabled={isOutOfStock || isAddingToCart}
+            isLoading={isAddingToCart}
+            disabled={isOutOfStock}
             variant="default"
             size="sm"
             className="w-full flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isAddingToCart ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-            ) : (
-              <>
-                <ShoppingCart className="h-4 w-4 shrink-0" />
-                <span className="whitespace-nowrap">Add to Cart</span>
-              </>
-            )}
-          </Button>
+            <>
+              <ShoppingCart className="h-4 w-4 shrink-0" />
+              <span className="whitespace-nowrap">Add to Cart</span>
+            </>
+          </LoadingButton>
         </div>
       </div>
     </div>

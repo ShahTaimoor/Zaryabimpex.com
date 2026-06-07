@@ -1,5 +1,6 @@
 import React, { useState, useEffect, forwardRef } from 'react';
 import { AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react';
+import { LoadingSpinner } from './LoadingSpinner';
 
 // Validated Input Component with real-time validation
 const ValidatedInput = forwardRef(({
@@ -137,7 +138,7 @@ const ValidatedInput = forwardRef(({
         {/* Validation icon */}
         <div className="absolute inset-y-0 right-0 flex items-center pr-3">
           {isValidating && (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <LoadingSpinner size="sm" inline />
           )}
           {shouldShowError && (
             <AlertCircle className="h-4 w-4 text-red-500" />
@@ -301,7 +302,7 @@ export const ValidatedTextarea = forwardRef(({
         {/* Validation indicator */}
         <div className="absolute top-2 right-2">
           {isValidating && (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <LoadingSpinner size="sm" inline />
           )}
           {shouldShowError && (
             <AlertCircle className="h-4 w-4 text-red-500" />

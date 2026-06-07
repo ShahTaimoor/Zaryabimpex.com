@@ -8,6 +8,7 @@ import { getProductDisplayName } from '../../../utils/partyDisplay';
 import { useWarehouseInventoryMode } from '../hooks/useWarehouseInventoryMode';
 import { getLocationId, getPrimaryLocation, normalizeLocationList } from '../utils/inventoryHelpers';
 import LocationSelectTabs from './LocationSelectTabs';
+import { LoadingSpinner, LoadingInline } from '../../../components/LoadingSpinner';
 
 const PAGE_SIZES = [50, 100, 200, 500];
 
@@ -135,7 +136,7 @@ export default function LocationStockReportSection({
   if (locationsLoading) {
     return (
       <div className="flex justify-center py-16">
-        <RefreshCcw className="h-8 w-8 animate-spin text-gray-400" />
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -165,7 +166,11 @@ export default function LocationStockReportSection({
           onClick={() => stockQuery.refetch()}
           className="inline-flex items-center gap-2 self-start rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
         >
-          <RefreshCcw className={`h-4 w-4 ${stockQuery.isFetching ? 'animate-spin' : ''}`} />
+          {stockQuery.isFetching ? (
+            <LoadingSpinner size="sm" />
+          ) : (
+            <RefreshCcw className="h-4 w-4" />
+          )}
           Refresh
         </button>
       </div>
@@ -204,7 +209,7 @@ export default function LocationStockReportSection({
             {stockQuery.isLoading ? (
               <tr>
                 <td colSpan={6} className="px-4 py-12 text-center">
-                  <RefreshCcw className="h-6 w-6 animate-spin text-gray-400 mx-auto" />
+                  <LoadingSpinner size="lg" className="mx-auto" />
                 </td>
               </tr>
             ) : stockRows.length === 0 ? (

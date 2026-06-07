@@ -21,6 +21,7 @@ export const LoadingSpinner = ({ size = 'md', className = '', inline = false }) 
 export const LoadingButton = ({
   isLoading,
   loading,
+  loadingText = 'Loading...',
   children,
   disabled,
   className = '',
@@ -46,7 +47,7 @@ export const LoadingButton = ({
         ) : (
           <div className="flex items-center justify-center">
             <LoadingSpinner size="sm" className="mr-2" />
-            <span>Loading...</span>
+            <span>{loadingText}</span>
           </div>
         )
       ) : (

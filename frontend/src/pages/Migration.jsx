@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { Button } from '@/components/ui/button';
+import { LoadingButton } from '../components/LoadingSpinner';
 import { useUpdateInvoicePrefixMutation } from '../store/services/migrationApi';
 import { PageLayout } from '../components/layout/PageLayout';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -35,15 +35,18 @@ const Migration = () => {
           subtitle="Update existing ORD- invoices to SI- format"
           icon={RefreshCw}
           actions={
-            <Button
+            <LoadingButton
               onClick={handleRunMigration}
-              disabled={isRunning}
+              isLoading={isRunning}
+              loadingText="Running Migration..."
               variant="default"
               className="flex items-center gap-2 w-full sm:w-auto"
             >
-              <RefreshCw className={`h-4 w-4 ${isRunning ? 'animate-spin' : ''}`} />
-              <span>{isRunning ? 'Running Migration...' : 'Run Migration'}</span>
-            </Button>
+              <>
+                <RefreshCw className="h-4 w-4" />
+                <span>Run Migration</span>
+              </>
+            </LoadingButton>
           }
           className="mb-6"
         />

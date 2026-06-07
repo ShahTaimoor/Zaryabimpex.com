@@ -33,7 +33,7 @@ import {
   useDeleteAccountMutation,
 } from '../store/services/chartOfAccountsApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
-import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
+import { LoadingPage, LoadingButton } from '../components/LoadingSpinner';
 import { handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1052,7 +1052,7 @@ export const ChartOfAccounts = () => {
   };
 
   if (isLoading) {
-    return <LoadingSpinner />;
+    return <LoadingPage useSpinningText={false} />;
   }
 
   if (error) {

@@ -442,7 +442,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
               />
               {companyNameChecking && (
                 <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <LoadingInline size="sm" />
+                  <LoadingInline />
                 </div>
               )}
             </div>
@@ -471,7 +471,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
                 />
                 {contactNameChecking && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <LoadingInline size="sm" />
+                    <LoadingInline />
                   </div>
                 )}
               </div>
@@ -497,7 +497,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
                 />
                 {emailChecking && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <LoadingInline size="sm" />
+                    <LoadingInline />
                   </div>
                 )}
               </div>

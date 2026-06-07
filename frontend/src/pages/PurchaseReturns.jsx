@@ -26,7 +26,7 @@ import {
 } from '../store/services/purchaseReturnsApi';
 import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { LoadingSpinner, LoadingCard, LoadingTable, LoadingButton } from '../components/LoadingSpinner';
+import { LoadingSpinner, LoadingCard, LoadingTable, LoadingButton, LoadingInline } from '../components/LoadingSpinner';
 import { useResponsive } from '../components/ResponsiveContainer';
 import { SupplierPartySelect } from '../components/order/SupplierPartySelect';
 import CreatePurchaseReturnModal from '../components/CreatePurchaseReturnModal';
@@ -575,7 +575,7 @@ const PurchaseReturns = () => {
               </div>
             </div>
             {suppliersLoading ? (
-              <LoadingSpinner />
+              <LoadingInline message="Loading suppliers..." />
             ) : (
               <SupplierPartySelect
                 placeholder="Search supplier by name, phone, or email..."

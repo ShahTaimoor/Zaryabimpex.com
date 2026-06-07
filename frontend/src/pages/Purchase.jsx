@@ -2149,7 +2149,11 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                     className="p-2 text-gray-400 transition-colors hover:text-gray-600 hover:bg-gray-100 rounded-full"
                     title="Refresh"
                   >
-                    <RefreshCw className={`h-4 w-4 ${isSavedPurchaseLoading ? 'animate-spin' : ''}`} />
+                    {isSavedPurchaseLoading ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -2274,8 +2278,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
           <div className="card-content p-0">
             {isSavedPurchaseLoading ? (
               <div className="p-8 text-center">
-                <RefreshCw className="h-8 w-8 animate-spin mx-auto text-gray-400" />
-                <p className="mt-2 text-gray-500">Loading purchase invoices...</p>
+                <LoadingInline message="Loading purchase invoices..." />
               </div>
             ) : savedPurchaseError ? (
               <div className="p-8 text-center text-red-600">

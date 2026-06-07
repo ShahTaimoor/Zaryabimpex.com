@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useGetSummaryQuery, useGetAnalyticsQuery } from '../store/services/customerAnalyticsApi';
 import { formatCurrency } from '../utils/formatters';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingPage } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { showErrorToast, handleApiError } from '../utils/errorHandler';
@@ -88,7 +88,7 @@ const CustomerAnalytics = () => {
   };
 
   if (summaryLoading || analyticsLoading) {
-    return <LoadingSpinner />;
+    return <LoadingPage useSpinningText={false} />;
   }
 
   return (

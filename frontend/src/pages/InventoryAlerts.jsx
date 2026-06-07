@@ -7,7 +7,6 @@ import {
   Package,
   CheckCircle,
   XCircle,
-  Loader2,
   Zap,
   Search,
   ChevronLeft,
@@ -20,7 +19,7 @@ import {
 } from '../store/services/inventoryApi';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingSpinner, LoadingButton, LoadingTable } from '../components/LoadingSpinner';
 import { POLLING_INTERVALS } from '../config/polling';
 import { PageLayout } from '@/components/layout/PageLayout';
 
@@ -182,21 +181,20 @@ const InventoryAlerts = () => {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Monitor low stock and auto-generate purchase orders</p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-          <Button
+          <LoadingButton
             onClick={handleGeneratePOs}
-            disabled={generating || alerts.length === 0}
+            isLoading={generating}
+            disabled={alerts.length === 0}
             variant="default"
             size="default"
             className="flex items-center justify-center gap-2"
           >
-            {generating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
+            <>
               <Zap className="h-4 w-4" />
-            )}
-            <span className="hidden sm:inline">Generate Purchase Orders</span>
-            <span className="sm:hidden">Generate POs</span>
-          </Button>
+              <span className="hidden sm:inline">Generate Purchase Orders</span>
+              <span className="sm:hidden">Generate POs</span>
+            </>
+          </LoadingButton>
         </div>
       </div>
 
@@ -340,7 +338,7 @@ const InventoryAlerts = () => {
       {/* Alerts Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {isLoading ? (
-          <LoadingSpinner />
+          <LoadingTable rows={8} columns={6} />
         ) : error ? (
           <div className="p-6 text-center text-red-600">
             Error loading alerts: {handleApiError(error).message}

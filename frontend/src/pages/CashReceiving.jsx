@@ -5,7 +5,6 @@ import {
   RotateCcw,
   Printer,
   RefreshCw,
-  Loader2,
   Search,
   Banknote,
   Users,
@@ -26,6 +25,7 @@ import PrintModal from '../components/PrintModal';
 import PrintReportModal from '../components/PrintReportModal';
 import PageShell from '../components/PageShell';
 import { PageHeader } from '../components/layout/PageHeader';
+import { LoadingSpinner, LoadingButton, LoadingInline } from '../components/LoadingSpinner';
 import { getLocalDateString } from '../utils/dateUtils';
 import { getCustomerDisplayName } from '../utils/partyDisplay';
 import { toTitleCase } from '../utils/titleCase';
@@ -724,7 +724,7 @@ const CashReceiving = () => {
                 className={crBtnPrimary}
               >
                 {customersLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  <LoadingSpinner size="sm" inline aria-hidden />
                 ) : (
                   <RefreshCw className="h-4 w-4" aria-hidden />
                 )}
@@ -756,8 +756,7 @@ const CashReceiving = () => {
             <div className="h-48 overflow-y-auto rounded-lg border border-neutral-200 bg-white sm:h-64">
               {citiesLoading ? (
                 <div className="p-4 text-center text-neutral-500">
-                  <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" aria-hidden />
-                  Loading cities...
+                  <LoadingInline message="Loading cities..." />
                 </div>
               ) : cities.length === 0 ? (
                 <div className="p-4 text-center text-neutral-500">No cities available</div>
@@ -957,7 +956,7 @@ const CashReceiving = () => {
           className={cn(crBtnPrimary, 'w-full sm:w-auto sm:min-w-[10rem]')}
         >
           {creating ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            <LoadingSpinner size="sm" inline aria-hidden />
           ) : (
             <Save className="h-4 w-4" aria-hidden />
           )}

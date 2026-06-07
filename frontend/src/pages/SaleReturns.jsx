@@ -28,7 +28,7 @@ import {
 import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { getCustomerDisplayName } from '../utils/partyDisplay';
-import { LoadingSpinner, LoadingButton, LoadingCard, LoadingTable } from '../components/LoadingSpinner';
+import { LoadingSpinner, LoadingButton, LoadingCard, LoadingTable, LoadingInline } from '../components/LoadingSpinner';
 import { useResponsive } from '../components/ResponsiveContainer';
 import { useTab } from '../contexts/TabContext';
 import { CustomerPartySelect, CustomerBalanceStrip } from '../components/order/CustomerPartySelect';
@@ -763,7 +763,7 @@ const SaleReturns = () => {
               </div>
             </div>
             {customersLoading ? (
-              <LoadingSpinner />
+              <LoadingInline message="Loading customers..." />
             ) : (
               <CustomerPartySelect
                 placeholder="Search customer by name, phone, or email..."

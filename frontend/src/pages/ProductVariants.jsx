@@ -18,7 +18,7 @@ import {
 import { useGetProductQuery } from '../store/services/productsApi';
 import { ProductSearchableSelect } from '../components/ProductSearchableSelect';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
+import { LoadingSpinner, LoadingButton, LoadingTable } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
@@ -147,7 +147,7 @@ const ProductVariants = () => {
 
       {/* Variants Table */}
       {variantsLoading ? (
-        <LoadingSpinner />
+        <LoadingTable rows={6} columns={5} />
       ) : variants.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-8 sm:p-12 text-center">
           <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />

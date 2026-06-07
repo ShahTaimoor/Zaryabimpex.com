@@ -23,7 +23,7 @@ import { useGetProductQuery } from '../store/services/productsApi';
 import { ProductSearchableSelect } from '../components/ProductSearchableSelect';
 import { VariantSearchableSelect } from '../components/VariantSearchableSelect';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
+import { LoadingButton, LoadingTable } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -255,7 +255,7 @@ const ProductTransformations = () => {
 
       {/* Transformations Table */}
       {transformationsLoading ? (
-        <LoadingSpinner />
+        <LoadingTable rows={6} columns={5} />
       ) : transformations.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-8 sm:p-12 text-center">
           <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />

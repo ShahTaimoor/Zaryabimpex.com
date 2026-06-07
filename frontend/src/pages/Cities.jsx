@@ -10,7 +10,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingSpinner, LoadingTable } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -314,7 +314,11 @@ export const Cities = () => {
               size="default"
               disabled={isLoading}
             >
-              <RotateCcw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              {isLoading ? (
+                <LoadingSpinner size="sm" className="mr-2" />
+              ) : (
+                <RotateCcw className="h-4 w-4 mr-2" />
+              )}
               Refresh
             </Button>
           </div>
@@ -324,7 +328,7 @@ export const Cities = () => {
       {/* Cities Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {isLoading ? (
-          <LoadingSpinner />
+          <LoadingTable rows={8} columns={5} />
         ) : error ? (
           <div className="p-6 text-center text-red-600">
             <p>Error loading cities: {error?.data?.message || error?.message}</p>

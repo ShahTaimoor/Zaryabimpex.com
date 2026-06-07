@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { LoadingButton } from './LoadingSpinner';
 import ValidationSummary from './ValidationSummary';
 

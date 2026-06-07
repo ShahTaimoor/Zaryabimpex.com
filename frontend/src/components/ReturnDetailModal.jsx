@@ -3,7 +3,7 @@ import { Printer } from 'lucide-react';
 import { useGetReturnQuery } from '../store/services/returnsApi';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { useIssueRefundMutation } from '../store/services/saleReturnsApi';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingButton } from '../components/LoadingSpinner';
 import { PrintModal, ReturnPrintContent } from './print';
 import { showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
@@ -342,9 +342,9 @@ const ReturnDetailModal = ({
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setShowIssueRefundModal(false)}>Cancel</Button>
-              <Button onClick={handleIssueRefund} disabled={isIssuingRefund}>
-                {isIssuingRefund ? <LoadingSpinner size="sm" /> : 'Issue Refund'}
-              </Button>
+              <LoadingButton onClick={handleIssueRefund} isLoading={isIssuingRefund}>
+                Issue Refund
+              </LoadingButton>
             </div>
           </div>
         </div>

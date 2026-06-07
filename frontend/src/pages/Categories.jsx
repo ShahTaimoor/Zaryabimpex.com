@@ -476,8 +476,7 @@ export const Categories = () => {
       {/* Categories Grid */}
       {isLoading ? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading categories...</p>
+          <LoadingGrid count={6} />
         </div>
       ) : error ? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">

@@ -16,8 +16,7 @@ import {
   TrendingUp,
   BarChart3,
   Camera,
-  MapPin,
-  Loader2
+  MapPin
 } from 'lucide-react';
 import {
   useGetStatusQuery,
@@ -31,7 +30,7 @@ import {
 import { useUploadProductImageMutation } from '../store/services/productsApi';
 import { useGetEmployeesQuery } from '../store/services/employeesApi';
 import { useAuth } from '../contexts/AuthContext';
-import { LoadingSpinner, LoadingButton } from '../components/LoadingSpinner';
+import { LoadingSpinner, LoadingButton, LoadingPage, LoadingInline } from '../components/LoadingSpinner';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { formatDate, formatTime } from '../utils/formatters';
 import { toast } from 'sonner';
@@ -445,7 +444,11 @@ const Attendance = () => {
             }}
             className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all shadow-sm w-full sm:w-auto"
           >
-            <RefreshCw className={`h-4 w-4 ${statusLoading || isLoading ? 'animate-spin' : ''}`} />
+            {(statusLoading || isLoading) ? (
+              <LoadingSpinner size="sm" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
             <span>Sync Data</span>
           </button>
         }
@@ -465,7 +468,7 @@ const Attendance = () => {
             
             <div className="p-8 flex-1 flex flex-col justify-center items-center text-center">
               {statusLoading ? (
-                <div className="py-12"><LoadingSpinner /></div>
+                <div className="py-12"><LoadingPage useSpinningText={false} /></div>
               ) : currentSession ? (
                 <div className="w-full space-y-8">
                   <div className="space-y-2">
@@ -493,16 +496,16 @@ const Attendance = () => {
                           {formatDuration(calculateActiveBreakDuration())}
                         </div>
                       </div>
-                      <button
+                      <LoadingButton
                         onClick={handleEndBreak}
-                        disabled={endBreakLoading}
+                        isLoading={endBreakLoading}
                         className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-lg transition-all shadow-md shadow-amber-200/50 flex items-center justify-center space-x-2"
                       >
-                        {endBreakLoading ? <LoadingSpinner size="sm" /> : <>
+                        <>
                           <LogOut className="h-4 w-4" />
                           <span>Resume Work</span>
-                        </>}
-                      </button>
+                        </>
+                      </LoadingButton>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-3 animate-in fade-in duration-300">
@@ -532,16 +535,17 @@ const Attendance = () => {
                       placeholder="Shift handover notes (optional)..."
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm mb-4 resize-none h-24"
                     />
-                    <button
+                    <LoadingButton
                       onClick={handleOpenClockOut}
-                      disabled={clockOutLoading || isUploadingImage}
+                      isLoading={clockOutLoading}
+                      disabled={isUploadingImage}
                       className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-slate-200 flex items-center justify-center space-x-3"
                     >
-                      {clockOutLoading ? <LoadingSpinner size="sm" /> : <>
+                      <>
                         <LogOut className="h-5 w-5" />
                         <span className="text-base uppercase tracking-widest">End Session</span>
-                      </>}
-                    </button>
+                      </>
+                    </LoadingButton>
                   </div>
                 </div>
               ) : (
@@ -561,16 +565,17 @@ const Attendance = () => {
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm resize-none h-24"
                   />
 
-                  <button
+                  <LoadingButton
                     onClick={handleOpenClockIn}
-                    disabled={clockInLoading || isUploadingImage}
+                    isLoading={clockInLoading}
+                    disabled={isUploadingImage}
                     className="w-full py-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-primary-200/50 flex items-center justify-center space-x-3"
                   >
-                    {clockInLoading ? <LoadingSpinner size="sm" /> : <>
+                    <>
                       <LogIn className="h-5 w-5" />
                       <span className="text-base uppercase tracking-widest">Clock In Now</span>
-                    </>}
-                  </button>
+                    </>
+                  </LoadingButton>
                 </div>
               )}
             </div>
@@ -702,7 +707,7 @@ const Attendance = () => {
 
             <div className="table-scroll">
               {isLoading ? (
-                <div className="py-20 text-center"><LoadingSpinner /></div>
+                <div className="py-20 text-center"><LoadingPage useSpinningText={false} /></div>
               ) : attendanceList.length === 0 ? (
                 <div className="py-20 text-center text-slate-400">
                   <Calendar className="h-10 w-10 mx-auto mb-4 opacity-20" />
@@ -840,7 +845,7 @@ const Attendance = () => {
             </div>
             <div className="text-xs">
               {locationLoading ? (
-                <span className="text-amber-600 flex items-center"><Loader2 className="h-3 w-3 animate-spin mr-1"/> Fetching...</span>
+                <span className="text-amber-600"><LoadingInline message="Fetching..." /></span>
               ) : locationError ? (
                 <span className="text-rose-500 font-medium">{locationError}</span>
               ) : location ? (
@@ -904,7 +909,7 @@ const Attendance = () => {
             </div>
             <div className="text-xs">
               {locationLoading ? (
-                <span className="text-amber-600 flex items-center"><Loader2 className="h-3 w-3 animate-spin mr-1"/> Fetching...</span>
+                <span className="text-amber-600"><LoadingInline message="Fetching..." /></span>
               ) : locationError ? (
                 <span className="text-rose-500 font-medium">{locationError}</span>
               ) : location ? (

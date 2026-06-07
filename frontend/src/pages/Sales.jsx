@@ -2634,7 +2634,11 @@ export const Sales = ({ tabId, editData }) => {
                     className="p-2 text-gray-400 transition-colors hover:text-gray-600 hover:bg-gray-100 rounded-full"
                     title="Refresh"
                   >
-                    <RefreshCw className={`h-4 w-4 ${isSavedInvoicesLoading ? 'animate-spin' : ''}`} />
+                    {isSavedInvoicesLoading ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -2759,8 +2763,7 @@ export const Sales = ({ tabId, editData }) => {
           <div className="card-content p-0">
             {isSavedInvoicesLoading ? (
               <div className="p-8 text-center">
-                <RefreshCw className="h-8 w-8 animate-spin mx-auto text-gray-400" />
-                <p className="mt-2 text-gray-500">Loading sales invoices...</p>
+                <LoadingInline message="Loading sales invoices..." />
               </div>
             ) : savedInvoicesError ? (
               <div className="p-8 text-center text-red-600">

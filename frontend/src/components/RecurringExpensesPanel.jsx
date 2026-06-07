@@ -21,6 +21,7 @@ import {
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { Button } from '@/components/ui/button';
+import { LoadingSpinner, LoadingInline } from './LoadingSpinner';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
@@ -261,7 +262,11 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
             className="flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap h-[36px] sm:h-[38px] flex-shrink-0 px-2 sm:px-3 text-xs sm:text-sm"
             disabled={upcomingFetching}
           >
-            <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 ${upcomingFetching ? 'animate-spin' : ''}`} />
+            {upcomingFetching ? (
+              <LoadingSpinner size="sm" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+            )}
             <span className="hidden sm:inline">Refresh</span>
             <span className="sm:hidden">Ref</span>
           </Button>
@@ -437,7 +442,7 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
                 <span>Upcoming</span>
               </h3>
               {(upcomingLoading || upcomingFetching) && (
-                <span className="text-xs md:text-sm text-gray-500">Loading...</span>
+                <LoadingInline />
               )}
             </div>
             {upcomingExpenses.length === 0 ? (
@@ -530,7 +535,7 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
                 <span>Active Recurring Expenses</span>
               </h3>
               {activeLoading ? (
-                <span className="shrink-0 text-xs text-neutral-500 md:text-sm">Loading...</span>
+                <LoadingInline />
               ) : null}
             </div>
             {activeExpenses.length === 0 ? (

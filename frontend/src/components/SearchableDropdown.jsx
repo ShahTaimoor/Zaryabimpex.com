@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Search, ChevronDown, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { LoadingInline } from '@/components/LoadingSpinner';
 
 const EMPTY_ARRAY = [];
 
@@ -555,8 +556,7 @@ export const SearchableDropdown = forwardRef(({
         >
           {loading ? (
             <div className="p-3 text-center text-gray-500">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600 mx-auto"></div>
-              <p className="mt-2 text-sm">Loading...</p>
+              <LoadingInline />
             </div>
           ) : filteredItems.length > 0 ? (
             <div

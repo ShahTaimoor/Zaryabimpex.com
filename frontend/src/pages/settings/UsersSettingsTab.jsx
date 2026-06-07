@@ -735,19 +735,17 @@ export const UsersSettingsTab = memo(function UsersSettingsTab() {
                           You altered <strong>{newUserData.role}</strong> baseline defaults.
                         </p>
                       </div>
-                      <Button
+                      <LoadingButton
                         type="button"
                         onClick={() => handleUpdateRolePermissions(newUserData.role)}
-                        disabled={isUpdatingRolePermissions}
+                        isLoading={isUpdatingRolePermissions}
                         className="bg-orange-600 hover:bg-orange-700 text-white font-bold h-9 text-xs rounded-lg shadow-sm whitespace-nowrap px-4"
                       >
-                        {isUpdatingRolePermissions ? (
-                          <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                        ) : (
+                        <>
                           <Users className="h-3.5 w-3.5 mr-1.5" />
-                        )}
-                        Push to all {newUserData.role}s
-                      </Button>
+                          Push to all {newUserData.role}s
+                        </>
+                      </LoadingButton>
                     </div>
                   </div>
                 )}

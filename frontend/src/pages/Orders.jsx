@@ -33,6 +33,7 @@ import BaseModal from '../components/BaseModal';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import { Button } from '@/components/ui/button';
+import { LoadingPage } from '../components/LoadingSpinner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -558,11 +559,7 @@ export const Orders = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <LoadingPage useSpinningText={false} />;
   }
 
   if (error) {

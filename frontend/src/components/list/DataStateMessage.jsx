@@ -1,6 +1,6 @@
 import React from 'react';
-import { RefreshCw } from 'lucide-react';
 import { handleApiError } from '@/utils/errorHandler';
+import { LoadingInline } from '@/components/LoadingSpinner';
 
 /**
  * Dispatcher component for the standard 3-state list shell:
@@ -39,8 +39,7 @@ export function DataStateMessage({
   if (isLoading) {
     return (
       <div className={className}>
-        <RefreshCw className="h-8 w-8 animate-spin mx-auto text-gray-400" />
-        <p className="mt-2 text-gray-500">{loadingLabel}</p>
+        <LoadingInline message={loadingLabel} />
       </div>
     );
   }

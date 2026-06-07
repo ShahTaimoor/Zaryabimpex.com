@@ -12,7 +12,7 @@ import { useGetOrdersQuery } from '../store/services/salesApi';
 import { useGetSalesOrdersQuery } from '../store/services/salesOrdersApi';
 import { useGetPurchaseInvoicesQuery } from '../store/services/purchaseInvoicesApi';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { LoadingSpinner } from '../components/LoadingSpinner';
+import { LoadingSpinner, LoadingButton, LoadingInline } from '../components/LoadingSpinner';
 
 const CreateReturnModal = ({ isOpen, onClose, onSuccess, defaultReturnType = 'sales' }) => {
   const isPurchaseReturn = defaultReturnType === 'purchase';
@@ -202,14 +202,15 @@ const CreateReturnModal = ({ isOpen, onClose, onSuccess, defaultReturnType = 'sa
             <Button type="button" onClick={onClose} variant="secondary">
               Cancel
             </Button>
-            <Button
+            <LoadingButton
               type="submit"
               form="return-form"
-              disabled={isCreatingReturn || !selectedOrder || formData.items.length === 0}
+              isLoading={isCreatingReturn}
+              disabled={!selectedOrder || formData.items.length === 0}
               variant="default"
             >
-              {isCreatingReturn ? <LoadingSpinner size="sm" /> : 'Create Return Request'}
-            </Button>
+              Create Return Request
+            </LoadingButton>
           </div>
         ) : null
       }
@@ -388,7 +389,7 @@ const CreateReturnModal = ({ isOpen, onClose, onSuccess, defaultReturnType = 'sa
                 </label>
                 
                 {eligibleItemsLoading ? (
-                  <LoadingSpinner message="Loading eligible items..." />
+                  <LoadingInline message="Loading eligible items..." />
                 ) : eligibleItems.length === 0 ? (
                   <div className="p-4 text-center text-gray-500 bg-gray-50 rounded-lg">
                     <AlertCircle className="mx-auto h-8 w-8 text-gray-400 mb-2" />

@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { showSuccessToast, showErrorToast, handleApiError } from '../utils/errorHandler';
 import { formatDate, formatCurrency } from '../utils/formatters';
-import { LoadingButton } from '../components/LoadingSpinner';
+import { LoadingButton, LoadingSpinner, LoadingInline } from '../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -2856,7 +2856,11 @@ const SalesOrders = ({ tabId }) => {
                   className="p-2 text-gray-400 transition-colors hover:text-gray-600 hover:bg-gray-100 rounded-full"
                   title="Refresh"
                 >
-                  <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                  {isLoading ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
                 </button>
               </div>
             </div>
@@ -2974,8 +2978,7 @@ const SalesOrders = ({ tabId }) => {
         <div className="card-content p-0">
           {isLoading ? (
             <div className="p-8 text-center">
-              <RefreshCw className="h-8 w-8 animate-spin mx-auto text-gray-400" />
-              <p className="mt-2 text-gray-500">Loading sales orders...</p>
+              <LoadingInline message="Loading sales orders..." />
             </div>
           ) : error ? (
             <div className="p-8 text-center text-red-600">

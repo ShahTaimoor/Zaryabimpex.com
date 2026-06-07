@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FileText, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { LoadingSpinner } from './LoadingSpinner';
 
 /**
  * A professional Export PDF button component
@@ -267,7 +268,7 @@ const PdfExportButton = React.forwardRef(({ getData, label = "PDF", className = 
             title={label || "Export PDF"}
         >
             {isExporting ? (
-                <div className="h-4 w-4 border-2 border-red-600/30 border-t-red-600 rounded-full animate-spin" />
+                <LoadingSpinner size="sm" inline />
             ) : (
                 <FileText className="h-4 w-4 text-red-600 group-hover:scale-110 transition-transform" />
             )}

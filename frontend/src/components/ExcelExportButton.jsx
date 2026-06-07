@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FileSpreadsheet, Download } from 'lucide-react';
 import { exportToExcel } from '../utils/excelExport';
+import { LoadingSpinner } from './LoadingSpinner';
 
 /**
  * A professional Export button component
@@ -38,7 +39,7 @@ const ExcelExportButton = React.forwardRef(({ getData, label = "Export to Excel"
             title={label || "Export Excel"}
         >
             {isExporting ? (
-                <div className="h-4 w-4 border-2 border-green-600/30 border-t-green-600 rounded-full animate-spin" />
+                <LoadingSpinner size="sm" inline />
             ) : (
                 <FileSpreadsheet className="h-4 w-4 text-green-600 group-hover:scale-110 transition-transform" />
             )}
