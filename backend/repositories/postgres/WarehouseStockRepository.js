@@ -53,15 +53,32 @@ class WarehouseStockRepository {
   }
 
   async listByWarehouse(warehouseId, options = {}) {
-    const { search, page = 1, limit = 50 } = options;
+    const { search, page = 1, limit = 50, allProducts = false } = options;
     const offset = (page - 1) * limit;
-    let sql = `
-      SELECT ws.*, p.name AS product_name, p.sku AS product_sku
-      FROM warehouse_stock ws
-      JOIN products p ON p.id = ws.product_id
-      WHERE ws.warehouse_id = $1 AND p.is_deleted = FALSE`;
     const params = [warehouseId];
     let n = 2;
+
+    let sql;
+    if (allProducts) {
+      sql = `
+        SELECT
+          p.id AS product_id,
+          p.name AS product_name,
+          p.sku AS product_sku,
+          COALESCE(ws.quantity, 0) AS quantity,
+          COALESCE(ws.reserved_quantity, 0) AS reserved_quantity
+        FROM products p
+        LEFT JOIN warehouse_stock ws
+          ON ws.product_id = p.id AND ws.warehouse_id = $1
+        WHERE p.is_deleted = FALSE`;
+    } else {
+      sql = `
+        SELECT ws.*, p.name AS product_name, p.sku AS product_sku
+        FROM warehouse_stock ws
+        JOIN products p ON p.id = ws.product_id
+        WHERE ws.warehouse_id = $1 AND p.is_deleted = FALSE`;
+    }
+
     if (search) {
       sql += ` AND (p.name ILIKE $${n} OR p.sku ILIKE $${n})`;
       params.push(`%${search}%`);
@@ -73,17 +90,33 @@ class WarehouseStockRepository {
     return result.rows;
   }
 
-  async countByWarehouse(warehouseId, search) {
-    let sql = `
-      SELECT COUNT(*)::int AS c
-      FROM warehouse_stock ws
-      JOIN products p ON p.id = ws.product_id
-      WHERE ws.warehouse_id = $1 AND p.is_deleted = FALSE`;
-    const params = [warehouseId];
-    if (search) {
-      sql += ' AND (p.name ILIKE $2 OR p.sku ILIKE $2)';
-      params.push(`%${search}%`);
+  async countByWarehouse(warehouseId, search, allProducts = false) {
+    let params;
+    let sql;
+
+    if (allProducts) {
+      params = [];
+      sql = `
+        SELECT COUNT(*)::int AS c
+        FROM products p
+        WHERE p.is_deleted = FALSE`;
+      if (search) {
+        sql += ' AND (p.name ILIKE $1 OR p.sku ILIKE $1)';
+        params.push(`%${search}%`);
+      }
+    } else {
+      params = [warehouseId];
+      sql = `
+        SELECT COUNT(*)::int AS c
+        FROM warehouse_stock ws
+        JOIN products p ON p.id = ws.product_id
+        WHERE ws.warehouse_id = $1 AND p.is_deleted = FALSE`;
+      if (search) {
+        sql += ' AND (p.name ILIKE $2 OR p.sku ILIKE $2)';
+        params.push(`%${search}%`);
+      }
     }
+
     const result = await query(sql, params);
     return result.rows[0]?.c || 0;
   }

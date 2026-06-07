@@ -223,6 +223,7 @@ router.post('/', [
 
     // IMMEDIATE INVENTORY UPDATE - No confirmation required
     const inventoryService = require('../services/inventoryService');
+    const destinationWarehouseId = req.body.destinationWarehouseId || req.body.warehouseId || null;
     const inventoryUpdates = [];
     let inventoryUpdateFailed = false;
 
@@ -234,6 +235,7 @@ router.post('/', [
           type: 'in',
           quantity: item.quantity,
           cost: item.unitCost, // Pass cost price from purchase invoice
+          warehouseId: destinationWarehouseId,
           reason: 'Purchase Invoice Creation',
           reference: 'Purchase Invoice',
           referenceId: invoice._id,

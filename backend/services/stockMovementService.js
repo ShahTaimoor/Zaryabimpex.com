@@ -104,6 +104,8 @@ class StockMovementService {
         referenceId,
         referenceNumber,
         location,
+        warehouseId: movementData.warehouseId || null,
+        shopId: movementData.shopId || null,
         fromLocation,
         toLocation,
         userId,

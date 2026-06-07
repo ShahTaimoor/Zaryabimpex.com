@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const { auth, requirePermission } = require('../middleware/auth');
+const { requireWarehouseInventoryEnabled } = require('../utils/warehouseInventory');
 const shopService = require('../services/shopService');
 
 const router = express.Router();
@@ -42,11 +43,13 @@ router.get('/:shopId', [
 
 router.get('/:shopId/stock', [
   auth,
+  requireWarehouseInventoryEnabled,
   requirePermission('view_inventory'),
   param('shopId').isUUID(4),
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 500 }),
   query('search').optional().isString().trim(),
+  query('allProducts').optional().isIn(['true', 'false', '1', '0']),
 ], handleValidation, async (req, res, next) => {
   try {
     const result = await shopService.getShopStock(req.params.shopId, req.query);

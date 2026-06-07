@@ -737,6 +737,7 @@ class SalesService {
             productId: item.product,
             type: 'out',
             quantity: item.quantity,
+            shopId: data.sourceShopId || data.shopId || null,
             reason: 'Sales Invoice Creation',
             reference: 'Sales Invoice',
             referenceModel: 'Sale',
@@ -853,7 +854,10 @@ class SalesService {
       payment: paymentStatus ? { status: paymentStatus } : undefined
     };
 
-    await StockMovementService.trackSalesOrder(orderPayload, user, {});
+    // updateStock already logs movements via locationStockService — avoid duplicate rows
+    if (skipInventoryUpdate) {
+      await StockMovementService.trackSalesOrder(orderPayload, user, {});
+    }
 
     if (orderStatus === 'confirmed' && paymentStatus === 'paid') {
       try {

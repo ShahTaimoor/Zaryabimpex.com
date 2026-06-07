@@ -12,10 +12,14 @@ class WarehouseStockService {
     const page = Math.max(1, parseInt(queryParams.page, 10) || 1);
     const limit = Math.min(500, Math.max(1, parseInt(queryParams.limit, 10) || 50));
     const search = queryParams.search || undefined;
+    const allProducts =
+      queryParams.allProducts === true ||
+      queryParams.allProducts === 'true' ||
+      queryParams.allProducts === '1';
 
     const [rows, total] = await Promise.all([
-      warehouseStockRepository.listByWarehouse(warehouse.id, { search, page, limit }),
-      warehouseStockRepository.countByWarehouse(warehouse.id, search),
+      warehouseStockRepository.listByWarehouse(warehouse.id, { search, page, limit, allProducts }),
+      warehouseStockRepository.countByWarehouse(warehouse.id, search, allProducts),
     ]);
 
     return {

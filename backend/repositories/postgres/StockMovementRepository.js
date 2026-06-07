@@ -275,10 +275,11 @@ class StockMovementRepository {
       `INSERT INTO stock_movements (
         product_id, product_name, product_sku, movement_type, quantity, unit_cost, total_value,
         previous_stock, new_stock, reference_type, reference_id, reference_number, location,
-        from_location, to_location, user_id, user_name, reason, notes, batch_number, expiry_date,
-        supplier_id, customer_id, status, is_reversal, original_movement_id, reversed_by, reversed_at,
-        system_generated, ip_address, user_agent, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        warehouse_id, shop_id, from_location, to_location, user_id, user_name, reason, notes,
+        batch_number, expiry_date, supplier_id, customer_id, status, is_reversal,
+        original_movement_id, reversed_by, reversed_at, system_generated, ip_address, user_agent,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *`,
       [
         data.product || data.productId,
@@ -294,6 +295,8 @@ class StockMovementRepository {
         data.referenceId || data.reference_id,
         data.referenceNumber || data.reference_number || null,
         data.location || 'main_warehouse',
+        data.warehouseId || data.warehouse_id || null,
+        data.shopId || data.shop_id || null,
         data.fromLocation || data.from_location || null,
         data.toLocation || data.to_location || null,
         data.user || data.userId,

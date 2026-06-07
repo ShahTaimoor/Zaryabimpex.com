@@ -13,7 +13,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
 export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSidebarConfig }) {
-  const { data: settings, refetch: refetchSettings } = useGetCompanySettingsQuery();
+  const { data: settingsResponse, refetch: refetchSettings } = useGetCompanySettingsQuery();
+  const settings = settingsResponse?.data || settingsResponse;
   const [updateCompanySettings] = useUpdateCompanySettingsMutation();
   const { data: userPreferencesResponse } = useGetUserPreferencesQuery();
   const [updateUserPreferences, { isLoading: isSavingUserPreferences }] = useUpdateUserPreferencesMutation();
@@ -34,7 +35,9 @@ export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSideba
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
 
   useEffect(() => {
-    setUseMarketPurchasePrices(settings?.orderSettings?.useMarketPurchasePrices === true);
+    const enabled = settings?.orderSettings?.useMarketPurchasePrices === true;
+    setUseMarketPurchasePrices(enabled);
+    syncMarketPricesSidebarVisibility(enabled);
   }, [settings?.orderSettings?.useMarketPurchasePrices]);
 
   useEffect(() => {
@@ -42,7 +45,9 @@ export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSideba
   }, [settings?.orderSettings?.enableImportPurchaseLandedCost]);
 
   useEffect(() => {
-    setWarehouseInventoryEnabled(settings?.orderSettings?.warehouseInventoryEnabled === true);
+    const enabled = settings?.orderSettings?.warehouseInventoryEnabled === true;
+    setWarehouseInventoryEnabled(enabled);
+    syncWarehouseInventorySidebarVisibility(enabled);
   }, [settings?.orderSettings?.warehouseInventoryEnabled]);
 
   useEffect(() => {

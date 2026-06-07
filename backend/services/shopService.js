@@ -57,9 +57,13 @@ class ShopService {
     const page = Math.max(1, parseInt(queryParams.page, 10) || 1);
     const limit = Math.min(500, Math.max(1, parseInt(queryParams.limit, 10) || 50));
     const search = queryParams.search || undefined;
+    const allProducts =
+      queryParams.allProducts === true ||
+      queryParams.allProducts === 'true' ||
+      queryParams.allProducts === '1';
     const [rows, total] = await Promise.all([
-      ShopStockRepository.listByShop(shop.id, { search, page, limit }),
-      ShopStockRepository.countByShop(shop.id, search),
+      ShopStockRepository.listByShop(shop.id, { search, page, limit, allProducts }),
+      ShopStockRepository.countByShop(shop.id, search, allProducts),
     ]);
     return {
       shop: this.toApiShop(shop),

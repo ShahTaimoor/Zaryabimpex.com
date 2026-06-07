@@ -10,12 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
 import { useUpdateStockMutation } from '../store/services/inventoryApi';
-import { useCompanyInfo } from '../hooks/useCompanyInfo';
-import { isWarehouseInventoryEnabled } from '../utils/warehouseInventory';
+import { useWarehouseInventoryMode, usePrimaryLocations } from '../features/inventory';
 
 const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
-  const { companyInfo } = useCompanyInfo();
-  const warehouseMode = isWarehouseInventoryEnabled(companyInfo);
+  const { warehouseMode } = useWarehouseInventoryMode();
+  const { primaryWarehouseId } = usePrimaryLocations({ skip: !warehouseMode });
   const [updateType, setUpdateType] = useState('adjustment');
   const [updateStock, { isLoading: updating }] = useUpdateStockMutation();
 
@@ -82,6 +81,7 @@ const StockUpdateModal = ({ isOpen, onClose, product, onSuccess }) => {
       productId: product?.product?._id || product?._id,
       type: movementType,
       quantity: updateType === 'adjustment' ? quantity : Math.abs(quantity),
+      warehouseId: warehouseMode ? primaryWarehouseId : undefined,
       reason: values.reason,
       reference: 'Admin stock entry',
       referenceModel: 'StockAdjustment',

@@ -352,6 +352,7 @@ router.get(
     query('page').optional().isInt({ min: 1 }),
     query('limit').optional().isInt({ min: 1, max: 500 }),
     query('search').optional().isString().trim(),
+    query('allProducts').optional().isIn(['true', 'false', '1', '0']),
     handleValidation,
   ],
   async (req, res, next) => {

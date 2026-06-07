@@ -21,7 +21,8 @@ import {
   Wallet,
   Building2,
   MoreHorizontal,
-  FileText
+  FileText,
+  Warehouse
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -59,6 +60,8 @@ import {
   getCategoryDisplayName,
 } from '../utils/partyDisplay';
 import { toTitleCase } from '../utils/titleCase';
+import WarehouseStockReportSection from './reports/WarehouseStockReportSection';
+import { LocationStockReportSection, useWarehouseInventoryMode } from '../features/inventory';
 
 const REPORT_TITLE_CASE_KEYS = new Set([
   'name',
@@ -130,7 +133,8 @@ function formatReportRowForExport(item, index) {
 
 export const Reports = () => {
   const { companyInfo: companySettings } = useCompanyInfo();
-  
+  const { enabled: warehouseInventoryEnabled } = useWarehouseInventoryMode();
+
   // Refs for responsive actions
   const excelExportRef = useRef(null);
   const pdfExportRef = useRef(null);
@@ -171,6 +175,23 @@ export const Reports = () => {
   const [selectedBankIds, setSelectedBankIds] = useState([]);
   /** When true, report API calls append `nocache=1` so the backend skips the reports TTL cache (see reportsService.reportsCache). */
   const [reportNoCache, setReportNoCache] = useState(false);
+  const [warehouseStockReport, setWarehouseStockReport] = useState({
+    rows: [],
+    warehouseName: '',
+    summary: { totalProducts: 0, inStockCount: 0, totalOnHand: 0, totalAvailable: 0 },
+  });
+  const [shopStockReport, setShopStockReport] = useState({
+    rows: [],
+    shopName: '',
+    summary: { totalProducts: 0, inStockCount: 0, totalOnHand: 0, totalAvailable: 0 },
+  });
+
+  useEffect(() => {
+    if (warehouseInventoryEnabled) return;
+    if (activeTab === 'warehouse-stock' || activeTab === 'shop-stock') {
+      setActiveTab('inventory');
+    }
+  }, [warehouseInventoryEnabled, activeTab]);
 
   const reportNoCacheParams = reportNoCache ? { nocache: '1' } : {};
 
@@ -187,6 +208,7 @@ export const Reports = () => {
     if (activeTab === 'inventory') promises.push(refetchInventory());
     if (activeTab === 'financial') promises.push(refetchFinancial());
     if (activeTab === 'bank-cash') promises.push(refetchBankCash());
+    // warehouse-stock refetches via its section Refresh button
 
     Promise.all(promises).finally(() => {
       setReportNoCache(false);
@@ -644,6 +666,28 @@ export const Reports = () => {
               row.lastOrderDate ? new Date(row.lastOrderDate).toLocaleDateString() : '—'
           },
         ];
+      case 'warehouse-stock':
+      case 'shop-stock':
+        return [
+          { header: 'S.NO', render: (row, idx) => (idx ?? 0) + 1, align: 'right', key: 'sno' },
+          {
+            header: 'Product',
+            render: (row) => getProductDisplayName(
+              { name: row.productName, sku: row.productSku },
+              row.productName || '—'
+            ),
+            key: 'productName',
+          },
+          { header: 'SKU', key: 'productSku', render: (row) => row.productSku || '—' },
+          { header: 'On Hand', render: (row) => Number(row.quantity ?? 0).toLocaleString(), align: 'right' },
+          { header: 'Reserved', render: (row) => Number(row.reservedQuantity ?? 0).toLocaleString(), align: 'right' },
+          {
+            header: 'Available',
+            render: (row) => Number(row.availableQuantity ?? 0).toLocaleString(),
+            align: 'right',
+            bold: true,
+          },
+        ];
       default:
         return [];
     }
@@ -680,6 +724,14 @@ export const Reports = () => {
         return 'Top Products by Revenue';
       case 'top-customers':
         return 'Top Customers by Revenue';
+      case 'warehouse-stock':
+        return warehouseStockReport.warehouseName
+          ? `Warehouse Stock — ${warehouseStockReport.warehouseName}`
+          : 'Warehouse Stock Report';
+      case 'shop-stock':
+        return shopStockReport.shopName
+          ? `Shop Stock — ${shopStockReport.shopName}`
+          : 'Shop Stock Report';
       default:
         return 'Business Report';
     }
@@ -701,6 +753,10 @@ export const Reports = () => {
         return productReportData?.products || [];
       case 'top-customers':
         return customerReportData?.customers || [];
+      case 'warehouse-stock':
+        return warehouseStockReport.rows || [];
+      case 'shop-stock':
+        return shopStockReport.rows || [];
       default:
         return [];
     }
@@ -795,6 +851,15 @@ export const Reports = () => {
         'Orders (top 100 rows)': tableOrders
       };
     }
+    if (activeTab === 'warehouse-stock' || activeTab === 'shop-stock') {
+      const s = (activeTab === 'shop-stock' ? shopStockReport : warehouseStockReport).summary || {};
+      return {
+        'Total Products': s.totalProducts || 0,
+        'In Stock (page)': s.inStockCount || 0,
+        'On Hand (page)': s.totalOnHand || 0,
+        'Available (page)': s.totalAvailable || 0,
+      };
+    }
     return null;
   };
 
@@ -820,6 +885,10 @@ export const Reports = () => {
     if (activeTab === 'top-customers') {
       if (title === 'Customers with orders') return 'Distinct buyers in period';
       return 'In Selected Period';
+    }
+    if (activeTab === 'warehouse-stock' || activeTab === 'shop-stock') {
+      if (title === 'Total Products') return activeTab === 'shop-stock' ? 'All products in shop' : 'All products in warehouse';
+      return 'Current page totals';
     }
     return '';
   };
@@ -960,6 +1029,17 @@ export const Reports = () => {
           { header: 'Last order', key: 'lastOrderLabel', width: 14 }
         ];
         break;
+      case 'warehouse-stock':
+      case 'shop-stock':
+        columns = [
+          { header: 'S.NO', key: 'sno', width: 8, type: 'number' },
+          { header: 'Product', key: 'productName', width: 40 },
+          { header: 'SKU', key: 'productSku', width: 18 },
+          { header: 'On Hand', key: 'quantity', width: 12, type: 'number' },
+          { header: 'Reserved', key: 'reservedQuantity', width: 12, type: 'number' },
+          { header: 'Available', key: 'availableQuantity', width: 12, type: 'number' },
+        ];
+        break;
     }
 
     return {
@@ -1021,7 +1101,7 @@ export const Reports = () => {
         />
 
         <div className="flex flex-wrap md:flex-nowrap items-center gap-3 shrink-0">
-          {(activeTab !== 'bank-cash') && (activeTab !== 'inventory' || inventoryType === 'stock-summary') && (
+          {(activeTab !== 'bank-cash' && activeTab !== 'warehouse-stock' && activeTab !== 'shop-stock') && (activeTab !== 'inventory' || inventoryType === 'stock-summary') && (
             <DateFilter
               startDate={dateRange.from}
               endDate={dateRange.to}
@@ -1107,6 +1187,10 @@ export const Reports = () => {
             if (title === 'Low Stock') return <AlertTriangle className="h-6 w-6 text-amber-600" />;
             if (title === 'Out of Stock') return <XCircle className="h-6 w-6 text-red-600" />;
             if (title === 'Combined Balance') return <DollarSign className="h-6 w-6 text-indigo-600" />;
+            if (title === 'Total Products') return <Package className="h-6 w-6 text-blue-600" />;
+            if (title === 'In Stock (page)') return <CheckCircle className="h-6 w-6 text-green-600" />;
+            if (title === 'On Hand (page)') return <Warehouse className="h-6 w-6 text-slate-600" />;
+            if (title === 'Available (page)') return <ShoppingBag className="h-6 w-6 text-emerald-600" />;
             return idx === 0 ? <Users className="h-6 w-6 text-blue-600" /> :
               idx === 1 ? <TrendingUp className="h-6 w-6 text-purple-600" /> :
                 <Package className="h-6 w-6 text-gray-600" />;
@@ -1118,6 +1202,10 @@ export const Reports = () => {
             if (title === 'Low Stock') return "bg-amber-50";
             if (title === 'Out of Stock') return "bg-red-50";
             if (title === 'Combined Balance') return "bg-indigo-50";
+            if (title === 'Total Products') return "bg-blue-50";
+            if (title === 'In Stock (page)') return "bg-green-50";
+            if (title === 'On Hand (page)') return "bg-slate-50";
+            if (title === 'Available (page)') return "bg-emerald-50";
             return idx === 0 ? "bg-blue-50" :
               idx === 1 ? "bg-purple-50" :
                 "bg-gray-50";
@@ -1168,6 +1256,20 @@ export const Reports = () => {
               onClick={() => setActiveTab('inventory')}
               label="Inventory"
             />
+            {warehouseInventoryEnabled && (
+              <>
+                <TabButton
+                  active={activeTab === 'warehouse-stock'}
+                  onClick={() => setActiveTab('warehouse-stock')}
+                  label="Warehouse Stock"
+                />
+                <TabButton
+                  active={activeTab === 'shop-stock'}
+                  onClick={() => setActiveTab('shop-stock')}
+                  label="Shop Stock"
+                />
+              </>
+            )}
             <TabButton
               active={activeTab === 'financial'}
               onClick={() => setActiveTab('financial')}
@@ -1776,6 +1878,21 @@ export const Reports = () => {
                 </div>
               )}
             </div>
+          )}
+
+          {activeTab === 'warehouse-stock' && (
+            <WarehouseStockReportSection
+              active
+              onReportDataChange={setWarehouseStockReport}
+            />
+          )}
+
+          {activeTab === 'shop-stock' && (
+            <LocationStockReportSection
+              active
+              locationType="shop"
+              onReportDataChange={setShopStockReport}
+            />
           )}
 
           {activeTab === 'financial' && (

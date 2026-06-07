@@ -54,15 +54,32 @@ class ShopStockRepository {
   }
 
   async listByShop(shopId, options = {}) {
-    const { search, page = 1, limit = 50 } = options;
+    const { search, page = 1, limit = 50, allProducts = false } = options;
     const offset = (page - 1) * limit;
-    let sql = `
-      SELECT ss.*, p.name AS product_name, p.sku AS product_sku
-      FROM shop_stock ss
-      JOIN products p ON p.id = ss.product_id
-      WHERE ss.shop_id = $1 AND p.is_deleted = FALSE`;
     const params = [shopId];
     let n = 2;
+
+    let sql;
+    if (allProducts) {
+      sql = `
+        SELECT
+          p.id AS product_id,
+          p.name AS product_name,
+          p.sku AS product_sku,
+          COALESCE(ss.quantity, 0) AS quantity,
+          COALESCE(ss.reserved_quantity, 0) AS reserved_quantity
+        FROM products p
+        LEFT JOIN shop_stock ss
+          ON ss.product_id = p.id AND ss.shop_id = $1
+        WHERE p.is_deleted = FALSE`;
+    } else {
+      sql = `
+        SELECT ss.*, p.name AS product_name, p.sku AS product_sku
+        FROM shop_stock ss
+        JOIN products p ON p.id = ss.product_id
+        WHERE ss.shop_id = $1 AND p.is_deleted = FALSE`;
+    }
+
     if (search) {
       sql += ` AND (p.name ILIKE $${n} OR p.sku ILIKE $${n})`;
       params.push(`%${search}%`);
@@ -74,17 +91,33 @@ class ShopStockRepository {
     return result.rows;
   }
 
-  async countByShop(shopId, search) {
-    let sql = `
-      SELECT COUNT(*)::int AS c
-      FROM shop_stock ss
-      JOIN products p ON p.id = ss.product_id
-      WHERE ss.shop_id = $1 AND p.is_deleted = FALSE`;
-    const params = [shopId];
-    if (search) {
-      sql += ' AND (p.name ILIKE $2 OR p.sku ILIKE $2)';
-      params.push(`%${search}%`);
+  async countByShop(shopId, search, allProducts = false) {
+    let params;
+    let sql;
+
+    if (allProducts) {
+      params = [];
+      sql = `
+        SELECT COUNT(*)::int AS c
+        FROM products p
+        WHERE p.is_deleted = FALSE`;
+      if (search) {
+        sql += ' AND (p.name ILIKE $1 OR p.sku ILIKE $1)';
+        params.push(`%${search}%`);
+      }
+    } else {
+      params = [shopId];
+      sql = `
+        SELECT COUNT(*)::int AS c
+        FROM shop_stock ss
+        JOIN products p ON p.id = ss.product_id
+        WHERE ss.shop_id = $1 AND p.is_deleted = FALSE`;
+      if (search) {
+        sql += ' AND (p.name ILIKE $2 OR p.sku ILIKE $2)';
+        params.push(`%${search}%`);
+      }
     }
+
     const result = await query(sql, params);
     return result.rows[0]?.c || 0;
   }

@@ -39,6 +39,7 @@ import {
   useDeletePurchaseInvoiceMutation,
 } from '../store/services/purchaseInvoicesApi';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useWarehouseInventoryMode, usePrimaryLocations } from '../features/inventory';
 import { useGetUnifiedBalanceQuery } from '../store/services/accountingApi';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { toast } from 'sonner';
@@ -444,7 +445,17 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
 
   const { isMobile } = useResponsive();
   const { companyInfo: companySettings } = useCompanyInfo();
+  const { enabled: warehouseInventoryMode } = useWarehouseInventoryMode();
+  const { warehouses, primaryWarehouseId } = usePrimaryLocations({
+    skip: !warehouseInventoryMode,
+  });
+  const [destinationWarehouseId, setDestinationWarehouseId] = useState('');
   const importPurchaseFeatureEnabled = companySettings.orderSettings?.enableImportPurchaseLandedCost === true;
+
+  useEffect(() => {
+    if (!warehouseInventoryMode || !primaryWarehouseId) return;
+    setDestinationWarehouseId((prev) => prev || primaryWarehouseId);
+  }, [warehouseInventoryMode, primaryWarehouseId]);
   const isEnhancedImportPurchase = isImportPurchase && importPurchaseFeatureEnabled;
   const dualUnitShowBoxInputEnabledPage = companySettings.orderSettings?.dualUnitShowBoxInput !== false;
   const taxSystemEnabled = companySettings.taxEnabled === true;
@@ -1206,7 +1217,8 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
       expectedDelivery: expectedDelivery,
       invoiceDate: billDate || undefined, // Bill Date for backdating (sent as invoiceDate to API, same as Sale page)
       notes: notes,
-      terms: ''
+      terms: '',
+      ...(destinationWarehouseId ? { destinationWarehouseId } : {}),
     };
 
     if (isEnhancedImportPurchase) {
@@ -1502,6 +1514,29 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
               outstandingOverride={supplierOutstanding}
               roundOutstanding
             />
+
+            {warehouseInventoryMode && warehouses.length > 0 && (
+              <div className="mt-3 max-w-xs">
+                <label htmlFor="destination-warehouse" className="block text-xs font-medium text-gray-700 mb-1">
+                  Receive stock into
+                </label>
+                <select
+                  id="destination-warehouse"
+                  value={destinationWarehouseId}
+                  onChange={(e) => setDestinationWarehouseId(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm"
+                >
+                  {warehouses.map((w) => {
+                    const id = w.id || w._id;
+                    return (
+                      <option key={id} value={id}>
+                        {w.name}{w.code ? ` (${w.code})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
