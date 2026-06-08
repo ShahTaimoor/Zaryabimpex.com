@@ -281,12 +281,17 @@ function ProductSearchComponent({
       const ppb = getPiecesPerBox(product);
       const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(1, ppb) : {};
       
-      onAddProduct({
+      const addResult = onAddProduct({
         product,
         quantity: 1,
         ...(ppb && { boxes, pieces }),
         unitPrice: unitPrice
       });
+
+      if (addResult === 'duplicate') {
+        productSearchRef.current?.blur();
+        return;
+      }
 
       toast.success(`Scanned: ${getProductDisplayName(product, 'Product')}`, {
         icon: '✅',
@@ -515,12 +520,17 @@ function ProductSearchComponent({
 
       const ppb = getPiecesPerBox(selectedProduct);
       const { boxes, pieces } = ppb ? piecesToBoxesAndPieces(quantity, ppb) : {};
-      onAddProduct({
+      const addResult = onAddProduct({
         product: selectedProduct,
         quantity: quantity,
         ...(ppb && { boxes, pieces }),
         unitPrice: unitPrice
       });
+
+      if (addResult === 'duplicate') {
+        productSearchRef.current?.blur();
+        return;
+      }
 
       // Reset form
       setSelectedProduct(null);

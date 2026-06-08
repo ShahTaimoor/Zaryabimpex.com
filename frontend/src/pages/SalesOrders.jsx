@@ -1015,7 +1015,7 @@ const SalesOrders = ({ tabId }) => {
           ...(payload.pieces !== undefined ? { pieces: payload.pieces } : {}),
         },
       });
-      return;
+      return 'duplicate';
     }
 
     let highlightLineIndex = null;

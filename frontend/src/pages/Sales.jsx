@@ -975,7 +975,7 @@ export const Sales = ({ tabId, editData }) => {
         pendingItem: item,
         displayName: getProductDisplayName(product, 'Product'),
       });
-      return;
+      return 'duplicate';
     }
 
     let highlightLineIndex = null;

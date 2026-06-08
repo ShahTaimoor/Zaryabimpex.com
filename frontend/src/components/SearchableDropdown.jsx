@@ -9,6 +9,12 @@ const EMPTY_ARRAY = [];
 
 const DEFAULT_INITIAL_LIMIT = 20;
 
+/** Product search dropdown uses a portal; stay below modal overlays (z-50+). */
+const DROPDOWN_Z_INDEX = 40;
+
+const isModalDialogOpen = () =>
+  typeof document !== 'undefined' && Boolean(document.querySelector('[aria-modal="true"]'));
+
 /** Lowercased tokens from whitespace; used so "air hd717" matches "AIR FLOW HD717". */
 function splitSearchTokensLower(term) {
   return String(term ?? '')
@@ -159,6 +165,29 @@ export const SearchableDropdown = forwardRef(({
       }
     }
   }, [value]);
+
+  // Close dropdown when a modal dialog opens (e.g. duplicate line merge)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const closeIfModalOpen = () => {
+      if (isModalDialogOpen()) {
+        setIsOpen(false);
+        setSelectedIndex(-1);
+      }
+    };
+
+    closeIfModalOpen();
+    const observer = new MutationObserver(closeIfModalOpen);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['aria-modal'],
+    });
+
+    return () => observer.disconnect();
+  }, [isOpen]);
 
   // Store displayKey in a ref to avoid unnecessary re-renders when it's a function
   const displayKeyRef = useRef(displayKey);
@@ -494,6 +523,7 @@ export const SearchableDropdown = forwardRef(({
   const hasCustomPadding = className.includes('pr-');
 
   const handleInputClick = () => {
+    if (isModalDialogOpen()) return;
     // Open dropdown when clicking on input (if there are items or a search term)
     if (items.length > 0 || searchTerm || value) {
       setIsOpen(true);
@@ -529,6 +559,7 @@ export const SearchableDropdown = forwardRef(({
           onKeyDown={handleKeyDown}
           onClick={handleInputClick}
           onFocus={() => {
+            if (isModalDialogOpen()) return;
             // Only open on focus if openOnFocus prop is explicitly set to true
             if (openOnFocus) {
               setIsOpen(true);
@@ -547,8 +578,9 @@ export const SearchableDropdown = forwardRef(({
       {isOpen && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9999] max-h-96 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
+          className="fixed max-h-96 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
           style={{
+            zIndex: DROPDOWN_Z_INDEX,
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             width: `${dropdownPosition.width}px`

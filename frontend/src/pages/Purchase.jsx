@@ -992,7 +992,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
         addQuantity: Number(newItem.quantity) || 0,
         incomingItem: newItem,
       });
-      return;
+      return 'duplicate';
     }
 
     let highlightLineIndex = null;

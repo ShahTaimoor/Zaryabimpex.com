@@ -915,7 +915,7 @@ export const PurchaseOrders = ({ tabId }) => {
           ...(item?.boxes !== undefined && item?.pieces !== undefined ? { boxes: item.boxes, pieces: item.pieces } : {}),
         },
       });
-      return;
+      return 'duplicate';
     }
 
     const newItem = {

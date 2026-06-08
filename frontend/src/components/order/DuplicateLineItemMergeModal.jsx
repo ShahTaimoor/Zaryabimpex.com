@@ -66,6 +66,7 @@ export function DuplicateLineItemMergeModal({
       subtitle={`${productName || 'This product'} is already on this ${scopeLabel}. Add the new quantity to the existing line instead of creating another row.`}
       maxWidth="md"
       variant="centered"
+      zIndex={10050}
       className="h-auto"
       contentClassName="px-5 pb-1 pt-0"
       headerClassName="!py-3.5"
