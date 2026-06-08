@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ShoppingCart,
   Users,
@@ -98,6 +98,43 @@ const StatCard = ({ title, value, icon: Icon, color, iconColor = 'text-white', c
 
 const DASHBOARD_HIDDEN_KEY = 'dashboardDataHidden';
 const LOW_STOCK_THRESHOLD = 5;
+const EXCLUDED_GROSS_PROFIT_STATUSES = new Set(['cancelled', 'returned']);
+
+const getLineUnitCost = (item) =>
+  Number(item?.unitCost ?? item?.cost_price ?? item?.costPrice ?? item?.cost ?? 0) || 0;
+
+const getLineQuantity = (item) =>
+  Number(item?.quantity ?? item?.qty ?? 0) || 0;
+
+const getLineCogs = (item) => getLineQuantity(item) * getLineUnitCost(item);
+
+const getInvoiceRevenue = (invoice) =>
+  Number(invoice?.total ?? invoice?.pricing?.total ?? 0) || 0;
+
+const getInvoiceCogs = (invoice) => {
+  const items = Array.isArray(invoice?.items) ? invoice.items : [];
+  return items.reduce((sum, item) => sum + getLineCogs(item), 0);
+};
+
+const isActiveSalesInvoice = (invoice) => {
+  const status = String(invoice?.status || '').toLowerCase();
+  return !EXCLUDED_GROSS_PROFIT_STATUSES.has(status);
+};
+
+/** First finite non-zero value (0 from P&L often means stale/empty — do not block fallbacks). */
+const pickNonZeroMetric = (...values) => {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    const n = Number(value);
+    if (Number.isFinite(n) && n !== 0) return n;
+  }
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+};
 
 export const Dashboard = () => {
   const today = getCurrentDatePakistan();
@@ -153,6 +190,7 @@ export const Dashboard = () => {
   const [showAllPaymentsModal, setShowAllPaymentsModal] = useState(false);
   const [showDiscountsModal, setShowDiscountsModal] = useState(false);
   const [showLowStockModal, setShowLowStockModal] = useState(false);
+  const [showGrossProfitModal, setShowGrossProfitModal] = useState(false);
 
   // Lazy query for period summary
   const [getPeriodSummary] = useLazyGetPeriodSummaryQuery();
@@ -252,8 +290,30 @@ export const Dashboard = () => {
 
   useEffect(() => {
     if (!startDate || !endDate) return;
-    if (showSalesInvoicesModal || showAllReceiptsModal || showDiscountsModal) fetchSalesInvoicesModal(rangeParams);
-  }, [showSalesInvoicesModal, showAllReceiptsModal, showDiscountsModal, startDate, endDate, fetchSalesInvoicesModal]);
+    const needsSalesInvoices =
+      showSalesInvoicesModal ||
+      showAllReceiptsModal ||
+      showDiscountsModal ||
+      showGrossProfitModal ||
+      showWidget('grossProfit');
+    if (!needsSalesInvoices) return;
+
+    fetchSalesInvoicesModal({
+      dateFrom: startDate,
+      dateTo: endDate,
+      all: true,
+      ...(showGrossProfitModal ? { listMode: 'full' } : {}),
+    });
+  }, [
+    showSalesInvoicesModal,
+    showAllReceiptsModal,
+    showDiscountsModal,
+    showGrossProfitModal,
+    startDate,
+    endDate,
+    fetchSalesInvoicesModal,
+    widgetsConfig,
+  ]);
 
   useEffect(() => {
     if (!startDate || !endDate) return;
@@ -285,7 +345,7 @@ export const Dashboard = () => {
     { pollingInterval: 120000 }
   );
 
-  const { data: plSummaryData } = useGetSummaryQuery(
+  const { data: plSummaryData, isLoading: plSummaryLoading } = useGetSummaryQuery(
     { startDate, endDate },
     { skip: !startDate || !endDate }
   );
@@ -430,11 +490,124 @@ export const Dashboard = () => {
   // totalSales (Sales Orders + Sales Invoices) for revenue while P&L uses only invoiced sales minus returns.
   const plRevenueTotal = plSummaryData?.data?.revenue?.total ?? plSummaryData?.revenue?.total;
   const plCogsTotal = plSummaryData?.data?.costOfGoodsSold?.total ?? plSummaryData?.costOfGoodsSold?.total;
-  const grossProfit =
-    plRevenueTotal != null && plCogsTotal != null
-      ? plRevenueTotal - plCogsTotal
-      : (plSummaryData?.data?.grossProfit ?? plSummaryData?.grossProfit ?? (netRevenue - costOfGoodsSold));
+  const plGrossProfitRaw = plSummaryData?.data?.grossProfit ?? plSummaryData?.grossProfit;
+
+  const grossProfitActiveInvoices = useMemo(
+    () => salesInvoicesArray.filter(isActiveSalesInvoice),
+    [salesInvoicesArray]
+  );
+
+  const grossProfitInvoiceRows = useMemo(
+    () =>
+      grossProfitActiveInvoices.map((invoice) => {
+        const revenue = getInvoiceRevenue(invoice);
+        const cogs = getInvoiceCogs(invoice);
+        const profit = revenue - cogs;
+        const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+        return {
+          ...invoice,
+          gpRevenue: revenue,
+          gpCogs: cogs,
+          gpProfit: profit,
+          gpMargin: margin,
+        };
+      }),
+    [grossProfitActiveInvoices]
+  );
+
+  const grossProfitLineRows = useMemo(() => {
+    const rows = [];
+    for (const invoice of grossProfitActiveInvoices) {
+      const invoiceNumber = invoice.order_number || invoice.orderNumber || invoice.invoiceNo || '-';
+      const customerName =
+        invoice.customer?.businessName ||
+        invoice.customer?.business_name ||
+        invoice.customerInfo?.businessName ||
+        invoice.customerInfo?.business_name ||
+        invoice.customerName ||
+        invoice.customer?.name ||
+        invoice.customerInfo?.name ||
+        '-';
+      const items = Array.isArray(invoice.items) ? invoice.items : [];
+      for (const item of items) {
+        const quantity = getLineQuantity(item);
+        const unitCost = getLineUnitCost(item);
+        const unitPrice = Number(item.unitPrice ?? item.unit_price ?? 0) || 0;
+        const lineCogs = quantity * unitCost;
+        const lineRevenue = quantity * unitPrice;
+        rows.push({
+          invoiceNumber,
+          customerName,
+          productName: item.name || item.productName || item.product?.name || '-',
+          quantity,
+          unitCost,
+          unitPrice,
+          lineCogs,
+          lineRevenue,
+          lineProfit: lineRevenue - lineCogs,
+        });
+      }
+    }
+    return rows;
+  }, [grossProfitActiveInvoices]);
+
+  const computedInvoiceCogsTotal = useMemo(
+    () => grossProfitInvoiceRows.reduce((sum, row) => sum + row.gpCogs, 0),
+    [grossProfitInvoiceRows]
+  );
+
+  const computedInvoiceRevenueTotal = useMemo(
+    () => grossProfitInvoiceRows.reduce((sum, row) => sum + row.gpRevenue, 0),
+    [grossProfitInvoiceRows]
+  );
+
+  const computedInvoiceGrossProfitTotal = useMemo(
+    () => grossProfitInvoiceRows.reduce((sum, row) => sum + row.gpProfit, 0),
+    [grossProfitInvoiceRows]
+  );
+
+  const resolvedSalesRevenue = pickNonZeroMetric(
+    computedInvoiceRevenueTotal,
+    plSummaryData?.data?.revenue?.salesRevenue,
+    plSummaryData?.revenue?.salesRevenue,
+    salesInvoicesTotal,
+    totalSales
+  );
+
+  const resolvedCogsSold = pickNonZeroMetric(
+    computedInvoiceCogsTotal,
+    salesInvoicesCOGS,
+    plCogsTotal,
+    costOfGoodsSold
+  );
+
+  const resolvedNetRevenue = pickNonZeroMetric(
+    computedInvoiceRevenueTotal > 0 ? computedInvoiceRevenueTotal - totalSalesReturns : null,
+    plRevenueTotal,
+    resolvedSalesRevenue - totalSalesReturns,
+    totalRevenue
+  );
+
+  const hasLineItemCosts = grossProfitLineRows.length > 0 && computedInvoiceCogsTotal > 0;
+  const invoiceGrossProfitEstimate =
+    computedInvoiceRevenueTotal > 0 && resolvedCogsSold > 0
+      ? computedInvoiceRevenueTotal - totalSalesReturns - resolvedCogsSold
+      : null;
+
+  const grossProfit = pickNonZeroMetric(
+    hasLineItemCosts ? computedInvoiceGrossProfitTotal : invoiceGrossProfitEstimate,
+    plGrossProfitRaw,
+    plRevenueTotal != null && plCogsTotal != null ? plRevenueTotal - plCogsTotal : null,
+    resolvedNetRevenue - resolvedCogsSold,
+    netRevenue - costOfGoodsSold
+  );
+
   const netProfit = grossProfit - operatingExpenses;
+
+  const grossMarginPercent =
+    resolvedNetRevenue > 0
+      ? ((grossProfit / resolvedNetRevenue) * 100).toFixed(1)
+      : '0.0';
 
   // Column definitions for modals
   const salesOrdersColumns = [
@@ -481,6 +654,75 @@ export const Dashboard = () => {
     { key: 'sale_date', label: 'Date', sortable: true, format: 'date', render: (val, row) => formatDate(val || row.createdAt || row.orderDate || row.date) },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'total', label: 'Total', sortable: true, render: (val, row) => formatCurrency(val !== undefined && val !== null ? val : (row.pricing?.total || 0)) }
+  ];
+
+  const grossProfitInvoiceColumns = [
+    {
+      key: 'order_number',
+      label: 'Invoice',
+      sortable: true,
+      render: (val, row) => val || row.orderNumber || row.invoiceNo || '-',
+    },
+    {
+      key: 'customer',
+      label: 'Customer',
+      sortable: true,
+      render: (_val, row) =>
+        row.customer?.businessName ||
+        row.customer?.business_name ||
+        row.customerInfo?.businessName ||
+        row.customerInfo?.business_name ||
+        row.customerName ||
+        row.customer?.name ||
+        row.customerInfo?.name ||
+        '-',
+    },
+    {
+      key: 'sale_date',
+      label: 'Date',
+      sortable: true,
+      format: 'date',
+      render: (val, row) => formatDate(val || row.createdAt || row.orderDate || row.date),
+    },
+    { key: 'gpRevenue', label: 'Revenue', sortable: true, format: 'currency' },
+    { key: 'gpCogs', label: 'COGS', sortable: true, format: 'currency' },
+    {
+      key: 'gpProfit',
+      label: 'Gross Profit',
+      sortable: true,
+      render: (val) => (
+        <span className={Number(val) >= 0 ? 'text-gray-900' : 'text-red-600 font-semibold'}>
+          {formatCurrency(val || 0)}
+        </span>
+      ),
+    },
+    {
+      key: 'gpMargin',
+      label: 'Margin %',
+      sortable: true,
+      render: (val) => `${Number(val || 0).toFixed(1)}%`,
+    },
+  ];
+
+  const grossProfitLineColumns = [
+    { key: 'invoiceNumber', label: 'Invoice', sortable: true },
+    { key: 'customerName', label: 'Customer', sortable: true },
+    { key: 'productName', label: 'Product', sortable: true },
+    { key: 'quantity', label: 'Qty', sortable: true },
+    { key: 'unitCost', label: 'Unit Cost', sortable: true, format: 'currency' },
+    { key: 'unitPrice', label: 'Unit Price', sortable: true, format: 'currency' },
+    { key: 'lineCogs', label: 'Line COGS', sortable: true, format: 'currency' },
+    { key: 'lineRevenue', label: 'Line Revenue', sortable: true, format: 'currency' },
+    {
+      key: 'lineProfit',
+      label: 'Line Profit',
+      sortable: true,
+      render: (val) => (
+        <span className={Number(val) >= 0 ? 'text-gray-900' : 'text-red-600 font-semibold'}>
+          {formatCurrency(val || 0)}
+        </span>
+      ),
+    },
   ];
 
   const salesDiscountsColumns = [
@@ -1170,7 +1412,13 @@ export const Dashboard = () => {
 
                   {/* Gross Profit */}
                   {showWidget('grossProfit') && (
-                  <div className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg shadow-sm min-w-0">
+                  <div
+                    className="text-center p-2 sm:p-2.5 xl:p-3 2xl:p-4 border border-gray-200 bg-white rounded-lg cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-colors relative group shadow-sm min-w-0"
+                    onClick={() => setShowGrossProfitModal(true)}
+                  >
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Eye className="h-2.5 w-2.5 xl:h-3 xl:w-3 2xl:h-4 2xl:w-4 text-gray-600" />
+                    </div>
                     <div className="flex justify-center mb-1 sm:mb-1.5 xl:mb-2">
                       <div className="p-1.5 sm:p-2 xl:p-2.5 2xl:p-3 bg-blue-100 rounded-full">
                         <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4 xl:h-5 xl:w-5 2xl:h-6 2xl:w-6 text-blue-700" />
@@ -1180,7 +1428,7 @@ export const Dashboard = () => {
                     <p className={`text-sm sm:text-base xl:text-lg 2xl:text-xl font-bold break-words ${grossProfit >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                       {Math.round(grossProfit).toLocaleString()}
                     </p>
-                    <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">Revenue - COGS</p>
+                    <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">Revenue - COGS · Click for breakdown</p>
                   </div>
                   )}
 
@@ -1697,6 +1945,48 @@ export const Dashboard = () => {
               { label: 'Total Discount Given', value: totalDiscounts },
               { label: 'Invoices With Discount', value: salesDiscountsDataArray.length }
             ]}
+          />
+
+          <DashboardReportModal
+            isOpen={showGrossProfitModal}
+            onClose={() => setShowGrossProfitModal(false)}
+            title="Gross Profit Breakdown"
+            maxWidth="2xl"
+            columns={grossProfitInvoiceColumns}
+            data={grossProfitInvoiceRows}
+            isLoading={siModalState.isFetching || plSummaryLoading}
+            dateFrom={startDate}
+            dateTo={endDate}
+            onDateChange={(from, to) => {
+              setStartDate(from);
+              setEndDate(to);
+            }}
+            summary={[
+              { label: 'Sales Revenue', value: resolvedSalesRevenue },
+              { label: 'Sales Returns', value: totalSalesReturns },
+              { label: 'Net Revenue', value: resolvedNetRevenue },
+              { label: 'COGS (Sold)', value: resolvedCogsSold },
+              {
+                label: 'Gross Profit',
+                value: grossProfit,
+                highlight: true,
+                valueClassName: grossProfit >= 0 ? 'text-primary-600' : 'text-red-600',
+              },
+              { label: 'Gross Margin', value: `${grossMarginPercent}%` },
+              { label: 'Purchase Invoices', value: purchaseInvoicesTotal },
+              { label: 'Operating Expenses', value: operatingExpenses },
+              {
+                label: 'Net Profit',
+                value: netProfit,
+                valueClassName: netProfit >= 0 ? 'text-gray-900' : 'text-red-600',
+              },
+            ]}
+            summaryNote="Gross Profit = Net Revenue − COGS (cost of goods sold on invoice lines). Purchase invoices are what you bought; they are shown for reference only and are not subtracted from revenue."
+            detailSection={{
+              title: 'Line Items (Qty × Unit Cost = COGS per line)',
+              columns: grossProfitLineColumns,
+              data: grossProfitLineRows,
+            }}
           />
         </>
       )}

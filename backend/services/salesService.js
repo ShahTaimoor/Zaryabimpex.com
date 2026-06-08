@@ -729,7 +729,12 @@ class SalesService {
     };
 
     const order = await withBusinessTransaction(async ({ client, addPostCommit }) => {
-      // Inventory updates must commit/rollback with sale creation.
+      const createdOrder = await salesRepository.create(saleData, client);
+      const saleId = createdOrder.id || createdOrder._id;
+      const saleRefNumber =
+        createdOrder.order_number || createdOrder.orderNumber || orderNumber;
+
+      // Inventory updates must commit/rollback with sale creation (needs sale id for stock_movements.reference_id).
       if (!skipInventoryUpdate) {
         for (const item of orderItems) {
           if (item.isManual) continue;
@@ -739,15 +744,14 @@ class SalesService {
             quantity: item.quantity,
             shopId: data.sourceShopId || data.shopId || null,
             reason: 'Sales Invoice Creation',
-            reference: 'Sales Invoice',
+            reference: saleRefNumber,
+            referenceId: saleId,
             referenceModel: 'Sale',
             performedBy: user._id,
             notes: 'Stock reduced due to sales invoice creation'
           }, { client, skipAccountingEntry: true });
         }
       }
-
-      const createdOrder = await salesRepository.create(saleData, client);
 
       // Core ledger posting is part of transactional truth for a sale.
       await AccountingService.recordSale(createdOrder, { client });
