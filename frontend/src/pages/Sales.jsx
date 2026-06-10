@@ -326,6 +326,7 @@ export const Sales = ({ tabId, editData }) => {
       // Set the customer
       if (activeEditData.customer) {
         setSelectedCustomer(activeEditData.customer);
+        setCustomerSearchTerm(getCustomerDisplayName(activeEditData.customer, ''));
       }
 
       // Set the invoice number
@@ -905,8 +906,16 @@ export const Sales = ({ tabId, editData }) => {
   const resolvedOrderTypeForSave = () =>
     resolveOrderTypeForSave(priceType, activeEditData?.orderType);
 
+  const handleCustomerSearch = (searchTerm) => {
+    setCustomerSearchTerm(searchTerm);
+    if (searchTerm === '') {
+      setSelectedCustomer(null);
+    }
+  };
+
   const handleCustomerSelect = async (customer) => {
     setSelectedCustomer(customer);
+    setCustomerSearchTerm(getCustomerDisplayName(customer, ''));
 
     // Reset price states when customer changes
     setOriginalPrices({});
@@ -1694,7 +1703,7 @@ export const Sales = ({ tabId, editData }) => {
                   items={customers}
                   selectedItem={selectedCustomer}
                   onSelect={handleCustomerSelect}
-                  onSearch={setCustomerSearchTerm}
+                  onSearch={handleCustomerSearch}
                   searchValue={customerSearchTerm}
                   loading={customersLoading || customersFetching}
                   serverSideSearch
