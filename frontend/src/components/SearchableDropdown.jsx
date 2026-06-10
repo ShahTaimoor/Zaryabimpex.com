@@ -9,8 +9,10 @@ const EMPTY_ARRAY = [];
 
 const DEFAULT_INITIAL_LIMIT = 20;
 
-/** Product search dropdown uses a portal; stay below modal overlays (z-50+). */
+/** Default portal z-index on regular pages. */
 const DROPDOWN_Z_INDEX = 40;
+/** Above Headless UI Dialog overlays (z-50). */
+const MODAL_DROPDOWN_Z_INDEX = 60;
 
 const isModalDialogOpen = () =>
   typeof document !== 'undefined' && Boolean(document.querySelector('[aria-modal="true"]'));
@@ -57,6 +59,10 @@ export const SearchableDropdown = forwardRef(({
   maxInitialItems = DEFAULT_INITIAL_LIMIT,
   /** When true, items are pre-filtered by the server; skip local token matching. */
   serverSideSearch = false,
+  /** When true, allow dropdown inside modal dialogs (higher z-index, no auto-close). */
+  withinModal = false,
+  /** Optional z-index override for the portaled dropdown list. */
+  dropdownZIndex,
 }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -166,9 +172,12 @@ export const SearchableDropdown = forwardRef(({
     }
   }, [value]);
 
-  // Close dropdown when a modal dialog opens (e.g. duplicate line merge)
+  const portalZIndex = dropdownZIndex ?? (withinModal ? MODAL_DROPDOWN_Z_INDEX : DROPDOWN_Z_INDEX);
+  const blockForModal = () => !withinModal && isModalDialogOpen();
+
+  // Close dropdown when a modal dialog opens (e.g. duplicate line merge) — not when embedded in one.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || withinModal) return;
 
     const closeIfModalOpen = () => {
       if (isModalDialogOpen()) {
@@ -187,7 +196,7 @@ export const SearchableDropdown = forwardRef(({
     });
 
     return () => observer.disconnect();
-  }, [isOpen]);
+  }, [isOpen, withinModal]);
 
   // Store displayKey in a ref to avoid unnecessary re-renders when it's a function
   const displayKeyRef = useRef(displayKey);
@@ -523,7 +532,7 @@ export const SearchableDropdown = forwardRef(({
   const hasCustomPadding = className.includes('pr-');
 
   const handleInputClick = () => {
-    if (isModalDialogOpen()) return;
+    if (blockForModal()) return;
     // Open dropdown when clicking on input (if there are items or a search term)
     if (items.length > 0 || searchTerm || value) {
       setIsOpen(true);
@@ -559,7 +568,7 @@ export const SearchableDropdown = forwardRef(({
           onKeyDown={handleKeyDown}
           onClick={handleInputClick}
           onFocus={() => {
-            if (isModalDialogOpen()) return;
+            if (blockForModal()) return;
             // Only open on focus if openOnFocus prop is explicitly set to true
             if (openOnFocus) {
               setIsOpen(true);
@@ -580,7 +589,7 @@ export const SearchableDropdown = forwardRef(({
           ref={dropdownRef}
           className="fixed max-h-96 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
           style={{
-            zIndex: DROPDOWN_Z_INDEX,
+            zIndex: portalZIndex,
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             width: `${dropdownPosition.width}px`

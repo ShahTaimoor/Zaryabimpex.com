@@ -6,13 +6,15 @@ import { useFormValidation } from '../hooks/useFormValidation';
 import { validateRequired, validatePositiveNumber } from '../utils/validation';
 import { LoadingButton } from './LoadingSpinner';
 import { handleApiError, showSuccessToast, showErrorToast } from '../utils/errorHandler';
-import { useGetProductsQuery } from '../store/services/productsApi';
 import { useCreateStockAdjustmentMutation } from '../store/services/inventoryApi';
 import { SearchableDropdown } from './SearchableDropdown';
+import { useDebouncedProductSearch } from '../hooks/useDebouncedProductSearch';
 import { formatCurrency } from '../utils/formatters';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+
+const productId = (product) => product?.id ?? product?._id;
 
 const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
   const [adjustmentType, setAdjustmentType] = useState('physical_count');
@@ -41,15 +43,10 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
     }
   );
 
-  // Fetch products for search
-  const { data: productsResponse, isLoading: productsLoading } = useGetProductsQuery(
-    { search: productSearchTerm, limit: 20 },
-    {
-      skip: productSearchTerm.length === 0,
-    }
+  const { products, isLoading: productsLoading, isFetching: productsFetching } = useDebouncedProductSearch(
+    productSearchTerm,
+    { enabled: isOpen, listMode: 'minimal', limit: 20 }
   );
-
-  const products = productsResponse?.data?.products || productsResponse?.products || [];
 
   // Create stock adjustment mutation
   const [createStockAdjustment, { isLoading: creating }] = useCreateStockAdjustmentMutation();
@@ -73,7 +70,7 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
     setIsAddingProduct(true);
     
     // Check if product already exists in adjustments
-    const existingAdjustment = adjustments.find(adj => adj.product._id === product._id);
+    const existingAdjustment = adjustments.find((adj) => productId(adj.product) === productId(product));
     if (existingAdjustment) {
       showErrorToast('Product is already in the adjustment list');
       setIsAddingProduct(false);
@@ -101,13 +98,13 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
     setProductSearchTerm('');
   };
 
-  const removeAdjustment = (productId) => {
-    setAdjustments(prev => prev.filter(adj => adj.product._id !== productId));
+  const removeAdjustment = (pid) => {
+    setAdjustments((prev) => prev.filter((adj) => productId(adj.product) !== pid));
   };
 
-  const updateAdjustment = (productId, field, value) => {
+  const updateAdjustment = (pid, field, value) => {
     setAdjustments(prev => prev.map(adj => {
-      if (adj.product._id === productId) {
+      if (productId(adj.product) === pid) {
         const updated = { ...adj, [field]: value };
         if (field === 'adjustedStock') {
           updated.variance = value - adj.currentStock;
@@ -138,7 +135,7 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
       warehouse: values.warehouse,
       notes: values.notes,
       adjustments: adjustments.map(adj => ({
-        product: adj.product._id,
+        product: productId(adj.product),
         currentStock: adj.currentStock,
         adjustedStock: adj.adjustedStock,
         cost: adj.cost,
@@ -341,12 +338,16 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                     </label>
                     <SearchableDropdown
                       placeholder="Search products to adjust..."
-                      items={products?.data?.products || []}
+                      items={products}
                       onSelect={handleProductSelect}
                       onSearch={setProductSearchTerm}
                       displayKey={productDisplayKey}
-                      loading={productsLoading}
+                      valueKey="id"
+                      loading={productsLoading || productsFetching}
                       emptyMessage="No products found"
+                      serverSideSearch
+                      withinModal
+                      openOnFocus
                     />
                   </div>
 
@@ -437,7 +438,7 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                       <h4 className="font-medium text-gray-900 mb-3">Adjustments ({adjustments.length})</h4>
                       <div className="space-y-3">
                         {adjustments.map((adjustment) => (
-                          <div key={adjustment.product._id} className="bg-white border rounded-lg p-4">
+                          <div key={productId(adjustment.product)} className="bg-white border rounded-lg p-4">
                             <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-3 text-sm text-gray-600">
                               <Package className="h-5 w-5 text-gray-400" />
@@ -458,7 +459,7 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                               </div>
                               <button
                                 type="button"
-                                onClick={() => removeAdjustment(adjustment.product._id)}
+                                onClick={() => removeAdjustment(productId(adjustment.product))}
                                 className="text-red-600 hover:text-red-800"
                               >
                                 <X className="h-4 w-4" />
@@ -485,7 +486,7 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                                   type="number"
                                   min="0"
                                   value={adjustment.adjustedStock}
-                                  onChange={(e) => updateAdjustment(adjustment.product._id, 'adjustedStock', parseFloat(e.target.value) || 0)}
+                                  onChange={(e) => updateAdjustment(productId(adjustment.product), 'adjustedStock', parseFloat(e.target.value) || 0)}
                                 />
                               </div>
                               <div>
@@ -501,7 +502,7 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                                   Cost Impact
                                 </label>
                                 <div className={`input bg-gray-100 ${adjustment.variance * adjustment.cost >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  ${(adjustment.variance * adjustment.cost).toFixed(2)}
+                                  {formatCurrency(adjustment.variance * adjustment.cost)}
                                 </div>
                               </div>
                             </div>
@@ -529,7 +530,7 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSuccess }) => {
                         <div>
                           <div className="text-sm text-gray-600">Cost Impact</div>
                           <div className={`text-lg font-semibold ${totalCostImpact >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            ${totalCostImpact.toFixed(2)}
+                            {formatCurrency(totalCostImpact)}
                           </div>
                         </div>
                       </div>

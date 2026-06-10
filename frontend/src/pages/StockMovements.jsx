@@ -114,15 +114,17 @@ export const StockMovements = () => {
 
   const loadProductOptions = useCallback(async (inputValue) => {
     const term = String(inputValue ?? '').trim();
-    if (term.length < 2) return [];
     try {
-      const res = await triggerProducts({
-        search: term,
+      const params = {
         status: 'active',
         limit: 50,
         page: 1,
         listMode: 'minimal',
-      }).unwrap();
+      };
+      if (term.length > 0) {
+        params.search = term;
+      }
+      const res = await triggerProducts(params).unwrap();
       const products = res?.products ?? res?.data?.products ?? [];
       if (Array.isArray(products) && products.length > 0) {
         setProductMap((prev) => {
@@ -146,6 +148,16 @@ export const StockMovements = () => {
     const product = productMap.get(productId);
     return product ? formatProductOption(product) : null;
   }, [productMap, formatProductOption]);
+
+  useEffect(() => {
+    if (!showAdjustmentModal) return;
+    loadProductOptions('');
+  }, [showAdjustmentModal, loadProductOptions]);
+
+  const asyncSelectMenuPortalStyles = {
+    menuPortal: (base) => ({ ...base, zIndex: 60 }),
+    menu: (base) => ({ ...base, zIndex: 60 }),
+  };
 
   useEffect(() => {
     const options = Object.entries(movementTypes).map(([key, config]) => ({
@@ -689,22 +701,21 @@ export const StockMovements = () => {
                   </label>
                   <AsyncSelect
                     cacheOptions
-                    defaultOptions={defaultProductOptions}
+                    defaultOptions
                     loadOptions={loadProductOptions}
                     value={getProductOptionById(adjustmentData.productId)}
                     onChange={(option) => setAdjustmentData(prev => ({ ...prev, productId: option ? option.value : '' }))}
                     isClearable
                     isLoading={false}
-                    placeholder="Select product"
+                    placeholder="Search or select product"
+                    menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+                    menuPosition="fixed"
                     styles={{
                       control: (provided) => ({
                         ...provided,
                         minHeight: '2.5rem'
                       }),
-                      menu: (provided) => ({
-                        ...provided,
-                        zIndex: 30
-                      })
+                      ...asyncSelectMenuPortalStyles,
                     }}
                     required
                   />

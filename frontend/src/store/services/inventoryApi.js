@@ -46,7 +46,7 @@ export const inventoryApi = api.injectEndpoints({
     }),
     createStockAdjustment: builder.mutation({
       query: (data) => ({
-        url: 'inventory/stock-adjustments',
+        url: 'inventory/adjustments',
         method: 'post',
         data,
       }),

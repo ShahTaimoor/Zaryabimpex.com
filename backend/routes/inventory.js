@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
 const { handleValidationErrors, sanitizeRequest } = require('../middleware/validation');
 const inventoryService = require('../services/inventoryService');
 const inventoryRepository = require('../repositories/InventoryRepository');
@@ -483,10 +483,10 @@ router.post('/release-stock', [
 
 // @route   POST /api/inventory/adjustments
 // @desc    Create a stock adjustment request
-// @access  Private (requires 'create_inventory_adjustments' permission)
+// @access  Private (requires inventory update permission)
 router.post('/adjustments', [
   auth,
-  requirePermission('create_inventory_adjustments'),
+  requireAnyPermission(['update_inventory', 'manage_inventory']),
   sanitizeRequest,
   body('type').isIn(['physical_count', 'damage', 'theft', 'transfer', 'correction', 'return', 'write_off']).withMessage('Invalid adjustment type'),
   body('reason').trim().notEmpty().withMessage('Reason is required'),
