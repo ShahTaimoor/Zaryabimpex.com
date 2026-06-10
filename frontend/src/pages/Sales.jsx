@@ -125,11 +125,30 @@ import {
   priceTypeFromBusinessType,
   resolveOrderTypeForSave,
 } from '../utils/priceTypeUtils';
+import {
+  getProductCostPrice,
+  getProductDisplayCostPrice,
+  getEffectiveCostForLossCheck,
+} from '../utils/productCostUtils';
 
 function normalizeCartProductId(product) {
   if (!product) return '';
   const id = product._id ?? product.id;
   return id != null ? String(id) : '';
+}
+
+function getCartLineLastPurchasePrice(product, lastPurchasePrices) {
+  const id = normalizeCartProductId(product);
+  if (!id || lastPurchasePrices[id] === undefined) return null;
+  const value = Number(lastPurchasePrices[id]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function getCartLineEffectiveCost(product, lastPurchasePrices) {
+  return getEffectiveCostForLossCheck(
+    product,
+    getCartLineLastPurchasePrice(product, lastPurchasePrices)
+  );
 }
 
 /** Cart → print payload: names, optional manual photo, dual-unit qty for invoice/PDF. */
@@ -262,24 +281,13 @@ export const Sales = ({ tabId, editData }) => {
       const quantity = Number(item.quantity) || 0;
       const salePrice = Number(item.unitPrice) || 0;
 
-      const lastPurchaseCost =
-        productId && lastPurchasePrices[productId] !== undefined
-          ? Number(lastPurchasePrices[productId])
-          : null;
-
-      const fallbackCost =
-        lastPurchaseCost ??
-        Number(item.product.pricing?.cost) ??
-        Number(item.product.pricing?.purchasePrice) ??
-        Number(item.product.pricing?.wholesaleCost) ??
-        0;
-
-      const profitPerUnit = salePrice - (Number.isFinite(fallbackCost) ? fallbackCost : 0);
+      const catalogCost = getProductCostPrice(item.product);
+      const profitPerUnit = salePrice - (Number.isFinite(catalogCost) ? catalogCost : 0);
       const lineProfit = profitPerUnit * quantity;
 
       return sum + (Number.isFinite(lineProfit) ? lineProfit : 0);
     }, 0);
-  }, [cart, lastPurchasePrices]);
+  }, [cart]);
 
   // Generate invoice number
   const generateInvoiceNumber = (customer) => {
@@ -1119,9 +1127,7 @@ export const Sales = ({ tabId, editData }) => {
     // Check if sale price is less than cost price (always check, regardless of showCostPrice)
     const cartItem = cart.find(item => item.product._id === productId);
     if (cartItem) {
-      const costPrice = lastPurchasePrices[productId] !== undefined
-        ? lastPurchasePrices[productId]
-        : cartItem.product.pricing?.cost;
+      const costPrice = getCartLineEffectiveCost(cartItem.product, lastPurchasePrices);
       if (costPrice !== undefined && costPrice !== null && newPrice < costPrice) {
         const loss = costPrice - newPrice;
         const lossPercent = ((loss / costPrice) * 100).toFixed(1);
@@ -1810,6 +1816,12 @@ export const Sales = ({ tabId, editData }) => {
                   const isLowStock = item.product.inventory?.currentStock <= item.product.inventory?.reorderPoint;
 
                   const serialHighlight = highlightedCartLineIndex === index;
+                  const lineDisplayCost = getProductDisplayCostPrice(item.product);
+                  const lineEffectiveCost = getCartLineEffectiveCost(item.product, lastPurchasePrices);
+                  const isBelowCost =
+                    hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) &&
+                    lineEffectiveCost != null &&
+                    item.unitPrice < lineEffectiveCost;
 
                   return (
                     <div
@@ -1853,9 +1865,7 @@ export const Sales = ({ tabId, editData }) => {
                               )}
                               <div className="flex flex-wrap items-center gap-2 mt-1">
                                 {isLowStock && <span className="text-yellow-600 text-xs">⚠️ Low Stock</span>}
-                                {lastPurchasePrices[item.product._id] !== undefined &&
-                                  hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) &&
-                                  item.unitPrice < lastPurchasePrices[item.product._id] && (
+                                {isBelowCost && (
                                     <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
                                       ⚠️ Loss
                                     </span>
@@ -1920,8 +1930,7 @@ export const Sales = ({ tabId, editData }) => {
                               value={Math.round(item.unitPrice)}
                               onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
                               onFocus={(e) => e.target.select()}
-                              className={`text-center h-8 w-full ${(lastPurchasePrices[item.product._id] !== undefined &&
-                                item.unitPrice < lastPurchasePrices[item.product._id])
+                              className={`text-center h-8 w-full ${isBelowCost
                                 ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
                                 : ''
                                 }`}
@@ -1932,9 +1941,7 @@ export const Sales = ({ tabId, editData }) => {
                             <div className="col-span-2">
                               <label className="block text-xs font-medium text-gray-500 mb-1">Cost</label>
                               <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center">
-                                {lastPurchasePrices[item.product._id] !== undefined
-                                  ? `${Math.round(lastPurchasePrices[item.product._id])}`
-                                  : 'N/A'}
+                                {lineDisplayCost ?? 'N/A'}
                               </span>
                             </div>
                           )}
@@ -1983,10 +1990,8 @@ export const Sales = ({ tabId, editData }) => {
                                 </span>
                                 {isLowStock && <span className="text-yellow-600 text-xs whitespace-nowrap">⚠️ Low Stock</span>}
                                 {/* Warning if sale price is below cost price (only if has permission) */}
-                                {lastPurchasePrices[item.product._id] !== undefined &&
-                                  hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) &&
-                                  item.unitPrice < lastPurchasePrices[item.product._id] && (
-                                    <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold whitespace-nowrap" title={`Sale price below cost! Loss: ${Math.round(lastPurchasePrices[item.product._id] - item.unitPrice)} per unit`}>
+                                {isBelowCost && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold whitespace-nowrap" title={`Sale price below cost! Loss: ${Math.round(lineEffectiveCost - item.unitPrice)} per unit`}>
                                       ⚠️ Loss
                                     </span>
                                   )}
@@ -2046,45 +2051,32 @@ export const Sales = ({ tabId, editData }) => {
                           {showCostPrice && hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) && (
                             <div className="min-w-0">
                               <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-8 flex items-center justify-center" title="Cost Price">
-                                {lastPurchasePrices[item.product._id] !== undefined
-                                  ? `${Math.round(lastPurchasePrices[item.product._id])}`
-                                  : item.product.pricing?.cost !== undefined
-                                    ? `${Math.round(item.product.pricing.cost)}`
-                                    : 'N/A'}
+                                {lineDisplayCost ?? 'N/A'}
                               </span>
                             </div>
                           )}
 
                           {/* Rate - 1 column */}
                           <div className="min-w-0 relative">
-                            {(() => {
-                              const effectiveCost = lastPurchasePrices[item.product._id] !== undefined
-                                ? lastPurchasePrices[item.product._id]
-                                : item.product.pricing?.cost;
-                              const isBelowCost = hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) && effectiveCost !== undefined && effectiveCost !== null && item.unitPrice < effectiveCost;
-
-                              return (
-                                <Input
-                                  type="number"
-                                  step="1"
-                                  autoComplete="off"
-                                  value={Math.round(item.unitPrice)}
-                                  onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
-                                  onFocus={(e) => e.target.select()}
-                                  className={`text-center h-8 ${
-                                    isBelowCost
-                                      ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
-                                      : priceStatusInputClasses(priceStatus[item.product._id])
-                                    }`}
-                                  min="0"
-                                  title={
-                                    isBelowCost
-                                      ? `⚠️ WARNING: Sale price ($${Math.round(item.unitPrice)}) is below cost price ($${Math.round(effectiveCost)})`
-                                      : ''
-                                  }
-                                />
-                              );
-                            })()}
+                            <Input
+                              type="number"
+                              step="1"
+                              autoComplete="off"
+                              value={Math.round(item.unitPrice)}
+                              onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
+                              onFocus={(e) => e.target.select()}
+                              className={`text-center h-8 ${
+                                isBelowCost
+                                  ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
+                                  : priceStatusInputClasses(priceStatus[item.product._id])
+                                }`}
+                              min="0"
+                              title={
+                                isBelowCost
+                                  ? `⚠️ WARNING: Sale price ($${Math.round(item.unitPrice)}) is below cost price ($${Math.round(lineEffectiveCost)})`
+                                  : ''
+                              }
+                            />
                             {isLastPricesApplied && (
                               <LineItemPriceStatusIcon status={priceStatus[item.product._id]} />
                             )}

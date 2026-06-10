@@ -16,6 +16,11 @@ import BaseModal from '@/components/BaseModal';
 import { useSensitiveDataPermissions } from '@/hooks/useSensitiveDataPermissions';
 import { compressImageFileToDataUrl } from '@/utils/imageCompress';
 import { getProductDisplayName } from '@/utils/partyDisplay';
+import {
+  getProductCostPrice,
+  getProductDisplayCostPrice,
+  getEffectiveCostForLossCheck,
+} from '@/utils/productCostUtils';
 import { PRODUCT_SEARCH_DROPDOWN_LIMIT } from '@/constants/listPagination';
 import { useCompanyInfo } from '@/hooks/useCompanyInfo';
 /** Cap manual line images stored as data URLs on sales.items */
@@ -71,6 +76,8 @@ function ProductSearchComponent({
   const productSearchRef = useRef(null);
   const manualNameRef = useRef(null);
   const manualImageInputRef = useRef(null);
+  /** Guards async last-purchase fetch when the user changes selection quickly. */
+  const selectedProductIdRef = useRef(null);
   const dispatch = useDispatch();
 
   const [triggerProducts] = useLazyGetProductsQuery();
@@ -147,25 +154,10 @@ function ProductSearchComponent({
     }
   }, [onFocusReady, focusSearchInput]);
 
-  const getCostPrice = (product) => {
-    if (!product) return 0;
+  const getDisplayCostPrice = (product) => getProductDisplayCostPrice(product);
 
-    const pricing = product.pricing || {};
-    const normalizedCost = pricing.cost
-      ?? pricing.costPrice
-      ?? pricing.cost_price
-      ?? pricing.purchasePrice
-      ?? pricing.purchase_price
-      ?? pricing.wholesaleCost
-      ?? product.pricing?.cost_price
-      ?? product.costPrice
-      ?? product.cost_price
-      ?? product.purchasePrice
-      ?? product.purchase_price;
-
-    const numericCost = Number(normalizedCost);
-    return Number.isFinite(numericCost) ? numericCost : 0;
-  };
+  const getLineEffectiveCost = (product) =>
+    getEffectiveCostForLossCheck(product, lastPurchasePrice);
 
   const calculatePrice = (product, priceType) => {
     if (!product) return 0;
@@ -174,7 +166,7 @@ function ProductSearchComponent({
     const pricing = product.pricing || {};
 
     if (priceType === 'cost') {
-      return getCostPrice(product);
+      return getProductCostPrice(product);
     } else if (priceType === 'distributor') {
       return pricing.distributor || pricing.wholesale || pricing.retail || 0;
     } else if (priceType === 'wholesale') {
@@ -188,6 +180,10 @@ function ProductSearchComponent({
   };
 
   const handleProductSelect = async (product) => {
+    const selectedId = String(product._id ?? product.id ?? '');
+    selectedProductIdRef.current = selectedId;
+
+    setLastPurchasePrice(null);
     setSelectedProduct(product);
     setQuantity(1);
     setIsAddingProduct(true);
@@ -197,12 +193,15 @@ function ProductSearchComponent({
 
     // Fetch last purchase price (always, for loss alerts)
     // For variants, use the base product ID to get purchase price
-    const productIdForPrice = product.isVariant ? product.baseProductId : product._id;
+    const productIdForPrice = product.isVariant
+      ? (product.baseProductId ?? product.baseProduct?._id ?? product.baseProduct?.id)
+      : (product._id ?? product.id);
 
     let fetchedLastPurchasePrice = null;
     if (productIdForPrice) {
       try {
         const response = await getLastPurchasePrice(productIdForPrice).unwrap();
+        if (selectedProductIdRef.current !== selectedId) return;
         if (response && response.lastPurchasePrice !== null) {
           fetchedLastPurchasePrice = Number(response.lastPurchasePrice);
           setLastPurchasePrice(fetchedLastPurchasePrice);
@@ -213,6 +212,7 @@ function ProductSearchComponent({
           setLastPurchasePrice(null);
         }
       } catch (error) {
+        if (selectedProductIdRef.current !== selectedId) return;
         // Silently fail - last purchase price is optional
         setLastPurchasePrice(null);
       }
@@ -285,7 +285,9 @@ function ProductSearchComponent({
       let unitPrice = calculatePrice(product, priceType);
       if (priceType === 'cost') {
         try {
-          const productIdForPrice = product.isVariant ? product.baseProductId : product._id;
+          const productIdForPrice = product.isVariant
+      ? (product.baseProductId ?? product.baseProduct?._id ?? product.baseProduct?.id)
+      : (product._id ?? product.id);
           if (productIdForPrice) {
             const response = await getLastPurchasePrice(productIdForPrice).unwrap();
             const fetched = Number(response?.lastPurchasePrice);
@@ -299,7 +301,7 @@ function ProductSearchComponent({
       }
       
       // Check for loss warning (sale < cost)
-      const costPrice = getCostPrice(product); // Simplified for auto-add to avoid blocking confirm dialogs
+      const costPrice = getProductCostPrice(product); // Simplified for auto-add to avoid blocking confirm dialogs
       if (unitPrice < costPrice) {
         toast.warning(`Auto-added ${getProductDisplayName(product, 'Product')} with price BELOW cost!`, { duration: 4000 });
       }
@@ -328,6 +330,8 @@ function ProductSearchComponent({
 
       // Clear search and focus back
       setProductSearchTerm('');
+      selectedProductIdRef.current = null;
+      setLastPurchasePrice(null);
       setSelectedProduct(null);
       setIsAddingProduct(false);
 
@@ -525,7 +529,7 @@ function ProductSearchComponent({
       const unitPrice = parseFloat(customRate) || Number(calculatedRate) || 0;
 
       // Check if sale price is less than cost price (always check, regardless of showCostPrice)
-      const costPrice = lastPurchasePrice !== null ? lastPurchasePrice : getCostPrice(selectedProduct);
+      const costPrice = getLineEffectiveCost(selectedProduct);
       if (costPrice !== undefined && costPrice !== null && unitPrice < costPrice) {
         const loss = costPrice - unitPrice;
         const lossPercent = ((loss / costPrice) * 100).toFixed(1);
@@ -560,6 +564,8 @@ function ProductSearchComponent({
       }
 
       // Reset form
+      selectedProductIdRef.current = null;
+      setLastPurchasePrice(null);
       setSelectedProduct(null);
       setQuantity(0);
       setCustomRate('');
@@ -612,6 +618,8 @@ function ProductSearchComponent({
         setTimeout(() => productSearchRef.current?.focus({ preventScroll: true }), 100);
       } else if (isAddingProduct) {
         e.preventDefault();
+        selectedProductIdRef.current = null;
+        setLastPurchasePrice(null);
         setSelectedProduct(null);
         setQuantity(0);
         setCustomRate('');
@@ -634,7 +642,7 @@ function ProductSearchComponent({
     let priceLabel = 'Wholesale';
 
     if (priceType === 'cost') {
-      unitPrice = getCostPrice(product);
+      unitPrice = getProductCostPrice(product);
       priceLabel = 'Cost';
     } else if (priceType === 'wholesale') {
       unitPrice = pricing.wholesale || pricing.retail || 0;
@@ -644,7 +652,7 @@ function ProductSearchComponent({
       priceLabel = 'Retail';
     }
 
-    const purchasePrice = getCostPrice(product);
+    const purchasePrice = getProductCostPrice(product);
 
     // Show variant indicator
     const variantInfo = product.isVariant
@@ -744,6 +752,8 @@ function ProductSearchComponent({
                       onClick={() => {
                         setIsManualMode(true);
                         setIsAddingProduct(true);
+                        selectedProductIdRef.current = null;
+                        setLastPurchasePrice(null);
                         setSelectedProduct(null);
                         setCalculatedRate(0);
                         setTimeout(() => manualNameRef.current?.focus({ preventScroll: true }), 100);
@@ -988,11 +998,9 @@ function ProductSearchComponent({
                   />
                 ) : (
                   <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-2 rounded border border-red-200 block text-center h-10 flex items-center justify-center" title="Cost Price">
-                    {lastPurchasePrice !== null
-                      ? `${Math.round(lastPurchasePrice)}`
-                      : (selectedProduct?.pricing?.cost !== undefined && selectedProduct?.pricing?.cost !== null)
-                        ? `${Math.round(selectedProduct.pricing.cost)}`
-                        : selectedProduct ? 'N/A' : '0'}
+                    {selectedProduct
+                      ? (getDisplayCostPrice(selectedProduct) ?? 'N/A')
+                      : '0'}
                   </span>
                 )}
               </div>
@@ -1070,6 +1078,8 @@ function ProductSearchComponent({
                       onClick={() => {
                         setIsManualMode(true);
                         setIsAddingProduct(true);
+                        selectedProductIdRef.current = null;
+                        setLastPurchasePrice(null);
                         setSelectedProduct(null);
                         setCalculatedRate(0);
                         setTimeout(() => manualNameRef.current?.focus({ preventScroll: true }), 100);
@@ -1205,9 +1215,9 @@ function ProductSearchComponent({
                 />
               ) : (
                 <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-2 rounded border border-red-200 block text-center h-10 flex items-center justify-center" title="Cost Price">
-                  {!isManualMode && selectedProduct ? (
-                    lastPurchasePrice !== null ? Math.round(lastPurchasePrice) : (selectedProduct?.pricing?.cost ? Math.round(selectedProduct.pricing.cost) : 'N/A')
-                  ) : '0'}
+                  {!isManualMode && selectedProduct
+                    ? (getDisplayCostPrice(selectedProduct) ?? 'N/A')
+                    : '0'}
                 </span>
               )}
             </div>

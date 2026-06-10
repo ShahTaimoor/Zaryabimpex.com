@@ -127,6 +127,11 @@ import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import { PageLayout } from '../components/layout/PageLayout';
+import {
+  getProductCostPrice,
+  getProductDisplayCostPrice,
+  getEffectiveCostForLossCheck,
+} from '../utils/productCostUtils';
 
 
 // Helper function to safely render values
@@ -138,6 +143,44 @@ const safeRender = (value) => {
   }
   return String(value);
 };
+
+function getSoItemProductData(item) {
+  if (item?.productData) return item.productData;
+  if (item?.product && typeof item.product === 'object') return item.product;
+  return null;
+}
+
+function getSoItemProductIdFromItem(item) {
+  const raw = typeof item?.product === 'string'
+    ? item.product
+    : (item?.product?._id ?? item?.product?.id);
+  return raw != null ? String(raw) : '';
+}
+
+function getSoLineLastPurchasePrice(item, lastPurchasePrices) {
+  const lineId = getSoItemProductIdFromItem(item);
+  if (lineId && lastPurchasePrices[lineId] !== undefined) {
+    const value = Number(lastPurchasePrices[lineId]);
+    if (Number.isFinite(value)) return value;
+  }
+  const productData = getSoItemProductData(item);
+  if (productData?.isVariant) {
+    const baseId = productData.baseProductId ?? productData.baseProduct?._id ?? productData.baseProduct?.id;
+    const baseKey = baseId != null ? String(baseId) : '';
+    if (baseKey && lastPurchasePrices[baseKey] !== undefined) {
+      const value = Number(lastPurchasePrices[baseKey]);
+      if (Number.isFinite(value)) return value;
+    }
+  }
+  return null;
+}
+
+function getSoLineEffectiveCost(item, lastPurchasePrices) {
+  return getEffectiveCostForLossCheck(
+    getSoItemProductData(item),
+    getSoLineLastPurchasePrice(item, lastPurchasePrices)
+  );
+}
 
 // Address formatting moved to utils/partyDisplay.js (imported at top)
 
@@ -367,51 +410,18 @@ const SalesOrders = ({ tabId }) => {
   const totalProfit = useMemo(() => {
     if (!Array.isArray(formData.items) || formData.items.length === 0) return 0;
 
-    const getProductIdFromItem = (item) => {
-      if (!item) return null;
-      if (item.product?._id) return item.product._id;
-      if (typeof item.product === 'string') return item.product;
-      if (item.productData?._id) return item.productData._id;
-      return null;
-    };
-
-    const getProductData = (item) => {
-      if (!item) return null;
-      if (item.productData) return item.productData;
-      if (item.product && typeof item.product === 'object') return item.product;
-      return null;
-    };
-
     return formData.items.reduce((sum, item) => {
       const quantity = Number(item.quantity) || 0;
       const salePrice = Number(item.unitPrice) || 0;
-      const productId = getProductIdFromItem(item);
-      const productData = getProductData(item);
+      const productData = getSoItemProductData(item);
 
-      const lastCost =
-        productId && lastPurchasePrices[productId] !== undefined
-          ? Number(lastPurchasePrices[productId])
-          : null;
-
-      const fallbackCostCandidates = [
-        lastCost,
-        Number(productData?.pricing?.cost),
-        Number(productData?.pricing?.purchasePrice),
-        Number(productData?.pricing?.wholesaleCost),
-        Number(productData?.costPrice),
-        Number(productData?.purchasePrice),
-      ];
-
-      const cost = fallbackCostCandidates.find(
-        (value) => value !== null && value !== undefined && Number.isFinite(value)
-      ) || 0;
-
-      const profitPerUnit = salePrice - cost;
+      const catalogCost = getProductCostPrice(productData);
+      const profitPerUnit = salePrice - (Number.isFinite(catalogCost) ? catalogCost : 0);
       const lineProfit = profitPerUnit * quantity;
 
       return sum + (Number.isFinite(lineProfit) ? lineProfit : 0);
     }, 0);
-  }, [formData.items, lastPurchasePrices]);
+  }, [formData.items]);
 
   // Modal-specific product selection state
   const [modalProductSearchTerm, setModalProductSearchTerm] = useState('');
@@ -881,11 +891,12 @@ const SalesOrders = ({ tabId }) => {
       const unitPrice = parseFloat(customRate) || calculatedRate;
 
       // Check if sale price is less than cost price (always check, regardless of showCostPrice)
-      if (lastPurchasePrice !== null && unitPrice < lastPurchasePrice) {
-        const loss = lastPurchasePrice - unitPrice;
-        const lossPercent = ((loss / lastPurchasePrice) * 100).toFixed(1);
+      const costPrice = getEffectiveCostForLossCheck(selectedProduct, lastPurchasePrice);
+      if (costPrice != null && unitPrice < costPrice) {
+        const loss = costPrice - unitPrice;
+        const lossPercent = ((loss / costPrice) * 100).toFixed(1);
         const shouldProceed = window.confirm(
-          `⚠️ WARNING: Sale price (${unitPrice}) is below cost price (${Math.round(lastPurchasePrice)}).\n\n` +
+          `⚠️ WARNING: Sale price (${unitPrice}) is below cost price (${Math.round(costPrice)}).\n\n` +
           `Loss per unit: ${Math.round(loss)} (${lossPercent}%)\n` +
           `Total loss: ${Math.round(loss * quantity)}\n\n` +
           `Do you want to proceed?`
@@ -1151,9 +1162,10 @@ const SalesOrders = ({ tabId }) => {
         lastPrice = null;
       }
     }
-    if (lastPrice !== null && unitPrice < lastPrice) {
+    const effectiveCost = getEffectiveCostForLossCheck(modalSelectedProduct, lastPrice);
+    if (effectiveCost != null && unitPrice < effectiveCost) {
       const ok = window.confirm(
-        `⚠️ WARNING: Sale price (${unitPrice}) is below cost price (${Math.round(lastPrice)}).\n\nDo you want to proceed?`
+        `⚠️ WARNING: Sale price (${unitPrice}) is below cost price (${Math.round(effectiveCost)}).\n\nDo you want to proceed?`
       );
       if (!ok) return;
     }
@@ -2230,10 +2242,16 @@ const SalesOrders = ({ tabId }) => {
                 }
               >
                 {formData.items.map((item, index) => {
-                  const product = item.productData || item.product; // Use stored product data or fallback to product
+                  const product = getSoItemProductData(item);
                   const totalPrice = item.unitPrice * item.quantity;
                   const isLowStock = product?.inventory?.currentStock <= (product?.inventory?.reorderPoint || 0);
                   const serialHighlight = highlightedSoLineIndex === index;
+                  const lineDisplayCost = getProductDisplayCostPrice(product);
+                  const lineEffectiveCost = getSoLineEffectiveCost(item, lastPurchasePrices);
+                  const isBelowCost =
+                    canViewCostPrice &&
+                    lineEffectiveCost != null &&
+                    item.unitPrice < lineEffectiveCost;
 
                   return (
                     <div
@@ -2278,9 +2296,8 @@ const SalesOrders = ({ tabId }) => {
                                 ? getProductDisplayName(product, 'Unknown Variant')
                                 : (safeRender(product?.name) || 'Unknown Product')}
                               {isLowStock && <span className="text-yellow-600 text-xs ml-2">⚠️ Low Stock</span>}
-                              {lastPurchasePrices[item.product?.toString()] !== undefined &&
-                                item.unitPrice < lastPurchasePrices[item.product?.toString()] && (
-                                  <span className="text-xs ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold" title={`Sale price below cost! Loss: ${Math.round(lastPurchasePrices[item.product?.toString()] - item.unitPrice)} per unit`}>
+                              {isBelowCost && (
+                                  <span className="text-xs ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold" title={`Sale price below cost! Loss: ${Math.round(lineEffectiveCost - item.unitPrice)} per unit`}>
                                     ⚠️ Below Cost
                                   </span>
                                 )}
@@ -2384,12 +2401,8 @@ const SalesOrders = ({ tabId }) => {
                         {/* Purchase Price (Cost) - 1 column (conditional) - Between Quantity and Rate */}
                         {showCostPrice && canViewCostPrice && (
                           <div className="min-w-0">
-                            <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-8 flex items-center justify-center" title={lastPurchasePrices[item.product?.toString()] !== undefined ? 'Last Purchase Price' : 'Product Cost (from pricing)'}>
-                              {lastPurchasePrices[item.product?.toString()] !== undefined
-                                ? `${Math.round(lastPurchasePrices[item.product?.toString()])}`
-                                : (product?.pricing?.cost != null && product?.pricing?.cost !== '')
-                                  ? `${Math.round(Number(product.pricing.cost))}`
-                                  : 'N/A'}
+                            <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center h-8 flex items-center justify-center" title="Cost Price">
+                              {lineDisplayCost ?? 'N/A'}
                             </span>
                           </div>
                         )}
@@ -2402,10 +2415,10 @@ const SalesOrders = ({ tabId }) => {
                             value={item.unitPrice}
                             onChange={(e) => {
                               const newPrice = parseFloat(e.target.value) || 0;
-                              const costPrice = lastPurchasePrices[item.product?.toString()];
+                              const costPrice = getSoLineEffectiveCost(item, lastPurchasePrices);
 
                               // Check if new price is below cost (always check, regardless of showCostPrice)
-                              if (costPrice !== undefined && newPrice < costPrice) {
+                              if (costPrice != null && newPrice < costPrice) {
                                 const loss = costPrice - newPrice;
                                 const lossPercent = ((loss / costPrice) * 100).toFixed(1);
                                 const shouldProceed = window.confirm(
@@ -2427,15 +2440,13 @@ const SalesOrders = ({ tabId }) => {
                               }));
                             }}
                             onFocus={(e) => e.target.select()}
-                            className={`input text-center h-8 ${lastPurchasePrices[item.product?.toString()] !== undefined &&
-                              item.unitPrice < lastPurchasePrices[item.product?.toString()]
+                            className={`input text-center h-8 ${isBelowCost
                               ? 'border-red-500 bg-red-50'
                               : ''
                               }`}
                             title={
-                              lastPurchasePrices[item.product?.toString()] !== undefined &&
-                                item.unitPrice < lastPurchasePrices[item.product?.toString()]
-                                ? `⚠️ WARNING: Sale price (${Math.round(item.unitPrice)}) is below cost price (${Math.round(lastPurchasePrices[item.product?.toString()])})`
+                              isBelowCost
+                                ? `⚠️ WARNING: Sale price (${Math.round(item.unitPrice)}) is below cost price (${Math.round(lineEffectiveCost)})`
                                 : ''
                             }
                             min="0"
@@ -2482,8 +2493,7 @@ const SalesOrders = ({ tabId }) => {
                               </h5>
                               {isLowStock && <span className="text-yellow-600 text-xs text-nowrap">⚠️ Low Stock</span>}
                             </div>
-                            {lastPurchasePrices[item.product?.toString()] !== undefined &&
-                              item.unitPrice < lastPurchasePrices[item.product?.toString()] && (
+                            {isBelowCost && (
                                 <span className="text-xs ml-2 px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-bold">
                                   ⚠️ Below Cost
                                 </span>
@@ -2549,9 +2559,9 @@ const SalesOrders = ({ tabId }) => {
                               value={item.unitPrice}
                               onChange={(e) => {
                                 const newPrice = parseFloat(e.target.value) || 0;
-                                const costPrice = lastPurchasePrices[item.product?.toString()];
+                                const costPrice = getSoLineEffectiveCost(item, lastPurchasePrices);
 
-                                if (costPrice !== undefined && newPrice < costPrice) {
+                                if (costPrice != null && newPrice < costPrice) {
                                   const loss = costPrice - newPrice;
                                   const lossPercent = ((loss / costPrice) * 100).toFixed(1);
                                   const shouldProceed = window.confirm(
@@ -2573,8 +2583,7 @@ const SalesOrders = ({ tabId }) => {
                                 }));
                               }}
                               onFocus={(e) => e.target.select()}
-                              className={`input text-center h-8 text-sm w-full ${lastPurchasePrices[item.product?.toString()] !== undefined &&
-                                item.unitPrice < lastPurchasePrices[item.product?.toString()]
+                              className={`input text-center h-8 text-sm w-full ${isBelowCost
                                 ? 'border-red-500 bg-red-50'
                                 : ''
                                 }`}
@@ -2592,13 +2601,9 @@ const SalesOrders = ({ tabId }) => {
                         {/* Cost Price (if shown) */}
                         {showCostPrice && canViewCostPrice && (
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">{lastPurchasePrices[item.product?.toString()] !== undefined ? 'Last Purchase Price' : 'Cost'}</p>
+                            <p className="text-xs text-gray-500 mb-1">Cost</p>
                             <p className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200">
-                              {lastPurchasePrices[item.product?.toString()] !== undefined
-                                ? `${Math.round(lastPurchasePrices[item.product?.toString()])}`
-                                : (product?.pricing?.cost != null && product?.pricing?.cost !== '')
-                                  ? `${Math.round(Number(product.pricing.cost))}`
-                                  : 'N/A'}
+                              {lineDisplayCost ?? 'N/A'}
                             </p>
                           </div>
                         )}
