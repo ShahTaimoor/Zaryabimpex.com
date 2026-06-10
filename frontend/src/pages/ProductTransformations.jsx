@@ -531,6 +531,7 @@ const TransformationModal = ({ isOpen, onClose, onSuccess, onOpenBarcodePrint })
             onValueChange={(id) =>
               setFormData((prev) => ({ ...prev, baseProduct: id, optionalBarcode: '' }))
             }
+            withinModal
             className="w-full"
           />
 
@@ -554,6 +555,7 @@ const TransformationModal = ({ isOpen, onClose, onSuccess, onOpenBarcodePrint })
                 onValueChange={(id) =>
                   setFormData((prev) => ({ ...prev, targetVariant: id, optionalBarcode: '' }))
                 }
+                withinModal
                 className="w-full"
               />
 

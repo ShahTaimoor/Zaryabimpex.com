@@ -433,6 +433,7 @@ const VariantModal = ({ variant, isOpen, onClose, onSuccess }) => {
             value={formData.baseProduct}
             onValueChange={(id) => setFormData({ ...formData, baseProduct: id })}
             disabled={!!variant}
+            withinModal
             className="w-full"
           />
 

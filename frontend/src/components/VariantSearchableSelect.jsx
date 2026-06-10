@@ -16,6 +16,7 @@ export function VariantSearchableSelect({
   className = '',
   maxInitialItems = 20,
   searchLimit = 50,
+  withinModal = false,
 }) {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -92,6 +93,7 @@ export function VariantSearchableSelect({
         maxInitialItems={maxInitialItems}
         rightContentKey={rightContentKey}
         serverSideSearch
+        withinModal={withinModal}
         className="w-full"
         openOnFocus
       />

@@ -22,6 +22,7 @@ export function ProductSearchableSelect({
   clearLabel = 'Clear',
   listMode = 'minimal',
   searchLimit = PRODUCT_SEARCH_DROPDOWN_LIMIT,
+  withinModal = false,
 }) {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -85,6 +86,7 @@ export function ProductSearchableSelect({
             maxInitialItems={maxInitialItems}
             rightContentKey={rightContentKey}
             serverSideSearch
+            withinModal={withinModal}
             className="w-full"
             openOnFocus
           />
