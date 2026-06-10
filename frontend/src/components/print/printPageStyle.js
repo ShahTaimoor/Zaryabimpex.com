@@ -9,15 +9,15 @@
  * Canonical values:
  *   body font-size: 11px      |  th/td border: 1px solid #000
  *   th/td padding:  4px 6px   |  th/td font-size: 11px
- *   th background:  #f3f4f6   |  @page A4: margin 10mm
+ *   th background:  #f3f4f6   |  @page A4: margin 0 (content padding 10mm)
  */
 
 export const PRINT_PAGE_STYLE = `
-  @page { size: A4 portrait; margin: 10mm; }
+  @page { size: A4 portrait; margin: 0; }
   * { box-sizing: border-box; }
   body {
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 10mm !important;
     font-family: 'Inter', Arial, Helvetica, sans-serif !important;
     font-size: 11px !important;
     color: #000 !important;

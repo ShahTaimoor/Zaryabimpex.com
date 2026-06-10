@@ -27,7 +27,8 @@ const PrintWrapper = forwardRef(({
 
   const handlePrint = useReactToPrint({
     contentRef,
-    documentTitle,
+    // Empty title suppresses the browser print header (page title on the right).
+    documentTitle: '',
     onBeforeGetContent,
     onAfterPrint,
     pageStyle: pageStyle || undefined,

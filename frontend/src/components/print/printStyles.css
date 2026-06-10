@@ -9,7 +9,7 @@
  *   th/td padding:  4px 6px
  *   th/td font-size: 11px
  *   th background:  #f3f4f6
- *   @page:          size auto, margin 10mm
+ *   @page:          size auto, margin 0 (content padding 10mm)
  * =========================================================================
  */
 
@@ -18,7 +18,7 @@
   /* ── Page ────────────────────────────────────────────────────────────── */
   @page {
     size: auto;
-    margin: 10mm;
+    margin: 0;
   }
 
   /* ── Hide UI elements ───────────────────────────────────────────────── */
@@ -50,7 +50,7 @@
   /* ── Base body reset ────────────────────────────────────────────────── */
   body {
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 10mm !important;
     font-family: 'Inter', Arial, Helvetica, sans-serif !important;
     font-size: 11px !important;
     color: #000 !important;

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
+import { PRINT_PAGE_STYLE } from '../components/print/printPageStyle';
 import { Users, Building2, Calendar, FileText, ChevronDown, Printer, Wallet } from 'lucide-react';
 import { useGetLedgerSummaryQuery, useGetCustomerDetailedTransactionsQuery, useGetSupplierDetailedTransactionsQuery, useGetAllEntriesQuery } from '../store/services/accountLedgerApi';
 import { useGetCustomersQuery } from '../store/services/customersApi';
@@ -845,7 +846,8 @@ const AccountLedgerSummary = () => {
 
   const handleLedgerPrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: `Account Ledger Summary - ${ledgerPartyName}`,
+    documentTitle: '',
+    pageStyle: PRINT_PAGE_STYLE,
     onBeforeGetContent: () => {
       if (!printRef.current) {
         toast.error('No content to print. Please select a customer, supplier, or expense account.');
