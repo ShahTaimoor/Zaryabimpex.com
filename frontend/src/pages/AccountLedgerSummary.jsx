@@ -21,6 +21,12 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { handleApiError } from '../utils/errorHandler';
 import { getId } from '../utils/entityId';
+import {
+  sortLedgerDisplayEntries,
+  applyLedgerRunningBalance,
+  isSaleReturnLedgerRow,
+  isPurchaseReturnLedgerRow,
+} from '../utils/ledgerSortUtils';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -268,6 +274,7 @@ const AccountLedgerSummary = () => {
       return {
         openingBalance: d.openingBalance ?? 0,
         closingBalance: d.closingBalance ?? d.openingBalance ?? 0,
+        returnTotal: d.returnTotal ?? 0,
         supplier: d.supplier ?? {},
         entries: Array.isArray(d.entries) ? d.entries : []
       };
@@ -278,6 +285,7 @@ const AccountLedgerSummary = () => {
     return {
       openingBalance: one.openingBalance ?? 0,
       closingBalance: one.closingBalance ?? one.openingBalance ?? 0,
+      returnTotal: one.returnTotal ?? 0,
       supplier: { id: one.id ?? one._id, name: one.name ?? '', accountCode: one.accountCode ?? '' },
       entries: []
     };
@@ -322,20 +330,6 @@ const AccountLedgerSummary = () => {
   const expenseLedgerEntries = selectedExpenseAccountCode ? (summaryData?.data?.entries || []) : [];
   const period = summaryData?.data?.period || {};
 
-  const printLedgerRows = useMemo(() => {
-    if (selectedExpenseAccountCode) return expenseLedgerEntries;
-    if (selectedCustomerId) return customerDetail?.entries ?? detailedTransactionsData?.data?.entries ?? [];
-    return supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries ?? [];
-  }, [
-    selectedExpenseAccountCode,
-    expenseLedgerEntries,
-    selectedCustomerId,
-    customerDetail?.entries,
-    detailedTransactionsData?.data?.entries,
-    supplierDetail?.entries,
-    detailedSupplierTransactionsData?.data?.entries,
-  ]);
-
   const printOpeningBal = useMemo(() => {
     if (selectedExpenseAccountCode) return expenseAccountDetail?.openingBalance ?? 0;
     if (selectedCustomerId) return customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0;
@@ -374,7 +368,12 @@ const AccountLedgerSummary = () => {
     };
   }, [selectedExpenseAccountCode, expenseAccountDetail, selectedCustomerId, customerDetail, detailedTransactionsData, supplierDetail, detailedSupplierTransactionsData]);
 
-  const printShowReturnCol = showReturnColumn && !!selectedCustomerId && !selectedExpenseAccountCode;
+  const printShowReturnCol = showReturnColumn && (!!selectedCustomerId || !!selectedSupplierId) && !selectedExpenseAccountCode;
+  const activeReturnTotal = selectedCustomerId
+    ? (customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0)
+    : selectedSupplierId
+      ? (supplierDetail?.returnTotal ?? detailedSupplierTransactionsData?.data?.returnTotal ?? 0)
+      : 0;
 
   // Filter customers based on selection (must be before early return)
   const customers = useMemo(() => {
@@ -580,14 +579,40 @@ const AccountLedgerSummary = () => {
     );
   }, [bankLedgerRows, selectedBankId, ALL_BANKS_VALUE, bankTotals, banksSummary, selectedBank]);
 
-  const customerEntries = useMemo(
-    () => customerDetail?.entries ?? detailedTransactionsData?.data?.entries ?? [],
-    [customerDetail?.entries, detailedTransactionsData?.data?.entries]
-  );
-  const supplierEntries = useMemo(
-    () => supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries ?? [],
-    [supplierDetail?.entries, detailedSupplierTransactionsData?.data?.entries]
-  );
+  const customerEntries = useMemo(() => {
+    const raw = customerDetail?.entries ?? detailedTransactionsData?.data?.entries ?? [];
+    const opening = customerDetail?.openingBalance ?? detailedTransactionsData?.data?.openingBalance ?? 0;
+    return applyLedgerRunningBalance(sortLedgerDisplayEntries(raw), opening, false);
+  }, [
+    customerDetail?.entries,
+    customerDetail?.openingBalance,
+    detailedTransactionsData?.data?.entries,
+    detailedTransactionsData?.data?.openingBalance,
+  ]);
+  const supplierEntries = useMemo(() => {
+    const raw = supplierDetail?.entries ?? detailedSupplierTransactionsData?.data?.entries ?? [];
+    const opening = supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0;
+    return applyLedgerRunningBalance(sortLedgerDisplayEntries(raw), opening, true);
+  }, [
+    supplierDetail?.entries,
+    supplierDetail?.openingBalance,
+    detailedSupplierTransactionsData?.data?.entries,
+    detailedSupplierTransactionsData?.data?.openingBalance,
+  ]);
+
+  const printLedgerRows = useMemo(() => {
+    if (selectedExpenseAccountCode) return expenseLedgerEntries;
+    if (selectedCustomerId) return customerEntries;
+    if (selectedSupplierId) return supplierEntries;
+    return [];
+  }, [
+    selectedExpenseAccountCode,
+    expenseLedgerEntries,
+    selectedCustomerId,
+    selectedSupplierId,
+    customerEntries,
+    supplierEntries,
+  ]);
 
   const virtualizeCustomerLedgerRows = Boolean(selectedCustomerId && customerEntries.length > 35);
   const virtualizeSupplierLedgerRows = Boolean(selectedSupplierId && supplierEntries.length > 35);
@@ -1146,7 +1171,7 @@ const AccountLedgerSummary = () => {
                               </td>
                               {showReturnColumn && (
                                 <td className="px-4 py-3 text-sm text-gray-900">
-                                  {entry.source === 'Sale Return' ? 'Return' : ''}
+                                  {isSaleReturnLedgerRow(entry) ? 'Return' : ''}
                                 </td>
                               )}
                               <td className="px-4 py-3 text-sm text-right text-gray-900">
@@ -1202,7 +1227,7 @@ const AccountLedgerSummary = () => {
                                       </td>
                                       {showReturnColumn && (
                                         <td className="px-4 py-3 text-sm text-gray-900">
-                                          {entry.source === 'Sale Return' ? 'Return' : ''}
+                                          {isSaleReturnLedgerRow(entry) ? 'Return' : ''}
                                         </td>
                                       )}
                                       <td className="px-4 py-3 text-sm text-right text-gray-900">
@@ -1302,6 +1327,11 @@ const AccountLedgerSummary = () => {
                           {formatDate(filters.startDate)} – {formatDate(filters.endDate)}
                         </p>
                       )}
+                      {showReturnColumn && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Return total: {formatCurrency(supplierDetail?.returnTotal ?? detailedSupplierTransactionsData?.data?.returnTotal ?? 0)}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1321,6 +1351,9 @@ const AccountLedgerSummary = () => {
                           <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Date</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Voucher No</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Particular</th>
+                          {showReturnColumn && (
+                            <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider w-20">Return</th>
+                          )}
                           <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Debits</th>
                           <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Credits</th>
                           <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase tracking-wider">Balance</th>
@@ -1330,7 +1363,7 @@ const AccountLedgerSummary = () => {
                       <tbody className="divide-y divide-gray-200 bg-white">
                         {/* Opening Balance Row */}
                         <tr className="bg-blue-50/50">
-                          <td colSpan="3" className="px-4 py-3 text-sm font-medium text-gray-900">Opening Balance:</td>
+                          <td colSpan={showReturnColumn ? 4 : 3} className="px-4 py-3 text-sm font-medium text-gray-900">Opening Balance:</td>
                           <td className="px-4 py-3 text-sm text-right text-gray-900">0</td>
                           <td className="px-4 py-3 text-sm text-right text-gray-900">0</td>
                           <td className={`px-4 py-3 text-sm text-right font-bold ${(supplierDetail?.openingBalance ?? detailedSupplierTransactionsData?.data?.openingBalance ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'
@@ -1343,7 +1376,7 @@ const AccountLedgerSummary = () => {
                         {/* Transaction Entries */}
                         {supplierEntries.length === 0 ? (
                           <tr>
-                            <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
+                            <td colSpan={showReturnColumn ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
                               <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
                               <p>No transactions found for this period</p>
                             </td>
@@ -1360,6 +1393,11 @@ const AccountLedgerSummary = () => {
                               <td className="px-4 py-3 text-sm text-gray-700 max-w-md whitespace-normal break-words">
                                 {entry.particular || '-'}
                               </td>
+                              {showReturnColumn && (
+                                <td className="px-4 py-3 text-sm text-gray-900">
+                                  {isPurchaseReturnLedgerRow(entry) ? 'Return' : ''}
+                                </td>
+                              )}
                               <td className="px-4 py-3 text-sm text-right text-gray-900">
                                 {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
                               </td>
@@ -1390,11 +1428,12 @@ const AccountLedgerSummary = () => {
                             const vItems = supplierLedgerVirtualizer.getVirtualItems();
                             const totalH = supplierLedgerVirtualizer.getTotalSize();
                             const { padTop, padBottom } = getVirtualTablePadding(vItems, totalH);
+                            const supplierColSpan = showReturnColumn ? 8 : 7;
                             return (
                               <>
                                 {padTop > 0 ? (
                                   <tr aria-hidden className="pointer-events-none">
-                                    <td colSpan={7} className="p-0 border-0" style={{ height: padTop }} />
+                                    <td colSpan={supplierColSpan} className="p-0 border-0" style={{ height: padTop }} />
                                   </tr>
                                 ) : null}
                                 {vItems.map((vr) => {
@@ -1410,6 +1449,11 @@ const AccountLedgerSummary = () => {
                                       <td className="px-4 py-3 text-sm text-gray-700 max-w-md whitespace-normal break-words">
                                         {entry.particular || '-'}
                                       </td>
+                                      {showReturnColumn && (
+                                        <td className="px-4 py-3 text-sm text-gray-900">
+                                          {isPurchaseReturnLedgerRow(entry) ? 'Return' : ''}
+                                        </td>
+                                      )}
                                       <td className="px-4 py-3 text-sm text-right text-gray-900">
                                         {entry.debitAmount > 0 ? formatCurrency(entry.debitAmount) : '0'}
                                       </td>
@@ -1438,7 +1482,7 @@ const AccountLedgerSummary = () => {
                                 })}
                                 {padBottom > 0 ? (
                                   <tr aria-hidden className="pointer-events-none">
-                                    <td colSpan={7} className="p-0 border-0" style={{ height: padBottom }} />
+                                    <td colSpan={supplierColSpan} className="p-0 border-0" style={{ height: padBottom }} />
                                   </tr>
                                 ) : null}
                               </>
@@ -1446,12 +1490,30 @@ const AccountLedgerSummary = () => {
                           })()
                         )}
 
+                        {showReturnColumn &&
+                          supplierEntries.length > 0 &&
+                          activeReturnTotal > 0 && (
+                            <tr className="bg-blue-100 font-medium">
+                              <td className="px-4 py-3 text-sm text-gray-900"></td>
+                              <td className="px-4 py-3 text-sm text-gray-900"></td>
+                              <td className="px-4 py-3 text-sm text-gray-900">Return Total</td>
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900">Return</td>
+                              <td className="px-4 py-3 text-sm text-right text-gray-900">
+                                {formatCurrency(activeReturnTotal)}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-right text-gray-900">0</td>
+                              <td className="px-4 py-3 text-sm text-right text-gray-900"></td>
+                              <td className="px-4 py-3 text-center no-print"></td>
+                            </tr>
+                          )}
+
                         {/* Total Row */}
                         {supplierEntries.length > 0 && (
                           <tr className="bg-blue-200 font-semibold border-t-2 border-blue-300">
                             <td className="px-4 py-3 text-sm text-gray-900"></td>
                             <td className="px-4 py-3 text-sm text-gray-900"></td>
                             <td className="px-4 py-3 text-sm text-gray-900">Total</td>
+                            {showReturnColumn && <td className="px-4 py-3 text-sm text-gray-900"></td>}
                             <td className="px-4 py-3 text-sm text-right text-gray-900">
                               {formatCurrency(sumDebits(supplierEntries))}
                             </td>
@@ -1903,7 +1965,7 @@ const AccountLedgerSummary = () => {
                   </td>
                   {printShowReturnCol && (
                     <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}>
-                      {selectedCustomerId && entry.source === 'Sale Return' ? 'Return' : ''}
+                      {isSaleReturnLedgerRow(entry) || isPurchaseReturnLedgerRow(entry) ? 'Return' : ''}
                     </td>
                   )}
                   <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>
@@ -1918,16 +1980,18 @@ const AccountLedgerSummary = () => {
                 </tr>
               ))}
 
-              {/* Return Total Row - customer only, when there are returns and return column visible */}
-              {printShowReturnCol && selectedCustomerId && (customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0) > 0 && (
+              {/* Return Total Row when there are returns and return column visible */}
+              {printShowReturnCol && activeReturnTotal > 0 && (
                 <tr className="account-ledger-print-subtotal">
                   <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center' }}></td>
                   <td style={{ border: '1px solid #000', padding: '6px 2px' }}></td>
                   <td style={{ border: '1px solid #000', padding: '6px 2px', fontWeight: '600' }}>Return Total</td>
                   <td style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'center', fontWeight: '600' }}>Return</td>
-                  <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>0</td>
                   <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>
-                    {formatCurrency(customerDetail?.returnTotal ?? detailedTransactionsData?.data?.returnTotal ?? 0)}
+                    {selectedSupplierId ? formatCurrency(activeReturnTotal) : '0'}
+                  </td>
+                  <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}>
+                    {selectedCustomerId ? formatCurrency(activeReturnTotal) : '0'}
                   </td>
                   <td className="print-amount" style={{ border: '1px solid #000', padding: '6px 2px', textAlign: 'right' }}></td>
                 </tr>

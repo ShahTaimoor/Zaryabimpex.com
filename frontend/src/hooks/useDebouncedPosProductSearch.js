@@ -34,6 +34,24 @@ function parseMaybeJson(val, fallback = {}) {
   return fallback;
 }
 
+function normalizeInventoryFields(source = {}) {
+  const inv = parseMaybeJson(source.inventory ?? source.inventory_data, {});
+  return {
+    currentStock:
+      Number(inv.currentStock ?? inv.current_stock ?? source.currentStock ?? source.current_stock ?? 0) || 0,
+    reorderPoint:
+      Number(inv.reorderPoint ?? inv.reorder_point ?? source.reorderPoint ?? source.reorder_point ?? 0) || 0,
+  };
+}
+
+function normalizeProductRow(p) {
+  if (!p) return null;
+  return {
+    ...p,
+    inventory: normalizeInventoryFields(p),
+  };
+}
+
 function normalizeVariantRow(v) {
   if (!v) return null;
   const pricing = parseMaybeJson(v.pricing, {});
@@ -68,13 +86,14 @@ export function getPosProductSearchEmptyMessage(searchTerm) {
 /**
  * Debounced server-side product + variant search for POS / order lines.
  * @param {string} searchTerm - raw input (e.g. controlled field value)
- * @param {{ dropdownLimit?: number }} [options]
+ * @param {{ dropdownLimit?: number, browseLimit?: number, loadInitialOnEmpty?: boolean, refreshKey?: number }} [options]
  * @returns {{ items: Array, isLoading: boolean, emptyMessage: string }}
  */
 export function useDebouncedPosProductSearch(searchTerm, options = {}) {
   const searchDropdownLimit = options.dropdownLimit ?? PRODUCT_SEARCH_DROPDOWN_LIMIT;
   const browseDropdownLimit = options.browseLimit ?? PRODUCT_BROWSE_DROPDOWN_LIMIT;
   const loadInitialOnEmpty = options.loadInitialOnEmpty !== false;
+  const refreshKey = options.refreshKey ?? 0;
 
   const [triggerProducts, { isFetching: productsFetching }] = useLazyGetProductsQuery();
   const [triggerVariants, { isFetching: variantsFetching }] = useLazyGetVariantsQuery();
@@ -132,19 +151,23 @@ export function useDebouncedPosProductSearch(searchTerm, options = {}) {
         };
 
       try {
-        const pRes = await triggerProducts(baseProductParams).unwrap();
+        // Always bypass RTK cache — POS dropdown must show live stock (e.g. after a sale).
+        const pRes = await triggerProducts(baseProductParams, false).unwrap();
         const vRes = variantParams
-          ? await triggerVariants(variantParams).unwrap()
+          ? await triggerVariants(variantParams, false).unwrap()
           : null;
         if (cancelled) return;
 
         const rawProducts = pRes?.products ?? pRes?.data?.products ?? [];
         const rawVariants = vRes?.variants ?? vRes?.data?.variants ?? [];
 
-        const productsList = (Array.isArray(rawProducts) ? rawProducts : []).map((p) => ({
-          ...p,
-          isVariant: false,
-        }));
+        const productsList = (Array.isArray(rawProducts) ? rawProducts : [])
+          .map(normalizeProductRow)
+          .filter(Boolean)
+          .map((p) => ({
+            ...p,
+            isVariant: false,
+          }));
 
         const variantsList = (Array.isArray(rawVariants) ? rawVariants : [])
           .map(normalizeVariantRow)
@@ -179,6 +202,7 @@ export function useDebouncedPosProductSearch(searchTerm, options = {}) {
     searchDropdownLimit,
     browseDropdownLimit,
     loadInitialOnEmpty,
+    refreshKey,
   ]);
 
   const isLoading = productsFetching || variantsFetching;

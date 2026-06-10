@@ -46,7 +46,7 @@ class TransactionRepository {
 
   async findAll(filters = {}, options = {}) {
     const { sql, params } = this._buildWhere(filters);
-    let fullSql = `SELECT * FROM account_ledger WHERE ${sql} ORDER BY created_at ASC`;
+    let fullSql = `SELECT * FROM account_ledger WHERE ${sql} ORDER BY created_at ASC, id ASC`;
     let paramCount = params.length + 1;
     if (options.limit) { fullSql += ` LIMIT $${paramCount++}`; params.push(options.limit); }
     if (options.offset) { fullSql += ` OFFSET $${paramCount++}`; params.push(options.offset); }

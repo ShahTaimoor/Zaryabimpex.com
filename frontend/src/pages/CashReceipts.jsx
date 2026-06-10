@@ -203,8 +203,6 @@ const CashReceipts = () => {
     setSelectedSupplier(null);
     setCustomerSearchTerm('');
     setSupplierSearchTerm('');
-    setCustomerDropdownIndex(-1);
-    setSupplierDropdownIndex(-1);
     setPaymentType('customer');
   };
 

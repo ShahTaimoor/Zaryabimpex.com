@@ -58,6 +58,7 @@ function ProductSearchComponent({
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [searchKey, setSearchKey] = useState(0); // Key to force re-render
+  const [searchRefreshKey, setSearchRefreshKey] = useState(0);
   const [lastPurchasePrice, setLastPurchasePrice] = useState(null);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
@@ -80,21 +81,47 @@ function ProductSearchComponent({
     items: products,
     isLoading: productsLoading,
     emptyMessage: emptySearchMessage,
-  } = useDebouncedPosProductSearch(productSearchTerm, { dropdownLimit: PRODUCT_SEARCH_DROPDOWN_LIMIT });
+  } = useDebouncedPosProductSearch(productSearchTerm, {
+    dropdownLimit: PRODUCT_SEARCH_DROPDOWN_LIMIT,
+    refreshKey: searchRefreshKey,
+  });
 
   const dropdownItems = itemsOverride ?? (products || []);
   const dropdownLoading = loadingOverride ?? productsLoading;
   const dropdownEmptyMessage = emptyMessageOverride ?? emptySearchMessage;
 
-  const refreshProductSearchCache = useCallback(() => {
-    dispatch(
-      productsApi.util.invalidateTags([
-        { type: 'Products', id: 'LIST' },
-        { type: 'Products', id: 'SEARCH' },
-      ])
-    );
-    dispatch(productVariantsApi.util.invalidateTags([{ type: 'Products', id: 'VARIANTS_LIST' }]));
+  const refreshProductSearchCache = useCallback(async () => {
+    await Promise.all([
+      dispatch(
+        productsApi.util.invalidateTags([
+          { type: 'Products', id: 'LIST' },
+          { type: 'Products', id: 'SEARCH' },
+        ])
+      ),
+      dispatch(productVariantsApi.util.invalidateTags([{ type: 'Products', id: 'VARIANTS_LIST' }])),
+    ]);
+    // Re-fetch dropdown browse/search list (local state in useDebouncedPosProductSearch).
+    setSearchRefreshKey((k) => k + 1);
   }, [dispatch]);
+
+  // Keep selected-product stock in sync when the search list refreshes (e.g. after sale/purchase).
+  useEffect(() => {
+    if (!selectedProduct) return;
+    const selectedId = selectedProduct._id || selectedProduct.id;
+    if (!selectedId) return;
+    const fresh = (dropdownItems || []).find(
+      (p) => (p._id || p.id) === selectedId
+    );
+    if (!fresh) return;
+    const prevStock = Number(selectedProduct.inventory?.currentStock ?? 0);
+    const nextStock = Number(fresh.inventory?.currentStock ?? 0);
+    if (prevStock !== nextStock) {
+      setSelectedProduct((prev) => ({
+        ...prev,
+        inventory: { ...(prev.inventory || {}), ...fresh.inventory },
+      }));
+    }
+  }, [dropdownItems, selectedProduct]);
 
   useEffect(() => {
     const handleConfigChange = () => {
@@ -215,8 +242,8 @@ function ProductSearchComponent({
       
       // Fetch both products and variants by code
       const [pRes, vRes] = await Promise.all([
-        triggerProducts({ code: barcodeValue, status: 'active', limit: 2 }).unwrap(),
-        triggerVariants({ code: barcodeValue, status: 'active', limit: 2 }).unwrap()
+        triggerProducts({ code: barcodeValue, status: 'active', limit: 2 }, false).unwrap(),
+        triggerVariants({ code: barcodeValue, status: 'active', limit: 2 }, false).unwrap()
       ]);
 
       const foundProducts = pRes?.products ?? pRes?.data?.products ?? [];

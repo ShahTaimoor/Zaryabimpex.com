@@ -77,6 +77,120 @@ class AccountLedgerService {
       };
     });
   }
+
+  normalizeReferenceType(entry) {
+    return String(entry?.referenceType ?? entry?.reference_type ?? '')
+      .toLowerCase()
+      .replace(/_/g, ' ')
+      .trim();
+  }
+
+  isSaleReturnEntry(entry) {
+    return this.normalizeReferenceType(entry) === 'sale return';
+  }
+
+  isPurchaseReturnEntry(entry) {
+    return this.normalizeReferenceType(entry) === 'purchase return';
+  }
+
+  /**
+   * Within one voucher, post the primary document before its settlement/refund line.
+   * Sale: invoice → payment. Return: return credit → cash refund debit.
+   * Purchase: invoice credit → payment debit.
+   */
+  ledgerSameVoucherRank(entry) {
+    const refType = this.normalizeReferenceType(entry);
+    const desc = String(entry.description ?? entry.particular ?? '').toLowerCase();
+
+    if (refType === 'sale') return 10;
+    if (refType === 'sale payment') return 20;
+
+    if (refType === 'sale return') {
+      if (desc.includes('refund for return') || desc.includes('cash refund') || desc.includes('bank refund')) {
+        return 20;
+      }
+      return 10;
+    }
+
+    if (refType === 'purchase invoice' || refType === 'purchase') return 10;
+    if (refType === 'purchase invoice payment') return 20;
+
+    if (refType === 'purchase return') return 10;
+
+    if (desc.includes('payment for sale') || desc.includes('sale payment')) return 20;
+    if (desc.startsWith('sale:') || /^sale\b/.test(desc)) return 10;
+
+    if (desc.includes('payment for invoice') || desc.includes('payment for purchase')) return 20;
+    if (desc.includes('purchase invoice')) return 10;
+
+    if (desc.startsWith('sale return ') && !desc.includes('refund')) return 10;
+    if (desc.startsWith('purchase return ') && !desc.includes('refund')) return 10;
+
+    return 50;
+  }
+
+  /**
+   * Numeric hint from voucher numbers (INV-epoch, RET-YYYYMMDD-NNNN) when posted times tie.
+   */
+  ledgerReferenceSequence(entry) {
+    const ref = String(entry?.referenceNumber ?? entry?.reference_number ?? '').trim();
+    if (!ref) return 0;
+
+    const epochMatch = ref.match(/-(\d{13,})$/);
+    if (epochMatch) return Number(epochMatch[1]) || 0;
+
+    const retMatch = ref.match(/^RET-(\d{8})-(\d+)$/i);
+    if (retMatch) return Number(retMatch[1]) * 100000 + (Number(retMatch[2]) || 0);
+
+    const tailDigits = ref.match(/(\d+)$/);
+    if (tailDigits) return Number(tailDigits[1]) || 0;
+
+    return 0;
+  }
+
+  /**
+   * Oldest first, newest last — true posting sequence (not document/back-dated dates).
+   * Returns often use return_date on the voucher but are posted later; created_at fixes that.
+   */
+  sortLedgerEntriesChronological(entries) {
+    if (!Array.isArray(entries) || entries.length <= 1) return entries || [];
+
+    const toMs = (value) => {
+      if (value == null || value === '') return 0;
+      const ms = new Date(value).getTime();
+      return Number.isFinite(ms) ? ms : 0;
+    };
+
+    const entryPosted = (e) => toMs(e.createdAt ?? e.created_at ?? e.postedAt);
+    const entryDate = (e) => toMs(e.transactionDate ?? e.transaction_date ?? e.date);
+    const entryId = (e) => {
+      const raw = e.id ?? e._id;
+      if (raw == null) return '';
+      return String(raw);
+    };
+    const entryRef = (e) => String(e.referenceNumber ?? e.reference_number ?? e.voucherNo ?? '').trim();
+
+    return [...entries].sort((a, b) => {
+      const postedDiff = entryPosted(a) - entryPosted(b);
+      if (postedDiff !== 0) return postedDiff;
+
+      const seqDiff = this.ledgerReferenceSequence(a) - this.ledgerReferenceSequence(b);
+      if (seqDiff !== 0) return seqDiff;
+
+      const dateDiff = entryDate(a) - entryDate(b);
+      if (dateDiff !== 0) return dateDiff;
+
+      const refA = entryRef(a);
+      const refB = entryRef(b);
+      if (refA && refA === refB) {
+        const rankDiff = this.ledgerSameVoucherRank(a) - this.ledgerSameVoucherRank(b);
+        if (rankDiff !== 0) return rankDiff;
+      }
+
+      return entryId(a).localeCompare(entryId(b), undefined, { numeric: true });
+    });
+  }
+
   /**
    * Clamp date range to prevent excessive queries
    * @param {Date|string} start - Start date
@@ -510,7 +624,7 @@ class AccountLedgerService {
             const totalDebits = periodLedgerEntries.reduce((sum, entry) => sum + (entry.debitAmount || 0), 0);
             const totalCredits = periodLedgerEntries.reduce((sum, entry) => sum + (entry.creditAmount || 0), 0);
             const returnTotal = periodLedgerEntries
-              .filter(e => (e.referenceType || e.source) === 'Sale Return')
+              .filter((e) => this.isSaleReturnEntry(e))
               .reduce((sum, entry) => sum + (entry.creditAmount || 0), 0);
 
             // Total debits includes all debit entries (sales, payments to customer, etc.)
@@ -538,24 +652,22 @@ class AccountLedgerService {
             // SINGLE SOURCE OF TRUTH: Read from account_ledger table only
             let entries = [];
             if (customerId && String(customer?.id ?? customer?._id) === String(customerId)) {
-              // Sort entries by transaction date
-              const sortedEntries = [...periodLedgerEntries].sort((a, b) => {
-                const dateA = new Date(a.transactionDate || a.createdAt || 0);
-                const dateB = new Date(b.transactionDate || b.createdAt || 0);
-                return dateA - dateB;
-              });
+              const sortedEntries = this.sortLedgerEntriesChronological(periodLedgerEntries);
 
               let running = openingBalance;
               entries = sortedEntries.map(entry => {
                 running += (entry.debitAmount || 0) - (entry.creditAmount || 0);
+                const refType = entry.referenceType || entry.reference_type || 'Ledger';
                 return {
                   date: entry.transactionDate || entry.createdAt,
+                  postedAt: entry.createdAt || entry.created_at || entry.transactionDate,
                   voucherNo: entry.referenceNumber || entry.transactionId || entry.id,
-                  particular: entry.description || `${entry.referenceType || 'Transaction'}: ${entry.referenceNumber || entry.id}`,
+                  particular: entry.description || `${refType}: ${entry.referenceNumber || entry.id}`,
                   debitAmount: entry.debitAmount || 0,
                   creditAmount: entry.creditAmount || 0,
                   referenceId: entry.referenceId,
-                  source: entry.referenceType || 'Ledger',
+                  referenceType: refType,
+                  source: refType,
                   balance: running
                 };
               });
@@ -698,6 +810,9 @@ class AccountLedgerService {
             // For AP accounts: credits increase payables, debits decrease payables
             const totalCredits = periodLedgerEntries.reduce((sum, entry) => sum + (entry.creditAmount || 0), 0);
             const totalDebits = periodLedgerEntries.reduce((sum, entry) => sum + (entry.debitAmount || 0), 0);
+            const returnTotal = periodLedgerEntries
+              .filter((e) => this.isPurchaseReturnEntry(e))
+              .reduce((sum, entry) => sum + (entry.debitAmount || 0), 0);
 
             // Calculate closing balance
             const closingBalance = openingBalance + totalCredits - totalDebits;
@@ -721,25 +836,23 @@ class AccountLedgerService {
             // SINGLE SOURCE OF TRUTH: Read from account_ledger table only
             let entries = [];
             if (supplierId && String(supplier?.id ?? supplier?._id) === String(supplierId)) {
-              // Sort entries by transaction date
-              const sortedEntries = [...periodLedgerEntries].sort((a, b) => {
-                const dateA = new Date(a.transactionDate || a.createdAt || 0);
-                const dateB = new Date(b.transactionDate || b.createdAt || 0);
-                return dateA - dateB;
-              });
+              const sortedEntries = this.sortLedgerEntriesChronological(periodLedgerEntries);
 
               let running = openingBalance;
               entries = sortedEntries.map(entry => {
                 // For AP accounts: credits increase balance, debits decrease balance
                 running += (entry.creditAmount || 0) - (entry.debitAmount || 0);
+                const refType = entry.referenceType || entry.reference_type || 'Ledger';
                 return {
                   date: entry.transactionDate || entry.createdAt,
+                  postedAt: entry.createdAt || entry.created_at || entry.transactionDate,
                   voucherNo: entry.referenceNumber || entry.transactionId || entry.id,
-                  particular: entry.description || `${entry.referenceType || 'Transaction'}: ${entry.referenceNumber || entry.id}`,
+                  particular: entry.description || `${refType}: ${entry.referenceNumber || entry.id}`,
                   debitAmount: entry.debitAmount || 0,
                   creditAmount: entry.creditAmount || 0,
                   referenceId: entry.referenceId,
-                  source: entry.referenceType || 'Ledger',
+                  referenceType: refType,
+                  source: refType,
                   balance: running
                 };
               });
@@ -755,6 +868,7 @@ class AccountLedgerService {
               openingBalance,
               totalDebits,
               totalCredits,
+              returnTotal,
               closingBalance,
               transactionCount,
               particular,
@@ -773,6 +887,7 @@ class AccountLedgerService {
               openingBalance: parseFloat(supplier.opening_balance ?? supplier.openingBalance ?? 0) || 0,
               totalDebits: 0,
               totalCredits: 0,
+              returnTotal: 0,
               closingBalance: parseFloat(supplier.opening_balance ?? supplier.openingBalance ?? 0) || 0,
               transactionCount: 0,
               particular: 'Error loading transactions',
@@ -915,6 +1030,7 @@ class AccountLedgerService {
         const one = filteredSupplierSummaries[0];
         data.openingBalance = one.openingBalance ?? 0;
         data.closingBalance = one.closingBalance ?? one.openingBalance ?? 0;
+        data.returnTotal = one.returnTotal ?? 0;
         data.supplier = {
           id: one.id,
           name: one.name || '',
@@ -1020,7 +1136,7 @@ class AccountLedgerService {
              WHERE UPPER(BTRIM(al.account_code)) = UPPER(BTRIM($1::text))
                AND al.status = 'completed' AND al.reversed_at IS NULL
                AND al.transaction_date >= $2 AND al.transaction_date <= $3
-             ORDER BY al.transaction_date ASC, al.id ASC`,
+             ORDER BY al.created_at ASC, al.id ASC`,
             [code, expenseStart, expenseEnd]
           );
 

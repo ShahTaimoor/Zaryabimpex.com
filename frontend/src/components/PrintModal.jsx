@@ -36,6 +36,9 @@ export const DirectPrintInvoice = ({
   const ledgerBalance =
     balanceSummaryData?.data?.balances?.currentBalance ??
     balanceSummaryData?.balances?.currentBalance ??
+    orderData?.ledgerBalance ??
+    orderData?.customerInfo?.currentBalance ??
+    orderData?.customer?.currentBalance ??
     null;
 
   const handlePrint = useCallback(() => {
@@ -118,6 +121,9 @@ const InvoicePrintModal = ({
   const ledgerBalance =
     balanceSummaryData?.data?.balances?.currentBalance ??
     balanceSummaryData?.balances?.currentBalance ??
+    orderData?.ledgerBalance ??
+    orderData?.customerInfo?.currentBalance ??
+    orderData?.customer?.currentBalance ??
     null;
 
   const isCompact = companySettings?.printSettings?.invoiceLayout === 'compact' || orderData?.invoiceLayout === 'compact';

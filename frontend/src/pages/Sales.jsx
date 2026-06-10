@@ -1297,6 +1297,7 @@ export const Sales = ({ tabId, editData }) => {
     setDirectDiscount({ type: 'amount', value: 0 });
     setNotes('');
     setInvoiceNumber('');
+    setAutoGenerateInvoice(true);
     if (resetBillDate) {
       setBillDate(getLocalDateString());
     }
@@ -1305,6 +1306,8 @@ export const Sales = ({ tabId, editData }) => {
     setIsLastPricesApplied(false);
     setPriceStatus({});
     setInlineEditData(null);
+    setDuplicateCartMerge(null);
+    setProductSearchResetKey((k) => k + 1);
   }, []);
 
 
@@ -2310,6 +2313,8 @@ export const Sales = ({ tabId, editData }) => {
                               const tempOrder = {
                                 orderNumber: `TEMP-${Date.now()}`,
                                 orderType: resolvedOrderTypeForSave(),
+                                isEditMode: false,
+                                ledgerBalance: Number.isFinite(Number(currentBalanceNum)) ? Number(currentBalanceNum) : undefined,
                                 customer: selectedCustomer ?? undefined,
                                 customerInfo: selectedCustomer ? {
                                   name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,
@@ -2352,6 +2357,8 @@ export const Sales = ({ tabId, editData }) => {
                               const tempOrder = {
                                 orderNumber: `TEMP-${Date.now()}`,
                                 orderType: resolvedOrderTypeForSave(),
+                                isEditMode: false,
+                                ledgerBalance: Number.isFinite(Number(currentBalanceNum)) ? Number(currentBalanceNum) : undefined,
                                 customer: selectedCustomer ?? undefined,
                                 customerInfo: selectedCustomer ? {
                                   name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,

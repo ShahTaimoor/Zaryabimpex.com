@@ -6,7 +6,11 @@ const ThermalReceipt = ({
   companySettings = {},
   orderData = {},
   printSettings = {},
-  documentTitle = 'Receipt'
+  documentTitle = 'Receipt',
+  receivedAmount = null,
+  previousBalance = null,
+  combinedRemainingBalance = null,
+  showBalanceSummary = false,
 }) => {
   const barcodeRef = useRef(null);
 
@@ -178,6 +182,24 @@ const ThermalReceipt = ({
           <span>TOTAL:</span>
           <span>{formatCurrency(total)}</span>
         </div>
+        {receivedAmount != null && Number(receivedAmount) > 0 && (
+          <div className="thermal-receipt__summary-row">
+            <span>Received:</span>
+            <span>{formatCurrency(receivedAmount)}</span>
+          </div>
+        )}
+        {showBalanceSummary && previousBalance != null && (
+          <div className="thermal-receipt__summary-row">
+            <span>Prev. Balance:</span>
+            <span>{formatCurrency(previousBalance)}</span>
+          </div>
+        )}
+        {showBalanceSummary && combinedRemainingBalance != null && (
+          <div className="thermal-receipt__summary-row thermal-receipt__summary-row--total">
+            <span>Remaining Balance:</span>
+            <span>{formatCurrency(combinedRemainingBalance)}</span>
+          </div>
+        )}
       </div>
 
       <div className="thermal-receipt__footer">

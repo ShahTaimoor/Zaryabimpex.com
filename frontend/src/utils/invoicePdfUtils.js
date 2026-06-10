@@ -1,4 +1,5 @@
 import { formatQuantityDisplay } from './dualUnitUtils';
+import { computePrintPartyBalances } from './printBalanceUtils';
 
 /**
  * Formats order/invoice data for the PdfExportButton
@@ -104,10 +105,33 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
   }
   summaryRows.push({ name: 'Total', total: Math.round(total).toLocaleString('en-US') });
 
-  // Add Ledger Balance if available and the user has permission to view it
+  const explicitFromPayment = orderData?.payment?.amountPaid;
+  const explicitFromRoot = orderData?.amount_paid ?? orderData?.amountPaid;
+  const hasExplicitPaymentAmount =
+    (explicitFromPayment !== undefined && explicitFromPayment !== null) ||
+    (explicitFromRoot !== undefined && explicitFromRoot !== null);
+  const normalizedPaymentStatus = String(
+    orderData?.payment_status ?? orderData?.payment?.status ?? ''
+  ).toLowerCase();
+  const isPaidStatus = normalizedPaymentStatus === 'paid';
+  const receivedAmount = hasExplicitPaymentAmount
+    ? Number(explicitFromPayment ?? explicitFromRoot) || 0
+    : (isPaidStatus ? Number(total) || 0 : 0);
+
+  if (receivedAmount > 0) {
+    summaryRows.push({ name: 'Received Amount', total: Math.round(receivedAmount).toLocaleString('en-US') });
+  }
+
   const ledgerBalance = ledgerBalanceProp ?? orderData.ledgerBalance ?? orderData.customer?.balance ?? null;
   if (canViewBalance && ledgerBalance !== null) {
-    summaryRows.push({ name: 'Ledger Balance', total: Math.round(ledgerBalance).toLocaleString('en-US') });
+    const { previousBalance, combinedRemainingBalance } = computePrintPartyBalances({
+      ledgerBalance: Number(ledgerBalance) || 0,
+      totalValue: Number(total) || 0,
+      receivedAmount,
+      orderData,
+    });
+    summaryRows.push({ name: 'Previous Balance', total: Math.round(previousBalance).toLocaleString('en-US') });
+    summaryRows.push({ name: 'Remaining Balance', total: Math.round(combinedRemainingBalance).toLocaleString('en-US') });
   }
 
   // Add party details if needed - currently PdfExportButton only supports one table

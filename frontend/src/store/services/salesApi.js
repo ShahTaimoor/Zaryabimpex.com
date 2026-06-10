@@ -65,6 +65,7 @@ function buildInvalidateTagsAfterCreateSale(result, error, arg) {
     const cid = String(customerId);
     tags.push({ type: 'Customers', id: cid });
     tags.push({ type: 'Accounting', id: 'CUSTOMER_BALANCE' });
+    tags.push({ type: 'Accounting', id: `BALANCE_customer_${cid}` });
   }
 
   return tags;

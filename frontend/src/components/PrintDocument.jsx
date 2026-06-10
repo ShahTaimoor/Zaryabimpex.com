@@ -9,6 +9,7 @@ import {
 import ThermalReceipt from './print/ThermalReceipt';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 import { useAuth } from '../contexts/AuthContext';
+import { computePrintPartyBalances } from '../utils/printBalanceUtils';
 
 /** Line items for print when payloads use alternate keys or list APIs omit items (minimal listMode). */
 function resolvePrintOrderLineItems(orderData) {
@@ -368,7 +369,7 @@ const PrintDocument = ({
 
     const ledgerBalance = ledgerBalanceProp !== undefined && ledgerBalanceProp !== null
         ? toNumber(ledgerBalanceProp, 0)
-        : toNumber(partyInfo.balance, 0);
+        : toNumber(orderData?.ledgerBalance ?? partyInfo.balance, 0);
 
     const generatedAt = new Date();
     // Bill creation date: sale_date/billDate when bill was created; Print Date = generatedAt (when printing)
@@ -419,8 +420,17 @@ const PrintDocument = ({
     const receivedAmount = hasExplicitPaymentAmount
         ? rawReceived
         : (isPaidStatus ? toNumber(totalValue, 0) : 0);
-    const invoiceBalance = toNumber(totalValue, 0) - toNumber(receivedAmount, 0);
-    const previousBalance = ledgerBalance - invoiceBalance;
+
+    const {
+        previousBalance,
+        combinedRemainingBalance,
+    } = computePrintPartyBalances({
+        ledgerBalance,
+        totalValue,
+        receivedAmount,
+        orderData,
+    });
+    const showBalanceSummary = canViewPartyBalance && showPrintLedgerBalance;
 
     // ==========================================
     // Layout: Receipt / Payment Voucher (for Cash Receipt, Bank Receipt, Cash Payment, Bank Payment)
@@ -510,8 +520,6 @@ const PrintDocument = ({
     // Layout 2 (Professional Boxed Layout)
     // ==========================================
     if (invoiceLayout === 'layout2') {
-        const totalReceivables = ledgerBalance;
-
         return (
             <div className={printClassName}>
                 {children}
@@ -685,15 +693,15 @@ const PrintDocument = ({
                                     <td className="border border-black p-1 text-right font-bold">Received Amount</td>
                                     <td className="border border-black p-1 text-right">{formatCurrency(receivedAmount)}</td>
                                 </tr>
-                                {canViewPartyBalance && showPrintLedgerBalance && (
+                                {showBalanceSummary && (
                                     <>
                                         <tr>
                                             <td className="border border-black p-1 text-right font-bold">Previous Balance</td>
                                             <td className="border border-black p-1 text-right">{formatCurrency(previousBalance)}</td>
                                         </tr>
                                         <tr>
-                                            <td className="border border-black p-1 text-right font-bold">Total Receivables</td>
-                                            <td className="border border-black p-1 text-right font-bold">{formatCurrency(totalReceivables)}</td>
+                                            <td className="border border-black p-1 text-right font-bold">Remaining Balance</td>
+                                            <td className="border border-black p-1 text-right font-bold">{formatCurrency(combinedRemainingBalance)}</td>
                                         </tr>
                                     </>
                                 )}
@@ -717,6 +725,10 @@ const PrintDocument = ({
                     orderData={orderData}
                     printSettings={printSettings}
                     documentTitle={resolvedDocumentTitle}
+                    receivedAmount={receivedAmount}
+                    previousBalance={previousBalance}
+                    combinedRemainingBalance={combinedRemainingBalance}
+                    showBalanceSummary={showBalanceSummary}
                 />
             </div>
         );
@@ -960,15 +972,21 @@ const PrintDocument = ({
                             <span>Total</span>
                             <span>{formatCurrency(totalValue)}</span>
                         </div>
-                        {canViewPartyBalance && showPrintLedgerBalance && (
+                        {receivedAmount > 0 && (
+                            <div className="print-document__summary-row">
+                                <span>Received Amount</span>
+                                <span>{formatCurrency(receivedAmount)}</span>
+                            </div>
+                        )}
+                        {showBalanceSummary && (
                             <>
                                 <div className="print-document__summary-row">
                                     <span>Previous Balance</span>
                                     <span>{formatCurrency(previousBalance)}</span>
                                 </div>
-                                <div className="print-document__summary-row">
-                                    <span>Ledger Balance</span>
-                                    <span>{formatCurrency(ledgerBalance)}</span>
+                                <div className="print-document__summary-row print-document__summary-row--total">
+                                    <span>Remaining Balance</span>
+                                    <span>{formatCurrency(combinedRemainingBalance)}</span>
                                 </div>
                             </>
                         )}

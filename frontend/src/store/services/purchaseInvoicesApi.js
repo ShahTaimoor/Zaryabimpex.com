@@ -77,6 +77,7 @@ export const purchaseInvoicesApi = api.injectEndpoints({
           supplierTagId(result?.invoice?.supplier);
         if (sid) {
           tags.push({ type: 'Suppliers', id: sid });
+          tags.push({ type: 'Accounting', id: `BALANCE_supplier_${sid}` });
         }
         return tags;
       },
@@ -121,6 +122,7 @@ export const purchaseInvoicesApi = api.injectEndpoints({
           supplierTagId(result?.invoice?.supplier);
         if (sid) {
           tags.push({ type: 'Suppliers', id: sid });
+          tags.push({ type: 'Accounting', id: `BALANCE_supplier_${sid}` });
         }
         return tags;
       },

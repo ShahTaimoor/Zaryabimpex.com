@@ -378,6 +378,20 @@ const IMPORT_ALLOCATION_METHODS = {
   BY_QTY: 'by_quantity',
 };
 
+/** Stable supplier id whether API returns `id` or `_id`. */
+function getSupplierPartyId(supplier) {
+  if (!supplier) return null;
+  return supplier._id ?? supplier.id ?? null;
+}
+
+/** Keep both id shapes so RTK queries and supplier-change checks stay consistent. */
+function normalizeSupplierParty(supplier) {
+  if (!supplier) return null;
+  const id = getSupplierPartyId(supplier);
+  if (!id) return supplier;
+  return { ...supplier, _id: id, id };
+}
+
 export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   const {
     canViewSupplierBalance,
@@ -519,7 +533,8 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
 
 
 
-  const { updateTabTitle, getActiveTab, openTab } = useTab();
+  const { updateTabTitle, getActiveTab, openTab, updateTabProps } = useTab();
+  const isSubmittingRef = useRef(false);
 
   // Store refetch function from ProductSearch component
   const [refetchProducts, setRefetchProducts] = useState(null);
@@ -596,8 +611,9 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     if (activeEditData && activeEditData.isEditMode && activeEditData.invoiceId) {
       // Set the supplier (will be updated with complete data if available)
       if (activeEditData.supplier) {
-        setSelectedSupplier(activeEditData.supplier);
-        setSupplierSearchTerm(getSupplierDisplayName(activeEditData.supplier));
+        const editSupplier = normalizeSupplierParty(activeEditData.supplier);
+        setSelectedSupplier(editSupplier);
+        setSupplierSearchTerm(getSupplierDisplayName(editSupplier || activeEditData.supplier));
       }
 
       // Set the invoice number
@@ -660,10 +676,11 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   }, [activeEditData?.invoiceId, isEnhancedImportPurchase]); // Only depend on invoiceId to prevent multiple executions
 
   // Fetch complete supplier data when supplier is selected (for immediate balance updates)
+  const selectedSupplierId = getSupplierPartyId(selectedSupplier);
   const { data: completeSupplierData, refetch: refetchSupplier } = useGetSupplierQuery(
-    selectedSupplier?._id,
+    selectedSupplierId,
     {
-      skip: !selectedSupplier?._id,
+      skip: !selectedSupplierId,
       staleTime: 60_000,
       refetchOnMountOrArgChange: true,
     }
@@ -675,8 +692,8 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
       completeSupplierData?.supplier ??
       completeSupplierData?.data?.supplier ??
       completeSupplierData?.data;
-    if (s && (s._id || s.id)) {
-      setSelectedSupplier(s);
+    if (s && getSupplierPartyId(s)) {
+      setSelectedSupplier(normalizeSupplierParty(s));
     }
   }, [completeSupplierData]);
 
@@ -700,7 +717,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
         updatedSupplier.advanceBalance !== selectedSupplier.advanceBalance ||
         updatedSupplier.currentBalance !== selectedSupplier.currentBalance
       )) {
-        setSelectedSupplier(updatedSupplier);
+        setSelectedSupplier(normalizeSupplierParty(updatedSupplier));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -741,25 +758,29 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
   };
 
   const handleSupplierSelect = (supplier) => {
+    const normalized = normalizeSupplierParty(supplier);
+    const prevId = getSupplierPartyId(selectedSupplier);
+    const nextId = getSupplierPartyId(normalized);
+
     // SearchableDropdown passes the full supplier object
-    setSelectedSupplier(supplier);
+    setSelectedSupplier(normalized);
     // Controlled `searchValue` would otherwise keep the partial query (e.g. "S") in the input
-    setSupplierSearchTerm(supplier ? getSupplierDisplayName(supplier) : '');
+    setSupplierSearchTerm(normalized ? getSupplierDisplayName(normalized) : '');
 
     // Auto-generate invoice number if enabled
-    if (autoGenerateInvoice && supplier) {
-      setInvoiceNumber(generateInvoiceNumber(supplier));
+    if (autoGenerateInvoice && normalized) {
+      setInvoiceNumber(generateInvoiceNumber(normalized));
     }
 
     // Update tab title to show supplier name
     const activeTab = getActiveTab();
-    if (activeTab && supplier) {
-      updateTabTitle(activeTab.id, `Purchase - ${supplier.companyName || supplier.company_name || supplier.businessName || supplier.displayName || supplier.name || 'Unknown'}`);
+    if (activeTab && normalized) {
+      updateTabTitle(activeTab.id, `Purchase - ${normalized.companyName || normalized.company_name || normalized.businessName || normalized.displayName || normalized.name || 'Unknown'}`);
     }
 
     // Clear cart when supplier changes (only in new purchase mode, not in edit mode)
     // Only clear if we are changing from one supplier to another, not from no supplier to a supplier
-    const isChangingSupplier = selectedSupplier && supplier && selectedSupplier._id !== supplier._id;
+    const isChangingSupplier = Boolean(prevId && nextId && prevId !== nextId);
     if (purchaseItems.length > 0 && !activeEditData?.isEditMode && isChangingSupplier) {
       setPurchaseItems([]);
       setHighlightedPurchaseLineIndex(null);
@@ -773,12 +794,15 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     setAmountPaid(0);
     setPaymentMethod('cash');
     setInvoiceNumber('');
+    setAutoGenerateInvoice(true);
     setExpectedDelivery(new Date().toISOString().split('T')[0]);
     if (resetBillDate) {
       setBillDate(getLocalDateString());
     }
     setNotes('');
     setInlineEditData(null);
+    setPurchaseDuplicateMerge(null);
+    setPurchaseSearchResetKey((k) => k + 1);
 
     // Reset tab title to default
     const activeTab = getActiveTab();
@@ -789,6 +813,8 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
 
   // Handler functions for purchase invoice mutations
   const handleCreatePurchaseInvoice = async (invoiceData) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     const labelPayload = pendingReceiptLabelPayloadRef.current;
     pendingReceiptLabelPayloadRef.current = null;
     try {
@@ -826,8 +852,8 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
               result?.data?.supplier ??
               result?.data?.data?.supplier ??
               result?.data?.data;
-            if (s && (s._id || s.id)) {
-              setSelectedSupplier(s);
+            if (getSupplierPartyId(s)) {
+              setSelectedSupplier(normalizeSupplierParty(s));
             }
           }).catch(() => { });
         } catch {
@@ -837,13 +863,20 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
 
       refetchSuppliers?.();
 
+      if (tabId) {
+        updateTabProps(tabId, { editData: null });
+      }
       resetPurchaseDraft({ resetBillDate: true });
     } catch (error) {
       toast.error(error?.data?.message || error?.message || 'Failed to complete purchase');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
   const handleUpdatePurchaseInvoice = async (invoiceId, invoiceData) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     try {
       const result = await updatePurchaseInvoice({ id: invoiceId, ...invoiceData }).unwrap();
 
@@ -865,15 +898,15 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
 
       // Immediately refetch supplier to update outstanding balance
       // Only refetch if supplier is selected (query is not skipped)
-      if (selectedSupplier?._id && refetchSupplier && typeof refetchSupplier === 'function') {
+      if (selectedSupplierId && refetchSupplier && typeof refetchSupplier === 'function') {
         try {
           refetchSupplier().then((result) => {
             const s =
               result?.data?.supplier ??
               result?.data?.data?.supplier ??
               result?.data?.data;
-            if (s && (s._id || s.id)) {
-              setSelectedSupplier(s);
+            if (getSupplierPartyId(s)) {
+              setSelectedSupplier(normalizeSupplierParty(s));
             }
           }).catch((error) => {
             if (!error?.message?.includes('has not been started')) {
@@ -889,6 +922,9 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
 
       refetchSuppliers?.();
 
+      if (tabId) {
+        updateTabProps(tabId, { editData: null });
+      }
       if (inlineEditData?.isEditMode) {
         resetPurchaseDraft();
         toast.success('Returned to new purchase mode');
@@ -910,6 +946,8 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
       }
     } catch (error) {
       toast.error(error?.data?.message || error?.message || 'Failed to update purchase');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
@@ -1142,12 +1180,14 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
 
 
   const handleProcessPurchase = useCallback(() => {
+    if (isSubmittingRef.current) return;
+
     if (purchaseItems.length === 0) {
       toast.error('No items to purchase');
       return;
     }
 
-    if (!selectedSupplier) {
+    if (!getSupplierPartyId(selectedSupplier)) {
       toast.error('Please select a supplier');
       return;
     }
@@ -1171,7 +1211,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     // Create purchase invoice data
     const importAllocatedItems = getImportAllocatedItems();
     const invoiceData = {
-      supplier: selectedSupplier.id || selectedSupplier._id,
+      supplier: getSupplierPartyId(selectedSupplier),
       supplierInfo: {
         name: selectedSupplier.name,
         email: selectedSupplier.email,
@@ -1471,15 +1511,15 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                           /* ignore */
                         }
                       }
-                      if ((selectedSupplier?.id || selectedSupplier?._id) && refetchSupplier) {
+                      if (selectedSupplierId && refetchSupplier) {
                         try {
                           const result = await refetchSupplier();
                           const s =
                             result?.data?.supplier ??
                             result?.data?.data?.supplier ??
                             result?.data?.data;
-                          if (s && (s._id || s.id)) {
-                            setSelectedSupplier(s);
+                          if (getSupplierPartyId(s)) {
+                            setSelectedSupplier(normalizeSupplierParty(s));
                           }
                         } catch {
                           /* ignore */
