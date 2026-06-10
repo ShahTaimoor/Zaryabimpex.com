@@ -1689,7 +1689,9 @@ export const Sales = ({ tabId, editData }) => {
                   selectedItem={selectedCustomer}
                   onSelect={handleCustomerSelect}
                   onSearch={setCustomerSearchTerm}
+                  searchValue={customerSearchTerm}
                   loading={customersLoading || customersFetching}
+                  serverSideSearch
                   canViewBalance={hasPermission(PERMISSIONS.VIEW_CUSTOMER_BALANCE)}
                 />
               </div>

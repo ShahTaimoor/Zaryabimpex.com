@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils';
  * @param {boolean} props.compact - Compact layout for smaller spaces (default: false)
  * @param {boolean} props.showClear - Show clear button (default: true)
  * @param {boolean} props.showLabel - Show the default "Date range" label (default: true)
+ * @param {'md'|'sm'} props.size - Control trigger/clear height (sm = h-9, matches standard filter inputs)
  */
 const DateFilter = ({
   startDate: initialStartDate,
@@ -45,8 +46,12 @@ const DateFilter = ({
   className = '',
   compact = false,
   showClear = true,
-  showLabel = true
+  showLabel = true,
+  size = 'md',
 }) => {
+  const isSmall = size === 'sm';
+  const triggerHeightClass = isSmall ? 'h-9 text-sm' : compact ? 'h-10 text-sm' : 'h-11';
+  const clearHeightClass = isSmall ? 'h-9' : compact ? 'h-10' : 'h-11';
   const [startDate, setStartDate] = useState(initialStartDate || '');
   const [endDate, setEndDate] = useState(initialEndDate || '');
   const [showPresetMenu, setShowPresetMenu] = useState(false);
@@ -147,7 +152,7 @@ const DateFilter = ({
                 variant="outline"
                 className={cn(
                   'w-full justify-start text-left font-normal border-gray-300 bg-white hover:bg-gray-50',
-                  compact ? 'h-10 text-sm' : 'h-11',
+                  triggerHeightClass,
                   !startDate && !endDate && 'text-gray-500'
                 )}
               >
@@ -186,12 +191,17 @@ const DateFilter = ({
             )}
             <Button
               onClick={handleClear}
-              variant="secondary"
-              className={compact ? 'h-10 w-10 p-0 flex items-center justify-center border-gray-300' : 'w-full sm:w-auto h-11 flex items-center justify-center gap-2 px-4 border-gray-300'}
+              variant="outline"
+              className={cn(
+                'flex shrink-0 items-center justify-center gap-1.5 border-gray-300 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50',
+                clearHeightClass,
+                compact || isSmall ? 'w-auto' : 'w-full sm:w-auto px-4'
+              )}
               type="button"
             >
               <X className="h-4 w-4" />
-              {!compact && <span className="hidden sm:inline">Clear</span>}
+              {(compact || isSmall) && <span>Clear</span>}
+              {!compact && !isSmall && <span className="hidden sm:inline">Clear</span>}
             </Button>
           </div>
         )}

@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { PRINT_PAGE_STYLE } from '../components/print/printPageStyle';
-import { Users, Building2, Calendar, FileText, ChevronDown, Printer, Wallet } from 'lucide-react';
+import { Users, Building2, Calendar, FileText, Printer, Wallet } from 'lucide-react';
 import { useGetLedgerSummaryQuery, useGetCustomerDetailedTransactionsQuery, useGetSupplierDetailedTransactionsQuery, useGetAllEntriesQuery } from '../store/services/accountLedgerApi';
-import { useGetCustomersQuery } from '../store/services/customersApi';
-import { useGetSuppliersQuery } from '../store/services/suppliersApi';
+import { useDebouncedCustomerSearch } from '../hooks/useDebouncedCustomerSearch';
+import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch';
+import { CustomerPartySelect } from '../components/order/CustomerPartySelect';
+import { SupplierPartySelect } from '../components/order/SupplierPartySelect';
 import { useGetBanksQuery } from '../store/services/banksApi';
 import { useGetBankReceiptsQuery } from '../store/services/bankReceiptsApi';
 import { useGetBankPaymentsQuery } from '../store/services/bankPaymentsApi';
@@ -56,19 +58,27 @@ const AccountLedgerSummary = () => {
   const defaultDates = getDefaultDateRange();
 
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
-  const [debouncedCustomerQuery, setDebouncedCustomerQuery] = useState('');
-  const customerDropdownRef = useRef(null);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
 
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
-  const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
-  const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
-  const [debouncedSupplierQuery, setDebouncedSupplierQuery] = useState('');
+  const [selectedSupplier, setSelectedSupplier] = useState(null);
+  const [supplierSearchTerm, setSupplierSearchTerm] = useState('');
   const [selectedBankId, setSelectedBankId] = useState('');
   const [selectedExpenseAccountCode, setSelectedExpenseAccountCode] = useState('');
-  const supplierDropdownRef = useRef(null);
   const printRef = useRef(null);
+
+  const {
+    customers: customerOptions,
+    isLoading: customersLoading,
+    isFetching: customersFetching,
+  } = useDebouncedCustomerSearch(customerSearchTerm, { selectedCustomer });
+
+  const {
+    suppliers: supplierOptions,
+    isLoading: suppliersLoading,
+    isFetching: suppliersFetching,
+  } = useDebouncedSupplierSearch(supplierSearchTerm, { selectedSupplier });
 
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printData, setPrintData] = useState(null);
@@ -109,46 +119,6 @@ const AccountLedgerSummary = () => {
     window.addEventListener('accountLedgerConfigChanged', handler);
     return () => window.removeEventListener('accountLedgerConfigChanged', handler);
   }, []);
-
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (customerDropdownRef.current && !customerDropdownRef.current.contains(event.target)) {
-        setShowCustomerDropdown(false);
-      }
-      if (supplierDropdownRef.current && !supplierDropdownRef.current.contains(event.target)) {
-        setShowSupplierDropdown(false);
-      }
-    };
-
-    if (showCustomerDropdown || showSupplierDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showCustomerDropdown, showSupplierDropdown]);
-
-  // Fetch customers for dropdown
-  const { data: customersData, isLoading: customersLoading } = useGetCustomersQuery(
-    { search: customerSearchQuery, limit: 100 },
-    { refetchOnMountOrArgChange: true }
-  );
-
-  const allCustomers = useMemo(() => {
-    return customersData?.data?.customers || customersData?.customers || customersData?.data || customersData || [];
-  }, [customersData]);
-
-  // Fetch suppliers for dropdown
-  const { data: suppliersData, isLoading: suppliersLoading } = useGetSuppliersQuery(
-    { search: debouncedSupplierQuery, limit: 100 },
-    { refetchOnMountOrArgChange: true }
-  );
-
-  const allSuppliers = useMemo(() => {
-    return suppliersData?.data?.suppliers || suppliersData?.suppliers || suppliersData?.data || suppliersData || [];
-  }, [suppliersData]);
 
   const { data: banksData } = useGetBanksQuery({ isActive: true, all: 'true' }, { skip: false });
   const banks = useMemo(() => {
@@ -293,8 +263,6 @@ const AccountLedgerSummary = () => {
   }, [selectedSupplierId, detailedSupplierTransactionsData?.data, summaryData?.data?.suppliers?.summary]);
 
   // Extract data from summary (must be before early return)
-  const allCustomersSummary = summaryData?.data?.customers?.summary || [];
-  const suppliers = summaryData?.data?.suppliers?.summary || [];
   const banksSummary = summaryData?.data?.banks?.summary || [];
   const customerTotals = summaryData?.data?.customers?.totals || {};
   const supplierTotals = summaryData?.data?.suppliers?.totals || {};
@@ -375,54 +343,6 @@ const AccountLedgerSummary = () => {
     : selectedSupplierId
       ? (supplierDetail?.returnTotal ?? detailedSupplierTransactionsData?.data?.returnTotal ?? 0)
       : 0;
-
-  // Filter customers based on selection (must be before early return)
-  const customers = useMemo(() => {
-    if (!selectedCustomerId) return [];
-    return allCustomersSummary.filter(c => {
-      const customerId = getId(c)?.toString();
-      const selectedId = selectedCustomerId?.toString();
-      return customerId === selectedId;
-    });
-  }, [allCustomersSummary, selectedCustomerId]);
-
-  // Filter customers for dropdown (search by business name, company name, name)
-  const filteredCustomers = useMemo(() => {
-    if (!customerSearchQuery.trim()) return allCustomers.slice(0, 50);
-    const query = customerSearchQuery.toLowerCase();
-    return allCustomers.filter(customer => {
-      const businessName = (customer.businessName || customer.business_name || '').toLowerCase();
-      const companyName = (customer.companyName || customer.company_name || '').toLowerCase();
-      const name = (customer.name || '').toLowerCase();
-      const email = (customer.email || '').toLowerCase();
-      const phone = (customer.phone || '').toLowerCase();
-      return businessName.includes(query) || companyName.includes(query) || name.includes(query) || email.includes(query) || phone.includes(query);
-    }).slice(0, 50);
-  }, [allCustomers, customerSearchQuery]);
-
-  // Filter suppliers based on selection (must be before early return)
-  const filteredSuppliersList = useMemo(() => {
-    if (!selectedSupplierId) return [];
-    return suppliers.filter(s => {
-      const supplierId = getId(s)?.toString();
-      const selectedId = selectedSupplierId?.toString();
-      return supplierId === selectedId;
-    });
-  }, [suppliers, selectedSupplierId]);
-
-  // Filter suppliers for dropdown (search by business name, company name, name)
-  const filteredSuppliers = useMemo(() => {
-    if (!supplierSearchQuery.trim()) return allSuppliers.slice(0, 50);
-    const query = supplierSearchQuery.toLowerCase();
-    return allSuppliers.filter(supplier => {
-      const companyName = (supplier.companyName || supplier.company_name || '').toLowerCase();
-      const businessName = (supplier.businessName || supplier.business_name || '').toLowerCase();
-      const name = (supplier.name || '').toLowerCase();
-      const email = (supplier.email || '').toLowerCase();
-      const phone = (supplier.phone || '').toLowerCase();
-      return companyName.includes(query) || businessName.includes(query) || name.includes(query) || email.includes(query) || phone.includes(query);
-    }).slice(0, 50);
-  }, [allSuppliers, supplierSearchQuery]);
 
   const handleFilterChange = (field, value) => {
     setFilters({ ...filters, [field]: value });
@@ -649,11 +569,11 @@ const AccountLedgerSummary = () => {
       search: ''
     });
     setSelectedCustomerId('');
-    setCustomerSearchQuery('');
-    setDebouncedCustomerQuery('');
+    setSelectedCustomer(null);
+    setCustomerSearchTerm('');
     setSelectedSupplierId('');
-    setSupplierSearchQuery('');
-    setDebouncedSupplierQuery('');
+    setSelectedSupplier(null);
+    setSupplierSearchTerm('');
     setSelectedBankId('');
     setSelectedExpenseAccountCode('');
   };
@@ -663,40 +583,62 @@ const AccountLedgerSummary = () => {
     setSelectedExpenseAccountCode(next);
     if (next) {
       setSelectedCustomerId('');
-      setCustomerSearchQuery('');
-      setDebouncedCustomerQuery('');
+      setSelectedCustomer(null);
+      setCustomerSearchTerm('');
       setSelectedSupplierId('');
-      setSupplierSearchQuery('');
-      setDebouncedSupplierQuery('');
+      setSelectedSupplier(null);
+      setSupplierSearchTerm('');
       setSelectedBankId('');
     }
   };
 
+  const handleCustomerSearch = (searchTerm) => {
+    setCustomerSearchTerm(searchTerm);
+    if (!searchTerm) {
+      setSelectedCustomerId('');
+      setSelectedCustomer(null);
+    }
+  };
+
+  const handleSupplierSearch = (searchTerm) => {
+    setSupplierSearchTerm(searchTerm);
+    if (!searchTerm) {
+      setSelectedSupplierId('');
+      setSelectedSupplier(null);
+    }
+  };
+
   const handleCustomerSelect = (customer) => {
+    if (!customer) {
+      setSelectedCustomerId('');
+      setSelectedCustomer(null);
+      setCustomerSearchTerm('');
+      return;
+    }
     setSelectedCustomerId(getId(customer));
-    const businessName = customer.businessName || customer.business_name || customer.companyName || customer.company_name || '';
-    const label = businessName || customer.name || '';
-    setCustomerSearchQuery(label);
-    setDebouncedCustomerQuery(label.trim());
-    setShowCustomerDropdown(false);
+    setSelectedCustomer(customer);
     // Clear other selections when customer is selected
     setSelectedSupplierId('');
-    setSupplierSearchQuery('');
-    setDebouncedSupplierQuery('');
+    setSelectedSupplier(null);
+    setSupplierSearchTerm('');
     setSelectedBankId('');
     setSelectedExpenseAccountCode('');
   };
 
   const handleSupplierSelect = (supplier) => {
+    if (!supplier) {
+      setSelectedSupplierId('');
+      setSelectedSupplier(null);
+      setSupplierSearchTerm('');
+      return;
+    }
     setSelectedSupplierId(getId(supplier));
-    setSupplierSearchQuery(supplier.companyName || supplier.name || '');
-    setDebouncedSupplierQuery((supplier.companyName || supplier.name || '').trim());
-    setShowSupplierDropdown(false);
+    setSelectedSupplier(supplier);
     // Clear other selections when supplier is selected
     setSelectedExpenseAccountCode('');
     setSelectedCustomerId('');
-    setCustomerSearchQuery('');
-    setDebouncedCustomerQuery('');
+    setSelectedCustomer(null);
+    setCustomerSearchTerm('');
     setSelectedBankId('');
   };
 
@@ -910,87 +852,38 @@ const AccountLedgerSummary = () => {
         <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
           <h2 className="text-sm font-medium text-gray-700 mb-4 uppercase tracking-wide">Filters</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-            {/* Customer Dropdown */}
-            <div className="relative" ref={customerDropdownRef}>
+            {/* Customer */}
+            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Customer</label>
-              <div className="relative">
-                <Input
-                  type="text"
-                  placeholder="Search or select..."
-                  value={customerSearchQuery}
-                  onChange={(e) => {
-                    setCustomerSearchQuery(e.target.value);
-                    setShowCustomerDropdown(true);
-                  }}
-                  onFocus={() => setShowCustomerDropdown(true)}
-                  className="w-full h-9 border-gray-300 text-sm"
-                />
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                {showCustomerDropdown && filteredCustomers.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto">
-                    {filteredCustomers.map((customer) => {
-                      const businessName = customer.businessName || customer.business_name || customer.companyName || customer.company_name || '';
-                      const displayName = businessName || customer.name || 'Unknown Customer';
-                      return (
-                        <button
-                          key={getId(customer) ?? displayName}
-                          onClick={() => handleCustomerSelect(customer)}
-                          className={`w-full text-left px-3 py-2.5 text-sm border-b border-gray-100 last:border-0 hover:bg-gray-50 ${selectedCustomerId == getId(customer) ? 'bg-gray-100' : ''}`}
-                        >
-                          <div className="text-sm font-medium text-gray-900">{displayName}</div>
-                          {businessName && customer.name && customer.name !== businessName && (
-                            <div className="text-xs text-gray-500">{customer.name}</div>
-                          )}
-                          {customer.email && (
-                            <div className="text-xs text-gray-500">{customer.email}</div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <CustomerPartySelect
+                items={customerOptions}
+                selectedItem={selectedCustomer}
+                onSelect={handleCustomerSelect}
+                onSearch={handleCustomerSearch}
+                searchValue={customerSearchTerm}
+                loading={customersLoading || customersFetching}
+                serverSideSearch
+                showSecondaryName
+                placeholder="Search or select..."
+                className="[&_input]:h-9 [&_input]:text-sm"
+              />
             </div>
 
-            {/* Supplier Dropdown */}
-            <div className="relative" ref={supplierDropdownRef}>
+            {/* Supplier */}
+            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Supplier</label>
-              <div className="relative">
-                <Input
-                  type="text"
-                  placeholder="Search or select..."
-                  value={supplierSearchQuery}
-                  onChange={(e) => {
-                    setSupplierSearchQuery(e.target.value);
-                    setShowSupplierDropdown(true);
-                  }}
-                  onFocus={() => setShowSupplierDropdown(true)}
-                  className="w-full h-9 border-gray-300 text-sm"
-                />
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                {showSupplierDropdown && filteredSuppliers.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto">
-                    {filteredSuppliers.map((supplier) => {
-                      const displayName = supplier.companyName || supplier.company_name || supplier.name || 'Unknown Supplier';
-                      return (
-                        <button
-                          key={getId(supplier) ?? displayName}
-                          onClick={() => handleSupplierSelect(supplier)}
-                          className={`w-full text-left px-3 py-2.5 text-sm border-b border-gray-100 last:border-0 hover:bg-gray-50 ${selectedSupplierId == getId(supplier) ? 'bg-gray-100' : ''}`}
-                        >
-                          <div className="text-sm font-medium text-gray-900">{displayName}</div>
-                          {supplier.name && supplier.name !== displayName && (
-                            <div className="text-xs text-gray-500">{supplier.name}</div>
-                          )}
-                          {supplier.email && (
-                            <div className="text-xs text-gray-500">{supplier.email}</div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <SupplierPartySelect
+                items={supplierOptions}
+                selectedItem={selectedSupplier}
+                onSelect={handleSupplierSelect}
+                onSearch={handleSupplierSearch}
+                searchValue={supplierSearchTerm}
+                loading={suppliersLoading || suppliersFetching}
+                serverSideSearch
+                showSecondaryName
+                placeholder="Search or select..."
+                className="[&_input]:h-9 [&_input]:text-sm"
+              />
             </div>
 
             {/* Date range */}
@@ -1024,11 +917,11 @@ const AccountLedgerSummary = () => {
                   if (val) {
                     // Clear customer/supplier/expense selections when bank is selected
                     setSelectedCustomerId('');
-                    setCustomerSearchQuery('');
-                    setDebouncedCustomerQuery('');
+                    setSelectedCustomer(null);
+                    setCustomerSearchTerm('');
                     setSelectedSupplierId('');
-                    setSupplierSearchQuery('');
-                    setDebouncedSupplierQuery('');
+                    setSelectedSupplier(null);
+                    setSupplierSearchTerm('');
                     setSelectedExpenseAccountCode('');
                   }
                 }}
