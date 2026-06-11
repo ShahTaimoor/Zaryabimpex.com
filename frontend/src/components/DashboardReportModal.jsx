@@ -81,11 +81,11 @@ const DashboardReportModal = ({
   const getFilterInput = (column) => {
     if (column.filterType === 'date') {
       return (
-        <Input
-          type="date"
+        <DateFilter mode="single"
           value={localFilters[column.key] || ''}
-          onChange={(e) => handleFilterChange(column.key, e.target.value)}
-          className="text-xs w-full"
+          onChange={(date) => handleFilterChange(column.key, date)}
+          showLabel={false}
+          size="sm"
           placeholder="Equals:"
         />
       );

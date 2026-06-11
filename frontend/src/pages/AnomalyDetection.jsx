@@ -21,6 +21,7 @@ import { showErrorToast, handleApiError } from '../utils/errorHandler';
 import { Button } from '@/components/ui/button';
 import { PageLayout } from '../components/layout/PageLayout';
 import { PageHeader } from '../components/layout/PageHeader';
+import DateFilter from '../components/DateFilter';
 
 const AnomalyDetection = () => {
   const [filters, setFilters] = useState({
@@ -177,17 +178,15 @@ const AnomalyDetection = () => {
               <option value="medium">Medium</option>
               <option value="low">Low</option>
             </select>
-            <input
-              type="date"
-              value={filters.startDate}
-              onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-              className="input text-sm"
-            />
-            <input
-              type="date"
-              value={filters.endDate}
-              onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-              className="input text-sm"
+            <DateFilter
+              startDate={filters.startDate}
+              endDate={filters.endDate}
+              onDateChange={(startDate, endDate) => setFilters({ ...filters, startDate, endDate })}
+              compact
+              showPresets={false}
+              showClear={false}
+              showLabel={false}
+              size="sm"
             />
             <Button
               onClick={() => setFilters({ type: '', severity: '', startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], endDate: new Date().toISOString().split('T')[0] })}

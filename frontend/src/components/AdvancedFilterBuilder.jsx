@@ -5,7 +5,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Filter, X, Plus, Save, Calendar, TrendingUp, Package, Tag, CheckSquare } from 'lucide-react';
-
+import DateFilter from './DateFilter';
 const FILTER_TYPES = {
   dateRange: {
     label: 'Date Range',
@@ -196,29 +196,26 @@ export const AdvancedFilterBuilder = ({
       case 'dateRange':
         if (operator === 'between') {
           return (
-            <div className="flex items-center space-x-2">
-              <input
-                type="date"
-                value={value?.from || ''}
-                onChange={(e) => changeHandler({ value: { ...value, from: e.target.value } })}
-                className="flex-1 px-3 py-1 border border-gray-300 rounded-md text-sm"
-              />
-              <span className="text-gray-500">to</span>
-              <input
-                type="date"
-                value={value?.to || ''}
-                onChange={(e) => changeHandler({ value: { ...value, to: e.target.value } })}
-                className="flex-1 px-3 py-1 border border-gray-300 rounded-md text-sm"
-              />
-            </div>
+            <DateFilter
+              startDate={value?.from || ''}
+              endDate={value?.to || ''}
+              onDateChange={(from, to) => changeHandler({ value: { from, to } })}
+              compact
+              showPresets={false}
+              showClear={false}
+              showLabel={false}
+              size="sm"
+              className="flex-1 min-w-0"
+            />
           );
         }
         return (
-          <input
-            type="date"
+          <DateFilter mode="single"
             value={value || ''}
-            onChange={(e) => changeHandler({ value: e.target.value })}
-            className="flex-1 px-3 py-1 border border-gray-300 rounded-md text-sm"
+            onChange={(date) => changeHandler({ value: date })}
+            showLabel={false}
+            size="sm"
+            className="flex-1 min-w-0"
           />
         );
 

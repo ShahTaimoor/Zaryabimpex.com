@@ -2,6 +2,12 @@ import React, { memo } from 'react';
 import { LayoutDashboard, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { navigation } from '../../config/navigation';
+import {
+  useGetCompanySettingsQuery,
+  useUpdateCompanySettingsMutation,
+} from '../../store/services/settingsApi';
+import { isDailyCashClosingEnabled } from '../../utils/dailyCashSettings';
+import { handleApiError } from '../../utils/errorHandler';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
@@ -10,6 +16,29 @@ export const SidebarSettingsTab = memo(function SidebarSettingsTab({
   setSidebarConfig,
   isSidebarItemEnabled,
 }) {
+  const { data: settingsResponse, refetch: refetchSettings } = useGetCompanySettingsQuery();
+  const [updateCompanySettings] = useUpdateCompanySettingsMutation();
+  const settings = settingsResponse?.data || settingsResponse;
+  const dailyCashEnabled = isDailyCashClosingEnabled(settings?.orderSettings);
+
+  const syncDailyCashFeatureFlag = async (child, checked) => {
+    if (child.requiresFeature !== 'dailyCashClosing') return;
+    await updateCompanySettings({
+      orderSettings: {
+        ...(settings?.orderSettings || {}),
+        dailyCashClosingEnabled: !!checked,
+      },
+    }).unwrap();
+    refetchSettings();
+  };
+
+  const isChildVisibleInSettings = (child) => {
+    if (child.requiresFeature === 'dailyCashClosing' && !dailyCashEnabled) {
+      return false;
+    }
+    return true;
+  };
+
   const updateSidebarConfig = (next) => {
     setSidebarConfig(next);
     localStorage.setItem('sidebarConfig', JSON.stringify(next));
@@ -98,7 +127,7 @@ export const SidebarSettingsTab = memo(function SidebarSettingsTab({
                           </div>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                          {item.children.map((child) => {
+                          {item.children.filter(isChildVisibleInSettings).map((child) => {
                             const childId = `sidebar-${section.heading.name}-${item.name}-${child.name}`.replace(/\s+/g, '-');
                             return (
                               <div
@@ -108,9 +137,23 @@ export const SidebarSettingsTab = memo(function SidebarSettingsTab({
                                 <Checkbox
                                   id={childId}
                                   checked={isSidebarItemEnabled(child.name)}
-                                  onCheckedChange={(checked) => {
-                                    updateSidebarConfig({ ...sidebarConfig, [child.name]: checked });
-                                    toast.success(`${child.name} ${checked ? 'shown' : 'hidden'} in sidebar`);
+                                  onCheckedChange={async (checked) => {
+                                    const nextChecked = !!checked;
+                                    const previousConfig = { ...sidebarConfig };
+                                    updateSidebarConfig({ ...sidebarConfig, [child.name]: nextChecked });
+                                    try {
+                                      if (child.requiresFeature === 'dailyCashClosing') {
+                                        await syncDailyCashFeatureFlag(child, nextChecked);
+                                        toast.success(
+                                          `Daily Cash Closing ${nextChecked ? 'enabled' : 'disabled'}`
+                                        );
+                                      } else {
+                                        toast.success(`${child.name} ${nextChecked ? 'shown' : 'hidden'} in sidebar`);
+                                      }
+                                    } catch (error) {
+                                      updateSidebarConfig(previousConfig);
+                                      handleApiError(error, 'Update sidebar setting');
+                                    }
                                   }}
                                   className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600 transition-colors"
                                 />

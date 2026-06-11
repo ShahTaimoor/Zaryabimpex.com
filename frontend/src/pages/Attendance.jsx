@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 import PageShell from '../components/PageShell';
 import { PageHeader } from '../components/layout/PageHeader';
 import ConfirmationDialog from '../components/ConfirmationDialog';
+import DateFilter from '../components/DateFilter';
 
 const Attendance = () => {
   const { user, hasPermission } = useAuth();
@@ -652,27 +653,16 @@ const Attendance = () => {
                 )}
               </div>
 
-              <div className="flex items-center space-x-2">
-                <div className="relative">
-                  <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    type="date"
-                    value={filters.startDate}
-                    onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                    className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-primary-500/20"
-                  />
-                </div>
-                <span className="text-slate-400 text-xs font-bold">to</span>
-                <div className="relative">
-                  <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    type="date"
-                    value={filters.endDate}
-                    onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                    className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-primary-500/20"
-                  />
-                </div>
-              </div>
+              <DateFilter
+                startDate={filters.startDate}
+                endDate={filters.endDate}
+                onDateChange={(startDate, endDate) => setFilters({ ...filters, startDate, endDate })}
+                compact
+                showPresets={false}
+                showClear={false}
+                showLabel={false}
+                size="sm"
+              />
             </div>
 
             {viewMode === 'team' && (

@@ -1,73 +1,36 @@
-const TillSessionRepository = require('../repositories/TillSessionRepository');
+/**
+ * @deprecated Use dailyCashService. Kept as a thin delegate for legacy imports.
+ */
+const dailyCashService = require('./dailyCashService');
 
-class TillService {
-  /**
-   * Open a till session
-   * @param {object} sessionData - Session data
-   * @param {string} userId - User ID
-   * @returns {Promise<object>}
-   */
-  async openTill(sessionData, userId) {
-    // Check if user already has an open session
-    const existingSession = await TillSessionRepository.findOpenSessionByUser(userId);
-    if (existingSession) {
-      throw new Error('Till already open for this user');
-    }
+module.exports = {
+  MOVEMENT_TYPES: dailyCashService.MOVEMENT_TYPES,
 
-    const processedData = {
-      user: userId,
-      storeId: sessionData.storeId || null,
-      deviceId: sessionData.deviceId || null,
-      openedAt: new Date(),
-      openingAmount: Number(sessionData.openingAmount),
-      notesOpen: sessionData.notesOpen || '',
-      status: 'open'
-    };
-
-    try {
-      return await TillSessionRepository.create(processedData);
-    } catch (err) {
-      if (err.code === 11000) {
-        throw new Error('Duplicate entry detected');
-      }
-      throw err;
-    }
-  }
-
-  /**
-   * Close a till session
-   * @param {object} closeData - Close data
-   * @param {string} userId - User ID
-   * @returns {Promise<object>}
-   */
-  async closeTill(closeData, userId) {
-    const session = await TillSessionRepository.findOpenSessionByUser(userId);
-    if (!session) {
-      throw new Error('No open till to close');
-    }
-
-    // Use the model's closeTill method
-    session.closeTill(
-      Number(closeData.closingDeclaredAmount),
-      typeof closeData.expectedAmount !== 'undefined' ? Number(closeData.expectedAmount) : undefined,
-      closeData.notesClose
-    );
-
-    await session.save();
-    return session;
-  }
-
-  /**
-   * Get variance/sessions for a user
-   * @param {string} userId - User ID
-   * @param {object} options - Query options
-   * @returns {Promise<Array>}
-   */
-  async getSessionsByUser(userId, options = {}) {
-    const { limit = 20 } = options;
-    return await TillSessionRepository.findSessionsByUser(userId, { limit, sort: { createdAt: -1 } });
-  }
-}
-
-module.exports = new TillService();
-
+  getActiveShopTill: () => dailyCashService.getTodaySummary(),
+  getOpenSessionForUser: () => dailyCashService.getTodaySummary(),
+  buildSessionSummary: (session) => dailyCashService.buildDailySummary(session?.business_date || session?.businessDate),
+  ensureDefaultShopTill: async () => dailyCashService.getTodaySummary(),
+  openTill: async () => {
+    throw Object.assign(new Error('Till open is no longer used. Use daily cash closing instead.'), { code: 'DEPRECATED_TILL' });
+  },
+  closeTill: async (data, userId) => dailyCashService.closeDay({
+    actualCash: data.closingDeclaredAmount,
+    notes: data.notesClose,
+    openingCash: data.openingAmount,
+  }, userId),
+  recordMovementForUser: (userId, payload, client) => dailyCashService.recordMovement(userId, payload, client),
+  recordCashSale: (userId, data, client) => dailyCashService.recordCashSale(userId, data, client),
+  recordSalePaymentDelta: (userId, data, client) => dailyCashService.recordSalePaymentDelta(userId, data, client),
+  recordCashReceipt: (userId, receipt, client) => dailyCashService.recordCashReceipt(userId, receipt, client),
+  recordCashPayment: (userId, payment, opts, client) => dailyCashService.recordCashPayment(userId, payment, opts, client),
+  recordRefund: (userId, data, client) => dailyCashService.recordRefund(userId, data, client),
+  recordWithdrawal: (userId, data, client) => dailyCashService.recordWithdrawal(userId, data, client),
+  getSessionsByUser: () => dailyCashService.getClosingReport({ limit: 50 }),
+  getSessionById: () => null,
+  listSessions: (filters) => dailyCashService.getClosingReport(filters),
+  getMovementReport: (filters) => dailyCashService.getMovementReport(filters),
+  getDailySummary: (range) => dailyCashService.getDailySummaryReport(range),
+  getCashierSummary: (range) => dailyCashService.getUserActivityReport(range),
+  getVarianceReport: (range) => dailyCashService.getVarianceReport(range),
+  getDashboardStats: (range) => dailyCashService.getDashboardStats(range),
+};

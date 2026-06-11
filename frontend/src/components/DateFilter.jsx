@@ -1,16 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Calendar as CalendarIcon, ChevronDown, X } from 'lucide-react';
 import { format } from 'date-fns';
-import {
-  formatDateForInput,
-  getCurrentDatePakistan,
-  getDateDaysAgo,
-  getStartOfMonth,
-  getEndOfMonth,
-  getDatePresets
-} from '../utils/dateUtils';
+import { formatDateForInput, getDatePresets } from '../utils/dateUtils';
 import { Calendar } from '@/components/ui/calendar';
 import {
   Popover,
@@ -20,24 +12,104 @@ import {
 import { cn } from '@/lib/utils';
 
 /**
- * Reusable Date Filter Component
- * 
- * Provides start and end date pickers with preset options.
- * All dates are handled in Pakistan Standard Time (Asia/Karachi).
- * 
- * @param {Object} props
- * @param {string} props.startDate - Initial start date (YYYY-MM-DD)
- * @param {string} props.endDate - Initial end date (YYYY-MM-DD)
- * @param {Function} props.onDateChange - Callback when dates change (startDate, endDate)
- * @param {boolean} props.showPresets - Show preset date range buttons (default: true)
- * @param {boolean} props.required - Require both dates to be selected (default: false)
- * @param {string} props.className - Additional CSS classes
- * @param {boolean} props.compact - Compact layout for smaller spaces (default: false)
- * @param {boolean} props.showClear - Show clear button (default: true)
- * @param {boolean} props.showLabel - Show the default "Date range" label (default: true)
- * @param {'md'|'sm'} props.size - Control trigger/clear height (sm = h-9, matches standard filter inputs)
+ * Unified date picker — same popover/calendar design across the POS.
+ *
+ * mode="range" (default) — start + end date, presets (Dashboard, reports, filters)
+ *   startDate, endDate, onDateChange(start, end)
+ *
+ * mode="single" — one date (Business Date, Bill Date, voucher date, etc.)
+ *   value, onChange(date), label, max, min
  */
-const DateFilter = ({
+const DateFilter = (props) => {
+  if (props.mode === 'single') {
+    return <SingleDatePicker {...props} />;
+  }
+  return <RangeDatePicker {...props} />;
+};
+
+function SingleDatePicker({
+  label,
+  value,
+  onChange,
+  required = false,
+  placeholder = 'Pick a date',
+  className = '',
+  showLabel = true,
+  size = 'md',
+  max,
+  min,
+  disabled = false,
+  id,
+}) {
+  const isSmall = size === 'sm';
+  const triggerHeightClass = isSmall ? 'h-9 text-sm' : 'h-11';
+  const [open, setOpen] = useState(false);
+  const selectedDate = value ? new Date(`${value}T00:00:00`) : undefined;
+
+  const handleSelect = (date) => {
+    if (!date) {
+      onChange?.('');
+      return;
+    }
+    onChange?.(formatDateForInput(date));
+    setOpen(false);
+  };
+
+  const isDateDisabled = (date) => {
+    const dateStr = formatDateForInput(date);
+    if (max && dateStr > max) return true;
+    if (min && dateStr < min) return true;
+    return false;
+  };
+
+  return (
+    <div className={cn('min-w-0', className)}>
+      {label != null && label !== '' && showLabel && (
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1.5">
+          {label}
+          {required && <span className="text-red-500 ml-0.5">*</span>}
+        </label>
+      )}
+      <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            className={cn(
+              'w-full justify-start text-left font-normal border-gray-300 bg-white hover:bg-gray-50',
+              triggerHeightClass,
+              !value && 'text-gray-500'
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4 text-gray-400 shrink-0" />
+            {selectedDate ? (
+              <span className="truncate text-gray-900">
+                {format(selectedDate, isSmall ? 'dd MMM yy' : 'LLL dd, y')}
+              </span>
+            ) : (
+              <span>{placeholder}</span>
+            )}
+            <ChevronDown className="ml-auto h-4 w-4 text-gray-400 shrink-0" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0 border-gray-200 shadow-lg" align="start">
+          <Calendar
+            mode="single"
+            defaultMonth={selectedDate || new Date()}
+            selected={selectedDate}
+            onSelect={handleSelect}
+            disabled={isDateDisabled}
+            className="p-3"
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+function RangeDatePicker({
   startDate: initialStartDate,
   endDate: initialEndDate,
   onDateChange,
@@ -48,16 +120,14 @@ const DateFilter = ({
   showClear = true,
   showLabel = true,
   size = 'md',
-}) => {
+}) {
   const isSmall = size === 'sm';
   const triggerHeightClass = isSmall ? 'h-9 text-sm' : compact ? 'h-10 text-sm' : 'h-11';
   const clearHeightClass = isSmall ? 'h-9' : compact ? 'h-10' : 'h-11';
   const [startDate, setStartDate] = useState(initialStartDate || '');
   const [endDate, setEndDate] = useState(initialEndDate || '');
-  const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
 
-  // Update local state when props change
   useEffect(() => {
     if (initialStartDate !== undefined) {
       setStartDate(initialStartDate || '');
@@ -70,37 +140,10 @@ const DateFilter = ({
     }
   }, [initialEndDate]);
 
-  const handleStartDateChange = (e) => {
-    const newStartDate = e.target.value;
-    setStartDate(newStartDate);
-
-    // Ensure end date is not before start date
-    if (endDate && newStartDate > endDate) {
-      setEndDate(newStartDate);
-      onDateChange?.(newStartDate, newStartDate);
-    } else {
-      onDateChange?.(newStartDate, endDate);
-    }
-  };
-
-  const handleEndDateChange = (e) => {
-    const newEndDate = e.target.value;
-    setEndDate(newEndDate);
-
-    // Ensure start date is not after end date
-    if (startDate && newEndDate < startDate) {
-      setStartDate(newEndDate);
-      onDateChange?.(newEndDate, newEndDate);
-    } else {
-      onDateChange?.(startDate, newEndDate);
-    }
-  };
-
   const handlePresetSelect = (preset) => {
     setStartDate(preset.startDate);
     setEndDate(preset.endDate);
     onDateChange?.(preset.startDate, preset.endDate);
-    setShowPresetMenu(false);
   };
 
   const handleClear = () => {
@@ -111,7 +154,6 @@ const DateFilter = ({
 
   const presets = getDatePresets();
 
-  // Convert YYYY-MM-DD strings to Date for calendar (start of day local)
   const dateFrom = startDate ? new Date(startDate + 'T00:00:00') : undefined;
   const dateTo = endDate ? new Date(endDate + 'T00:00:00') : undefined;
   const range = (dateFrom && dateTo) ? { from: dateFrom, to: dateTo } : dateFrom ? { from: dateFrom } : undefined;
@@ -138,7 +180,6 @@ const DateFilter = ({
 
   return (
     <div className={compact ? `flex items-center gap-2 min-w-0 ${className}` : `space-y-3 ${className}`}>
-      {/* Date Range Picker - Popover + Calendar design */}
       <div className={compact ? 'flex items-center gap-2 flex-1 min-w-0' : 'flex flex-col sm:flex-row items-stretch sm:items-center gap-3'}>
         <div className={compact ? 'flex-1 min-w-0' : 'flex-1 min-w-0'}>
           {!compact && showLabel && (
@@ -207,7 +248,6 @@ const DateFilter = ({
         )}
       </div>
 
-      {/* Preset Buttons - hidden in compact mode */}
       {showPresets && !compact && (
         <div className="flex flex-wrap gap-2">
           <button
@@ -263,6 +303,6 @@ const DateFilter = ({
       )}
     </div>
   );
-};
+}
 
 export default DateFilter;

@@ -9,19 +9,10 @@ import {
   FileText,
   RotateCcw,
   Save,
-  Calendar as CalendarIcon,
-  ChevronDown,
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { formatDateForInput } from '../../utils/dateUtils';
+import DateFilter from '../DateFilter';
 
 /** Shared black & white theme for all cash/bank voucher forms. */
 const MONO_THEME = {
@@ -286,55 +277,20 @@ export function PaymentDateField({
   required = false,
   placeholder = 'Pick a date',
   className = '',
+  max,
+  min,
 }) {
-  const [open, setOpen] = React.useState(false);
-  const selectedDate = value ? new Date(`${value}T00:00:00`) : undefined;
-
-  const handleSelect = (date) => {
-    if (!date) {
-      onChange?.('');
-      return;
-    }
-    onChange?.(formatDateForInput(date));
-    setOpen(false);
-  };
-
   return (
     <PaymentFormField label={label} required={required} className={className}>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            className={cn(
-              'h-11 w-full justify-start rounded-lg border-neutral-200 bg-white text-left text-sm font-normal shadow-sm hover:bg-neutral-50',
-              !value && 'text-neutral-500'
-            )}
-          >
-            <CalendarIcon className="mr-2 h-4 w-4 shrink-0 text-neutral-400" />
-            {selectedDate ? (
-              <span className="truncate text-neutral-900">
-                {format(selectedDate, 'dd MMM yy')}
-              </span>
-            ) : (
-              <span>{placeholder}</span>
-            )}
-            <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-neutral-400" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          className="w-auto border-neutral-200 p-0 shadow-lg"
-          align="start"
-        >
-          <Calendar
-            mode="single"
-            defaultMonth={selectedDate || new Date()}
-            selected={selectedDate}
-            onSelect={handleSelect}
-            className="p-3"
-          />
-        </PopoverContent>
-      </Popover>
+      <DateFilter
+        mode="single"
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        showLabel={false}
+        max={max}
+        min={min}
+      />
     </PaymentFormField>
   );
 }

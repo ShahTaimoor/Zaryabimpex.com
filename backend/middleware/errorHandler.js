@@ -207,6 +207,19 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
+  // Handle till session errors (open till required)
+  if (
+    err.code === 'NO_OPEN_TILL' ||
+    err.code === 'TILL_ALREADY_CLOSED' ||
+    err.code === 'DAY_ALREADY_CLOSED' ||
+    err.code === 'DAILY_CASH_DISABLED'
+  ) {
+    return sendErrorResponse(res, req, err.statusCode || 400, {
+      message: err.message,
+      code: err.code,
+    });
+  }
+
   // Handle default server errors
   const statusCode = err.statusCode || err.status || 500;
   const message = err.message || 'Internal server error';

@@ -98,7 +98,10 @@ const MIGRATIONS = [
   '079_product_search_text.sql',
   '080_minimal_chart_of_accounts.sql',
   '081_restore_essential_accounts.sql',
-  '082_location_stock_enhancements.sql'
+  '082_location_stock_enhancements.sql',
+  '083_stock_movements_variant_support.sql',
+  '084_till_movements.sql',
+  '085_daily_cash_closing.sql'
 ];
 
 async function ensureMigrationsTable() {

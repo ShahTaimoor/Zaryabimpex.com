@@ -6,6 +6,8 @@ const productVariantRepository = require('../repositories/ProductVariantReposito
 const AccountingService = require('./accountingService');
 const locationStockService = require('./locationStockService');
 const settingsService = require('./settingsService');
+const StockMovementService = require('./stockMovementService');
+const { resolveStockEntity, getEntityCurrentStock } = require('../utils/stockEntityResolver');
 const { isWarehouseInventoryEnabled } = require('../utils/warehouseInventory');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -24,20 +26,23 @@ function getCost(inv) {
   return c && typeof c === 'object' ? c : (typeof c === 'string' ? JSON.parse(c || '{}') : {});
 }
 
-// Ensure an inventory record exists for the product (create from product stock if missing)
+// Ensure an inventory record exists for the product or variant
 const ensureInventoryRecord = async (productId, client = null) => {
   let inv = await inventoryRepository.findOne({ product: productId, productId }, client);
   if (inv) return inv;
-  const product = await productRepository.findById(productId, true);
-  if (!product) throw new Error('Product not found');
+
+  const entity = await resolveStockEntity(productId);
+  if (!entity) throw new Error('Product not found');
+
+  const startingStock = await getEntityCurrentStock(entity.id, entity.productModel);
   inv = await inventoryRepository.create({
-    productId,
-    product: productId,
-    productModel: 'Product',
-    currentStock: product.stock_quantity ?? product.inventory?.currentStock ?? 0,
-    reorderPoint: product.min_stock_level ?? product.inventory?.reorderPoint ?? 10,
-    reorderQuantity: product.inventory?.reorderQuantity ?? 50,
-    status: 'active'
+    productId: entity.id,
+    product: entity.id,
+    productModel: entity.productModel,
+    currentStock: startingStock,
+    reorderPoint: 10,
+    reorderQuantity: 50,
+    status: 'active',
   }, client);
   return inv;
 };
@@ -183,6 +188,16 @@ async function updateStockLegacy(
     await productVariantRepository.updateById(productId, {
       inventory: { currentStock: newStock },
     }, client);
+  }
+
+  try {
+    await StockMovementService.logLegacyInventoryMovement(
+      { productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes },
+      { previousStock: current, currentStock: newStock },
+      { id: performedBy, email: 'System' }
+    );
+  } catch (movErr) {
+    console.error('Failed to log legacy stock movement:', movErr?.message || movErr);
   }
 
   return updated || inv;

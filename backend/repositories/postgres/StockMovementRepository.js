@@ -7,6 +7,7 @@ function rowToMovement(row) {
     id: row.id,
     _id: row.id,
     productId: row.product_id,
+    productModel: row.product_model || 'Product',
     productName: row.product_name,
     productSku: row.product_sku,
     movementType: row.movement_type,
@@ -273,16 +274,17 @@ class StockMovementRepository {
     const q = client ? client.query.bind(client) : query;
     const result = await q(
       `INSERT INTO stock_movements (
-        product_id, product_name, product_sku, movement_type, quantity, unit_cost, total_value,
+        product_id, product_model, product_name, product_sku, movement_type, quantity, unit_cost, total_value,
         previous_stock, new_stock, reference_type, reference_id, reference_number, location,
         warehouse_id, shop_id, from_location, to_location, user_id, user_name, reason, notes,
         batch_number, expiry_date, supplier_id, customer_id, status, is_reversal,
         original_movement_id, reversed_by, reversed_at, system_generated, ip_address, user_agent,
         created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *`,
       [
         data.product || data.productId,
+        data.productModel || data.product_model || 'Product',
         data.productName || data.product_name,
         data.productSku || data.product_sku || null,
         data.movementType || data.movement_type,
@@ -439,6 +441,54 @@ class StockMovementRepository {
       totalMovements: parseInt(r.totalMovements, 10) || 0,
       totalQuantity: parseFloat(r.totalQuantity) || 0,
       totalValue: parseFloat(r.totalValue) || 0
+    }));
+  }
+
+  /** Compare inventory.current_stock with latest movement new_stock per product. */
+  async getReconciliation(options = {}) {
+    const limit = Math.min(Number(options.limit) || 100, 500);
+    const onlyMismatches = options.onlyMismatches !== false;
+    const minDiff = Number(options.minDiff) || 0.001;
+
+    let sql = `
+      WITH latest_movement AS (
+        SELECT DISTINCT ON (product_id)
+          product_id,
+          product_name,
+          product_model,
+          new_stock,
+          created_at AS last_movement_at
+        FROM stock_movements
+        WHERE status = 'completed'
+        ORDER BY product_id, created_at DESC
+      )
+      SELECT
+        i.product_id AS "productId",
+        COALESCE(lm.product_name, 'Unknown') AS "productName",
+        COALESCE(lm.product_model, i.product_model, 'Product') AS "productModel",
+        COALESCE(i.current_stock, 0)::decimal AS "inventoryStock",
+        COALESCE(lm.new_stock, 0)::decimal AS "lastMovementStock",
+        (COALESCE(i.current_stock, 0) - COALESCE(lm.new_stock, 0))::decimal AS "difference",
+        lm.last_movement_at AS "lastMovementAt"
+      FROM inventory i
+      LEFT JOIN latest_movement lm ON lm.product_id = i.product_id
+      WHERE i.deleted_at IS NULL
+    `;
+
+    if (onlyMismatches) {
+      sql += ` AND ABS(COALESCE(i.current_stock, 0) - COALESCE(lm.new_stock, 0)) > $1`;
+    }
+
+    sql += ` ORDER BY ABS(COALESCE(i.current_stock, 0) - COALESCE(lm.new_stock, 0)) DESC LIMIT $${onlyMismatches ? 2 : 1}`;
+
+    const params = onlyMismatches ? [minDiff, limit] : [limit];
+    const result = await query(sql, params);
+    return result.rows.map((row) => ({
+      ...row,
+      inventoryStock: parseFloat(row.inventoryStock) || 0,
+      lastMovementStock: parseFloat(row.lastMovementStock) || 0,
+      difference: parseFloat(row.difference) || 0,
+      hasMismatch: Math.abs(parseFloat(row.difference) || 0) > minDiff,
     }));
   }
 }

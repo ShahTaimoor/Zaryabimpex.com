@@ -85,7 +85,8 @@ export const PAGE_PERMISSION_GROUPS = {
         { key: 'cash-payments', name: 'Cash Payments', view: 'view_cash_payments', create: 'create_cash_payments', edit: 'edit_cash_payments', delete: 'delete_cash_payments' },
         { key: 'bank-receipts', name: 'Bank Receipts', view: 'view_bank_receipts', create: 'create_bank_receipts', edit: 'edit_bank_receipts', delete: 'delete_bank_receipts' },
         { key: 'bank-payments', name: 'Bank Payments', view: 'view_bank_payments', create: 'create_bank_payments', edit: 'edit_bank_payments', delete: 'delete_bank_payments' },
-        { key: 'expenses', name: 'Expenses', view: 'view_expenses', create: 'create_expenses', edit: 'edit_expenses', delete: 'delete_expenses' }
+        { key: 'expenses', name: 'Expenses', view: 'view_expenses', create: 'create_expenses', edit: 'edit_expenses', delete: 'delete_expenses' },
+        { key: 'till', name: 'Till Management (Admin)', view: 'view_till', create: 'open_till', edit: 'close_till' }
       ]
     },
     accounting: {
@@ -319,8 +320,6 @@ export const DEFAULT_ROLE_PERMISSIONS = {
       // Attendance
       clock_attendance: true, clock_in: true, clock_out: true, manage_attendance_breaks: true,
       view_own_attendance: true, view_team_attendance: true,
-      // Till Management
-      open_till: true, close_till: true, view_till: true,
       // Investor Management
       view_investors: true, manage_investors: true, create_investors: true, edit_investors: true, payout_investors: true,
       view_drop_shipping: true, create_drop_shipping: true, edit_drop_shipping: true,

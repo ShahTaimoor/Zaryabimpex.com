@@ -47,6 +47,7 @@ import {
   PaymentPartyTypeRadio,
   PaymentFormField,
   PaymentAmountField,
+  PaymentDateField,
   PaymentBalancePanel,
   PaymentFormActions,
   paymentFormInputClass,
@@ -563,16 +564,11 @@ const CashPayments = () => {
                 description="Date, description, and internal notes"
                 icon={FileText}
               >
-              <PaymentFormField label="Payment Date">
-                <InputWithIcon
-                  icon={Calendar}
-                  type="date"
-                  autoComplete="off"
-                  value={formData.date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  className={paymentFormInputClass}
-                />
-              </PaymentFormField>
+              <PaymentDateField
+                label="Payment Date"
+                value={formData.date}
+                onChange={(date) => setFormData(prev => ({ ...prev, date }))}
+              />
 
               <PaymentFormField label="Description">
                 <Input
@@ -835,16 +831,11 @@ const CashPayments = () => {
         }
       >
         <div className="space-y-4">
-          <FormField label="Date" htmlFor="edit-date">
-            <Input
-              id="edit-date"
-              type="date"
-              autoComplete="off"
-              value={formData.date}
-              onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-              className="w-full"
-            />
-          </FormField>
+          <PaymentDateField
+            label="Date"
+            value={formData.date}
+            onChange={(date) => setFormData(prev => ({ ...prev, date }))}
+          />
           <FormField label="Amount" htmlFor="edit-amount" required>
             <Input
               id="edit-amount"

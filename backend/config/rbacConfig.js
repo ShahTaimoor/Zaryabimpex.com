@@ -151,7 +151,7 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.SETTINGS_ADVANCED_DISPLAY,
     PERMISSIONS.SETTINGS_ADVANCED_FEATURES,
     PERMISSIONS.SETTINGS_ADVANCED_SECURITY,
-    'view_help'
+    'view_help',
   ],
   
   [ROLES.CASHIER]: [
@@ -168,6 +168,10 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.VIEW_PRODUCTS,
     PERMISSIONS.VIEW_INVENTORY,
     'view_inventory_levels',
+    'view_cash_receipts',
+    'create_cash_receipts',
+    'view_cash_payments',
+    'create_cash_payments',
     'view_help'
   ],
   

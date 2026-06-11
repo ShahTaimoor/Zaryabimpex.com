@@ -64,6 +64,11 @@ const withRouteAccess = (items) => {
         } else {
           delete next.permissionAny;
         }
+        if (Object.prototype.hasOwnProperty.call(access, 'role')) {
+          next.role = access.role;
+        } else {
+          delete next.role;
+        }
       }
     }
 
@@ -113,6 +118,7 @@ export const navigation = withRouteAccess([
       { name: 'Bank Receipts', href: '/bank-receipts', icon: Building, permission: 'view_bank_receipts' },
       { name: 'Bank Payments', href: '/bank-payments', icon: ArrowUpDown, permission: 'view_bank_payments' },
       { name: 'Record Expense', href: '/expenses', icon: Wallet, permission: 'view_expenses' },
+      { name: 'Daily Cash Closing', href: '/daily-cash', icon: Wallet, requiresFeature: 'dailyCashClosing', sidebarDefaultHidden: true },
     ],
   },
 
@@ -198,6 +204,7 @@ const DEFAULT_SIDEBAR_HIDDEN = {
   'Backdate Report': false,
   'Current Purchase Market Prices': false,
   'Stock Transfers': false,
+  'Daily Cash Closing': false,
 };
 
 /** Migrate legacy parent-only sidebar keys to per-child keys (see Settings → Sidebar). */
@@ -239,6 +246,9 @@ export function loadSidebarConfig() {
     if (migrated['Stock Transfers'] === undefined) {
       migrated['Stock Transfers'] = false;
     }
+    if (migrated['Daily Cash Closing'] === undefined) {
+      migrated['Daily Cash Closing'] = false;
+    }
     delete migrated['Current Market Prices'];
     if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
       localStorage.setItem('sidebarConfig', JSON.stringify(migrated));
@@ -249,8 +259,13 @@ export function loadSidebarConfig() {
   }
 }
 
-export function isSidebarNavItemVisible(item, sidebarConfig) {
+export function isSidebarNavItemVisible(item, sidebarConfig, orderSettings = null) {
   if (!item?.name) return false;
+  if (item.requiresFeature === 'dailyCashClosing') {
+    if (orderSettings?.dailyCashClosingEnabled !== true) {
+      return false;
+    }
+  }
   if (item.sidebarDefaultHidden && sidebarConfig?.[item.name] === undefined) {
     return false;
   }

@@ -46,6 +46,7 @@ import {
   PaymentPartyTypeRadio,
   PaymentFormField,
   PaymentAmountField,
+  PaymentDateField,
   PaymentBalancePanel,
   PaymentBankSelect,
   PaymentFormActions,
@@ -593,16 +594,11 @@ const BankPayments = () => {
               description="Bank account, reference, and notes"
               icon={Landmark}
             >
-            <PaymentFormField label="Payment Date">
-                <InputWithIcon
-                  icon={Calendar}
-                  type="date"
-                  autoComplete="off"
-                  value={formData.date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  className={paymentFormInputClass}
-                />
-            </PaymentFormField>
+            <PaymentDateField
+              label="Payment Date"
+              value={formData.date}
+              onChange={(date) => setFormData(prev => ({ ...prev, date }))}
+            />
 
             <PaymentBankSelect
               value={formData.bank}
@@ -961,15 +957,11 @@ const BankPayments = () => {
               />
             )}
 
-            <FormField label="Date">
-              <Input
-                type="date"
-                autoComplete="off"
-                value={formData.date}
-                onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                className="h-10"
-              />
-            </FormField>
+            <PaymentDateField
+              label="Date"
+              value={formData.date}
+              onChange={(date) => setFormData(prev => ({ ...prev, date }))}
+            />
             <FormField label="Bank Account">
               <select
                 value={formData.bank}

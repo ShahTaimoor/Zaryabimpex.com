@@ -54,6 +54,20 @@ class SettingsRepository {
     const settings = await this.getSettings();
     if (!settings) throw new Error('Settings not found');
 
+    const mergedUpdates = { ...updates };
+    if (updates.orderSettings !== undefined) {
+      mergedUpdates.orderSettings = {
+        ...(settings.orderSettings || {}),
+        ...updates.orderSettings,
+      };
+    }
+    if (updates.printSettings !== undefined) {
+      mergedUpdates.printSettings = {
+        ...(settings.printSettings || {}),
+        ...updates.printSettings,
+      };
+    }
+
     const map = {
       companyName: 'company_name',
       contactNumber: 'contact_number',
@@ -76,9 +90,9 @@ class SettingsRepository {
     const params = [];
     let paramCount = 1;
     for (const [k, col] of Object.entries(map)) {
-      if (updates[k] !== undefined) {
+      if (mergedUpdates[k] !== undefined) {
         setClauses.push(`${col} = $${paramCount++}`);
-        params.push(typeof updates[k] === 'object' ? JSON.stringify(updates[k]) : updates[k]);
+        params.push(typeof mergedUpdates[k] === 'object' ? JSON.stringify(mergedUpdates[k]) : mergedUpdates[k]);
       }
     }
     if (setClauses.length === 0) return settings;

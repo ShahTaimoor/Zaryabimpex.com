@@ -37,6 +37,7 @@ export const Settings2 = () => {
         'Import Purchase',
         'Current Purchase Market Prices',
         'Stock Transfers',
+        'Daily Cash Closing',
       ]),
     []
   );

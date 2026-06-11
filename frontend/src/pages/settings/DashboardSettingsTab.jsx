@@ -11,6 +11,8 @@ import {
   isReceiptsCombined,
   isPaymentsCombined,
 } from '../../config/dashboardConfig';
+import { useGetCompanySettingsQuery } from '../../store/services/settingsApi';
+import { isDailyCashClosingEnabled } from '../../utils/dailyCashSettings';
 
 export const DashboardSettingsTab = memo(function DashboardSettingsTab({
   sidebarConfig,
@@ -19,6 +21,10 @@ export const DashboardSettingsTab = memo(function DashboardSettingsTab({
   dashboardWidgetsConfig,
   setDashboardWidgetsConfig,
 }) {
+  const { data: settingsResponse } = useGetCompanySettingsQuery();
+  const settings = settingsResponse?.data || settingsResponse;
+  const dailyCashEnabled = isDailyCashClosingEnabled(settings?.orderSettings);
+
   const updateSidebarDashboard = (checked) => {
     const newConfig = { ...sidebarConfig, Dashboard: !!checked };
     setSidebarConfig(newConfig);
@@ -148,7 +154,9 @@ export const DashboardSettingsTab = memo(function DashboardSettingsTab({
               <div className="h-[1px] flex-1 min-w-[4rem] bg-gradient-to-r from-gray-100 to-transparent" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {section.widgets.map((widget) => (
+              {section.widgets
+                .filter((widget) => widget.key !== 'dailyCash' || dailyCashEnabled)
+                .map((widget) => (
                 <div
                   key={widget.key}
                   className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200"

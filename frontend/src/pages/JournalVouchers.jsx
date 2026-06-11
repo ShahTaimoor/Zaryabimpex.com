@@ -819,20 +819,13 @@ export const JournalVouchers = () => {
 
         <div className="p-5 sm:p-6 space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Voucher Date</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  type="date"
-                  autoComplete="off"
-                  value={formState.voucherDate}
-                  onChange={(e) => setFormState(prev => ({ ...prev, voucherDate: e.target.value }))}
-                  className="pl-10 bg-slate-50 border-slate-200"
-                  required
-                />
-              </div>
-            </div>
+            <DateFilter mode="single"
+              label="Voucher Date"
+              value={formState.voucherDate}
+              onChange={(date) => setFormState(prev => ({ ...prev, voucherDate: date }))}
+              required
+              size="sm"
+            />
 
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Reference</label>

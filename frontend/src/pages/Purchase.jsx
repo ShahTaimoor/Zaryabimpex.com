@@ -1694,29 +1694,21 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                         containerClassName=""
                         inputClassName="w-full pr-20 h-10 text-sm"
                       />
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Expected Delivery</label>
-                        <Input
-                          type="date"
-                          autoComplete="off"
-                          value={expectedDelivery}
-                          onChange={(e) => setExpectedDelivery(e.target.value)}
-                          className="h-10 text-sm w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Bill Date <span className="text-gray-500">(Optional)</span>
-                        </label>
-                        <Input
-                          type="date"
-                          autoComplete="off"
-                          value={billDate}
-                          onChange={(e) => setBillDate(e.target.value)}
-                          className="h-10 text-sm w-full"
-                          max={getLocalDateString()}
-                        />
-                      </div>
+                      <DateFilter mode="single"
+                        label="Expected Delivery"
+                        value={expectedDelivery}
+                        onChange={setExpectedDelivery}
+                        size="sm"
+                        placeholder="Select date"
+                      />
+                      <DateFilter mode="single"
+                        label={<>Bill Date <span className="text-gray-500 font-normal">(Optional)</span></>}
+                        value={billDate}
+                        onChange={setBillDate}
+                        size="sm"
+                        max={getLocalDateString()}
+                        placeholder="Today"
+                      />
                       <OrderNotesField
                         value={notes}
                         onChange={setNotes}
@@ -1744,27 +1736,23 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                           }
                         }}
                       />
-                      <div className="flex flex-col w-44">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Expected Delivery</label>
-                        <Input
-                          type="date"
-                          autoComplete="off"
+                      <div className="w-44">
+                        <DateFilter mode="single"
+                          label="Expected Delivery"
                           value={expectedDelivery}
-                          onChange={(e) => setExpectedDelivery(e.target.value)}
-                          className="h-8 text-sm"
+                          onChange={setExpectedDelivery}
+                          size="sm"
+                          placeholder="Select date"
                         />
                       </div>
-                      <div className="flex flex-col w-44">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Bill Date <span className="text-gray-500">(Optional)</span>
-                        </label>
-                        <Input
-                          type="date"
-                          autoComplete="off"
+                      <div className="w-44">
+                        <DateFilter mode="single"
+                          label={<>Bill Date <span className="text-gray-500 font-normal">(Optional)</span></>}
                           value={billDate}
-                          onChange={(e) => setBillDate(e.target.value)}
-                          className="h-8 text-sm"
+                          onChange={setBillDate}
+                          size="sm"
                           max={getLocalDateString()}
+                          placeholder="Today"
                         />
                       </div>
                       <OrderNotesField

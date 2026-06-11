@@ -777,13 +777,38 @@ class SalesService {
         }, { client });
       }
 
+      const pmTill = String(payment?.method || 'cash').toLowerCase();
+      if (pmTill === 'cash') {
+        const { isDailyCashClosingEnabled } = require('../utils/dailyCashSettings');
+        if (await isDailyCashClosingEnabled()) {
+          const dailyCashService = require('./dailyCashService');
+          const cashTillAmount = amountPaidAtCreate > 0 ? amountPaidAtCreate : orderTotal;
+          const userId = user?.id || user?._id;
+          const { formatDatePakistan } = require('../utils/dateFilter');
+          const businessDate = billDate
+            ? (typeof billDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(billDate)
+              ? billDate
+              : formatDatePakistan(parseLocalDate(billDate) || new Date(billDate)))
+            : undefined;
+          if (userId && cashTillAmount > 0) {
+            await dailyCashService.recordCashSale(userId, {
+              saleId: saleId,
+              orderNumber: saleRefNumber,
+              amount: cashTillAmount,
+              businessDate,
+            }, client);
+          }
+        }
+      }
+
       // Non-critical updates remain post-commit.
       addPostCommit(async () => {
         if (nextInvoiceSequence !== null) {
           try {
+            const latestSettings = await settingsService.getCompanySettings();
             await settingsService.updateCompanySettings({
               orderSettings: {
-                ...orderSettings,
+                ...(latestSettings?.orderSettings || {}),
                 invoiceSequenceNext: nextInvoiceSequence
               }
             });

@@ -1,13 +1,43 @@
 const StockMovementRepository = require('../repositories/StockMovementRepository');
-const ProductRepository = require('../repositories/ProductRepository');
 const InventoryRepository = require('../repositories/InventoryRepository');
+const { resolveStockEntity, getEntityCurrentStock } = require('../utils/stockEntityResolver');
+
+const STOCK_IN_TYPES = new Set([
+  'purchase', 'return_in', 'adjustment_in', 'transfer_in', 'production', 'initial_stock',
+]);
+const STOCK_OUT_TYPES = new Set([
+  'sale', 'return_out', 'adjustment_out', 'transfer_out', 'damage', 'expiry', 'theft', 'consumption',
+]);
+
+function mapLegacyFlowToMovement({ type, referenceModel, reference }) {
+  const ref = String(reference || '');
+  if (type === 'in') {
+    if (referenceModel === 'PurchaseInvoice' || referenceModel === 'PurchaseOrder' || ref.includes('Purchase')) {
+      return { movementType: 'purchase', referenceType: 'purchase_order' };
+    }
+    return { movementType: 'return_in', referenceType: 'return' };
+  }
+  if (type === 'return') {
+    return { movementType: 'return_in', referenceType: 'return' };
+  }
+  if (type === 'out') {
+    if (referenceModel === 'Sale' || referenceModel === 'SalesOrder' || ref.includes('Sales') || ref === 'Sales Invoice') {
+      return { movementType: 'sale', referenceType: 'sales_order' };
+    }
+    return { movementType: 'adjustment_out', referenceType: 'adjustment' };
+  }
+  if (type === 'adjustment') {
+    return { movementType: 'adjustment_in', referenceType: 'adjustment' };
+  }
+  if (type === 'damage' || type === 'theft') {
+    return { movementType: type, referenceType: 'write_off' };
+  }
+  return { movementType: 'adjustment_out', referenceType: 'adjustment' };
+}
 
 class StockMovementService {
   /**
-   * Create a stock movement record
-   * @param {Object} movementData - Movement data
-   * @param {Object} user - User performing the action
-   * @returns {Promise<StockMovement>}
+   * Create a stock movement record (supports base products and variants).
    */
   static async createMovement(movementData, user) {
     try {
@@ -30,30 +60,33 @@ class StockMovementService {
         toLocation,
         previousStock: providedPreviousStock,
         newStock: providedNewStock,
-        skipInventoryUpdate = false
+        skipInventoryUpdate = false,
+        productModel: providedProductModel,
+        productName: providedProductName,
+        productSku: providedProductSku,
       } = movementData;
 
-      // Get product details
-      const product = await ProductRepository.findById(productId);
-      if (!product) {
-        // For manual items, we don't track stock movements
-        if (typeof productId === 'string' && productId.startsWith('manual_')) {
-          return null;
-        }
-        throw new Error('Product not found');
+      if (typeof productId === 'string' && productId.startsWith('manual_')) {
+        return null;
       }
 
-      const inventoryRow = await InventoryRepository.findByProduct(productId);
-      const currentStock = inventoryRow
-        ? Number(inventoryRow.current_stock ?? inventoryRow.currentStock ?? 0)
-        : Number(product.stock_quantity ?? product.stockQuantity ?? 0);
-      const resolvedUnitCost = typeof unitCost === 'number' && !Number.isNaN(unitCost)
-        ? unitCost
-        : (Number(product.cost_price ?? product.costPrice ?? 0) || (product.pricing?.cost ?? 0));
+      const entity = await resolveStockEntity(productId);
+      if (!entity) {
+        throw new Error('Product or variant not found');
+      }
+
+      const productModel = providedProductModel || entity.productModel;
+      const currentStock =
+        typeof providedPreviousStock === 'number'
+          ? providedPreviousStock
+          : await getEntityCurrentStock(entity.id, productModel);
+
+      const resolvedUnitCost =
+        typeof unitCost === 'number' && !Number.isNaN(unitCost) ? unitCost : entity.unitCost;
       const totalValue = quantity * resolvedUnitCost;
 
-      const isStockIn = ['purchase', 'return_in', 'adjustment_in', 'transfer_in', 'production', 'initial_stock'].includes(movementType);
-      const isStockOut = ['sale', 'return_out', 'adjustment_out', 'transfer_out', 'damage', 'expiry', 'theft', 'consumption'].includes(movementType);
+      const isStockIn = STOCK_IN_TYPES.has(movementType);
+      const isStockOut = STOCK_OUT_TYPES.has(movementType);
 
       let previousStock = typeof providedPreviousStock === 'number' ? providedPreviousStock : undefined;
       let newStock = typeof providedNewStock === 'number' ? providedNewStock : undefined;
@@ -88,12 +121,17 @@ class StockMovementService {
       }
 
       const userId = user?.id ?? user?._id;
-      const userName = (user?.firstName && user?.lastName) ? `${user.firstName} ${user.lastName}` : (user?.email || 'System');
+      const userName =
+        user?.firstName && user?.lastName
+          ? `${user.firstName} ${user.lastName}`
+          : user?.email || 'System';
+
       const stockMovementRecord = {
-        productId,
-        product: productId,
-        productName: product.name || product.productName,
-        productSku: product.sku || null,
+        productId: entity.id,
+        product: entity.id,
+        productModel,
+        productName: providedProductName || entity.name,
+        productSku: providedProductSku ?? entity.sku,
         movementType,
         quantity,
         unitCost: resolvedUnitCost,
@@ -118,14 +156,14 @@ class StockMovementService {
         supplier,
         customer,
         status: 'completed',
-        systemGenerated: true
+        systemGenerated: true,
       };
 
       const movement = await StockMovementRepository.create(stockMovementRecord);
 
       if (!skipInventoryUpdate) {
         try {
-          await InventoryRepository.updateByProductId(productId, { currentStock: newStock });
+          await InventoryRepository.updateByProductId(entity.id, { currentStock: newStock });
         } catch (invErr) {
           console.error('Error updating Inventory record for stock movement:', invErr);
         }
@@ -138,27 +176,82 @@ class StockMovementService {
     }
   }
 
-  /**
-   * Track purchase order stock movement
-   * @param {Object} purchaseOrder - Purchase order data
-   * @param {Object} user - User performing the action
-   */
+  /** Log movement after legacy inventory update (warehouse feature off). */
+  static async logLegacyInventoryMovement(flowParams, stockResult, user) {
+    const { productId, type, quantity, cost, reason, reference, referenceId, referenceModel, notes } =
+      flowParams;
+    if (!productId || typeof productId === 'string' && productId.startsWith('manual_')) return null;
+
+    const entity = await resolveStockEntity(productId);
+    if (!entity) return null;
+
+    const { movementType, referenceType } = mapLegacyFlowToMovement({
+      type,
+      referenceModel,
+      reference,
+    });
+
+    const previousStock = Number(
+      stockResult?.previousQuantity ??
+      stockResult?.previousStock ??
+      (Number(stockResult?.current_stock ?? stockResult?.currentStock ?? 0) -
+        (['in', 'return'].includes(type) ? quantity : -quantity))
+    );
+    const newStock = Number(
+      stockResult?.newQuantity ??
+      stockResult?.newStock ??
+      stockResult?.current_stock ??
+      stockResult?.currentStock ??
+      0
+    );
+
+    return StockMovementRepository.create({
+      productId: entity.id,
+      product: entity.id,
+      productModel: entity.productModel,
+      productName: entity.name,
+      productSku: entity.sku,
+      movementType,
+      quantity,
+      unitCost: cost != null ? Number(cost) : entity.unitCost,
+      totalValue: quantity * (cost != null ? Number(cost) : entity.unitCost),
+      previousStock: Number.isFinite(previousStock) ? previousStock : Math.max(newStock - quantity, 0),
+      newStock,
+      referenceType,
+      referenceId: referenceId || entity.id,
+      referenceNumber: reference || null,
+      location: 'main_warehouse',
+      userId: user?.id ?? user?._id,
+      userName:
+        user?.firstName && user?.lastName
+          ? `${user.firstName} ${user.lastName}`
+          : user?.email || 'System',
+      reason: reason || `Inventory ${type}`,
+      notes,
+      status: 'completed',
+      systemGenerated: true,
+    });
+  }
+
   static async trackPurchaseOrder(purchaseOrder, user) {
     try {
       for (const item of purchaseOrder.items) {
-        await this.createMovement({
-          productId: item.product,
-          movementType: 'purchase',
-          quantity: item.quantity,
-          unitCost: item.unitCost,
-          referenceType: 'purchase_order',
-          referenceId: purchaseOrder._id,
-          referenceNumber: purchaseOrder.poNumber,
-          location: purchaseOrder.deliveryLocation || 'main_warehouse',
-          reason: 'Purchase order received',
-          notes: `PO: ${purchaseOrder.poNumber}`,
-          supplier: purchaseOrder.supplier
-        }, user);
+        await this.createMovement(
+          {
+            productId: item.product,
+            movementType: 'purchase',
+            quantity: item.quantity,
+            unitCost: item.unitCost,
+            referenceType: 'purchase_order',
+            referenceId: purchaseOrder._id,
+            referenceNumber: purchaseOrder.poNumber,
+            location: purchaseOrder.deliveryLocation || 'main_warehouse',
+            reason: 'Purchase order received',
+            notes: `PO: ${purchaseOrder.poNumber}`,
+            supplier: purchaseOrder.supplier,
+          },
+          user
+        );
       }
     } catch (error) {
       console.error('Error tracking purchase order:', error);
@@ -166,37 +259,36 @@ class StockMovementService {
     }
   }
 
-  /**
-   * Track sales order stock movement
-   * @param {Object} salesOrder - Sales order or Sales invoice data
-   * @param {Object} user - User performing the action
-   */
   static async trackSalesOrder(salesOrder, user) {
     try {
-      // Handle both Sales Orders (soNumber) and Sales Invoices (orderNumber)
       const referenceNumber = salesOrder.soNumber || salesOrder.orderNumber || 'N/A';
       const location = salesOrder.shippingLocation || salesOrder.location || 'main_warehouse';
-      
+
       for (const item of salesOrder.items) {
-        // Skip stock tracking for manual items
-        if (item.isManual === true || (typeof item.product === 'string' && item.product.startsWith('manual_'))) {
+        if (
+          item.isManual === true ||
+          (typeof item.product === 'string' && item.product.startsWith('manual_'))
+        ) {
           continue;
         }
 
-        await this.createMovement({
-          productId: item.product,
-          movementType: 'sale',
-          quantity: item.quantity,
-          unitCost: item.unitCost || 0,
-          referenceType: 'sales_order',
-          referenceId: salesOrder._id,
-          referenceNumber: referenceNumber,
-          location: location,
-          reason: 'Sales invoice/order fulfilled',
-          notes: salesOrder.soNumber ? `SO: ${referenceNumber}` : `Invoice: ${referenceNumber}`,
-          customer: salesOrder.customer,
-          skipInventoryUpdate: true
-        }, user);
+        await this.createMovement(
+          {
+            productId: item.product,
+            movementType: 'sale',
+            quantity: item.quantity,
+            unitCost: item.unitCost || 0,
+            referenceType: 'sales_order',
+            referenceId: salesOrder._id || salesOrder.id,
+            referenceNumber,
+            location,
+            reason: 'Sales invoice/order fulfilled',
+            notes: salesOrder.soNumber ? `SO: ${referenceNumber}` : `Invoice: ${referenceNumber}`,
+            customer: salesOrder.customer,
+            skipInventoryUpdate: true,
+          },
+          user
+        );
       }
     } catch (error) {
       console.error('Error tracking sales order:', error);
@@ -204,30 +296,28 @@ class StockMovementService {
     }
   }
 
-  /**
-   * Track return stock movement
-   * @param {Object} returnData - Return data
-   * @param {Object} user - User performing the action
-   */
   static async trackReturn(returnData, user) {
     try {
       const movementType = returnData.type === 'customer_return' ? 'return_in' : 'return_out';
-      
+
       for (const item of returnData.items) {
-        await this.createMovement({
-          productId: item.product,
-          movementType,
-          quantity: item.quantity,
-          unitCost: item.unitCost,
-          referenceType: 'return',
-          referenceId: returnData._id,
-          referenceNumber: returnData.returnNumber,
-          location: returnData.location || 'main_warehouse',
-          reason: returnData.reason,
-          notes: `Return: ${returnData.returnNumber}`,
-          customer: returnData.customer,
-          supplier: returnData.supplier
-        }, user);
+        await this.createMovement(
+          {
+            productId: item.product,
+            movementType,
+            quantity: item.quantity,
+            unitCost: item.unitCost,
+            referenceType: 'return',
+            referenceId: returnData._id,
+            referenceNumber: returnData.returnNumber,
+            location: returnData.location || 'main_warehouse',
+            reason: returnData.reason,
+            notes: `Return: ${returnData.returnNumber}`,
+            customer: returnData.customer,
+            supplier: returnData.supplier,
+          },
+          user
+        );
       }
     } catch (error) {
       console.error('Error tracking return:', error);
@@ -235,165 +325,109 @@ class StockMovementService {
     }
   }
 
-  /**
-   * Track stock adjustment
-   * @param {Object} adjustmentData - Adjustment data
-   * @param {Object} user - User performing the action
-   */
   static async trackAdjustment(adjustmentData, user) {
     try {
-      return await this.createMovement({
-        productId: adjustmentData.productId,
-        movementType: adjustmentData.movementType,
-        quantity: adjustmentData.quantity,
-        unitCost: adjustmentData.unitCost,
-        referenceType: 'adjustment',
-        referenceId: adjustmentData.productId,
-        referenceNumber: adjustmentData.referenceNumber,
-        location: adjustmentData.location,
-        reason: adjustmentData.reason,
-        notes: adjustmentData.notes
-      }, user);
+      return await this.createMovement(
+        {
+          productId: adjustmentData.productId,
+          movementType: adjustmentData.movementType,
+          quantity: adjustmentData.quantity,
+          unitCost: adjustmentData.unitCost,
+          referenceType: 'adjustment',
+          referenceId: adjustmentData.productId,
+          referenceNumber: adjustmentData.referenceNumber,
+          location: adjustmentData.location,
+          reason: adjustmentData.reason,
+          notes: adjustmentData.notes,
+        },
+        user
+      );
     } catch (error) {
       console.error('Error tracking adjustment:', error);
       throw error;
     }
   }
 
-  /**
-   * Track stock transfer
-   * @param {Object} transferData - Transfer data
-   * @param {Object} user - User performing the action
-   */
   static async trackTransfer(transferData, user) {
     try {
-      // Create outbound movement
-      await this.createMovement({
-        productId: transferData.productId,
-        movementType: 'transfer_out',
-        quantity: transferData.quantity,
-        unitCost: transferData.unitCost,
-        referenceType: 'transfer',
-        referenceId: transferData._id,
-        referenceNumber: transferData.transferNumber,
-        location: transferData.fromLocation,
-        fromLocation: transferData.fromLocation,
-        toLocation: transferData.toLocation,
-        reason: 'Stock transfer out',
-        notes: `Transfer: ${transferData.transferNumber}`
-      }, user);
+      await this.createMovement(
+        {
+          productId: transferData.productId,
+          movementType: 'transfer_out',
+          quantity: transferData.quantity,
+          unitCost: transferData.unitCost,
+          referenceType: 'transfer',
+          referenceId: transferData._id,
+          referenceNumber: transferData.transferNumber,
+          location: transferData.fromLocation,
+          fromLocation: transferData.fromLocation,
+          toLocation: transferData.toLocation,
+          reason: 'Stock transfer out',
+          notes: `Transfer: ${transferData.transferNumber}`,
+        },
+        user
+      );
 
-      // Create inbound movement
-      await this.createMovement({
-        productId: transferData.productId,
-        movementType: 'transfer_in',
-        quantity: transferData.quantity,
-        unitCost: transferData.unitCost,
-        referenceType: 'transfer',
-        referenceId: transferData._id,
-        referenceNumber: transferData.transferNumber,
-        location: transferData.toLocation,
-        fromLocation: transferData.fromLocation,
-        toLocation: transferData.toLocation,
-        reason: 'Stock transfer in',
-        notes: `Transfer: ${transferData.transferNumber}`
-      }, user);
+      await this.createMovement(
+        {
+          productId: transferData.productId,
+          movementType: 'transfer_in',
+          quantity: transferData.quantity,
+          unitCost: transferData.unitCost,
+          referenceType: 'transfer',
+          referenceId: transferData._id,
+          referenceNumber: transferData.transferNumber,
+          location: transferData.toLocation,
+          fromLocation: transferData.fromLocation,
+          toLocation: transferData.toLocation,
+          reason: 'Stock transfer in',
+          notes: `Transfer: ${transferData.transferNumber}`,
+        },
+        user
+      );
     } catch (error) {
       console.error('Error tracking transfer:', error);
       throw error;
     }
   }
 
-  /**
-   * Track damage/write-off
-   * @param {Object} writeOffData - Write-off data
-   * @param {Object} user - User performing the action
-   */
   static async trackWriteOff(writeOffData, user) {
     try {
-      return await this.createMovement({
-        productId: writeOffData.productId,
-        movementType: writeOffData.writeOffType, // 'damage', 'expiry', 'theft'
-        quantity: writeOffData.quantity,
-        unitCost: writeOffData.unitCost,
-        referenceType: 'write_off',
-        referenceId: writeOffData._id,
-        referenceNumber: writeOffData.referenceNumber,
-        location: writeOffData.location,
-        reason: writeOffData.reason,
-        notes: writeOffData.notes
-      }, user);
+      return await this.createMovement(
+        {
+          productId: writeOffData.productId,
+          movementType: writeOffData.writeOffType,
+          quantity: writeOffData.quantity,
+          unitCost: writeOffData.unitCost,
+          referenceType: 'write_off',
+          referenceId: writeOffData._id,
+          referenceNumber: writeOffData.referenceNumber,
+          location: writeOffData.location,
+          reason: writeOffData.reason,
+          notes: writeOffData.notes,
+        },
+        user
+      );
     } catch (error) {
       console.error('Error tracking write-off:', error);
       throw error;
     }
   }
 
-  /**
-   * Get stock movement summary for a product
-   * @param {String} productId - Product ID
-   * @param {Object} options - Query options
-   * @returns {Promise<Object>}
-   */
+  static async getProductMovements(productId, options = {}) {
+    return StockMovementRepository.getProductMovements(productId, options);
+  }
+
   static async getProductSummary(productId, options = {}) {
-    try {
-      const summary = await StockMovement.getStockSummary(productId, options.date);
-      return summary[0] || {
+    const summary = await StockMovementRepository.getStockSummary(productId, options.date);
+    return (
+      summary[0] || {
         totalIn: 0,
         totalOut: 0,
         totalValueIn: 0,
-        totalValueOut: 0
-      };
-    } catch (error) {
-      console.error('Error getting product summary:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get stock movements for a product
-   * @param {String} productId - Product ID
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>}
-   */
-  static async getProductMovements(productId, options = {}) {
-    try {
-      return await StockMovement.getProductMovements(productId, options);
-    } catch (error) {
-      console.error('Error getting product movements:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Reverse a stock movement
-   * @param {String} movementId - Movement ID
-   * @param {Object} user - User performing the reversal
-   * @param {String} reason - Reason for reversal
-   * @returns {Promise<StockMovement>}
-   */
-  static async reverseMovement(movementId, user, reason) {
-    try {
-      const movement = await StockMovement.findById(movementId);
-      if (!movement) {
-        throw new Error('Stock movement not found');
+        totalValueOut: 0,
       }
-
-      const reversedMovement = await movement.reverse(user._id, reason);
-      
-      // Update product stock
-      const product = await ProductRepository.findById(movement.product);
-      if (product) {
-        await ProductRepository.updateById(product._id, {
-          'inventory.currentStock': reversedMovement.newStock
-        });
-      }
-
-      return reversedMovement;
-    } catch (error) {
-      console.error('Error reversing movement:', error);
-      throw error;
-    }
+    );
   }
 }
 

@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Banknote
 } from 'lucide-react';
+import DateFilter from './DateFilter';
 import {
   useGetUpcomingExpensesQuery,
   useGetRecurringExpensesQuery,
@@ -369,13 +370,13 @@ const RecurringExpensesPanel = ({ expenseAccounts = [], onPaymentRecorded }) => 
                 </select>
               </div>
               <div>
-                <label className="form-label">Start From</label>
-                <Input
-                  type="date"
+                <DateFilter mode="single"
+                  label="Start From"
                   value={formData.startFromDate}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, startFromDate: e.target.value }))
+                  onChange={(date) =>
+                    setFormData((prev) => ({ ...prev, startFromDate: date }))
                   }
+                  size="sm"
                 />
               </div>
               {formData.defaultPaymentType === 'bank' && (

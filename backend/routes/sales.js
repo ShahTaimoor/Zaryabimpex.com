@@ -885,6 +885,24 @@ router.put('/:id', [
             transactionDate: newSaleDate || new Date(),
             createdBy: req.user?.id || req.user?._id
           });
+          if (pmAdj === 'cash') {
+            const { isDailyCashClosingEnabled } = require('../utils/dailyCashSettings');
+            if (await isDailyCashClosingEnabled()) {
+              const dailyCashService = require('../services/dailyCashService');
+              const { formatDatePakistan } = require('../utils/dateFilter');
+              const delta = newAmountPaid - oldAmountPaid;
+              const businessDate = newSaleDate
+                ? formatDatePakistan(newSaleDate instanceof Date ? newSaleDate : new Date(newSaleDate))
+                : undefined;
+              await dailyCashService.recordSalePaymentDelta(req.user?.id || req.user?._id, {
+                saleId: order.id || order._id,
+                orderNumber: order.order_number || order.orderNumber,
+                delta,
+                isIncrease: delta > 0,
+                businessDate,
+              });
+            }
+          }
         } catch (ledgerErr) {
           console.error('Failed to post sale payment adjustment to ledger:', ledgerErr);
         }

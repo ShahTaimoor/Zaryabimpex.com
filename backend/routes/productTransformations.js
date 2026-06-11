@@ -235,6 +235,7 @@ router.post('/', [
     await stockMovementRepository.create({
       productId: baseProduct,
       product: baseProduct,
+      productModel: 'Product',
       productName: baseProductName,
       movementType: 'consumption',
       quantity,
@@ -246,6 +247,27 @@ router.post('/', [
       referenceId: transformation.id || transformation._id,
       referenceNumber: transformation.transformation_number || transformation.transformationNumber,
       notes: notes || `Transformed to ${targetVariantName}`,
+      userId,
+      userName
+    });
+
+    const variantUnitCost = unitCost + transformationCost;
+    await stockMovementRepository.create({
+      productId: targetVariant,
+      product: targetVariant,
+      productModel: 'ProductVariant',
+      productName: targetVariantName,
+      productSku: variantDoc.sku || null,
+      movementType: 'production',
+      quantity,
+      unitCost: variantUnitCost,
+      totalValue: quantity * variantUnitCost,
+      previousStock: variantStockBefore,
+      newStock: variantStockAfter,
+      referenceType: 'production',
+      referenceId: transformation.id || transformation._id,
+      referenceNumber: transformation.transformation_number || transformation.transformationNumber,
+      notes: notes || `Produced from ${baseProductName}`,
       userId,
       userName
     });

@@ -172,6 +172,18 @@ export const componentRegistry = {
     icon: 'Wallet',
     component: () => import('../pages/Expenses').then(m => m.default || m.Expenses)
   },
+  '/daily-cash': {
+    title: 'Daily Cash Closing',
+    icon: 'Wallet',
+    allowMultiple: false,
+    component: () => import('../pages/DailyCashClosing').then(m => m.default || m.DailyCashClosing)
+  },
+  '/till': {
+    title: 'Daily Cash Closing',
+    icon: 'Wallet',
+    allowMultiple: false,
+    component: () => import('../pages/DailyCashClosing').then(m => m.default || m.DailyCashClosing)
+  },
   '/bank-payments': {
     title: 'Bank Payments',
     icon: 'CreditCard',

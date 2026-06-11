@@ -253,6 +253,9 @@ router.post('/', [
       // Post to account ledger atomically (using same client)
       await AccountingService.recordCashReceipt(receipt, client);
 
+      const dailyCashService = require('../services/dailyCashService');
+      await dailyCashService.recordCashReceipt(req.user._id || req.user.id, receipt, client);
+
       return receipt;
     });
 
@@ -271,6 +274,9 @@ router.post('/', [
       data: responseData
     });
   } catch (error) {
+    if (error.code === 'DAY_ALREADY_CLOSED') {
+      return res.status(400).json({ success: false, message: error.message, code: error.code });
+    }
     console.error('Create cash receipt error:', error);
     res.status(500).json({ 
       success: false,
@@ -587,6 +593,8 @@ router.post('/batch', [
 
         try {
           await AccountingService.recordCashReceipt(cashReceipt);
+          const dailyCashService = require('../services/dailyCashService');
+          await dailyCashService.recordCashReceipt(uid, cashReceipt);
         } catch (error) {
           console.error(`Error creating accounting entries for cash receipt ${cashReceipt.id}:`, error);
         }

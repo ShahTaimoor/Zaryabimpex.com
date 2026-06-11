@@ -49,6 +49,7 @@ import {
   PaymentPartyTypeRadio,
   PaymentFormField,
   PaymentAmountField,
+  PaymentDateField,
   PaymentBalancePanel,
   PaymentBankSelect,
   PaymentFormActions,
@@ -481,15 +482,11 @@ const BankReceipts = () => {
                 description="Bank account, reference, and notes"
                 icon={Landmark}
               >
-              <PaymentFormField label="Receipt Date">
-                <InputWithIcon
-                  icon={Calendar}
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  className={paymentFormInputClass}
-                />
-              </PaymentFormField>
+              <PaymentDateField
+                label="Receipt Date"
+                value={formData.date}
+                onChange={(date) => setFormData(prev => ({ ...prev, date }))}
+              />
 
               <PaymentBankSelect
                 value={formData.bank}
@@ -867,20 +864,11 @@ const BankReceipts = () => {
 
               {/* Right Column */}
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Receipt Date
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                      className="w-full pr-10"
-                    />
-                    <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
-                </div>
+                <PaymentDateField
+                  label="Receipt Date"
+                  value={formData.date}
+                  onChange={(date) => setFormData(prev => ({ ...prev, date }))}
+                />
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -985,15 +973,11 @@ const BankReceipts = () => {
         }
       >
         <div className="space-y-4">
-          <FormField label="Date" htmlFor="edit-date">
-            <Input
-              id="edit-date"
-              type="date"
-              value={formData.date}
-              onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-              className="w-full"
-            />
-          </FormField>
+          <PaymentDateField
+            label="Date"
+            value={formData.date}
+            onChange={(date) => setFormData(prev => ({ ...prev, date }))}
+          />
           <FormField label="Bank Account" htmlFor="edit-bank">
             <select
               id="edit-bank"

@@ -1875,18 +1875,13 @@ export const PurchaseOrders = ({ tabId }) => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Expected Delivery
-                      </label>
-                      <div className="relative">
-                        <Input
-                          type="date"
-                          value={formData.expectedDelivery}
-                          onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
-                          className="h-10 text-sm w-full pr-8"
-                        />
-                        <Calendar className="absolute right-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none sm:hidden" />
-                      </div>
+                      <DateFilter mode="single"
+                        label="Expected Delivery"
+                        value={formData.expectedDelivery}
+                        onChange={(date) => setFormData(prev => ({ ...prev, expectedDelivery: date }))}
+                        size="sm"
+                        placeholder="Select date"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1917,15 +1912,13 @@ export const PurchaseOrders = ({ tabId }) => {
                         disabled
                       />
                     </div>
-                    <div className="flex flex-col w-48">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Expected Delivery
-                      </label>
-                      <Input
-                        type="date"
+                    <div className="w-48">
+                      <DateFilter mode="single"
+                        label="Expected Delivery"
                         value={formData.expectedDelivery}
-                        onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
-                        className="h-8 text-sm"
+                        onChange={(date) => setFormData(prev => ({ ...prev, expectedDelivery: date }))}
+                        size="sm"
+                        placeholder="Select date"
                       />
                     </div>
                     <div className="flex flex-col w-[28rem]">
@@ -2224,16 +2217,13 @@ export const PurchaseOrders = ({ tabId }) => {
                         </div>
 
                         {/* Expected Delivery */}
-                        <div className="flex flex-col w-48">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Expected Delivery
-                          </label>
-                          <Input
-                            type="date"
-                            autoComplete="off"
+                        <div className="w-48">
+                          <DateFilter mode="single"
+                            label="Expected Delivery"
                             value={formData.expectedDelivery}
-                            onChange={(e) => setFormData(prev => ({ ...prev, expectedDelivery: e.target.value }))}
-                            className="h-8 text-sm"
+                            onChange={(date) => setFormData(prev => ({ ...prev, expectedDelivery: date }))}
+                            size="sm"
+                            placeholder="Select date"
                           />
                         </div>
 

@@ -165,11 +165,9 @@ export const inventoryApi = api.injectEndpoints({
     // Stock Movements
     getStockMovements: builder.query({
       query: (params) => {
-        // Filter out empty string parameters
         const filteredParams = {};
         Object.keys(params || {}).forEach(key => {
           const value = params[key];
-          // Only include non-empty values (skip empty strings, null, undefined)
           if (value !== '' && value !== null && value !== undefined) {
             filteredParams[key] = value;
           }
@@ -185,6 +183,33 @@ export const inventoryApi = api.injectEndpoints({
       },
       keepUnusedDataFor: 60,
       providesTags: [{ type: 'Inventory', id: 'MOVEMENTS' }],
+    }),
+    getProductStockMovements: builder.query({
+      query: ({ productId, ...params }) => {
+        const filteredParams = {};
+        Object.keys(params || {}).forEach(key => {
+          const value = params[key];
+          if (value !== '' && value !== null && value !== undefined) {
+            filteredParams[key] = value;
+          }
+        });
+        return {
+          url: `stock-movements/product/${productId}`,
+          method: 'get',
+          params: filteredParams,
+        };
+      },
+      providesTags: (_res, _err, { productId }) => [
+        { type: 'Inventory', id: `MOVEMENTS_PRODUCT_${productId}` },
+      ],
+    }),
+    getStockReconciliation: builder.query({
+      query: (params) => ({
+        url: 'stock-movements/reconciliation',
+        method: 'get',
+        params: params || {},
+      }),
+      providesTags: [{ type: 'Inventory', id: 'RECONCILIATION' }],
     }),
     getStockMovementStats: builder.query({
       query: (params) => {
@@ -286,6 +311,8 @@ export const {
   useGeneratePurchaseOrdersMutation,
   useGetStockLedgerQuery,
   useGetStockMovementsQuery,
+  useGetProductStockMovementsQuery,
+  useGetStockReconciliationQuery,
   useGetStockMovementStatsQuery,
   useCreateStockMovementMutation,
   useCreateStockMovementAdjustmentMutation,

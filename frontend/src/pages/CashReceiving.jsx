@@ -27,6 +27,7 @@ import PageShell from '../components/PageShell';
 import { PageHeader } from '../components/layout/PageHeader';
 import { LoadingSpinner, LoadingButton, LoadingInline } from '../components/LoadingSpinner';
 import { getLocalDateString } from '../utils/dateUtils';
+import DateFilter from '../components/DateFilter';
 import { getCustomerDisplayName } from '../utils/partyDisplay';
 import { toTitleCase } from '../utils/titleCase';
 
@@ -650,18 +651,12 @@ const CashReceiving = () => {
                 <p className="mt-0.5 text-xs text-neutral-500">Date, number, balance filters, and load</p>
               </div>
             </div>
-            <div>
-              <label className={crLabelClass}>Voucher Date</label>
-              <div className="relative">
-                <input
-                  type="date"
-                  value={voucherData.voucherDate}
-                  onChange={(e) => setVoucherData(prev => ({ ...prev, voucherDate: e.target.value }))}
-                  className={crInputClass}
-                />
-                <Calendar className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-              </div>
-            </div>
+            <DateFilter mode="single"
+              label="Voucher Date"
+              value={voucherData.voucherDate}
+              onChange={(date) => setVoucherData(prev => ({ ...prev, voucherDate: date }))}
+              size="sm"
+            />
 
             <div>
               <label className={crLabelClass}>Voucher No</label>

@@ -1,5 +1,5 @@
 import React, { memo, useState, useEffect } from 'react';
-import { BarChart3, Camera } from 'lucide-react';
+import { BarChart3, Camera, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useGetCompanySettingsQuery,
@@ -11,6 +11,7 @@ import { OrderItemWiseConfirmationSettings } from '../../components/OrderItemWis
 import { handleApiError } from '../../utils/errorHandler';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 
 export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSidebarConfig }) {
   const { data: settingsResponse, refetch: refetchSettings } = useGetCompanySettingsQuery();
@@ -33,6 +34,8 @@ export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSideba
   const [warehouseInventoryEnabled, setWarehouseInventoryEnabled] = useState(false);
   const [productSearchCameraEnabled, setProductSearchCameraEnabled] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [defaultDailyOpeningCash, setDefaultDailyOpeningCash] = useState('0');
+  const [dailyCashClosingEnabled, setDailyCashClosingEnabled] = useState(false);
 
   useEffect(() => {
     const enabled = settings?.orderSettings?.useMarketPurchasePrices === true;
@@ -55,8 +58,30 @@ export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSideba
   }, [settings?.orderSettings?.productSearchCameraEnabled]);
 
   useEffect(() => {
+    const orderSettings = settings?.orderSettings || {};
+    setDefaultDailyOpeningCash(String(orderSettings.defaultDailyOpeningCash ?? 0));
+  }, [settings?.orderSettings?.defaultDailyOpeningCash]);
+
+  useEffect(() => {
+    const enabled = settings?.orderSettings?.dailyCashClosingEnabled === true;
+    setDailyCashClosingEnabled(enabled);
+    syncDailyCashSidebarVisibility(enabled);
+  }, [settings?.orderSettings?.dailyCashClosingEnabled]);
+
+  useEffect(() => {
     setTwoFactorEnabled(!!userPreferences?.twoFactorEnabled);
   }, [userPreferences?.twoFactorEnabled]);
+
+  /** Keep all Advanced toggle values when saving partial orderSettings (prevents stale API cache re-enabling flags). */
+  const buildOrderSettingsPatch = (patch = {}) => ({
+    ...(settings?.orderSettings || {}),
+    useMarketPurchasePrices,
+    enableImportPurchaseLandedCost,
+    warehouseInventoryEnabled,
+    productSearchCameraEnabled,
+    dailyCashClosingEnabled,
+    ...patch,
+  });
 
   const syncMarketPricesSidebarVisibility = (enabled) => {
     const savedSidebarRaw = localStorage.getItem('sidebarConfig');
@@ -73,6 +98,22 @@ export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSideba
       'Current Purchase Market Prices': !!enabled,
     };
     delete nextSidebar['Current Market Prices'];
+    localStorage.setItem('sidebarConfig', JSON.stringify(nextSidebar));
+    setSidebarConfig(nextSidebar);
+    window.dispatchEvent(new Event('sidebarConfigChanged'));
+  };
+
+  const syncDailyCashSidebarVisibility = (enabled) => {
+    const savedSidebarRaw = localStorage.getItem('sidebarConfig');
+    let savedSidebar = {};
+    if (savedSidebarRaw) {
+      try {
+        savedSidebar = JSON.parse(savedSidebarRaw) || {};
+      } catch (_) {
+        savedSidebar = {};
+      }
+    }
+    const nextSidebar = { ...savedSidebar, 'Daily Cash Closing': !!enabled };
     localStorage.setItem('sidebarConfig', JSON.stringify(nextSidebar));
     setSidebarConfig(nextSidebar);
     window.dispatchEvent(new Event('sidebarConfigChanged'));
@@ -101,10 +142,7 @@ export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSideba
     syncMarketPricesSidebarVisibility(nextChecked);
     try {
       await updateCompanySettings({
-        orderSettings: {
-          ...(settings?.orderSettings || {}),
-          useMarketPurchasePrices: nextChecked,
-        },
+        orderSettings: buildOrderSettingsPatch({ useMarketPurchasePrices: nextChecked }),
       }).unwrap();
       toast.success(`Market purchase prices ${nextChecked ? 'enabled' : 'disabled'}.`);
       refetchSettings();
@@ -121,10 +159,7 @@ export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSideba
     setEnableImportPurchaseLandedCost(nextChecked);
     try {
       await updateCompanySettings({
-        orderSettings: {
-          ...(settings?.orderSettings || {}),
-          enableImportPurchaseLandedCost: nextChecked,
-        },
+        orderSettings: buildOrderSettingsPatch({ enableImportPurchaseLandedCost: nextChecked }),
       }).unwrap();
       toast.success(`Import purchase landed-cost ${nextChecked ? 'enabled' : 'disabled'}.`);
       refetchSettings();
@@ -141,10 +176,7 @@ export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSideba
     syncWarehouseInventorySidebarVisibility(nextChecked);
     try {
       await updateCompanySettings({
-        orderSettings: {
-          ...(settings?.orderSettings || {}),
-          warehouseInventoryEnabled: nextChecked,
-        },
+        orderSettings: buildOrderSettingsPatch({ warehouseInventoryEnabled: nextChecked }),
       }).unwrap();
       toast.success(`Warehouse inventory ${nextChecked ? 'enabled' : 'disabled'}.`);
       refetchSettings();
@@ -161,16 +193,48 @@ export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSideba
     setProductSearchCameraEnabled(nextChecked);
     try {
       await updateCompanySettings({
-        orderSettings: {
-          ...(settings?.orderSettings || {}),
-          productSearchCameraEnabled: nextChecked,
-        },
+        orderSettings: buildOrderSettingsPatch({ productSearchCameraEnabled: nextChecked }),
       }).unwrap();
       toast.success(`Product search camera ${nextChecked ? 'enabled' : 'disabled'}.`);
       refetchSettings();
     } catch (error) {
       setProductSearchCameraEnabled(previousChecked);
       handleApiError(error, 'Update Product Search Camera Setting');
+    }
+  };
+
+  const handleDailyCashClosingToggle = async (checked) => {
+    const nextChecked = !!checked;
+    const previousChecked = dailyCashClosingEnabled;
+    setDailyCashClosingEnabled(nextChecked);
+    syncDailyCashSidebarVisibility(nextChecked);
+    try {
+      await updateCompanySettings({
+        orderSettings: buildOrderSettingsPatch({ dailyCashClosingEnabled: nextChecked }),
+      }).unwrap();
+      toast.success(`Daily Cash Closing ${nextChecked ? 'enabled' : 'disabled'}.`);
+      refetchSettings();
+    } catch (error) {
+      setDailyCashClosingEnabled(previousChecked);
+      syncDailyCashSidebarVisibility(previousChecked);
+      handleApiError(error, 'Update Daily Cash Closing Setting');
+    }
+  };
+
+  const handleDefaultOpeningCashBlur = async () => {
+    const amount = parseFloat(defaultDailyOpeningCash);
+    if (Number.isNaN(amount) || amount < 0) {
+      toast.error('Enter a valid default opening cash amount');
+      return;
+    }
+    try {
+      await updateCompanySettings({
+        orderSettings: buildOrderSettingsPatch({ defaultDailyOpeningCash: amount }),
+      }).unwrap();
+      refetchSettings();
+      toast.success('Default daily opening cash updated.');
+    } catch (error) {
+      handleApiError(error, 'Update Default Opening Cash');
     }
   };
 
@@ -306,6 +370,44 @@ export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSideba
                 <span className="text-[10px] text-gray-400">Shows the camera scan button in Product Selection &amp; Cart (Sales, Purchases, etc.). Off by default.</span>
               </Label>
             </div>
+
+            <div className="flex items-center space-x-3 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 sm:col-span-2">
+              <Checkbox
+                id="dailyCashClosingEnabled"
+                className="w-5 h-5 rounded-md border-2 border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                checked={dailyCashClosingEnabled}
+                onCheckedChange={(checked) => handleDailyCashClosingToggle(!!checked)}
+              />
+              <Label htmlFor="dailyCashClosingEnabled" className="flex flex-col cursor-pointer group-hover:text-blue-700">
+                <span className="text-sm font-semibold flex items-center gap-1.5">
+                  <Wallet className="h-4 w-4 text-gray-600" aria-hidden />
+                  Enable Daily Cash Closing
+                </span>
+                <span className="text-[10px] text-gray-400">When on: track daily cash and enforce closed days on cash sales. Hiding the sidebar link alone does not turn this off. Off by default.</span>
+              </Label>
+            </div>
+
+            {dailyCashClosingEnabled && (
+              <div className="flex flex-col gap-2 p-3.5 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 sm:col-span-2">
+                <Label htmlFor="defaultDailyOpeningCash" className="flex flex-col">
+                  <span className="text-sm font-semibold flex items-center gap-1.5">
+                    <Wallet className="h-4 w-4 text-gray-600" aria-hidden />
+                    Default Daily Opening Cash
+                  </span>
+                  <span className="text-[10px] text-gray-400">Used when no previous day closing exists. Otherwise opening carries from prior day actual count.</span>
+                </Label>
+                <Input
+                  id="defaultDailyOpeningCash"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={defaultDailyOpeningCash}
+                  onChange={(e) => setDefaultDailyOpeningCash(e.target.value)}
+                  onBlur={handleDefaultOpeningCashBlur}
+                  className="max-w-xs"
+                />
+              </div>
+            )}
           </div>
 
           <div className="pt-4 border-t border-gray-100">

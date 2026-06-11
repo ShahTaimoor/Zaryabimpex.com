@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import DateFilter from './DateFilter';
 import { Calendar, ChevronDown } from 'lucide-react';
 
 export const PeriodSelector = ({
@@ -49,30 +50,15 @@ export const PeriodSelector = ({
 
       {showCustomPicker && value === 'custom' && showCustomDatePicker && (
         <div className="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Start Date
-              </label>
-              <input
-                type="date"
-                value={customStartDate || ''}
-                onChange={(e) => onCustomDateChange?.({ start: e.target.value, end: customEndDate })}
-                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                End Date
-              </label>
-              <input
-                type="date"
-                value={customEndDate || ''}
-                onChange={(e) => onCustomDateChange?.({ start: customStartDate, end: e.target.value })}
-                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
-            </div>
-          </div>
+          <DateFilter
+            startDate={customStartDate || ''}
+            endDate={customEndDate || ''}
+            onDateChange={(start, end) => onCustomDateChange?.({ start, end })}
+            compact
+            showPresets={false}
+            showClear={false}
+            size="sm"
+          />
         </div>
       )}
     </div>

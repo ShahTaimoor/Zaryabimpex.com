@@ -26,6 +26,8 @@ const componentLoader = {
   '/discounts': () => import('../pages/Discounts').then(module => module.default),
   '/cash-payments': () => import('../pages/CashPayments').then(module => module.default),
   '/expenses': () => import('../pages/Expenses').then(module => module.default),
+  '/daily-cash': () => import('../pages/DailyCashClosing').then(module => module.default || module.DailyCashClosing),
+  '/till': () => import('../pages/DailyCashClosing').then(module => module.default || module.DailyCashClosing),
   '/bank-payments': () => import('../pages/BankPayments').then(module => module.default),
   '/cash-receipts': () => import('../pages/CashReceipts').then(module => module.default),
   '/cash-receiving': () => import('../pages/CashReceiving').then(module => module.default),
@@ -150,6 +152,16 @@ export const componentRegistry = {
   '/expenses': {
     title: 'Expenses',
     icon: 'Wallet'
+  },
+  '/daily-cash': {
+    title: 'Daily Cash Closing',
+    icon: 'Wallet',
+    allowMultiple: false
+  },
+  '/till': {
+    title: 'Daily Cash Closing',
+    icon: 'Wallet',
+    allowMultiple: false
   },
   '/bank-payments': {
     title: 'Bank Payments',

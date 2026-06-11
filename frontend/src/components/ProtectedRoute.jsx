@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { hasPermission } from '../config/rbacConfig';
 import { LoadingPage } from './LoadingSpinner';
 
-export const ProtectedRoute = ({ children, permission, permissionAny = [] }) => {
+export const ProtectedRoute = ({ children, permission, permissionAny = [], role }) => {
   const { isAuthenticated, loading, user } = useAuth();
 
   if (loading) {
@@ -16,6 +16,10 @@ export const ProtectedRoute = ({ children, permission, permissionAny = [] }) => 
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (role && user?.role !== role && user?.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
   }
 
   const hasAnyPermission = permissionAny.length === 0 || permissionAny.some((permissionKey) => hasPermission(user, permissionKey));

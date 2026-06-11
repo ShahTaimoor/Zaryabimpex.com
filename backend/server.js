@@ -213,6 +213,7 @@ app.use('/api/stock-transfers', require('./routes/stockTransfers'));
 app.use('/api/employees', require('./routes/employees'));
 app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/tills', require('./routes/tills'));
+app.use('/api/daily-cash', require('./routes/dailyCash'));
 app.use('/api/excel-manager', require('./routes/exportManagement'));
 app.use('/api/investors', require('./routes/investors'));
 app.use('/api/drop-shipping', require('./routes/dropShipping'));

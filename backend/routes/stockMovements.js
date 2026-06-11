@@ -5,6 +5,8 @@ const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const stockMovementRepository = require('../repositories/postgres/StockMovementRepository');
 const productRepository = require('../repositories/postgres/ProductRepository');
+const productVariantRepository = require('../repositories/postgres/ProductVariantRepository');
+const { resolveStockEntity, getEntityCurrentStock } = require('../utils/stockEntityResolver');
 
 const router = express.Router();
 
@@ -147,6 +149,40 @@ router.get('/', [
   }
 });
 
+// Get stock reconciliation (inventory vs last movement balance)
+router.get('/reconciliation', [
+  auth,
+  requirePermission('view_inventory'),
+  query('limit').optional({ checkFalsy: true }).isInt({ min: 1, max: 500 }),
+  query('onlyMismatches').optional({ checkFalsy: true }).isBoolean(),
+], async (req, res) => {
+  try {
+    const rows = await stockMovementRepository.getReconciliation({
+      limit: parseInt(req.query.limit, 10) || 100,
+      onlyMismatches: req.query.onlyMismatches !== 'false',
+    });
+    const mismatches = rows.filter((r) => r.hasMismatch);
+    res.json({
+      success: true,
+      data: {
+        rows,
+        summary: {
+          totalChecked: rows.length,
+          mismatchCount: mismatches.length,
+          matchedCount: rows.length - mismatches.length,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching stock reconciliation:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+});
+
 // Get stock movements for a specific product
 router.get('/product/:productId', [
   auth, 
@@ -170,11 +206,15 @@ router.get('/product/:productId', [
 
     const movements = await stockMovementRepository.getProductMovements(productId, options);
     const summary = await stockMovementRepository.getStockSummary(productId);
-    const product = await productRepository.findById(productId);
+    const entity = await resolveStockEntity(productId);
+    const currentStock = entity
+      ? await getEntityCurrentStock(entity.id, entity.productModel)
+      : 0;
 
     res.json({
       success: true,
       data: {
+        product: entity,
         movements,
         summary: summary[0] || {
           totalIn: 0,
@@ -182,7 +222,7 @@ router.get('/product/:productId', [
           totalValueIn: 0,
           totalValueOut: 0
         },
-        currentStock: product?.stock_quantity ?? product?.inventory?.currentStock ?? 0
+        currentStock
       }
     });
   } catch (error) {

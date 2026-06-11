@@ -34,6 +34,7 @@ import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import PageShell from '../components/PageShell';
 import { PageHeader } from '../components/layout/PageHeader';
+import DateFilter from '../components/DateFilter';
 
 const Employees = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -594,16 +595,13 @@ const Employees = () => {
                         className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-sm font-medium"
                       />
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Date of Hire *</label>
-                      <input
-                        type="date"
-                        required
-                        value={formData.hireDate}
-                        onChange={(e) => setFormData({ ...formData, hireDate: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-sm font-medium"
-                      />
-                    </div>
+                    <DateFilter mode="single"
+                      label="Date of Hire"
+                      value={formData.hireDate}
+                      onChange={(hireDate) => setFormData({ ...formData, hireDate })}
+                      required
+                      size="sm"
+                    />
                     <div>
                       <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Employment Type</label>
                       <select

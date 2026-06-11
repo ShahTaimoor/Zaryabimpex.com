@@ -25,6 +25,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import DashboardReportModal from '../components/DashboardReportModal';
+import DailyCashDashboardWidget from '../components/dailyCash/DailyCashDashboardWidget';
 import {
   useGetTodaySummaryQuery,
   useLazyGetOrdersQuery,
@@ -1595,6 +1596,8 @@ export const Dashboard = () => {
                     <p className="text-[9px] sm:text-[10px] xl:text-xs text-gray-500 mt-0.5 hidden sm:block">Receipts - Payments</p>
                   </div>
                   )}
+
+                  {showWidget('dailyCash') && <DailyCashDashboardWidget />}
 
                   {/* Total Orders */}
                   {showWidget('totalTransactions') && (

@@ -37,6 +37,8 @@ export const ROUTE_ACCESS = {
   '/cities': { permission: 'view_cities' },
   '/banks': { permission: PERMISSIONS.VIEW_BANKS },
   '/expenses': { permissionAny: [PERMISSIONS.VIEW_EXPENSES, 'create_expenses', 'edit_expenses'] },
+  '/daily-cash': { role: 'admin' },
+  '/till': { role: 'admin' },
   '/bank-receipts': { permissionAny: [PERMISSIONS.VIEW_BANK_RECEIPTS, 'create_bank_receipts', 'edit_bank_receipts'] },
   '/bank-payments': { permissionAny: [PERMISSIONS.VIEW_BANK_PAYMENTS, 'create_bank_payments', 'edit_bank_payments'] },
   '/journal-vouchers': { permission: PERMISSIONS.VIEW_JOURNAL_VOUCHERS },
@@ -59,6 +61,7 @@ export const canAccessRoute = (path, user, hasPermission) => {
   const access = getRouteAccess(path);
   if (!access) return true;
   if (user?.role === 'admin') return true;
+  if (access.role && user?.role !== access.role) return false;
   if (Array.isArray(access.permissionAny) && access.permissionAny.length > 0) {
     return access.permissionAny.some((permission) => hasPermission(permission));
   }

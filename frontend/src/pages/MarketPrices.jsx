@@ -10,6 +10,7 @@ import {
 } from '../store/services/marketPricesApi';
 import { PageLayout } from '../components/layout/PageLayout';
 import { PageHeader } from '../components/layout/PageHeader';
+import DateFilter from '../components/DateFilter';
 
 const defaultMapping = {
   productName: 1,
@@ -126,11 +127,12 @@ export default function MarketPrices() {
             placeholder="Purchase price"
             className="rounded border px-2 py-2 text-sm"
           />
-          <input
-            type="date"
+          <DateFilter mode="single"
             value={effectiveDate}
-            onChange={(e) => setEffectiveDate(e.target.value)}
-            className="rounded border px-2 py-2 text-sm"
+            onChange={setEffectiveDate}
+            showLabel={false}
+            size="sm"
+            className="min-w-[10rem]"
           />
           <button
             type="submit"

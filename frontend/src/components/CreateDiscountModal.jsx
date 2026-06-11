@@ -13,6 +13,7 @@ import {
   HelpCircle,
   RefreshCw
 } from 'lucide-react';
+import DateFilter from './DateFilter';
 import {
   useCreateDiscountMutation,
   useGenerateCodeSuggestionsMutation,
@@ -861,21 +862,14 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
                 <h3 className="text-[10px] font-black text-primary-600 uppercase tracking-widest mb-6 border-b border-primary-100 pb-2">Validity Period</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Valid From *</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Calendar className="h-4 w-4 text-slate-400" />
-                      </div>
-                      <input
-                        type="date"
-                        value={formData.validFrom}
-                        onChange={(e) => handleChange('validFrom', e.target.value)}
-                        className={`w-full pl-10 px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-sm font-medium ${
-                          errors.validFrom ? 'border-red-300' : 'border-slate-200'
-                        }`}
-                        disabled={isCreating}
-                      />
-                    </div>
+                    <DateFilter mode="single"
+                      label="Valid From"
+                      value={formData.validFrom}
+                      onChange={(date) => handleChange('validFrom', date)}
+                      required
+                      disabled={isCreating}
+                      size="sm"
+                    />
                     {errors.validFrom && (
                       <p className="mt-1 text-xs text-red-600 flex items-center">
                         <AlertCircle className="h-3 w-3 mr-1" />
@@ -885,21 +879,14 @@ const CreateDiscountModal = ({ isOpen, onClose, onSuccess }) => {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Valid Until *</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Calendar className="h-4 w-4 text-slate-400" />
-                      </div>
-                      <input
-                        type="date"
-                        value={formData.validUntil}
-                        onChange={(e) => handleChange('validUntil', e.target.value)}
-                        className={`w-full pl-10 px-4 py-2.5 bg-slate-50 border rounded-xl focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all text-sm font-medium ${
-                          errors.validUntil ? 'border-red-300' : 'border-slate-200'
-                        }`}
-                        disabled={isCreating}
-                      />
-                    </div>
+                    <DateFilter mode="single"
+                      label="Valid Until"
+                      value={formData.validUntil}
+                      onChange={(date) => handleChange('validUntil', date)}
+                      required
+                      disabled={isCreating}
+                      size="sm"
+                    />
                     {errors.validUntil && (
                       <p className="mt-1 text-xs text-red-600 flex items-center">
                         <AlertCircle className="h-3 w-3 mr-1" />

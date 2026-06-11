@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, X } from 'lucide-react';
+import DateFilter from './DateFilter';
 
 const BalanceSheetFilters = ({ filters, onFilterChange, isLoading }) => {
   const handleFilterChange = (field, value) => {
@@ -36,31 +37,20 @@ const BalanceSheetFilters = ({ filters, onFilterChange, isLoading }) => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {/* Date range: From */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              From date
-            </label>
-            <input
-              type="date"
-              value={filters.startDate || ''}
-              onChange={(e) => handleFilterChange('startDate', e.target.value || '')}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              disabled={isLoading}
-            />
-          </div>
-
-          {/* Date range: To */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              To date
-            </label>
-            <input
-              type="date"
-              value={filters.endDate || ''}
-              onChange={(e) => handleFilterChange('endDate', e.target.value || '')}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              disabled={isLoading}
+          {/* Date range */}
+          <div className="col-span-2">
+            <DateFilter
+              startDate={filters.startDate || ''}
+              endDate={filters.endDate || ''}
+              onDateChange={(start, end) => {
+                onFilterChange({
+                  startDate: start || '',
+                  endDate: end || '',
+                });
+              }}
+              compact
+              showPresets={false}
+              size="sm"
             />
           </div>
 

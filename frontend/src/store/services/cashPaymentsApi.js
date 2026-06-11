@@ -43,6 +43,8 @@ export const cashPaymentsApi = api.injectEndpoints({
         { type: 'Reports', id: 'SUMMARY_CARDS' },
         { type: 'Reports', id: 'FINANCIAL_REPORT' },
         { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
+        { type: 'DailyCash', id: 'TODAY' },
+        { type: 'DailyCash', id: 'DASHBOARD' },
       ],
     }),
     updateCashPayment: builder.mutation({

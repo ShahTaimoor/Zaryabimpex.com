@@ -25,6 +25,8 @@ const CACHE_INVALIDATE_AFTER_NEW_SALE = [
   { type: 'Accounting', id: 'LEDGER_SUMMARY' },
   { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
   { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+  { type: 'DailyCash', id: 'TODAY' },
+  { type: 'DailyCash', id: 'DASHBOARD' },
 ];
 
 /** Extra tags when an invoice is edited, deleted, or ledger backfill/sync runs. */

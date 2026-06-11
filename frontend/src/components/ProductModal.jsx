@@ -5,6 +5,7 @@ import { LoadingButton } from './LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useUploadProductImageMutation } from '../store/services/productsApi';
+import DateFilter from './DateFilter';
 
 export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, allProducts = [], onEditExisting, categories = [], showCostPrice = true }) => {
   const showImages = localStorage.getItem('showProductImagesUI') !== 'false';
@@ -752,13 +753,12 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
                   <label htmlFor="expiryDate" className="block text-xs sm:text-sm font-medium text-gray-700 mb-0.5 sm:mb-1">
                     Expiry Date
                   </label>
-                  <input
-                    id="expiryDate"
-                    name="expiryDate"
-                    type="date"
+                  <DateFilter mode="single"
                     value={formData.expiryDate || ''}
-                    onChange={handleChange}
-                    className="w-full px-2 py-1.5 sm:px-3 sm:py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-h-[2rem] sm:min-h-0"
+                    onChange={(date) => handleChange({ target: { name: 'expiryDate', value: date } })}
+                    showLabel={false}
+                    size="sm"
+                    placeholder="No expiry"
                   />
                   <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-xs text-gray-500">Leave empty if N/A</p>
                 </div>

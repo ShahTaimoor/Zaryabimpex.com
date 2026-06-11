@@ -203,6 +203,11 @@ router.post('/', [
         await AccountingService.recordCashPayment(payment, client);
       }
 
+      const dailyCashService = require('../services/dailyCashService');
+      await dailyCashService.recordCashPayment(req.user._id || req.user.id, payment, {
+        isExpense: isExpenseOnly,
+      }, client);
+
       return payment;
     });
 
@@ -242,6 +247,9 @@ router.post('/', [
       data: responseData
     });
   } catch (error) {
+    if (error.code === 'DAY_ALREADY_CLOSED') {
+      return res.status(400).json({ success: false, message: error.message, code: error.code });
+    }
     console.error('Create cash payment error:', error);
     console.error('Error stack:', error.stack);
     res.status(500).json({

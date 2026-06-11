@@ -943,6 +943,18 @@ class ReturnManagementService {
           },
           client
         );
+        const dailyCashService = require('./dailyCashService');
+        const tillUserId = toUuid(
+          returnRequest.processed_by ?? returnRequest.processedBy ??
+          returnRequest.created_by ?? returnRequest.createdBy
+        );
+        if (tillUserId) {
+          await dailyCashService.recordRefund(tillUserId, {
+            returnId: returnRequest.id || returnRequest._id,
+            returnNumber: returnRequest.return_number || returnRequest.returnNumber,
+            amount: amt,
+          }, client);
+        }
       } else if (amt > 0 && (refundMethod === 'bank_transfer' || refundMethod === 'check')) {
         await this.createDoubleEntry(
           {
@@ -1632,6 +1644,12 @@ class ReturnManagementService {
           { ...payment, customer_id: customerId, customerId },
           client
         );
+        const dailyCashService = require('./dailyCashService');
+        await dailyCashService.recordRefund(userId, {
+          returnId,
+          returnNumber,
+          amount: refundAmount,
+        }, client);
       } else if (method === 'bank_transfer' || method === 'check') {
         const bankPaymentData = {
           date: date ? new Date(date) : new Date(),

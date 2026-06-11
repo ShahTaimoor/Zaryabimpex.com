@@ -18,6 +18,7 @@ export const DASHBOARD_WIDGET_SECTIONS = [
     widgets: [
       { key: 'grossProfit', label: 'Gross Profit', description: 'Revenue minus COGS', defaultOff: true },
       { key: 'netCashFlow', label: 'Net Cash Flow', description: 'Receipts minus payments' },
+      { key: 'dailyCash', label: 'Daily Cash', description: 'Today expected cash and closing status', defaultOff: true },
       { key: 'totalTransactions', label: 'Total Transactions', description: 'Total orders in the period' },
     ],
   },

@@ -30,6 +30,7 @@ import {
   defaultOpenSections,
 } from '../config/navigation';
 import { TopBarActionButtonsDesktop, TopBarActionButtonsMobile } from './TopBarActionButtons';
+import { useCompanyInfo } from '../hooks/useCompanyInfo';
 
 // Re-export for backward compatibility
 export { navigation, loadSidebarConfig, loadBottomNavConfig, migrateSidebarConfig } from '../config/navigation';
@@ -39,6 +40,7 @@ const isItemPermitted = (item, user, hasPermission) => {
     return canAccessRoute(item.href, user, hasPermission);
   }
   if (user?.role === 'admin') return true;
+  if (item.role && user?.role !== item.role) return false;
   if (item.permissionAny?.length) {
     return item.permissionAny.some((permissionKey) => hasPermission(permissionKey));
   }
@@ -46,7 +48,7 @@ const isItemPermitted = (item, user, hasPermission) => {
   return hasPermission(item.permission);
 };
 
-const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, onNavigate, level = 0 }) => {
+const SidebarItem = ({ item, isActivePath, sidebarConfig, orderSettings, user, hasPermission, onNavigate, level = 0 }) => {
   const hasChildren = item.children && item.children.length > 0;
   const [isOpen, setIsOpen] = useState(hasChildren && defaultOpenSections.includes(item.name));
 
@@ -59,14 +61,14 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
   }, [item, isActivePath, hasChildren]);
 
   // Check visibility and permission
-  if (!isSidebarNavItemVisible(item, sidebarConfig)) return null;
+  if (!isSidebarNavItemVisible(item, sidebarConfig, orderSettings)) return null;
   const isPermitted = isItemPermitted(item, user, hasPermission);
   if (!isPermitted) return null;
 
   // If group, check if any child is visible/permitted
   if (hasChildren) {
     const hasVisibleChild = item.children.some(child => {
-      const childVisible = sidebarConfig?.[child.name] !== false;
+      const childVisible = isSidebarNavItemVisible(child, sidebarConfig, orderSettings);
       const childPermitted = isItemPermitted(child, user, hasPermission);
       return childVisible && childPermitted;
     });
@@ -107,6 +109,7 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
                   item={child}
                   isActivePath={isActivePath}
                   sidebarConfig={sidebarConfig}
+                  orderSettings={orderSettings}
                   user={user}
                   hasPermission={hasPermission}
                   onNavigate={onNavigate}
@@ -133,6 +136,8 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, user, hasPermission, o
 };
 
 export const MultiTabLayout = ({ children }) => {
+  const { companyInfo } = useCompanyInfo();
+  const orderSettings = companyInfo?.orderSettings || {};
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
@@ -424,6 +429,7 @@ export const MultiTabLayout = ({ children }) => {
                 item={item}
                 isActivePath={isActivePath}
                 sidebarConfig={sidebarConfig}
+                orderSettings={orderSettings}
                 user={user}
                 hasPermission={hasPermission}
                 onNavigate={(item) => {
@@ -452,6 +458,7 @@ export const MultiTabLayout = ({ children }) => {
                 item={item}
                 isActivePath={isActivePath}
                 sidebarConfig={sidebarConfig}
+                orderSettings={orderSettings}
                 user={user}
                 hasPermission={hasPermission}
                 onNavigate={handleNavigationClick}

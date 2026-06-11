@@ -33,6 +33,7 @@ import {
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import DateFilter from '../components/DateFilter';
 import { useTableRowVirtualizer, getVirtualTablePadding } from '../hooks/useTableRowVirtualizer';
 import PageShell from '../components/PageShell';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -851,9 +852,9 @@ const AccountLedgerSummary = () => {
         {/* Filters - clean card */}
         <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
           <h2 className="text-sm font-medium text-gray-700 mb-4 uppercase tracking-wide">Filters</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
             {/* Customer */}
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Customer</label>
               <CustomerPartySelect
                 items={customerOptions}
@@ -870,7 +871,7 @@ const AccountLedgerSummary = () => {
             </div>
 
             {/* Supplier */}
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Supplier</label>
               <SupplierPartySelect
                 items={supplierOptions}
@@ -887,27 +888,25 @@ const AccountLedgerSummary = () => {
             </div>
 
             {/* Date range */}
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Date range</label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="date"
-                  value={filters.startDate}
-                  onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                  className="flex-1 min-w-0 h-9 border-gray-300 text-sm relative [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                />
-                <span className="text-gray-400 shrink-0">–</span>
-                <Input
-                  type="date"
-                  value={filters.endDate}
-                  onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                  className="flex-1 min-w-0 h-9 border-gray-300 text-sm relative [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                />
-              </div>
+              <DateFilter
+                startDate={filters.startDate}
+                endDate={filters.endDate}
+                onDateChange={(start, end) => {
+                  setFilters((prev) => ({ ...prev, startDate: start, endDate: end }));
+                }}
+                compact
+                showPresets={false}
+                showClear={false}
+                showLabel={false}
+                size="sm"
+                className="min-w-0"
+              />
             </div>
 
             {/* Bank */}
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Bank</label>
               <select
                 value={selectedBankId}
@@ -939,7 +938,7 @@ const AccountLedgerSummary = () => {
             </div>
 
             {/* Expense account (GL) */}
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Expense account</label>
               <select
                 value={selectedExpenseAccountCode}
@@ -957,7 +956,10 @@ const AccountLedgerSummary = () => {
             </div>
 
             {/* Clear */}
-            <div className="flex items-end">
+            <div className="min-w-0">
+              <label className="block text-xs font-medium text-gray-600 mb-1.5 invisible" aria-hidden="true">
+                Clear
+              </label>
               <Button
                 onClick={handleClearFilters}
                 variant="outline"

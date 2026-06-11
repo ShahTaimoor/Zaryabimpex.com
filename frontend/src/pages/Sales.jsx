@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ShoppingCart,
@@ -250,6 +251,7 @@ export const Sales = ({ tabId, editData }) => {
   const { isMobile, isTablet } = useResponsive();
   const { activeTabId, updateTabTitle, getActiveTab } = useTab();
   const { hasPermission, user } = useAuth();
+  const navigate = useNavigate();
   const { getPartyPermissions } = useSensitiveDataPermissions();
   const { companyInfo: companySettings } = useCompanyInfo();
 
@@ -1325,8 +1327,6 @@ export const Sales = ({ tabId, editData }) => {
     setProductSearchResetKey((k) => k + 1);
   }, []);
 
-
-
   const handleCreateOrder = useCallback(async (orderData) => {
     // Double-check: prevent duplicate calls even if handleCheckout guard fails
     if (isSubmittingRef.current) {
@@ -1377,6 +1377,9 @@ export const Sales = ({ tabId, editData }) => {
         setTimeout(() => {
           resetSubmittingState();
         }, (retryAfter + 2) * 1000);
+      } else if (error?.data?.code === 'DAY_ALREADY_CLOSED') {
+        toast.error(error?.data?.message || 'This business day is already closed.');
+        resetSubmittingState();
       } else {
         handleApiError(error, 'Create Sale');
         resetSubmittingState();
@@ -1432,6 +1435,9 @@ export const Sales = ({ tabId, editData }) => {
         setTimeout(() => {
           resetSubmittingState();
         }, (retryAfter + 2) * 1000);
+      } else if (error?.data?.code === 'DAY_ALREADY_CLOSED') {
+        toast.error(error?.data?.message || 'This business day is already closed.');
+        resetSubmittingState();
       } else {
         handleApiError(error, 'Update Order');
         resetSubmittingState();
@@ -2175,19 +2181,13 @@ export const Sales = ({ tabId, editData }) => {
                     />
 
                     {/* Bill Date (for backdating) */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Bill Date <span className="text-gray-500">(Optional - for backdating)</span>
-                      </label>
-                      <Input
-                        type="date"
-                        autoComplete="off"
-                        value={billDate}
-                        onChange={(e) => setBillDate(e.target.value)}
-                        className="h-10 text-sm w-full"
-                        max={getLocalDateString()} // Prevent future dates
-                      />
-                    </div>
+                    <DateFilter mode="single"
+                      label={<>Bill Date <span className="text-gray-500 font-normal">(Optional - for backdating)</span></>}
+                      value={billDate}
+                      onChange={setBillDate}
+                      size="sm"
+                      placeholder="Today"
+                    />
 
                     <OrderNotesField
                       value={notes}
@@ -2239,17 +2239,13 @@ export const Sales = ({ tabId, editData }) => {
                     />
 
                     {/* Bill Date (for backdating) - Desktop */}
-                    <div className="flex flex-col w-44">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Bill Date <span className="text-gray-500">(Optional)</span>
-                      </label>
-                      <Input
-                        type="date"
-                        autoComplete="off"
+                    <div className="w-44">
+                      <DateFilter mode="single"
+                        label={<>Bill Date <span className="text-gray-500 font-normal">(Optional)</span></>}
                         value={billDate}
-                        onChange={(e) => setBillDate(e.target.value)}
-                        className="h-8 text-sm"
-                        max={getLocalDateString()} // Prevent future dates
+                        onChange={setBillDate}
+                        size="sm"
+                        placeholder="Today"
                       />
                     </div>
 

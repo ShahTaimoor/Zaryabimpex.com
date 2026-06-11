@@ -23,6 +23,8 @@ import {
 import AsyncSelect from 'react-select/async';
 import {
   useGetStockMovementsQuery,
+  useGetProductStockMovementsQuery,
+  useGetStockReconciliationQuery,
   useGetStockMovementStatsQuery,
   useCreateStockMovementAdjustmentMutation,
   useReverseStockMovementMutation,
@@ -55,6 +57,7 @@ export const StockMovements = () => {
     status: ''
   });
   const [selectedMovement, setSelectedMovement] = useState(null);
+  const [showReconciliation, setShowReconciliation] = useState(false);
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
   const [adjustmentData, setAdjustmentData] = useState({
     productId: '',
@@ -91,6 +94,29 @@ export const StockMovements = () => {
       onError: (error) => handleApiError(error, 'Stock Movements')
     }
   );
+
+  const {
+    data: productMovementsData,
+    isFetching: productMovementsFetching,
+  } = useGetProductStockMovementsQuery(
+    {
+      productId: filters.product,
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+      movementType: filters.movementType || undefined,
+    },
+    { skip: !filters.product }
+  );
+
+  const {
+    data: reconciliationData,
+    isFetching: reconciliationFetching,
+    refetch: refetchReconciliation,
+  } = useGetStockReconciliationQuery(
+    { limit: 100, onlyMismatches: true },
+    { skip: !showReconciliation }
+  );
+
   const [movementTypeOptions, setMovementTypeOptions] = useState([]);
 
   const [triggerProducts] = useLazyGetProductsQuery();
@@ -306,8 +332,17 @@ export const StockMovements = () => {
   const rawPagination = movementsData?.data?.pagination || {};
   const pagination = getUiPagination(rawPagination, 20);
   const summary = movementsData?.data?.summary || {};
+  const productDrilldown = productMovementsData?.data;
+  const productDrilldownMovements = productDrilldown?.movements || [];
+  const reconciliationRows = reconciliationData?.data?.rows || [];
+  const reconciliationSummary = reconciliationData?.data?.summary || {};
   const stats = statsData?.data?.overview || {};
   const topProducts = statsData?.data?.topProducts || [];
+
+  const STOCK_IN_TYPES = useMemo(
+    () => new Set(['purchase', 'return_in', 'adjustment_in', 'transfer_in', 'production', 'initial_stock']),
+    []
+  );
 
   useEffect(() => {
     updateFromPagination(rawPagination);
@@ -324,15 +359,30 @@ export const StockMovements = () => {
         subtitle="Detailed inventory history and movement tracking"
         icon={Package}
         actions={(
-          <Button
-            onClick={() => setShowAdjustmentModal(true)}
-            variant="default"
-            size="default"
-            className="flex items-center justify-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Stock Adjustment
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={showReconciliation ? 'default' : 'outline'}
+              size="default"
+              onClick={() => {
+                setShowReconciliation((v) => !v);
+                if (!showReconciliation) refetchReconciliation();
+              }}
+              className="flex items-center gap-2"
+            >
+              <AlertTriangle className="h-4 w-4" />
+              Reconciliation
+            </Button>
+            <Button
+              onClick={() => setShowAdjustmentModal(true)}
+              variant="default"
+              size="default"
+              className="flex items-center justify-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Stock Adjustment
+            </Button>
+          </div>
         )}
       />
 
@@ -396,6 +446,124 @@ export const StockMovements = () => {
           </div>
         </div>
       </div>
+
+      {showReconciliation && (
+        <div className="card border-amber-200">
+          <div className="card-content">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Stock Reconciliation</h3>
+                <p className="text-sm text-gray-500">
+                  Compares current inventory with the last movement balance per product.
+                </p>
+              </div>
+              {reconciliationFetching ? <LoadingSpinner size="sm" /> : null}
+            </div>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="rounded-lg bg-gray-50 p-3 text-center">
+                <p className="text-xs text-gray-500">Checked</p>
+                <p className="text-xl font-semibold">{reconciliationSummary.totalChecked ?? 0}</p>
+              </div>
+              <div className="rounded-lg bg-green-50 p-3 text-center">
+                <p className="text-xs text-green-700">Matched</p>
+                <p className="text-xl font-semibold text-green-800">{reconciliationSummary.matchedCount ?? 0}</p>
+              </div>
+              <div className="rounded-lg bg-red-50 p-3 text-center">
+                <p className="text-xs text-red-700">Mismatches</p>
+                <p className="text-xl font-semibold text-red-800">{reconciliationSummary.mismatchCount ?? 0}</p>
+              </div>
+            </div>
+            {reconciliationRows.length === 0 ? (
+              <p className="text-sm text-green-700 bg-green-50 rounded-lg p-4">
+                No mismatches found — inventory matches the last recorded movement balances.
+              </p>
+            ) : (
+              <div className="table-scroll">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium text-gray-500">Product</th>
+                      <th className="px-4 py-2 text-right font-medium text-gray-500">Inventory</th>
+                      <th className="px-4 py-2 text-right font-medium text-gray-500">Last Movement</th>
+                      <th className="px-4 py-2 text-right font-medium text-gray-500">Difference</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {reconciliationRows.map((row) => (
+                      <tr key={row.productId} className="hover:bg-gray-50">
+                        <td className="px-4 py-2">
+                          <div className="font-medium">{row.productName}</div>
+                          <div className="text-xs text-gray-500">{row.productModel}</div>
+                        </td>
+                        <td className="px-4 py-2 text-right">{Number(row.inventoryStock).toFixed(2)}</td>
+                        <td className="px-4 py-2 text-right">{Number(row.lastMovementStock).toFixed(2)}</td>
+                        <td className={`px-4 py-2 text-right font-semibold ${row.hasMismatch ? 'text-red-600' : 'text-green-600'}`}>
+                          {Number(row.difference).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {filters.product && (
+        <div className="card border-blue-200">
+          <div className="card-content">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Product Movement History</h3>
+                <p className="text-sm text-gray-500">
+                  {productDrilldown?.product?.name || getProductOptionById(filters.product)?.label || 'Selected product'}
+                  {productDrilldown?.product?.productModel === 'ProductVariant' ? ' (Variant)' : ''}
+                </p>
+              </div>
+              <div className="text-sm text-gray-600">
+                Current stock: <span className="font-semibold">{Number(productDrilldown?.currentStock ?? 0).toFixed(2)}</span>
+              </div>
+            </div>
+            {productMovementsFetching ? (
+              <LoadingSpinner />
+            ) : productDrilldownMovements.length === 0 ? (
+              <p className="text-sm text-gray-500">No movements for this product in the selected date range.</p>
+            ) : (
+              <div className="table-scroll">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium text-gray-500">Date</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-500">Type</th>
+                      <th className="px-4 py-2 text-right font-medium text-gray-500">Qty In</th>
+                      <th className="px-4 py-2 text-right font-medium text-gray-500">Qty Out</th>
+                      <th className="px-4 py-2 text-right font-medium text-gray-500">Balance</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-500">Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {productDrilldownMovements.map((m) => {
+                      const type = m.movementType || m.movement_type;
+                      const isIn = STOCK_IN_TYPES.has(type);
+                      return (
+                        <tr key={m.id || m._id}>
+                          <td className="px-4 py-2 whitespace-nowrap">{formatDate(m.createdAt || m.created_at)}</td>
+                          <td className="px-4 py-2">{movementTypes[type]?.label || type}</td>
+                          <td className="px-4 py-2 text-right text-green-700">{isIn ? Number(m.quantity).toFixed(2) : '—'}</td>
+                          <td className="px-4 py-2 text-right text-red-700">{!isIn ? Number(m.quantity).toFixed(2) : '—'}</td>
+                          <td className="px-4 py-2 text-right font-medium">{Number(m.newStock ?? m.new_stock ?? 0).toFixed(2)}</td>
+                          <td className="px-4 py-2">{m.referenceNumber || m.reference_number || '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card">
