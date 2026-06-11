@@ -1,8 +1,6 @@
-import { formatCurrency } from '../utils/formatters';
-
 /**
  * Normalize Pakistani / international numbers for wa.me (digits only, country code).
- * e.g. 03130922988 → 923130922988
+ * e.g. 03001234567 → 923001234567
  */
 export function normalizePhoneForWhatsApp(phone) {
   if (!phone) return '';
@@ -19,67 +17,18 @@ export function isValidWhatsAppPhone(phone) {
   return normalized.length >= 10 && normalized.length <= 15;
 }
 
-function resolveCustomerName(orderData) {
-  const info = orderData?.customerInfo || orderData?.customer || {};
-  return (
-    info.businessName ||
-    info.business_name ||
-    info.displayName ||
-    info.name ||
-    orderData?.customerName ||
-    orderData?.customer_name ||
-    'Customer'
-  );
-}
-
-function resolveInvoiceNumber(orderData) {
-  return (
-    orderData?.invoiceNumber ||
-    orderData?.orderNumber ||
-    orderData?.order_number ||
-    orderData?.id ||
-    orderData?._id ||
-    '—'
-  );
-}
-
-function resolveTotalAmount(orderData) {
-  const total =
-    orderData?.pricing?.total ??
-    orderData?.total ??
-    0;
-  return formatCurrency(Number(total) || 0);
-}
-
 /**
- * Reusable WhatsApp invoice message template.
+ * WhatsApp caption when sharing an invoice PDF — company name only (details are in the PDF).
  */
-export function buildWhatsAppInvoiceMessage(orderData, options = {}) {
+export function buildWhatsAppInvoiceMessage(_orderData, options = {}) {
   const { pdfLink, companyName } = options;
-  const customerName = resolveCustomerName(orderData);
-  const invoiceNumber = resolveInvoiceNumber(orderData);
-  const totalAmount = resolveTotalAmount(orderData);
-  const from = companyName ? `${companyName}\n\n` : '';
-
-  let message = `${from}Hello ${customerName},
-
-Thank you for your purchase.
-
-Invoice No: ${invoiceNumber}
-Total Amount: ${totalAmount}`;
 
   if (pdfLink) {
-    message += `
-
-Download Invoice:
-${pdfLink}`;
-  } else {
-    message += `
-
-Please find your invoice attached.`;
+    const parts = [companyName, `Download Invoice:\n${pdfLink}`].filter(Boolean);
+    return parts.join('\n\n').trim();
   }
 
-  return message.trim();
+  return (companyName || '').trim();
 }
 
 export function resolvePartyPhoneFromOrder(orderData) {
