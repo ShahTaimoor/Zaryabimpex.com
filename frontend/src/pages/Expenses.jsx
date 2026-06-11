@@ -31,7 +31,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import RecurringExpensesPanel from '../components/RecurringExpensesPanel';
-import { getLocalDateString } from '../utils/dateUtils';
+import { getLocalDateString, getDateDaysAgo } from '../utils/dateUtils';
+import DateFilter from '../components/DateFilter';
 import { DeleteConfirmationDialog } from '../components/ConfirmationDialog';
 import { useDeleteConfirmation } from '../hooks/useConfirmation';
 import { PrintModal } from '../components/print';
@@ -60,6 +61,33 @@ import { PageLayout } from '@/components/layout/PageLayout';
 
 const today = getLocalDateString();
 
+/** Expense entries have no supplier/customer party (Record Expense), unlike Cash/Bank Payments to parties. */
+function isExpensePaymentEntry(payment) {
+  if (!payment) return false;
+  const supplierId =
+    payment.supplier?.id ||
+    payment.supplier?._id ||
+    payment.supplier_id ||
+    payment.supplierId;
+  const customerId =
+    payment.customer?.id ||
+    payment.customer?._id ||
+    payment.customer_id ||
+    payment.customerId;
+  return !supplierId && !customerId;
+}
+
+function getExpenseDateKey(expense) {
+  const raw = expense?.date || expense?.createdAt;
+  if (!raw) return '';
+  if (typeof raw === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    if (raw.includes('T')) return raw.split('T')[0];
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? '' : getLocalDateString(parsed);
+}
+
 const defaultFormState = {
   date: today,
   expenseAccount: '',
@@ -81,6 +109,8 @@ const Expenses = () => {
   const [formData, setFormData] = useState(defaultFormState);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [recentExpenses, setRecentExpenses] = useState([]);
+  const [recentFromDate, setRecentFromDate] = useState(() => getDateDaysAgo(30));
+  const [recentToDate, setRecentToDate] = useState(() => getLocalDateString());
   const [editingExpense, setEditingExpense] = useState(null);
   const [partyType, setPartyType] = useState('supplier'); // 'supplier' or 'customer'
   const [supplierSearchTerm, setSupplierSearchTerm] = useState('');
@@ -110,15 +140,24 @@ const Expenses = () => {
     [banksResponse]
   );
 
+  const recentListQuery = {
+    limit: 100,
+    expenseOnly: true,
+    ...(recentFromDate ? { fromDate: recentFromDate } : {}),
+    ...(recentToDate ? { toDate: recentToDate } : {}),
+  };
+
   const { data: cashPaymentsResponse, isFetching: cashExpensesLoading } = useGetCashPaymentsQuery(
-    { limit: 20 }
+    recentListQuery,
+    { refetchOnMountOrArgChange: true }
   );
   const cashPaymentsData = useMemo(() => {
     return cashPaymentsResponse?.data?.cashPayments || cashPaymentsResponse?.cashPayments || cashPaymentsResponse?.data?.data?.cashPayments || [];
   }, [cashPaymentsResponse]);
 
   const { data: bankPaymentsResponse, isFetching: bankExpensesLoading } = useGetBankPaymentsQuery(
-    { limit: 20 }
+    recentListQuery,
+    { refetchOnMountOrArgChange: true }
   );
   const bankPaymentsData = useMemo(() => {
     return bankPaymentsResponse?.data?.bankPayments || bankPaymentsResponse?.bankPayments || bankPaymentsResponse?.data?.data?.bankPayments || [];
@@ -126,16 +165,38 @@ const Expenses = () => {
 
   const combinedRecentExpenses = useMemo(() => {
     const apiResults = [
-      ...(cashPaymentsData || []).map((item) => ({ ...item, source: 'cash' })),
-      ...(bankPaymentsData || []).map((item) => ({ ...item, source: 'bank' })),
-      ...recentExpenses
+      ...(cashPaymentsData || []).filter(isExpensePaymentEntry).map((item) => ({ ...item, source: 'cash' })),
+      ...(bankPaymentsData || []).filter(isExpensePaymentEntry).map((item) => ({ ...item, source: 'bank' })),
+      ...recentExpenses.filter(isExpensePaymentEntry),
     ];
 
     return apiResults
       .filter((item, index, self) => item?._id && index === self.findIndex((s) => s._id === item._id))
       .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
-      .slice(0, 25);
+      .slice(0, 100);
   }, [cashPaymentsData, bankPaymentsData, recentExpenses]);
+
+  const expensesByDate = useMemo(() => {
+    const groups = new Map();
+    combinedRecentExpenses.forEach((expense) => {
+      const key = getExpenseDateKey(expense) || 'unknown';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(expense);
+    });
+
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([dateKey, items]) => ({
+        dateKey,
+        items,
+        total: items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
+      }));
+  }, [combinedRecentExpenses]);
+
+  const recentGrandTotal = useMemo(
+    () => combinedRecentExpenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
+    [combinedRecentExpenses]
+  );
 
   const valueToDisplayString = (value) => {
     if (value == null) return '';
@@ -642,17 +703,41 @@ const Expenses = () => {
               <span className="text-xs text-neutral-500">Refreshing...</span>
             )}
           </div>
+          <div className="border-b border-neutral-200 px-4 py-3 sm:px-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0 flex-1 max-w-xl">
+                <label className="mb-1.5 block text-sm font-medium text-neutral-700">Date range</label>
+                <DateFilter
+                  startDate={recentFromDate}
+                  endDate={recentToDate}
+                  onDateChange={(start, end) => {
+                    setRecentFromDate(start || '');
+                    setRecentToDate(end || '');
+                  }}
+                  compact
+                  showPresets
+                  showClear
+                />
+              </div>
+              {combinedRecentExpenses.length > 0 && (
+                <div className="text-right text-sm text-neutral-600 shrink-0">
+                  <span className="font-medium text-neutral-900">{combinedRecentExpenses.length}</span> entries
+                  <span className="mx-1.5 text-neutral-300">·</span>
+                  Total <span className="font-semibold tabular-nums text-neutral-900">{formatCurrency(recentGrandTotal)}</span>
+                </div>
+              )}
+            </div>
+          </div>
           <div className="p-4 sm:p-5">
             {combinedRecentExpenses.length === 0 ? (
               <p className="text-sm text-neutral-500">
-                Expenses recorded here will appear in this list for quick reference.
+                No expense entries in this date range. Adjust the filter or record a new expense above.
               </p>
             ) : (
               <div className="table-scroll">
                 <table className="min-w-full divide-y divide-neutral-200">
                   <thead className="bg-neutral-50">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Date</th>
                       <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Voucher</th>
                       <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Expense Account</th>
                       <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Description</th>
@@ -663,72 +748,86 @@ const Expenses = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100 bg-white">
-                    {combinedRecentExpenses.map((expense) => (
-                      <tr key={expense._id} className="hover:bg-neutral-50">
-                        <td className="whitespace-nowrap px-4 py-3 text-sm text-neutral-700">
-                          {formatDate(expense.date || expense.createdAt)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-sm text-neutral-700">
-                          {expense.voucherCode || expense._id}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-neutral-700">
-                          {expense.expenseAccount?.accountName
-                            ? `${expense.expenseAccount.accountName} (${expense.expenseAccount.accountCode})`
-                            : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-neutral-600">
-                          {expense.particular || '—'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-neutral-600">
-                          {expense.supplier?.displayName || expense.customer?.displayName || '—'}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold tabular-nums text-neutral-900">
-                          {formatCurrency(expense.amount || 0)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-center text-sm capitalize text-neutral-600">
-                          {resolvePaymentMethodLabel(expense)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-center text-sm text-neutral-600">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleViewExpense(expense)}
-                              className={expenseActionBtnClass}
-                              title="View Expense"
-                            >
-                              <Eye className="h-4 w-4" aria-hidden />
-                              <span className="sr-only">View</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handlePrintExpense(expense)}
-                              className={expenseActionBtnClass}
-                              title="Print Expense"
-                            >
-                              <Printer className="h-4 w-4" aria-hidden />
-                              <span className="sr-only">Print</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleEditExpense(expense)}
-                              className={expenseActionBtnClass}
-                              title="Edit Expense"
-                            >
-                              <Pencil className="h-4 w-4" aria-hidden />
-                              <span className="sr-only">Edit</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteExpense(expense)}
-                              className={expenseActionBtnClass}
-                              title="Delete Expense"
-                            >
-                              <Trash2 className="h-4 w-4" aria-hidden />
-                              <span className="sr-only">Delete</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                    {expensesByDate.map(({ dateKey, items, total }) => (
+                      <React.Fragment key={dateKey}>
+                        <tr className="bg-neutral-100/80">
+                          <td colSpan={7} className="px-4 py-2.5 text-sm font-semibold text-neutral-800">
+                            <span>{dateKey !== 'unknown' ? formatDate(dateKey) : 'Unknown date'}</span>
+                            <span className="mx-2 font-normal text-neutral-400">·</span>
+                            <span className="font-normal text-neutral-600">
+                              {items.length} {items.length === 1 ? 'entry' : 'entries'}
+                            </span>
+                            <span className="mx-2 font-normal text-neutral-400">·</span>
+                            <span className="font-normal text-neutral-600">
+                              Day total <span className="font-semibold tabular-nums text-neutral-900">{formatCurrency(total)}</span>
+                            </span>
+                          </td>
+                        </tr>
+                        {items.map((expense) => (
+                          <tr key={expense._id} className="hover:bg-neutral-50">
+                            <td className="whitespace-nowrap px-4 py-3 text-sm text-neutral-700">
+                              {expense.voucherCode || expense._id}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-neutral-700">
+                              {expense.expenseAccount?.accountName
+                                ? `${expense.expenseAccount.accountName} (${expense.expenseAccount.accountCode})`
+                                : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-neutral-600">
+                              {expense.particular || '—'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-neutral-600">
+                              {expense.supplier?.displayName || expense.customer?.displayName || '—'}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold tabular-nums text-neutral-900">
+                              {formatCurrency(expense.amount || 0)}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-center text-sm capitalize text-neutral-600">
+                              {resolvePaymentMethodLabel(expense)}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-center text-sm text-neutral-600">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewExpense(expense)}
+                                  className={expenseActionBtnClass}
+                                  title="View Expense"
+                                >
+                                  <Eye className="h-4 w-4" aria-hidden />
+                                  <span className="sr-only">View</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handlePrintExpense(expense)}
+                                  className={expenseActionBtnClass}
+                                  title="Print Expense"
+                                >
+                                  <Printer className="h-4 w-4" aria-hidden />
+                                  <span className="sr-only">Print</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditExpense(expense)}
+                                  className={expenseActionBtnClass}
+                                  title="Edit Expense"
+                                >
+                                  <Pencil className="h-4 w-4" aria-hidden />
+                                  <span className="sr-only">Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteExpense(expense)}
+                                  className={expenseActionBtnClass}
+                                  title="Delete Expense"
+                                >
+                                  <Trash2 className="h-4 w-4" aria-hidden />
+                                  <span className="sr-only">Delete</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>

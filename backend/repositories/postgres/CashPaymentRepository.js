@@ -203,6 +203,9 @@ class CashPaymentRepository {
       sql += ` AND cp.particular ILIKE $${paramCount++}`;
       params.push(`%${filters.particular}%`);
     }
+    if (filters.expenseOnly) {
+      sql += ' AND cp.supplier_id IS NULL AND cp.customer_id IS NULL';
+    }
 
     // Count query (simplified, without JOINs for performance)
     let countSql = 'SELECT COUNT(*) FROM cash_payments cp WHERE cp.deleted_at IS NULL';
@@ -237,7 +240,10 @@ class CashPaymentRepository {
       countSql += ` AND cp.particular ILIKE $${countParamCount++}`;
       countParams.push(`%${filters.particular}%`);
     }
-    
+    if (filters.expenseOnly) {
+      countSql += ' AND cp.supplier_id IS NULL AND cp.customer_id IS NULL';
+    }
+
     const countResult = await query(countSql, countParams);
     const total = parseInt(countResult.rows[0].count, 10);
 

@@ -268,6 +268,9 @@ class BankPaymentRepository {
       sql += ` AND bp.particular ILIKE $${paramCount++}`;
       params.push(`%${filters.particular}%`);
     }
+    if (filters.expenseOnly) {
+      sql += ' AND bp.supplier_id IS NULL AND bp.customer_id IS NULL';
+    }
 
     // Count query (simplified, without JOINs for performance)
     let countSql = 'SELECT COUNT(*) FROM bank_payments bp WHERE bp.deleted_at IS NULL';
@@ -305,6 +308,9 @@ class BankPaymentRepository {
     if (filters.particular) {
       countSql += ` AND bp.particular ILIKE $${countParamCount++}`;
       countParams.push(`%${filters.particular}%`);
+    }
+    if (filters.expenseOnly) {
+      countSql += ' AND bp.supplier_id IS NULL AND bp.customer_id IS NULL';
     }
     
     const countResult = await query(countSql, countParams);
