@@ -5,6 +5,7 @@ import PrintWrapper from './PrintWrapper';
 import PrintTrigger from './PrintTrigger';
 import { PRINT_PAGE_STYLE } from './printPageStyle';
 import PdfExportButton from '../PdfExportButton';
+import WhatsAppShareButton from '../invoice/WhatsAppShareButton';
 
 /**
  * PrintModal - Unified print preview modal using BaseModal + react-to-print.
@@ -28,6 +29,7 @@ const PrintModal = ({
   autoPrint = false,
   zIndex = 50,
   getPdfData,
+  shareConfig,
   onAfterPrint,
   pageStyle = PRINT_PAGE_STYLE
 }) => {
@@ -47,11 +49,21 @@ const PrintModal = ({
   }, [isOpen, autoPrint, hasData, handlePrint]);
 
   const footer = (
-    <div className="flex justify-end gap-3 no-print">
+    <div className="flex flex-wrap justify-end gap-3 no-print">
+      {shareConfig?.orderData && (
+        <WhatsAppShareButton
+          orderData={shareConfig.orderData}
+          documentTitle={shareConfig.documentTitle || documentTitle}
+          partyLabel={shareConfig.partyLabel || 'Customer'}
+          ledgerBalance={shareConfig.ledgerBalance}
+          requireSaved={shareConfig.requireSaved !== false}
+          label="WhatsApp"
+        />
+      )}
       {getPdfData && (
-        <PdfExportButton 
-          getData={getPdfData} 
-          label="Download PDF" 
+        <PdfExportButton
+          getData={getPdfData}
+          label="Download PDF"
           className="bg-red-600 text-white hover:bg-red-700 hover:text-white border-red-600"
         />
       )}

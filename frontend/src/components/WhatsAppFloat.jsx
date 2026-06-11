@@ -1,8 +1,9 @@
 import React from 'react';
 import { MessageCircle } from 'lucide-react';
+import { SUPPORT_WHATSAPP_PHONE } from '../services/whatsappService';
 
 export const WhatsAppFloat = () => {
-  const phoneNumber = '923166464649'; // WhatsApp number without + sign
+  const phoneNumber = SUPPORT_WHATSAPP_PHONE;
   
   return (
     <a

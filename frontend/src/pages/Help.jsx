@@ -55,12 +55,12 @@ export const Help = () => {
               <div>
                 <p className="font-medium text-gray-900">WhatsApp Support</p>
                 <a 
-                  href="https://wa.me/923166464649" 
+                  href="https://wa.me/923130922988" 
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[#25D366] hover:text-[#20B858] underline"
                 >
-                  +92 316 64 64 64 9
+                  0313 0922988
                 </a>
                 <p className="text-sm text-gray-600 mt-1">
                   Chat with us on WhatsApp for instant support

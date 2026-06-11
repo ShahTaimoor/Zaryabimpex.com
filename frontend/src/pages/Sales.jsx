@@ -95,6 +95,8 @@ import PaginationControls from '../components/PaginationControls';
 import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
+import { buildCartInvoiceOrder } from '../utils/buildCartInvoiceOrder';
+import WhatsAppShareButton from '../components/invoice/WhatsAppShareButton';
 
 import { ProductSearch } from '../components/sales/ProductSearch';
 import { DuplicateLineItemMergeModal } from '../components/order/DuplicateLineItemMergeModal';
@@ -597,6 +599,20 @@ export const Sales = ({ tabId, editData }) => {
   }, [fetchOrderById]);
 
   /** Saved-invoice list uses minimal rows (no line items); load full sale before print preview. */
+  const fetchFreshSavedInvoice = useCallback(
+    async (invoice) => {
+      const id = invoice?._id || invoice?.id;
+      if (!id) return invoice;
+      try {
+        const result = await fetchOrderById(id).unwrap();
+        return result?.order || result?.data?.order || result || invoice;
+      } catch {
+        return invoice;
+      }
+    },
+    [fetchOrderById]
+  );
+
   const openSavedInvoicePrintPreview = useCallback(
     async (invoice) => {
       const id = invoice?._id || invoice?.id;
@@ -606,8 +622,7 @@ export const Sales = ({ tabId, editData }) => {
         return;
       }
       try {
-        const result = await fetchOrderById(id).unwrap();
-        const full = result?.order || result?.data?.order || result || invoice;
+        const full = await fetchFreshSavedInvoice(invoice);
         setSavedInvoicePrintOrder(full);
         setShowSavedInvoicePrintModal(true);
       } catch (err) {
@@ -616,7 +631,7 @@ export const Sales = ({ tabId, editData }) => {
         setShowSavedInvoicePrintModal(true);
       }
     },
-    [fetchOrderById]
+    [fetchFreshSavedInvoice]
   );
 
   const handleDeleteSavedInvoice = useCallback(async (invoice) => {
@@ -907,6 +922,78 @@ export const Sales = ({ tabId, editData }) => {
   // such in edit mode.
   const resolvedOrderTypeForSave = () =>
     resolveOrderTypeForSave(priceType, activeEditData?.orderType);
+
+  const createdByUser = useMemo(
+    () =>
+      user
+        ? {
+            firstName: user.firstName,
+            lastName: user.lastName,
+            name:
+              user.displayName ||
+              `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+              'Admin',
+          }
+        : { name: 'Admin' },
+    [user]
+  );
+
+  const buildSalesCartOrder = useCallback(() => {
+    const base = buildCartInvoiceOrder({
+      selectedParty: selectedCustomer,
+      partyType: 'customer',
+      cartItems: mapCartItemsForInvoicePrint(cart),
+      pricing: {
+        subtotal,
+        discountAmount: totalDiscountAmount,
+        taxAmount: tax,
+        isTaxExempt: !taxSystemEnabled,
+        total,
+      },
+      payment: {
+        method: paymentMethod,
+        bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
+        amountPaid,
+        remainingBalance: total - amountPaid,
+        isPartialPayment: amountPaid < total,
+        isAdvancePayment,
+        advanceAmount: isAdvancePayment ? amountPaid - total : 0,
+      },
+      invoiceNumber,
+      orderType: resolvedOrderTypeForSave(),
+      ledgerBalance: Number.isFinite(Number(currentBalanceNum)) ? Number(currentBalanceNum) : undefined,
+      createdByUser,
+      isEditMode: Boolean(activeEditData?.orderId),
+    });
+
+    if (activeEditData?.orderId) {
+      return {
+        ...base,
+        _id: activeEditData.orderId,
+        id: activeEditData.orderId,
+        orderNumber: activeEditData.orderNumber || invoiceNumber,
+        invoiceNumber: activeEditData.orderNumber || invoiceNumber,
+      };
+    }
+    return base;
+  }, [
+    selectedCustomer,
+    cart,
+    subtotal,
+    totalDiscountAmount,
+    tax,
+    taxSystemEnabled,
+    total,
+    paymentMethod,
+    selectedBankAccount,
+    amountPaid,
+    isAdvancePayment,
+    invoiceNumber,
+    currentBalanceNum,
+    createdByUser,
+    activeEditData,
+    priceType,
+  ]);
 
   const handleCustomerSearch = (searchTerm) => {
     setCustomerSearchTerm(searchTerm);
@@ -2290,109 +2377,49 @@ export const Sales = ({ tabId, editData }) => {
                       </LoadingButton>
                     )}
                     {cart.length > 0 && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                            title="Print Options"
-                          >
-                            <Printer className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              let customerAddress = '';
-                              if (selectedCustomer?.addresses?.length) {
-                                const addr = selectedCustomer.addresses.find(a => a.isDefault) || selectedCustomer.addresses.find(a => a.type === 'billing' || a.type === 'both') || selectedCustomer.addresses[0];
-                                if (addr) customerAddress = [addr.street, addr.city, addr.state, addr.country, addr.zipCode || addr.zip].filter(Boolean).join(', ');
-                              } else if (selectedCustomer?.address) customerAddress = selectedCustomer.address;
-                              const tempOrder = {
-                                orderNumber: `TEMP-${Date.now()}`,
-                                orderType: resolvedOrderTypeForSave(),
-                                isEditMode: false,
-                                ledgerBalance: Number.isFinite(Number(currentBalanceNum)) ? Number(currentBalanceNum) : undefined,
-                                customer: selectedCustomer ?? undefined,
-                                customerInfo: selectedCustomer ? {
-                                  name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,
-                                  email: selectedCustomer.email,
-                                  phone: selectedCustomer.phone,
-                                  businessName: selectedCustomer.businessName || selectedCustomer.business_name,
-                                  address: customerAddress || undefined,
-                                  currentBalance: selectedCustomer.currentBalance,
-                                  pendingBalance: selectedCustomer.pendingBalance,
-                                  advanceBalance: selectedCustomer.advanceBalance
-                                } : null,
-                                items: mapCartItemsForInvoicePrint(cart),
-                                pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt: !taxSystemEnabled, total },
-                                payment: {
-                                  method: paymentMethod,
-                                  bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
-                                  amountPaid,
-                                  remainingBalance: total - amountPaid,
-                                  isPartialPayment: amountPaid < total,
-                                  isAdvancePayment,
-                                  advanceAmount: isAdvancePayment ? (amountPaid - total) : 0
-                                },
-                                createdAt: new Date(),
-                                createdBy: user ? { firstName: user.firstName, lastName: user.lastName, name: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Admin' } : { name: 'Admin' },
-                                invoiceNumber
-                              };
-                              setDirectPrintOrder(tempOrder);
-                            }}
-                          >
-                            <Printer className="h-4 w-4 mr-2" />
-                            Print
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              let customerAddress = '';
-                              if (selectedCustomer?.addresses?.length) {
-                                const addr = selectedCustomer.addresses.find(a => a.isDefault) || selectedCustomer.addresses.find(a => a.type === 'billing' || a.type === 'both') || selectedCustomer.addresses[0];
-                                if (addr) customerAddress = [addr.street, addr.city, addr.state, addr.country, addr.zipCode || addr.zip].filter(Boolean).join(', ');
-                              } else if (selectedCustomer?.address) customerAddress = selectedCustomer.address;
-                              const tempOrder = {
-                                orderNumber: `TEMP-${Date.now()}`,
-                                orderType: resolvedOrderTypeForSave(),
-                                isEditMode: false,
-                                ledgerBalance: Number.isFinite(Number(currentBalanceNum)) ? Number(currentBalanceNum) : undefined,
-                                customer: selectedCustomer ?? undefined,
-                                customerInfo: selectedCustomer ? {
-                                  name: selectedCustomer.businessName || selectedCustomer.business_name || selectedCustomer.displayName || selectedCustomer.name,
-                                  email: selectedCustomer.email,
-                                  phone: selectedCustomer.phone,
-                                  businessName: selectedCustomer.businessName || selectedCustomer.business_name,
-                                  address: customerAddress || undefined,
-                                  currentBalance: selectedCustomer.currentBalance,
-                                  pendingBalance: selectedCustomer.pendingBalance,
-                                  advanceBalance: selectedCustomer.advanceBalance
-                                } : null,
-                                items: mapCartItemsForInvoicePrint(cart),
-                                pricing: { subtotal, discountAmount: totalDiscountAmount, taxAmount: tax, isTaxExempt: !taxSystemEnabled, total },
-                                payment: {
-                                  method: paymentMethod,
-                                  bankAccount: paymentMethod === 'bank' ? selectedBankAccount : null,
-                                  amountPaid,
-                                  remainingBalance: total - amountPaid,
-                                  isPartialPayment: amountPaid < total,
-                                  isAdvancePayment,
-                                  advanceAmount: isAdvancePayment ? (amountPaid - total) : 0
-                                },
-                                createdAt: new Date(),
-                                createdBy: user ? { firstName: user.firstName, lastName: user.lastName, name: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Admin' } : { name: 'Admin' },
-                                invoiceNumber
-                              };
-                              setCurrentOrder(tempOrder);
-                              setShowPrintModal(true);
-                            }}
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            Print Preview
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <div className="flex items-center gap-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="h-8 w-8 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                              title="Print Options"
+                            >
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => setDirectPrintOrder(buildSalesCartOrder())}
+                            >
+                              <Printer className="h-4 w-4 mr-2" />
+                              Print
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setCurrentOrder(buildSalesCartOrder());
+                                setShowPrintModal(true);
+                              }}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              Print Preview
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <WhatsAppShareButton
+                          orderData={buildSalesCartOrder()}
+                          documentTitle="Sales Invoice"
+                          partyLabel="Customer"
+                          ledgerBalance={
+                            Number.isFinite(Number(currentBalanceNum)) ? Number(currentBalanceNum) : undefined
+                          }
+                          requireSaved={!activeEditData?.orderId}
+                          showLabel={false}
+                          size="sm"
+                          className="h-8 w-8 border-none shadow-none bg-transparent hover:bg-green-50"
+                        />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2835,6 +2862,15 @@ export const Sales = ({ tabId, editData }) => {
                                 >
                                   <Printer className="h-4 w-4" />
                                 </button>
+                                <WhatsAppShareButton
+                                  getOrderData={() => fetchFreshSavedInvoice(invoice)}
+                                  documentTitle="Sales Invoice"
+                                  partyLabel="Customer"
+                                  requireSaved
+                                  showLabel={false}
+                                  size="sm"
+                                  className="border-none shadow-none bg-transparent hover:bg-green-50 p-0 h-auto w-auto"
+                                />
                                 <ExcelExportButton
                                   getData={async () => {
                                     const printPerms = getPartyPermissions('customer');

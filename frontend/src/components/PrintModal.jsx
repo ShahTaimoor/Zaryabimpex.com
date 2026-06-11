@@ -140,6 +140,13 @@ const InvoicePrintModal = ({
       onAfterPrint={onAfterPrint}
       pageStyle={pageStyle}
       getPdfData={() => getInvoicePdfPayload(orderData, companySettings, resolvedDocumentTitle, partyLabel, canViewBalance ? ledgerBalance : null, { canViewBalance, canViewPhone })}
+      shareConfig={{
+        orderData,
+        documentTitle: resolvedDocumentTitle,
+        partyLabel,
+        ledgerBalance: canViewBalance ? ledgerBalance : null,
+        requireSaved: !String(orderData?.orderNumber || orderData?.order_number || '').startsWith('TEMP-'),
+      }}
     >
       <PrintDocument
         companySettings={companySettings || {}}
