@@ -22,6 +22,40 @@ function canBeCancelled(order) {
   const status = order?.status;
   return status === 'pending' || status === 'confirmed';
 }
+
+/** Post-commit AR ledger balance for print/POS (source of truth after save). */
+async function resolveCustomerLedgerBalance(customerId) {
+  if (!customerId) return null;
+  try {
+    return await AccountingService.getCustomerBalance(customerId);
+  } catch (err) {
+    console.error('Failed to fetch customer ledger balance:', err);
+    return null;
+  }
+}
+
+/** Previous balance before this invoice: current ledger − (net − received). */
+function resolvePreviousBalanceFromLedger(ledgerBalance, orderTotal, amountPaid) {
+  if (ledgerBalance == null || !Number.isFinite(Number(ledgerBalance))) return null;
+  const total = parseFloat(orderTotal) || 0;
+  const paid = parseFloat(amountPaid) || 0;
+  const invoiceRemaining = Math.max(0, total - paid);
+  return Math.round((Number(ledgerBalance) - invoiceRemaining) * 100) / 100;
+}
+
+function resolveOrderTotalAndPaid(order) {
+  const total =
+    parseFloat(order?.total) ||
+    parseFloat(order?.pricing?.total) ||
+    0;
+  const amountPaid =
+    parseFloat(order?.amount_paid) ||
+    parseFloat(order?.amountPaid) ||
+    parseFloat(order?.payment?.amountPaid) ||
+    parseFloat(order?.payment?.amountReceived) ||
+    0;
+  return { total, amountPaid };
+}
 const { auth, requirePermission, maskSensitiveData } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 const { preventPOSDuplicates } = require('../middleware/duplicatePrevention');
@@ -372,11 +406,27 @@ router.post('/', [
 
     // Get plain object for response transformations
     const orderForResponse = savedOrder.toObject ? savedOrder.toObject({ virtuals: true }) : { ...savedOrder };
+    const customerIdForBalance =
+      orderForResponse.customer_id ||
+      orderForResponse.customerId ||
+      orderForResponse.customer?.id ||
+      orderForResponse.customer?._id ||
+      customer ||
+      null;
+    const customerLedgerBalance = await resolveCustomerLedgerBalance(customerIdForBalance);
+    const { total: orderTotal, amountPaid } = resolveOrderTotalAndPaid(orderForResponse);
+    const customerPreviousBalance = resolvePreviousBalanceFromLedger(
+      customerLedgerBalance,
+      orderTotal,
+      amountPaid
+    );
 
     res.status(201).json({
       success: true,
       message: 'Order created successfully',
-      order: orderForResponse
+      order: orderForResponse,
+      customerLedgerBalance,
+      customerPreviousBalance,
     });
   } catch (error) {
     return next(error);
@@ -1034,9 +1084,26 @@ router.put('/:id', [
       console.error('Failed to get fully enriched order on update:', e);
     }
 
+    const customerIdForBalance =
+      finalOrder?.customer_id ||
+      finalOrder?.customerId ||
+      finalOrder?.customer?.id ||
+      finalOrder?.customer?._id ||
+      customerIdForLedger ||
+      null;
+    const customerLedgerBalance = await resolveCustomerLedgerBalance(customerIdForBalance);
+    const { total: savedOrderTotal, amountPaid: savedAmountPaid } = resolveOrderTotalAndPaid(finalOrder);
+    const customerPreviousBalance = resolvePreviousBalanceFromLedger(
+      customerLedgerBalance,
+      savedOrderTotal,
+      savedAmountPaid
+    );
+
     res.json({
       message: 'Order updated successfully',
-      order: finalOrder
+      order: finalOrder,
+      customerLedgerBalance,
+      customerPreviousBalance,
     });
   } catch (error) {
     console.error('Update order error:', error);

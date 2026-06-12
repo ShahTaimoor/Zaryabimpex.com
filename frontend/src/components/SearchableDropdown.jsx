@@ -72,6 +72,8 @@ export const SearchableDropdown = forwardRef(({
   const inputRef = useRef(null);
   const containerRef = useRef(null);
   const dropdownRef = useRef(null);
+  /** Skip one focus-open after mouse selection (focus restore must not reopen the list). */
+  const skipNextOpenOnFocusRef = useRef(false);
   const listScrollRef = useRef(null);
   const itemRefs = useRef([]);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
@@ -345,6 +347,7 @@ export const SearchableDropdown = forwardRef(({
     setSelectedIndex(-1);
     // Mouse clicks happen on portal list buttons; restore focus so Tab continues to next form field.
     if (restoreInputFocus && inputRef.current) {
+      skipNextOpenOnFocusRef.current = true;
       requestAnimationFrame(() => {
         inputRef.current?.focus({ preventScroll: true });
       });
@@ -569,6 +572,10 @@ export const SearchableDropdown = forwardRef(({
           onClick={handleInputClick}
           onFocus={() => {
             if (blockForModal()) return;
+            if (skipNextOpenOnFocusRef.current) {
+              skipNextOpenOnFocusRef.current = false;
+              return;
+            }
             // Only open on focus if openOnFocus prop is explicitly set to true
             if (openOnFocus) {
               setIsOpen(true);
@@ -630,6 +637,7 @@ export const SearchableDropdown = forwardRef(({
                     >
                       <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleSelect(item, { restoreInputFocus: true })}
                         className={`flex min-h-[44px] w-full items-start justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${isSelected ? 'bg-primary-50 text-primary-700' : 'text-gray-900'
                           }`}

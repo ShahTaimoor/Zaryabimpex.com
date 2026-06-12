@@ -1,5 +1,5 @@
 import { formatQuantityDisplay } from './dualUnitUtils';
-import { computePrintPartyBalances } from './printBalanceUtils';
+import { computeLedgerPrintBalances } from './printBalanceUtils';
 
 /**
  * Formats order/invoice data for the PdfExportButton
@@ -124,7 +124,7 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
 
   const ledgerBalance = ledgerBalanceProp ?? orderData.ledgerBalance ?? orderData.customer?.balance ?? null;
   if (canViewBalance && ledgerBalance !== null) {
-    const { previousBalance, combinedRemainingBalance } = computePrintPartyBalances({
+    const { previousBalance, combinedRemainingBalance } = computeLedgerPrintBalances({
       ledgerBalance: Number(ledgerBalance) || 0,
       totalValue: Number(total) || 0,
       receivedAmount,

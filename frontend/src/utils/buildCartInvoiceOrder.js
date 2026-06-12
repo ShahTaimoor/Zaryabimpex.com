@@ -12,6 +12,7 @@ export function buildCartInvoiceOrder({
   ledgerBalance,
   createdByUser,
   isEditMode = false,
+  savedInvoiceRemaining = null,
 }) {
   const isCustomer = partyType === 'customer';
   let partyAddress = '';
@@ -51,6 +52,10 @@ export function buildCartInvoiceOrder({
     orderNumber: `TEMP-${Date.now()}`,
     orderType,
     isEditMode,
+    savedInvoiceRemaining:
+      savedInvoiceRemaining !== undefined && savedInvoiceRemaining !== null
+        ? Number(savedInvoiceRemaining)
+        : undefined,
     ledgerBalance: Number.isFinite(Number(ledgerBalance)) ? Number(ledgerBalance) : undefined,
     ...(isCustomer
       ? { customer: selectedParty ?? undefined, customerInfo: partyInfo }

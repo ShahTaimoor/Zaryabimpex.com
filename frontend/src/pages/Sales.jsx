@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
+import { useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
@@ -96,6 +97,12 @@ import ExcelExportButton from '../components/ExcelExportButton';
 import PdfExportButton from '../components/PdfExportButton';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import { buildCartInvoiceOrder } from '../utils/buildCartInvoiceOrder';
+import {
+  computePartyBalances,
+  computePostSaveLedgerBalance,
+  computePostSavePreviousBalance,
+} from '../utils/printBalanceUtils';
+import { accountingApi } from '../store/services/accountingApi';
 import WhatsAppShareButton from '../components/invoice/WhatsAppShareButton';
 
 import { ProductSearch } from '../components/sales/ProductSearch';
@@ -178,6 +185,8 @@ function mapCartItemsForInvoicePrint(cart) {
 }
 
 export const Sales = ({ tabId, editData }) => {
+  const dispatch = useDispatch();
+
   // Store refetch function from ProductSearch component
   const [refetchProducts, setRefetchProducts] = useState(null);
 
@@ -235,6 +244,8 @@ export const Sales = ({ tabId, editData }) => {
   const [invoiceDeleteTarget, setInvoiceDeleteTarget] = useState(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const activeEditData = inlineEditData?.isEditMode ? inlineEditData : editData;
+  /** Net − paid when the invoice was loaded into edit mode; drives live balance preview. */
+  const editSavedInvoiceRemainingRef = useRef(null);
 
   useEffect(() => {
     const handleConfigChange = () => {
@@ -456,7 +467,23 @@ export const Sales = ({ tabId, editData }) => {
         setBillDate(getLocalDateString());
       }
 
+      const savedTotal = Number(
+        activeEditData.total ??
+        activeEditData.pricing?.total ??
+        0
+      ) || 0;
+      const savedPaid = Number(
+        activeEditData.amount_paid ??
+        activeEditData.amountPaid ??
+        activeEditData.payment?.amountPaid ??
+        activeEditData.payment?.amountReceived ??
+        0
+      ) || 0;
+      editSavedInvoiceRemainingRef.current = Math.max(0, savedTotal - savedPaid);
+
       // Data loaded successfully (no toast needed as Orders already shows opening message)
+    } else {
+      editSavedInvoiceRemainingRef.current = null;
     }
   }, [activeEditData?.orderId]); // Only depend on orderId to prevent multiple executions
 
@@ -820,7 +847,9 @@ export const Sales = ({ tabId, editData }) => {
     type: 'customer',
     id: selectedCustomerId
   }, {
-    skip: !selectedCustomerId
+    skip: !selectedCustomerId,
+    refetchOnMountOrArgChange: true,
+    refetchOnFocus: true,
   });
 
   const customerWithBalance = selectedCustomerDetail?.data?.customer ?? selectedCustomerDetail?.customer ?? selectedCustomerDetail ?? selectedCustomer;
@@ -916,6 +945,39 @@ export const Sales = ({ tabId, editData }) => {
   const change = amountPaid - total;
   const manualDiscountDisplay = Math.max(0, Math.round(directDiscountAmount || 0));
 
+  const checkoutPartyBalances = useMemo(() => {
+    if (!selectedCustomer) {
+      return {
+        previousBalance: 0,
+        totalReceivables: 0,
+        projectedLedger: 0,
+      };
+    }
+
+    const ledgerBalance = Number.isFinite(Number(currentBalanceNum))
+      ? Number(currentBalanceNum)
+      : (selectedCustomer.currentBalance !== undefined && selectedCustomer.currentBalance !== null
+        ? Number(selectedCustomer.currentBalance)
+        : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0)));
+
+    return computePartyBalances({
+      ledgerBalance,
+      totalValue: total,
+      receivedAmount: amountPaid || 0,
+      isEditMode: Boolean(activeEditData?.orderId),
+      savedInvoiceRemaining: editSavedInvoiceRemainingRef.current,
+      orderData: activeEditData?.orderId
+        ? { id: activeEditData.orderId, isEditMode: true }
+        : null,
+    });
+  }, [
+    selectedCustomer,
+    currentBalanceNum,
+    total,
+    amountPaid,
+    activeEditData?.orderId,
+  ]);
+
   // The orderType sent to the backend always reflects the user-selected
   // Price Type so the value round-trips correctly between create and edit.
   // We also preserve return/exchange overrides if the order was loaded as
@@ -937,6 +999,71 @@ export const Sales = ({ tabId, editData }) => {
         : { name: 'Admin' },
     [user]
   );
+
+  const patchCustomerLedgerCache = useCallback((customerId, balance) => {
+    if (!customerId || !Number.isFinite(Number(balance))) return;
+    dispatch(
+      accountingApi.util.upsertQueryData(
+        'getUnifiedBalance',
+        { type: 'customer', id: customerId },
+        {
+          success: true,
+          type: 'customer',
+          id: customerId,
+          balance: Number(balance),
+          timestamp: new Date().toISOString(),
+        }
+      )
+    );
+  }, [dispatch]);
+
+  const enrichOrderForPrint = useCallback((
+    order,
+    paidAmount = amountPaid,
+    serverLedgerBalance = null,
+    serverPreviousBalance = null,
+  ) => {
+    if (!order) return order;
+
+    const paid = Number(paidAmount) || 0;
+    const orderId = order.id || order._id;
+    const invoiceRemaining = Math.max(0, total - paid);
+    const wasEdit = Boolean(activeEditData?.orderId);
+    const ledgerBalance = Number.isFinite(Number(serverLedgerBalance))
+      ? Number(serverLedgerBalance)
+      : computePostSaveLedgerBalance({
+        ledgerBalanceBefore: currentBalanceNum,
+        totalValue: total,
+        receivedAmount: paid,
+        savedInvoiceRemaining: editSavedInvoiceRemainingRef.current,
+        isNewSale: !wasEdit,
+      });
+    const previousBalance = Number.isFinite(Number(serverPreviousBalance))
+      ? Number(serverPreviousBalance)
+      : computePostSavePreviousBalance({
+        ledgerBalanceAfter: ledgerBalance,
+        totalValue: total,
+        receivedAmount: paid,
+        ledgerBalanceBefore: currentBalanceNum,
+        isNewSale: !wasEdit,
+      });
+
+    return {
+      ...order,
+      isEditMode: true,
+      id: orderId,
+      _id: orderId,
+      ledgerBalance,
+      previousBalance,
+      ledgerBalanceFresh: true,
+      payment: {
+        ...(order.payment || {}),
+        amountPaid: paid,
+        amountReceived: paid,
+        remainingBalance: invoiceRemaining,
+      },
+    };
+  }, [activeEditData?.orderId, amountPaid, currentBalanceNum, total]);
 
   const buildSalesCartOrder = useCallback(() => {
     const base = buildCartInvoiceOrder({
@@ -961,7 +1088,6 @@ export const Sales = ({ tabId, editData }) => {
       },
       invoiceNumber,
       orderType: resolvedOrderTypeForSave(),
-      ledgerBalance: Number.isFinite(Number(currentBalanceNum)) ? Number(currentBalanceNum) : undefined,
       createdByUser,
       isEditMode: Boolean(activeEditData?.orderId),
     });
@@ -989,7 +1115,6 @@ export const Sales = ({ tabId, editData }) => {
     amountPaid,
     isAdvancePayment,
     invoiceNumber,
-    currentBalanceNum,
     createdByUser,
     activeEditData,
     priceType,
@@ -1410,6 +1535,7 @@ export const Sales = ({ tabId, editData }) => {
     setIsLastPricesApplied(false);
     setPriceStatus({});
     setInlineEditData(null);
+    editSavedInvoiceRemainingRef.current = null;
     setDuplicateCartMerge(null);
     setProductSearchResetKey((k) => k + 1);
   }, []);
@@ -1441,12 +1567,24 @@ export const Sales = ({ tabId, editData }) => {
       // No need to manually refetch - it happens automatically via cache invalidation
       // This prevents React warnings about updating components during render
 
+      const serverLedger = result?.customerLedgerBalance;
+      const serverPrevious = result?.customerPreviousBalance;
+      const customerId =
+        result?.order?.customer_id ||
+        result?.order?.customerId ||
+        selectedCustomer?.id ||
+        selectedCustomer?._id;
+      if (customerId && serverLedger != null) {
+        patchCustomerLedgerCache(customerId, serverLedger);
+      }
+
       if (result?.order && autoPrintEnabled) {
-        setDirectPrintOrder(result.order);
+        setDirectPrintOrder(enrichOrderForPrint(result.order, amountPaid, serverLedger, serverPrevious));
       } else {
         // No print flow: complete and clear immediately.
         resetSaleDraft({ resetBillDate: true });
       }
+      editSavedInvoiceRemainingRef.current = Math.max(0, total - (Number(amountPaid) || 0));
       resetSubmittingState();
     } catch (error) {
       // Handle duplicate request errors gracefully (409)
@@ -1472,7 +1610,7 @@ export const Sales = ({ tabId, editData }) => {
         resetSubmittingState();
       }
     }
-  }, [createSale, resetSubmittingState, autoPrintEnabled, resetSaleDraft, refetchProducts]);
+  }, [createSale, resetSubmittingState, autoPrintEnabled, resetSaleDraft, refetchProducts, enrichOrderForPrint, amountPaid, total, patchCustomerLedgerCache, selectedCustomer]);
 
   const handleUpdateOrder = useCallback(async (orderId, updateData) => {
     // Double-check: prevent duplicate calls even if handleCheckout guard fails
@@ -1500,11 +1638,26 @@ export const Sales = ({ tabId, editData }) => {
       // No need to manually refetch - it happens automatically via cache invalidation
       // This prevents React warnings about updating components during render
 
+      const paidAfterUpdate = Number(updateData?.amountReceived ?? amountPaid) || 0;
+      const serverLedger = result?.customerLedgerBalance;
+      const serverPrevious = result?.customerPreviousBalance;
+      const customerId =
+        result?.order?.customer_id ||
+        result?.order?.customerId ||
+        updateData?.customer ||
+        selectedCustomer?.id ||
+        selectedCustomer?._id;
+      if (customerId && serverLedger != null) {
+        patchCustomerLedgerCache(customerId, serverLedger);
+      }
+
       if (result?.order && autoPrintEnabled) {
-        setDirectPrintOrder(result.order);
+        setDirectPrintOrder(enrichOrderForPrint(result.order, paidAfterUpdate, serverLedger, serverPrevious));
+        editSavedInvoiceRemainingRef.current = Math.max(0, total - paidAfterUpdate);
       } else {
         // No print flow: complete and clear immediately.
         resetSaleDraft();
+        editSavedInvoiceRemainingRef.current = Math.max(0, total - paidAfterUpdate);
       }
       resetSubmittingState();
     } catch (error) {
@@ -1530,7 +1683,7 @@ export const Sales = ({ tabId, editData }) => {
         resetSubmittingState();
       }
     }
-  }, [updateOrder, resetSubmittingState, isSubmittingRef, autoPrintEnabled, resetSaleDraft, refetchProducts]);
+  }, [updateOrder, resetSubmittingState, isSubmittingRef, autoPrintEnabled, resetSaleDraft, refetchProducts, enrichOrderForPrint, amountPaid, total, patchCustomerLedgerCache, selectedCustomer]);
 
   const handleCheckout = useCallback((e) => {
     // Prevent default and stop propagation to avoid any event bubbling issues
@@ -1808,7 +1961,7 @@ export const Sales = ({ tabId, editData }) => {
             <CustomerBalanceStrip
               customer={selectedCustomer}
               canViewBalance={hasPermission(PERMISSIONS.VIEW_CUSTOMER_BALANCE)}
-              balanceOverride={currentBalanceNum}
+              balanceOverride={checkoutPartyBalances.projectedLedger}
               creditLimitOverride={
                 selectedCustomer?.creditLimit ??
                 selectedCustomer?.credit_limit ??
@@ -2411,9 +2564,6 @@ export const Sales = ({ tabId, editData }) => {
                           orderData={buildSalesCartOrder()}
                           documentTitle="Sales Invoice"
                           partyLabel="Customer"
-                          ledgerBalance={
-                            Number.isFinite(Number(currentBalanceNum)) ? Number(currentBalanceNum) : undefined
-                          }
                           requireSaved={!activeEditData?.orderId}
                           showLabel={false}
                           size="sm"
@@ -2439,23 +2589,7 @@ export const Sales = ({ tabId, editData }) => {
                     </div>
                   )}
                   {selectedCustomer && (() => {
-                    // Match Print logic: invoiceBalance = net amount - received; previousBalance = ledger - invoiceBalance; totalReceivables = ledger
-                    // Use same balance as CustomerBalanceStrip (unified ledger when API provides it), not raw selectedCustomer only
-                    const unifiedLedger = Number(currentBalanceNum);
-                    const ledgerBalance = Number.isFinite(unifiedLedger)
-                      ? unifiedLedger
-                      : (selectedCustomer.currentBalance !== undefined && selectedCustomer.currentBalance !== null
-                        ? Number(selectedCustomer.currentBalance)
-                        : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0)));
-                    const receivedAmount = amountPaid || 0;
-                    const invoiceBalance = total - receivedAmount;
-                    // In edit mode, ledger already includes this invoice; in new sale, it does not
-                    const previousBalance = activeEditData?.isEditMode
-                      ? ledgerBalance - invoiceBalance
-                      : ledgerBalance;
-                    const totalReceivables = activeEditData?.isEditMode
-                      ? ledgerBalance
-                      : ledgerBalance + invoiceBalance;
+                    const { previousBalance, totalReceivables } = checkoutPartyBalances;
 
                     return (
                       <div className="mt-2">

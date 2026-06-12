@@ -9,7 +9,7 @@ import {
 import ThermalReceipt from './print/ThermalReceipt';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 import { useAuth } from '../contexts/AuthContext';
-import { computePrintPartyBalances } from '../utils/printBalanceUtils';
+import { computeLedgerPrintBalances } from '../utils/printBalanceUtils';
 
 /** Line items for print when payloads use alternate keys or list APIs omit items (minimal listMode). */
 function resolvePrintOrderLineItems(orderData) {
@@ -423,7 +423,7 @@ const PrintDocument = ({
     const {
         previousBalance,
         combinedRemainingBalance,
-    } = computePrintPartyBalances({
+    } = computeLedgerPrintBalances({
         ledgerBalance,
         totalValue,
         receivedAmount,

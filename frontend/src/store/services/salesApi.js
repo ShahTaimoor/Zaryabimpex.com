@@ -73,6 +73,33 @@ function buildInvalidateTagsAfterCreateSale(result, error, arg) {
   return tags;
 }
 
+/** Merge update/delete tags with customer-scoped balance cache invalidation. */
+function buildInvalidateTagsAfterSaleMutation(result, error, arg) {
+  const orderId = arg?.id ?? arg;
+  const tags = [
+    ...(orderId ? [{ type: 'Sales', id: orderId }] : []),
+    ...CACHE_INVALIDATE_AFTER_NEW_SALE,
+    ...CACHE_INVALIDATE_AFTER_SALE_LEDGER_REPORTS,
+  ];
+  if (error) return tags;
+
+  const customerId =
+    arg?.customer ??
+    result?.order?.customer_id ??
+    result?.order?.customerId ??
+    (typeof result?.order?.customer === 'string'
+      ? result.order.customer
+      : result?.order?.customer?.id ?? result?.order?.customer?._id);
+  if (customerId) {
+    const cid = String(customerId);
+    tags.push({ type: 'Customers', id: cid });
+    tags.push({ type: 'Accounting', id: 'CUSTOMER_BALANCE' });
+    tags.push({ type: 'Accounting', id: `BALANCE_customer_${cid}` });
+  }
+
+  return tags;
+}
+
 export const salesApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getSales: builder.query({
@@ -148,22 +175,14 @@ export const salesApi = api.injectEndpoints({
         method: 'put',
         data,
       }),
-      invalidatesTags: (_r, _e, { id }) => [
-        { type: 'Sales', id },
-        ...CACHE_INVALIDATE_AFTER_NEW_SALE,
-        ...CACHE_INVALIDATE_AFTER_SALE_LEDGER_REPORTS,
-      ],
+      invalidatesTags: buildInvalidateTagsAfterSaleMutation,
     }),
     deleteOrder: builder.mutation({
       query: (id) => ({
         url: `sales/${id}`,
         method: 'delete',
       }),
-      invalidatesTags: (_r, _e, id) => [
-        { type: 'Sales', id },
-        ...CACHE_INVALIDATE_AFTER_NEW_SALE,
-        ...CACHE_INVALIDATE_AFTER_SALE_LEDGER_REPORTS,
-      ],
+      invalidatesTags: buildInvalidateTagsAfterSaleMutation,
     }),
     getLastPrices: builder.query({
       query: (customerId) => ({
