@@ -40,12 +40,15 @@ export function computePartyBalances({
 
   if (posted) {
     const savedRemaining = Number(savedInvoiceRemaining);
-    const savedDelta = Number.isFinite(savedRemaining) ? savedRemaining : invoiceBalance;
-    const projectedLedger = ledger - savedDelta + invoiceBalance;
+    // Never treat the live invoice balance as the saved snapshot — that freezes receivables
+    // when qty/rate/payment change during edit.
+    const savedDelta = Number.isFinite(savedRemaining) ? savedRemaining : 0;
+    const previousBalance = ledger - savedDelta;
+    const projectedLedger = previousBalance + invoiceBalance;
 
     return {
       invoiceBalance,
-      previousBalance: projectedLedger - invoiceBalance,
+      previousBalance,
       combinedRemainingBalance: projectedLedger,
       totalReceivables: projectedLedger,
       projectedLedger,
@@ -62,6 +65,47 @@ export function computePartyBalances({
     totalReceivables: projectedLedger,
     projectedLedger,
     ledgerAlreadyIncludesInvoice: false,
+  };
+}
+
+/**
+ * Live POS checkout display: previous balance (before this invoice) + current invoice remaining.
+ * Always reacts to cart total and payment edits in real time.
+ */
+export function computeCheckoutDisplayBalances({
+  ledgerBalance = 0,
+  totalValue = 0,
+  receivedAmount = 0,
+  isEditMode = false,
+  savedInvoiceRemaining = null,
+  savedInvoiceTotal = null,
+  savedInvoicePaid = null,
+} = {}) {
+  const ledger = Number(ledgerBalance) || 0;
+  const invoiceRemaining = Math.max(0, (Number(totalValue) || 0) - (Number(receivedAmount) || 0));
+
+  let savedRemaining = Number(savedInvoiceRemaining);
+  if (isEditMode && !Number.isFinite(savedRemaining)) {
+    const savedTotal = Number(savedInvoiceTotal);
+    const savedPaid = Number(savedInvoicePaid);
+    if (Number.isFinite(savedTotal)) {
+      savedRemaining = Math.max(0, savedTotal - (Number.isFinite(savedPaid) ? savedPaid : 0));
+    }
+  }
+
+  const previousBalance = isEditMode && Number.isFinite(savedRemaining)
+    ? ledger - savedRemaining
+    : ledger;
+  const totalReceivables = previousBalance + invoiceRemaining;
+
+  return {
+    invoiceRemaining,
+    invoiceBalance: invoiceRemaining,
+    previousBalance,
+    combinedRemainingBalance: totalReceivables,
+    totalReceivables,
+    projectedLedger: totalReceivables,
+    ledgerAlreadyIncludesInvoice: isEditMode,
   };
 }
 

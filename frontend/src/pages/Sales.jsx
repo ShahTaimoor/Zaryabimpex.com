@@ -98,7 +98,7 @@ import PdfExportButton from '../components/PdfExportButton';
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 import { buildCartInvoiceOrder } from '../utils/buildCartInvoiceOrder';
 import {
-  computePartyBalances,
+  computeLedgerPrintBalances,
   computePostSaveLedgerBalance,
   computePostSavePreviousBalance,
 } from '../utils/printBalanceUtils';
@@ -245,7 +245,7 @@ export const Sales = ({ tabId, editData }) => {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const activeEditData = inlineEditData?.isEditMode ? inlineEditData : editData;
   /** Net − paid when the invoice was loaded into edit mode; drives live balance preview. */
-  const editSavedInvoiceRemainingRef = useRef(null);
+  const [editSavedInvoiceRemaining, setEditSavedInvoiceRemaining] = useState(null);
 
   useEffect(() => {
     const handleConfigChange = () => {
@@ -479,11 +479,11 @@ export const Sales = ({ tabId, editData }) => {
         activeEditData.payment?.amountReceived ??
         0
       ) || 0;
-      editSavedInvoiceRemainingRef.current = Math.max(0, savedTotal - savedPaid);
+      setEditSavedInvoiceRemaining(Math.max(0, savedTotal - savedPaid));
 
       // Data loaded successfully (no toast needed as Orders already shows opening message)
     } else {
-      editSavedInvoiceRemainingRef.current = null;
+      setEditSavedInvoiceRemaining(null);
     }
   }, [activeEditData?.orderId]); // Only depend on orderId to prevent multiple executions
 
@@ -951,6 +951,7 @@ export const Sales = ({ tabId, editData }) => {
         previousBalance: 0,
         totalReceivables: 0,
         projectedLedger: 0,
+        invoiceRemaining: 0,
       };
     }
 
@@ -960,22 +961,32 @@ export const Sales = ({ tabId, editData }) => {
         ? Number(selectedCustomer.currentBalance)
         : ((selectedCustomer.pendingBalance || 0) - (selectedCustomer.advanceBalance || 0)));
 
-    return computePartyBalances({
+    const isEditMode = Boolean(activeEditData?.orderId);
+    const invoiceRemaining = Math.max(0, Number(total) - (Number(amountPaid) || 0));
+
+    const printBalances = computeLedgerPrintBalances({
       ledgerBalance,
       totalValue: total,
       receivedAmount: amountPaid || 0,
-      isEditMode: Boolean(activeEditData?.orderId),
-      savedInvoiceRemaining: editSavedInvoiceRemainingRef.current,
-      orderData: activeEditData?.orderId
+      orderData: isEditMode
         ? { id: activeEditData.orderId, isEditMode: true }
         : null,
     });
+
+    return {
+      previousBalance: printBalances.previousBalance,
+      totalReceivables: printBalances.combinedRemainingBalance,
+      projectedLedger: printBalances.combinedRemainingBalance,
+      invoiceRemaining,
+    };
   }, [
     selectedCustomer,
     currentBalanceNum,
     total,
     amountPaid,
     activeEditData?.orderId,
+    cart.length,
+    subtotal,
   ]);
 
   // The orderType sent to the backend always reflects the user-selected
@@ -1035,7 +1046,7 @@ export const Sales = ({ tabId, editData }) => {
         ledgerBalanceBefore: currentBalanceNum,
         totalValue: total,
         receivedAmount: paid,
-        savedInvoiceRemaining: editSavedInvoiceRemainingRef.current,
+        savedInvoiceRemaining: editSavedInvoiceRemaining,
         isNewSale: !wasEdit,
       });
     const previousBalance = Number.isFinite(Number(serverPreviousBalance))
@@ -1063,7 +1074,7 @@ export const Sales = ({ tabId, editData }) => {
         remainingBalance: invoiceRemaining,
       },
     };
-  }, [activeEditData?.orderId, amountPaid, currentBalanceNum, total]);
+  }, [activeEditData?.orderId, amountPaid, currentBalanceNum, total, editSavedInvoiceRemaining]);
 
   const buildSalesCartOrder = useCallback(() => {
     const base = buildCartInvoiceOrder({
@@ -1535,7 +1546,7 @@ export const Sales = ({ tabId, editData }) => {
     setIsLastPricesApplied(false);
     setPriceStatus({});
     setInlineEditData(null);
-    editSavedInvoiceRemainingRef.current = null;
+    setEditSavedInvoiceRemaining(null);
     setDuplicateCartMerge(null);
     setProductSearchResetKey((k) => k + 1);
   }, []);
@@ -1584,7 +1595,7 @@ export const Sales = ({ tabId, editData }) => {
         // No print flow: complete and clear immediately.
         resetSaleDraft({ resetBillDate: true });
       }
-      editSavedInvoiceRemainingRef.current = Math.max(0, total - (Number(amountPaid) || 0));
+      setEditSavedInvoiceRemaining(Math.max(0, total - (Number(amountPaid) || 0)));
       resetSubmittingState();
     } catch (error) {
       // Handle duplicate request errors gracefully (409)
@@ -1653,11 +1664,11 @@ export const Sales = ({ tabId, editData }) => {
 
       if (result?.order && autoPrintEnabled) {
         setDirectPrintOrder(enrichOrderForPrint(result.order, paidAfterUpdate, serverLedger, serverPrevious));
-        editSavedInvoiceRemainingRef.current = Math.max(0, total - paidAfterUpdate);
+        setEditSavedInvoiceRemaining(Math.max(0, total - paidAfterUpdate));
       } else {
         // No print flow: complete and clear immediately.
         resetSaleDraft();
-        editSavedInvoiceRemainingRef.current = Math.max(0, total - paidAfterUpdate);
+        setEditSavedInvoiceRemaining(Math.max(0, total - paidAfterUpdate));
       }
       resetSubmittingState();
     } catch (error) {
@@ -2702,7 +2713,7 @@ export const Sales = ({ tabId, editData }) => {
                             />
                           </div>
 
-                          {/* 6. Total Receivables */}
+                          {/* 6. Total Receivables — same formula as invoice print Remaining Balance */}
                           <div className="flex flex-col">
                             <span className={`text-[10px] uppercase tracking-wider font-bold mb-1 ${totalReceivables < 0 ? 'text-red-700' : 'text-green-700'}`}>
                               Receivables

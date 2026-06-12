@@ -27,6 +27,8 @@ import { SupplierPartySelect, SupplierSummaryStrip } from '../components/order/S
 import { OrderNotesField } from '../components/order/OrderNotesField';
 import { PaymentMethodSelect } from '../components/order/PaymentMethodSelect';
 import { computePurchaseCheckoutPricing } from '../utils/orderPricing';
+import { getSupplierOutstanding } from '../utils/partyBalance';
+import { computeLedgerPrintBalances } from '../utils/printBalanceUtils';
 import { getSupplierDisplayName, getProductDisplayName } from '../utils/partyDisplay';
 import { useGetSupplierQuery } from '../store/services/suppliersApi';
 import { useDebouncedSupplierSearch } from '../hooks/useDebouncedSupplierSearch';
@@ -965,10 +967,54 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
     importChargesTotal,
   });
   // Use centralized ledger balance if available, fallback to entity balance
-  const supplierOutstanding = unifiedBalanceData?.balance ?? (
-    Number(selectedSupplier?.pendingBalance ?? selectedSupplier?.outstandingBalance ?? 0) || 0
+  const supplierLedgerBalanceNum = unifiedBalanceData?.balance ?? (
+    selectedSupplier ? getSupplierOutstanding(selectedSupplier) : 0
   );
-  const totalPayables = total + supplierOutstanding;
+
+  const checkoutSupplierBalances = useMemo(() => {
+    if (!selectedSupplier) {
+      return {
+        previousOutstanding: 0,
+        totalPayables: 0,
+        projectedLedger: 0,
+        invoiceRemaining: 0,
+      };
+    }
+
+    const ledgerBalance = Number.isFinite(Number(supplierLedgerBalanceNum))
+      ? Number(supplierLedgerBalanceNum)
+      : getSupplierOutstanding(selectedSupplier);
+
+    const isEditMode = Boolean(activeEditData?.invoiceId);
+    const invoiceRemaining = Math.max(0, Number(total) - (Number(amountPaid) || 0));
+
+    const printBalances = computeLedgerPrintBalances({
+      ledgerBalance,
+      totalValue: total,
+      receivedAmount: amountPaid || 0,
+      orderData: isEditMode
+        ? { id: activeEditData.invoiceId, isEditMode: true }
+        : null,
+    });
+
+    return {
+      previousOutstanding: printBalances.previousBalance,
+      totalPayables: printBalances.combinedRemainingBalance,
+      projectedLedger: printBalances.combinedRemainingBalance,
+      invoiceRemaining,
+    };
+  }, [
+    selectedSupplier,
+    supplierLedgerBalanceNum,
+    total,
+    amountPaid,
+    activeEditData?.invoiceId,
+    purchaseItems.length,
+    subtotal,
+  ]);
+
+  const { previousOutstanding, totalPayables, projectedLedger: supplierProjectedLedger } =
+    checkoutSupplierBalances;
 
   const getImportAllocatedItems = useCallback(() => {
     if (!isEnhancedImportPurchase || importChargesTotal <= 0 || purchaseItems.length === 0) {
@@ -1551,7 +1597,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
               supplier={selectedSupplier}
               canViewBalance={canViewSupplierBalance}
               canViewPhone={canViewSupplierPhone}
-              outstandingOverride={supplierOutstanding}
+              outstandingOverride={supplierProjectedLedger}
               roundOutstanding
             />
 
@@ -2086,11 +2132,11 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                             </div>
                           </div>
 
-                          {/* 4. Previous Outstanding */}
+                          {/* 4. Previous Outstanding — before this invoice (matches print) */}
                           <div className="flex flex-col">
                             <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Outstanding</span>
                             <div className="h-8 flex items-center px-2 bg-slate-50 border border-gray-200 rounded-md text-xl font-semibold tabular-nums text-foreground">
-                              {supplierOutstanding.toFixed(2)}
+                              {previousOutstanding.toFixed(2)}
                             </div>
                           </div>
 
@@ -2120,7 +2166,7 @@ export const Purchase = ({ tabId, editData, purchaseMode = 'local' }) => {
                             />
                           </div>
 
-                          {/* 6. Total Payables */}
+                          {/* 6. Total Payables — same formula as invoice print Remaining Balance */}
                           <div className="flex flex-col">
                             <span className="text-[10px] uppercase tracking-wider font-bold text-foreground mb-1">Payables</span>
                             <div className="h-8 flex items-center px-2 bg-slate-50 border border-gray-200 rounded-md text-xl font-bold tabular-nums text-primary">
