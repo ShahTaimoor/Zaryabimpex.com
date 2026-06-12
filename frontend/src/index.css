@@ -389,6 +389,94 @@
   width: 100%;
 }
 
+/* Auto-fit invoice preview inside print modal on small screens (screen only).
+   Print and PDF/WhatsApp share keep full desktop layout. */
+@media screen and (max-width: 768px) {
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) {
+    width: 100%;
+    max-width: 100%;
+    padding: 18px 16px 16px;
+    border-radius: 14px;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+    box-sizing: border-box;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .print-document__company {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .print-document__company-details {
+    text-align: left;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .print-document__company-name {
+    font-size: 22px;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .print-document__company-subtitle {
+    font-size: 13px;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .print-document__info-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .print-document__table {
+    font-size: 10px;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .print-document__summary {
+    justify-content: stretch;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .print-document__summary-table {
+    width: 100%;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .layout2-header .grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .layout2-header .col-span-2,
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .layout2-header .col-span-8,
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .layout2-header .col-span-4,
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .layout2-header .col-span-12 {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .grid.grid-cols-12 {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .grid.grid-cols-12 > [class*="col-span-"] {
+    grid-column: 1 / -1 !important;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .layout2-company-name {
+    font-size: 20px;
+    line-height: 1.2;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .layout2-table th,
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .layout2-table td {
+    padding: 4px 3px !important;
+    font-size: 10px !important;
+  }
+
+  .print-modal-preview .print-document:not(.print-document--compact):not(.print-document--receipt) .urdu-note {
+    margin-top: 16px;
+    font-size: 11px;
+  }
+}
+
 .print-document__title {
   font-size: 18px;
   font-weight: 600;

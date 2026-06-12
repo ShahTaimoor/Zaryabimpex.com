@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useCallback, useEffect, useState } from 'react';
 import BaseModal from '../BaseModal';
 import { Button } from '@/components/ui/button';
 import PrintWrapper from './PrintWrapper';
@@ -34,6 +34,17 @@ const PrintModal = ({
   pageStyle = PRINT_PAGE_STYLE
 }) => {
   const printRef = useRef(null);
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 768px)');
+    const syncViewport = () => setIsNarrowViewport(mediaQuery.matches);
+    syncViewport();
+    mediaQuery.addEventListener('change', syncViewport);
+    return () => mediaQuery.removeEventListener('change', syncViewport);
+  }, []);
 
   const handlePrint = useCallback(() => {
     if (printRef.current?.print) {
@@ -84,9 +95,9 @@ const PrintModal = ({
       isOpen={isOpen}
       onClose={onClose}
       title={`${documentTitle} – Print Preview`}
-      maxWidth="2xl"
+      maxWidth={isNarrowViewport ? 'full' : '2xl'}
       variant="centered"
-      contentClassName="p-4 overflow-auto max-h-[75vh] min-w-0 flex justify-center"
+      contentClassName="p-3 sm:p-4 overflow-x-hidden overflow-y-auto max-h-[75vh] min-w-0 flex justify-center"
       className="max-h-[90vh] flex flex-col"
       footer={footer}
       zIndex={zIndex}
@@ -98,7 +109,7 @@ const PrintModal = ({
         onAfterPrint={onAfterPrint}
       >
         {hasData ? (
-          <div className="print-preview-scale print-modal-preview max-w-full overflow-auto flex justify-center">
+          <div className="print-preview-scale print-modal-preview w-full max-w-full overflow-x-hidden flex justify-center">
             {children}
           </div>
         ) : (

@@ -18,17 +18,15 @@ export function isValidWhatsAppPhone(phone) {
 }
 
 /**
- * WhatsApp caption when sharing an invoice PDF — company name only (details are in the PDF).
+ * WhatsApp caption — empty by default (invoice PDF has all details).
+ * Only used for link-based fallback sharing.
  */
 export function buildWhatsAppInvoiceMessage(_orderData, options = {}) {
-  const { pdfLink, companyName } = options;
-
+  const { pdfLink } = options;
   if (pdfLink) {
-    const parts = [companyName, `Download Invoice:\n${pdfLink}`].filter(Boolean);
-    return parts.join('\n\n').trim();
+    return `Download Invoice:\n${pdfLink}`;
   }
-
-  return (companyName || '').trim();
+  return '';
 }
 
 export function resolvePartyPhoneFromOrder(orderData) {

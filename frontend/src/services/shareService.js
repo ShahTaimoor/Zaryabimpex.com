@@ -98,14 +98,11 @@ export async function shareInvoiceWhatsApp({
     companyName: companySettings?.companyName,
   });
 
-  // Primary: native share sheet — user chooses WhatsApp, then picks the customer contact.
+  // Primary: share PDF file only — no caption text (invoice details are inside the PDF).
+  // User picks WhatsApp, then selects the customer contact.
   if (canSharePdfFile(file)) {
     try {
-      await navigator.share({
-        files: [file],
-        title: `Invoice ${invoiceNumber}`,
-        text: message,
-      });
+      await navigator.share({ files: [file] });
       return { method: 'web-share-file' };
     } catch (err) {
       if (err?.name === 'AbortError') {
@@ -117,11 +114,10 @@ export async function shareInvoiceWhatsApp({
   if (canUseWebShareApi()) {
     try {
       await navigator.share({
+        files: [file],
         title: `Invoice ${invoiceNumber}`,
-        text: message,
-        url: pdfLink || undefined,
       });
-      return { method: 'web-share-text' };
+      return { method: 'web-share-file-fallback' };
     } catch (err) {
       if (err?.name === 'AbortError') {
         return { method: 'cancelled' };
@@ -129,12 +125,12 @@ export async function shareInvoiceWhatsApp({
     }
   }
 
-  // Fallback: open WhatsApp without a phone number — user selects the customer in WhatsApp.
+  // Fallback: save PDF, open WhatsApp — user picks contact and attaches the downloaded file.
   onProgress?.('Opening WhatsApp...');
   try {
     await downloadPdfFromPayload(payload, { onProgress });
   } catch {
-    // PDF download is best-effort; user can still paste message in WhatsApp.
+    // PDF download is best-effort.
   }
   openWhatsAppComposer(message);
   return { method: 'whatsapp-composer', pdfDownloaded: true };

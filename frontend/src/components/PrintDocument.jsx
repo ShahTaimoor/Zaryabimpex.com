@@ -83,9 +83,8 @@ const PrintDocument = ({
         logoSize = 100
     } = printSettings || {};
 
-    const isMobileLayout =
-        (printSettings?.mobilePrintPreview ?? false) ||
-        (typeof window !== 'undefined' && window.innerWidth <= 768);
+    // Mobile stacked layout only when explicitly enabled in Print Settings — not auto on phone screens.
+    const isMobileLayout = printSettings?.mobilePrintPreview === true;
     const isSale = (partyLabel?.toLowerCase() || '').includes('customer');
     const isPurchase = (partyLabel?.toLowerCase() || '').includes('supplier');
     const isReceipt = invoiceLayout === 'receipt';

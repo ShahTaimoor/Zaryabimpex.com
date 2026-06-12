@@ -69,6 +69,21 @@ export const PRINT_PAGE_STYLE = `
     -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
   }
 
+  .print-wrapper, .print-preview-scale, .print-modal-preview, .print-document {
+    transform: none !important;
+  }
+
+  .print-modal-preview .print-document__company {
+    flex-direction: row !important;
+    align-items: center !important;
+  }
+  .print-modal-preview .print-document__company-details { text-align: right !important; }
+  .print-modal-preview .print-document__info-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
+  }
+  .print-modal-preview .print-document__summary { justify-content: flex-end !important; }
+  .print-modal-preview .print-document__summary-table { width: 260px !important; }
+
   tr { page-break-inside: avoid !important; }
   thead { display: table-header-group !important; }
   .text-right { text-align: right !important; }

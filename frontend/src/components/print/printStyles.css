@@ -69,6 +69,45 @@
   .print-modal-preview {
     box-shadow: none !important;
     border: none !important;
+    transform: none !important;
+    overflow: visible !important;
+  }
+
+  /* Restore desktop invoice layout when printing from mobile preview */
+  .print-modal-preview .print-document__company {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0 !important;
+    margin-bottom: 28px !important;
+  }
+
+  .print-modal-preview .print-document__company-details {
+    text-align: right !important;
+  }
+
+  .print-modal-preview .print-document__company-name {
+    font-size: 30px !important;
+  }
+
+  .print-modal-preview .print-document__info-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
+    gap: 24px !important;
+  }
+
+  .print-modal-preview .print-document__summary {
+    justify-content: flex-end !important;
+  }
+
+  .print-modal-preview .print-document__summary-table {
+    width: 260px !important;
+  }
+
+  .print-modal-preview .layout2-header .grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+  }
+
+  .print-modal-preview .grid.grid-cols-12 {
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
   }
 
   /* ── .print-document reset (A4 / standard / layout2) ────────────────── */
