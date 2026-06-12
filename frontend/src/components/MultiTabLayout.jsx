@@ -141,6 +141,8 @@ export const MultiTabLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+  const mobileMenuButtonRef = useRef(null);
+  const mobileSidebarPanelRef = useRef(null);
   const { user, logout, hasPermission, isLoggingOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -201,6 +203,25 @@ export const MultiTabLayout = ({ children }) => {
       document.body.style.overflow = prev;
     };
   }, [sidebarOpen, isMobile]);
+
+  const closeSidebar = useCallback(() => {
+    if (mobileSidebarPanelRef.current?.contains(document.activeElement)) {
+      mobileMenuButtonRef.current?.focus({ preventScroll: true });
+    }
+    setSidebarOpen(false);
+  }, []);
+
+  const openSidebar = useCallback(() => {
+    setSidebarOpen(true);
+  }, []);
+
+  // Close drawer on route change when it was left open
+  useEffect(() => {
+    if (sidebarOpen) {
+      closeSidebar();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to navigation
+  }, [location.pathname]);
 
   // Get alert summary for mobile bottom navbar
   const { data: summaryData } = useGetAlertSummaryQuery(undefined, {
@@ -398,14 +419,20 @@ export const MultiTabLayout = ({ children }) => {
         className={`fixed inset-0 z-[60] lg:hidden transition-opacity duration-200 ${
           sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
-        aria-hidden={!sidebarOpen}
       >
         <div
           className="fixed inset-0 bg-gray-900/50 backdrop-blur-[1px]"
-          onClick={() => setSidebarOpen(false)}
-          aria-label="Close navigation menu"
+          onClick={closeSidebar}
+          aria-hidden="true"
+          tabIndex={-1}
         />
-        <div
+        <aside
+          ref={mobileSidebarPanelRef}
+          role="dialog"
+          aria-modal={sidebarOpen ? true : undefined}
+          aria-label="Navigation menu"
+          aria-hidden={!sidebarOpen}
+          {...(!sidebarOpen ? { inert: '' } : {})}
           className={`fixed inset-y-0 left-0 flex w-[min(16rem,85vw)] max-w-xs flex-col bg-gray-100 shadow-xl transition-transform duration-200 ease-out ${
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
@@ -416,13 +443,15 @@ export const MultiTabLayout = ({ children }) => {
               <h1 className="text-lg font-bold tracking-tight text-gray-900">ZARYAB IMPEX</h1>
             </div>
             <button
-              onClick={() => setSidebarOpen(false)}
+              type="button"
+              onClick={closeSidebar}
               className="text-gray-400 hover:text-gray-600"
+              aria-label="Close navigation menu"
             >
               <X className="h-6 w-6" />
             </button>
           </div>
-          <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto max-h-[calc(100dvh-3.5rem)] scrollbar-thin scrollbar-thumb-gray-200">
+          <nav id="mobile-sidebar-nav" className="flex-1 space-y-1 px-3 py-4 overflow-y-auto max-h-[calc(100dvh-3.5rem)] scrollbar-thin scrollbar-thumb-gray-200">
             {navigation.map((item) => (
               <SidebarItem
                 key={item.name}
@@ -434,12 +463,12 @@ export const MultiTabLayout = ({ children }) => {
                 hasPermission={hasPermission}
                 onNavigate={(item) => {
                   handleNavigationClick(item);
-                  setSidebarOpen(false);
+                  closeSidebar();
                 }}
               />
             ))}
           </nav>
-        </div>
+        </aside>
       </div>
 
       {/* Desktop sidebar */}
@@ -476,8 +505,12 @@ export const MultiTabLayout = ({ children }) => {
           {/* Mobile Menu Button */}
           <button
             type="button"
+            ref={mobileMenuButtonRef}
             className="-m-2.5 p-2.5 text-gray-700 lg:hidden mr-2"
-            onClick={() => setSidebarOpen(true)}
+            onClick={openSidebar}
+            aria-label="Open navigation menu"
+            aria-expanded={sidebarOpen}
+            aria-controls="mobile-sidebar-nav"
           >
             <Menu className="h-6 w-6" />
           </button>
