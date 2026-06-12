@@ -54,6 +54,7 @@ const ThermalReceipt = ({
   const tax = pricing.taxAmount || orderData.tax || 0;
   const shipping = pricing.shipping || 0;
   const total = pricing.total || orderData.total || 0;
+  const notes = String(orderData.notes || '').trim();
 
   const formatDate = (date) => {
     if (!date) return 'N/A';
@@ -123,6 +124,12 @@ const ThermalReceipt = ({
           <div className="thermal-receipt__info-row">
             <span>Customer:</span>
             <span>{customerInfo.name}</span>
+          </div>
+        )}
+        {notes && (
+          <div className="thermal-receipt__info-row thermal-receipt__info-row--notes">
+            <span>Notes:</span>
+            <span className="thermal-receipt__notes-value">{notes}</span>
           </div>
         )}
       </div>

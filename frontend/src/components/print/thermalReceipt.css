@@ -69,6 +69,19 @@
   font-weight: 600;
 }
 
+.thermal-receipt__info-row--notes {
+  align-items: flex-start;
+  gap: 2mm;
+}
+
+.thermal-receipt__notes-value {
+  flex: 1;
+  max-width: 65%;
+  text-align: right;
+  white-space: pre-line;
+  word-wrap: break-word;
+}
+
 .thermal-receipt__table {
   width: 100%;
   border-collapse: collapse;
