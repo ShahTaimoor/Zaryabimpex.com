@@ -162,21 +162,21 @@ const PurchaseItem = ({
             className="p-1 flex-shrink-0"
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Stock</label>
-            <span className="text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center leading-tight">
+        <div className="grid grid-cols-4 gap-2">
+          <div className="min-w-0">
+            <label className="block text-[10px] text-gray-500 mb-1 truncate">Stock</label>
+            <span className="text-xs font-semibold text-gray-700 bg-gray-100 px-1 py-1.5 rounded border border-gray-200 block text-center leading-tight min-h-[2rem] flex items-center justify-center">
               {hasDualUnit(product)
                 ? formatStockDualLabel(currentStock, product)
                 : currentStock}
             </span>
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Total</label>
-            <LineItemTotalCell value={totalPrice.toFixed(2)} textSize="text-xs" />
+          <div className="min-w-0">
+            <label className="block text-[10px] text-gray-500 mb-1 truncate">Total</label>
+            <LineItemTotalCell value={totalPrice.toFixed(2)} textSize="text-xs" className="px-1" />
           </div>
-          <div className={hasDualUnit(product) ? 'col-span-2' : ''}>
-            <label className="block text-xs text-gray-500 mb-1">Quantity</label>
+          <div className="min-w-0">
+            <label className="block text-[10px] text-gray-500 mb-1 truncate">Quantity</label>
             {hasDualUnit(product) ? (
               <DualUnitQuantityInput
                 product={product}
@@ -193,7 +193,7 @@ const PurchaseItem = ({
                   onUpdateQuantity(item.product?._id, newQuantity, ppb ? { boxes, pieces } : undefined);
                 }}
                 min={1}
-                inputClassName="input text-center text-sm h-8"
+                inputClassName="input text-center text-sm h-8 px-1"
                 compact={hasDualUnit(product)}
               />
             ) : (
@@ -203,13 +203,13 @@ const PurchaseItem = ({
                 value={item.quantity}
                 onChange={(e) => onUpdateQuantity(item.product?._id, parseInt(e.target.value) || 1)}
                 onFocus={(e) => e.target.select()}
-                className="input text-center text-sm h-8"
+                className="input text-center text-sm h-8 px-1 w-full"
                 min="1"
               />
             )}
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Cost</label>
+          <div className="min-w-0">
+            <label className="block text-[10px] text-gray-500 mb-1 truncate">Cost</label>
             <input
               type="number"
               step="0.01"
@@ -217,7 +217,7 @@ const PurchaseItem = ({
               value={item.costPerUnit}
               onChange={(e) => onUpdateCost(item.product?._id, parseFloat(e.target.value) || 0)}
               onFocus={(e) => e.target.select()}
-              className="input text-center text-sm h-8"
+              className="input text-center text-sm h-8 px-1 w-full"
               min="0"
             />
           </div>

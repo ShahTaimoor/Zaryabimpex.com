@@ -2508,17 +2508,17 @@ const SalesOrders = ({ tabId }) => {
                         </div>
 
                         {/* Details Grid */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className={`grid gap-2 ${canViewStock ? 'grid-cols-4' : 'grid-cols-3'}`}>
                           {canViewStock && (
-                            <div>
-                              <p className="text-xs text-gray-500 mb-1">Stock</p>
-                              <p className="text-sm font-medium text-gray-900">
+                            <div className="min-w-0">
+                              <p className="text-[10px] text-gray-500 mb-1 truncate">Stock</p>
+                              <p className="text-xs font-medium text-gray-900 text-center bg-gray-100 border border-gray-200 rounded h-8 flex items-center justify-center px-1">
                                 {product?.inventory?.currentStock || 0}
                               </p>
                             </div>
                           )}
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Quantity</p>
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-gray-500 mb-1 truncate">Quantity</p>
                             <DualUnitQuantityInput
                               product={product}
                               quantity={item.quantity}
@@ -2547,11 +2547,11 @@ const SalesOrders = ({ tabId }) => {
                               showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(product)}
                               showPiecesInput={dualUnitShowPiecesInputEnabled}
                               showPiecesUnitLabel={false}
-                              inputClassName="input text-center h-8 text-sm w-full"
+                              inputClassName="input text-center h-8 text-sm w-full px-1"
                             />
                           </div>
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Rate</p>
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-gray-500 mb-1 truncate">Rate</p>
                             <input
                               type="number"
                               step="0.01"
@@ -2583,16 +2583,16 @@ const SalesOrders = ({ tabId }) => {
                                 }));
                               }}
                               onFocus={(e) => e.target.select()}
-                              className={`input text-center h-8 text-sm w-full ${isBelowCost
+                              className={`input text-center h-8 text-sm w-full px-1 ${isBelowCost
                                 ? 'border-red-500 bg-red-50'
                                 : ''
                                 }`}
                               min="0"
                             />
                           </div>
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Total</p>
-                            <p className="text-sm font-semibold text-gray-900 bg-gray-100 px-2 py-1 rounded border border-gray-200 text-center h-8 flex items-center justify-center">
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-gray-500 mb-1 truncate">Total</p>
+                            <p className="text-xs font-semibold text-gray-900 bg-gray-100 px-1 py-1 rounded border border-gray-200 text-center h-8 flex items-center justify-center">
                               {Math.round(totalPrice)}
                             </p>
                           </div>

@@ -703,13 +703,14 @@ function ProductSearchComponent({
           : 'col-span-7';
   /** Dual-unit uses two regular-width columns: Box + Qty */
   const quantityColClass = dualUnit ? 'col-span-2' : 'col-span-1';
+  const showStockField = !isManualMode && canViewStock;
 
   return (
     <div className="space-y-4">
       {/* Product Selection - Responsive Layout */}
       <div>
-        {/* Mobile Layout */}
-        <div className="md:hidden space-y-3">
+        {/* Mobile & tablet layout */}
+        <div className="lg:hidden space-y-3">
           {/* Product Search */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -838,26 +839,23 @@ function ProductSearchComponent({
             </div>
           </div>
 
-          {/* Fields Grid - 2 columns on mobile */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Fields Grid - single row on mobile/tablet */}
+          <div className={`grid gap-2 ${showStockField ? 'grid-cols-4' : 'grid-cols-3'}`}>
             {/* Stock */}
-            {!isManualMode && canViewStock && (
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+            {showStockField && (
+              <div className="min-w-0">
+                <label className="block text-[10px] font-medium text-gray-700 mb-1 truncate">
                   Stock
                 </label>
                 <span
-                  className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-2 rounded border border-gray-200 block text-center min-h-[2.5rem] flex flex-col items-center justify-center gap-0.5 leading-tight"
+                  className="text-xs font-semibold text-gray-700 bg-gray-100 px-1 py-1.5 rounded border border-gray-200 block text-center min-h-[2rem] flex flex-col items-center justify-center gap-0.5 leading-tight"
                   title={selectedProduct ? `Available stock (pieces)` : ''}
                 >
                   {selectedProduct ? (
                     hasDualUnit(selectedProduct) ? (
-                      <>
-                        <span className="text-xs">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
-
-                      </>
+                      <span className="text-[10px] leading-tight">{formatStockDualLabel(selectedProduct.inventory?.currentStock ?? 0, selectedProduct)}</span>
                     ) : (
-                      <span>{selectedProduct.inventory?.currentStock ?? 0} pcs</span>
+                      <span>{selectedProduct.inventory?.currentStock ?? 0}</span>
                     )
                   ) : (
                     '0'
@@ -867,8 +865,8 @@ function ProductSearchComponent({
             )}
 
             {/* Amount */}
-            <div className={isManualMode ? 'col-span-1' : ''}>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+            <div className="min-w-0">
+              <label className="block text-[10px] font-medium text-gray-700 mb-1 truncate">
                 Amount
               </label>
               <Input
@@ -876,23 +874,26 @@ function ProductSearchComponent({
                 readOnly
                 value={isAddingProduct ? formatDisplayNumber(quantity * (parseFloat(customRate || 0) || 0)) : 0}
                 onFocus={(e) => e.target.select()}
-                className="text-center h-10 bg-gray-100 font-semibold text-gray-700"
+                className="text-center h-8 px-1 bg-gray-100 font-semibold text-gray-700 text-sm"
               />
             </div>
 
             {/* Box + Qty (dual unit): no parent "Quantity" label — matches cart columns */}
-            <div className={(!isManualMode && dualUnit) ? 'col-span-2' : ''}>
+            <div className="min-w-0">
               {(!isManualMode && !dualUnit) || isManualMode ? (
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-[10px] font-medium text-gray-700 mb-1 truncate">
                   Quantity
                 </label>
-              ) : null}
+              ) : (
+                <label className="block text-[10px] font-medium text-gray-700 mb-1 truncate">
+                  Qty
+                </label>
+              )}
               {!isManualMode && dualUnit ? (
                 (dualUnitShowBoxInput || dualUnitShowPiecesInput) ? (
-                  <div className={`grid ${dualUnitShowBoxInput && dualUnitShowPiecesInput ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                  <div className={`grid ${dualUnitShowBoxInput && dualUnitShowPiecesInput ? 'grid-cols-2' : 'grid-cols-1'} gap-1`}>
                     {dualUnitShowBoxInput && (
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Box</label>
+                      <div className="min-w-0">
                         <Input
                           type="number"
                           min="0"
@@ -908,13 +909,14 @@ function ProductSearchComponent({
                           }}
                           onFocus={(e) => e.target.select()}
                           onKeyDown={handleKeyDown}
-                          className="text-center h-10"
+                          className="text-center h-8 px-1 text-sm"
+                          placeholder="Box"
+                          aria-label="Box quantity"
                         />
                       </div>
                     )}
                     {dualUnitShowPiecesInput && (
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Qty</label>
+                      <div className="min-w-0">
                         <Input
                           type="number"
                           min="1"
@@ -926,7 +928,9 @@ function ProductSearchComponent({
                           }}
                           onFocus={(e) => e.target.select()}
                           onKeyDown={handleKeyDown}
-                          className="text-center h-10"
+                          className="text-center h-8 px-1 text-sm"
+                          placeholder="Qty"
+                          aria-label="Piece quantity"
                         />
                       </div>
                     )}
@@ -942,7 +946,7 @@ function ProductSearchComponent({
                     showBoxInput={false}
                     showPiecesInput={false}
                     onKeyDown={handleKeyDown}
-                    inputClassName="text-center h-10 border border-gray-300 rounded px-2 w-full"
+                    inputClassName="text-center h-8 border border-gray-300 rounded px-1 w-full text-sm"
                     compact
                   />
                 )
@@ -954,14 +958,14 @@ function ProductSearchComponent({
                   onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 0))}
                   onFocus={(e) => e.target.select()}
                   onKeyDown={handleKeyDown}
-                  className="text-center h-10"
+                  className="text-center h-8 px-1 text-sm"
                 />
               )}
             </div>
 
             {/* Rate */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+            <div className="min-w-0">
+              <label className="block text-[10px] font-medium text-gray-700 mb-1 truncate">
                 Rate
               </label>
               <Input
@@ -972,7 +976,7 @@ function ProductSearchComponent({
                 onChange={(e) => setCustomRate(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onFocus={(e) => e.target.select()}
-                className="text-center h-10"
+                className="text-center h-8 px-1 text-sm"
                 placeholder="0"
                 required
               />
@@ -980,7 +984,7 @@ function ProductSearchComponent({
 
             {/* Cost - Full width if shown */}
             {showCostPrice && hasCostPricePermission && (
-              <div className="col-span-2">
+              <div className={showStockField ? 'col-span-4' : 'col-span-3'}>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Cost
                 </label>
@@ -1026,7 +1030,7 @@ function ProductSearchComponent({
 
         {/* Desktop Layout — items-start for quantity column alignment */}
         <div 
-          className={`hidden md:grid gap-x-1 items-start pb-2 border-b border-gray-200 mb-1 ${
+          className={`hidden lg:grid gap-x-1 items-start pb-2 border-b border-gray-200 mb-1 ${
             dualUnitShowBoxInput
               ? (showCostPrice && hasCostPricePermission
                   ? 'grid-cols-[2.25rem_minmax(0,1fr)_4.75rem_5.35rem_5.35rem_5rem_5.35rem_5.35rem_2.25rem]'

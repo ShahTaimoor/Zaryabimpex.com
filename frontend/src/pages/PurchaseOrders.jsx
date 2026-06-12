@@ -1599,21 +1599,21 @@ export const PurchaseOrders = ({ tabId }) => {
                             className="h-8 w-8 p-0 flex-shrink-0 ml-2"
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Stock</label>
-                            <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200 block text-center leading-tight">
+                        <div className="grid grid-cols-4 gap-2">
+                          <div className="min-w-0">
+                            <label className="block text-[10px] font-medium text-gray-500 mb-1 truncate">Stock</label>
+                            <span className="text-xs font-semibold text-gray-700 bg-gray-100 px-1 py-1.5 rounded border border-gray-200 block text-center leading-tight min-h-[2rem] flex items-center justify-center">
                               {hasDualUnit(product)
                                 ? formatStockDualLabel(product?.inventory?.currentStock || 0, product)
                                 : (product?.inventory?.currentStock || 0)}
                             </span>
                           </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Total</label>
-                            <LineItemTotalCell value={Math.round(totalPrice)} />
+                          <div className="min-w-0">
+                            <label className="block text-[10px] font-medium text-gray-500 mb-1 truncate">Total</label>
+                            <LineItemTotalCell value={Math.round(totalPrice)} textSize="text-xs" className="px-1" />
                           </div>
-                          <div className={hasDualUnit(product) ? 'col-span-2' : ''}>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
+                          <div className="min-w-0">
+                            <label className="block text-[10px] font-medium text-gray-500 mb-1 truncate">Quantity</label>
                             {hasDualUnit(product) ? (
                               <DualUnitQuantityInput
                                 product={product}
@@ -1640,7 +1640,7 @@ export const PurchaseOrders = ({ tabId }) => {
                                   }));
                                 }}
                                 min={1}
-                                inputClassName="text-center h-8 w-full border border-gray-300 rounded px-2"
+                                inputClassName="text-center h-8 w-full border border-gray-300 rounded px-1 text-sm"
                                 compact={hasDualUnit(product)}
                               />
                             ) : (
@@ -1661,13 +1661,13 @@ export const PurchaseOrders = ({ tabId }) => {
                                   }));
                                 }}
                                 onFocus={(e) => e.target.select()}
-                                className="text-center h-8 w-full"
+                                className="text-center h-8 w-full px-1 text-sm"
                                 min="1"
                               />
                             )}
                           </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Cost</label>
+                          <div className="min-w-0">
+                            <label className="block text-[10px] font-medium text-gray-500 mb-1 truncate">Cost</label>
                             <Input
                               type="number"
                               step="0.01"
@@ -1682,7 +1682,7 @@ export const PurchaseOrders = ({ tabId }) => {
                                 }));
                               }}
                               onFocus={(e) => e.target.select()}
-                              className="text-center h-8 w-full"
+                              className="text-center h-8 w-full px-1 text-sm"
                               min="0"
                             />
                           </div>

@@ -2091,7 +2091,7 @@ export const Sales = ({ tabId, editData }) => {
                       style={{ transform: `translateY(${virtualRow.start}px)` }}
                     >
                       {/* Mobile Card View */}
-                      <div className="md:hidden mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
+                      <div className="lg:hidden mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1 min-w-0 flex items-center gap-3">
                             {showProductImages && (
@@ -2137,30 +2137,43 @@ export const Sales = ({ tabId, editData }) => {
                             className="h-8 w-8 p-0 flex-shrink-0 ml-2"
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div
+                          className={`grid gap-2 ${
+                            hasDualUnit(item.product) && dualUnitShowBoxInputEnabled
+                              ? 'grid-cols-5'
+                              : 'grid-cols-4'
+                          }`}
+                        >
                           {hasDualUnit(item.product) && dualUnitShowBoxInputEnabled && (
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Box</label>
+                            <div className="min-w-0">
+                              <label className="block text-[10px] font-medium text-gray-500 mb-1 truncate">Box</label>
                               <LineItemBoxInputCell
                                 product={item.product}
                                 item={item}
                                 onChange={(value) => updateCartBoxCount(item.product._id, value)}
+                                className="px-1 text-xs"
                               />
                             </div>
                           )}
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Stock</label>
+                          <div className="min-w-0">
+                            <label className="block text-[10px] font-medium text-gray-500 mb-1 truncate">Stock</label>
                             <LineItemStockCell
                               currentStock={item.product.inventory?.currentStock}
                               reorderPoint={item.product.inventory?.reorderPoint}
+                              textSize="text-xs"
+                              className="px-1"
                             />
                           </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Total</label>
-                            <LineItemTotalCell value={Math.round(totalPrice)} />
+                          <div className="min-w-0">
+                            <label className="block text-[10px] font-medium text-gray-500 mb-1 truncate">Total</label>
+                            <LineItemTotalCell
+                              value={Math.round(totalPrice)}
+                              textSize="text-xs"
+                              className="px-1"
+                            />
                           </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Quantity</label>
+                          <div className="min-w-0">
+                            <label className="block text-[10px] font-medium text-gray-500 mb-1 truncate">Quantity</label>
                             <DualUnitQuantityInput
                               product={item.product}
                               quantity={item.quantity}
@@ -2172,12 +2185,12 @@ export const Sales = ({ tabId, editData }) => {
                               showPiecesUnitLabel={false}
                               showBoxInput={dualUnitShowBoxInputEnabled && !hasDualUnit(item.product)}
                               showPiecesInput={dualUnitShowPiecesInputEnabled}
-                              inputClassName="w-full min-w-0 text-center h-8 border border-gray-300 rounded px-2"
+                              inputClassName="w-full min-w-0 text-center h-8 border border-gray-300 rounded px-1 text-sm"
                               compact={hasDualUnit(item.product)}
                             />
                           </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Rate</label>
+                          <div className="min-w-0">
+                            <label className="block text-[10px] font-medium text-gray-500 mb-1 truncate">Rate</label>
                             <Input
                               type="number"
                               step="1"
@@ -2185,7 +2198,7 @@ export const Sales = ({ tabId, editData }) => {
                               value={Math.round(item.unitPrice)}
                               onChange={(e) => updateUnitPrice(item.product._id, parseInt(e.target.value) || 0)}
                               onFocus={(e) => e.target.select()}
-                              className={`text-center h-8 w-full ${isBelowCost
+                              className={`text-center h-8 w-full px-1 text-sm ${isBelowCost
                                 ? 'bg-red-50 border-red-400 ring-2 ring-red-300'
                                 : ''
                                 }`}
@@ -2193,7 +2206,13 @@ export const Sales = ({ tabId, editData }) => {
                             />
                           </div>
                           {showCostPrice && hasPermission(PERMISSIONS.VIEW_PRODUCT_COSTS) && (
-                            <div className="col-span-2">
+                            <div
+                              className={
+                                hasDualUnit(item.product) && dualUnitShowBoxInputEnabled
+                                  ? 'col-span-5'
+                                  : 'col-span-4'
+                              }
+                            >
                               <label className="block text-xs font-medium text-gray-500 mb-1">Cost</label>
                               <span className="text-sm font-semibold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 block text-center">
                                 {lineDisplayCost ?? 'N/A'}
@@ -2204,7 +2223,7 @@ export const Sales = ({ tabId, editData }) => {
                       </div>
 
                       {/* Desktop Table Row */}
-                      <div className={`hidden md:block py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                      <div className={`hidden lg:block py-1 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                         <div
                           className={`grid gap-x-1 items-center ${dualUnitShowBoxInputEnabled
                             ? (
