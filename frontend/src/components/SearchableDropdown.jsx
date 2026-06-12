@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, forwardRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, forwardRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Search, ChevronDown, Check } from 'lucide-react';
@@ -25,8 +25,8 @@ function splitSearchTokensLower(term) {
     .split(/\s+/)
     .filter((t) => t.length > 0);
 }
-/** Initial estimate before measure; customer rows can be multi-line (name + balance). */
-const DROPDOWN_ROW_ESTIMATE = 72;
+/** Initial estimate before measure; single-line rows ~36px, multi-line measured dynamically. */
+const DROPDOWN_ROW_ESTIMATE = 40;
 
 /** Stable id for list deduping when valueKey may not match (e.g. id vs _id). */
 const getItemId = (item, valueKey) => {
@@ -75,7 +75,6 @@ export const SearchableDropdown = forwardRef(({
   /** Skip one focus-open after mouse selection (focus restore must not reopen the list). */
   const skipNextOpenOnFocusRef = useRef(false);
   const listScrollRef = useRef(null);
-  const itemRefs = useRef([]);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
 
   const rowVirtualizer = useVirtualizer({
@@ -84,6 +83,13 @@ export const SearchableDropdown = forwardRef(({
     estimateSize: () => DROPDOWN_ROW_ESTIMATE,
     overscan: 8,
   });
+
+  // Re-measure rows when the list opens or changes so virtual slots match actual height.
+  useLayoutEffect(() => {
+    if (isOpen && filteredItems.length > 0) {
+      rowVirtualizer.measure();
+    }
+  }, [isOpen, filteredItems.length]);
 
   const valueToDisplayString = (value) => {
     if (value == null) return '';
@@ -626,10 +632,7 @@ export const SearchableDropdown = forwardRef(({
                     <div
                       key={virtualRow.key}
                       data-index={virtualRow.index}
-                      ref={(node) => {
-                        rowVirtualizer.measureElement(node);
-                        itemRefs.current[index] = node;
-                      }}
+                      ref={rowVirtualizer.measureElement}
                       className="absolute left-0 top-0 w-full"
                       style={{
                         transform: `translateY(${virtualRow.start}px)`,
@@ -639,11 +642,11 @@ export const SearchableDropdown = forwardRef(({
                         type="button"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => handleSelect(item, { restoreInputFocus: true })}
-                        className={`flex min-h-[44px] w-full items-start justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${isSelected ? 'bg-primary-50 text-primary-700' : 'text-gray-900'
+                        className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${isSelected ? 'bg-primary-50 text-primary-700' : 'text-gray-900'
                           }`}
                       >
                         <span className="min-w-0 flex-1">{getDisplayValue(item)}</span>
-                        <span className="flex shrink-0 items-start gap-2 pt-0.5">
+                        <span className="flex shrink-0 items-center gap-2">
                           {getRightContent(item) && (
                             <span className="text-xs text-gray-500">{getRightContent(item)}</span>
                           )}
