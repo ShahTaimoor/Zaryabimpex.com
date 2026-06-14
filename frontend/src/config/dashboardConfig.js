@@ -6,7 +6,7 @@ export const DASHBOARD_WIDGET_SECTIONS = [
     label: 'Revenue, Cost & Discounts',
     widgets: [
       { key: 'salesRevenue', label: 'Sales (Revenue)', description: 'Sales orders and invoices (SO | SI)' },
-      { key: 'purchaseCogs', label: 'Purchase (COGS)', description: 'Purchase orders and invoices (PO | PI)' },
+      { key: 'purchaseCogs', label: 'Total Purchases', description: 'Purchase orders and invoices (PO | PI)' },
       { key: 'discountGiven', label: 'Discount Given', description: 'Total discounts in the period' },
       { key: 'pendingSalesOrders', label: 'Pending Sales Orders', description: 'Open sales orders count' },
       { key: 'pendingPurchaseOrders', label: 'Pending Purchase Orders', description: 'Open purchase orders count' },

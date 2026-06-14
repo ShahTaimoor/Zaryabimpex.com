@@ -267,7 +267,7 @@ export const AdvancedSettingsTab = memo(function AdvancedSettingsTab({ setSideba
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm text-gray-700">
               <div><strong>Sales:</strong> Total revenue from Sales Orders + Sales Invoices</div>
               <div><strong>Net Revenue:</strong> Sales minus discounts given</div>
-              <div><strong>Purchase (COGS):</strong> Cost of goods purchased from suppliers</div>
+              <div><strong>Total Purchases:</strong> Cost of goods purchased from suppliers</div>
               <div><strong>Gross Profit:</strong> Net Revenue - COGS (your margin)</div>
               <div><strong>Receipts:</strong> Total money received (Cash Receipts + Bank Receipts + Sales Invoice Payments)</div>
               <div><strong>Payments:</strong> Cash/Bank money paid (includes supplier payments + expenses)</div>
