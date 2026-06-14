@@ -6,6 +6,7 @@ const ReturnRepository = require('../repositories/postgres/ReturnRepository');
 const AccountingService = require('./accountingService');
 const { getCached } = require('../utils/ttlCache');
 const { stableQueryKey } = require('../utils/stableQueryKey');
+const cogsProfitService = require('./cogsProfitService');
 
 const REPORT_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.REPORT_CACHE_TTL_MS || '90000', 10));
 
@@ -181,7 +182,7 @@ class ReportsService {
             s.sale_date as date,
             COALESCE(c.business_name, c.name) as "customerName",
             s.total,
-            s.payment_status as status,
+            COALESCE(s.payment_status, 'pending') as status,
             s.payment_method as method
           FROM sales s
           LEFT JOIN customers c ON s.customer_id = c.id
@@ -1724,6 +1725,17 @@ class ReportsService {
         partyType,
         city: city || 'All Cities'
       };
+    });
+  }
+
+  /**
+   * Get COGS & Profit Report
+   * @param {object} filters - Query filters
+   * @returns {Promise<object>}
+   */
+  async getCOGSProfitReport(filters) {
+    return reportsCache('getCOGSProfitReport', filters, async () => {
+      return await cogsProfitService.getCOGSProfitReport(filters);
     });
   }
 

@@ -16,6 +16,7 @@ const settingsService = require('./settingsService');
 const { getEffectiveGlobalTaxRate } = require('../utils/globalTax');
 const purchaseInvoiceRepository = require('../repositories/postgres/PurchaseInvoiceRepository');
 const { withBusinessTransaction } = require('./withBusinessTransaction');
+const costingService = require('./costingService');
 
 /** User-facing message when AR would exceed credit limit (sales order confirm / invoice). */
 const CREDIT_LIMIT_EXCEEDED_INVOICE_MESSAGE = 'Credit limit exceeded. Invoice cannot be created';
@@ -629,12 +630,18 @@ class SalesService {
       let productId = null;
       if (product) {
         productId = product.id || product._id;
-        const inv = await inventoryRepository.findByProduct(productId);
-        if (inv && inv.cost) {
-          const costObj = typeof inv.cost === 'string' ? JSON.parse(inv.cost) : inv.cost;
-          unitCost = costObj.average ?? costObj.lastPurchase ?? 0;
+        try {
+          const costInfo = await costingService.calculateCost(productId, item.quantity);
+          unitCost = costInfo.unitCost || 0;
+        } catch (err) {
+          console.error(`Failed to calculate costing for product ${productId}:`, err.message);
+          const inv = await inventoryRepository.findByProduct(productId);
+          if (inv && inv.cost) {
+            const costObj = typeof inv.cost === 'string' ? JSON.parse(inv.cost) : inv.cost;
+            unitCost = costObj.average ?? costObj.lastPurchase ?? 0;
+          }
+          if (unitCost === 0) unitCost = product.pricing?.cost ?? product.cost_price ?? 0;
         }
-        if (unitCost === 0) unitCost = product.pricing?.cost ?? product.cost_price ?? 0;
       } else {
         // Manual item: COGS/P&L use line unitCost (POS may send cost entered at sale time)
         productId = item.product || `manual_${Date.now()}`;

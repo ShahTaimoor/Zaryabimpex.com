@@ -222,4 +222,24 @@ router.get('/bank-cash-summary', [
   }
 });
 
+// @route   GET /api/reports/cogs-profit
+// @desc    Get COGS & Profit report for sales invoices
+// @access  Private
+router.get('/cogs-profit', [
+  auth,
+  requirePermission('view_reports'),
+  ...validateDateParams,
+  query('search').optional().trim(),
+  query('customerId').optional().isUUID(4),
+  handleValidationErrors,
+], async (req, res) => {
+  try {
+    const report = await reportsService.getCOGSProfitReport(req.query);
+    res.json(report);
+  } catch (error) {
+    console.error('COGS/Profit report error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

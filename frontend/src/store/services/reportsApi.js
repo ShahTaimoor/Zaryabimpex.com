@@ -81,6 +81,15 @@ export const reportsApi = api.injectEndpoints({
       keepUnusedDataFor: 90,
       providesTags: [{ type: 'Reports', id: 'BACKDATE_REPORT' }],
     }),
+    getCOGSProfitReport: builder.query({
+      query: (params) => ({
+        url: 'reports/cogs-profit',
+        method: 'get',
+        params,
+      }),
+      keepUnusedDataFor: 90,
+      providesTags: [{ type: 'Reports', id: 'COGS_PROFIT_REPORT' }],
+    }),
   }),
   overrideExisting: false,
 });
@@ -95,5 +104,6 @@ export const {
   useGetFinancialReportQuery,
   useGetBankCashSummaryQuery,
   useGetBackdateReportQuery,
+  useGetCOGSProfitReportQuery,
 } = reportsApi;
 

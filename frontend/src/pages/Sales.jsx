@@ -106,6 +106,7 @@ import { accountingApi } from '../store/services/accountingApi';
 import WhatsAppShareButton from '../components/invoice/WhatsAppShareButton';
 
 import { ProductSearch } from '../components/sales/ProductSearch';
+import COGSProfitReportModal from '../components/sales/COGSProfitReportModal';
 import { DuplicateLineItemMergeModal } from '../components/order/DuplicateLineItemMergeModal';
 import { ProductImagePreviewModal } from '../components/order/ProductImagePreviewModal';
 import { DocumentNumberField } from '../components/order/DocumentNumberField';
@@ -243,6 +244,8 @@ export const Sales = ({ tabId, editData }) => {
   const [inlineEditData, setInlineEditData] = useState(null);
   const [invoiceDeleteTarget, setInvoiceDeleteTarget] = useState(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [isCOGSProfitModalOpen, setIsCOGSProfitModalOpen] = useState(false);
+  const [cogsProfitModalTab, setCogsProfitModalTab] = useState('cogs');
   const activeEditData = inlineEditData?.isEditMode ? inlineEditData : editData;
   /** Net − paid when the invoice was loaded into edit mode; drives live balance preview. */
   const [editSavedInvoiceRemaining, setEditSavedInvoiceRemaining] = useState(null);
@@ -2825,6 +2828,30 @@ export const Sales = ({ tabId, editData }) => {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setCogsProfitModalTab('cogs');
+                      setIsCOGSProfitModalOpen(true);
+                    }}
+                    className="border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 h-9 text-xs sm:text-sm font-semibold shadow-sm rounded-lg"
+                  >
+                    <TrendingUp className="h-4 w-4 text-emerald-600" />
+                    <span>Show COGS</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setCogsProfitModalTab('profit');
+                      setIsCOGSProfitModalOpen(true);
+                    }}
+                    className="border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 h-9 text-xs sm:text-sm font-semibold shadow-sm rounded-lg"
+                  >
+                    <TrendingUp className="h-4 w-4 text-blue-600" />
+                    <span>Show Profit</span>
+                  </Button>
                   <button
                     type="button"
                     onClick={() => refetchSavedInvoices()}
@@ -3219,6 +3246,19 @@ export const Sales = ({ tabId, editData }) => {
         documentTitle="Sales Invoice"
         partyLabel="Customer"
       />
+
+      {isCOGSProfitModalOpen && (
+        <COGSProfitReportModal
+          isOpen={isCOGSProfitModalOpen}
+          onClose={() => setIsCOGSProfitModalOpen(false)}
+          initialTab={cogsProfitModalTab}
+          initialFilters={{
+            dateFrom: savedInvoiceFromDate,
+            dateTo: savedInvoiceToDate,
+            search: savedInvoiceSearchTerm,
+          }}
+        />
+      )}
 
       <ProductImagePreviewModal
         product={previewImageProduct}

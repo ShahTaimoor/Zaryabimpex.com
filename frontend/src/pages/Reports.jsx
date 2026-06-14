@@ -515,7 +515,22 @@ export const Reports = () => {
             { header: 'Date', render: (row) => new Date(row.date).toLocaleDateString() },
             { header: 'Customer', render: (row) => getCustomerDisplayName({ businessName: row.customerName, name: row.name }, row.customerName || row.name || 'N/A') },
             { header: 'Total', render: (row) => (row.total || 0).toLocaleString(), align: 'right', bold: true },
-            { header: 'Status', key: 'status' },
+            {
+              header: 'Status',
+              key: 'status',
+              render: (row) => {
+                const status = String(row.status || '').toLowerCase();
+                let badgeClass = '';
+                if (status === 'paid') badgeClass = 'bg-green-100 text-green-800';
+                else if (status === 'partial') badgeClass = 'bg-yellow-100 text-yellow-800';
+                else badgeClass = 'bg-red-100 text-red-800';
+                return (
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${badgeClass}`}>
+                    {status}
+                  </span>
+                );
+              }
+            },
           ];
         }
         return [];

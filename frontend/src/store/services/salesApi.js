@@ -25,6 +25,7 @@ const CACHE_INVALIDATE_AFTER_NEW_SALE = [
   { type: 'Accounting', id: 'LEDGER_SUMMARY' },
   { type: 'Reports', id: 'DASHBOARD_RANGE_SUMMARY' },
   { type: 'Reports', id: 'PL_STATEMENTS_SUMMARY' },
+  { type: 'Reports', id: 'COGS_PROFIT_REPORT' },
   { type: 'DailyCash', id: 'TODAY' },
   { type: 'DailyCash', id: 'DASHBOARD' },
 ];
@@ -45,6 +46,7 @@ const CACHE_INVALIDATE_AFTER_SALE_LEDGER_REPORTS = [
   { type: 'Reports', id: 'PARTY_BALANCE' },
   { type: 'Reports', id: 'BANK_CASH_SUMMARY' },
   { type: 'Reports', id: 'FINANCIAL_REPORT' },
+  { type: 'Reports', id: 'COGS_PROFIT_REPORT' },
 ];
 
 /** Merge base sale tags with response-scoped tags (new invoice id, customer AR balance). */

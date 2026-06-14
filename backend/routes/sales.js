@@ -9,6 +9,7 @@ const { query: pgQuery } = require('../config/postgres');
 const profitDistributionService = require('../services/profitDistributionService');
 const salesRepository = require('../repositories/SalesRepository');
 const productRepository = require('../repositories/ProductRepository');
+const costingService = require('../services/costingService');
 const inventoryRepository = require('../repositories/postgres/InventoryRepository');
 const productVariantRepository = require('../repositories/ProductVariantRepository');
 const customerRepository = require('../repositories/CustomerRepository');
@@ -753,12 +754,18 @@ router.put('/:id', [
         let unitCost = 0;
         const productId = productForTax?.id || productForTax?._id;
         if (productId) {
-          const inv = await inventoryRepository.findByProduct(productId);
-          if (inv && inv.cost) {
-            const costObj = typeof inv.cost === 'string' ? JSON.parse(inv.cost) : inv.cost;
-            unitCost = costObj.average ?? costObj.lastPurchase ?? 0;
+          try {
+            const costInfo = await costingService.calculateCost(productId, item.quantity);
+            unitCost = costInfo.unitCost || 0;
+          } catch (err) {
+            console.error(`Failed to calculate costing for product ${productId}:`, err.message);
+            const inv = await inventoryRepository.findByProduct(productId);
+            if (inv && inv.cost) {
+              const costObj = typeof inv.cost === 'string' ? JSON.parse(inv.cost) : inv.cost;
+              unitCost = costObj.average ?? costObj.lastPurchase ?? 0;
+            }
+            if (unitCost === 0) unitCost = productForTax?.pricing?.cost ?? productForTax?.cost_price ?? 0;
           }
-          if (unitCost === 0) unitCost = productForTax?.pricing?.cost ?? productForTax?.cost_price ?? 0;
         }
 
         newOrderItems.push({
