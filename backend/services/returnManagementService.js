@@ -154,14 +154,23 @@ class ReturnManagementService {
     // This prevents zero-value returns when frontend sends mismatched field names.
     if (isPurchaseReturn) {
       for (const item of returnRequest.items) {
-        const orderItem = originalOrder.items?.find(oi =>
+        let orderItem = originalOrder.items?.find(oi =>
           String(oi._id || oi.id) === String(item.originalOrderItem)
         );
+        // Fallback: match by product ID
+        if (!orderItem && item.product) {
+          const retProductId = String(item.product?._id || item.product?.id || item.product);
+          orderItem = originalOrder.items?.find(oi => {
+            const oiPid = String(oi.product?._id || oi.product?.id || oi.product);
+            return oiPid === retProductId;
+          });
+        }
         if (!orderItem) continue;
         const productId = orderItem?.product && (orderItem.product.id || orderItem.product._id);
         const product = productId ? await ProductRepository.findById(productId) : null;
         const derivedUnitCost = this.extractCostBasis(orderItem, product);
         item.originalPrice = derivedUnitCost;
+        item.unitCost = derivedUnitCost;
       }
     }
 
@@ -185,6 +194,8 @@ class ReturnManagementService {
       originalOrderItem: item.originalOrderItem ? String(item.originalOrderItem) : null,
       quantity: item.quantity,
       originalPrice: item.originalPrice,
+      unitCost: item.unitCost || 0,
+      unit_cost: item.unitCost || 0,
       returnReason: item.returnReason,
       returnReasonDetail: item.returnReasonDetail,
       condition: item.condition,
@@ -411,9 +422,18 @@ class ReturnManagementService {
   // Validate return items
   async validateReturnItems(originalOrder, returnItems) {
     for (const returnItem of returnItems) {
-      const orderItem = originalOrder.items.find(item =>
+      let orderItem = originalOrder.items.find(item =>
         String(item._id || item.id) === String(returnItem.originalOrderItem)
       );
+
+      // Fallback: match by product ID if no match by originalOrderItem ID
+      if (!orderItem && returnItem.product) {
+        const retProductId = String(returnItem.product?._id || returnItem.product?.id || returnItem.product);
+        orderItem = originalOrder.items.find(oi => {
+          const oiPid = String(oi.product?._id || oi.product?.id || oi.product);
+          return oiPid === retProductId;
+        });
+      }
 
       if (!orderItem) {
         throw new Error(`Order item not found: ${returnItem.originalOrderItem}`);
@@ -429,6 +449,9 @@ class ReturnManagementService {
       // Sales/Orders use unitPrice, legacy might use price
       returnItem.originalPrice = Number(orderItem.unitPrice || orderItem.price) || 0;
       console.log(`Set originalPrice for item ${returnItem.product}: ${returnItem.originalPrice}`);
+
+      // Extract and set unitCost (COGS cost basis) for the return item so it's stored in Postgres items
+      returnItem.unitCost = this.extractCostBasis(orderItem, product);
 
       // Always set default values for optional fields (override any frontend value)
       // Handle string "undefined" or actual undefined values
@@ -1179,9 +1202,19 @@ class ReturnManagementService {
     let totalCOGS = 0;
 
     for (const returnItem of returnRequest.items) {
-      const originalItem = originalSale.items.find(oi =>
-        oi._id.toString() === returnItem.originalOrderItem.toString()
+      // Find original sale item using safe string matching
+      let originalItem = originalSale.items.find(oi =>
+        String(oi._id || oi.id) === String(returnItem.originalOrderItem)
       );
+
+      // Fallback: match by product ID if ID match fails
+      if (!originalItem && returnItem.product) {
+        const retProductId = String(returnItem.product?._id || returnItem.product?.id || returnItem.product);
+        originalItem = originalSale.items.find(oi => {
+          const oiPid = String(oi.product?._id || oi.product?.id || oi.product);
+          return oiPid === retProductId;
+        });
+      }
 
       if (originalItem) {
         // Fetch product to use as fallback for cost basis extraction
@@ -1192,6 +1225,8 @@ class ReturnManagementService {
         // Extract cost basis using consistent logic (avoids falling back to selling price)
         const unitCost = this.extractCostBasis(originalItem, product);
         totalCOGS += unitCost * returnItem.quantity;
+      } else {
+        console.warn(`calculateCOGSAdjustment: could not find original item for originalOrderItem=${returnItem.originalOrderItem}`);
       }
     }
 
@@ -1203,9 +1238,19 @@ class ReturnManagementService {
     let totalCOGS = 0;
 
     for (const returnItem of returnRequest.items) {
-      const originalItem = originalInvoice.items.find(oi =>
-        oi._id.toString() === returnItem.originalOrderItem.toString()
+      // Find original invoice item using safe string matching
+      let originalItem = originalInvoice.items.find(oi =>
+        String(oi._id || oi.id) === String(returnItem.originalOrderItem)
       );
+
+      // Fallback: match by product ID if ID match fails
+      if (!originalItem && returnItem.product) {
+        const retProductId = String(returnItem.product?._id || returnItem.product?.id || returnItem.product);
+        originalItem = originalInvoice.items.find(oi => {
+          const oiPid = String(oi.product?._id || oi.product?.id || oi.product);
+          return oiPid === retProductId;
+        });
+      }
 
       if (originalItem) {
         // Fetch product to use as fallback for cost basis extraction
@@ -1216,6 +1261,8 @@ class ReturnManagementService {
         // Extract cost basis using consistent logic (avoids falling back to selling price)
         const unitCost = this.extractCostBasis(originalItem, product);
         totalCOGS += unitCost * returnItem.quantity;
+      } else {
+        console.warn(`calculatePurchaseCOGSAdjustment: could not find original item for originalOrderItem=${returnItem.originalOrderItem}`);
       }
     }
 

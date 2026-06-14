@@ -54,8 +54,44 @@ async function getCOGSProfitReport(filters = {}) {
   // Fetch sales invoices matching filters (limit to 10000 to optimize performance)
   const invoices = await salesRepository.findAll(dbFilters, { limit: 10000 });
 
-  // Get customer names for display
-  const customerIds = [...new Set(invoices.map(inv => inv.customer_id).filter(Boolean))];
+  // Fetch sale returns matching date filters and customer filters
+  const { query } = require('../config/postgres');
+  let returnsSql = `
+    SELECT r.id, r.return_number, r.return_date, r.customer_id, r.total_amount, r.items
+    FROM returns r
+    WHERE r.return_type = 'sale_return'
+      AND r.status NOT IN ('rejected', 'cancelled', 'pending')
+      AND r.deleted_at IS NULL
+  `;
+  const returnsParams = [];
+  let paramIndex = 1;
+  if (dbFilters.dateFrom) {
+    returnsSql += ` AND r.return_date >= $${paramIndex++}`;
+    returnsParams.push(dbFilters.dateFrom);
+  }
+  if (dbFilters.dateTo) {
+    returnsSql += ` AND r.return_date <= $${paramIndex++}`;
+    returnsParams.push(dbFilters.dateTo);
+  }
+  if (dbFilters.customerId) {
+    returnsSql += ` AND r.customer_id = $${paramIndex++}`;
+    returnsParams.push(dbFilters.customerId);
+  }
+
+  let returnsResult;
+  try {
+    returnsResult = await query(returnsSql, returnsParams);
+  } catch (err) {
+    console.error('Failed to fetch returns for COGS report:', err.message);
+    returnsResult = { rows: [] };
+  }
+
+  // Combine customer IDs to pre-fetch customer names in one query
+  const customerIds = [...new Set([
+    ...invoices.map(inv => inv.customer_id),
+    ...returnsResult.rows.map(ret => ret.customer_id)
+  ].filter(Boolean))];
+
   const customerMap = new Map();
   if (customerIds.length > 0) {
     try {
@@ -72,6 +108,7 @@ async function getCOGSProfitReport(filters = {}) {
   let totalCOGS = 0;
   const data = [];
 
+  // 1) Process Sales Invoices
   for (const inv of invoices) {
     const items = typeof inv.items === 'string' ? JSON.parse(inv.items || '[]') : (inv.items || []);
     const cogs = calculateItemsCOGS(items);
@@ -106,6 +143,74 @@ async function getCOGSProfitReport(filters = {}) {
       profitMargin
     });
   }
+
+  // 2) Process Sales Returns (Negative Revenue & Negative COGS)
+  for (const ret of returnsResult.rows) {
+    // Resolve customer name
+    let customerName = 'Walk-in';
+    if (ret.customer_id) {
+      const mappedName = customerMap.get(String(ret.customer_id));
+      if (mappedName) {
+        customerName = mappedName;
+      }
+    }
+
+    // Apply search filter in JS if search filter exists
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      const matchSearch =
+        (ret.return_number || '').toLowerCase().includes(searchLower) ||
+        customerName.toLowerCase().includes(searchLower);
+      if (!matchSearch) continue;
+    }
+
+    const items = typeof ret.items === 'string' ? JSON.parse(ret.items || '[]') : (ret.items || []);
+    let returnCOGS = 0;
+
+    for (const ri of items) {
+      const qty = Number(ri.quantity || 0);
+      let unitCost = Number(ri.unit_cost ?? ri.unitCost ?? ri.cost_price ?? ri.costPrice ?? 0);
+
+      // Fallback: If unit_cost is not recorded on return item, look up product's current cost price
+      if (unitCost === 0 && ri.product) {
+        try {
+          const ProductRepository = require('../repositories/postgres/ProductRepository');
+          const productId = typeof ri.product === 'object' ? (ri.product.id || ri.product._id) : ri.product;
+          const prod = await ProductRepository.findById(productId);
+          if (prod) {
+            unitCost = Number(prod.cost_price ?? prod.costPrice ?? 0);
+          }
+        } catch (err) {
+          console.warn(`Failed to resolve fallback product cost for product ID ${ri.product}:`, err.message);
+        }
+      }
+
+      returnCOGS += unitCost * qty;
+    }
+
+    const revenue = Number(ret.total_amount || 0);
+    const negRevenue = -revenue;
+    const negCOGS = -returnCOGS;
+    const { grossProfit: negGrossProfit } = calculateProfitMetrics(negRevenue, negCOGS);
+
+    totalSalesRevenue += negRevenue;
+    totalCOGS += negCOGS;
+
+    data.push({
+      id: ret.id,
+      invoiceNumber: ret.return_number || '—',
+      invoiceDate: ret.return_date || ret.createdAt,
+      customerName,
+      totalSaleAmount: negRevenue,
+      totalProductCost: negCOGS,
+      cogsAmount: negCOGS,
+      grossProfit: negGrossProfit,
+      profitMargin: 0 // Not applicable for return items directly
+    });
+  }
+
+  // Sort report entries by date in descending order so they are displayed chronologically
+  data.sort((a, b) => new Date(b.invoiceDate) - new Date(a.invoiceDate));
 
   const { grossProfit: totalGrossProfit, profitMargin: overallProfitMargin } = calculateProfitMetrics(totalSalesRevenue, totalCOGS);
   const totalInvoices = invoices.length;

@@ -148,10 +148,11 @@ class PLCalculationService {
     let cogs = fromSales.cogs;
     const salesReturns = await this.calculateReturnRevenue(startDate, endDate);
     const totalRevenue = salesRevenue - salesReturns;
-    if (salesReturns > 0) {
-      const returnCogsReversals = await this.getReturnCOGSReversals(startDate, endDate);
-      cogs = Math.max(0, cogs - returnCogsReversals);
-    } else if (cogs === 0) {
+
+    const returnCogsReversals = await this.getReturnCOGSReversals(startDate, endDate);
+    cogs = cogs - returnCogsReversals;
+
+    if (cogs === 0) {
       cogs = await this.calculateCOGS(startDate, endDate);
     }
     const totalExpenses = await this.calculateTotalExpensesFromLedger(startDate, endDate);
@@ -174,11 +175,10 @@ class PLCalculationService {
     let cogs = fromSales.cogs;
 
     const salesReturns = await this.calculateReturnRevenue(start, end);
+    const returnCogsReversals = await this.getReturnCOGSReversals(start, end);
+    cogs = cogs - returnCogsReversals;
 
-    if (salesReturns > 0) {
-      const returnCogsReversals = await this.getReturnCOGSReversals(start, end);
-      cogs = Math.max(0, cogs - returnCogsReversals);
-    } else if (cogs === 0) {
+    if (cogs === 0) {
       cogs = await this.calculateCOGS(start, end);
     }
 

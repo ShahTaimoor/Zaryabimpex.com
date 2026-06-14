@@ -567,27 +567,33 @@ export const Dashboard = () => {
     [grossProfitInvoiceRows]
   );
 
-  const resolvedSalesRevenue = pickNonZeroMetric(
-    computedInvoiceRevenueTotal,
-    plSummaryData?.data?.revenue?.salesRevenue,
-    plSummaryData?.revenue?.salesRevenue,
-    salesInvoicesTotal,
-    totalSales
-  );
+  const resolvedSalesRevenue = plSummaryData && !plSummaryLoading
+    ? (plSummaryData?.data?.revenue?.salesRevenue ?? plSummaryData?.revenue?.salesRevenue ?? computedInvoiceRevenueTotal)
+    : pickNonZeroMetric(
+        computedInvoiceRevenueTotal,
+        plSummaryData?.data?.revenue?.salesRevenue,
+        plSummaryData?.revenue?.salesRevenue,
+        salesInvoicesTotal,
+        totalSales
+      );
 
-  const resolvedCogsSold = pickNonZeroMetric(
-    computedInvoiceCogsTotal,
-    salesInvoicesCOGS,
-    plCogsTotal,
-    costOfGoodsSold
-  );
+  const resolvedCogsSold = plSummaryData && !plSummaryLoading
+    ? (plCogsTotal ?? computedInvoiceCogsTotal)
+    : pickNonZeroMetric(
+        computedInvoiceCogsTotal,
+        salesInvoicesCOGS,
+        plCogsTotal,
+        costOfGoodsSold
+      );
 
-  const resolvedNetRevenue = pickNonZeroMetric(
-    computedInvoiceRevenueTotal > 0 ? computedInvoiceRevenueTotal - totalSalesReturns : null,
-    plRevenueTotal,
-    resolvedSalesRevenue - totalSalesReturns,
-    totalRevenue
-  );
+  const resolvedNetRevenue = plSummaryData && !plSummaryLoading
+    ? (plRevenueTotal ?? (computedInvoiceRevenueTotal > 0 ? computedInvoiceRevenueTotal - totalSalesReturns : resolvedSalesRevenue - totalSalesReturns))
+    : pickNonZeroMetric(
+        computedInvoiceRevenueTotal > 0 ? computedInvoiceRevenueTotal - totalSalesReturns : null,
+        plRevenueTotal,
+        resolvedSalesRevenue - totalSalesReturns,
+        totalRevenue
+      );
 
   const hasLineItemCosts = grossProfitLineRows.length > 0 && computedInvoiceCogsTotal > 0;
   const invoiceGrossProfitEstimate =
@@ -595,13 +601,15 @@ export const Dashboard = () => {
       ? computedInvoiceRevenueTotal - totalSalesReturns - resolvedCogsSold
       : null;
 
-  const grossProfit = pickNonZeroMetric(
-    hasLineItemCosts ? computedInvoiceGrossProfitTotal : invoiceGrossProfitEstimate,
-    plGrossProfitRaw,
-    plRevenueTotal != null && plCogsTotal != null ? plRevenueTotal - plCogsTotal : null,
-    resolvedNetRevenue - resolvedCogsSold,
-    netRevenue - costOfGoodsSold
-  );
+  const grossProfit = plSummaryData && !plSummaryLoading
+    ? (plGrossProfitRaw ?? (plRevenueTotal != null && plCogsTotal != null ? plRevenueTotal - plCogsTotal : resolvedNetRevenue - resolvedCogsSold))
+    : pickNonZeroMetric(
+        hasLineItemCosts ? computedInvoiceGrossProfitTotal : invoiceGrossProfitEstimate,
+        plGrossProfitRaw,
+        plRevenueTotal != null && plCogsTotal != null ? plRevenueTotal - plCogsTotal : null,
+        resolvedNetRevenue - resolvedCogsSold,
+        netRevenue - costOfGoodsSold
+      );
 
   const netProfit = grossProfit - operatingExpenses;
 
