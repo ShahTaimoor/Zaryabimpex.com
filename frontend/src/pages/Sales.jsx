@@ -3097,13 +3097,32 @@ export const Sales = ({ tabId, editData }) => {
                                   label=""
                                   className="p-1 bg-transparent border-none shadow-none hover:bg-transparent text-red-600 hover:text-red-800 px-1 py-1"
                                 />
-                                <button
-                                  onClick={() => handleEditSavedInvoice(invoice)}
-                                  className="text-blue-600 hover:text-blue-800"
-                                  title="Edit"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </button>
+                                {(() => {
+                                  const isEditable = (() => {
+                                    if (!invoiceDate) return true;
+                                    const invD = new Date(invoiceDate);
+                                    const sixMonthsAgo = new Date();
+                                    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+                                    sixMonthsAgo.setHours(0, 0, 0, 0);
+                                    invD.setHours(0, 0, 0, 0);
+                                    return invD >= sixMonthsAgo;
+                                  })();
+                                  return (
+                                    <button
+                                      onClick={() => {
+                                        if (isEditable) {
+                                          handleEditSavedInvoice(invoice);
+                                        } else {
+                                          toast.error("Cannot edit sales invoice older than 6 months.");
+                                        }
+                                      }}
+                                      className={isEditable ? "text-blue-600 hover:text-blue-800" : "text-gray-300 cursor-not-allowed"}
+                                      title={isEditable ? "Edit" : "Edit disabled (older than 6 months)"}
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </button>
+                                  );
+                                })()}
                                 <button
                                   onClick={() => setInvoiceDeleteTarget(invoice)}
                                   className="text-red-600 hover:text-red-900"
