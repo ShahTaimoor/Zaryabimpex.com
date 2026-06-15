@@ -80,5 +80,6 @@ INSERT INTO shop_stock (shop_id, product_id, quantity)
 SELECT s.id, i.product_id, GREATEST(COALESCE(i.current_stock, 0), 0)
 FROM shops s
 JOIN inventory i ON i.deleted_at IS NULL
+JOIN products p ON p.id = i.product_id
 WHERE s.is_primary = TRUE AND s.deleted_at IS NULL
 ON CONFLICT (shop_id, product_id) DO NOTHING;
