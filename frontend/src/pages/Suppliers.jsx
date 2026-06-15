@@ -156,9 +156,11 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
     : (citiesResponse?.data || []);
 
   const ledgerOptions = useMemo(() => {
-    if (!Array.isArray(ledgerAccounts)) return [];
+    const accounts = Array.isArray(ledgerAccounts)
+      ? ledgerAccounts
+      : (ledgerAccounts?.data?.accounts || ledgerAccounts?.data || ledgerAccounts?.accounts || []);
 
-    const prioritized = ledgerAccounts.filter((account) => {
+    const prioritized = accounts.filter((account) => {
       const name = (account.accountName || account.name || '').toLowerCase();
       const tags = Array.isArray(account.tags) ? account.tags : [];
       return (
@@ -169,7 +171,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
       );
     });
 
-    const directPosting = ledgerAccounts.filter(
+    const directPosting = accounts.filter(
       (account) => account.allowDirectPosting !== false
     );
 
@@ -178,7 +180,7 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
         ? prioritized
         : directPosting.length > 0
           ? directPosting
-          : ledgerAccounts;
+          : accounts;
 
     return [...source].sort((a, b) => {
       const codeA = (a.accountCode || '').toString();
@@ -187,77 +189,106 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
     });
   }, [ledgerAccounts]);
 
-  // Auto-link to Accounts Payable account
+  // Populate general supplier details immediately when selected supplier changes
+  useEffect(() => {
+    if (supplier) {
+      const derivedOpeningBalance =
+        typeof supplier.openingBalance === 'number'
+          ? supplier.openingBalance
+          : supplier.pendingBalance && supplier.pendingBalance > 0
+            ? supplier.pendingBalance
+            : supplier.advanceBalance
+              ? -supplier.advanceBalance
+              : 0;
+
+      // Normalize addresses: API returns address (object/array) or addresses (array)
+      const rawAddress = supplier.address || supplier.addresses;
+      let addresses = supplierDefaultValues.addresses;
+      if (Array.isArray(rawAddress) && rawAddress.length > 0) {
+        addresses = rawAddress.map((a) => ({
+          type: a.type || 'both',
+          street: a.street || '',
+          city: a.city || '',
+          state: a.state || '',
+          zipCode: a.zipCode || '',
+          country: a.country || 'US',
+          isDefault: a.isDefault ?? (a === rawAddress[0])
+        }));
+      } else if (rawAddress && typeof rawAddress === 'object' && !Array.isArray(rawAddress)) {
+        addresses = [{
+          type: rawAddress.type || 'both',
+          street: rawAddress.street || '',
+          city: rawAddress.city || '',
+          state: rawAddress.state || '',
+          zipCode: rawAddress.zipCode || '',
+          country: rawAddress.country || 'US',
+          isDefault: true
+        }];
+      } else if (supplier.addresses?.length) {
+        addresses = supplier.addresses;
+      }
+
+      setFormData({
+        ...supplierDefaultValues,
+        ...supplier,
+        companyName: supplier.companyName || supplier.company_name || supplier.businessName || '',
+        contactPerson: {
+          name: supplier.contactPerson?.name || supplier.contact_person || '',
+          title: supplier.contactPerson?.title || ''
+        },
+        addresses,
+        openingBalance: derivedOpeningBalance,
+        ledgerAccount: supplier.ledgerAccount?._id || supplier.ledgerAccount || ''
+      });
+    } else {
+      setFormData({ ...supplierDefaultValues });
+    }
+  }, [supplier]);
+
+  // Handle auto-linking to the default Accounts Payable account once ledgerOptions are loaded
   useEffect(() => {
     if (ledgerOptions.length > 0) {
-      // Explicitly look for "Accounts Payable" first (by name or code 2110)
       const accountsPayable = ledgerOptions.find((account) => {
         const name = (account.accountName || account.name || '').toLowerCase();
         return name === 'accounts payable' || account.accountCode === '2110';
       }) || ledgerOptions[0];
 
-      if (supplier) {
-        const derivedOpeningBalance =
-          typeof supplier.openingBalance === 'number'
-            ? supplier.openingBalance
-            : supplier.pendingBalance && supplier.pendingBalance > 0
-              ? supplier.pendingBalance
-              : supplier.advanceBalance
-                ? -supplier.advanceBalance
-                : 0;
+      const defaultAccountId = accountsPayable._id || accountsPayable.id || '';
 
-        // Normalize addresses: API returns address (object/array) or addresses (array)
-        const rawAddress = supplier.address || supplier.addresses;
-        let addresses = supplierDefaultValues.addresses;
-        if (Array.isArray(rawAddress) && rawAddress.length > 0) {
-          addresses = rawAddress.map((a) => ({
-            type: a.type || 'both',
-            street: a.street || '',
-            city: a.city || '',
-            state: a.state || '',
-            zipCode: a.zipCode || '',
-            country: a.country || 'US',
-            isDefault: a.isDefault ?? (a === rawAddress[0])
-          }));
-        } else if (rawAddress && typeof rawAddress === 'object' && !Array.isArray(rawAddress)) {
-          addresses = [{
-            type: rawAddress.type || 'both',
-            street: rawAddress.street || '',
-            city: rawAddress.city || '',
-            state: rawAddress.state || '',
-            zipCode: rawAddress.zipCode || '',
-            country: rawAddress.country || 'US',
-            isDefault: true
-          }];
-        } else if (supplier.addresses?.length) {
-          addresses = supplier.addresses;
-        }
+      setFormData((prev) => {
+        // If ledgerAccount is already populated, do not override it
+        if (prev.ledgerAccount) return prev;
 
-        setFormData({
-          ...supplierDefaultValues,
-          ...supplier,
-          companyName: supplier.companyName || supplier.company_name || supplier.businessName || '',
-          contactPerson: {
-            name: supplier.contactPerson?.name || supplier.contact_person || '',
-            title: supplier.contactPerson?.title || ''
-          },
-          addresses,
-          openingBalance: derivedOpeningBalance,
-          // Use supplier's existing ledger account or auto-link to Accounts Payable
-          ledgerAccount: supplier.ledgerAccount?._id || supplier.ledgerAccount || (accountsPayable._id || accountsPayable.id) || ''
-        });
-      } else {
-        // For new supplier, auto-link to Accounts Payable
-        const accountId = accountsPayable._id || accountsPayable.id;
-        if (accountId) {
-          setFormData((prev) => ({
+        if (supplier) {
+          const supplierLedger = supplier.ledgerAccount?._id || supplier.ledgerAccount;
+          return {
             ...prev,
-            ledgerAccount: accountId
-          }));
+            ledgerAccount: supplierLedger || defaultAccountId
+          };
+        } else {
+          return {
+            ...prev,
+            ledgerAccount: defaultAccountId
+          };
         }
-      }
+      });
     }
-  }, [supplier, ledgerOptions]);
+  }, [ledgerOptions, supplier]);
+
+  // Normalize city names in addresses to match the citiesData dropdown options (case-insensitive)
+  useEffect(() => {
+    if (!citiesData || !Array.isArray(citiesData) || citiesData.length === 0) return;
+    setFormData((prev) => ({
+      ...prev,
+      addresses: prev.addresses.map((addr) => {
+        if (!addr.city) return addr;
+        const matched = citiesData.find(
+          (c) => (c.name || '').toLowerCase().trim() === addr.city.toLowerCase().trim()
+        );
+        return matched ? { ...addr, city: matched.name } : addr;
+      })
+    }));
+  }, [citiesData]);
 
   // Email validation effect
   useEffect(() => {
@@ -714,6 +745,12 @@ const SupplierForm = ({ supplier, onSave, onCancel, isOpen, isSubmitting }) => {
                       disabled={citiesLoading}
                     >
                       <option value="">Select a city</option>
+                      {/* Fallback: show stored city if it doesn't exist in the cities list */}
+                      {address.city && Array.isArray(citiesData) && !citiesData.some(
+                        (c) => (c.name || '').toLowerCase().trim() === address.city.toLowerCase().trim()
+                      ) && (
+                        <option value={address.city}>{address.city}</option>
+                      )}
                       {Array.isArray(citiesData) && citiesData.map((city) => (
                         <option key={city._id || city.name} value={city.name}>
                           {city.name}{city.state ? `, ${city.state}` : ''}

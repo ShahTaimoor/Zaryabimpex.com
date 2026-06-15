@@ -202,7 +202,7 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       newErrors.name = 'Product name must be at least 2 characters';
     }
 
-    if (!formData.pricing.cost || formData.pricing.cost === '') {
+    if (formData.pricing.cost === undefined || formData.pricing.cost === null || formData.pricing.cost === '') {
       newErrors.cost = 'Cost price is required';
     }
 
@@ -273,14 +273,14 @@ export const ProductModal = ({ product, isOpen, onClose, onSave, isSubmitting, a
       brand: newData.brand || '',
       imageUrl: newData.imageUrl || '',
       pricing: {
-        cost: newData.pricing?.cost || '',
-        retail: newData.pricing?.retail || '',
-        wholesale: newData.pricing?.wholesale || '',
-        lastSale: newData.pricing?.lastSale || 0
+        cost: newData.pricing?.cost ?? '',
+        retail: newData.pricing?.retail ?? '',
+        wholesale: newData.pricing?.wholesale ?? '',
+        lastSale: newData.pricing?.lastSale ?? 0
       },
       inventory: {
-        currentStock: newData.inventory?.currentStock || '',
-        reorderPoint: newData.inventory?.reorderPoint || ''
+        currentStock: newData.inventory?.currentStock ?? '',
+        reorderPoint: newData.inventory?.reorderPoint ?? ''
       },
       unit: newData.unit || 'PCS',
       piecesPerBox: newData.piecesPerBox ?? newData.pieces_per_box ?? ''

@@ -79,6 +79,61 @@ class PLCalculationService {
   }
 
   /**
+   * Get returns and return COGS directly from the returns table for the period.
+   * Provides a database-driven source of returns that matches the sales table.
+   */
+  async getReturnsAndCOGSFromReturns(startDate, endDate) {
+    const start = startDate ? getStartOfDayPakistan(startDate) : null;
+    const end = endDate ? getEndOfDayPakistan(endDate) : null;
+    if (!start || !end) return { returnsRevenue: 0, returnCogs: 0 };
+
+    const returnsResult = await query(
+      `SELECT COALESCE(SUM(total_amount), 0) AS total_returns
+       FROM returns
+       WHERE return_type = 'sale_return'
+         AND status NOT IN ('rejected', 'cancelled', 'pending')
+         AND deleted_at IS NULL
+         AND return_date >= $1 AND return_date <= $2`,
+      [start, end]
+    );
+    const returnsRevenue = parseFloat(returnsResult.rows[0]?.total_returns || 0);
+
+    const returnsRows = await query(
+      `SELECT items FROM returns
+       WHERE return_type = 'sale_return'
+         AND status NOT IN ('rejected', 'cancelled', 'pending')
+         AND deleted_at IS NULL
+         AND return_date >= $1 AND return_date <= $2`,
+      [start, end]
+    );
+
+    let returnCogs = 0;
+    for (const r of returnsRows.rows || []) {
+      const items = typeof r.items === 'string' ? JSON.parse(r.items || '[]') : (r.items || []);
+      for (const it of items) {
+        const qty = Number(it.quantity) || 0;
+        let unitCost = Number(it.unit_cost ?? it.unitCost ?? it.cost_price ?? it.costPrice ?? 0);
+        
+        if (unitCost === 0 && it.product) {
+          try {
+            const ProductRepository = require('../repositories/postgres/ProductRepository');
+            const productId = typeof it.product === 'object' ? (it.product.id || it.product._id) : it.product;
+            const prod = await ProductRepository.findById(productId);
+            if (prod) {
+              unitCost = Number(prod.cost_price ?? prod.costPrice ?? 0);
+            }
+          } catch (err) {
+            console.warn(`Failed to resolve fallback product cost in P&L for product ${it.product}:`, err.message);
+          }
+        }
+        returnCogs += qty * unitCost;
+      }
+    }
+
+    return { returnsRevenue, returnCogs };
+  }
+
+  /**
    * Calculate cost of goods sold for a period
    */
   async calculateCOGS(startDate, endDate) {
@@ -146,15 +201,24 @@ class PLCalculationService {
     const fromSales = await this.getRevenueAndCOGSFromSales(startDate, endDate);
     let salesRevenue = fromSales.revenue;
     let cogs = fromSales.cogs;
-    const salesReturns = await this.calculateReturnRevenue(startDate, endDate);
+
+    const useLedgerCogs = (cogs === 0);
+
+    const fromReturns = await this.getReturnsAndCOGSFromReturns(startDate, endDate);
+    const ledgerReturns = await this.calculateReturnRevenue(startDate, endDate);
+    const ledgerReversals = await this.getReturnCOGSReversals(startDate, endDate);
+
+    const salesReturns = Math.max(fromReturns.returnsRevenue, ledgerReturns);
+    const returnCogsReversals = Math.max(fromReturns.returnCogs, ledgerReversals);
+
     const totalRevenue = salesRevenue - salesReturns;
 
-    const returnCogsReversals = await this.getReturnCOGSReversals(startDate, endDate);
-    cogs = cogs - returnCogsReversals;
-
-    if (cogs === 0) {
+    if (useLedgerCogs) {
       cogs = await this.calculateCOGS(startDate, endDate);
+    } else {
+      cogs = cogs - returnCogsReversals;
     }
+
     const totalExpenses = await this.calculateTotalExpensesFromLedger(startDate, endDate);
     return totalRevenue - cogs - totalExpenses;
   }
@@ -174,12 +238,19 @@ class PLCalculationService {
     let salesRevenue = fromSales.revenue;
     let cogs = fromSales.cogs;
 
-    const salesReturns = await this.calculateReturnRevenue(start, end);
-    const returnCogsReversals = await this.getReturnCOGSReversals(start, end);
-    cogs = cogs - returnCogsReversals;
+    const useLedgerCogs = (cogs === 0);
 
-    if (cogs === 0) {
+    const fromReturns = await this.getReturnsAndCOGSFromReturns(start, end);
+    const ledgerReturns = await this.calculateReturnRevenue(start, end);
+    const ledgerReversals = await this.getReturnCOGSReversals(start, end);
+
+    const salesReturns = Math.max(fromReturns.returnsRevenue, ledgerReturns);
+    const returnCogsReversals = Math.max(fromReturns.returnCogs, ledgerReversals);
+
+    if (useLedgerCogs) {
       cogs = await this.calculateCOGS(start, end);
+    } else {
+      cogs = cogs - returnCogsReversals;
     }
 
     const totalRevenue = salesRevenue - salesReturns;
