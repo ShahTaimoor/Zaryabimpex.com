@@ -84,10 +84,42 @@ export const PrintSettingsTab = memo(function PrintSettingsTab({
               className="mr-3 h-4 w-4 accent-gray-900"
             />
             <div>
-              <div className="text-sm font-semibold text-gray-900">Print 3 (80mm Thermal)</div>
+              <div className="text-sm font-semibold text-gray-900">Print 3 (Thermal Receipt)</div>
             </div>
           </label>
         </div>
+
+        {printSettings.invoiceLayout === 'compact' && (
+          <div className="mt-4">
+            <label className="block text-sm font-semibold text-gray-800 mb-2">
+              Thermal Paper Width
+            </label>
+            <div className="grid grid-cols-2 gap-3 max-w-md">
+              <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition-all ${printSettings.thermalPaperWidth === '58mm' ? 'border-gray-900 bg-gray-900/5' : 'border-gray-200 hover:bg-gray-50'}`}>
+                <input
+                  type="radio"
+                  name="thermalPaperWidth"
+                  value="58mm"
+                  checked={printSettings.thermalPaperWidth === '58mm'}
+                  onChange={handlePrintSettingsChange}
+                  className="mr-3 h-4 w-4 accent-gray-900"
+                />
+                <span className="text-sm font-semibold text-gray-900">58mm</span>
+              </label>
+              <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition-all ${(!printSettings.thermalPaperWidth || printSettings.thermalPaperWidth === '80mm') ? 'border-gray-900 bg-gray-900/5' : 'border-gray-200 hover:bg-gray-50'}`}>
+                <input
+                  type="radio"
+                  name="thermalPaperWidth"
+                  value="80mm"
+                  checked={!printSettings.thermalPaperWidth || printSettings.thermalPaperWidth === '80mm'}
+                  onChange={handlePrintSettingsChange}
+                  className="mr-3 h-4 w-4 accent-gray-900"
+                />
+                <span className="text-sm font-semibold text-gray-900">80mm</span>
+              </label>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Header and Footer Customization - Hidden for Layout 2 */}
@@ -305,7 +337,7 @@ export const PrintSettingsTab = memo(function PrintSettingsTab({
             <div className="space-y-4">
               <div className="flex items-center space-x-2 border-b border-gray-100 pb-2">
                 <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600"><Printer className="h-4 w-4" /></div>
-                <h4 className="text-sm font-bold text-gray-700">Thermal Receipt (80mm) Options</h4>
+                <h4 className="text-sm font-bold text-gray-700">Thermal Receipt Options</h4>
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 {[
@@ -363,7 +395,7 @@ export const PrintSettingsTab = memo(function PrintSettingsTab({
           Live Receipt Preview
         </label>
         <p className="text-xs text-gray-500 mb-4">
-          Preview changes by selected layout: Standard, Compact (80mm thermal), or Layout 2 (Professional).
+          Preview changes by selected layout: Standard, Thermal Receipt (58mm / 80mm), or Layout 2 (Professional).
           {(!companyData.companyName && !companyData.address && !companyData.contactNumber) && (
             <span className="text-orange-600 font-medium"> Please save your company information first to see the preview.</span>
           )}
@@ -372,7 +404,10 @@ export const PrintSettingsTab = memo(function PrintSettingsTab({
         {printSettings.invoiceLayout === 'compact' ? (
           <div className="bg-gray-200 border border-gray-300 rounded-2xl p-3 sm:p-6 overflow-auto flex justify-center items-start min-h-[460px] shadow-inner">
             <div
-              style={{ width: '80mm', maxWidth: '100%' }}
+              style={{
+                width: printSettings.thermalPaperWidth === '58mm' ? '58mm' : '80mm',
+                maxWidth: '100%',
+              }}
               className="bg-white text-black border border-black/30 rounded-md shadow-lg mx-auto transition-all duration-300 overflow-hidden"
             >
               <PrintDocument

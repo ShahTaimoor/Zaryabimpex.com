@@ -12,7 +12,7 @@ import PrintDocument from './PrintDocument';
 
 import { PrintModal, PrintWrapper } from './print';
 
-import { PRINT_PAGE_STYLE, THERMAL_PRINT_PAGE_STYLE } from './print/printPageStyle';
+import { PRINT_PAGE_STYLE, getThermalPrintPageStyle } from './print/printPageStyle';
 
 import { getInvoicePdfPayload } from '../utils/invoicePdfUtils';
 
@@ -276,7 +276,9 @@ export const DirectPrintInvoice = ({
 
   const isCompact = companySettings?.printSettings?.invoiceLayout === 'compact' || orderData?.invoiceLayout === 'compact';
 
-  const selectedPageStyle = isCompact ? THERMAL_PRINT_PAGE_STYLE : PRINT_PAGE_STYLE;
+  const selectedPageStyle = isCompact
+    ? getThermalPrintPageStyle(companySettings?.printSettings)
+    : PRINT_PAGE_STYLE;
 
 
 
@@ -384,7 +386,17 @@ const InvoicePrintModal = ({
 
   const isCompact = companySettings?.printSettings?.invoiceLayout === 'compact' || orderData?.invoiceLayout === 'compact';
 
-  const pageStyle = isCompact ? THERMAL_PRINT_PAGE_STYLE : PRINT_PAGE_STYLE;
+  const pageStyle = isCompact
+    ? getThermalPrintPageStyle(companySettings?.printSettings)
+    : PRINT_PAGE_STYLE;
+
+  const flushDomBeforePrint = useCallback(
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      }),
+    []
+  );
 
 
 
@@ -407,6 +419,7 @@ const InvoicePrintModal = ({
       onAfterPrint={onAfterPrint}
 
       pageStyle={pageStyle}
+      onBeforeGetContent={isCompact ? flushDomBeforePrint : undefined}
 
       getPdfData={() => getInvoicePdfPayload(orderData, companySettings, resolvedDocumentTitle, partyLabel, canViewBalance ? ledgerBalance : null, { canViewBalance, canViewPhone })}
 

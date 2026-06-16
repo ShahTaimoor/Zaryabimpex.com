@@ -4,8 +4,8 @@ import { PrintModal } from './print';
 import { PRINT_PAGE_STYLE } from './print/printPageStyle';
 
 const REPORT_PAGE_STYLE = PRINT_PAGE_STYLE.replace(
-  '@page { size: A4 portrait; margin: 10mm; }',
-  '@page { size: A4 landscape; margin: 10mm; }'
+  '@page { size: A4 portrait; margin: 0; }',
+  '@page { size: A4 landscape; margin: 0; }'
 );
 
 const ReportPrintContent = ({ reportTitle, data, columns, filters, summaryData, companyInfo }) => (

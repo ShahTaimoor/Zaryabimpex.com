@@ -1,16 +1,39 @@
 import React, { useEffect, useRef } from 'react';
 import JsBarcode from 'jsbarcode';
+import { getThermalCssVariables } from './thermalPrintConfig';
 import './thermalReceipt.css';
+
+/** Stable two-column row for thermal receipts (grid, not flex). */
+export function ThermalReceiptRow({ label, value, className = '', valueClassName = '' }) {
+  if (value === null || value === undefined || value === '') return null;
+  return (
+    <div className={`thermal-receipt__row ${className}`.trim()}>
+      <span className="thermal-receipt__row-label">{label}</span>
+      <span className={`thermal-receipt__row-value ${valueClassName}`.trim()}>{value}</span>
+    </div>
+  );
+}
 
 const ThermalReceipt = ({
   companySettings = {},
   orderData = {},
   printSettings = {},
   documentTitle = 'Receipt',
+  thermalConfig,
+  items: itemsProp,
+  subtotal = 0,
+  discount = 0,
+  tax = 0,
+  shipping = 0,
+  total = 0,
   receivedAmount = null,
   previousBalance = null,
   combinedRemainingBalance = null,
   showBalanceSummary = false,
+  invoiceNumber: invoiceNumberProp,
+  customerName,
+  invoiceDate,
+  notes: notesProp,
 }) => {
   const barcodeRef = useRef(null);
 
@@ -18,8 +41,9 @@ const ThermalReceipt = ({
     companyName = 'Store Name',
     address = '',
     contactNumber = '',
-    email = ''
+    email = '',
   } = companySettings;
+
   const receiptFooterText = printSettings?.receiptFooterText || '';
 
   const {
@@ -28,19 +52,13 @@ const ThermalReceipt = ({
     showThermalBarcode = true,
     showThermalBarcodeValue = true,
     showThermalFooter = true,
-    showThermalPrintDate = true
+    showThermalPrintDate = true,
   } = printSettings || {};
 
-  const {
-    createdAt = new Date(),
-    sale_date,
-    items = [],
-    pricing = {},
-    customerInfo = {},
-    payment = {}
-  } = orderData;
+  const { customerInfo = {}, payment = {} } = orderData || {};
 
   const invoiceNumber =
+    invoiceNumberProp ||
     orderData?.invoiceNumber ||
     orderData?.orderNumber ||
     orderData?.order_number ||
@@ -50,32 +68,45 @@ const ThermalReceipt = ({
     orderData?._id ||
     'N/A';
 
-  const discount = pricing.discountAmount || pricing.discount || orderData.discount || 0;
-  const tax = pricing.taxAmount || orderData.tax || 0;
-  const shipping = pricing.shipping || 0;
-  const total = pricing.total || orderData.total || 0;
-  const notes = String(orderData.notes || '').trim();
+  const resolvedCustomerName =
+    customerName ||
+    customerInfo?.name ||
+    orderData?.customer?.name ||
+    '';
+
+  const resolvedDate =
+    invoiceDate ||
+    orderData?.sale_date ||
+    orderData?.saleDate ||
+    orderData?.createdAt;
+
+  const notes = String(notesProp ?? orderData?.notes ?? '').trim();
+
+  const items = Array.isArray(itemsProp) ? itemsProp : (orderData?.items || []);
+
+  const cssVars = getThermalCssVariables(thermalConfig || {});
 
   const formatDate = (date) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',
-      year: 'numeric'
+      year: 'numeric',
     });
   };
 
   const formatCurrency = (value) => {
+    if (value === undefined || value === null || Number.isNaN(Number(value))) return '-';
     return Number(value).toLocaleString('en-US', {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     });
   };
 
   useEffect(() => {
     if (showThermalBarcode && barcodeRef.current && invoiceNumber && invoiceNumber !== 'N/A') {
       try {
-        JsBarcode(barcodeRef.current, invoiceNumber, {
+        JsBarcode(barcodeRef.current, String(invoiceNumber), {
           format: 'CODE128',
           width: 2,
           height: 40,
@@ -90,7 +121,7 @@ const ThermalReceipt = ({
           lineColor: '#000000',
           background: '#ffffff',
           textAlign: 'center',
-          flat: true
+          flat: true,
         });
       } catch (error) {
         console.error('Barcode generation failed:', error);
@@ -98,8 +129,12 @@ const ThermalReceipt = ({
     }
   }, [invoiceNumber, showThermalBarcode, showThermalBarcodeValue]);
 
+  const showSubtotal = Number(subtotal) > 0 && (Number(discount) > 0 || Number(tax) > 0);
+  const showReceived = receivedAmount != null && Number(receivedAmount) >= 0;
+  const invoiceBalance = Math.max(0, Number(total) - Number(receivedAmount || 0));
+
   return (
-    <div className="thermal-receipt break-inside-avoid">
+    <div className="thermal-receipt break-inside-avoid" style={cssVars}>
       <div className="thermal-receipt__header">
         <h1 className="thermal-receipt__store-name">{companyName}</h1>
         <div className="thermal-receipt__store-details">
@@ -109,32 +144,28 @@ const ThermalReceipt = ({
         </div>
       </div>
 
-      <div className="thermal-receipt__divider"></div>
+      <div className="thermal-receipt__divider" />
 
       <div className="thermal-receipt__info">
-        <div className="thermal-receipt__info-row">
-          <span>{documentTitle}:</span>
-          <span>{invoiceNumber}</span>
-        </div>
-        <div className="thermal-receipt__info-row">
-          <span>Date:</span>
-          <span>{formatDate(sale_date || createdAt)}</span>
-        </div>
-        {showThermalCustomerName && customerInfo?.name && (
-          <div className="thermal-receipt__info-row">
-            <span>Customer:</span>
-            <span>{customerInfo.name}</span>
-          </div>
+        <ThermalReceiptRow label={`${documentTitle}:`} value={invoiceNumber} />
+        <ThermalReceiptRow label="Date:" value={formatDate(resolvedDate)} />
+        {showThermalCustomerName && resolvedCustomerName && (
+          <ThermalReceiptRow
+            label="Customer:"
+            value={resolvedCustomerName}
+            valueClassName="thermal-receipt__row-value--wrap"
+          />
         )}
         {notes && (
-          <div className="thermal-receipt__info-row thermal-receipt__info-row--notes">
-            <span>Notes:</span>
-            <span className="thermal-receipt__notes-value">{notes}</span>
-          </div>
+          <ThermalReceiptRow
+            label="Notes:"
+            value={notes}
+            valueClassName="thermal-receipt__row-value--wrap"
+          />
         )}
       </div>
 
-      <div className="thermal-receipt__divider"></div>
+      <div className="thermal-receipt__divider" />
 
       <table className="thermal-receipt__table">
         <thead>
@@ -149,10 +180,14 @@ const ThermalReceipt = ({
         <tbody>
           {items.map((item, index) => {
             const qty = item.quantity || item.qty || 0;
-            const price = item.unitPrice || item.price || 0;
-            const lineTotal = item.total || (qty * price);
+            const price = item.unitPrice || item.unit_price || item.price || 0;
+            const lineTotal =
+              item.total ??
+              item.lineTotal ??
+              item.subtotal ??
+              (Number(qty) * Number(price));
             return (
-              <tr key={index}>
+              <tr key={item.id || item._id || index}>
                 <td>{index + 1}</td>
                 <td className="thermal-receipt__item-name">
                   {item.product?.name || item.name || `Item ${index + 1}`}
@@ -167,66 +202,53 @@ const ThermalReceipt = ({
       </table>
 
       <div className="thermal-receipt__summary">
-        {discount > 0 && (
-          <div className="thermal-receipt__summary-row">
-            <span>Discount:</span>
-            <span>-{formatCurrency(discount)}</span>
-          </div>
+        {showSubtotal && (
+          <ThermalReceiptRow label="Subtotal:" value={formatCurrency(subtotal)} />
         )}
-        {tax > 0 && (
-          <div className="thermal-receipt__summary-row">
-            <span>Tax:</span>
-            <span>{formatCurrency(tax)}</span>
-          </div>
+        {Number(discount) > 0 && (
+          <ThermalReceiptRow label="Discount:" value={`-${formatCurrency(discount)}`} />
         )}
-        {shipping > 0 && (
-          <div className="thermal-receipt__summary-row">
-            <span>Shipping:</span>
-            <span>{formatCurrency(shipping)}</span>
-          </div>
+        {Number(tax) > 0 && (
+          <ThermalReceiptRow label="Tax:" value={formatCurrency(tax)} />
         )}
-        <div className="thermal-receipt__summary-row thermal-receipt__summary-row--total">
-          <span>TOTAL:</span>
-          <span>{formatCurrency(total)}</span>
-        </div>
-        {receivedAmount != null && Number(receivedAmount) > 0 && (
-          <div className="thermal-receipt__summary-row">
-            <span>Received:</span>
-            <span>{formatCurrency(receivedAmount)}</span>
-          </div>
+        {Number(shipping) > 0 && (
+          <ThermalReceiptRow label="Shipping:" value={formatCurrency(shipping)} />
         )}
-
+        <ThermalReceiptRow
+          label="TOTAL:"
+          value={formatCurrency(total)}
+          className="thermal-receipt__summary-row--total"
+        />
+        {showReceived && (
+          <ThermalReceiptRow label="Received:" value={formatCurrency(receivedAmount)} />
+        )}
+       
+       
       </div>
 
       <div className="thermal-receipt__footer">
         {showThermalPaidBy && payment.method && (
-          <div className="thermal-receipt__info-row">
-            <span>Paid by:</span>
-            <span>{payment.method}</span>
-          </div>
+          <ThermalReceiptRow label="Paid by:" value={payment.method} />
         )}
         {showThermalBarcode && (
           <>
-            <div className="thermal-receipt__divider"></div>
+            <div className="thermal-receipt__divider" />
             <div className="thermal-receipt__barcode">
-              <canvas ref={barcodeRef} width="520" height="100"></canvas>
+              <canvas ref={barcodeRef} width="520" height="100" />
             </div>
           </>
         )}
         {showThermalFooter && (
           <>
-            {receiptFooterText && (
-              <div className="thermal-receipt__custom-footer">
-                {receiptFooterText}
-              </div>
+            {receiptFooterText ? (
+              <div className="thermal-receipt__custom-footer">{receiptFooterText}</div>
+            ) : (
+              <div>Thank You for Shopping!</div>
             )}
-            {!receiptFooterText && <div>Thank You for Shopping!</div>}
           </>
         )}
         {showThermalPrintDate && (
-          <div style={{ fontSize: '9px', marginTop: '2mm' }}>
-            {new Date().toLocaleString()}
-          </div>
+          <div className="thermal-receipt__print-date">{new Date().toLocaleString()}</div>
         )}
       </div>
     </div>

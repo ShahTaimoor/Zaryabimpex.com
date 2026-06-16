@@ -1,4 +1,4 @@
-import React, { useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { useReactToPrint } from 'react-to-print';
 
 /**
@@ -25,11 +25,19 @@ const PrintWrapper = forwardRef(({
   const internalRef = useRef(null);
   const contentRef = externalRef || internalRef;
 
+  const handleBeforeGetContent = useCallback(async () => {
+    if (onBeforeGetContent) {
+      await onBeforeGetContent();
+    }
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+  }, [onBeforeGetContent]);
+
   const handlePrint = useReactToPrint({
     contentRef,
-    // Empty title suppresses the browser print header (page title on the right).
     documentTitle: '',
-    onBeforeGetContent,
+    onBeforeGetContent: handleBeforeGetContent,
     onAfterPrint,
     pageStyle: pageStyle || undefined,
     removeAfterPrint: false

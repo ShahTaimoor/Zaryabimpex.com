@@ -7,6 +7,7 @@ import {
   getProductDisplayName,
 } from '../utils/partyDisplay';
 import ThermalReceipt from './print/ThermalReceipt';
+import { getThermalConfig, getThermalCssVariables } from './print/thermalPrintConfig';
 import { useSensitiveDataPermissions } from '../hooks/useSensitiveDataPermissions';
 import { useAuth } from '../contexts/AuthContext';
 import { computeLedgerPrintBalances } from '../utils/printBalanceUtils';
@@ -94,9 +95,12 @@ const PrintDocument = ({
     const saleOrPurchaseClass = !isReceipt ? (isSale ? ' print-document--sale' : isPurchase ? ' print-document--purchase' : '') : '';
     const receiptTypeClass = isReceipt ? (isBank ? ' print-document--bank' : isCash ? ' print-document--cash' : '') : '';
 
-    const isCompact = invoiceLayout === 'compact';
+    const thermalConfig = useMemo(
+        () => getThermalConfig(printSettings),
+        [printSettings?.thermalPaperWidth, printSettings?.printSize]
+    );
 
-    const printClassName = `print-document${invoiceLayout === 'layout2' ? ' print-document--layout2' : ''}${isReceipt ? ' print-document--receipt' : ''}${isCompact ? ' print-document--compact' : ''}${isMobileLayout ? ' print-document--mobile' : ''}${saleOrPurchaseClass}${receiptTypeClass}`;
+    const printClassName = `print-document${invoiceLayout === 'layout2' ? ' print-document--layout2' : ''}${isReceipt ? ' print-document--receipt' : ''}${isMobileLayout ? ' print-document--mobile' : ''}${saleOrPurchaseClass}${receiptTypeClass}`;
 
     const formatDate = (date) =>
         new Date(date || new Date()).toLocaleDateString('en-GB', {
@@ -318,6 +322,7 @@ const PrintDocument = ({
     const taxValue =
         toNumber(orderData?.pricing?.taxAmount ?? orderData?.tax, undefined) ??
         (orderData?.pricing?.isTaxExempt ? 0 : 0);
+    const shippingValue = toNumber(orderData?.pricing?.shipping ?? orderData?.shipping, 0);
     const storedTotal = toNumber(orderData?.pricing?.total ?? orderData?.total, undefined);
     const totalValue =
         items.length > 0
@@ -717,17 +722,30 @@ const PrintDocument = ({
     // ==========================================
     if (invoiceLayout === 'compact') {
         return (
-            <div className={printClassName}>
+            <div
+                className="print-thermal-root"
+                style={getThermalCssVariables(thermalConfig)}
+            >
                 {children}
                 <ThermalReceipt
                     companySettings={safeCompanySettings}
                     orderData={orderData}
                     printSettings={printSettings}
                     documentTitle={resolvedDocumentTitle}
+                    thermalConfig={thermalConfig}
+                    items={items}
+                    subtotal={computedSubtotal}
+                    discount={discountValue}
+                    tax={taxValue}
+                    shipping={shippingValue}
+                    total={totalValue}
                     receivedAmount={receivedAmount}
                     previousBalance={previousBalance}
                     combinedRemainingBalance={combinedRemainingBalance}
                     showBalanceSummary={showBalanceSummary}
+                    invoiceNumber={documentNumber}
+                    customerName={partyInfo.name}
+                    invoiceDate={invoiceDate}
                 />
             </div>
         );

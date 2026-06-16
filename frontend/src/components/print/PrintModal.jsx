@@ -1,5 +1,4 @@
-import React, { useRef, useCallback, useEffect, useState } from 'react';
-import BaseModal from '../BaseModal';
+import React, { useRef, useCallback, useEffect, useState } from 'react';import BaseModal from '../BaseModal';
 import { Button } from '@/components/ui/button';
 import PrintWrapper from './PrintWrapper';
 import PrintTrigger from './PrintTrigger';
@@ -30,6 +29,7 @@ const PrintModal = ({
   zIndex = 50,
   getPdfData,
   shareConfig,
+  onBeforeGetContent,
   onAfterPrint,
   pageStyle = PRINT_PAGE_STYLE
 }) => {
@@ -106,6 +106,7 @@ const PrintModal = ({
         ref={printRef}
         documentTitle={documentTitle}
         pageStyle={pageStyle}
+        onBeforeGetContent={onBeforeGetContent}
         onAfterPrint={onAfterPrint}
       >
         {hasData ? (

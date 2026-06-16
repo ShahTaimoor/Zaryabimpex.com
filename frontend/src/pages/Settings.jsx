@@ -80,6 +80,7 @@ export const Settings2 = () => {
     autoCompleteSaleAfterPrint: true,
     mobilePrintPreview: false,
     printSize: 'standard',
+    thermalPaperWidth: '80mm',
     headerText: '',
     footerText: '',
     receiptFooterText: '',
@@ -223,7 +224,8 @@ export const Settings2 = () => {
         autoCompleteSaleAfterPrint: ps.autoCompleteSaleAfterPrint ?? true,
         mobilePrintPreview: ps.mobilePrintPreview ?? false,
         invoiceLayout: ps.invoiceLayout || 'standard',
-        printSize: (ps.invoiceLayout || 'standard') === 'compact' ? '80mm' : 'standard',
+        printSize: (ps.invoiceLayout || 'standard') === 'compact' ? (ps.thermalPaperWidth || ps.printSize || '80mm') : 'standard',
+        thermalPaperWidth: ps.thermalPaperWidth || (String(ps.printSize || '').includes('58') ? '58mm' : '80mm'),
         headerText: ps.headerText || '',
         footerText: ps.footerText || '',
         receiptFooterText: ps.receiptFooterText || '',
@@ -253,9 +255,15 @@ export const Settings2 = () => {
     setPrintSettings((prev) => {
       const next = { ...prev, [name]: raw };
       if (name === 'invoiceLayout') {
-        next.printSize = raw === 'compact' ? '80mm' : 'standard';
+        next.printSize = raw === 'compact' ? (prev.thermalPaperWidth || '80mm') : 'standard';
       }
-      if (name === 'printSize' && raw === '80mm') {
+      if (name === 'printSize' && (raw === '80mm' || raw === '58mm')) {
+        next.invoiceLayout = 'compact';
+        next.thermalPaperWidth = raw;
+      }
+      if (name === 'thermalPaperWidth') {
+        next.thermalPaperWidth = raw;
+        next.printSize = raw;
         next.invoiceLayout = 'compact';
       }
       return next;

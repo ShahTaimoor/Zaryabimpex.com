@@ -3,25 +3,28 @@
  * SINGLE SOURCE OF TRUTH — All @media print rules for the entire app.
  * Imported once in index.jsx. Do NOT add @media print blocks elsewhere.
  *
- * Canonical values (keep printPageStyle.js in sync):
- *   body font-size: 11px
- *   th/td border:   1px solid #000
- *   th/td padding:  4px 6px
- *   th/td font-size: 11px
- *   th background:  #f3f4f6
- *   @page:          size auto, margin 0 (content padding 10mm)
+ * Architecture:
+ *   A4 / Ledger  → .print-document, .account-ledger-print, .receipt-voucher
+ *   Thermal      → .thermal-receipt (never shares table/body rules with A4)
+ *
+ * react-to-print iframe styles: printPageStyle.js + thermalPrintConfig.js
  * =========================================================================
  */
 
 @media print {
 
-  /* ── Page ────────────────────────────────────────────────────────────── */
+  /* ── Page defaults ─────────────────────────────────────────────────── */
   @page {
     size: auto;
     margin: 0;
   }
 
-  /* ── Hide UI elements ───────────────────────────────────────────────── */
+  @page thermal {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  /* ── Hide UI elements ──────────────────────────────────────────────── */
   .no-print,
   .print\:hidden,
   nav,
@@ -47,10 +50,10 @@
     display: block !important;
   }
 
-  /* ── Base body reset ────────────────────────────────────────────────── */
+  /* ── Body reset — thermal has zero padding; A4/ledger get 10mm ───── */
   body {
     margin: 0 !important;
-    padding: 10mm !important;
+    padding: 0 !important;
     font-family: 'Inter', Arial, Helvetica, sans-serif !important;
     font-size: 11px !important;
     color: #000 !important;
@@ -59,7 +62,11 @@
     print-color-adjust: exact !important;
   }
 
-  /* ── Print preview transforms ───────────────────────────────────────── */
+  body:not(:has(.thermal-receipt)) {
+    padding: 10mm !important;
+  }
+
+  /* ── Print preview transforms ────────────────────────────────────── */
   .print-preview-scale {
     transform: none !important;
   }
@@ -110,7 +117,7 @@
     grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
   }
 
-  /* ── .print-document reset (A4 / standard / layout2) ────────────────── */
+  /* ── A4 .print-document ──────────────────────────────────────────── */
   .print-document {
     width: 100% !important;
     max-width: 100% !important;
@@ -119,38 +126,33 @@
     padding: 0 !important;
     margin: 0 !important;
     border-radius: 0 !important;
+    page-break-inside: avoid;
   }
 
-  .print-document--compact {
-    width: 100% !important;
-    max-width: 100% !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    box-shadow: none !important;
-    border: none !important;
-  }
-
-  /* ── Logo ────────────────────────────────────────────────────────────── */
   .print-document__logo-placeholder {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  /* ── Tables (universal) ─────────────────────────────────────────────── */
-  table,
+  /* A4 tables — scoped, never affects .thermal-receipt */
+  .print-document table,
   .print-document__table,
-  .account-ledger-table {
+  .receipt-voucher table,
+  .layout2-table {
     width: 100% !important;
     border-collapse: collapse !important;
     font-size: 11px !important;
     table-layout: auto !important;
   }
 
-  th, td,
+  .print-document th,
+  .print-document td,
   .print-document__table th,
   .print-document__table td,
-  .account-ledger-table th,
-  .account-ledger-table td {
+  .receipt-voucher th,
+  .receipt-voucher td,
+  .layout2-table th,
+  .layout2-table td {
     border: 1px solid #000 !important;
     padding: 4px 6px !important;
     font-size: 11px !important;
@@ -158,36 +160,26 @@
     line-height: 1.2 !important;
   }
 
-  th,
+  .print-document th,
   .print-document__table th,
-  .account-ledger-table th {
+  .layout2-table th {
     background-color: #f3f4f6 !important;
     font-weight: 700 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* ── Page breaks ────────────────────────────────────────────────────── */
-  .print-document,
-  .print-layout-a4 .print-document,
-  .receipt-voucher {
-    page-break-inside: avoid;
-  }
-
-  .print-break-inside-auto tr,
-  .print-break-inside-auto .print-row {
-    page-break-inside: auto;
-  }
-
-  tr {
+  .print-document tr,
+  .receipt-voucher tr {
     page-break-inside: avoid !important;
   }
 
-  thead {
+  .print-document thead,
+  .receipt-voucher thead {
     display: table-header-group !important;
   }
 
-  /* ── A4 Invoice layout helpers ──────────────────────────────────────── */
+  /* ── A4 layout helpers ───────────────────────────────────────────── */
   .print-layout-a4 {
     font-size: 11px;
     max-width: 100%;
@@ -209,33 +201,169 @@
     padding: 4px;
   }
 
-  /* ── 80mm Thermal layout helpers ────────────────────────────────────── */
-  .print-layout-thermal {
-    width: 80mm !important;
-    max-width: 80mm !important;
-    font-size: 10px !important;
-    padding: 2mm !important;
+  .receipt-voucher {
+    page-break-inside: avoid;
   }
 
-  .print-layout-thermal .receipt-voucher {
-    max-width: 76mm;
+  /* ── THERMAL — scoped to .thermal-receipt only ───────────────────── */
+  .print-thermal-root {
+    width: var(--thermal-paper-width, 80mm);
+    max-width: var(--thermal-paper-width, 80mm);
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    border: none;
+    overflow: visible;
   }
 
-  .print-layout-thermal .receipt-voucher__company-name {
-    font-size: 14px;
+  body:has(.thermal-receipt) {
+    padding: 0 !important;
+    width: var(--thermal-paper-width, 80mm);
+    max-width: var(--thermal-paper-width, 80mm);
   }
 
-  .print-layout-thermal .receipt-voucher__title h2 {
-    font-size: 12px;
+  .thermal-receipt {
+    width: var(--thermal-content-width, 76mm);
+    max-width: var(--thermal-content-width, 76mm);
+    margin: 0 var(--thermal-horizontal-margin, 2mm);
+    padding: 1mm 0;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: var(--thermal-font-size, 11px);
+    font-weight: 600;
+    line-height: 1.15;
+    color: #000;
+    background: #fff;
+    display: block;
+    overflow: visible;
+    transform: none;
+    page-break-inside: auto;
   }
 
-  .print-layout-thermal table th,
-  .print-layout-thermal table td {
-    font-size: 9px;
-    padding: 2px 3px;
+  .thermal-receipt * {
+    box-sizing: border-box;
+    color: #000;
+    border-color: #000;
   }
 
-  /* ── Ledger / Summary print header & footer ─────────────────────────── */
+  .thermal-receipt__store-name {
+    font-size: var(--thermal-store-name-font-size, 19px);
+    font-weight: 800;
+  }
+
+  .thermal-receipt__store-details {
+    font-size: var(--thermal-store-details-font-size, 9px);
+  }
+
+  .thermal-receipt__row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2mm;
+    align-items: start;
+    margin-bottom: 0.5mm;
+    font-size: var(--thermal-table-font-size, 10px);
+  }
+
+  .thermal-receipt__row-label {
+    min-width: 0;
+    word-wrap: break-word;
+  }
+
+  .thermal-receipt__row-value {
+    text-align: right;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .thermal-receipt__row-value--wrap {
+    white-space: normal;
+    word-wrap: break-word;
+    max-width: 55%;
+    text-align: right;
+  }
+
+  .thermal-receipt__table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1mm 0;
+    table-layout: fixed;
+  }
+
+  .thermal-receipt__table th,
+  .thermal-receipt__table td {
+    border: none;
+    border-bottom: 1px solid #000;
+    padding: 0.8mm 0;
+    font-size: var(--thermal-table-font-size, 10px);
+    font-weight: 600;
+    vertical-align: top;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    overflow: hidden;
+  }
+
+  .thermal-receipt__table th {
+    font-weight: 800;
+  }
+
+  .thermal-receipt__table th:nth-child(1),
+  .thermal-receipt__table td:nth-child(1) {
+    width: 7%;
+    text-align: center;
+  }
+
+  .thermal-receipt__table th:nth-child(2),
+  .thermal-receipt__table td:nth-child(2) {
+    width: 38%;
+    text-align: left;
+  }
+
+  .thermal-receipt__table th:nth-child(3),
+  .thermal-receipt__table td:nth-child(3) {
+    width: 10%;
+    text-align: center;
+  }
+
+  .thermal-receipt__table th:nth-child(4),
+  .thermal-receipt__table td:nth-child(4) {
+    width: 22%;
+    text-align: right;
+  }
+
+  .thermal-receipt__table th:nth-child(5),
+  .thermal-receipt__table td:nth-child(5) {
+    width: 23%;
+    text-align: right;
+  }
+
+  .thermal-receipt__summary-row--total {
+    font-size: var(--thermal-total-font-size, 13px);
+    font-weight: bold;
+    border-top: 1px solid #000;
+    margin-top: 1mm;
+    padding-top: 1mm;
+  }
+
+  .thermal-receipt__table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .thermal-receipt__divider {
+    border-top: 1px dashed #000;
+    margin: 1mm 0;
+    width: 100%;
+  }
+
+  .thermal-receipt__barcode canvas {
+    width: var(--thermal-barcode-width, 52mm);
+    max-width: var(--thermal-barcode-width, 52mm);
+    height: var(--thermal-barcode-height, 10mm);
+    display: block;
+    margin: 0 auto;
+    image-rendering: auto;
+    transform: none;
+  }
+
+  /* ── Ledger / Summary print header & footer ──────────────────────── */
   .print-header {
     text-align: center;
     margin-bottom: 10px;
@@ -257,10 +385,31 @@
     padding-top: 4px;
   }
 
-  /* ── Account Ledger Summary colors ──────────────────────────────────── */
+  /* ── Account Ledger Summary colors ───────────────────────────────── */
   .account-ledger-print {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .account-ledger-print table,
+  .account-ledger-print-table,
+  .account-ledger-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: fixed !important;
+    font-size: 10px !important;
+  }
+
+  .account-ledger-print th,
+  .account-ledger-print td,
+  .account-ledger-print-table th,
+  .account-ledger-print-table td,
+  .account-ledger-table th,
+  .account-ledger-table td {
+    border: 1px solid #000 !important;
+    padding: 4px 6px !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
   }
 
   /* Customer = emerald */
@@ -335,7 +484,7 @@
     print-color-adjust: exact;
   }
 
-  /* ── Sale invoice = emerald ─────────────────────────────────────────── */
+  /* ── Sale invoice = emerald ──────────────────────────────────────── */
   .print-document--sale .print-document__table th,
   .print-document--sale .layout2-table th {
     background-color: #059669 !important;
@@ -358,7 +507,7 @@
     border-color: #10b981 !important;
   }
 
-  /* ── Purchase invoice = blue ────────────────────────────────────────── */
+  /* ── Purchase invoice = blue ─────────────────────────────────────── */
   .print-document--purchase .print-document__table th,
   .print-document--purchase .layout2-table th {
     background-color: #2563eb !important;
@@ -381,7 +530,7 @@
     border-color: #3b82f6 !important;
   }
 
-  /* ── Utility classes ────────────────────────────────────────────────── */
+  /* ── Utility classes ─────────────────────────────────────────────── */
   .text-right { text-align: right !important; }
   .text-left { text-align: left !important; }
   .text-center { text-align: center !important; }
