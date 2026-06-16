@@ -195,18 +195,7 @@ const ThermalReceipt = ({
             <span>{formatCurrency(receivedAmount)}</span>
           </div>
         )}
-        {showBalanceSummary && previousBalance != null && (
-          <div className="thermal-receipt__summary-row">
-            <span>Prev. Balance:</span>
-            <span>{formatCurrency(previousBalance)}</span>
-          </div>
-        )}
-        {showBalanceSummary && combinedRemainingBalance != null && (
-          <div className="thermal-receipt__summary-row thermal-receipt__summary-row--total">
-            <span>Remaining Balance:</span>
-            <span>{formatCurrency(combinedRemainingBalance)}</span>
-          </div>
-        )}
+
       </div>
 
       <div className="thermal-receipt__footer">
