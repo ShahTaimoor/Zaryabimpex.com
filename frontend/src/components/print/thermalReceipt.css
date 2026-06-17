@@ -53,7 +53,7 @@
 /* Grid rows — stable on narrow paper (replaces flex space-between) */
 .thermal-receipt__row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr;
   gap: 2mm;
   align-items: start;
   margin-bottom: 0.5mm;
@@ -75,8 +75,8 @@
 .thermal-receipt__row-value--wrap {
   white-space: normal;
   word-wrap: break-word;
-  word-break: break-word;
-  max-width: 55%;
+  word-break: normal;
+  max-width: 75%;
   text-align: right;
 }
 

@@ -20,7 +20,7 @@
   }
 
   @page thermal {
-    size: 80mm auto;
+    size: 80mm 297mm;
     margin: 0;
   }
 
@@ -51,6 +51,11 @@
   }
 
   /* ── Body reset — thermal has zero padding; A4/ledger get 10mm ───── */
+  html, body {
+    height: auto !important;
+    min-height: auto !important;
+  }
+
   body {
     margin: 0 !important;
     padding: 0 !important;
@@ -256,7 +261,7 @@
 
   .thermal-receipt__row {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr;
     gap: 2mm;
     align-items: start;
     margin-bottom: 0.5mm;
@@ -277,7 +282,8 @@
   .thermal-receipt__row-value--wrap {
     white-space: normal;
     word-wrap: break-word;
-    max-width: 55%;
+    word-break: normal;
+    max-width: 75%;
     text-align: right;
   }
 

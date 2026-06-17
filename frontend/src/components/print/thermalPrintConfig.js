@@ -73,13 +73,15 @@ export function buildThermalPrintPageStyle(config = getThermalConfig()) {
 
   return `
     @page {
-      size: ${paperWidth} auto;
+      size: ${paperWidth} 297mm;
       margin: 0;
     }
     html, body {
       width: ${paperWidth};
       max-width: ${paperWidth};
       min-width: ${paperWidth};
+      height: auto !important;
+      min-height: auto !important;
       margin: 0;
       padding: 0;
       background: #fff;
