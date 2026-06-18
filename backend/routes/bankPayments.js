@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { body, validationResult, query } = require('express-validator');
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const bankPaymentRepository = require('../repositories/postgres/BankPaymentRepository');
@@ -15,7 +15,7 @@ const { validateUuidParam } = require('../middleware/validation');
 // @access  Private
 router.get('/', [
   auth,
-  requirePermission('view_reports'),
+  requireAnyPermission(['view_reports', 'view_accounting_summary']),
   query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
   query('limit').optional().isInt({ min: 1, max: 999999 }).withMessage('Limit must be between 1 and 999999'),
   query('all').optional({ checkFalsy: true }).isBoolean().withMessage('all must be boolean'),

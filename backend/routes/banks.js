@@ -9,7 +9,7 @@ const bankService = require('../services/bankService');
 // @access  Private
 router.get('/', [
   auth,
-  requireAnyPermission(['view_banks', 'view_reports']),
+  requireAnyPermission(['view_banks', 'view_reports', 'view_accounting_summary']),
   query('isActive').optional().isBoolean().withMessage('isActive must be a boolean'),
   query('search').optional().isString().trim(),
   query('page').optional().isInt({ min: 1 }),

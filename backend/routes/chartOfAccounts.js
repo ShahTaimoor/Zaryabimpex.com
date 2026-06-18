@@ -5,8 +5,8 @@ const chartOfAccountsRepository = require('../repositories/ChartOfAccountsReposi
 const accountCategoryRepository = require('../repositories/AccountCategoryRepository');
 const AccountingService = require('../services/accountingService');
 
-const chartView = requireAnyPermission(['view_chart_of_accounts', 'view_reports']);
-const chartManage = requireAnyPermission(['manage_chart_of_accounts', 'view_reports']);
+const chartView = requireAnyPermission(['view_chart_of_accounts', 'view_reports', 'view_accounting_summary']);
+const chartManage = requireAnyPermission(['manage_chart_of_accounts', 'view_reports', 'view_accounting_summary']);
 
 // GET /api/chart-of-accounts - list accounts (query: accountType, accountCategory, isActive, includeBalances, page, limit)
 router.get('/', auth, chartView, async (req, res) => {
