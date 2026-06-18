@@ -7,7 +7,7 @@ import {
 } from '@/constants/listPagination';
 
 const SEARCH_DEBOUNCE_MS = 280;
-const MIN_SEARCH_CHARS = 2;
+const MIN_SEARCH_CHARS = 1;
 
 /**
  * Barcode / long SKU only — exact match on sku OR barcode.
@@ -78,7 +78,7 @@ export function getPosProductSearchEmptyMessage(searchTerm) {
   const t = String(searchTerm ?? '').trim();
   if (!t) return 'Showing first 20 products — type to search or scan barcode/SKU.';
   if (t.length < MIN_SEARCH_CHARS && !looksLikeExactProductCode(t)) {
-    return 'Type at least 2 characters, or scan a barcode/SKU.';
+    return 'Type at least 1 character, or scan a barcode/SKU.';
   }
   return 'No products found';
 }
