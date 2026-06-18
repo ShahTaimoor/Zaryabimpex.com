@@ -25,6 +25,7 @@ import {
   SupplierSettingsTab,
   AdvancedSettingsTab,
   PrintSettingsTab,
+  TextFormatSettingsTab,
   UsersSettingsTab,
 } from './settings/index';
 
@@ -313,6 +314,10 @@ export const Settings2 = () => {
             companyProfile={companyProfile}
             sampleOrderData={sampleOrderData}
           />
+        )}
+
+        {activeTab === 'text-format' && hasPermission('manage_settings') && (
+          <TextFormatSettingsTab />
         )}
 
         {activeTab === 'other' && hasPermission('manage_advanced_settings') && (

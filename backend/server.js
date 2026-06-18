@@ -140,6 +140,16 @@ app.get('/health', (req, res) => {
   try {
     await connectPostgres();
     logger.info('PostgreSQL connected');
+    // Preload the global text-formatting mode so the first request after boot
+    // is already formatted correctly (otherwise the first /settings read sets it).
+    try {
+      const SettingsRepository = require('./repositories/postgres/SettingsRepository');
+      const bootSettings = await SettingsRepository.getSettings();
+      const mode = bootSettings?.textFormatSettings?.mode;
+      if (mode) logger.info(`Text formatting mode: ${mode}`);
+    } catch (e) {
+      logger.warn('Could not preload text formatting mode:', e.message);
+    }
   } catch (err) {
     logger.error('PostgreSQL connection failed:', err);
     process.exit(1);

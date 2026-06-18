@@ -35,7 +35,21 @@ router.put('/company', auth, requireAnyPermission([
   'manage_advanced_settings'
 ]), async (req, res) => {
   try {
-    
+    // Validate global text-format mode if provided.
+    if (req.body.textFormatSettings !== undefined) {
+      const { VALID_MODES } = require('../utils/textFormat');
+      const incoming = req.body.textFormatSettings && typeof req.body.textFormatSettings === 'object'
+        ? req.body.textFormatSettings
+        : {};
+      const mode = incoming.mode || req.body.textFormat;
+      if (mode !== undefined && !VALID_MODES.includes(String(mode).toLowerCase())) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid text format mode. Allowed: ${VALID_MODES.join(', ')}`
+        });
+      }
+    }
+
     const {
       companyName,
       contactNumber,

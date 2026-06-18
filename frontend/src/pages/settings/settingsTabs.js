@@ -8,12 +8,14 @@ import {
   Package,
   UserPlus,
   BarChart3,
+  Type,
 } from 'lucide-react';
 
 export const SETTINGS_TABS = [
   { id: 'company', name: 'Company Information', shortName: 'Company', icon: Building },
   { id: 'users', name: 'Users', shortName: 'Users', icon: Users, permission: 'manage_users' },
   { id: 'print', name: 'Print Preview Settings', shortName: 'Print', icon: Printer, permission: 'manage_print_settings' },
+  { id: 'text-format', name: 'Text Formatting', shortName: 'Text Format', icon: Type, permission: 'manage_settings' },
   { id: 'dashboard', name: 'Dashboard Settings', shortName: 'Dashboard', icon: LayoutDashboard },
   { id: 'sidebar', name: 'Sidebar Configuration', shortName: 'Sidebar', icon: LayoutDashboard },
   { id: 'topbar', name: 'Top Bar Configuration', shortName: 'Top Bar', icon: Wallet },

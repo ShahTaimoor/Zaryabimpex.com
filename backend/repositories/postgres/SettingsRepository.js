@@ -1,4 +1,5 @@
 const { query } = require('../../config/postgres');
+const { setFormatMode, normalizeMode, DEFAULT_MODE } = require('../../utils/textFormat');
 
 const DEFAULT_ID = 'company_settings';
 
@@ -45,6 +46,12 @@ class SettingsRepository {
       defaultTaxRate: row.default_tax_rate != null ? parseFloat(row.default_tax_rate) : 0,
       printSettings: typeof row.print_settings === 'string' ? JSON.parse(row.print_settings) : (row.print_settings || {}),
       orderSettings: typeof row.order_settings === 'string' ? JSON.parse(row.order_settings || '{}') : (row.order_settings || {}),
+      textFormatSettings: (() => {
+        const raw = typeof row.text_format_settings === 'string' ? JSON.parse(row.text_format_settings || '{}') : (row.text_format_settings || {});
+        const mode = normalizeMode(raw?.mode);
+        setFormatMode(mode); // keep in-memory cache in sync with DB
+        return { mode };
+      })(),
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
@@ -67,6 +74,14 @@ class SettingsRepository {
         ...updates.printSettings,
       };
     }
+    if (updates.textFormatSettings !== undefined) {
+      const incoming = updates.textFormatSettings && typeof updates.textFormatSettings === 'object'
+        ? updates.textFormatSettings
+        : {};
+      const mode = normalizeMode(incoming.mode || updates.textFormat);
+      mergedUpdates.textFormatSettings = { mode };
+      setFormatMode(mode); // apply immediately for subsequent request formatting
+    }
 
     const map = {
       companyName: 'company_name',
@@ -84,7 +99,8 @@ class SettingsRepository {
       taxEnabled: 'tax_enabled',
       defaultTaxRate: 'default_tax_rate',
       printSettings: 'print_settings',
-      orderSettings: 'order_settings'
+      orderSettings: 'order_settings',
+      textFormatSettings: 'text_format_settings'
     };
     const setClauses = [];
     const params = [];

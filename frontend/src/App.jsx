@@ -11,6 +11,7 @@ import { LoadingPage } from './components/LoadingSpinner';
 import { getRouteAccess } from './config/routeAccess';
 import { DailyCashFeatureRoute } from './components/DailyCashFeatureRoute';
 import SyncManager from './services/SyncManager';
+import { useTextFormatMode } from './hooks/useTextFormatMode';
 
 // Critical components - load immediately (small, frequently used)
 import { Login } from './pages/Login';
@@ -77,6 +78,13 @@ const withRouteGuard = (path, element) => {
   );
 };
 
+function TextFormatInit() {
+  // Syncs the global text-format mode from settings into the in-memory cache
+  // so toTitleCase() / formatText() always reflects the latest preference.
+  useTextFormatMode();
+  return null;
+}
+
 function App() {
   useEffect(() => {
     // Initialize offline sync manager
@@ -87,6 +95,7 @@ function App() {
     <ErrorBoundary>
       <ErrorProvider>
         <TabProvider>
+          <TextFormatInit />
           <NetworkStatus />
           <OfflineIndicator />
           <Routes>

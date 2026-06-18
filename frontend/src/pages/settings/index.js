@@ -10,4 +10,5 @@ export { CustomerSettingsTab } from './CustomerSettingsTab';
 export { SupplierSettingsTab } from './SupplierSettingsTab';
 export { AdvancedSettingsTab } from './AdvancedSettingsTab';
 export { PrintSettingsTab } from './PrintSettingsTab';
+export { TextFormatSettingsTab } from './TextFormatSettingsTab';
 export { UsersSettingsTab } from './UsersSettingsTab';
