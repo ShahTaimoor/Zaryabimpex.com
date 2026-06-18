@@ -642,6 +642,7 @@ const PurchaseReturns = () => {
                 itemsOverride={supplierPurchasedProductsForSearch}
                 loadingOverride={isSearching}
                 emptyMessageOverride="No purchased products found for this supplier"
+                onSearchChange={setProductSearchTerm}
               />
             </div>
 
