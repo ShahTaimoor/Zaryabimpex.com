@@ -147,7 +147,20 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
   // Add party details if needed - currently PdfExportButton only supports one table
   // We can add them to the title or use a multi-table approach if we improve PdfExportButton
 
-  const orderId = orderData.invoiceNumber || orderData.soNumber || orderData.orderNumber || orderData.id || orderData._id || 'Draft';
+  const orderId =
+    orderData.invoiceNumber ||
+    orderData.invoice_number ||
+    orderData.soNumber ||
+    orderData.so_number ||
+    orderData.orderNumber ||
+    orderData.order_number ||
+    orderData.billNumber ||
+    orderData.bill_number ||
+    orderData.referenceNumber ||
+    orderData.poNumber ||
+    orderData.id ||
+    orderData._id ||
+    'Draft';
   const filename = `${documentTitle.replace(/\s+/g, '_')}_${orderId}.pdf`;
 
   // Resolve party details for "Bill To"
