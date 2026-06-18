@@ -810,6 +810,7 @@ const SaleReturns = () => {
               itemsOverride={customerSoldProductsForSearch}
               loadingOverride={isSearching}
               emptyMessageOverride="No sold products found for this customer"
+              onSearchChange={setProductSearchTerm}
             />
           }
           isEmpty={returnCart.length === 0}

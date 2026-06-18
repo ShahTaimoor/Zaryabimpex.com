@@ -43,6 +43,8 @@ function ProductSearchComponent({
   loadingOverride = null,
   emptyMessageOverride = null,
   onFocusReady,
+  /** Called whenever the internal search term changes so the parent can drive its own search. */
+  onSearchChange,
 }) {
   const { canViewStock } = useSensitiveDataPermissions();
   const { companyInfo } = useCompanyInfo();
@@ -56,6 +58,13 @@ function ProductSearchComponent({
   };
 
   const [productSearchTerm, setProductSearchTerm] = useState('');
+
+  // Wrapper that forwards search term changes to parent when itemsOverride is used
+  const updateProductSearchTerm = useCallback((term) => {
+    setProductSearchTerm(term);
+    onSearchChange?.(term);
+  }, [onSearchChange]);
+
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [quantity, setQuantity] = useState(0);
   const [customRate, setCustomRate] = useState('');
@@ -189,7 +198,7 @@ function ProductSearchComponent({
     setIsAddingProduct(true);
 
     // Show selected product/variant name in search field
-    setProductSearchTerm(getProductDisplayName(product, ''));
+    updateProductSearchTerm(getProductDisplayName(product, ''));
 
     // Fetch last purchase price (always, for loss alerts)
     // For variants, use the base product ID to get purchase price
@@ -261,13 +270,13 @@ function ProductSearchComponent({
 
       if (totalMatches.length === 0) {
         toast.error(`No product found with barcode: ${barcodeValue}`);
-        setProductSearchTerm(barcodeValue); // Set search term so user can see what failed
+        updateProductSearchTerm(barcodeValue); // Set search term so user can see what failed
         return;
       }
 
       if (totalMatches.length > 1) {
         toast.warning(`Multiple products found for barcode: ${barcodeValue}. Please select manually.`);
-        setProductSearchTerm(barcodeValue);
+        updateProductSearchTerm(barcodeValue);
         return;
       }
 
@@ -329,7 +338,7 @@ function ProductSearchComponent({
       });
 
       // Clear search and focus back
-      setProductSearchTerm('');
+      updateProductSearchTerm('');
       selectedProductIdRef.current = null;
       setLastPurchasePrice(null);
       setSelectedProduct(null);
@@ -573,7 +582,7 @@ function ProductSearchComponent({
       setIsAddingProduct(false);
 
       // Clear search term and force re-render
-      setProductSearchTerm('');
+      updateProductSearchTerm('');
       setSearchKey(prev => prev + 1);
 
       // Focus back to product search input
@@ -726,7 +735,7 @@ function ProductSearchComponent({
                       placeholder="Search or select product..."
                       items={dropdownItems}
                       onSelect={handleProductSelect}
-                      onSearch={setProductSearchTerm}
+                      onSearch={updateProductSearchTerm}
                       displayKey={productDisplayKey}
                       selectedItem={selectedProduct}
                       loading={dropdownLoading}
@@ -1055,7 +1064,7 @@ function ProductSearchComponent({
                       placeholder="Search or select product..."
                       items={dropdownItems}
                       onSelect={handleProductSelect}
-                      onSearch={setProductSearchTerm}
+                      onSearch={updateProductSearchTerm}
                       displayKey={productDisplayKey}
                       selectedItem={selectedProduct}
                       loading={dropdownLoading}
