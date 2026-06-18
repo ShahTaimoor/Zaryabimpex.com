@@ -371,8 +371,8 @@ class ReturnManagementService {
     const now = new Date();
     const daysSinceOrder = Math.floor((now - order.createdAt) / (1000 * 60 * 60 * 24));
 
-    // Check return window (default 30 days)
-    const returnWindow = 30; // This could be configurable per product/category
+    // Check return window (2 years for invoices)
+    const returnWindow = 730; // 2 years
     if (daysSinceOrder > returnWindow) {
       return {
         eligible: false,
