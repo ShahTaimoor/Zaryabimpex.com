@@ -316,10 +316,9 @@ class PurchaseInvoiceRepository {
       params.push(filters.paymentStatus);
     }
     if (filters.search) {
-      sql += ` AND (pi.invoice_number ILIKE $${paramCount++} OR pi.notes ILIKE $${paramCount++} OR s.company_name ILIKE $${paramCount++} OR (pi.supplier_info->>'companyName') ILIKE $${paramCount})`;
+      sql += ` AND (pi.invoice_number ILIKE $${paramCount++} OR pi.notes ILIKE $${paramCount++} OR s.company_name ILIKE $${paramCount++} OR (pi.supplier_info->>'companyName') ILIKE $${paramCount++})`;
       const term = `%${filters.search}%`;
       params.push(term, term, term, term);
-      paramCount += 4;
     }
     // Filter by invoice date (bill date) only so "today" shows only today's invoices
     if (filters.dateFrom) {
@@ -475,7 +474,7 @@ class PurchaseInvoiceRepository {
     const cursorStr = options.cursor || options.keysetCursor;
     const decoded = typeof cursorStr === 'string' ? decodeCursor(cursorStr) : null;
 
-    let countSql = 'SELECT COUNT(*)::bigint AS c FROM purchase_invoices pi WHERE pi.deleted_at IS NULL';
+    let countSql = 'SELECT COUNT(*)::bigint AS c FROM purchase_invoices pi LEFT JOIN suppliers s ON pi.supplier_id = s.id AND s.deleted_at IS NULL WHERE pi.deleted_at IS NULL';
     const countParams = [];
     let paramCount = 1;
     if (filter.supplierId || filter.supplier) {
@@ -496,8 +495,8 @@ class PurchaseInvoiceRepository {
     }
     if (filter.search) {
       const term = `%${filter.search}%`;
-      countSql += ` AND (pi.invoice_number ILIKE $${paramCount++} OR pi.notes ILIKE $${paramCount++} OR (pi.supplier_info->>'companyName') ILIKE $${paramCount++})`;
-      countParams.push(term, term, term);
+      countSql += ` AND (pi.invoice_number ILIKE $${paramCount++} OR pi.notes ILIKE $${paramCount++} OR s.company_name ILIKE $${paramCount++} OR (pi.supplier_info->>'companyName') ILIKE $${paramCount++})`;
+      countParams.push(term, term, term, term);
     }
     if (filter.dateFrom) {
       countSql += ` AND COALESCE(pi.invoice_date, pi.created_at) >= $${paramCount++}`;
