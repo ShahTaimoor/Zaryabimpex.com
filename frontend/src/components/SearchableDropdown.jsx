@@ -542,8 +542,9 @@ export const SearchableDropdown = forwardRef(({
 
   const handleInputClick = () => {
     if (blockForModal()) return;
-    // Open dropdown when clicking on input (if there are items or a search term)
-    if (items.length > 0 || searchTerm || value) {
+    // Only open dropdown when clicking on input if there is already a search term typed
+    const currentTerm = value !== null ? value : searchTerm;
+    if (currentTerm && currentTerm.trim()) {
       setIsOpen(true);
     }
   };
@@ -582,9 +583,12 @@ export const SearchableDropdown = forwardRef(({
               skipNextOpenOnFocusRef.current = false;
               return;
             }
-            // Only open on focus if openOnFocus prop is explicitly set to true
+            // Only open on focus if there is already a search term typed
             if (openOnFocus) {
-              setIsOpen(true);
+              const currentTerm = value !== null ? value : searchTerm;
+              if (currentTerm && currentTerm.trim()) {
+                setIsOpen(true);
+              }
             }
           }}
           disabled={disabled}
