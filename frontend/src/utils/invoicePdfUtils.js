@@ -122,7 +122,17 @@ export const getInvoicePdfPayload = (orderData, companySettings, documentTitle =
     summaryRows.push({ name: 'Received Amount', total: Math.round(receivedAmount).toLocaleString('en-US') });
   }
 
-  const ledgerBalance = ledgerBalanceProp ?? orderData.ledgerBalance ?? orderData.customer?.balance ?? null;
+  const ledgerBalance = ledgerBalanceProp
+    ?? orderData.ledgerBalance
+    ?? orderData.customer?.balance
+    ?? orderData.customer?.currentBalance
+    ?? orderData.customerInfo?.balance
+    ?? orderData.customerInfo?.currentBalance
+    ?? orderData.supplierInfo?.balance
+    ?? orderData.supplierInfo?.currentBalance
+    ?? orderData.supplier?.balance
+    ?? orderData.supplier?.currentBalance
+    ?? null;
   if (canViewBalance && ledgerBalance !== null) {
     const { previousBalance, combinedRemainingBalance } = computeLedgerPrintBalances({
       ledgerBalance: Number(ledgerBalance) || 0,

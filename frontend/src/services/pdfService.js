@@ -13,29 +13,61 @@ export async function buildPdfDocument(payload, { onProgress } = {}) {
   const autoTable = (await import('jspdf-autotable')).default;
 
   const doc = new jsPDF(payload.orientation || 'portrait');
-  let currentY = 10;
+  const pageWidth = doc.internal.pageSize.width;
   const startX = 5;
+  const rightX = pageWidth / 2 + 5;
+  const halfWidth = (pageWidth / 2) - 10;
+  let leftY = 10;
+  let rightY = 10;
 
   if (payload.company) {
     doc.setFontSize(20);
     doc.setTextColor(41, 128, 185);
     doc.setFont('helvetica', 'bold');
-    doc.text(payload.company.name || '', startX, currentY);
-    currentY += 8;
+    doc.text(payload.company.name || '', startX, leftY);
+    leftY += 8;
 
     doc.setFontSize(9);
     doc.setTextColor(80, 80, 80);
     doc.setFont('helvetica', 'normal');
     if (payload.company.address) {
-      doc.text(payload.company.address, startX, currentY);
-      currentY += 5;
+      doc.text(payload.company.address, startX, leftY);
+      leftY += 5;
     }
     if (payload.company.contact) {
-      doc.text(payload.company.contact, startX, currentY);
-      currentY += 5;
+      doc.text(payload.company.contact, startX, leftY);
+      leftY += 5;
     }
-    currentY += 5;
+    leftY += 2;
   }
+
+  if (payload.party) {
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(payload.party.label || 'Bill To:', rightX, rightY);
+    rightY += 5;
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.text(payload.party.name || '', rightX, rightY);
+    rightY += 5;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    if (payload.party.address) {
+      const splitAddress = doc.splitTextToSize(String(payload.party.address), halfWidth);
+      doc.text(splitAddress, rightX, rightY);
+      rightY += splitAddress.length * 4 + 2;
+    }
+    if (payload.party.phone) {
+      doc.text(`Phone: ${payload.party.phone}`, rightX, rightY);
+      rightY += 5;
+    }
+    rightY += 2;
+  }
+
+  // Use the taller of the two columns as starting Y for the title
+  let currentY = Math.max(leftY, rightY) + 3;
 
   doc.setFontSize(16);
   doc.setTextColor(0, 0, 0);
@@ -43,31 +75,6 @@ export async function buildPdfDocument(payload, { onProgress } = {}) {
   const cleanTitle = (payload.title || 'Report').split(':')[0].trim();
   doc.text(cleanTitle, startX, currentY);
   currentY += 10;
-
-  if (payload.party) {
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(payload.party.label || 'Bill To:', startX, currentY);
-    currentY += 5;
-
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'bold');
-    doc.text(payload.party.name || '', startX, currentY);
-    currentY += 5;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    if (payload.party.address) {
-      const splitAddress = doc.splitTextToSize(String(payload.party.address), 90);
-      doc.text(splitAddress, startX, currentY);
-      currentY += splitAddress.length * 4 + 2;
-    }
-    if (payload.party.phone) {
-      doc.text(`Phone: ${payload.party.phone}`, startX, currentY);
-      currentY += 5;
-    }
-    currentY += 5;
-  }
 
   const heads = [payload.columns.map((c) => c.header)];
   const imageColumnsIndices = [];
@@ -160,7 +167,6 @@ export async function buildPdfDocument(payload, { onProgress } = {}) {
   }
 
   let finalY = (doc.lastAutoTable ? doc.lastAutoTable.finalY : currentY) + 25;
-  const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
 
   if (finalY + 20 > pageHeight) {
