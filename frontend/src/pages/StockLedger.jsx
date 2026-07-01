@@ -446,12 +446,13 @@ export const StockLedger = () => {
               <table className="min-w-full border-collapse text-[13px]">
                 <thead>
                   <tr className="border-y border-gray-200 bg-gray-50">
-                    {['S.No', 'Date', 'Invoice', 'Type', 'Customer / Supplier', 'Price', 'Qty', 'Amount', 'Qty left'].map((h) => (
+                    {['S.No', 'Date', 'Invoice', 'Type', 'Customer / Supplier', 'Price', 'Unit cost', 'FIFO batch', 'Qty', 'Amount', 'Qty left'].map((h) => (
                       <th
                         key={h}
                         className={cn(
                           'whitespace-nowrap px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500',
-                          ['Price', 'Qty', 'Amount', 'Qty left'].includes(h) ? 'text-right' : 'text-left'
+                          ['Price', 'Unit cost', 'Qty', 'Amount', 'Qty left'].includes(h) ? 'text-right' : 'text-left',
+                          h === 'FIFO batch' ? 'text-left min-w-[140px]' : ''
                         )}
                       >
                         {h}
@@ -463,7 +464,7 @@ export const StockLedger = () => {
                   {ledger.map((productGroup, groupIndex) => (
                     <React.Fragment key={productGroup.productId || groupIndex}>
                       <tr className="border-t-2 border-gray-200 bg-gray-100/80">
-                        <td colSpan={8} className="px-4 py-2">
+                        <td colSpan={10} className="px-4 py-2">
                           <div className="flex items-center gap-2 font-semibold text-gray-900">
                             <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white border border-gray-200 shadow-sm">
                               <Package className="h-3.5 w-3.5 text-gray-600" />
@@ -505,6 +506,17 @@ export const StockLedger = () => {
                           <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-gray-700">
                             {formatCurrency(entry.price)}
                           </td>
+                          <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-gray-600">
+                            {entry.unitCost != null && entry.unitCost > 0
+                              ? formatCurrency(entry.unitCost)
+                              : '—'}
+                          </td>
+                          <td
+                            className="max-w-[200px] truncate px-4 py-2.5 text-xs text-gray-600"
+                            title={entry.fifoBatchLabel || ''}
+                          >
+                            {entry.fifoBatchLabel || '—'}
+                          </td>
                           <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums font-medium">
                             {entry.quantity < 0 ? (
                               <span className="text-red-600">({Math.abs(entry.quantity)})</span>
@@ -528,6 +540,7 @@ export const StockLedger = () => {
                         <td colSpan={5} className="px-4 py-2 text-sm">
                           Subtotal — {productGroup.productName}
                         </td>
+                        <td className="px-4 py-2" />
                         <td className="px-4 py-2" />
                         <td className="px-4 py-2 text-right tabular-nums">
                           {productGroup.totalQuantity < 0 ? (
@@ -553,6 +566,7 @@ export const StockLedger = () => {
                     <td colSpan={5} className="px-4 py-3 text-sm font-semibold">
                       Grand total
                     </td>
+                    <td className="px-4 py-3" />
                     <td className="px-4 py-3" />
                     <td className="px-4 py-3 text-right tabular-nums font-semibold">
                       {grandTotal.totalQuantity < 0 ? (

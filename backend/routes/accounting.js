@@ -1,5 +1,6 @@
 const express = require('express');
-const { auth } = require('../middleware/auth');
+const { auth, requireAnyPermission } = require('../middleware/auth');
+const { VIEW_ACCOUNTING_SUMMARY } = require('../config/routePermissions');
 const AccountingService = require('../services/accountingService');
 
 const router = express.Router();
@@ -9,7 +10,11 @@ const router = express.Router();
  * @desc    Get unified balance for an account (customer, supplier, bank, or coa)
  * @access  Private
  */
-router.get('/balance/:type/:id', auth, async (req, res) => {
+router.get('/balance/:type/:id', auth, requireAnyPermission([
+  ...VIEW_ACCOUNTING_SUMMARY,
+  'view_customer_balance',
+  'view_supplier_balance',
+]), async (req, res) => {
   try {
     const { type, id } = req.params;
     const { asOfDate } = req.query;

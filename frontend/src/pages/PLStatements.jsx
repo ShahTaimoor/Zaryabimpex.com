@@ -314,7 +314,7 @@ export const PLStatements = () => {
                 </li>
                 <li className="flex gap-2">
                   <span className="inline-block w-1.5 h-1.5 shrink-0 rounded-full bg-gray-400 mt-1.5" />
-                  <span>COGS uses the moving average cost method.</span>
+                  <span>COGS uses the FIFO (First-In, First-Out) cost method.</span>
                 </li>
                 <li className="flex gap-2">
                   <span className="inline-block w-1.5 h-1.5 shrink-0 rounded-full bg-gray-400 mt-1.5" />

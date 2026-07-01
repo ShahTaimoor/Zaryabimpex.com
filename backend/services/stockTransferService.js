@@ -78,7 +78,7 @@ class StockTransferService {
           referenceNumber: transferNumber,
           performedBy: userId,
           notes: `Transfer from ${warehouse.name}`,
-        }, { client });
+        }, { client, skipFifoReceive: true });
 
         const savedLine = await stockTransferRepository.createLine({
           transferId: header.id,

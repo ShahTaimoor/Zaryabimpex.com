@@ -7,6 +7,7 @@ const AccountingService = require('./accountingService');
 const locationStockService = require('./locationStockService');
 const settingsService = require('./settingsService');
 const StockMovementService = require('./stockMovementService');
+const fifoService = require('./fifoService');
 const { resolveStockEntity, getEntityCurrentStock } = require('../utils/stockEntityResolver');
 const { isWarehouseInventoryEnabled } = require('../utils/warehouseInventory');
 
@@ -121,52 +122,83 @@ function mapLocationStockParams(params) {
 
 // Legacy single-location inventory (used when warehouse feature is off)
 async function updateStockLegacy(
-  { productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes },
+  { productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes, supplierId, warehouseId, shopId },
   options = {}
 ) {
-  const { client = null, skipAccountingEntry = false } = options;
+  const { client = null, skipAccountingEntry = false, skipFifoConsume = false, skipFifoReceive = false } = options;
   const inv = await ensureInventoryRecord(productId, client);
   const current = getCurrentStock(inv);
   const isIn = ['in', 'return'].includes(type);
   const newStock = isIn ? current + quantity : current - quantity;
 
-  let finalCost = cost;
+  const unitCostIn = cost != null && Number.isFinite(Number(cost)) ? Number(cost) : null;
+  let fifoConsumeResult = null;
 
-  if (cost !== undefined && cost !== null && isIn && current > 0) {
-    const productRow = await productRepository.findById(productId, true);
-    const currentCostPrice = parseFloat(productRow?.cost_price || productRow?.costPrice || 0);
-    if (currentCostPrice > 0) {
-      const oldStockValue = current * currentCostPrice;
-      const newStockValue = quantity * cost;
-      const totalValue = oldStockValue + newStockValue;
-      finalCost = Math.round((totalValue / newStock) * 100) / 100;
-    }
+  if (!isIn && !skipFifoConsume) {
+    fifoConsumeResult = await fifoService.consumeStock(
+      {
+        productId,
+        quantity,
+        referenceModel,
+        referenceId,
+        referenceNumber: reference,
+        userId: performedBy,
+        notes: notes || reason,
+        movementType: referenceModel === 'Sale' ? 'sale_out' : 'stock_out',
+      },
+      client
+    );
+  }
+
+  if (isIn && !skipFifoReceive) {
+    const productForCost = await productRepository.findById(productId, true);
+    const receiveCost =
+      unitCostIn ??
+      parseFloat(productForCost?.cost_price || productForCost?.costPrice || 0);
+    await fifoService.receiveStock(
+      {
+        productId,
+        quantity,
+        unitCost: receiveCost,
+        purchaseId: referenceModel === 'PurchaseInvoice' || referenceModel === 'PurchaseOrder' ? referenceId : null,
+        supplierId,
+        warehouseId,
+        shopId,
+        referenceModel,
+        referenceId,
+        referenceNumber: reference,
+        userId: performedBy,
+        notes: notes || reason,
+        movementType: type === 'return' ? 'sale_return_in' : 'purchase_in',
+      },
+      client
+    );
   }
 
   const updatePayload = { currentStock: newStock };
-  if (finalCost !== undefined && finalCost !== null && isIn) {
+  if (isIn && unitCostIn != null) {
     const costObj = getCost(inv);
-    updatePayload.cost = { ...costObj, average: finalCost, lastPurchase: cost || finalCost };
+    updatePayload.cost = { ...costObj, lastPurchase: unitCostIn };
   }
   const updated = await inventoryRepository.updateByProductId(productId, updatePayload, client);
 
   const productRow = await productRepository.findById(productId, true);
   if (productRow) {
-    await productRepository.update(productId, {
-      stockQuantity: newStock,
-      ...(finalCost !== undefined && finalCost !== null && isIn ? { costPrice: finalCost } : {}),
-    }, client);
+    await productRepository.update(productId, { stockQuantity: newStock }, client);
 
     if (!skipAccountingEntry) {
       try {
         const delta = isIn ? quantity : -quantity;
-        const unitCost = cost || parseFloat(productRow.cost_price || productRow.costPrice) || 0;
+        const movementUnitCost =
+          fifoConsumeResult?.unitCost ??
+          unitCostIn ??
+          (parseFloat(productRow.cost_price || productRow.costPrice) || 0);
         const validatedUserId = isValidUuid(performedBy) ? performedBy : null;
 
         await AccountingService.recordInventoryValueChange({
           productId,
           delta,
-          unitCost,
+          unitCost: movementUnitCost,
           reason: reason || `Inventory ${type}`,
           referenceType: referenceModel === 'PurchaseInvoice'
             ? 'purchase_invoice'
@@ -192,7 +224,18 @@ async function updateStockLegacy(
 
   try {
     await StockMovementService.logLegacyInventoryMovement(
-      { productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes },
+      {
+        productId,
+        type,
+        quantity,
+        reason,
+        reference,
+        referenceId,
+        referenceModel,
+        cost: fifoConsumeResult?.unitCost ?? unitCostIn ?? cost,
+        performedBy,
+        notes,
+      },
       { previousStock: current, currentStock: newStock },
       { id: performedBy, email: 'System' }
     );
@@ -200,13 +243,13 @@ async function updateStockLegacy(
     console.error('Failed to log legacy stock movement:', movErr?.message || movErr);
   }
 
-  return updated || inv;
+  return { ...(updated || inv), fifoConsumeResult };
 }
 
-// Update stock levels with Average Cost Method for incoming stock
-const updateStock = async ({ productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes, warehouseId, shopId }, options = {}) => {
-  const { client = null, skipAccountingEntry = false, warehouseInventoryEnabled } = options;
-  const flowParams = { productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes, warehouseId, shopId };
+// Update stock levels with FIFO batch tracking
+const updateStock = async ({ productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes, warehouseId, shopId, supplierId }, options = {}) => {
+  const { client = null, skipAccountingEntry = false, skipFifoConsume = false, skipFifoReceive = false, warehouseInventoryEnabled } = options;
+  const flowParams = { productId, type, quantity, reason, reference, referenceId, referenceModel, cost, performedBy, notes, warehouseId, shopId, supplierId };
 
   let warehouseEnabled = warehouseInventoryEnabled;
   if (warehouseEnabled === undefined) {
@@ -215,28 +258,31 @@ const updateStock = async ({ productId, type, quantity, reason, reference, refer
   }
 
   if (!warehouseEnabled) {
-    return updateStockLegacy(flowParams, { client, skipAccountingEntry });
+    return updateStockLegacy(flowParams, { client, skipAccountingEntry, skipFifoConsume, skipFifoReceive });
   }
 
   if (isPurchaseStockFlow(flowParams)) {
     if (type === 'in') {
-      return locationStockService.receiveAtWarehouse(mapLocationStockParams(flowParams), { client });
+      return locationStockService.receiveAtWarehouse(mapLocationStockParams(flowParams), { client, skipFifoReceive });
     }
     if (type === 'out') {
       return locationStockService.issueFromWarehouse({
         ...mapLocationStockParams(flowParams),
         movementType: 'return_out',
-      }, { client });
+      }, { client, skipFifoConsume });
     }
     throw new Error('Purchase stock changes must be warehouse in or out only');
   }
 
   if (isSaleStockFlow(flowParams)) {
     if (type === 'out') {
-      return locationStockService.issueFromShop(mapLocationStockParams(flowParams), { client });
+      return locationStockService.issueFromShop(mapLocationStockParams(flowParams), { client, skipFifoConsume });
     }
     if (type === 'in' || type === 'return') {
-      return locationStockService.restoreToShop(mapLocationStockParams(flowParams), { client });
+      return locationStockService.restoreToShop(mapLocationStockParams(flowParams), {
+        client,
+        skipFifoReceive: options.skipFifoReceive,
+      });
     }
     throw new Error('Sales stock changes must use shop inventory (out or return only)');
   }
@@ -375,7 +421,12 @@ const getInventoryHistory = async ({ productId, limit = 50, offset = 0, type, st
 const getInventorySummary = async () => {
   try {
     const result = await pgQuery(
-      `WITH base AS (
+      `WITH fifo_totals AS (
+         SELECT COALESCE(SUM(quantity_remaining * unit_cost), 0)::numeric AS fifo_total_value
+         FROM inventory_batches
+         WHERE status = 'active' AND quantity_remaining > 0
+       ),
+       base AS (
          SELECT
            CASE WHEN i.id IS NOT NULL THEN COALESCE(i.current_stock::numeric, 0) ELSE 0::numeric END AS current_stock,
            CASE WHEN i.id IS NOT NULL THEN COALESCE(i.reorder_point::numeric, 0)
@@ -396,7 +447,11 @@ const getInventorySummary = async () => {
          COUNT(*) FILTER (
            WHERE b.current_stock > 0 AND b.reorder_point > 0 AND b.current_stock <= b.reorder_point
          )::int AS low_stock,
-         COALESCE(SUM(b.current_stock * b.unit_cost), 0)::float AS total_value
+         COALESCE(
+           NULLIF((SELECT fifo_total_value FROM fifo_totals), 0),
+           SUM(b.current_stock * b.unit_cost),
+           0
+         )::float AS total_value
        FROM base b
        CROSS JOIN pc`,
       []

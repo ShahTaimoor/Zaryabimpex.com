@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { auth } = require('../middleware/auth');
+const { auth, requireAnyPermission } = require('../middleware/auth');
+const { VIEW_BACKDATE_REPORT } = require('../config/routePermissions');
 const salesOrderRepository = require('../repositories/SalesOrderRepository');
 const purchaseOrderRepository = require('../repositories/PurchaseOrderRepository');
 const cashReceiptRepository = require('../repositories/CashReceiptRepository');
@@ -11,7 +12,7 @@ const salesRepository = require('../repositories/SalesRepository');
 const purchaseInvoiceRepository = require('../repositories/PurchaseInvoiceRepository');
 
 // Get backdate/future date report
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, requireAnyPermission(VIEW_BACKDATE_REPORT), async (req, res) => {
   try {
     const { getStartOfDayPakistan, getEndOfDayPakistan, formatDatePakistan } = require('../utils/dateFilter');
     const today = new Date();

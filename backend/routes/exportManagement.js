@@ -6,7 +6,8 @@ const logger = require('../utils/logger');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
-const { auth } = require('../middleware/auth');
+const { auth, requireAnyPermission } = require('../middleware/auth');
+const { EXPORT_DATA } = require('../config/routePermissions');
 
 /** Normalize ExcelJS cell values for JSON (strings, numbers, dates; rich text & formula results). */
 function cellValueToPlain(cell) {
@@ -28,7 +29,7 @@ function cellValueToPlain(cell) {
  * @desc    Export data to a professionally styled Excel file
  * @access  Private (Assume auth middleware is applied globally or here)
  */
-router.post('/generate', auth, async (req, res) => {
+router.post('/generate', auth, requireAnyPermission(EXPORT_DATA), async (req, res) => {
     try {
         const { 
             title = 'Report', 
@@ -131,7 +132,7 @@ router.get('/sample', async (req, res) => {
     }
 });
 
-router.post('/import', auth, upload.single('excelFile'), async (req, res) => {
+router.post('/import', auth, requireAnyPermission(EXPORT_DATA), upload.single('excelFile'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ message: 'No file uploaded' });

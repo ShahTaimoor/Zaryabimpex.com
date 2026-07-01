@@ -3,7 +3,8 @@ const { body, validationResult, query } = require('express-validator');
 const { query: runQuery } = require('../config/postgres');
 const fs = require('fs');
 const path = require('path');
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
+const { VIEW_SALES_ORDERS } = require('../config/routePermissions');
 const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const inventoryService = require('../services/inventoryService');
@@ -138,6 +139,7 @@ router.get('/', [
   query('orderNumber').optional().trim(),
   handleValidationErrors,
   processDateFilter('createdAt'),
+  requireAnyPermission(VIEW_SALES_ORDERS),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -247,7 +249,7 @@ router.get('/', [
 // @route   GET /api/sales-orders/:id
 // @desc    Get single sales order
 // @access  Private
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', auth, requireAnyPermission(VIEW_SALES_ORDERS), async (req, res) => {
   try {
     const salesOrder = await salesOrderRepository.findById(req.params.id);
 
@@ -652,7 +654,7 @@ router.patch('/:id/items-confirmation', [
 // @route   GET /api/sales-orders/:id/stock-status
 // @desc    Check which items have insufficient/out-of-stock before confirm
 // @access  Private
-router.get('/:id/stock-status', auth, async (req, res) => {
+router.get('/:id/stock-status', auth, requireAnyPermission(VIEW_SALES_ORDERS), async (req, res) => {
   try {
     const salesOrder = await salesOrderRepository.findById(req.params.id);
     if (!salesOrder) {
@@ -1205,7 +1207,7 @@ router.delete('/:id', [
 // @route   GET /api/sales-orders/:id/convert
 // @desc    Get sales order items available for conversion
 // @access  Private
-router.get('/:id/convert', auth, async (req, res) => {
+router.get('/:id/convert', auth, requireAnyPermission(VIEW_SALES_ORDERS), async (req, res) => {
   try {
     const salesOrder = await salesOrderRepository.findById(req.params.id, {
       populate: [

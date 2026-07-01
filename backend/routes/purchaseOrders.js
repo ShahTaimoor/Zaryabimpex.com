@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, validationResult, query } = require('express-validator');
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
+const { VIEW_PURCHASE_ORDERS } = require('../config/routePermissions');
 const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const inventoryService = require('../services/inventoryService');
@@ -33,6 +34,7 @@ router.get('/', [
   ...validateDateParams,
   handleValidationErrors,
   processDateFilter('createdAt'),
+  requireAnyPermission(VIEW_PURCHASE_ORDERS),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -62,7 +64,7 @@ router.get('/', [
 // @route   GET /api/purchase-orders/:id
 // @desc    Get single purchase order
 // @access  Private
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', auth, requireAnyPermission(VIEW_PURCHASE_ORDERS), async (req, res) => {
   try {
     const purchaseOrder = await purchaseOrderService.getPurchaseOrderById(req.params.id);
     res.json({ purchaseOrder });
@@ -633,7 +635,7 @@ router.delete('/:id', [
 // @route   GET /api/purchase-orders/:id/convert
 // @desc    Get purchase order items available for conversion
 // @access  Private
-router.get('/:id/convert', auth, async (req, res) => {
+router.get('/:id/convert', auth, requireAnyPermission(VIEW_PURCHASE_ORDERS), async (req, res) => {
   try {
     const result = await purchaseOrderService.getPurchaseOrderForConversion(req.params.id);
     res.json(result);

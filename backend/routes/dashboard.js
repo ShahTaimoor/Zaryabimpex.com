@@ -1,6 +1,7 @@
 const express = require('express');
 const { query } = require('express-validator');
-const { auth } = require('../middleware/auth');
+const { auth, requireAnyPermission } = require('../middleware/auth');
+const { VIEW_DASHBOARD } = require('../config/routePermissions');
 const { handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams } = require('../middleware/dateFilter');
 const dashboardService = require('../services/dashboardService');
@@ -11,6 +12,7 @@ router.get(
   '/range-summary',
   [
     auth,
+    requireAnyPermission(VIEW_DASHBOARD),
     ...validateDateParams,
     query('dateFrom').notEmpty().withMessage('dateFrom is required'),
     query('dateTo').notEmpty().withMessage('dateTo is required'),

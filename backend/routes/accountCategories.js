@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
-const { auth } = require("../middleware/auth");
+const { auth, requireAnyPermission, requirePermission } = require("../middleware/auth");
+const { VIEW_CHART_OF_ACCOUNTS } = require("../config/routePermissions");
 const { validateAccountCategory } = require("../middleware/validation");
 const accountCategoryRepository = require("../repositories/AccountCategoryRepository");
 const chartOfAccountsRepository = require("../repositories/ChartOfAccountsRepository");
 
 // Get all account categories
-router.get("/", auth, async (req, res) => {
+router.get("/", auth, requireAnyPermission(VIEW_CHART_OF_ACCOUNTS), async (req, res) => {
   try {
     const { accountType, grouped } = req.query;
 
@@ -35,7 +36,7 @@ router.get("/", auth, async (req, res) => {
 });
 
 // Get grouped account categories (specific route before /:id to avoid route conflict)
-router.get("/grouped", auth, async (req, res) => {
+router.get("/grouped", auth, requireAnyPermission(VIEW_CHART_OF_ACCOUNTS), async (req, res) => {
   try {
     const categories =
       await accountCategoryRepository.getAllCategoriesGrouped();
@@ -55,7 +56,7 @@ router.get("/grouped", auth, async (req, res) => {
 });
 
 // Get single account category
-router.get("/:id", auth, async (req, res) => {
+router.get("/:id", auth, requireAnyPermission(VIEW_CHART_OF_ACCOUNTS), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -100,7 +101,7 @@ router.get("/:id", auth, async (req, res) => {
 });
 
 // Create new account category
-router.post("/", auth, validateAccountCategory, async (req, res) => {
+router.post("/", auth, requirePermission('create_chart_of_accounts'), validateAccountCategory, async (req, res) => {
   try {
     const categoryData = {
       ...req.body,
@@ -145,7 +146,7 @@ router.post("/", auth, validateAccountCategory, async (req, res) => {
 });
 
 // Update account category
-router.put("/:id", auth, validateAccountCategory, async (req, res) => {
+router.put("/:id", auth, requirePermission('edit_chart_of_accounts'), validateAccountCategory, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -208,7 +209,7 @@ router.put("/:id", auth, validateAccountCategory, async (req, res) => {
 });
 
 // Delete account category
-router.delete("/:id", auth, async (req, res) => {
+router.delete("/:id", auth, requirePermission('delete_chart_of_accounts'), async (req, res) => {
   try {
     const { id } = req.params;
 

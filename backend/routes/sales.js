@@ -57,9 +57,10 @@ function resolveOrderTotalAndPaid(order) {
     0;
   return { total, amountPaid };
 }
-const { auth, requirePermission, maskSensitiveData } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission, maskSensitiveData } = require('../middleware/auth');
 const { handleValidationErrors } = require('../middleware/validation');
 const { preventPOSDuplicates } = require('../middleware/duplicatePrevention');
+const { VIEW_DASHBOARD, VIEW_SALES } = require('../config/routePermissions');
 
 const { transformCustomerToUppercase, transformProductToUppercase, transformSupplierToUppercase } = require('../utils/displayTransforms');
 
@@ -148,7 +149,7 @@ router.get('/cctv-orders', [
   query('dateTo').optional().isISO8601(),
   query('orderNumber').optional().trim(),
   query('customerId').optional().isUUID(4),
-  requirePermission('view_sales'), // Or specific CCTV permission if needed
+  requireAnyPermission(['view_cctv_access', 'view_sales']),
   maskSensitiveData('view_product_costs', ['items.unitCost', 'items.cost_price'])
 ], async (req, res, next) => {
   try {
@@ -524,23 +525,7 @@ router.put('/:id/status', [
       });
     }
 
-    // If cancelling, restore inventory (Postgres: update product stock_quantity)
-    if (req.body.status === 'cancelled' && Array.isArray(order.items)) {
-      for (const item of order.items) {
-        const productId = item.product_id || item.product;
-        if (!productId) continue;
-        const product = await productRepository.findById(productId);
-        if (product) {
-          const newStock = (parseFloat(product.stock_quantity) || 0) + (item.quantity || 0);
-          await productRepository.update(productId, { stockQuantity: newStock });
-        }
-      }
-    }
-
-    await salesRepository.update(req.params.id, {
-      status: req.body.status,
-      updatedBy: req.user?.id || req.user?._id
-    });
+    await salesService.updateStatus(req.params.id, req.body.status, req.user);
     const updatedOrder = await salesRepository.findById(req.params.id);
 
     res.json({
@@ -549,6 +534,14 @@ router.put('/:id/status', [
     });
   } catch (error) {
     console.error('Update order status error:', error);
+    if (req.body.status === 'cancelled') {
+      return res.status(400).json({
+        message: error.message || 'Could not cancel order — inventory restore failed',
+      });
+    }
+    if (error.message === 'Order not found') {
+      return res.status(404).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -727,6 +720,25 @@ router.put('/:id', [
         }
       }
 
+      const saleId = order.id || order._id;
+      const saleRefNumber = order.order_number || order.orderNumber || saleId;
+      let fifoCostByProduct = new Map();
+      try {
+        fifoCostByProduct = await salesService.adjustSaleInventoryOnEdit({
+          saleId,
+          saleRefNumber,
+          oldItems,
+          newItems: req.body.items,
+          userId: req.user?.id || req.user?._id,
+          referenceModel: 'Sale',
+        });
+      } catch (invErr) {
+        console.error('FIFO inventory adjustment failed on sale edit:', invErr);
+        return res.status(400).json({
+          message: invErr.message || 'Inventory adjustment failed while updating this invoice',
+        });
+      }
+
       // Recalculate pricing for new items
       let newSubtotal = 0;
       let newTotalDiscount = 0;
@@ -750,21 +762,26 @@ router.put('/:id', [
         const taxRate = globalTax.rateDecimal;
         const itemTax = itemTaxable * taxRate;
 
-        // Get unit cost for P&L (COGS) - same logic as createSale
+        // Unit cost: use FIFO result from edit adjustment, else preserve frozen line cost
         let unitCost = 0;
         const productId = productForTax?.id || productForTax?._id;
-        if (productId) {
-          try {
-            const costInfo = await costingService.calculateCost(productId, item.quantity);
-            unitCost = costInfo.unitCost || 0;
-          } catch (err) {
-            console.error(`Failed to calculate costing for product ${productId}:`, err.message);
-            const inv = await inventoryRepository.findByProduct(productId);
-            if (inv && inv.cost) {
-              const costObj = typeof inv.cost === 'string' ? JSON.parse(inv.cost) : inv.cost;
-              unitCost = costObj.average ?? costObj.lastPurchase ?? 0;
+        const productKey = productId != null ? String(productId) : '';
+        if (productKey && fifoCostByProduct.has(productKey)) {
+          unitCost = fifoCostByProduct.get(productKey);
+        } else if (productId) {
+          const oldItemForCost = oldItems.find((oi) => {
+            const oldProductId = oi.product?._id ? oi.product._id.toString() : oi.product?.toString() || oi.product;
+            return oldProductId === productKey;
+          });
+          unitCost = parseFloat(oldItemForCost?.unitCost ?? oldItemForCost?.cost_price ?? 0) || 0;
+          if (!oldItemForCost) {
+            try {
+              const costInfo = await costingService.calculateCost(productId, item.quantity);
+              unitCost = costInfo.unitCost || 0;
+            } catch (err) {
+              console.error(`Failed to calculate FIFO costing for product ${productId}:`, err.message);
+              unitCost = productForTax?.pricing?.cost ?? productForTax?.cost_price ?? 0;
             }
-            if (unitCost === 0) unitCost = productForTax?.pricing?.cost ?? productForTax?.cost_price ?? 0;
           }
         }
 
@@ -987,79 +1004,6 @@ router.put('/:id', [
       }
     }
 
-    // Adjust inventory based on item changes
-    if (req.body.items && req.body.items.length > 0) {
-      try {
-        const inventoryService = require('../services/inventoryService');
-
-        for (const newItem of req.body.items) {
-          const oldItem = oldItems.find(oi => {
-            const oldProductId = oi.product?._id ? oi.product._id.toString() : oi.product?.toString() || oi.product;
-            const newProductId = newItem.product?.toString() || newItem.product;
-            return oldProductId === newProductId;
-          });
-          const oldQuantity = oldItem ? oldItem.quantity : 0;
-          const quantityChange = newItem.quantity - oldQuantity;
-
-          if (quantityChange !== 0) {
-            if (quantityChange > 0) {
-              // Quantity increased - reduce inventory
-              await inventoryService.updateStock({
-                productId: newItem.product,
-                type: 'out',
-                quantity: quantityChange,
-                reason: 'Order Update - Quantity Increased',
-                reference: 'Sales Order',
-                referenceId: order.id || order._id,
-                referenceModel: 'SalesOrder',
-                performedBy: req.user?.id || req.user?._id,
-                notes: `Inventory reduced due to order ${order.orderNumber} update - quantity increased by ${quantityChange}`
-              });
-            } else {
-              // Quantity decreased - restore inventory
-              await inventoryService.updateStock({
-                productId: newItem.product,
-                type: 'in',
-                quantity: Math.abs(quantityChange),
-                reason: 'Order Update - Quantity Decreased',
-                reference: 'Sales Order',
-                referenceId: order.id || order._id,
-                referenceModel: 'SalesOrder',
-                performedBy: req.user?.id || req.user?._id,
-                notes: `Inventory restored due to order ${order.orderNumber} update - quantity decreased by ${Math.abs(quantityChange)}`
-              });
-            }
-          }
-        }
-
-        // Handle removed items (items that were in old but not in new)
-        for (const oldItem of oldItems) {
-          const oldProductId = oldItem.product?._id ? oldItem.product._id.toString() : oldItem.product?.toString() || oldItem.product;
-          const stillExists = req.body.items.find(newItem => {
-            const newProductId = newItem.product?.toString() || newItem.product;
-            return oldProductId === newProductId;
-          });
-          if (!stillExists) {
-            // Item was removed - restore inventory
-            await inventoryService.updateStock({
-              productId: oldItem.product?._id || oldItem.product,
-              type: 'in',
-              quantity: oldItem.quantity,
-              reason: 'Order Update - Item Removed',
-              reference: 'Sales Order',
-              referenceId: order.id || order._id,
-              referenceModel: 'SalesOrder',
-              performedBy: req.user?.id || req.user?._id,
-              notes: `Inventory restored due to order ${order.orderNumber} update - item removed`
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error adjusting inventory on order update:', error);
-        // Don't fail update if inventory adjustment fails
-      }
-    }
-
     // Customer balance: now derived from Account Ledger (AccountingService), no direct Customer update.
 
     // If customer changed, move ledger entries to the new customer
@@ -1200,31 +1144,26 @@ router.delete('/:id', [
     // Customer balance: now derived from Account Ledger; no direct Customer update on delete.
 
     const orderTotal = parseFloat(order.total) || 0;
-    const orderItems = Array.isArray(order.items) ? order.items : [];
-    if (orderTotal > 0 || orderItems.length > 0) {
+    let orderItems = order.items;
+    if (typeof orderItems === 'string') {
+      try { orderItems = JSON.parse(orderItems); } catch { orderItems = []; }
+    }
+    if (!Array.isArray(orderItems)) orderItems = [];
+    if (order.status !== 'cancelled' && orderItems.length > 0) {
       try {
-        const inventoryService = require('../services/inventoryService');
-        for (const item of orderItems) {
-          const productId = item.product_id || item.product;
-          if (!productId) continue;
-          try {
-            await inventoryService.updateStock({
-              productId,
-              type: 'in',
-              quantity: item.quantity || 0,
-              reason: 'Order Deletion',
-              reference: 'Sales Order',
-              referenceId: order.id || order._id,
-              referenceModel: 'SalesOrder',
-              performedBy: req.user?.id || req.user?._id,
-              notes: `Inventory restored due to deletion of order ${order.order_number || order.orderNumber}`
-            });
-          } catch (err) {
-            console.error(`Failed to restore inventory for product ${productId}:`, err);
-          }
-        }
+        const saleId = order.id || order._id;
+        const saleRefNumber = order.order_number || order.orderNumber || saleId;
+        await salesService.restoreSaleInventoryOnDelete({
+          saleId,
+          saleRefNumber,
+          items: orderItems,
+          userId: req.user?.id || req.user?._id,
+        });
       } catch (error) {
-        console.error('Error restoring inventory on order deletion:', error);
+        console.error('Error restoring FIFO inventory on order deletion:', error);
+        return res.status(400).json({
+          message: error.message || 'Could not restore inventory for this sale. Deletion aborted.',
+        });
       }
     }
 
@@ -1251,7 +1190,8 @@ router.delete('/:id', [
 // @desc    Get today's order summary
 // @access  Private
 router.get('/today/summary', [
-  auth
+  auth,
+  requireAnyPermission([...VIEW_DASHBOARD, ...VIEW_SALES]),
 ], async (req, res) => {
   try {
     const today = new Date();
@@ -1286,6 +1226,7 @@ router.get('/today/summary', [
 // @access  Private
 router.get('/period/summary', [
   auth,
+  requireAnyPermission([...VIEW_DASHBOARD, ...VIEW_SALES]),
   query('dateFrom').isISO8601().withMessage('Invalid start date'),
   query('dateTo').isISO8601().withMessage('Invalid end date')
 ], async (req, res) => {

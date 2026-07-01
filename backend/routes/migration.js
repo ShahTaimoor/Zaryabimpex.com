@@ -1,5 +1,6 @@
 const express = require('express');
-const { auth } = require('../middleware/auth');
+const { auth, requireAnyPermission } = require('../middleware/auth');
+const { MANAGE_MIGRATION } = require('../config/routePermissions');
 const migrationService = require('../services/migrationService');
 
 const router = express.Router();
@@ -7,7 +8,7 @@ const router = express.Router();
 // @route   POST /api/migration/update-invoice-prefix
 // @desc    Update existing ORD- invoices to SI- format
 // @access  Private
-router.post('/update-invoice-prefix', auth, async (req, res) => {
+router.post('/update-invoice-prefix', auth, requireAnyPermission(MANAGE_MIGRATION), async (req, res) => {
   try {
     const result = await migrationService.updateInvoicePrefix();
     res.json(result);

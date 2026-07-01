@@ -4,7 +4,8 @@
 
 const express = require('express');
 const multer = require('multer');
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
+const { VIEW_PRODUCTS } = require('../config/routePermissions');
 const { uploadImageOnCloudinary } = require('../services/cloudinary');
 const logger = require('../utils/logger');
 
@@ -38,7 +39,7 @@ const upload = multer({
 // @route   POST /api/images/upload
 // @desc    Upload to Cloudinary
 // @access  Private
-router.post('/upload', auth, upload.single('image'), async (req, res) => {
+router.post('/upload', auth, requireAnyPermission([...VIEW_PRODUCTS, 'edit_products', 'create_products']), upload.single('image'), async (req, res) => {
   try {
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({

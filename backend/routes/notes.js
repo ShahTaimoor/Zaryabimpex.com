@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
+const NOTE_VIEW = ['view_customers', 'view_suppliers', 'view_sales', 'manage_sales', 'view_products', 'view_sales_orders'];
 const { body, validationResult, query } = require('express-validator');
 const noteService = require('../services/noteService');
 
@@ -13,7 +14,8 @@ router.get('/', [
   query('entityId').isUUID(4).optional(),
   query('isPrivate').isBoolean().optional(),
   query('search').isString().optional(),
-  query('tags').isString().optional()
+  query('tags').isString().optional(),
+  requireAnyPermission(NOTE_VIEW),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -36,7 +38,7 @@ router.get('/', [
 // @route   GET /api/notes/:id
 // @desc    Get a single note with history
 // @access  Private
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', auth, requireAnyPermission(NOTE_VIEW), async (req, res) => {
   try {
     const note = await noteService.getNoteById(req.params.id, req.user.id);
     res.json(note);
@@ -57,6 +59,7 @@ router.get('/:id', auth, async (req, res) => {
 // @access  Private
 router.post('/', [
   auth,
+  requireAnyPermission(NOTE_VIEW),
   body('entityType').isIn(['Customer', 'Product', 'SalesOrder', 'PurchaseOrder', 'Supplier', 'Sale', 'PurchaseInvoice', 'SalesInvoice']),
   body('entityId').isUUID(4),
   body('content').trim().isLength({ min: 1, max: 10000 }),
@@ -85,6 +88,7 @@ router.post('/', [
 // @access  Private
 router.put('/:id', [
   auth,
+  requireAnyPermission(NOTE_VIEW),
   body('content').optional().trim().isLength({ min: 1, max: 10000 }),
   body('htmlContent').optional().isString(),
   body('isPrivate').optional().isBoolean(),
@@ -116,7 +120,7 @@ router.put('/:id', [
 // @route   DELETE /api/notes/:id
 // @desc    Delete a note (soft delete)
 // @access  Private
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, requireAnyPermission(NOTE_VIEW), async (req, res) => {
   try {
     const result = await noteService.deleteNote(req.params.id, req.user.id);
     
@@ -136,7 +140,7 @@ router.delete('/:id', auth, async (req, res) => {
 // @route   GET /api/notes/:id/history
 // @desc    Get note history
 // @access  Private
-router.get('/:id/history', auth, async (req, res) => {
+router.get('/:id/history', auth, requireAnyPermission(NOTE_VIEW), async (req, res) => {
   try {
     const history = await noteService.getNoteHistory(req.params.id, req.user.id);
     res.json(history);
@@ -155,7 +159,7 @@ router.get('/:id/history', auth, async (req, res) => {
 // @route   GET /api/notes/search/users
 // @desc    Search users for @mentions
 // @access  Private
-router.get('/search/users', auth, async (req, res) => {
+router.get('/search/users', auth, requireAnyPermission(NOTE_VIEW), async (req, res) => {
   try {
     const users = await noteService.searchUsers(req.query.q);
     res.json(users);

@@ -3,7 +3,8 @@ const { transformCustomerToUppercase, transformProductToUppercase, transformSupp
 
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
+const { VIEW_DROP_SHIPPING } = require('../config/routePermissions');
 const dropShippingRepository = require('../repositories/postgres/DropShippingRepository');
 const supplierRepository = require('../repositories/postgres/SupplierRepository');
 const customerRepository = require('../repositories/postgres/CustomerRepository');
@@ -21,7 +22,7 @@ const handleValidationErrors = (req, res, next) => {
 // @route   GET /api/drop-shipping
 // @desc    Get all drop shipping transactions with filters
 // @access  Private
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, requireAnyPermission(VIEW_DROP_SHIPPING), async (req, res) => {
   try {
     const {
       page = 1,
@@ -62,7 +63,7 @@ router.get('/', auth, async (req, res) => {
 // @route   GET /api/drop-shipping/stats
 // @desc    Get drop shipping statistics
 // @access  Private
-router.get('/stats', auth, async (req, res) => {
+router.get('/stats', auth, requireAnyPermission(VIEW_DROP_SHIPPING), async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const filter = {};
@@ -91,7 +92,7 @@ router.get('/stats', auth, async (req, res) => {
 // @route   GET /api/drop-shipping/:id
 // @desc    Get single drop shipping transaction
 // @access  Private
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', auth, requireAnyPermission(VIEW_DROP_SHIPPING), async (req, res) => {
   try {
     const transaction = await dropShippingRepository.findById(req.params.id);
 
@@ -208,7 +209,7 @@ router.post('/', [
 // @access  Private
 router.put('/:id', [
   auth,
-  requirePermission('update_drop_shipping'),
+  requirePermission('edit_drop_shipping'),
   body('supplier').optional().isUUID(4).withMessage('Valid supplier is required'),
   body('customer').optional().isUUID(4).withMessage('Valid customer is required'),
   body('items').optional().isArray({ min: 1 }).withMessage('At least one item is required'),
@@ -336,6 +337,7 @@ router.delete('/:id', [
 // @access  Private
 router.put('/:id/status', [
   auth,
+  requirePermission('edit_drop_shipping'),
   body('status').isIn(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'completed']).withMessage('Valid status is required'),
   handleValidationErrors
 ], async (req, res) => {

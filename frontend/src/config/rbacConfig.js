@@ -127,15 +127,90 @@ export const PERMISSIONS = {
   VIEW_JOURNAL_VOUCHERS: 'view_journal_vouchers'
 };
 
+/** Role → default permission list (mirrors backend/config/rbacConfig.js) */
+export const ROLE_PERMISSIONS = {
+  admin: ['*'],
+  manager: [
+    PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_SALES, PERMISSIONS.MANAGE_SALES,
+    PERMISSIONS.VIEW_SALES_ORDERS, 'view_sales_invoices', 'create_sales_orders', 'edit_sales_orders',
+    'create_sales_invoices', 'edit_sales_invoices', 'view_sale_returns', 'create_sale_returns', 'edit_sale_returns',
+    PERMISSIONS.VIEW_PRODUCTS, PERMISSIONS.CREATE_PRODUCTS, PERMISSIONS.EDIT_PRODUCTS, PERMISSIONS.VIEW_PRODUCT_COSTS,
+    'view_bp', 'apply_last_prices', PERMISSIONS.VIEW_CUSTOMER_BALANCE, PERMISSIONS.VIEW_SUPPLIER_BALANCE,
+    PERMISSIONS.VIEW_STOCK_LEVELS, PERMISSIONS.VIEW_CUSTOMER_PHONE, PERMISSIONS.VIEW_SUPPLIER_PHONE,
+    'view_product_categories', 'view_customers', 'view_suppliers', 'view_banks', 'view_cctv_access',
+    PERMISSIONS.VIEW_MARKET_PRICES, PERMISSIONS.MANAGE_MARKET_PRICES, PERMISSIONS.IMPORT_MARKET_PRICES,
+    'view_purchase_orders', 'view_purchase_invoices', 'create_purchase_orders', 'edit_purchase_orders',
+    'create_purchase_invoices', 'edit_purchase_invoices', 'view_import_purchase', 'create_import_purchase',
+    'edit_import_purchase', 'view_purchase_returns', 'create_purchase_returns', 'edit_purchase_returns',
+    PERMISSIONS.VIEW_INVENTORY, PERMISSIONS.MANAGE_INVENTORY, 'view_warehouses', 'view_stock_movements',
+    'view_inventory_levels', PERMISSIONS.VIEW_REPORTS, PERMISSIONS.MANAGE_PRINT_SETTINGS,
+    PERMISSIONS.MANAGE_PRODUCT_SETTINGS, PERMISSIONS.MANAGE_CUSTOMER_SETTINGS, PERMISSIONS.MANAGE_SUPPLIER_SETTINGS,
+    PERMISSIONS.MANAGE_ADVANCED_SETTINGS, PERMISSIONS.SETTINGS_PRINT_LAYOUT, PERMISSIONS.SETTINGS_PRINT_LOGO_HEADER,
+    PERMISSIONS.SETTINGS_PRINT_PARTY_DETAILS, PERMISSIONS.SETTINGS_PRINT_INVOICE_META, PERMISSIONS.SETTINGS_PRINT_FINANCIALS,
+    PERMISSIONS.SETTINGS_PRINT_BEHAVIOR, PERMISSIONS.SETTINGS_PRODUCT_IMAGES, PERMISSIONS.SETTINGS_PRODUCT_FIELDS,
+    PERMISSIONS.SETTINGS_CUSTOMER_FIELDS, PERMISSIONS.SETTINGS_SUPPLIER_FIELDS, PERMISSIONS.SETTINGS_ADVANCED_DISPLAY,
+    PERMISSIONS.SETTINGS_ADVANCED_FEATURES, PERMISSIONS.SETTINGS_ADVANCED_SECURITY, 'view_help',
+    'view_general_reports', 'view_pl_statements', 'view_balance_sheets',
+    'view_customer_analytics', 'view_anomaly_detection', 'view_recommendations',
+    'view_discounts', 'view_investors', 'view_cities',
+    'view_chart_of_accounts', 'view_accounting_summary', 'view_journal_vouchers',
+    'create_journal_vouchers', 'edit_journal_vouchers',
+    'create_chart_of_accounts', 'edit_chart_of_accounts',
+    'view_product_variants', 'view_product_transformations',
+  ],
+  cashier: [
+    PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_SALES, PERMISSIONS.MANAGE_SALES,
+    'view_sales_orders', 'view_sales_invoices', 'create_sales_orders', 'edit_sales_orders',
+    'create_sales_invoices', 'edit_sales_invoices', 'apply_last_prices', PERMISSIONS.VIEW_PRODUCTS,
+    PERMISSIONS.VIEW_INVENTORY, 'view_inventory_levels', 'view_cash_receipts', 'create_cash_receipts',
+    'view_cash_payments', 'create_cash_payments', 'view_help',
+  ],
+  employee: [
+    PERMISSIONS.VIEW_SALES, PERMISSIONS.MANAGE_SALES, 'view_sales_orders', 'view_sales_invoices', 'view_help',
+  ],
+  inventory: [
+    PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_PRODUCTS, PERMISSIONS.VIEW_MARKET_PRICES,
+    PERMISSIONS.VIEW_INVENTORY, PERMISSIONS.MANAGE_INVENTORY, 'view_warehouses', 'view_stock_movements',
+    'view_inventory_levels', 'view_low_stock_alerts', 'view_help',
+  ],
+  viewer: [
+    PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_PRODUCTS, 'view_product_categories', 'view_customers',
+    'view_suppliers', PERMISSIONS.VIEW_INVENTORY, 'view_inventory_levels', PERMISSIONS.VIEW_SALES,
+    'view_sales_orders', 'view_sales_invoices', 'view_help',
+  ],
+  sales_person: [
+    PERMISSIONS.VIEW_DASHBOARD, PERMISSIONS.VIEW_SALES, PERMISSIONS.VIEW_SALES_ORDERS,
+    'view_sales_invoices', 'create_sales_orders', 'edit_sales_orders', 'create_sales_invoices',
+    'edit_sales_invoices', 'apply_last_prices', 'view_purchase_orders', 'view_purchase_invoices',
+    'create_purchase_orders', 'edit_purchase_orders', 'create_purchase_invoices', 'edit_purchase_invoices',
+    'view_import_purchase', 'view_help',
+  ],
+};
+
+export const roleHasDefaultPermission = (role, permission) => {
+  if (!role) return false;
+  const perms = ROLE_PERMISSIONS[role.toLowerCase()] || [];
+  if (perms.includes('*')) return true;
+  return perms.includes(permission);
+};
+
+/** Convert backend-style permission array to UI checkbox object */
+export const rolePermissionsToObject = (role) => {
+  const perms = ROLE_PERMISSIONS[role?.toLowerCase()] || [];
+  return Object.fromEntries(perms.filter((p) => p !== '*').map((p) => [p, true]));
+};
+
 /**
- * Check if user has a specific permission
- * @param {Object} user - User object from auth context
- * @param {string} permission - Permission name
- * @returns {boolean}
+ * Check if user has a specific permission (matches backend UserRepository.hasPermission)
  */
 export const hasPermission = (user, permission) => {
   if (!user) return false;
   if (user.role === 'admin') return true;
-  
-  return user.permissions && user.permissions.includes(permission);
+
+  if (Array.isArray(user.permissions) && user.permissions.length > 0) {
+    if (user.permissions.includes('*')) return true;
+    return user.permissions.includes(permission);
+  }
+
+  return roleHasDefaultPermission(user.role, permission);
 };

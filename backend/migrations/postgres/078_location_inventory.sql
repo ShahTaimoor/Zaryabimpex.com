@@ -56,9 +56,23 @@ CREATE TABLE IF NOT EXISTS stock_transfers (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Older DBs created stock_transfers without transferred_at / transferred_by (e.g. 082_location_inventory.sql legacy)
+ALTER TABLE stock_transfers ADD COLUMN IF NOT EXISTS transferred_by UUID;
+ALTER TABLE stock_transfers ADD COLUMN IF NOT EXISTS transferred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE stock_transfers ADD COLUMN IF NOT EXISTS created_by UUID;
+
+UPDATE stock_transfers
+SET transferred_by = created_by
+WHERE transferred_by IS NULL AND created_by IS NOT NULL;
+
+UPDATE stock_transfers
+SET transferred_at = COALESCE(transferred_at, created_at, CURRENT_TIMESTAMP)
+WHERE transferred_at IS NULL;
+
 CREATE INDEX IF NOT EXISTS idx_stock_transfers_warehouse ON stock_transfers(from_warehouse_id);
 CREATE INDEX IF NOT EXISTS idx_stock_transfers_shop ON stock_transfers(to_shop_id);
-CREATE INDEX IF NOT EXISTS idx_stock_transfers_transferred_at ON stock_transfers(transferred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_stock_transfers_transferred_at ON stock_transfers(transferred_at DESC NULLS LAST);
 
 CREATE TABLE IF NOT EXISTS stock_transfer_lines (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

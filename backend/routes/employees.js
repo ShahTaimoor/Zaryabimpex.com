@@ -193,7 +193,7 @@ router.delete('/:id', [
 // @route   GET /api/employees/departments/list
 // @desc    Get list of all departments
 // @access  Private
-router.get('/departments/list', auth, async (req, res) => {
+router.get('/departments/list', auth, requirePermission('manage_users'), async (req, res) => {
   try {
     const departments = await EmployeeRepository.getDistinctDepartments();
     res.json({
@@ -209,7 +209,7 @@ router.get('/departments/list', auth, async (req, res) => {
 // @route   GET /api/employees/positions/list
 // @desc    Get list of all positions
 // @access  Private
-router.get('/positions/list', auth, async (req, res) => {
+router.get('/positions/list', auth, requirePermission('manage_users'), async (req, res) => {
   try {
     const positions = await EmployeeRepository.getDistinctPositions();
     res.json({

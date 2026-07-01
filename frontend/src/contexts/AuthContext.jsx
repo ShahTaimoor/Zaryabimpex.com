@@ -11,6 +11,7 @@ import {
   useLogoutMutation,
 } from '../store/services/authApi';
 import { logout as logoutAction, setUser } from '../store/slices/authSlice';
+import { hasPermission as checkPermission } from '../config/rbacConfig';
 
 // Compatibility wrapper to keep existing imports; no longer provides context.
 export const AuthProvider = ({ children }) => children;
@@ -124,12 +125,7 @@ export const useAuth = () => {
     dispatch(setUser(userData));
   };
 
-  const hasPermission = (permission) => {
-    if (!user) return false;
-    if (user.role === 'admin') return true;
-    if (!user.permissions) return false;
-    return user.permissions.includes(permission);
-  };
+  const hasPermission = (permission) => checkPermission(user, permission);
 
   // Calculate loading state:
   // - Don't show loading on login page (query is skipped there)

@@ -2,7 +2,8 @@ const express = require('express');
 const { body, validationResult, query } = require('express-validator');
 const fs = require('fs');
 const path = require('path');
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
+const { VIEW_SUPPLIERS } = require('../config/routePermissions');
 const { validateUuidParam, handleValidationErrors } = require('../middleware/validation');
 const supplierService = require('../services/supplierServicePostgres');
 const supplierRepository = require('../repositories/postgres/SupplierRepository');
@@ -102,7 +103,8 @@ router.get('/', [
     return ['excellent', 'good', 'average', 'poor'].includes(value);
   }),
   query('emailStatus').optional().isIn(['verified', 'unverified', 'no-email']),
-  query('phoneStatus').optional().isIn(['verified', 'unverified', 'no-phone'])
+  query('phoneStatus').optional().isIn(['verified', 'unverified', 'no-phone']),
+  requireAnyPermission(VIEW_SUPPLIERS),
 ], async (req, res) => {
   try {
     // Prevent stale list after import (avoid 304/cached supplier listing)
@@ -150,7 +152,7 @@ router.get('/deleted', [
 
 // @route   GET /api/suppliers/search/:query
 // Legacy alias — prefer GET /api/suppliers?search=&page=1&limit=50
-router.get('/search/:query', auth, async (req, res) => {
+router.get('/search/:query', auth, requireAnyPermission(VIEW_SUPPLIERS), async (req, res) => {
   try {
     const search = String(req.params.query || '').trim();
     const result = await supplierService.getSuppliers({ search, page: 1, limit: 50 });
@@ -162,7 +164,7 @@ router.get('/search/:query', auth, async (req, res) => {
 });
 
 // @route   GET /api/suppliers/check-email/:email
-router.get('/check-email/:email', auth, async (req, res) => {
+router.get('/check-email/:email', auth, requireAnyPermission([...VIEW_SUPPLIERS, 'create_suppliers']), async (req, res) => {
   try {
     const email = req.params.email;
     const excludeId = req.query.excludeId;
@@ -177,7 +179,7 @@ router.get('/check-email/:email', auth, async (req, res) => {
 });
 
 // @route   GET /api/suppliers/check-company-name/:companyName
-router.get('/check-company-name/:companyName', auth, async (req, res) => {
+router.get('/check-company-name/:companyName', auth, requireAnyPermission([...VIEW_SUPPLIERS, 'create_suppliers']), async (req, res) => {
   try {
     const companyName = req.params.companyName;
     const excludeId = req.query.excludeId;
@@ -191,7 +193,7 @@ router.get('/check-company-name/:companyName', auth, async (req, res) => {
 });
 
 // @route   GET /api/suppliers/check-contact-name/:contactName
-router.get('/check-contact-name/:contactName', auth, async (req, res) => {
+router.get('/check-contact-name/:contactName', auth, requireAnyPermission([...VIEW_SUPPLIERS, 'create_suppliers']), async (req, res) => {
   try {
     const contactName = req.params.contactName;
     const excludeId = req.query.excludeId;
@@ -206,7 +208,7 @@ router.get('/check-contact-name/:contactName', auth, async (req, res) => {
 });
 
 // @route   GET /api/suppliers/active/list
-router.get('/active/list', auth, async (req, res) => {
+router.get('/active/list', auth, requireAnyPermission(VIEW_SUPPLIERS), async (req, res) => {
   try {
     const suppliers = await supplierService.getAllSuppliers({ status: 'active' });
     const transformedSuppliers = suppliers.map(transformSupplierToUppercase);
@@ -220,7 +222,7 @@ router.get('/active/list', auth, async (req, res) => {
 // @route   GET /api/suppliers/:id
 // @desc    Get single supplier
 // @access  Private
-router.get('/:id', [auth, validateUuidParam('id'), handleValidationErrors], async (req, res) => {
+router.get('/:id', [auth, requireAnyPermission(VIEW_SUPPLIERS), validateUuidParam('id'), handleValidationErrors], async (req, res) => {
   try {
     const supplier = await supplierService.getSupplierById(req.params.id);
     res.json({ supplier });

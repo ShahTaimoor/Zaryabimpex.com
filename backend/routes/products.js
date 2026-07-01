@@ -2,7 +2,8 @@ const express = require('express');
 const { body, param, validationResult, query } = require('express-validator');
 const fs = require('fs');
 const path = require('path');
-const { auth, requirePermission, maskSensitiveData } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission, maskSensitiveData } = require('../middleware/auth');
+const { VIEW_PRODUCTS } = require('../config/routePermissions');
 const { sanitizeRequest, handleValidationErrors } = require('../middleware/validation');
 const productService = require('../services/productServicePostgres');
 const auditLogService = require('../services/auditLogService');
@@ -95,6 +96,7 @@ router.get('/', [
   }),
   query('listMode').optional({ checkFalsy: true }).isIn(['full', 'minimal']),
   query('cursor').optional({ checkFalsy: true }).isString().trim(),
+  requireAnyPermission(VIEW_PRODUCTS),
   maskSensitiveData('view_product_costs', 'pricing.cost')
 ], async (req, res, next) => {
   try {
@@ -123,7 +125,7 @@ router.get('/', [
 // @route   GET /api/products/:id/last-purchase-price
 // @desc    Get last purchase price for a product
 // @access  Private
-router.get('/:id/last-purchase-price', auth, maskSensitiveData('view_product_costs', 'lastPurchasePrice'), async (req, res, next) => {
+router.get('/:id/last-purchase-price', auth, requireAnyPermission(VIEW_PRODUCTS), maskSensitiveData('view_product_costs', 'lastPurchasePrice'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const priceInfo = await productService.getLastPurchasePrice(id);
@@ -151,7 +153,7 @@ router.get('/:id/last-purchase-price', auth, maskSensitiveData('view_product_cos
 // @route   GET /api/products/:id
 // @desc    Get single product
 // @access  Private
-router.get('/:id', auth, maskSensitiveData('view_product_costs', 'pricing.cost'), async (req, res, next) => {
+router.get('/:id', auth, requireAnyPermission(VIEW_PRODUCTS), maskSensitiveData('view_product_costs', 'pricing.cost'), async (req, res, next) => {
   try {
     const product = await productService.getProductById(req.params.id);
     res.json({ product });
@@ -364,7 +366,7 @@ router.get('/deleted', [
 // @desc    Search products by name
 // @access  Private
 // Legacy alias — prefer GET /api/products?search=&page=1&limit=50
-router.get('/search/:query', auth, maskSensitiveData('view_product_costs', 'pricing.cost'), async (req, res, next) => {
+router.get('/search/:query', auth, requireAnyPermission(VIEW_PRODUCTS), maskSensitiveData('view_product_costs', 'pricing.cost'), async (req, res, next) => {
   try {
     const search = String(req.params.query || '').trim();
     const result = await productService.getProducts({ search, page: 1, limit: 50 });
@@ -423,7 +425,7 @@ router.delete('/bulk', [
 // @route   GET /api/products/low-stock
 // @desc    Get products with low stock
 // @access  Private
-router.get('/low-stock', auth, async (req, res, next) => {
+router.get('/low-stock', auth, requireAnyPermission(VIEW_PRODUCTS), async (req, res, next) => {
   try {
     const products = await productService.getLowStockProducts();
     res.json({ products });
@@ -437,6 +439,7 @@ router.get('/low-stock', auth, async (req, res, next) => {
 // @access  Private
 router.post('/:id/price-check', [
   auth,
+  requireAnyPermission(VIEW_PRODUCTS),
   body('customerType').isIn(['retail', 'wholesale', 'distributor', 'individual']).withMessage('Invalid customer type'),
   body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1')
 ], async (req, res, next) => {
@@ -512,7 +515,7 @@ router.delete('/:id/investors/:investorId', [
 // @route   POST /api/products/get-last-purchase-prices
 // @desc    Get last purchase prices for multiple products
 // @access  Private
-router.post('/get-last-purchase-prices', auth, async (req, res, next) => {
+router.post('/get-last-purchase-prices', auth, requireAnyPermission(VIEW_PRODUCTS), async (req, res, next) => {
   try {
     const { productIds } = req.body;
     

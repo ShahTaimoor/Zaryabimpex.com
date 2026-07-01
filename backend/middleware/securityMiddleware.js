@@ -106,12 +106,7 @@ class SecurityMiddleware {
         });
       }
       
-      // Check if user has required permission
-      const userPermissions = req.user.permissions || [];
-      
-      if (!userPermissions.includes(requiredPermission) && 
-          !userPermissions.includes('admin') &&
-          !userPermissions.includes('super_admin')) {
+      if (!req.user.hasPermission?.(requiredPermission)) {
         // Log unauthorized access attempt
         try {
           await AuditLogRepository.create({
@@ -130,7 +125,6 @@ class SecurityMiddleware {
         return res.status(403).json({
           message: 'Insufficient permissions for this operation',
           required: requiredPermission,
-          hasPermissions: userPermissions
         });
       }
       

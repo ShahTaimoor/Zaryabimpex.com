@@ -1,10 +1,15 @@
 /**
- * Catalog / master cost from product pricing (matches POS search dropdown "Cost:").
+ * Catalog cost for POS display — prefers next FIFO layer when present.
  */
 export function getProductCostPrice(product) {
   if (!product) return 0;
 
   const pricing = product.pricing || {};
+  const fifoCost = product.fifoUnitCost ?? pricing.fifoUnitCost;
+  if (fifoCost != null && Number.isFinite(Number(fifoCost))) {
+    return Number(fifoCost);
+  }
+
   const normalizedCost =
     pricing.cost ??
     pricing.costPrice ??

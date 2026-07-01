@@ -5,7 +5,8 @@
 
 const express = require('express');
 const multer = require('multer');
-const { auth } = require('../middleware/auth');
+const { auth, requireAnyPermission } = require('../middleware/auth');
+const { MANAGE_SETTINGS } = require('../config/routePermissions');
 const SettingsRepository = require('../repositories/postgres/SettingsRepository');
 const { uploadImageOnCloudinary } = require('../services/cloudinary');
 const logger = require('../utils/logger');
@@ -64,7 +65,7 @@ router.get('/', auth, async (req, res) => {
 // @route   PUT /api/company
 // @desc    Update company settings (stored in Postgres settings)
 // @access  Private
-router.put('/', auth, async (req, res) => {
+router.put('/', auth, requireAnyPermission(MANAGE_SETTINGS), async (req, res) => {
   try {
     const { companyName, phone, address } = req.body;
     const updates = {};
@@ -96,7 +97,7 @@ router.put('/', auth, async (req, res) => {
 // @route   POST /api/company/logo
 // @desc    Upload company logo (Multer + Cloudinary), save secure_url in Settings
 // @access  Private
-router.post('/logo', auth, upload.single('logo'), async (req, res) => {
+router.post('/logo', auth, requireAnyPermission(MANAGE_SETTINGS), upload.single('logo'), async (req, res) => {
   try {
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({

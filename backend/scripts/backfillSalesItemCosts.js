@@ -34,7 +34,7 @@ async function getUnitCostForProduct(productId) {
     const inv = await inventoryRepository.findByProduct(pid);
     if (inv && inv.cost) {
       const costObj = typeof inv.cost === 'string' ? JSON.parse(inv.cost) : inv.cost;
-      unitCost = costObj.average ?? costObj.lastPurchase ?? 0;
+      unitCost = costObj.lastPurchase ?? product?.cost_price ?? product?.costPrice ?? 0;
     }
     if (unitCost === 0) {
       if (isVariant) {

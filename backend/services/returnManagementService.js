@@ -13,7 +13,7 @@ const InventoryRepository = require('../repositories/postgres/InventoryRepositor
 const InventoryBalanceRepository = require('../repositories/postgres/InventoryBalanceRepository');
 const StockMovementRepository = require('../repositories/StockMovementRepository');
 const cashPaymentRepository = require('../repositories/postgres/CashPaymentRepository');
-const bankPaymentRepository = require('../repositories/postgres/BankPaymentRepository');
+const fifoService = require('./fifoService');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -704,11 +704,16 @@ class ReturnManagementService {
           returnRequest.returnNumber || returnRequest.return_number,
           returnRequest.id || returnRequest._id,
           userId,
-          client
+          client,
+          {
+            purchaseReferenceId: returnRequest.originalOrder || returnRequest.reference_id,
+            purchaseReferenceType: 'purchase_invoice',
+          }
         );
       } else {
         // Sale return: resellable = true → inventory++; resellable = false → quarantine/scrap (no sellable inventory increase)
         const resellable = returnRequest.inspection == null || returnRequest.inspection.resellable !== false;
+        const originalSaleId = returnRequest.originalOrder || returnRequest.reference_id;
         await this.logInventoryMovement(
           item,
           'return',
@@ -718,7 +723,11 @@ class ReturnManagementService {
           returnRequest.id || returnRequest._id,
           userId,
           client,
-          { resellable }
+          {
+            resellable,
+            originalSaleId,
+            saleItemIndex: null,
+          }
         );
       }
     }
@@ -751,24 +760,40 @@ class ReturnManagementService {
           productId,
           quantity: qty,
           reason: 'Purchase return',
-          referenceId: returnId,
+          referenceId: options.purchaseReferenceId || returnId,
           referenceNumber: reference,
           performedBy: userId,
           notes: options.notes || 'Stock reduced for purchase return',
-        }, { client });
+        }, { client, skipFifoConsume: false });
         return;
       }
 
       if (type === 'return' && options.resellable !== false) {
+        let restoreUnitCost = cost / qty;
+        if (options.originalSaleId) {
+          const fifoRestore = await fifoService.restoreFromSaleAllocations({
+            saleId: options.originalSaleId,
+            productId,
+            quantity: qty,
+            saleItemIndex: options.saleItemIndex,
+            returnId,
+            referenceNumber: reference,
+            userId,
+            notes: options.notes || 'FIFO restore for sale return',
+          }, client);
+          if (fifoRestore?.unitCost) restoreUnitCost = fifoRestore.unitCost;
+        }
+
         await locationStockService.restoreToShop({
           productId,
           quantity: qty,
+          unitCost: restoreUnitCost,
           reason: 'Sale return',
           referenceId: returnId,
           referenceNumber: reference,
           performedBy: userId,
           notes: options.notes || 'Stock restored for sale return',
-        }, { client });
+        }, { client, skipFifoReceive: Boolean(options.originalSaleId) });
         return;
       }
     }
@@ -794,6 +819,33 @@ class ReturnManagementService {
     if (type === 'return') {
       const resellable = options.resellable !== false;
       if (resellable) {
+        if (options.originalSaleId) {
+          await fifoService.restoreFromSaleAllocations({
+            saleId: options.originalSaleId,
+            productId,
+            quantity: qty,
+            saleItemIndex: options.saleItemIndex,
+            returnId,
+            referenceNumber: reference,
+            userId,
+            notes: options.notes || 'FIFO restore for sale return',
+          }, client);
+        } else {
+          await fifoService.receiveStock(
+            {
+              productId,
+              quantity: qty,
+              unitCost: qty > 0 ? (cost / qty) : 0,
+              referenceModel: 'Return',
+              referenceId: returnId,
+              referenceNumber: reference,
+              userId,
+              notes: options.notes || 'Legacy sale return FIFO batch',
+              movementType: 'sale_return_in',
+            },
+            client
+          );
+        }
         movementType = 'return_in';
         newStock = Math.max(0, currentStock + qty);
         quantityDelta = qty;
@@ -805,6 +857,16 @@ class ReturnManagementService {
     } else {
       movementType = quantity > 0 ? 'return_in' : 'return_out';
       if (movementType === 'return_out') {
+        await fifoService.reduceFromPurchaseBatches({
+          productId,
+          quantity: qty,
+          purchaseReferenceType: options.purchaseReferenceType || 'purchase_invoice',
+          purchaseReferenceId: options.purchaseReferenceId,
+          returnId,
+          referenceNumber: reference,
+          userId,
+          notes: options.notes || 'Legacy purchase return FIFO reduction',
+        }, client);
         if (currentStock < qty) return;
         newStock = Math.max(0, currentStock - qty);
         quantityDelta = -qty;

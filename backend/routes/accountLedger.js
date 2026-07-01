@@ -4,7 +4,9 @@ const { auth, requireAnyPermission } = require('../middleware/auth');
 const accountLedgerService = require('../services/accountLedgerService');
 const chartOfAccountsRepository = require('../repositories/ChartOfAccountsRepository');
 
-const ledgerView = requireAnyPermission(['view_accounting_summary', 'view_reports', 'view_chart_of_accounts']);
+const { VIEW_ACCOUNT_LEDGER } = require('../config/routePermissions');
+
+const ledgerView = requireAnyPermission(VIEW_ACCOUNT_LEDGER);
 
 // GET /api/account-ledger - ledger entries (same as getAccountLedger)
 router.get('/', auth, ledgerView, async (req, res) => {

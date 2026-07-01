@@ -6,6 +6,7 @@ const productRepository = require('../repositories/ProductRepository');
 const inventoryRepository = require('../repositories/InventoryRepository');
 const inventoryBalanceRepository = require('../repositories/postgres/InventoryBalanceRepository');
 const StockMovementService = require('./stockMovementService');
+const fifoService = require('./fifoService');
 
 async function resolvePrimaryWarehouse(client = null) {
   let wh = await warehouseRepository.findPrimary();
@@ -86,7 +87,7 @@ async function receiveAtWarehouse(
   },
   options = {}
 ) {
-  const { client = null } = options;
+  const { client = null, skipFifoReceive = false, skipFifoConsume = false } = options;
   const qty = Number(quantity);
   if (!productId || !Number.isFinite(qty) || qty <= 0) {
     throw new Error('Invalid warehouse stock receipt');
@@ -107,22 +108,33 @@ async function receiveAtWarehouse(
     client
   );
 
-  if (cost != null && Number.isFinite(Number(cost))) {
-    const currentCost = parseFloat(product.cost_price || product.costPrice || 0);
-    const prevWh = previousQuantity;
-    if (prevWh > 0 && currentCost > 0) {
-      const avg = Math.round(((prevWh * currentCost) + (qty * Number(cost))) / newQuantity * 100) / 100;
-      await productRepository.update(productId, { costPrice: avg }, client);
-    } else if (Number(cost) >= 0) {
-      await productRepository.update(productId, { costPrice: Number(cost) }, client);
-    }
+  const receiptCost = cost != null && Number.isFinite(Number(cost))
+    ? Number(cost)
+    : parseFloat(product.cost_price || product.costPrice || 0);
+
+  if (!skipFifoReceive) {
+    await fifoService.receiveStock(
+      {
+        productId,
+        quantity: qty,
+        unitCost: receiptCost,
+        warehouseId: warehouse.id,
+        referenceModel: movementType === 'purchase' ? 'PurchaseInvoice' : 'StockAdjustment',
+        referenceId: referenceId || null,
+        referenceNumber: referenceNumber || reference || null,
+        userId: performedBy,
+        notes: notes || reason || 'Warehouse stock in',
+        movementType: 'purchase_in',
+      },
+      client
+    );
   }
 
   await StockMovementService.createMovement({
     productId,
     movementType,
     quantity: qty,
-    unitCost: cost != null ? Number(cost) : parseFloat(product.cost_price || 0),
+    unitCost: receiptCost,
     referenceType: 'purchase_order',
     referenceId: referenceId || null,
     referenceNumber: referenceNumber || reference || null,
@@ -154,7 +166,8 @@ async function issueFromWarehouse(
   },
   options = {}
 ) {
-  const { client = null } = options;
+  const { client = null, skipFifoReceive = false, skipFifoConsume = false } = options;
+  const effectiveSkipFifoConsume = skipFifoConsume || movementType === 'transfer_out';
   const qty = Number(quantity);
   if (!productId || !Number.isFinite(qty) || qty <= 0) {
     throw new Error('Invalid warehouse stock issue');
@@ -175,11 +188,36 @@ async function issueFromWarehouse(
     client
   );
 
+  let movementUnitCost = parseFloat(product.cost_price || 0);
+  if (!effectiveSkipFifoConsume) {
+    const fifoResult = await fifoService.reduceFromPurchaseBatches({
+      productId,
+      quantity: qty,
+      purchaseReferenceId: referenceId,
+      returnId: referenceId,
+      referenceNumber,
+      userId: performedBy,
+      notes: notes || reason || 'Warehouse stock out',
+    }, client).catch(async () => {
+      return fifoService.consumeStock({
+        productId,
+        quantity: qty,
+        referenceModel: 'StockAdjustment',
+        referenceId,
+        referenceNumber,
+        userId: performedBy,
+        notes: notes || reason || 'Warehouse stock out',
+        movementType: movementType || 'transfer_out',
+      }, client);
+    });
+    movementUnitCost = fifoResult.unitCost || movementUnitCost;
+  }
+
   await StockMovementService.createMovement({
     productId,
     movementType,
     quantity: qty,
-    unitCost: parseFloat(product.cost_price || 0),
+    unitCost: movementUnitCost,
     referenceType: 'transfer',
     referenceId,
     referenceNumber,
@@ -200,7 +238,7 @@ async function issueFromShop(
   { productId, quantity, shopId, reason, reference, referenceId, referenceNumber, performedBy, notes },
   options = {}
 ) {
-  const { client = null } = options;
+  const { client = null, skipFifoConsume = false, unitCost: overrideUnitCost } = options;
   const qty = Number(quantity);
   if (!productId || !Number.isFinite(qty) || qty <= 0) {
     throw new Error('Invalid shop stock issue');
@@ -221,11 +259,27 @@ async function issueFromShop(
 
   await syncLegacyInventoryFromShop(shop.id, productId, client);
 
+  let movementUnitCost = overrideUnitCost ?? parseFloat(product.cost_price || 0);
+  if (!skipFifoConsume) {
+    const fifoResult = await fifoService.consumeStock({
+      productId,
+      quantity: qty,
+      saleId: referenceId,
+      referenceModel: 'Sale',
+      referenceId,
+      referenceNumber: referenceNumber || reference || null,
+      userId: performedBy,
+      notes: notes || reason || 'Shop stock out',
+      movementType: 'sale_out',
+    }, client);
+    movementUnitCost = fifoResult.unitCost || movementUnitCost;
+  }
+
   await StockMovementService.createMovement({
     productId,
     movementType: 'sale',
     quantity: qty,
-    unitCost: parseFloat(product.cost_price || 0),
+    unitCost: movementUnitCost,
     referenceType: 'sales_order',
     referenceId: referenceId || null,
     referenceNumber: referenceNumber || reference || null,
@@ -239,14 +293,14 @@ async function issueFromShop(
     skipInventoryUpdate: true,
   }, { id: performedBy });
 
-  return { shopId: shop.id, previousQuantity, newQuantity, currentStock: newQuantity };
+  return { shopId: shop.id, previousQuantity, newQuantity, currentStock: newQuantity, unitCost: movementUnitCost };
 }
 
 async function restoreToShop(
-  { productId, quantity, shopId, reason, referenceId, referenceNumber, performedBy, notes },
+  { productId, quantity, shopId, reason, referenceId, referenceNumber, performedBy, notes, unitCost },
   options = {}
 ) {
-  const { client = null } = options;
+  const { client = null, skipFifoReceive = false } = options;
   const qty = Number(quantity);
   if (!productId || !Number.isFinite(qty) || qty <= 0) {
     throw new Error('Invalid shop stock restore');
@@ -267,11 +321,33 @@ async function restoreToShop(
 
   await syncLegacyInventoryFromShop(shop.id, productId, client);
 
+  const restoreCost = unitCost != null
+    ? Number(unitCost)
+    : parseFloat(product.cost_price || 0);
+
+  if (!skipFifoReceive) {
+    await fifoService.receiveStock(
+      {
+        productId,
+        quantity: qty,
+        unitCost: restoreCost,
+        shopId: shop.id,
+        referenceModel: 'Return',
+        referenceId,
+        referenceNumber,
+        userId: performedBy,
+        notes: notes || reason || 'Shop stock restore',
+        movementType: 'sale_return_in',
+      },
+      client
+    );
+  }
+
   await StockMovementService.createMovement({
     productId,
     movementType: 'return_in',
     quantity: qty,
-    unitCost: parseFloat(product.cost_price || 0),
+    unitCost: restoreCost,
     referenceType: 'return',
     referenceId,
     referenceNumber,
@@ -291,7 +367,7 @@ async function receiveAtShop(
   { productId, quantity, shopId, unitCost, reason, referenceId, referenceNumber, performedBy, notes },
   options = {}
 ) {
-  const { client = null } = options;
+  const { client = null, skipFifoReceive = false } = options;
   const qty = Number(quantity);
   if (!productId || !Number.isFinite(qty) || qty <= 0) {
     throw new Error('Invalid shop stock receipt');
@@ -312,11 +388,33 @@ async function receiveAtShop(
 
   await syncLegacyInventoryFromShop(shop.id, productId, client);
 
+  const receiptCost = unitCost != null
+    ? Number(unitCost)
+    : parseFloat(product.cost_price || 0);
+
+  if (!skipFifoReceive) {
+    await fifoService.receiveStock(
+      {
+        productId,
+        quantity: qty,
+        unitCost: receiptCost,
+        shopId: shop.id,
+        referenceModel: 'Transfer',
+        referenceId,
+        referenceNumber,
+        userId: performedBy,
+        notes: notes || reason || 'Shop stock in',
+        movementType: 'transfer_in',
+      },
+      client
+    );
+  }
+
   await StockMovementService.createMovement({
     productId,
     movementType: 'transfer_in',
     quantity: qty,
-    unitCost: unitCost != null ? Number(unitCost) : parseFloat(product.cost_price || 0),
+    unitCost: receiptCost,
     referenceType: 'transfer',
     referenceId,
     referenceNumber,

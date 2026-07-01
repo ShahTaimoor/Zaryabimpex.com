@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, query } = require('express-validator');
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
+const { VIEW_SALE_RETURNS } = require('../config/routePermissions');
 const { handleValidationErrors, sanitizeRequest } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
 const returnManagementService = require('../services/returnManagementService');
@@ -89,6 +90,7 @@ router.get('/', [
   ...validateDateParams,
   handleValidationErrors,
   processDateFilter('returnDate'),
+  requireAnyPermission(VIEW_SALE_RETURNS),
 ], async (req, res) => {
   try {
     const queryParams = {
@@ -119,6 +121,7 @@ router.get('/', [
 // @access  Private
 router.get('/:id', [
   auth,
+  requireAnyPermission(VIEW_SALE_RETURNS),
   param('id').isUUID(4).withMessage('Valid return ID is required'),
   handleValidationErrors,
 ], async (req, res) => {
@@ -144,6 +147,7 @@ router.get('/:id', [
 // @access  Private
 router.get('/customer/:customerId/invoices', [
   auth,
+  requireAnyPermission(VIEW_SALE_RETURNS),
   param('customerId').isUUID(4).withMessage('Valid customer ID is required'),
   handleValidationErrors,
 ], async (req, res) => {
@@ -173,6 +177,7 @@ router.get('/customer/:customerId/invoices', [
 // @access  Private
 router.get('/customer/:customerId/products', [
   auth,
+  requireAnyPermission(VIEW_SALE_RETURNS),
   param('customerId').isUUID(4).withMessage('Valid customer ID is required'),
   query('search').optional().trim(),
   handleValidationErrors,
@@ -417,6 +422,7 @@ router.put('/:id/process', [
 // @access  Private
 router.get('/stats/summary', [
   auth,
+  requireAnyPermission(VIEW_SALE_RETURNS),
   query('startDate').optional().custom((v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v)).withMessage('startDate must be YYYY-MM-DD'),
   query('endDate').optional().custom((v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v)).withMessage('endDate must be YYYY-MM-DD'),
   handleValidationErrors,

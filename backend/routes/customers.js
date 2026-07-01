@@ -2,7 +2,8 @@ const express = require('express');
 const { body, validationResult, query } = require('express-validator');
 const fs = require('fs');
 const path = require('path');
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
+const { VIEW_CUSTOMERS } = require('../config/routePermissions');
 const { validateUuidParam, handleValidationErrors } = require('../middleware/validation');
 const customerService = require('../services/customerServicePostgres');
 const customerRepository = require('../repositories/postgres/CustomerRepository');
@@ -54,7 +55,8 @@ router.get('/', [
   query('status').optional().isIn(['active', 'inactive', 'suspended']),
   query('customerTier').optional().isIn(['bronze', 'silver', 'gold', 'platinum']),
   query('emailStatus').optional().isIn(['verified', 'unverified', 'no-email']),
-  query('phoneStatus').optional().isIn(['verified', 'unverified', 'no-phone'])
+  query('phoneStatus').optional().isIn(['verified', 'unverified', 'no-phone']),
+  requireAnyPermission(VIEW_CUSTOMERS),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -141,7 +143,7 @@ router.get('/by-cities', [
 // @route   GET /api/customers/:id
 // @desc    Get single customer
 // @access  Private
-router.get('/:id', [auth, validateUuidParam('id'), handleValidationErrors], async (req, res) => {
+router.get('/:id', [auth, requireAnyPermission(VIEW_CUSTOMERS), validateUuidParam('id'), handleValidationErrors], async (req, res) => {
   try {
     const customer = await customerService.getCustomerById(req.params.id);
     res.json({ customer });
@@ -159,7 +161,7 @@ router.get('/:id', [auth, validateUuidParam('id'), handleValidationErrors], asyn
 // @desc    Search customers by name, email, or phone
 // @access  Private
 // Legacy alias — prefer GET /api/customers?search=&page=1&limit=50
-router.get('/search/:query', auth, async (req, res) => {
+router.get('/search/:query', auth, requireAnyPermission(VIEW_CUSTOMERS), async (req, res) => {
   try {
     const search = String(req.params.query || '').trim();
     const result = await customerService.getCustomers({ search, page: 1, limit: 50 });
@@ -173,7 +175,7 @@ router.get('/search/:query', auth, async (req, res) => {
 // @route   GET /api/customers/check-email/:email
 // @desc    Check if email already exists
 // @access  Private
-router.get('/check-email/:email', auth, async (req, res) => {
+router.get('/check-email/:email', auth, requireAnyPermission([...VIEW_CUSTOMERS, 'create_customers']), async (req, res) => {
   try {
     const email = req.params.email;
     const excludeId = req.query.excludeId; // Optional: exclude current customer when editing
@@ -193,7 +195,7 @@ router.get('/check-email/:email', auth, async (req, res) => {
 // @route   GET /api/customers/check-business-name/:businessName
 // @desc    Check if business name already exists
 // @access  Private
-router.get('/check-business-name/:businessName', auth, async (req, res) => {
+router.get('/check-business-name/:businessName', auth, requireAnyPermission([...VIEW_CUSTOMERS, 'create_customers']), async (req, res) => {
   try {
     const businessName = req.params.businessName;
     const excludeId = req.query.excludeId; // Optional: exclude current customer when editing

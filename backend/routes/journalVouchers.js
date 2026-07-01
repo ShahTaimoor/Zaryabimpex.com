@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, query, validationResult } = require('express-validator');
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
+const { VIEW_JOURNAL_VOUCHERS, MANAGE_JOURNAL_VOUCHERS } = require('../config/routePermissions');
 const journalVoucherRepository = require('../repositories/JournalVoucherRepository');
 const journalVoucherService = require('../services/journalVoucherService');
 
@@ -16,7 +17,8 @@ router.get('/', [
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('voucherNumber').optional().trim(),
   query('dateFrom').optional().isISO8601(),
-  query('dateTo').optional().isISO8601()
+  query('dateTo').optional().isISO8601(),
+  requireAnyPermission(VIEW_JOURNAL_VOUCHERS),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -55,7 +57,7 @@ router.get('/', [
 /**
  * GET /api/journal-vouchers/stats - Get JV statistics
  */
-router.get('/stats', auth, async (req, res) => {
+router.get('/stats', auth, requireAnyPermission(VIEW_JOURNAL_VOUCHERS), async (req, res) => {
   try {
     const stats = await journalVoucherService.getJournalVoucherStats();
     res.json({ success: true, data: stats });
@@ -72,7 +74,7 @@ router.get('/stats', auth, async (req, res) => {
 /**
  * GET /api/journal-vouchers/:id - Get single journal voucher
  */
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', auth, requireAnyPermission(VIEW_JOURNAL_VOUCHERS), async (req, res) => {
   try {
     const voucher = await journalVoucherService.getJournalVoucher(req.params.id);
     res.json({ 
@@ -96,6 +98,7 @@ router.get('/:id', auth, async (req, res) => {
  */
 router.post('/', [
   auth,
+  requirePermission('create_journal_vouchers'),
   body('voucherDate').optional().isISO8601(),
   body('description').optional().trim(),
   body('notes').optional().trim(),
@@ -136,6 +139,7 @@ router.post('/', [
  */
 router.put('/:id', [
   auth,
+  requirePermission('edit_journal_vouchers'),
   body('voucherDate').optional().isISO8601(),
   body('description').optional().trim(),
   body('notes').optional().trim(),
@@ -180,7 +184,7 @@ router.put('/:id', [
  * PUT /api/journal-vouchers/:id/status - Update journal voucher status
  * Legacy endpoint for compatibility
  */
-router.put('/:id/status', auth, async (req, res) => {
+router.put('/:id/status', auth, requireAnyPermission(MANAGE_JOURNAL_VOUCHERS), async (req, res) => {
   try {
     const { status } = req.body;
     const voucherId = req.params.id;
@@ -225,7 +229,7 @@ router.put('/:id/status', auth, async (req, res) => {
 /**
  * POST /api/journal-vouchers/:id/post - Post journal voucher to ledger
  */
-router.post('/:id/post', auth, async (req, res) => {
+router.post('/:id/post', auth, requirePermission('edit_journal_vouchers'), async (req, res) => {
   try {
     const userId = req.user?.id || req.user?._id;
     const voucher = await journalVoucherService.postJournalVoucher(req.params.id, userId);
@@ -252,6 +256,7 @@ router.post('/:id/post', auth, async (req, res) => {
  */
 router.post('/:id/reverse', [
   auth,
+  requirePermission('edit_journal_vouchers'),
   body('reason').optional().trim()
 ], async (req, res) => {
   try {
@@ -285,7 +290,7 @@ router.post('/:id/reverse', [
 /**
  * DELETE /api/journal-vouchers/:id - Delete journal voucher (draft only)
  */
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, requirePermission('delete_journal_vouchers'), async (req, res) => {
   try {
     const userId = req.user?.id || req.user?._id;
     await journalVoucherService.deleteJournalVoucher(req.params.id, userId);

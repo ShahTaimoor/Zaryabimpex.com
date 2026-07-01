@@ -2,7 +2,8 @@ const express = require('express');
 const { body, validationResult, query } = require('express-validator');
 const fs = require('fs');
 const path = require('path');
-const { auth, requirePermission } = require('../middleware/auth');
+const { auth, requirePermission, requireAnyPermission } = require('../middleware/auth');
+const { VIEW_PURCHASE_INVOICES } = require('../config/routePermissions');
 const { validateUuidParam } = require('../middleware/validation');
 const { sanitizeRequest, handleValidationErrors } = require('../middleware/validation');
 const { validateDateParams, processDateFilter } = require('../middleware/dateFilter');
@@ -56,6 +57,7 @@ router.get('/', [
   ...validateDateParams,
   handleValidationErrors,
   processDateFilter(['invoiceDate', 'createdAt']),
+  requireAnyPermission(VIEW_PURCHASE_INVOICES),
 ], async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -104,6 +106,7 @@ router.post('/sync-ledger', auth, requirePermission('view_reports'), async (req,
 // @access  Private
 router.get('/:id', [
   auth,
+  requireAnyPermission(VIEW_PURCHASE_INVOICES),
   validateUuidParam('id'),
   handleValidationErrors
 ], async (req, res, next) => {
@@ -124,6 +127,7 @@ router.get('/:id', [
 // @access  Private
 router.post('/', [
   auth,
+  requirePermission('create_purchase_invoices'),
   body('supplier').optional().isUUID(4).withMessage('Invalid supplier ID'),
   body('items').isArray({ min: 1 }).withMessage('Items array is required'),
   body('items.*.product').isUUID(4).withMessage('Valid Product ID is required'),
@@ -337,6 +341,7 @@ router.post('/', [
 // @access  Private
 router.put('/:id', [
   auth,
+  requirePermission('edit_purchase_invoices'),
   body('supplier').optional().isUUID(4).withMessage('Valid supplier is required'),
   body('invoiceType').optional().isIn(['purchase', 'return', 'adjustment']).withMessage('Invalid invoice type'),
   body('notes').optional().trim().isLength({ max: 1000 }).withMessage('Notes too long'),
@@ -674,7 +679,8 @@ router.delete('/:id', [
 // @desc    Confirm purchase invoice (DEPRECATED - Purchase invoices are now auto-confirmed)
 // @access  Private
 router.put('/:id/confirm', [
-  auth
+  auth,
+  requirePermission('edit_purchase_invoices'),
 ], async (req, res) => {
   try {
     const invoice = await purchaseInvoiceRepository.findById(req.params.id);
@@ -698,7 +704,8 @@ router.put('/:id/confirm', [
 // @desc    Cancel purchase invoice
 // @access  Private
 router.put('/:id/cancel', [
-  auth
+  auth,
+  requirePermission('edit_purchase_invoices'),
 ], async (req, res) => {
   try {
     const invoice = await purchaseInvoiceRepository.findById(req.params.id);

@@ -8,6 +8,8 @@
     "dev": "nodemon server.js",
     "configure-atlas": "node configure-atlas.js",
     "migrate:postgres": "node migrations/postgres/migrate.js",
+    "backfill:fifo-batches": "node scripts/backfillFifoBatchesFromMovements.js",
+    "sync:fifo-opening": "node scripts/syncFifoOpeningBatches.js",
     "db:reset": "node scripts/resetDatabase.js",
     "seed:admin": "node scripts/seedAdmin.js",
     "seed:data": "node scripts/seedData.js",

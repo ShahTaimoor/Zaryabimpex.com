@@ -60,7 +60,7 @@ function handleCashError(err, res) {
   return res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Server error', code: err.code });
 }
 
-router.get('/today', auth, async (req, res) => {
+router.get('/today', ...adminOnly, async (req, res) => {
   try {
     const date = req.query.date || undefined;
     const summary = date

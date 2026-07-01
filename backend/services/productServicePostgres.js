@@ -2,6 +2,7 @@ const { query, transaction } = require('../config/postgres');
 const productRepository = require('../repositories/postgres/ProductRepository');
 const categoryRepository = require('../repositories/postgres/CategoryRepository');
 const inventoryRepository = require('../repositories/postgres/InventoryRepository');
+const inventoryBatchRepository = require('../repositories/postgres/InventoryBatchRepository');
 const locationStockService = require('./locationStockService');
 const { isWarehouseInventoryEnabled } = require('../utils/warehouseInventory');
 const investorRepository = require('../repositories/postgres/InvestorRepository');
@@ -139,6 +140,37 @@ function toApiProduct(row, categoryMap = null) {
     imageUrl: row.image_url || null
   };
   return formatProductEntity(apiShape);
+}
+
+/** POS / sale screens: show next FIFO layer cost, not blended inventory average. */
+async function attachFifoUnitCosts(products) {
+  if (!Array.isArray(products) || products.length === 0) return products;
+  const ids = products.map((p) => p.id).filter(Boolean);
+  if (ids.length === 0) return products;
+
+  let fifoMap;
+  try {
+    fifoMap = await inventoryBatchRepository.findNextFifoUnitCostsByProductIds(ids);
+  } catch (err) {
+    console.warn('attachFifoUnitCosts:', err.message);
+    return products;
+  }
+
+  return products.map((p) => {
+    const fifoUnitCost = fifoMap.get(String(p.id));
+    if (fifoUnitCost == null || fifoUnitCost <= 0) return p;
+    const inventoryUnitCost = p.pricing?.cost ?? 0;
+    return {
+      ...p,
+      fifoUnitCost,
+      pricing: {
+        ...p.pricing,
+        inventoryUnitCost,
+        fifoUnitCost,
+        cost: fifoUnitCost,
+      },
+    };
+  });
 }
 
 function attachInvestorsToApiProduct(apiProduct, linkRows) {
@@ -305,6 +337,8 @@ class ProductServicePostgres {
       }));
     }
 
+    products = await attachFifoUnitCosts(products);
+
     return {
       products,
       pagination: result.pagination
@@ -388,10 +422,11 @@ class ProductServicePostgres {
     const invMap = await productRepository.findInvestorsByProductIds([id]);
     const withInvestors = attachInvestorsToApiProduct(product, invMap.get(String(id)) || []);
     const usedInSales = await productRepository.findProductIdsUsedInSales([id]);
-    return {
+    const [withFifo] = await attachFifoUnitCosts([{
       ...withInvestors,
       canDelete: !usedInSales.has(String(id))
-    };
+    }]);
+    return withFifo;
   }
 
   async createProduct(productData, userId, req = null) {

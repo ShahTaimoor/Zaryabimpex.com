@@ -634,13 +634,8 @@ class SalesService {
           const costInfo = await costingService.calculateCost(productId, item.quantity);
           unitCost = costInfo.unitCost || 0;
         } catch (err) {
-          console.error(`Failed to calculate costing for product ${productId}:`, err.message);
-          const inv = await inventoryRepository.findByProduct(productId);
-          if (inv && inv.cost) {
-            const costObj = typeof inv.cost === 'string' ? JSON.parse(inv.cost) : inv.cost;
-            unitCost = costObj.average ?? costObj.lastPurchase ?? 0;
-          }
-          if (unitCost === 0) unitCost = product.pricing?.cost ?? product.cost_price ?? 0;
+          console.error(`Failed to calculate FIFO costing for product ${productId}:`, err.message);
+          unitCost = product.cost_price ?? product.costPrice ?? product.pricing?.cost ?? 0;
         }
       } else {
         // Manual item: COGS/P&L use line unitCost (POS may send cost entered at sale time)
@@ -743,8 +738,25 @@ class SalesService {
 
       // Inventory updates must commit/rollback with sale creation (needs sale id for stock_movements.reference_id).
       if (!skipInventoryUpdate) {
-        for (const item of orderItems) {
+        for (let itemIndex = 0; itemIndex < orderItems.length; itemIndex += 1) {
+          const item = orderItems[itemIndex];
           if (item.isManual) continue;
+
+          const fifoResult = await costingService.consumeForSale({
+            productId: item.product,
+            quantity: item.quantity,
+            saleId,
+            saleItemIndex: itemIndex,
+            referenceId: saleId,
+            referenceNumber: saleRefNumber,
+            userId: user._id || user.id,
+            notes: 'FIFO COGS consumption for sales invoice',
+          }, client);
+
+          if (fifoResult?.unitCost != null) {
+            item.unitCost = fifoResult.unitCost;
+          }
+
           await inventoryService.updateStock({
             productId: item.product,
             type: 'out',
@@ -756,7 +768,12 @@ class SalesService {
             referenceModel: 'Sale',
             performedBy: user._id,
             notes: 'Stock reduced due to sales invoice creation'
-          }, { client, skipAccountingEntry: true });
+          }, { client, skipAccountingEntry: true, skipFifoConsume: true });
+        }
+
+        if (orderItems.some((it) => !it.isManual)) {
+          await salesRepository.update(saleId, { items: orderItems }, client);
+          createdOrder.items = orderItems;
         }
       }
 
@@ -1038,33 +1055,33 @@ class SalesService {
     }
 
     if (status === 'cancelled') {
+      if (order.status === 'cancelled') {
+        return order;
+      }
+
       return await transaction(async (client) => {
         const updatedOrder = await salesRepository.update(id, {
           status,
           updatedBy: user.id || user._id?.toString()
         }, client);
 
-        if (order.items) {
-          const items = Array.isArray(order.items) ? order.items : [];
-          for (const item of items) {
-            if (item.product) {
-              await inventoryService.updateStock({
-                productId: item.product,
-                type: 'in',
-                quantity: item.quantity || 0,
-                reason: 'Sale cancelled',
-                reference: 'Sales Invoice',
-                referenceModel: 'Sale',
-                referenceId: order.id,
-                performedBy: user.id || user._id?.toString(),
-                notes: 'Stock restored due to sale cancellation'
-              }, { client });
-            }
-          }
+        let items = order.items;
+        if (typeof items === 'string') {
+          try { items = JSON.parse(items); } catch { items = []; }
+        }
+        if (!Array.isArray(items)) items = [];
+
+        if (items.length > 0) {
+          const saleId = order.id || order._id;
+          const saleRefNumber = order.order_number || order.orderNumber || saleId;
+          await this.restoreSaleInventoryOnDelete({
+            saleId,
+            saleRefNumber,
+            items,
+            userId: user.id || user._id?.toString(),
+          }, client);
         }
 
-        // Note: Reversing customer balance is now handled by the ledger/transactions.
-        // If we need to reverse a specific transaction, we should call customerTransactionService.reverseTransaction.
         return updatedOrder;
       });
     }
@@ -1186,6 +1203,197 @@ class SalesService {
       }
     }
     return { posted, updated, skipped: sales.length - posted - updated - errors.length, errors };
+  }
+
+  /**
+   * FIFO + physical stock when sale/invoice line items change on edit.
+   * @returns {Promise<Map<string, number>>} productId -> unitCost for updated lines
+   */
+  async adjustSaleInventoryOnEdit(
+    {
+      saleId,
+      saleRefNumber,
+      oldItems,
+      newItems,
+      userId,
+      shopId = null,
+      referenceModel = 'Sale',
+    },
+    client = null
+  ) {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const costByProduct = new Map();
+
+    const productIdOf = (item) => {
+      const raw = item?.product_id ?? item?.product;
+      if (raw == null) return null;
+      if (typeof raw === 'object') return String(raw.id ?? raw._id ?? '').trim() || null;
+      return String(raw).trim() || null;
+    };
+
+    const oldByProduct = new Map();
+    for (const item of oldItems || []) {
+      const pid = productIdOf(item);
+      if (!pid || !UUID_REGEX.test(pid)) continue;
+      oldByProduct.set(pid, item);
+    }
+
+    const newByProduct = new Map();
+    for (let i = 0; i < (newItems || []).length; i += 1) {
+      const item = newItems[i];
+      const pid = productIdOf(item);
+      if (!pid || !UUID_REGEX.test(pid)) continue;
+      newByProduct.set(pid, { ...item, saleItemIndex: i });
+    }
+
+    const invOpts = { client, skipAccountingEntry: true };
+
+    for (const [productId, newItem] of newByProduct) {
+      const oldItem = oldByProduct.get(productId);
+      const oldQty = Number(oldItem?.quantity ?? 0);
+      const newQty = Number(newItem.quantity ?? 0);
+      const delta = newQty - oldQty;
+      const oldUnitCost = parseFloat(oldItem?.unitCost ?? oldItem?.cost_price ?? 0) || 0;
+
+      if (delta > 0) {
+        const fifoResult = await costingService.consumeForSale({
+          productId,
+          quantity: delta,
+          saleId,
+          saleItemIndex: newItem.saleItemIndex,
+          referenceId: saleId,
+          referenceNumber: saleRefNumber,
+          userId,
+          notes: 'FIFO COGS consumption for sale line increase',
+        }, client);
+
+        await inventoryService.updateStock({
+          productId,
+          type: 'out',
+          quantity: delta,
+          shopId,
+          reason: 'Sale Edit - Quantity Increased',
+          reference: saleRefNumber,
+          referenceId: saleId,
+          referenceModel,
+          performedBy: userId,
+          notes: `Stock reduced by ${delta} on sale edit`,
+        }, { ...invOpts, skipFifoConsume: true });
+
+        const deltaCost = fifoResult?.totalCost ?? (fifoResult?.unitCost ?? 0) * delta;
+        const blended =
+          newQty > 0
+            ? Math.round(((oldQty * oldUnitCost) + deltaCost) / newQty * 100) / 100
+            : fifoResult?.unitCost ?? 0;
+        costByProduct.set(productId, blended);
+      } else if (delta < 0) {
+        const restoreQty = Math.abs(delta);
+        await costingService.restoreFromSaleAllocations({
+          saleId,
+          productId,
+          quantity: restoreQty,
+          saleItemIndex: null,
+          returnId: saleId,
+          referenceNumber: saleRefNumber,
+          userId,
+          notes: 'FIFO restore for sale line decrease',
+        }, client);
+
+        await inventoryService.updateStock({
+          productId,
+          type: 'in',
+          quantity: restoreQty,
+          shopId,
+          reason: 'Sale Edit - Quantity Decreased',
+          reference: saleRefNumber,
+          referenceId: saleId,
+          referenceModel,
+          performedBy: userId,
+          notes: `Stock restored by ${restoreQty} on sale edit`,
+        }, { ...invOpts, skipFifoReceive: true });
+
+        costByProduct.set(productId, oldUnitCost);
+      } else {
+        costByProduct.set(productId, oldUnitCost);
+      }
+
+      oldByProduct.delete(productId);
+    }
+
+    for (const [productId, oldItem] of oldByProduct) {
+      const oldQty = Number(oldItem.quantity ?? 0);
+      if (oldQty <= 0) continue;
+
+      await costingService.restoreFromSaleAllocations({
+        saleId,
+        productId,
+        quantity: oldQty,
+        saleItemIndex: null,
+        returnId: saleId,
+        referenceNumber: saleRefNumber,
+        userId,
+        notes: 'FIFO restore for removed sale line',
+      }, client);
+
+      await inventoryService.updateStock({
+        productId,
+        type: 'in',
+        quantity: oldQty,
+        shopId,
+        reason: 'Sale Edit - Item Removed',
+        reference: saleRefNumber,
+        referenceId: saleId,
+        referenceModel,
+        performedBy: userId,
+        notes: 'Stock restored for removed line on sale edit',
+      }, { ...invOpts, skipFifoReceive: true });
+    }
+
+    return costByProduct;
+  }
+
+  /**
+   * Restore FIFO batches and physical stock when a sale/invoice is deleted.
+   */
+  async restoreSaleInventoryOnDelete(
+    { saleId, saleRefNumber, items, userId, shopId = null },
+    client = null
+  ) {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const invOpts = { client, skipAccountingEntry: true };
+
+    for (const item of items || []) {
+      const raw = item?.product_id ?? item?.product;
+      const productId = raw != null ? String(typeof raw === 'object' ? (raw.id ?? raw._id) : raw).trim() : '';
+      if (!productId || !UUID_REGEX.test(productId)) continue;
+
+      const qty = Number(item.quantity ?? 0);
+      if (qty <= 0) continue;
+
+      await costingService.restoreFromSaleAllocations({
+        saleId,
+        productId,
+        quantity: qty,
+        saleItemIndex: null,
+        returnId: saleId,
+        referenceNumber: saleRefNumber,
+        userId,
+        notes: 'FIFO restore for deleted sale',
+      }, client);
+
+      await inventoryService.updateStock({
+        productId,
+        type: 'in',
+        quantity: qty,
+        shopId,
+        reason: 'Sale Deletion',
+        reference: saleRefNumber,
+        referenceId: saleId,
+        referenceModel: 'Sale',
+        performedBy: userId,
+        notes: 'Stock restored due to sale deletion',
+      }, { ...invOpts, skipFifoReceive: true });
+    }
   }
 }
 

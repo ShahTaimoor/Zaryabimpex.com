@@ -102,7 +102,8 @@ const MIGRATIONS = [
   '083_stock_movements_variant_support.sql',
   '084_till_movements.sql',
   '085_daily_cash_closing.sql',
-  '086_text_format_settings.sql'
+  '086_text_format_settings.sql',
+  '087_fifo_inventory.sql'
 ];
 
 async function ensureMigrationsTable() {
@@ -152,6 +153,24 @@ async function runMigration(fileName) {
   }
 }
 
+const LEGACY_MIGRATION_ALIASES = {
+  '082_location_stock_enhancements.sql': ['083_location_stock_enhancements.sql'],
+};
+
+async function reconcileLegacyMigrations(completed) {
+  for (const [canonical, legacyNames] of Object.entries(LEGACY_MIGRATION_ALIASES)) {
+    if (completed.has(canonical)) continue;
+    const matched = legacyNames.find((name) => completed.has(name));
+    if (!matched) continue;
+    await query(
+      'INSERT INTO schema_migrations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING',
+      [canonical]
+    );
+    completed.add(canonical);
+    console.log(`📎 Reconciled ${canonical} (legacy ${matched} already applied)`);
+  }
+}
+
 async function main() {
   try {
     console.log('🔌 Connecting to PostgreSQL...');
@@ -160,6 +179,7 @@ async function main() {
 
     await ensureMigrationsTable();
     const completed = await getCompletedMigrations();
+    await reconcileLegacyMigrations(completed);
 
     for (const fileName of MIGRATIONS) {
       if (completed.has(fileName)) {

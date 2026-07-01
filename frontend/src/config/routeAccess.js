@@ -59,7 +59,7 @@ export const getRouteAccess = (path) => ROUTE_ACCESS[path] || null;
 
 export const canAccessRoute = (path, user, hasPermission) => {
   const access = getRouteAccess(path);
-  if (!access) return true;
+  if (!access) return false;
   if (user?.role === 'admin') return true;
   if (access.role && user?.role !== access.role) return false;
   if (Array.isArray(access.permissionAny) && access.permissionAny.length > 0) {

@@ -14,6 +14,7 @@ const SupplierRepository = require('../repositories/postgres/SupplierRepository'
 const InventoryRepository = require('../repositories/InventoryRepository');
 const inventoryBalanceRepository = require('../repositories/postgres/InventoryBalanceRepository');
 const ProductVariantRepository = require('../repositories/postgres/ProductVariantRepository');
+const stockLedgerService = require('../services/stockLedgerService');
 
 /** UUID from purchase/sale line items (product may be string id or populated object). */
 function lineItemProductId(item) {
@@ -151,6 +152,8 @@ router.get('/', [
       if (customer) salesFilter.customerId = customer;
       if (invoiceNo) salesFilter.orderNumber = invoiceNo;
       const sales = await SalesRepository.findAll(salesFilter);
+      const saleIds = (sales || []).map((s) => s.id || s._id).filter(Boolean);
+      const saleAllocMap = await stockLedgerService.getSaleAllocationsBySaleIds(saleIds);
       const customerCache = {};
       for (const sale of sales || []) {
         let items = sale.items;
@@ -170,7 +173,7 @@ router.get('/', [
           if (product && String(productId) !== product) continue;
           if (!productId) continue;
           const productName = await resolveLedgerProductName(productId, item);
-          addEntry({
+          const baseEntry = {
             invoiceDate,
             invoiceNo: orderNum,
             invoiceType: 'SALE',
@@ -182,7 +185,13 @@ router.get('/', [
             amount: -((item.total || item.subtotal || (item.quantity || 0) * (item.unit_price || item.unitPrice || 0))),
             referenceId: saleId,
             referenceType: 'Sales'
-          });
+          };
+          const allocKey = `${saleId}:${productId}`;
+          addEntry(stockLedgerService.attachSaleFifoFields(
+            baseEntry,
+            saleAllocMap.get(allocKey),
+            item
+          ));
         }
       }
     }
@@ -192,6 +201,8 @@ router.get('/', [
         { supplierId: supplier, supplier, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined },
         {}
       );
+      const purchaseIds = (purchases || []).map((p) => p.id || p._id).filter(Boolean);
+      const purchaseBatchMap = await stockLedgerService.getPurchaseBatchesByInvoiceIds(purchaseIds);
       const supplierCache = {};
       for (const purchase of purchases || []) {
         let items = purchase.items;
@@ -214,7 +225,7 @@ router.get('/', [
           if (product && String(productId) !== product) continue;
           if (!productId) continue;
           const productName = await resolveLedgerProductName(productId, item);
-          addEntry({
+          const baseEntry = {
             invoiceDate: invDate,
             invoiceNo: invNum,
             invoiceType: 'PURCHASE',
@@ -226,7 +237,13 @@ router.get('/', [
             amount: item.total_cost || item.totalCost || (item.quantity || 0) * (item.unit_cost || item.unitCost || 0),
             referenceId: purchaseId,
             referenceType: 'PurchaseInvoice'
-          });
+          };
+          const batchKey = `${purchaseId}:${productId}`;
+          addEntry(stockLedgerService.attachPurchaseFifoFields(
+            baseEntry,
+            purchaseBatchMap.get(batchKey),
+            item
+          ));
         }
       }
     }

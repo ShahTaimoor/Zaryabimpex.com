@@ -638,11 +638,13 @@ class ReportsService {
         WHERE movement_type = 'purchase' AND status = 'completed'
         ORDER BY product_id, created_at DESC
       ),
-      avg_cost AS (
-        SELECT product_id,
-          CASE WHEN SUM(quantity) > 0 THEN SUM(total_value) / SUM(quantity) ELSE 0 END as avg_purchase_price
-        FROM stock_movements
-        WHERE movement_type = 'purchase' AND status = 'completed'
+      fifo_val AS (
+        SELECT
+          product_id,
+          COALESCE(SUM(quantity_remaining), 0)::decimal AS fifo_qty,
+          COALESCE(SUM(quantity_remaining * unit_cost), 0)::decimal AS fifo_value
+        FROM inventory_batches
+        WHERE status = 'active' AND quantity_remaining > 0
         GROUP BY product_id
       )
       SELECT
@@ -665,11 +667,12 @@ class ReportsService {
         COALESCE(pa.damage_qty, 0)::decimal as "damageQty",
         COALESCE(pa.damage_amt, 0)::decimal as "damageAmount",
         COALESCE(lp.last_purchase_price, pb.cost_price, 0)::decimal as "lastPurchasePrice",
-        COALESCE(ac.avg_purchase_price, pb.cost_price, 0)::decimal as "avgPurchasePrice"
+        COALESCE(fv.fifo_qty, 0)::decimal as "fifoQty",
+        COALESCE(fv.fifo_value, 0)::decimal as "fifoValue"
       FROM products_base pb
       LEFT JOIN period_act pa ON pa.product_id = pb.id
       LEFT JOIN last_pur lp ON lp.product_id = pb.id
-      LEFT JOIN avg_cost ac ON ac.product_id = pb.id
+      LEFT JOIN fifo_val fv ON fv.product_id = pb.id
       ORDER BY ${orderClause}
     `;
 
@@ -688,9 +691,18 @@ class ReportsService {
         const damageQty = parseFloat(r.damageQty || 0);
         const damageAmount = parseFloat(r.damageAmount || 0);
         const lastPurchasePrice = parseFloat(r.lastPurchasePrice || 0);
-        const avgPurchasePrice = parseFloat(r.avgPurchasePrice || 0);
-        const costPrice = avgPurchasePrice || lastPurchasePrice || parseFloat(r.cost_price || 0);
-        const openingAmount = openingQty * costPrice;
+        const fifoQty = parseFloat(r.fifoQty || 0);
+        const fifoValue = parseFloat(r.fifoValue || 0);
+        const fallbackCost = parseFloat(r.cost_price || 0);
+        const fifoUnitCost =
+          fifoQty > 0
+            ? Math.round((fifoValue / fifoQty) * 100) / 100
+            : lastPurchasePrice || fallbackCost;
+        const costPrice = fifoUnitCost;
+        const openingAmount =
+          fifoQty > 0
+            ? Math.round((fifoValue / fifoQty) * openingQty * 100) / 100
+            : Math.round(openingQty * fifoUnitCost * 100) / 100;
         const closingQty = openingQty + netQty;
         const currentStock = parseFloat(r.currentStock || 0);
         const reconciliationDelta = closingQty - currentStock;
@@ -698,7 +710,10 @@ class ReportsService {
         const wholesalePriceRaw = parseFloat(r.wholesalePrice || r.wholesale_price || 0);
         const sellingPrice = sellingPriceRaw || costPrice;
         const wholesalePrice = wholesalePriceRaw || sellingPriceRaw || costPrice;
-        const closingAmount = closingQty * costPrice;
+        const closingAmount =
+          fifoQty > 0
+            ? Math.round(fifoValue * 100) / 100
+            : Math.round(closingQty * fifoUnitCost * 100) / 100;
         const wholesaleValuation = closingQty * wholesalePrice;
         const retailValuation = closingQty * sellingPrice;
         const minStockLevel = parseFloat(r.min_stock_level || 0);
@@ -713,6 +728,9 @@ class ReportsService {
           supplierName: r.supplierName || null,
           minStockLevel,
           lastPurchasePrice,
+          costPrice,
+          fifoQty,
+          fifoValue,
           currentStock,
           reconciliationDelta,
           openingQty,
@@ -732,7 +750,7 @@ class ReportsService {
           salePrice1: sellingPriceRaw,
           wholesaleValuation,
           retailValuation,
-          avgPurchasePrice
+          avgPurchasePrice: costPrice,
         };
       });
 
@@ -896,14 +914,26 @@ class ReportsService {
         FROM inventory
         WHERE deleted_at IS NULL
         GROUP BY product_id
+      ),
+      fifo_val AS (
+        SELECT
+          product_id,
+          COALESCE(SUM(quantity_remaining), 0)::decimal AS fifo_qty,
+          COALESCE(SUM(quantity_remaining * unit_cost), 0)::decimal AS fifo_value
+        FROM inventory_batches
+        WHERE status = 'active' AND quantity_remaining > 0
+        GROUP BY product_id
       )
       SELECT p.id, p.name, p.sku, p.unit, cat.name as category_name,
              COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) as closing_stock,
-             p.cost_price
+             COALESCE(p.cost_price, 0) as cost_price,
+             COALESCE(fv.fifo_qty, 0) as fifo_qty,
+             COALESCE(fv.fifo_value, 0) as fifo_value
       FROM products p
       LEFT JOIN categories cat ON p.category_id = cat.id
       LEFT JOIN ib_agg ib ON ib.product_id = p.id
       LEFT JOIN inv_agg i ON i.product_id = p.id
+      LEFT JOIN fifo_val fv ON fv.product_id = p.id
       WHERE p.is_deleted = FALSE AND p.is_active = TRUE ${prodFilter}
       ORDER BY p.name ASC
     `;
@@ -927,7 +957,17 @@ class ReportsService {
         // Your formula: Closing Stock = Opening + Purchases - Sales + Sale Returns - Purchase Returns
         const calculatedClosing = openingStock + purchases - sales + saleReturns - purchaseReturns;
         const actualClosing = parseFloat(row.closing_stock || 0);
-        const costPrice = parseFloat(row.cost_price || 0);
+        const fifoQty = parseFloat(row.fifo_qty || 0);
+        const fifoValue = parseFloat(row.fifo_value || 0);
+        const fallbackCost = parseFloat(row.cost_price || 0);
+        const costPrice =
+          fifoQty > 0
+            ? Math.round((fifoValue / fifoQty) * 100) / 100
+            : fallbackCost;
+        const valuation =
+          fifoQty > 0
+            ? Math.round(fifoValue * 100) / 100
+            : Math.round(actualClosing * costPrice * 100) / 100;
 
         reportData.push({
           productId,
@@ -944,7 +984,9 @@ class ReportsService {
           actualClosing,
           variance: calculatedClosing - actualClosing,
           costPrice,
-          valuation: calculatedClosing * costPrice
+          fifoQty,
+          fifoValue,
+          valuation,
         });
       });
 
@@ -1051,6 +1093,15 @@ class ReportsService {
         FROM stock_movements
         WHERE movement_type = 'purchase' AND status = 'completed' AND supplier_id IS NOT NULL
         ORDER BY product_id, created_at DESC
+      ),
+      fifo_val AS (
+        SELECT
+          product_id,
+          COALESCE(SUM(quantity_remaining), 0)::decimal AS fifo_qty,
+          COALESCE(SUM(quantity_remaining * unit_cost), 0)::decimal AS fifo_value
+        FROM inventory_batches
+        WHERE status = 'active' AND quantity_remaining > 0
+        GROUP BY product_id
       )
       SELECT 
         p.id,
@@ -1063,15 +1114,19 @@ class ReportsService {
         COALESCE(sup.company_name, sup.name) as "supplierName",
         COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) as "stockQuantity",
         p.min_stock_level as "minStockLevel",
-        p.cost_price as "costPrice",
+        CASE
+          WHEN COALESCE(fv.fifo_qty, 0) > 0 THEN ROUND((fv.fifo_value / fv.fifo_qty)::numeric, 2)
+          ELSE COALESCE(p.cost_price, 0)
+        END as "costPrice",
         p.selling_price as "sellingPrice",
-        (COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * p.cost_price) as "valuation",
+        COALESCE(fv.fifo_value, COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * COALESCE(p.cost_price, 0)) as "valuation",
         (COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * p.selling_price) as "retailValuation",
         p.unit
       FROM products p
       LEFT JOIN categories cat ON p.category_id = cat.id
       LEFT JOIN ib_agg ib ON ib.product_id = p.id
       LEFT JOIN inv_agg i ON i.product_id = p.id
+      LEFT JOIN fifo_val fv ON fv.product_id = p.id
       LEFT JOIN last_supplier ls ON ls.product_id = p.id
       LEFT JOIN suppliers sup ON sup.id = ls.supplier_id AND (sup.is_deleted = FALSE OR sup.is_deleted IS NULL)
       ${whereClause}
@@ -1121,10 +1176,18 @@ class ReportsService {
         FROM inventory
         WHERE deleted_at IS NULL
         GROUP BY product_id
+      ),
+      fifo_val AS (
+        SELECT
+          product_id,
+          COALESCE(SUM(quantity_remaining * unit_cost), 0)::decimal AS fifo_value
+        FROM inventory_batches
+        WHERE status = 'active' AND quantity_remaining > 0
+        GROUP BY product_id
       )
       SELECT 
         COUNT(*) as "totalItems",
-        SUM(COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * COALESCE(p.cost_price, 0)) as "totalCost",
+        SUM(COALESCE(fv.fifo_value, COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * COALESCE(p.cost_price, 0))) as "totalCost",
         SUM(COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) * COALESCE(p.selling_price, 0)) as "totalRetailValuation",
         COUNT(*) FILTER (WHERE COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) = 0) as "outOfStockCount",
         COUNT(*) FILTER (WHERE COALESCE(ib.quantity, i.current_stock, p.stock_quantity, 0) > 0 
@@ -1134,6 +1197,7 @@ class ReportsService {
       FROM products p
       LEFT JOIN ib_agg ib ON ib.product_id = p.id
       LEFT JOIN inv_agg i ON i.product_id = p.id
+      LEFT JOIN fifo_val fv ON fv.product_id = p.id
       ${summaryWhere}
     `;
       const summaryResult = await query(summarySql, summaryParams.length ? summaryParams : []);
