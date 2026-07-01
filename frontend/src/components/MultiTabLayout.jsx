@@ -31,6 +31,7 @@ import {
 } from '../config/navigation';
 import { TopBarActionButtonsDesktop, TopBarActionButtonsMobile } from './TopBarActionButtons';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 // Re-export for backward compatibility
 export { navigation, loadSidebarConfig, loadBottomNavConfig, migrateSidebarConfig } from '../config/navigation';
@@ -138,6 +139,7 @@ const SidebarItem = ({ item, isActivePath, sidebarConfig, orderSettings, user, h
 export const MultiTabLayout = ({ children }) => {
   const { companyInfo } = useCompanyInfo();
   const orderSettings = companyInfo?.orderSettings || {};
+  const sidebarCompanyName = (companyInfo?.companyName || '').trim() || 'Company';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
@@ -148,6 +150,15 @@ export const MultiTabLayout = ({ children }) => {
   const navigate = useNavigate();
   const { isMobile, isTablet } = useResponsive();
   const { openTab, tabs, switchToTab, triggerTabHighlight, activeTabId } = useTab();
+
+  const activeTab = tabs.find((tab) => tab.id === activeTabId);
+  const routePageTitle = getComponentInfo(location.pathname)?.title || '';
+  const browserPageTitle = activeTab?.title || routePageTitle;
+
+  usePageTitle({
+    title: browserPageTitle,
+    companyName: companyInfo?.companyName,
+  });
 
   // Dashboard visibility state
   const [dashboardHidden, setDashboardHidden] = useState(() => {
@@ -437,10 +448,11 @@ export const MultiTabLayout = ({ children }) => {
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
-          <div className="flex h-14 items-center justify-between px-4 bg-gray-100">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded bg-black font-black text-white">Z</div>
-              <h1 className="text-lg font-bold tracking-tight text-gray-900">ZARYAB IMPEX</h1>
+          <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2 bg-gray-100">
+            <div className="flex flex-1 items-center min-w-0">
+              <h1 className="text-lg font-bold leading-snug text-left text-gray-900 break-words">
+                {sidebarCompanyName}
+              </h1>
             </div>
             <button
               type="button"
@@ -451,7 +463,7 @@ export const MultiTabLayout = ({ children }) => {
               <X className="h-6 w-6" />
             </button>
           </div>
-          <nav id="mobile-sidebar-nav" className="flex-1 space-y-1 px-3 py-4 overflow-y-auto max-h-[calc(100dvh-3.5rem)] scrollbar-thin scrollbar-thumb-gray-200">
+          <nav id="mobile-sidebar-nav" className="flex-1 space-y-1 px-3 pt-2 pb-4 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200">
             {navigation.map((item) => (
               <SidebarItem
                 key={item.name}
@@ -474,13 +486,12 @@ export const MultiTabLayout = ({ children }) => {
       {/* Desktop sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
         <div className="flex flex-col flex-grow bg-gray-100">
-          <div className="flex h-14 items-center px-6 bg-gray-100">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded bg-black font-black text-white">Z</div>
-              <h1 className="text-lg font-bold tracking-tight text-gray-900">ZARYAB IMPEX</h1>
-            </div>
+          <div className="flex items-center px-4 pt-4 pb-2 bg-gray-100">
+            <h1 className="text-lg font-bold leading-snug text-left text-gray-900 break-words">
+              {sidebarCompanyName}
+            </h1>
           </div>
-          <nav className="flex-1 space-y-1 px-3 py-6 overflow-y-auto max-h-[calc(100dvh-3.5rem)] scrollbar-thin scrollbar-thumb-gray-200">
+          <nav className="flex-1 space-y-1 px-3 pt-2 pb-6 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200">
             {navigation.map((item) => (
               <SidebarItem
                 key={item.name}
