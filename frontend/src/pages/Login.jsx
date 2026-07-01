@@ -19,6 +19,7 @@ import { LoadingButton } from '../components/LoadingSpinner';
 import { usePageTitle, DEFAULT_FAVICON } from '../hooks/usePageTitle';
 import { useCompanyInfo } from '../hooks/useCompanyInfo';
 import { InputWithIcon } from '@/components/ui/input-with-icon';
+import { LoginCursorTrail } from '../components/LoginCursorTrail';
 import { cn } from '@/lib/utils';
 
 const TAB_PASSWORD = 'password';
@@ -221,6 +222,7 @@ export const Login = () => {
 
   return (
     <div className="h-[100dvh] min-h-[100dvh] flex overflow-hidden bg-gray-50">
+      <LoginCursorTrail />
       {/* Brand panel — solid POS black, no gradients */}
       <aside className="hidden lg:flex lg:w-[42%] xl:w-1/2 h-full min-h-0 overflow-hidden bg-black text-white">
         <div className="flex flex-col justify-between h-full w-full overflow-hidden px-10 py-10 xl:px-14 xl:py-12 2xl:px-16">
